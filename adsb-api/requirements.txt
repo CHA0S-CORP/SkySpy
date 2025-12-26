@@ -1,0 +1,22 @@
+# FastAPI and ASGI
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# Database
+sqlalchemy[asyncio]>=2.0.25
+asyncpg>=0.29.0
+
+# HTTP Client
+httpx>=0.26.0
+
+# Configuration
+pydantic-settings>=2.1.0
+
+# Notifications
+apprise>=1.6.0
+
+# Redis (optional, for multi-worker SSE)
+redis>=5.0.0
+
+# Development
+python-multipart>=0.0.6
