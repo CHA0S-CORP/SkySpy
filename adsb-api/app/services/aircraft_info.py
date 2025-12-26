@@ -2,17 +2,42 @@
 Aircraft information service.
 Fetches and caches airframe data and photos from open sources.
 
-Data sources:
-- hexdb.io - Free aircraft database
-- OpenSky Network - Aircraft metadata
-- Planespotters.net - Aircraft photos (via their API)
-- FlightAware - Aircraft info (if API key provided)
+Data Sources (in priority order):
+
+1. hexdb.io (PRIMARY)
+   - Aircraft info: registration, type, manufacturer, operator, etc.
+   - Full-size photos via direct URLs
+   - API: https://hexdb.io/api/v1/aircraft/{hex}
+   - Photos: https://hexdb.io/hex-image?hex={hex}
+   - Thumbnails: https://hexdb.io/hex-image-thumb?hex={hex}
+   
+2. Local OpenSky Database (SUPPLEMENTARY)
+   - ~600k aircraft from OpenSky Network CSV
+   - Fast offline lookup, no network required
+   - Downloaded via scripts/download-opensky-db.sh
+   
+3. OpenSky Network API (FALLBACK)
+   - Online API for aircraft not in local DB
+   - API: https://opensky-network.org/api/metadata/aircraft/icao/{hex}
+
+4. Planespotters.net (PHOTO FALLBACK)
+   - Larger thumbnails (~640px) via public API
+   - API: https://api.planespotters.net/pub/photos/hex/{hex}
+
+5. airport-data.com (PHOTO FALLBACK)
+   - Small thumbnails (200px)
+   - API: https://airport-data.com/api/ac_thumb.json?m={hex}
+
+Network Requirements:
+   If using egress filtering, allow: hexdb.io, api.planespotters.net, 
+   airport-data.com, opensky-network.org
 """
 import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,6 +73,8 @@ async def get_aircraft_info(db: AsyncSession, icao_hex: str, force_refresh: bool
     Returns:
         Aircraft info dict or None if not found
     """
+    from app.services.photo_cache import cache_aircraft_photos
+    
     icao_hex = icao_hex.upper().strip()
     
     if not icao_hex or len(icao_hex) < 6 or len(icao_hex) > 10:
@@ -65,6 +92,11 @@ async def get_aircraft_info(db: AsyncSession, icao_hex: str, force_refresh: bool
         max_age = timedelta(hours=FAILED_CACHE_HOURS if cached.fetch_failed else CACHE_DURATION_HOURS)
         
         if cache_age < max_age:
+            # If we have photo URLs but no local paths, trigger background caching
+            if cached.photo_url and not cached.photo_local_path:
+                asyncio.create_task(_background_cache_photos(
+                    icao_hex, cached.photo_url, cached.photo_thumbnail_url
+                ))
             return _model_to_dict(cached)
     
     # Prevent duplicate lookups
@@ -90,6 +122,13 @@ async def get_aircraft_info(db: AsyncSession, icao_hex: str, force_refresh: bool
                 db.add(cached)
             
             await db.commit()
+            
+            # Trigger background photo caching
+            photo_url = info.get("photo_url")
+            thumb_url = info.get("photo_thumbnail_url")
+            if photo_url:
+                asyncio.create_task(_background_cache_photos(icao_hex, photo_url, thumb_url))
+            
             return _model_to_dict(cached)
         else:
             # Mark as failed lookup
@@ -112,59 +151,127 @@ async def get_aircraft_info(db: AsyncSession, icao_hex: str, force_refresh: bool
         _pending_lookups.discard(icao_hex)
 
 
+async def _background_cache_photos(icao_hex: str, photo_url: str, thumbnail_url: Optional[str] = None):
+    """
+    Background task to download and cache photos to filesystem.
+    Updates database with local paths when complete.
+    """
+    from app.core.database import async_session_factory
+    from app.services.photo_cache import cache_aircraft_photos
+    
+    try:
+        async with async_session_factory() as db:
+            photo_path, thumb_path = await cache_aircraft_photos(
+                db, icao_hex, photo_url, thumbnail_url
+            )
+            if photo_path:
+                logger.debug(f"Cached photo for {icao_hex}: {photo_path}")
+    except Exception as e:
+        logger.error(f"Background photo caching failed for {icao_hex}: {e}")
+
+
 async def _fetch_aircraft_info(icao_hex: str) -> Optional[dict]:
-    """Fetch aircraft info from local database first, then external sources."""
+    """
+    Fetch aircraft info from multiple sources.
+    
+    Priority order:
+    1. hexdb.io - Primary source (data + full-size photos)
+    2. Local OpenSky database - Fast offline lookup (data only)
+    3. OpenSky Network API - Additional metadata
+    4. Other photo sources as fallback
+    """
     from app.services import opensky_db
     
     info = {}
+    has_photo = False
     
-    # Try local OpenSky database first (fastest, no network)
-    if settings.opensky_db_enabled and opensky_db.is_loaded():
-        local_info = opensky_db.lookup(icao_hex)
-        if local_info:
-            info.update(local_info)
-            logger.debug(f"Found {icao_hex} in local OpenSky database")
-    
-    # If we got basic info locally, only fetch photo
-    if info.get("registration"):
-        # Just need photo from planespotters
-        photo_info = await _fetch_photo_from_planespotters(icao_hex)
-        if photo_info:
-            info.update(photo_info)
-        return info
-    
-    # Fall back to external APIs if not in local DB
-    # Try hexdb.io first (free, no API key required)
+    # Try hexdb.io first - it provides both data AND full-size photos
     hexdb_info = await _fetch_from_hexdb(icao_hex)
     if hexdb_info:
         info.update(hexdb_info)
+        has_photo = info.get("photo_url") is not None
+        logger.debug(f"Got data from hexdb.io for {icao_hex} (has_photo={has_photo})")
     
-    # Try to get photo from planespotters
-    photo_info = await _fetch_photo_from_planespotters(icao_hex)
-    if photo_info:
-        info.update(photo_info)
+    # Supplement with local OpenSky database (fast, no network)
+    if settings.opensky_db_enabled and opensky_db.is_loaded():
+        local_info = opensky_db.lookup(icao_hex)
+        if local_info:
+            # Only update fields that aren't already set
+            for key, value in local_info.items():
+                if key not in info or info[key] is None:
+                    info[key] = value
+            logger.debug(f"Supplemented with local OpenSky database for {icao_hex}")
     
-    # Try OpenSky Network API for additional data
-    opensky_info = await _fetch_from_opensky(icao_hex)
-    if opensky_info:
-        # Only update fields that aren't already set
-        for key, value in opensky_info.items():
-            if key not in info or info[key] is None:
-                info[key] = value
+    # If we still don't have a photo, try other sources
+    if not has_photo:
+        photo_info = await _fetch_best_photo(icao_hex)
+        if photo_info:
+            info.update(photo_info)
+    
+    # Try OpenSky Network API for any missing data
+    if not info.get("registration"):
+        opensky_info = await _fetch_from_opensky(icao_hex)
+        if opensky_info:
+            for key, value in opensky_info.items():
+                if key not in info or info[key] is None:
+                    info[key] = value
     
     return info if info else None
 
 
+async def _fetch_best_photo(icao_hex: str) -> Optional[dict]:
+    """
+    Try multiple photo sources and return the best quality available.
+    
+    Priority:
+    1. hexdb.io - provides full-size images via direct URLs
+    2. planespotters.net - provides larger thumbnails (~640px)
+    3. airport-data.com - provides small thumbnails (200px)
+    
+    Note: hexdb.io is already tried in _fetch_from_hexdb, so this is
+    called only as a fallback when hexdb.io photo lookup failed.
+    """
+    # Try hexdb.io first (full-size images) - in case it wasn't already tried
+    photo_info = await _fetch_photo_from_hexdb(icao_hex)
+    if photo_info:
+        logger.debug(f"Got photo from hexdb.io for {icao_hex}")
+        return photo_info
+    
+    # Try planespotters.net (larger thumbnails)
+    photo_info = await _fetch_photo_from_planespotters(icao_hex)
+    if photo_info:
+        logger.debug(f"Got photo from planespotters.net for {icao_hex}")
+        return photo_info
+    
+    # Try airport-data.com as last resort (small thumbnails)
+    photo_info = await _fetch_photo_from_airport_data(icao_hex)
+    if photo_info:
+        logger.debug(f"Got photo from airport-data.com for {icao_hex}")
+        return photo_info
+    
+    return None
+
+
 async def _fetch_from_hexdb(icao_hex: str) -> Optional[dict]:
-    """Fetch from hexdb.io - free aircraft database."""
+    """
+    Fetch from hexdb.io - free aircraft database.
+    This is the primary source for aircraft data and photos.
+    
+    hexdb.io provides:
+    - Aircraft info: registration, type, manufacturer, operator
+    - Direct image URLs (full-size and thumbnail)
+    - Route information (via callsign)
+    - Airport information
+    """
     try:
-        url = f"https://hexdb.io/api/v1/aircraft/{icao_hex}"
+        # Fetch aircraft data
+        url = f"https://hexdb.io/api/v1/aircraft/{icao_hex.lower()}"
         data = await safe_request(url)
         
         if not data:
             return None
         
-        return {
+        result = {
             "registration": data.get("Registration"),
             "type_code": data.get("ICAOTypeCode"),
             "type_name": data.get("Type"),
@@ -177,9 +284,89 @@ async def _fetch_from_hexdb(icao_hex: str) -> Optional[dict]:
             "country": data.get("Country"),
             "is_military": data.get("IsMilitary", False),
             "category": data.get("Category"),
+            # Store ModeS for reference
+            "extra_data": {
+                "modes": data.get("ModeS"),
+                "source": "hexdb.io"
+            }
         }
+        
+        # Also fetch photo from hexdb.io (integrated)
+        photo_info = await _fetch_photo_from_hexdb(icao_hex)
+        if photo_info:
+            result.update(photo_info)
+        
+        return result
     except Exception as e:
         logger.debug(f"hexdb.io lookup failed for {icao_hex}: {e}")
+        return None
+
+
+async def _fetch_photo_from_hexdb(icao_hex: str) -> Optional[dict]:
+    """
+    Fetch photo from hexdb.io - provides direct image URLs.
+    
+    Full image: https://hexdb.io/hex-image?hex=<HEX>
+    Thumbnail: https://hexdb.io/hex-image-thumb?hex=<HEX>
+    
+    These are direct image URLs that can be downloaded/cached.
+    """
+    try:
+        photo_url = f"https://hexdb.io/hex-image?hex={icao_hex.lower()}"
+        thumbnail_url = f"https://hexdb.io/hex-image-thumb?hex={icao_hex.lower()}"
+        
+        # Verify the image exists with a HEAD request
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.head(
+                photo_url, 
+                follow_redirects=True,
+                headers={"User-Agent": "ADS-B-API/2.6 (aircraft-tracker)"}
+            )
+            if response.status_code != 200:
+                logger.debug(f"hexdb.io photo not found for {icao_hex}: {response.status_code}")
+                return None
+            
+            content_type = response.headers.get("content-type", "")
+            if not content_type.startswith("image/"):
+                logger.debug(f"hexdb.io non-image response for {icao_hex}: {content_type}")
+                return None
+        
+        return {
+            "photo_url": photo_url,
+            "photo_thumbnail_url": thumbnail_url,
+            "photo_photographer": None,  # hexdb.io doesn't provide photographer info
+            "photo_source": "hexdb.io",
+        }
+    except Exception as e:
+        logger.debug(f"hexdb.io photo lookup failed for {icao_hex}: {e}")
+        return None
+
+
+async def _fetch_photo_from_airport_data(icao_hex: str) -> Optional[dict]:
+    """Fetch photo from airport-data.com API."""
+    try:
+        url = f"https://airport-data.com/api/ac_thumb.json?m={icao_hex.upper()}&n=1"
+        data = await safe_request(url)
+        
+        if not data or data.get("status") != 200 or not data.get("data"):
+            return None
+        
+        photo_data = data["data"][0]
+        thumbnail_url = photo_data.get("image")  # 200px thumbnail
+        
+        if not thumbnail_url:
+            return None
+        
+        # airport-data.com only provides thumbnails via API
+        # The 'link' field is an HTML page, not a direct image
+        return {
+            "photo_url": thumbnail_url,  # Only thumbnail available
+            "photo_thumbnail_url": thumbnail_url,
+            "photo_photographer": photo_data.get("photographer"),
+            "photo_source": "airport-data.com",
+        }
+    except Exception as e:
+        logger.debug(f"airport-data.com lookup failed for {icao_hex}: {e}")
         return None
 
 
@@ -222,18 +409,25 @@ async def _fetch_photo_from_planespotters(icao_hex: str) -> Optional[dict]:
         # Debug: log what keys are available
         logger.debug(f"Planespotters response keys for {icao_hex}: {list(photo.keys())}")
         
-        # Get thumbnail URLs (these usually work reliably)
-        thumbnail_url = (
-            photo.get("thumbnail_large", {}).get("src") or 
-            photo.get("thumbnail", {}).get("src")
-        )
+        # Planespotters API provides:
+        # - thumbnail_large: larger thumbnail (usually ~640px wide) 
+        # - thumbnail: smaller thumbnail (~232px wide)
+        # - link: webpage URL (NOT a direct image)
+        # The public API does NOT provide direct URLs to full-resolution images
         
-        # For full-size image, planespotters API typically only provides thumbnails
-        # The "link" field is a webpage URL, not a direct image
-        # Use thumbnail_large as the "full" image since it's highest quality available via API
-        photo_url = photo.get("thumbnail_large", {}).get("src")
+        # Get the larger thumbnail for "full" image (best available via public API)
+        large_thumb = photo.get("thumbnail_large", {})
+        photo_url = large_thumb.get("src") if isinstance(large_thumb, dict) else None
+        
+        # Get the smaller thumbnail
+        small_thumb = photo.get("thumbnail", {})
+        thumbnail_url = small_thumb.get("src") if isinstance(small_thumb, dict) else None
+        
+        # Fallback: if no large, use small for both
         if not photo_url:
             photo_url = thumbnail_url
+        if not thumbnail_url:
+            thumbnail_url = photo_url
         
         logger.debug(f"Planespotters for {icao_hex}: photo_url={photo_url}, thumbnail={thumbnail_url}")
         

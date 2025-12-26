@@ -801,234 +801,114 @@ async def get_navaid(
 
 
 # =============================================================================
-# FAA Airspace Endpoints (via ArcGIS)
+# Airspace Endpoints (AWC data)
 # =============================================================================
 
-# FAA ArcGIS Feature Service URLs - these may need verification
-# Primary source: https://adds-faa.opendata.arcgis.com/
-# Alternate: https://ais-faa.opendata.arcgis.com/
-FAA_AIRSPACE_SERVICES = {
-    # These URLs are constructed based on FAA AIS data patterns
-    # They query the FAA's published airspace data
-    "sua": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/US_Special_Use_Airspace/FeatureServer/0",
-    "class_b": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/US_Class_Airspace_B/FeatureServer/0",
-    "class_c": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/US_Class_Airspace_C/FeatureServer/0",
-    "class_d": "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/US_Class_Airspace_D/FeatureServer/0",
-}
-
-
-async def fetch_faa_airspace(service_url: str, bbox: str, limit: int = 100) -> list:
-    """Fetch airspace data from FAA ArcGIS Feature Service."""
-    import httpx
-    
-    # Convert bbox from "minLat,minLon,maxLat,maxLon" to ArcGIS format "minLon,minLat,maxLon,maxLat"
-    parts = bbox.split(",")
-    if len(parts) == 4:
-        min_lat, min_lon, max_lat, max_lon = parts
-        arcgis_bbox = f"{min_lon},{min_lat},{max_lon},{max_lat}"
-    else:
-        arcgis_bbox = bbox
-    
-    params = {
-        "where": "1=1",
-        "geometry": arcgis_bbox,
-        "geometryType": "esriGeometryEnvelope",
-        "inSR": "4326",
-        "spatialRel": "esriSpatialRelIntersects",
-        "outFields": "*",
-        "returnGeometry": "false",
-        "outSR": "4326",
-        "f": "json",
-        "resultRecordCount": limit,
-    }
-    
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.get(
-                f"{service_url}/query",
-                params=params,
-                headers={
-                    "User-Agent": "ADS-B-API/2.6 (aircraft-tracker)",
-                    "Accept": "application/json",
-                }
-            )
-            response.raise_for_status()
-            data = response.json()
-            
-            if "error" in data:
-                return []
-            
-            features = data.get("features", [])
-            return [f.get("attributes", {}) for f in features]
-    except Exception as e:
-        return []
-
-
 @router.get(
-    "/airspace",
-    summary="Get Airspaces by Location",
+    "/airspaces",
+    summary="Get Airspace Advisories by Location",
     description="""
-Find airspaces within a geographic area.
+Get active airspace advisories (G-AIRMETs) within a geographic area.
 
-Returns various types of airspace that intersect with the search area.
+G-AIRMETs provide graphical depictions of en route aviation weather hazards:
+- IFR conditions (low ceilings/visibility)
+- Mountain obscuration
+- Turbulence (low, moderate, high level)
+- Icing (low, moderate, high level)
+- Freezing level
+- Strong surface winds
 
-**Airspace Classes:**
-- Class B - Major airports (busiest)
-- Class C - Busy airports with control tower
-- Class D - Airports with control tower
-
-**Special Use Airspace (SUA):**
-- MOA - Military Operations Area
-- RESTRICTED - Restricted airspace
-- WARNING - Warning areas (over water)
-- PROHIBITED - Prohibited areas
-- ALERT - Alert areas
-
-**Also includes G-AIRMET data from Aviation Weather Center**
+**Note:** This endpoint returns active G-AIRMET advisories from Aviation Weather Center.
+For static airspace boundaries (Class B/C/D, MOAs, Restricted areas), consult 
+FAA sectional charts or the FAA UAS Data Delivery System at 
+https://udds-faa.opendata.arcgis.com/
 
 **Parameters:**
-- `lat`, `lon` - Center point coordinates
-- `radius` - Search radius in nautical miles (default 50)
-- `limit` - Maximum results (default 50)
-- `type` - Filter by airspace type (optional)
+- `lat`, `lon` - Center point coordinates (for distance calculation)
+- `hazard` - Filter by hazard type (optional)
 
-**Data Sources:** FAA AIS, aviationweather.gov
+**Data Source:** aviationweather.gov
     """,
     responses={
         200: {
-            "description": "Nearby airspaces",
+            "description": "Active airspace advisories",
             "content": {
                 "application/json": {
                     "example": {
                         "data": [
                             {
-                                "name": "SEATTLE CLASS B",
-                                "type": "CLASS_B",
+                                "name": "GAIRMET-SIERRA-3",
+                                "type": "GAIRMET",
+                                "hazard": "IFR",
+                                "severity": "LIFR",
                                 "lower_alt": 0,
-                                "upper_alt": 10000
-                            },
-                            {
-                                "name": "R-6703A YAKIMA",
-                                "type": "RESTRICTED",
-                                "lower_alt": 0,
-                                "upper_alt": 17999
+                                "upper_alt": 8000,
+                                "valid_from": "2024-01-15T12:00:00Z",
+                                "valid_to": "2024-01-15T18:00:00Z"
                             }
                         ],
-                        "count": 2,
+                        "count": 1,
                         "center": {"lat": 47.5, "lon": -122.3},
-                        "radius_nm": 50,
-                        "source": "faa.gov/aviationweather.gov"
+                        "source": "aviationweather.gov"
                     }
                 }
             }
         }
     }
 )
-@cached(ttl_seconds=3600)
+@cached(ttl_seconds=300)
 async def get_airspaces_by_location(
     lat: float = Query(..., ge=-90, le=90, description="Center latitude"),
     lon: float = Query(..., ge=-180, le=180, description="Center longitude"),
-    radius: float = Query(50, ge=5, le=500, description="Search radius in nautical miles"),
-    limit: int = Query(50, ge=1, le=200, description="Maximum results"),
-    airspace_type: Optional[str] = Query(
+    hazard: Optional[str] = Query(
         None,
-        alias="type",
-        description="Filter by airspace type",
-        enum=["CLASS_B", "CLASS_C", "CLASS_D", "SUA", "MOA", "RESTRICTED", "WARNING", "PROHIBITED", "ALERT", "GAIRMET"]
+        description="Filter by hazard type",
+        enum=["IFR", "MT_OBSC", "TURB-LO", "TURB-HI", "ICE", "FZLVL", "SFC_WND", "LLWS"]
     )
 ):
-    """Find airspaces within a geographic area."""
-    # Convert radius to bounding box
-    deg_offset = radius / 60.0
-    bbox = f"{lat - deg_offset},{lon - deg_offset},{lat + deg_offset},{lon + deg_offset}"
-    
+    """Get active airspace advisories (G-AIRMETs)."""
     all_airspaces = []
-    errors = []
     
-    # Try to get G-AIRMET data from AWC (always available)
-    if airspace_type is None or airspace_type == "GAIRMET":
-        gairmet_data = await fetch_awc_data("gairmet", {"format": "json"})
-        if isinstance(gairmet_data, list):
-            for g in gairmet_data:
-                # G-AIRMETs have hazard info
-                airspace = {
-                    "name": g.get("tag") or g.get("hazard") or "G-AIRMET",
-                    "type": "GAIRMET",
-                    "hazard": g.get("hazard"),
-                    "severity": g.get("severity"),
-                    "lower_alt": g.get("base") or g.get("altLow") or 0,
-                    "upper_alt": g.get("top") or g.get("altHi") or 0,
-                    "valid_from": g.get("validTimeFrom"),
-                    "valid_to": g.get("validTimeTo"),
-                    "source": "aviationweather.gov"
-                }
-                all_airspaces.append(airspace)
+    # Get G-AIRMET data from AWC
+    params = {"format": "json"}
+    if hazard:
+        params["hazard"] = hazard
     
-    # Try FAA ArcGIS services for Class airspace
-    services_to_query = []
+    gairmet_data = await fetch_awc_data("gairmet", params)
     
-    if airspace_type is None:
-        services_to_query = [
-            ("sua", "SUA"),
-            ("class_b", "CLASS_B"),
-            ("class_c", "CLASS_C"),
-            ("class_d", "CLASS_D"),
-        ]
-    elif airspace_type == "SUA" or airspace_type in ["MOA", "RESTRICTED", "WARNING", "PROHIBITED", "ALERT"]:
-        services_to_query = [("sua", "SUA")]
-    elif airspace_type.startswith("CLASS_"):
-        class_letter = airspace_type.replace("CLASS_", "").lower()
-        if f"class_{class_letter}" in FAA_AIRSPACE_SERVICES:
-            services_to_query = [(f"class_{class_letter}", airspace_type)]
+    if isinstance(gairmet_data, dict) and "error" in gairmet_data:
+        return {
+            "data": [],
+            "count": 0,
+            "center": {"lat": lat, "lon": lon},
+            "source": "aviationweather.gov",
+            "error": gairmet_data.get("error")
+        }
     
-    for service_key, type_label in services_to_query:
-        service_url = FAA_AIRSPACE_SERVICES.get(service_key)
-        if not service_url:
-            continue
-        
-        features = await fetch_faa_airspace(service_url, bbox, limit)
-        
-        if not features:
-            # Service might not be available, add to errors
-            errors.append(f"FAA {type_label} service unavailable")
-            continue
-        
-        for feat in features:
+    if isinstance(gairmet_data, list):
+        for g in gairmet_data:
             airspace = {
-                "name": feat.get("NAME") or feat.get("IDENT") or feat.get("AIRSPACE") or "Unknown",
-                "type": type_label if service_key != "sua" else (feat.get("TYPE_CODE") or feat.get("TYPE") or "SUA"),
-                "class": feat.get("CLASS") or feat.get("LOCAL_TYPE") or type_label.replace("CLASS_", ""),
-                "lower_alt": feat.get("LOWER_VAL") or feat.get("LOWER_ALT") or feat.get("LOW_ALT") or 0,
-                "upper_alt": feat.get("UPPER_VAL") or feat.get("UPPER_ALT") or feat.get("HIGH_ALT") or 0,
-                "city": feat.get("CITY") or None,
-                "state": feat.get("STATE") or feat.get("STATE_NAME") or None,
-                "icao": feat.get("ICAO") or feat.get("IDENT") or None,
-                "source": "faa.gov"
+                "name": g.get("tag") or f"GAIRMET-{g.get('hazard', 'UNK')}",
+                "type": "GAIRMET",
+                "hazard": g.get("hazard"),
+                "severity": g.get("severity"),
+                "lower_alt": g.get("base") or g.get("altLow") or 0,
+                "upper_alt": g.get("top") or g.get("altHi") or 0,
+                "valid_from": g.get("validTimeFrom"),
+                "valid_to": g.get("validTimeTo"),
+                "forecast_region": g.get("region"),
+                "raw_text": g.get("rawAirSigmet"),
             }
-            
-            # Filter SUA by specific type if requested
-            if airspace_type in ["MOA", "RESTRICTED", "WARNING", "PROHIBITED", "ALERT"]:
-                sua_type = str(airspace.get("type", "")).upper()
-                airspace_name = str(airspace.get("name", "")).upper()
-                if airspace_type not in sua_type and airspace_type[0] not in airspace_name[:2]:
-                    continue
-            
             all_airspaces.append(airspace)
     
-    # Sort by type then name
-    all_airspaces.sort(key=lambda x: (x.get("type", ""), x.get("name", "")))
+    # Sort by hazard type then validity
+    all_airspaces.sort(key=lambda x: (x.get("hazard", ""), x.get("valid_from", "")))
     
-    result = {
-        "data": all_airspaces[:limit],
-        "count": min(len(all_airspaces), limit),
+    return {
+        "data": all_airspaces,
+        "count": len(all_airspaces),
         "center": {"lat": lat, "lon": lon},
-        "radius_nm": radius,
-        "source": "faa.gov/aviationweather.gov",
+        "source": "aviationweather.gov",
+        "note": "For static airspace boundaries (Class B/C/D, MOAs), see FAA charts",
         "cached": False
     }
-    
-    if errors:
-        result["warnings"] = errors
-        result["note"] = "Some FAA airspace services may be unavailable. G-AIRMET data from AWC is included."
-    
-    return result

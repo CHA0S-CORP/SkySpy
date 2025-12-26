@@ -1,0 +1,252 @@
+services:
+  # Test runner service
+  test:
+    container_name: adsb_api_test
+    build:
+      context: ..
+      dockerfile: test/Dockerfile.test
+    profiles: ["test"]
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - ULTRAFEEDER_HOST=${ULTRAFEEDER_HOST}
+      - ULTRAFEEDER_PORT=${ULTRAFEEDER_PORT}
+      - DUMP978_HOST=${DUMP978_HOST}
+      - DUMP978_PORT=${DUMP978_PORT}
+      - FEEDER_LAT=${FEEDER_LAT}
+      - FEEDER_LON=${FEEDER_LON}
+      - APPRISE_URLS=${APPRISE_URLS}
+      - NOTIFICATION_COOLDOWN=${NOTIFICATION_COOLDOWN}
+      - PYTHONDONTWRITEBYTECODE=${PYTHONDONTWRITEBYTECODE}
+      - PYTHONUNBUFFERED=${PYTHONUNBUFFERED}
+    volumes:
+      - ./test-results:/app/test-results
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ultrafeeder:
+        condition: service_healthy
+      dump978:
+        condition: service_healthy
+    command: >
+      pytest test_adsb_api.py -v 
+      --tb=short 
+      --junitxml=/app/test-results/junit.xml
+      --html=/app/test-results/report.html
+      --self-contained-html
+    networks:
+      - test-network
+  adsb-dashboard:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+    container_name: adsb-dashboard-dev
+    working_dir: /app
+    profiles: ["dev"]
+    ports:
+      - "${DASHBOARD_PORT}:3000"
+    volumes:
+      - ../web/src:/app/src
+      - ../web/public:/app/public
+      - ../web/index.html:/app/index.html
+    environment:
+      - NODE_ENV=${NODE_ENV}
+    stdin_open: true
+    tty: true
+    depends_on:
+      api:
+        condition: service_healthy
+
+  api:
+    # container_name: adsb_api_dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["dev"]
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - ULTRAFEEDER_HOST=${ULTRAFEEDER_HOST}
+      - ULTRAFEEDER_PORT=${ULTRAFEEDER_PORT}
+      - DUMP978_HOST=${DUMP978_HOST}
+      - DUMP978_PORT=${DUMP978_PORT}
+      - FEEDER_LAT=${FEEDER_LAT}
+      - FEEDER_LON=${FEEDER_LON}
+      - APPRISE_URLS=${APPRISE_URLS}
+      - POLLING_INTERVAL=${POLLING_INTERVAL}
+      - DB_STORE_INTERVAL=${DB_STORE_INTERVAL}
+      - NOTIFICATION_COOLDOWN=${NOTIFICATION_COOLDOWN}
+      - PYTHONDONTWRITEBYTECODE=${PYTHONDONTWRITEBYTECODE}
+      - PYTHONUNBUFFERED=${PYTHONUNBUFFERED}
+      - PORT=${PORT}
+      # ACARS settings
+      - ACARS_ENABLED=${ACARS_ENABLED}
+      - ACARS_PORT=${ACARS_PORT}
+      - VDLM2_PORT=${VDLM2_PORT}
+      # Open SKY DB
+      - OPENSKY_DB_ENABLED=${OPENSKY_DB_ENABLED}
+      - OPENSKY_DB_PATH=${OPENSKY_DB_PATH}
+      # Photo Cache
+      - PHOTO_CACHE_ENABLED=${PHOTO_CACHE_ENABLED:-true}
+      - PHOTO_CACHE_DIR=${PHOTO_CACHE_DIR:-/data/photos}
+      - S3_ENABLED=${S3_ENABLED:-false}
+      - S3_BUCKET=${S3_BUCKET}
+      - S3_REGION=${S3_REGION:-us-west-1}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL}
+      - S3_PREFIX=${S3_PREFIX:-airfame-cache}
+      - S3_PUBLIC_URL=${S3_PUBLIC_URL}
+    volumes:
+      - ./test/api-cache:/data
+    ports:
+      - "${API_PORT}:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ultrafeeder:
+        condition: service_healthy
+      dump978:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - test-network
+
+  # PostgreSQL for integration tests
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["dev","test"]
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adsb -d adsb_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    tmpfs:
+      - /var/lib/postgresql/data
+    networks:
+      - test-network
+
+  # Redis for SSE pub/sub across workers
+  redis:
+    image: redis:7-alpine
+    profiles: ["dev","test"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    tmpfs:
+      - /data
+    networks:
+      - test-network
+
+  # Mock ultrafeeder service for integration tests
+  ultrafeeder:
+    build:
+      context: ./test/
+      dockerfile: Dockerfile.mock
+    profiles: ["dev","test"]
+    command: ["python3", "mock_1090.py"]
+    environment:
+      - MOCK_TYPE=ultrafeeder
+      - ADSBX_API_KEY=${ADSBX_API_KEY}
+    networks:
+      - test-network
+    ports:
+      - ${ULTRAFEEDER_PORT_EXTERNAL}:80
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Mock dump978 service for integration tests
+  dump978:
+    build:
+      context: ./test/
+      dockerfile: Dockerfile.mock
+    image: ghcr.io/chaoscorp/dump978-mock:latest
+    profiles: ["dev","test"]
+    command: ["python3", "mock_1090.py"]
+    environment:
+      - MOCK_TYPE=dump978
+      - ADSBX_API_KEY=${ADSBX_API_KEY}
+    networks:
+      - test-network
+    ports:
+      - ${DUMP978_PORT_EXTERNAL}:80
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+  acarshub-mock:
+    build: 
+      context: ./test/acars/
+      dockerfile: Dockerfile
+    image: ghcr.io/chaoscorp/acarshub-mock:latest
+    profiles: ["dev","test"]
+    container_name: acarshub-mock
+    restart: unless-stopped
+    networks:
+      - test-network
+    ports:
+      # Web interface
+      - "${ACARSHUB_WEB_PORT}:8080"
+      # UDP ports (same as real ACARSHUB - for receiving from decoders)
+      - "${ACARS_UDP_PORT}:5550/udp"   # ACARS (acarsdec)
+      - "${VDLM2_UDP_PORT}:5555/udp"   # VDLM2 (dumpvdl2)
+      - "${HFDL_UDP_PORT}:5556/udp"    # HFDL (dumphfdl)
+      - "${IMSL_UDP_PORT}:5557/udp"    # IMSL (Inmarsat)
+      - "${IRDM_UDP_PORT}:5558/udp"    # IRDM (Iridium)
+      # TCP relay ports (for consuming messages)
+      - "${ACARS_TCP_PORT}:15550"      # ACARS TCP relay
+      - "${VDLM2_TCP_PORT}:15555"      # VDLM2 TCP relay
+      - "${HFDL_TCP_PORT}:15556"       # HFDL TCP relay
+      - "${IMSL_TCP_PORT}:15557"       # IMSL TCP relay
+      - "${IRDM_TCP_PORT}:15558"       # IRDM TCP relay
+    
+    environment:
+      # Mock message generation
+      - MOCK_ENABLED=${MOCK_ENABLED}
+      - MOCK_INTERVAL_MIN=${MOCK_INTERVAL_MIN}
+      - MOCK_INTERVAL_MAX=${MOCK_INTERVAL_MAX}
+
+      # Station identification
+      - STATION_ID=${STATION_ID}
+
+      # Relay configuration - set these to send messages to your service
+      # Uncomment and configure:
+      - RELAY_HOST=${RELAY_HOST}
+      - RELAY_PORT=${RELAY_PORT}
+      - RELAY_PROTOCOL=${RELAY_PROTOCOL}
+    
+    # Optional: healthcheck
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      api:
+        condition: service_healthy
+
+networks:
+  test-network:
+    driver: bridge
+
+volumes:
+  node_modules:

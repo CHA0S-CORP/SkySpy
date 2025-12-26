@@ -89,9 +89,17 @@ Interactive docs at `/docs` (Swagger UI) and `/redoc`.
 | `ACARS_ENABLED` | `true` | Enable ACARS message reception |
 | `ACARS_PORT` | `5555` | UDP port for ACARS messages |
 | `VDLM2_PORT` | `5556` | UDP port for VDL2 messages |
-| `PHOTO_CACHE_ENABLED` | `true` | Enable local photo caching |
-| `PHOTO_CACHE_DIR` | `/data/photos` | Photo cache directory |
+| `PHOTO_CACHE_ENABLED` | `true` | Enable photo caching |
+| `PHOTO_CACHE_DIR` | `/data/photos` | Local photo cache directory |
 | `PHOTO_AUTO_DOWNLOAD` | `true` | Auto-download photos for new aircraft |
+| `S3_ENABLED` | `false` | Use S3 for photo storage |
+| `S3_BUCKET` | `""` | S3 bucket name |
+| `S3_REGION` | `us-east-1` | S3 region |
+| `S3_ACCESS_KEY` | `None` | S3 access key (or use IAM) |
+| `S3_SECRET_KEY` | `None` | S3 secret key |
+| `S3_ENDPOINT_URL` | `None` | Custom S3 endpoint (MinIO, Wasabi) |
+| `S3_PREFIX` | `aircraft-photos` | S3 key prefix |
+| `S3_PUBLIC_URL` | `None` | Public URL base for CDN |
 | `OPENSKY_DB_ENABLED` | `true` | Enable local OpenSky database |
 | `OPENSKY_DB_PATH` | `/data/opensky/aircraft-database.csv` | Path to OpenSky CSV |
 
@@ -180,13 +188,58 @@ The database contains ~600,000 aircraft and is checked first before any external
 
 ### Photo Caching
 
-Photos are automatically downloaded and cached locally when new aircraft are seen:
+Photos are automatically downloaded and cached when new aircraft are seen.
+Supports local filesystem (default) or S3-compatible storage.
 
+**Local Storage (default):**
 ```bash
-# Photos stored in:
-/data/photos/A12345.jpg      # Full-size
+PHOTO_CACHE_ENABLED=true
+PHOTO_CACHE_DIR=/data/photos
+PHOTO_AUTO_DOWNLOAD=true
+```
+
+Photos stored as:
+```
+/data/photos/A12345.jpg       # Full-size
 /data/photos/A12345_thumb.jpg # Thumbnail
 ```
+
+**S3/MinIO/Wasabi Storage:**
+```bash
+# Enable S3
+S3_ENABLED=true
+S3_BUCKET=my-aircraft-photos
+S3_REGION=us-east-1
+
+# Credentials (or use IAM role)
+S3_ACCESS_KEY=AKIAXXXXXXXX
+S3_SECRET_KEY=xxxxxxxx
+
+# Optional: Key prefix
+S3_PREFIX=aircraft-photos
+
+# Optional: Custom endpoint for MinIO, Wasabi, etc.
+S3_ENDPOINT_URL=https://minio.local:9000
+
+# Optional: Public URL base for CDN
+S3_PUBLIC_URL=https://cdn.example.com/aircraft-photos
+```
+
+S3 keys:
+```
+s3://my-bucket/aircraft-photos/A12345.jpg
+s3://my-bucket/aircraft-photos/A12345_thumb.jpg
+```
+
+**Comparison:**
+
+| Feature | Local | S3 |
+|---------|-------|-----|
+| Setup | Simple | Requires bucket |
+| Scaling | Single server | Multi-server |
+| Cost | Disk only | Per-request + storage |
+| CDN | Manual | Native |
+| Backup | Manual | Built-in |
 
 Environment variables:
 ```bash

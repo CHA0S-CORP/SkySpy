@@ -1,11 +1,25 @@
 """
 Photo caching service.
-Downloads and caches aircraft photos locally for offline access.
+Downloads and caches aircraft photos to local filesystem or S3.
+
+Storage backends:
+- Local filesystem (default): /data/photos/
+- S3/MinIO/Wasabi: s3://bucket/prefix/
+
+Configuration:
+- PHOTO_CACHE_ENABLED=true
+- PHOTO_CACHE_DIR=/data/photos (for local)
+- S3_ENABLED=true (for S3)
+- S3_BUCKET=my-bucket
+- S3_REGION=us-east-1
+- S3_ACCESS_KEY=xxx
+- S3_SECRET_KEY=xxx
+- S3_ENDPOINT_URL=https://minio.local:9000 (for S3-compatible)
+- S3_PREFIX=aircraft-photos
+- S3_PUBLIC_URL=https://cdn.example.com/aircraft-photos (optional)
 """
 import asyncio
-import hashlib
 import logging
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
@@ -26,6 +40,138 @@ _pending_downloads: set[str] = set()
 # Download queue for background processing
 _download_queue: asyncio.Queue = None
 
+# S3 client (lazy initialized)
+_s3_client = None
+
+
+def _get_s3_client():
+    """Get or create S3 client (lazy initialization)."""
+    global _s3_client
+    
+    if _s3_client is not None:
+        return _s3_client
+    
+    if not settings.s3_enabled:
+        return None
+    
+    try:
+        import boto3
+        from botocore.config import Config
+        
+        config = Config(
+            signature_version='s3v4',
+            retries={'max_attempts': 3, 'mode': 'standard'}
+        )
+        
+        client_kwargs = {
+            'service_name': 's3',
+            'region_name': settings.s3_region,
+            'config': config,
+        }
+        
+        # Use explicit credentials if provided
+        if settings.s3_access_key and settings.s3_secret_key:
+            client_kwargs['aws_access_key_id'] = settings.s3_access_key
+            client_kwargs['aws_secret_access_key'] = settings.s3_secret_key
+        
+        # Custom endpoint for MinIO, Wasabi, etc.
+        if settings.s3_endpoint_url:
+            client_kwargs['endpoint_url'] = settings.s3_endpoint_url
+        
+        _s3_client = boto3.client(**client_kwargs)
+        logger.info(f"S3 client initialized: bucket={settings.s3_bucket}, prefix={settings.s3_prefix}")
+        return _s3_client
+    
+    except ImportError:
+        logger.error("boto3 not installed - S3 storage unavailable. Install with: pip install boto3")
+        return None
+    except Exception as e:
+        logger.error(f"Failed to initialize S3 client: {e}")
+        return None
+
+
+def _get_s3_key(icao_hex: str, is_thumbnail: bool = False) -> str:
+    """Get S3 key for photo."""
+    suffix = "_thumb" if is_thumbnail else ""
+    prefix = settings.s3_prefix.strip("/")
+    return f"{prefix}/{icao_hex.upper()}{suffix}.jpg"
+
+
+def _get_s3_url(icao_hex: str, is_thumbnail: bool = False) -> str:
+    """Get public URL for S3 photo."""
+    key = _get_s3_key(icao_hex, is_thumbnail)
+    
+    # Use custom public URL if configured (e.g., CDN)
+    if settings.s3_public_url:
+        base = settings.s3_public_url.rstrip("/")
+        # Remove prefix from key if public URL already includes it
+        if settings.s3_prefix and key.startswith(settings.s3_prefix):
+            key = key[len(settings.s3_prefix):].lstrip("/")
+        return f"{base}/{key}"
+    
+    # Default S3 URL format
+    if settings.s3_endpoint_url:
+        # Custom endpoint (MinIO, etc.)
+        endpoint = settings.s3_endpoint_url.rstrip("/")
+        return f"{endpoint}/{settings.s3_bucket}/{key}"
+    else:
+        # Standard AWS S3
+        return f"https://{settings.s3_bucket}.s3.{settings.s3_region}.amazonaws.com/{key}"
+
+
+async def _upload_to_s3(data: bytes, icao_hex: str, is_thumbnail: bool = False) -> Optional[str]:
+    """Upload photo to S3. Returns URL or None on failure."""
+    client = _get_s3_client()
+    if not client:
+        return None
+    
+    key = _get_s3_key(icao_hex, is_thumbnail)
+    
+    try:
+        # Run in thread pool since boto3 is synchronous
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: client.put_object(
+                Bucket=settings.s3_bucket,
+                Key=key,
+                Body=data,
+                ContentType='image/jpeg',
+                CacheControl='max-age=31536000',  # 1 year cache
+            )
+        )
+        
+        url = _get_s3_url(icao_hex, is_thumbnail)
+        logger.info(f"Uploaded to S3: {key}")
+        return url
+    
+    except Exception as e:
+        logger.error(f"S3 upload failed for {icao_hex}: {e}")
+        return None
+
+
+async def _check_s3_exists(icao_hex: str, is_thumbnail: bool = False) -> bool:
+    """Check if photo exists in S3."""
+    client = _get_s3_client()
+    if not client:
+        return False
+    
+    key = _get_s3_key(icao_hex, is_thumbnail)
+    
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: client.head_object(Bucket=settings.s3_bucket, Key=key)
+        )
+        return True
+    except Exception:
+        return False
+
+
+# ============================================================================
+# Local filesystem functions
+# ============================================================================
 
 def get_cache_dir() -> Path:
     """Get and create cache directory."""
@@ -43,28 +189,35 @@ def get_photo_path(icao_hex: str, is_thumbnail: bool = False) -> Path:
 
 def get_cached_photo(icao_hex: str, thumbnail: bool = False) -> Optional[Path]:
     """
-    Get path to cached photo if it exists.
+    Get path to cached photo if it exists locally.
     
     Returns:
         Path to cached photo or None if not cached
     """
+    if settings.s3_enabled:
+        return None  # Use S3 URLs instead
+    
     path = get_photo_path(icao_hex, thumbnail)
     if path.exists() and path.stat().st_size > 0:
         return path
     return None
 
 
+# ============================================================================
+# Main download/cache functions
+# ============================================================================
+
 async def download_photo(
     url: str,
     icao_hex: str,
     is_thumbnail: bool = False,
     timeout: float = 30.0
-) -> Optional[Path]:
+) -> Optional[str]:
     """
-    Download a photo and save to cache.
+    Download a photo and save to cache (local or S3).
     
     Returns:
-        Path to downloaded file or None on failure
+        Path/URL to cached file or None on failure
     """
     if not settings.photo_cache_enabled:
         return None
@@ -82,11 +235,14 @@ async def download_photo(
     _pending_downloads.add(cache_key)
     
     try:
-        path = get_photo_path(icao_hex, is_thumbnail)
-        
-        # Skip if already cached
-        if path.exists() and path.stat().st_size > 0:
-            return path
+        # Check if already cached
+        if settings.s3_enabled:
+            if await _check_s3_exists(icao_hex, is_thumbnail):
+                return _get_s3_url(icao_hex, is_thumbnail)
+        else:
+            path = get_photo_path(icao_hex, is_thumbnail)
+            if path.exists() and path.stat().st_size > 0:
+                return str(path)
         
         logger.info(f"Downloading photo for {icao_hex}: {url}")
         
@@ -107,11 +263,19 @@ async def download_photo(
                 logger.warning(f"Not an image ({content_type}): {url}")
                 return None
             
-            # Save to file
-            path.write_bytes(response.content)
-            logger.info(f"Cached photo for {icao_hex}: {path}")
+            data = response.content
             
-            return path
+            # Save to S3 or local filesystem
+            if settings.s3_enabled:
+                result = await _upload_to_s3(data, icao_hex, is_thumbnail)
+                if result:
+                    logger.info(f"Cached photo to S3 for {icao_hex}")
+                return result
+            else:
+                path = get_photo_path(icao_hex, is_thumbnail)
+                path.write_bytes(data)
+                logger.info(f"Cached photo locally for {icao_hex}: {path}")
+                return str(path)
     
     except httpx.TimeoutException:
         logger.warning(f"Timeout downloading photo for {icao_hex}")
@@ -134,10 +298,10 @@ async def cache_aircraft_photos(
 ) -> Tuple[Optional[str], Optional[str]]:
     """
     Download and cache both full-size and thumbnail photos.
-    Updates database with local cache paths.
+    Updates database with local cache paths or S3 URLs.
     
     Returns:
-        Tuple of (photo_local_path, thumbnail_local_path)
+        Tuple of (photo_path_or_url, thumbnail_path_or_url)
     """
     if not settings.photo_cache_enabled:
         return None, None
@@ -150,15 +314,15 @@ async def cache_aircraft_photos(
     if photo_url:
         result = await download_photo(photo_url, icao_hex, is_thumbnail=False)
         if result:
-            photo_path = str(result)
+            photo_path = result
     
     # Download thumbnail
     if thumbnail_url:
         result = await download_photo(thumbnail_url, icao_hex, is_thumbnail=True)
         if result:
-            thumb_path = str(result)
+            thumb_path = result
     
-    # Update database with local paths
+    # Update database with local paths / S3 URLs
     if photo_path or thumb_path:
         try:
             await db.execute(
@@ -183,17 +347,24 @@ async def get_or_download_photo(
     thumbnail: bool = False
 ) -> Optional[bytes]:
     """
-    Get photo from cache or download if not cached.
+    Get photo bytes from cache or download if not cached.
     
     Returns:
         Photo bytes or None
     """
     icao_hex = icao_hex.upper()
     
-    # Check local cache first
-    cached = get_cached_photo(icao_hex, thumbnail)
-    if cached:
-        return cached.read_bytes()
+    # For S3, we return URLs not bytes (use photo_url from DB)
+    if settings.s3_enabled:
+        # Check if already in S3
+        if await _check_s3_exists(icao_hex, thumbnail):
+            # Return None - caller should use the URL from DB
+            return None
+    else:
+        # Check local cache first
+        cached = get_cached_photo(icao_hex, thumbnail)
+        if cached:
+            return cached.read_bytes()
     
     # Get URLs from database
     result = await db.execute(
@@ -212,20 +383,35 @@ async def get_or_download_photo(
         return None
     
     # Download and cache
-    path = await download_photo(url, icao_hex, is_thumbnail=thumbnail)
-    if path:
-        return path.read_bytes()
+    result_path = await download_photo(url, icao_hex, is_thumbnail=thumbnail)
+    
+    if result_path and not settings.s3_enabled:
+        # Local storage - return bytes
+        return Path(result_path).read_bytes()
     
     return None
 
 
 def get_cache_stats() -> dict:
     """Get statistics about the photo cache."""
+    
+    if settings.s3_enabled:
+        return {
+            "enabled": settings.photo_cache_enabled,
+            "storage": "s3",
+            "bucket": settings.s3_bucket,
+            "prefix": settings.s3_prefix,
+            "region": settings.s3_region,
+            "endpoint": settings.s3_endpoint_url,
+            "public_url": settings.s3_public_url,
+        }
+    
     cache_dir = get_cache_dir()
     
     if not cache_dir.exists():
         return {
             "enabled": settings.photo_cache_enabled,
+            "storage": "local",
             "cache_dir": str(cache_dir),
             "total_photos": 0,
             "total_thumbnails": 0,
@@ -239,6 +425,7 @@ def get_cache_stats() -> dict:
     
     return {
         "enabled": settings.photo_cache_enabled,
+        "storage": "local",
         "cache_dir": str(cache_dir),
         "total_photos": len(photos),
         "total_thumbnails": len(thumbnails),
@@ -246,7 +433,10 @@ def get_cache_stats() -> dict:
     }
 
 
+# ============================================================================
 # Background queue processing
+# ============================================================================
+
 async def init_download_queue():
     """Initialize the background download queue."""
     global _download_queue

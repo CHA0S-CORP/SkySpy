@@ -18,5 +18,9 @@ apprise>=1.6.0
 # Redis (optional, for multi-worker SSE)
 redis>=5.0.0
 
+# S3 Storage (optional, for photo cache)
+boto3>=1.34.0
+
 # Development
 python-multipart>=0.0.6
+

@@ -67,6 +67,16 @@ class Settings(BaseSettings):
     photo_cache_dir: str = "/data/photos"
     photo_auto_download: bool = True
     
+    # S3 Storage (optional - for photo cache)
+    s3_enabled: bool = False
+    s3_bucket: str = ""
+    s3_region: str = "us-east-1"
+    s3_access_key: Optional[str] = None
+    s3_secret_key: Optional[str] = None
+    s3_endpoint_url: Optional[str] = None  # For MinIO, Wasabi, etc.
+    s3_prefix: str = "aircraft-photos"  # Key prefix in bucket
+    s3_public_url: Optional[str] = None  # Public URL base for serving (e.g., CDN)
+    
     # OpenSky Database
     opensky_db_path: str = "/data/opensky/aircraft-database.csv"
     opensky_db_enabled: bool = True

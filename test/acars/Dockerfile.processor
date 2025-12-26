@@ -1,0 +1,17 @@
+# Example ACARS Processor Service Dockerfile
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install dependencies
+RUN pip install --no-cache-dir fastapi uvicorn[standard]
+
+# Copy application
+COPY processor.py .
+
+# Expose ports
+EXPOSE 5000/udp
+EXPOSE 5001
+
+CMD ["python", "processor.py"]

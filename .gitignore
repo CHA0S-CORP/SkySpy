@@ -1,0 +1,7 @@
+*.zip
+.env.test
+.env
+node_modules/
+.DS_Store
+test/api-cache/
+.vscode/
