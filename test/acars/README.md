@@ -14,22 +14,6 @@ A mock implementation of [sdr-enthusiasts/docker-acarshub](https://github.com/sd
 
 ## Quick Start
 
-### Using Docker Compose
-
-```bash
-# Clone or create the project
-cd acarshub-mock
-
-# Start the service
-docker compose up -d
-
-# View logs
-docker compose logs -f
-
-# Access web interface
-open http://localhost:8080
-```
-
 ### Using Docker
 
 ```bash

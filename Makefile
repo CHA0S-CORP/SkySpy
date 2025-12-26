@@ -15,11 +15,11 @@ help:
 
 # Run tests in Docker
 test:
-	docker compose --env-file ./.env.test -f test/docker-compose.test.yaml --profile test up --build --abort-on-container-exit --attach test --quiet-build --quiet-pull	--exit-code-from test 
+	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml --profile test up --build --quiet-build --quiet-pull --abort-on-container-exit --attach api-test --exit-code-from api-test 
 
 	@echo ""
 	@echo "📊 Test results available in ./test-results/"
-	docker compose --env-file ./.env.test -f test/docker-compose.test.yaml --profile test down > /dev/null 2>&1
+	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml --profile test down > /dev/null 2>&1
 
 # =============================================================================
 # Mock Server Commands
@@ -28,7 +28,7 @@ test:
 # Start mock servers for dashboard development
 mock:
 	@echo "🛫 Starting mock ADS-B servers..."
-	docker compose --env-file ./.env.test -f test/docker-compose.test.yaml --profile dev up --build -d
+	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml --profile dev up --build -d
 	@echo ""
 	@echo "✅ Services running:"
 	@echo ""
@@ -51,20 +51,20 @@ mock:
 
 # Stop mock servers
 mock-down:
-	docker compose --env-file ./.env.test -f test/docker-compose.test.yaml --profile dev down
+	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml --profile dev down
 	@echo "🛬 Mock servers stopped"
 
 # Show mock server logs
 mock-logs:
-	docker compose --env-file ./.env.test -f test/docker-compose.test.yaml --profile dev logs -f
+	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml --profile dev logs -f
 
 # Run tests with verbose output
 test-verbose:
-	docker compose --env-file ./.env.test -f test/docker-compose.test.yaml --profile test up --build test pytest test_adsb_api.py -v --tb=long
+	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml --profile test up --build test pytest test_adsb_api.py -v --tb=long
 
 # Generate HTML report
 test-html:
-	docker compose --env-file ./.env.test -f test/docker-compose.test.yaml --profile test up --build --abort-on-container-exit --exit-code-from test
+	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml --profile test up --build --abort-on-container-exit --exit-code-from test
 	@echo ""
 	@echo "📊 HTML report: ./test-results/report.html"
 
@@ -78,25 +78,15 @@ test-local:
 # Build Docker images
 build:
 	docker build -f Dockerfile -t adsb_api .
-	docker compose --env-file ./.env.test -f test/docker-compose.test.yaml build
+	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml build
 
 # Clean up
 clean:
-	docker compose --env-file ./.env.test -f test/docker-compose.test.yaml down -v --remove-orphans
+	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml down -v --remove-orphans
 	rm -rf test-results/__pycache__
 	rm -rf __pycache__
 	rm -rf .pytest_cache
 
 # Show logs
 logs:
-	docker compose --env-file ./.env.test -f test/docker-compose.test.yaml --profile test logs -f test
-
-# Run specific test class
-test-class:
-	@read -p "Enter test class name (e.g., TestAlertRulesEndpoints): " class; \
-	docker compose --env-file ./.env.test -f test/docker-compose.test.yaml --profile test run --build test pytest test_adsb_api.py -v -k "$$class"
-
-# Run tests matching pattern
-test-pattern:
-	@read -p "Enter test pattern: " pattern; \
-	docker compose --env-file ./.env.test -f test/docker-compose.test.yaml --profile test run --build test pytest test_adsb_api.py -v -k "$$pattern"
+	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml --profile test logs -f test

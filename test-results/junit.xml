@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="16" skipped="0" tests="34" time="2.234" timestamp="2025-12-26T22:21:26.291735+00:00" hostname="19dbb6183a63"><testcase classname="tests.integration.test_aircraft_api.TestAircraftEndpoints" name="test_get_aircraft_live_empty" time="0.495" /><testcase classname="tests.integration.test_aircraft_api.TestAircraftEndpoints" name="test_get_aircraft_stats" time="0.049"><failure message="AssertionError: assert 'total_aircraft' in {'total': 209, 'with_position': 209, 'military': 1, 'emergency': [], 'categories': {'A5': 9, 'A1': 45, 'A2': 37, 'A3': 98, 'A7': 7, '': 5, 'C2': 7, 'A4': 1}, 'altitude': {'ground': 56, 'low': 57, 'medium': 53, 'high': 43}, 'messages': 418, 'timestamp': '2025-12-26T22:21:26.922287Z'}">tests/integration/test_aircraft_api.py:23: in test_get_aircraft_stats
+    assert "total_aircraft" in data
+E   AssertionError: assert 'total_aircraft' in {'total': 209, 'with_position': 209, 'military': 1, 'emergency': [], 'categories': {'A5': 9, 'A1': 45, 'A2': 37, 'A3': 98, 'A7': 7, '': 5, 'C2': 7, 'A4': 1}, 'altitude': {'ground': 56, 'low': 57, 'medium': 53, 'high': 43}, 'messages': 418, 'timestamp': '2025-12-26T22:21:26.922287Z'}</failure></testcase><testcase classname="tests.integration.test_aircraft_api.TestAircraftEndpoints" name="test_get_aircraft_top" time="0.079" /><testcase classname="tests.integration.test_aircraft_api.TestHealthEndpoint" name="test_health_check" time="0.048" /><testcase classname="tests.integration.test_aircraft_api.TestHealthEndpoint" name="test_status_endpoint" time="0.056"><failure message="AssertionError: assert 'receiver' in {'version': '2.6.0', 'adsb_online': True, 'aircraft_count': 209, 'total_sightings': 0, 'total_sessions': 0, 'active_rules': 0, 'alert_history_count': 0, 'safety_event_count': 0, 'safety_monitoring_enabled': True, 'safety_tracked_aircraft': 0, 'notifications_configured': False, 'redis_enabled': False, 'sse_subscribers': 0, 'sse_tracked_aircraft': 0, 'sse_redis_enabled': False, 'acars_enabled': True, 'acars_running': False, 'polling_interval_seconds': 2, 'db_store_interval_seconds': 10, 'scheduler_running': False, 'scheduler_jobs': [], 'worker_pid': 1, 'location': {'lat': 47.9377, 'lon': -121.9687}}">tests/integration/test_aircraft_api.py:53: in test_status_endpoint
+    assert "receiver" in data
+E   AssertionError: assert 'receiver' in {'version': '2.6.0', 'adsb_online': True, 'aircraft_count': 209, 'total_sightings': 0, 'total_sessions': 0, 'active_rules': 0, 'alert_history_count': 0, 'safety_event_count': 0, 'safety_monitoring_enabled': True, 'safety_tracked_aircraft': 0, 'notifications_configured': False, 'redis_enabled': False, 'sse_subscribers': 0, 'sse_tracked_aircraft': 0, 'sse_redis_enabled': False, 'acars_enabled': True, 'acars_running': False, 'polling_interval_seconds': 2, 'db_store_interval_seconds': 10, 'scheduler_running': False, 'scheduler_jobs': [], 'worker_pid': 1, 'location': {'lat': 47.9377, 'lon': -121.9687}}</failure></testcase><testcase classname="tests.integration.test_alerts_api.TestAlertsEndpoints" name="test_get_alert_rules_empty" time="0.037"><failure message="AssertionError: assert False&#10; +  where False = isinstance({'rules': [], 'count': 0}, list)">tests/integration/test_alerts_api.py:17: in test_get_alert_rules_empty
+    assert isinstance(data, list)
+E   AssertionError: assert False
+E    +  where False = isinstance({'rules': [], 'count': 0}, list)</failure></testcase><testcase classname="tests.integration.test_alerts_api.TestAlertsEndpoints" name="test_create_alert_rule" time="0.068" /><testcase classname="tests.integration.test_alerts_api.TestAlertsEndpoints" name="test_get_alert_rules_after_create" time="0.044"><failure message="TypeError: string indices must be integers, not 'str'">tests/integration/test_alerts_api.py:52: in test_get_alert_rules_after_create
+    assert any(r["name"] == "Test Rule" for r in data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/integration/test_alerts_api.py:52: in &lt;genexpr&gt;
+    assert any(r["name"] == "Test Rule" for r in data)
+               ^^^^^^^^^
+E   TypeError: string indices must be integers, not 'str'</failure></testcase><testcase classname="tests.integration.test_alerts_api.TestAlertsEndpoints" name="test_update_alert_rule" time="0.043" /><testcase classname="tests.integration.test_alerts_api.TestAlertsEndpoints" name="test_delete_alert_rule" time="0.042"><failure message="assert 200 == 204&#10; +  where 200 = &lt;Response [200 OK]&gt;.status_code">tests/integration/test_alerts_api.py:95: in test_delete_alert_rule
+    assert response.status_code == 204
+E   assert 200 == 204
+E    +  where 200 = &lt;Response [200 OK]&gt;.status_code</failure></testcase><testcase classname="tests.integration.test_history_api.TestHistoryEndpoints" name="test_get_sightings_empty" time="0.042"><failure message="AssertionError: assert False&#10; +  where False = isinstance({'sightings': [], 'count': 0, 'total': 0}, list)">tests/integration/test_history_api.py:18: in test_get_sightings_empty
+    assert isinstance(data, list)
+E   AssertionError: assert False
+E    +  where False = isinstance({'sightings': [], 'count': 0, 'total': 0}, list)</failure></testcase><testcase classname="tests.integration.test_history_api.TestHistoryEndpoints" name="test_get_sightings_with_data" time="0.032"><failure message="TypeError: 'icao' is an invalid keyword argument for AircraftSighting">tests/integration/test_history_api.py:25: in test_get_sightings_with_data
+    sighting = AircraftSighting(
+&lt;string&gt;:4: in __init__
+    ???
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/state.py:596: in _initialize_instance
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/state.py:594: in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/decl_base.py:2179: in _declarative_constructor
+    raise TypeError(
+E   TypeError: 'icao' is an invalid keyword argument for AircraftSighting</failure></testcase><testcase classname="tests.integration.test_history_api.TestHistoryEndpoints" name="test_get_sessions_empty" time="0.037"><failure message="AssertionError: assert False&#10; +  where False = isinstance({'sessions': [], 'count': 0}, list)">tests/integration/test_history_api.py:53: in test_get_sessions_empty
+    assert isinstance(data, list)
+E   AssertionError: assert False
+E    +  where False = isinstance({'sessions': [], 'count': 0}, list)</failure></testcase><testcase classname="tests.integration.test_history_api.TestHistoryEndpoints" name="test_get_sessions_with_data" time="0.032"><failure message="TypeError: 'icao' is an invalid keyword argument for AircraftSession">tests/integration/test_history_api.py:60: in test_get_sessions_with_data
+    session = AircraftSession(
+&lt;string&gt;:4: in __init__
+    ???
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/state.py:596: in _initialize_instance
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/state.py:594: in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/decl_base.py:2179: in _declarative_constructor
+    raise TypeError(
+E   TypeError: 'icao' is an invalid keyword argument for AircraftSession</failure></testcase><testcase classname="tests.integration.test_history_api.TestHistoryEndpoints" name="test_get_sightings_filter_by_icao" time="0.033"><failure message="TypeError: 'icao' is an invalid keyword argument for AircraftSighting">tests/integration/test_history_api.py:83: in test_get_sightings_filter_by_icao
+    sighting1 = AircraftSighting(
+&lt;string&gt;:4: in __init__
+    ???
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/state.py:596: in _initialize_instance
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/state.py:594: in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/decl_base.py:2179: in _declarative_constructor
+    raise TypeError(
+E   TypeError: 'icao' is an invalid keyword argument for AircraftSighting</failure></testcase><testcase classname="tests.integration.test_safety_api.TestSafetyEndpoints" name="test_get_safety_events_empty" time="0.040"><failure message="AssertionError: assert False&#10; +  where False = isinstance({'events': [], 'count': 0}, list)">tests/integration/test_safety_api.py:17: in test_get_safety_events_empty
+    assert isinstance(data, list)
+E   AssertionError: assert False
+E    +  where False = isinstance({'events': [], 'count': 0}, list)</failure></testcase><testcase classname="tests.integration.test_safety_api.TestSafetyEndpoints" name="test_get_safety_events_with_data" time="0.033"><failure message="TypeError: 'icao' is an invalid keyword argument for SafetyEvent">tests/integration/test_safety_api.py:23: in test_get_safety_events_with_data
+    event1 = SafetyEvent(
+&lt;string&gt;:4: in __init__
+    ???
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/state.py:596: in _initialize_instance
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/state.py:594: in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/decl_base.py:2179: in _declarative_constructor
+    raise TypeError(
+E   TypeError: 'icao' is an invalid keyword argument for SafetyEvent</failure></testcase><testcase classname="tests.integration.test_safety_api.TestSafetyEndpoints" name="test_get_safety_events_filter_by_severity" time="0.032"><failure message="TypeError: 'icao' is an invalid keyword argument for SafetyEvent">tests/integration/test_safety_api.py:58: in test_get_safety_events_filter_by_severity
+    critical_event = SafetyEvent(
+&lt;string&gt;:4: in __init__
+    ???
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/state.py:596: in _initialize_instance
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/state.py:594: in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/decl_base.py:2179: in _declarative_constructor
+    raise TypeError(
+E   TypeError: 'icao' is an invalid keyword argument for SafetyEvent</failure></testcase><testcase classname="tests.integration.test_safety_api.TestSafetyEndpoints" name="test_get_safety_events_filter_by_type" time="0.034"><failure message="TypeError: 'icao' is an invalid keyword argument for SafetyEvent">tests/integration/test_safety_api.py:82: in test_get_safety_events_filter_by_type
+    proximity = SafetyEvent(
+&lt;string&gt;:4: in __init__
+    ???
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/state.py:596: in _initialize_instance
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/state.py:594: in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/decl_base.py:2179: in _declarative_constructor
+    raise TypeError(
+E   TypeError: 'icao' is an invalid keyword argument for SafetyEvent</failure></testcase><testcase classname="tests.integration.test_safety_api.TestSafetyEndpoints" name="test_get_safety_config" time="0.034"><failure message="assert 404 == 200&#10; +  where 404 = &lt;Response [404 Not Found]&gt;.status_code">tests/integration/test_safety_api.py:107: in test_get_safety_config
+    assert response.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404 Not Found]&gt;.status_code</failure></testcase><testcase classname="tests.unit.test_utils.TestCalculateDistance" name="test_calculate_distance_same_point" time="0.001" /><testcase classname="tests.unit.test_utils.TestCalculateDistance" name="test_calculate_distance_known_distance" time="0.000" /><testcase classname="tests.unit.test_utils.TestCalculateDistance" name="test_calculate_distance_equator" time="0.000" /><testcase classname="tests.unit.test_utils.TestPositionValidation" name="test_valid_position" time="0.000" /><testcase classname="tests.unit.test_utils.TestPositionValidation" name="test_invalid_latitude_high" time="0.000" /><testcase classname="tests.unit.test_utils.TestPositionValidation" name="test_invalid_latitude_low" time="0.000" /><testcase classname="tests.unit.test_utils.TestPositionValidation" name="test_invalid_longitude_high" time="0.000" /><testcase classname="tests.unit.test_utils.TestPositionValidation" name="test_invalid_longitude_low" time="0.000" /><testcase classname="tests.unit.test_utils.TestPositionValidation" name="test_edge_case_north_pole" time="0.000" /><testcase classname="tests.unit.test_utils.TestPositionValidation" name="test_edge_case_south_pole" time="0.000" /><testcase classname="tests.unit.test_utils.TestSafeAltitude" name="test_valid_altitude" time="0.000" /><testcase classname="tests.unit.test_utils.TestSafeAltitude" name="test_invalid_altitude_non_numeric" time="0.000"><failure message="AssertionError: assert 0 is None&#10; +  where 0 = safe_int_altitude('ground')">tests/unit/test_utils.py:68: in test_invalid_altitude_non_numeric
+    assert safe_int_altitude("ground") is None
+E   AssertionError: assert 0 is None
+E    +  where 0 = safe_int_altitude('ground')</failure></testcase><testcase classname="tests.unit.test_utils.TestSafeAltitude" name="test_invalid_altitude_none" time="0.000" /><testcase classname="tests.unit.test_utils.TestSafeAltitude" name="test_negative_altitude" time="0.001" /></testsuite></testsuites>

@@ -1,22 +1,36 @@
 services:
   # Test runner service
-  test:
+  api-test:
     container_name: adsb_api_test
     build:
-      context: ..
-      dockerfile: test/Dockerfile.test
+      context: ./adsb-api
+      dockerfile: Dockerfile.test
     profiles: ["test"]
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      # Database & Cache
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - REDIS_URL=${REDIS_URL}
-      - ULTRAFEEDER_HOST=${ULTRAFEEDER_HOST}
-      - ULTRAFEEDER_PORT=${ULTRAFEEDER_PORT}
-      - DUMP978_HOST=${DUMP978_HOST}
-      - DUMP978_PORT=${DUMP978_PORT}
+
+      # ADS-B Sources
+      - ULTRAFEEDER_HOST=${ULTRAFEEDER_HOST:-ultrafeeder}
+      - ULTRAFEEDER_PORT=${ULTRAFEEDER_PORT:-80}
+      - DUMP978_HOST=${DUMP978_HOST:-dump978}
+      - DUMP978_PORT=${DUMP978_PORT:-80}
+
+      # Feeder Location
       - FEEDER_LAT=${FEEDER_LAT}
       - FEEDER_LON=${FEEDER_LON}
+
+      # Notifications
       - APPRISE_URLS=${APPRISE_URLS}
       - NOTIFICATION_COOLDOWN=${NOTIFICATION_COOLDOWN}
+
+      # Safety Monitoring
+      - SAFETY_MONITORING_ENABLED=true
+      - SAFETY_PROXIMITY_NM=1.0
+      - SAFETY_ALTITUDE_DIFF_FT=1000
+
+      # Python
       - PYTHONDONTWRITEBYTECODE=${PYTHONDONTWRITEBYTECODE}
       - PYTHONUNBUFFERED=${PYTHONUNBUFFERED}
     volumes:
@@ -30,48 +44,21 @@ services:
         condition: service_healthy
       dump978:
         condition: service_healthy
-    command: >
-      pytest test_adsb_api.py -v 
-      --tb=short 
-      --junitxml=/app/test-results/junit.xml
-      --html=/app/test-results/report.html
-      --self-contained-html
     networks:
       - test-network
-  adsb-dashboard:
-    build:
-      context: ./web
-      dockerfile: Dockerfile.dev
-    container_name: adsb-dashboard-dev
-    working_dir: /app
-    profiles: ["dev"]
-    ports:
-      - "${DASHBOARD_PORT}:3000"
-    volumes:
-      - ../web/src:/app/src
-      - ../web/public:/app/public
-      - ../web/index.html:/app/index.html
-    environment:
-      - NODE_ENV=${NODE_ENV}
-    stdin_open: true
-    tty: true
-    depends_on:
-      api:
-        condition: service_healthy
-
   api:
-    # container_name: adsb_api_dev
+    container_name: adsb_api_dev
     build:
       context: .
       dockerfile: Dockerfile
     profiles: ["dev"]
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - REDIS_URL=${REDIS_URL}
-      - ULTRAFEEDER_HOST=${ULTRAFEEDER_HOST}
-      - ULTRAFEEDER_PORT=${ULTRAFEEDER_PORT}
-      - DUMP978_HOST=${DUMP978_HOST}
-      - DUMP978_PORT=${DUMP978_PORT}
+      - ULTRAFEEDER_HOST=${ULTRAFEEDER_HOST:-ultrafeeder}
+      - ULTRAFEEDER_PORT=${ULTRAFEEDER_PORT:-80}
+      - DUMP978_HOST=${DUMP978_HOST:-dump978}
+      - DUMP978_PORT=${DUMP978_PORT:-80}
       - FEEDER_LAT=${FEEDER_LAT}
       - FEEDER_LON=${FEEDER_LON}
       - APPRISE_URLS=${APPRISE_URLS}
@@ -120,6 +107,27 @@ services:
     networks:
       - test-network
 
+  adsb-dashboard:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+    container_name: adsb-dashboard-dev
+    working_dir: /app
+    profiles: ["dev"]
+    ports:
+      - "${DASHBOARD_PORT}:3000"
+    volumes:
+      - ../web/src:/app/src
+      - ../web/public:/app/public
+      - ../web/index.html:/app/index.html
+    environment:
+      - NODE_ENV=${NODE_ENV}
+    stdin_open: true
+    tty: true
+    depends_on:
+      api:
+        condition: service_healthy
+
   # PostgreSQL for integration tests
   postgres:
     image: postgres:16-alpine
@@ -155,8 +163,9 @@ services:
   # Mock ultrafeeder service for integration tests
   ultrafeeder:
     build:
-      context: ./test/
-      dockerfile: Dockerfile.mock
+      context: ./test/mock-1090
+      dockerfile: Dockerfile
+    image: ghcr.io/cha0s-corp/1090-mock:latest
     profiles: ["dev","test"]
     command: ["python3", "mock_1090.py"]
     environment:
@@ -175,9 +184,9 @@ services:
   # Mock dump978 service for integration tests
   dump978:
     build:
-      context: ./test/
-      dockerfile: Dockerfile.mock
-    image: ghcr.io/chaoscorp/dump978-mock:latest
+      context: ./test/mock-1090
+      dockerfile: Dockerfile
+    image: ghcr.io/cha0s-corp/1090-mock:latest
     profiles: ["dev","test"]
     command: ["python3", "mock_1090.py"]
     environment:
@@ -192,11 +201,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+  
   acarshub-mock:
     build: 
       context: ./test/acars/
       dockerfile: Dockerfile
-    image: ghcr.io/chaoscorp/acarshub-mock:latest
+    image: ghcr.io/cha0s-corp/acarshub-mock:latest
     profiles: ["dev","test"]
     container_name: acarshub-mock
     restart: unless-stopped
@@ -240,9 +250,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 5s
-    depends_on:
-      api:
-        condition: service_healthy
 
 networks:
   test-network:
