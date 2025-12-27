@@ -39,12 +39,12 @@ export function Header({ stats, location, config, setConfig, setShowSettings }) 
         </div>
         <div className="stat-item">
           <MapPin size={16} />
-          <span className="stat-value">{location?.lat?.toFixed(4) || '--'}</span>
+          <span className="stat-value">{location?.lat?.toFixed(1) || '--'}</span>
           <span className="stat-label">Lat</span>
         </div>
         <div className="stat-item">
           <MapPin size={16} />
-          <span className="stat-value">{location?.lon?.toFixed(4) || '--'}</span>
+          <span className="stat-value">{location?.lon?.toFixed(1) || '--'}</span>
           <span className="stat-label">Lon</span>
         </div>
       </div>

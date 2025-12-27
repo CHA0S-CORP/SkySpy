@@ -16,6 +16,7 @@ from app.models import AircraftSighting, AircraftSession, SafetyEvent
 from app.schemas import (
     SightingsListResponse, SessionsListResponse, HistoryStatsResponse
 )
+from app.services.opensky_db import lookup as opensky_lookup
 
 router = APIRouter(prefix="/api/v1/history", tags=["History"])
 
@@ -311,11 +312,22 @@ async def get_sessions(
                         count += 1
             safety_counts[s.id] = count
 
+    # Batch lookup aircraft info for registration data
+    aircraft_info_cache = {}
+    unique_icaos = list(set(s.icao_hex for s in session_list))
+    for icao in unique_icaos:
+        info = opensky_lookup(icao)
+        if info:
+            aircraft_info_cache[icao] = info
+
     for s in session_list:
         duration = (s.last_seen - s.first_seen).total_seconds() / 60
+        info = aircraft_info_cache.get(s.icao_hex, {})
         sessions.append({
             "icao_hex": s.icao_hex,
             "callsign": s.callsign,
+            "registration": info.get("registration"),
+            "country": info.get("country"),
             "first_seen": s.first_seen.isoformat() + "Z",
             "last_seen": s.last_seen.isoformat() + "Z",
             "duration_min": round(duration, 1),

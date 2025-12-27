@@ -36,6 +36,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
 
+import httpx
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -81,7 +82,10 @@ class Settings(BaseSettings):
     
     # Station ID
     station_id: str = "MOCK-STATION"
-    
+
+    # API URL for fetching real callsigns
+    api_url: str = "http://api:5000"
+
     class Config:
         env_prefix = ""
 
@@ -143,17 +147,141 @@ ACARS_LABELS = [
     ("83", "ACMS data"),
 ]
 
-MESSAGE_TEMPLATES = [
-    "FLT {flight} POS N{lat:.4f} W{lon:.4f} ALT {alt} SPD {spd} HDG {hdg}",
-    "ATIS INFO {letter} KSEA {time}Z WIND {wind_dir:03d}/{wind_spd:02d} VIS 10SM FEW250",
-    "REQUEST CURRENT WX FOR {airport}",
-    "DEPART {dep} ARRIVE {arr} ETD {etd} ETA {eta}",
-    "/POSC {lat:.3f}N/{lon:.3f}W,{alt},{time},,{gs},",
-    "OFF/{dep} {time}",
-    "ON/{arr} {time}",
-    "CLR TO {arr} VIA {route}",
-    "MAINT MSG: {system} STATUS NORMAL",
-    "ENG RPT: N1 {n1:.1f} N2 {n2:.1f} EGT {egt}",
+# Realistic ACARS message templates by label type
+REALISTIC_TEMPLATES = {
+    # Position reports (labels 20, 22) - ADS-C style
+    "20": [
+        "/POS{lat_dir}{lat:07.4f}/{lon_dir}{lon:08.4f},ALT{alt},SPD{gs},HDG{track:03.0f},FOB{fob}",
+        "POS N{lat:.4f}{lat_dir} {lon:.4f}{lon_dir} {time}Z FL{fl} M.{mach} {wind_dir:03d}/{wind_spd:02d}",
+        "/POSRPT/{lat:.2f}{lat_dir}/{lon:.2f}{lon_dir}/{time}/{fl}/M{mach:.2f}/{gs}KT",
+        "LAT {lat_dir}{lat:.4f}/LON {lon_dir}{lon:.4f}/ALT {alt}/TAS {tas}/SAT {sat}",
+    ],
+    "22": [
+        "ADS-C RPT/{lat:.3f}{lat_dir}/{lon:.3f}{lon_dir},FL{fl},{time}Z,{gs}KT,{track:03.0f}T",
+        "/ADS N{lat:.4f} W{lon:.4f} {alt}FT {gs}KT TRK{track:03.0f}",
+    ],
+    # OOOI events (label 14) - Out/Off/On/In
+    "14": [
+        "OUT/{dep}/{time}",
+        "OFF/{dep}/{time}",
+        "ON/{arr}/{time}",
+        "IN/{arr}/{time}",
+        "{event} {airport} {time} {date}",
+    ],
+    # Weather/ATIS (labels 15, 16, 44)
+    "15": [
+        "REQ WX {airport}",
+        "RQ MET {airport}",
+        "WXRQ/{airport}/{time}",
+    ],
+    "16": [
+        "{airport} {time}Z {wind_dir:03d}{wind_spd:02d}KT {vis}SM {clouds} {temp}/{dewpt} A{altimeter}",
+        "TAF {airport} {time}Z {wind_dir:03d}{wind_spd:02d}G{gust:02d}KT P6SM SCT{sct:03d} BKN{bkn:03d}",
+    ],
+    "44": [
+        "METAR {airport} {day:02d}{time}Z {wind_dir:03d}{wind_spd:02d}KT {vis}SM {clouds} {temp:02d}/{dewpt:02d} A{altimeter}",
+        "SPECI {airport} {day:02d}{time}Z {wind_dir:03d}{wind_spd:02d}G{gust:02d}KT {vis}SM {clouds} {temp:02d}/{dewpt:02d} A{altimeter} RMK AO2",
+    ],
+    # Engine/performance data (labels 80, 81, 83)
+    "80": [
+        "ENG 1: N1={n1_1:.1f} N2={n2_1:.1f} EGT={egt_1} FF={ff_1}\nENG 2: N1={n1_2:.1f} N2={n2_2:.1f} EGT={egt_2} FF={ff_2}",
+        "#CFBENG/{time}/N1 {n1_1:.1f}/{n1_2:.1f}/N2 {n2_1:.1f}/{n2_2:.1f}/FF {ff_1}/{ff_2}",
+    ],
+    "81": [
+        "CRUISE RPT FL{fl} SAT{sat:+d} TAT{tat:+d} N1={n1_1:.1f}/{n1_2:.1f} FF={ff_tot}",
+        "PERF/{time}/FL{fl}/GW{gw}/CG{cg:.1f}/FUEL{fuel}",
+    ],
+    "83": [
+        "ACMS RPT {time}Z\nFLT PHASE: {phase}\nALT: {alt} SPD: {spd}\nFUEL: {fuel} LBS FOB",
+        "DFDR/{time}/ALT{alt}/CAS{cas}/MACH{mach:.3f}/SAT{sat:+d}/TAT{tat:+d}",
+    ],
+    # General/crew messages (labels SA, H1, H2)
+    "SA": [
+        "ETA {arr} {eta}Z FUEL {fuel}",
+        "DELAY DUE TO {reason}. NEW ETD {etd}Z",
+        "PAX COUNT: {pax} CREW: {crew}",
+        "GATE ARRIVAL REQUEST {arr}",
+        "CONNECTING PAX: {conn_pax} TO {conn_flt}",
+        "CATERING CHANGE: {item}",
+        "MX STATUS: {system} NORMAL",
+    ],
+    "H1": [
+        "TO CREW: {msg}",
+        "OPS MSG: {msg}",
+        "DISP INFO: {msg}",
+        "WX ADVISORY: {advisory}",
+    ],
+    "H2": [
+        "FROM CREW: {msg}",
+        "PILOT RPT: {msg}",
+        "CABIN RPT: {msg}",
+    ],
+    # Departure/clearance (labels 10, 12, 30, B9)
+    "10": [
+        "CLR TO {arr} VIA {sid} {route} SQUAWK {squawk}",
+        "PDC {flight}/{arr}/{sid}/RWY{rwy}/INIT ALT {alt}/DEP FREQ {freq}/SQUAWK {squawk}",
+    ],
+    "12": [
+        "ATIS {letter}: {airport} {time}Z. RWY {rwy} IN USE. WIND {wind_dir:03d}/{wind_spd:02d}. VIS {vis}. {clouds}. TEMP {temp}. DEW {dewpt}. ALT {altimeter}. ADVS YOU HAVE INFO {letter}.",
+    ],
+    "30": [
+        "OCEANIC CLR: {route} MACH {mach:.2f} FL{fl} {entry}",
+        "SELCAL {selcal}. {route}. FL{fl}. MACH {mach:.2f}",
+    ],
+    "B9": [
+        "ARR {arr} GATE {gate} {time}Z",
+        "DEP {dep} GATE {gate} {time}Z",
+        "ALTN {altn} WX {reason}",
+    ],
+    # Link test/demand (labels _d, Q0, SQ)
+    "_d": [""],
+    "Q0": [""],
+    "SQ": ["{squawk}"],
+    "21": ["REQ POS {waypoint}"],
+}
+
+# Delay reasons for realistic messages
+DELAY_REASONS = [
+    "ATC FLOW CONTROL", "WEATHER", "MAINTENANCE", "CREW AVAILABILITY",
+    "LATE ARRIVING AIRCRAFT", "GATE HOLD", "FUELING", "CATERING",
+    "SECURITY", "PASSENGER BOARDING", "CONNECTING PASSENGERS", "CARGO LOADING"
+]
+
+# Flight phases for ACMS reports
+FLIGHT_PHASES = ["TAXI OUT", "TAKEOFF", "CLIMB", "CRUISE", "DESCENT", "APPROACH", "LANDING", "TAXI IN"]
+
+# Systems for maintenance messages
+AIRCRAFT_SYSTEMS = [
+    "HYDRAULICS", "ELECTRICAL", "PRESSURIZATION", "APU", "ENG 1", "ENG 2",
+    "FUEL", "ANTI-ICE", "AUTOPILOT", "FMS", "TCAS", "WEATHER RADAR"
+]
+
+# SIDs and airways for routing
+SIDS = ["HAROB2", "SUMMA1", "OZWLD4", "JEFPO1", "PAINE1", "BANGR9", "ELMAA4", "HAWKZ8"]
+AIRWAYS = ["J1", "J4", "J70", "Q1", "Q144", "V23", "V187", "T280", "UL851"]
+WAYPOINTS = ["MARNR", "JAWBN", "ZADON", "GLASR", "HETHR", "NORMY", "COUGA", "TUMBL"]
+
+# Crew messages
+CREW_MESSAGES = [
+    "ROGER", "WILCO", "CONFIRM GATE INFO", "REQUEST FUEL UPDATE",
+    "MEDICAL EMERGENCY ON BOARD", "TURBULENCE REPORT FL{fl}",
+    "RIDE REPORT: {ride} AT FL{fl}", "PIREP: {pirep}"
+]
+
+# Weather advisories
+WX_ADVISORIES = [
+    "SIGMET {id}: TS AREA {loc}", "CONVECTIVE ACTIVITY {dir} OF ROUTE",
+    "MOD TURB FL{fl_lo}-{fl_hi}", "ICING REPORTED FL{fl_lo}-{fl_hi}",
+    "VOLCANIC ASH ADVISORY {area}"
+]
+
+# Ride conditions
+RIDE_CONDITIONS = ["SMOOTH", "LIGHT CHOP", "LIGHT TURB", "MOD CHOP", "MOD TURB", "SEV TURB"]
+
+# Pilot reports
+PIREPS = [
+    "MOD ICE FL{fl}", "NEG ICE FL{fl}", "WIND {dir}/{spd} FL{fl}",
+    "TOPS FL{fl}", "BASES FL{fl}"
 ]
 
 
@@ -287,11 +415,45 @@ message_store = MessageStore()
 
 class MockGenerator:
     """Generates realistic mock ACARS messages"""
-    
+
     def __init__(self):
         self.running = False
         self._task: Optional[asyncio.Task] = None
-        
+        self._callsigns: list[dict] = []  # Cache of aircraft from API
+        self._callsign_refresh_task: Optional[asyncio.Task] = None
+
+    async def _refresh_callsigns(self):
+        """Periodically fetch callsigns from the API"""
+        async with httpx.AsyncClient() as client:
+            while self.running:
+                try:
+                    response = await client.get(
+                        f"{settings.api_url}/api/v1/aircraft",
+                        timeout=5.0
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        aircraft = data.get("aircraft", [])
+                        # Filter to aircraft with callsigns
+                        self._callsigns = [
+                            {
+                                "flight": ac.get("flight", "").strip(),
+                                "hex": ac.get("hex", ""),
+                                "lat": ac.get("lat"),
+                                "lon": ac.get("lon"),
+                                "alt_baro": ac.get("alt_baro"),
+                                "gs": ac.get("gs"),
+                                "track": ac.get("track"),
+                            }
+                            for ac in aircraft
+                            if ac.get("flight") and ac.get("flight").strip()
+                        ]
+                        logger.info(f"Refreshed callsigns: {len(self._callsigns)} aircraft with callsigns")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch callsigns from API: {e}")
+
+                await asyncio.sleep(10)  # Refresh every 10 seconds
+
     def generate_registration(self, prefix: str) -> str:
         """Generate a realistic aircraft registration"""
         if prefix == "N":
@@ -303,23 +465,207 @@ class MockGenerator:
             return f"D-A{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}"
         else:
             return f"{prefix}-{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}"
+
+    def _hex_to_tail(self, hex_code: str) -> str:
+        """Convert ICAO hex to a plausible tail number"""
+        if not hex_code:
+            return self.generate_registration("N")
+        # US aircraft hex codes start with A
+        if hex_code.upper().startswith("A"):
+            return f"N{hex_code[1:].upper()}"
+        # Otherwise generate based on first char
+        return f".{hex_code.upper()}"
+
+    def _generate_text_from_aircraft(self, label: str, now: datetime, ac: dict) -> str:
+        """Generate realistic message text using real aircraft data"""
+        lat = ac.get("lat") or random.uniform(30, 50)
+        lon = ac.get("lon") or random.uniform(-125, -70)
+        alt = ac.get("alt_baro")
+        gs = ac.get("gs") or random.randint(400, 520)
+        track = ac.get("track") or random.randint(0, 359)
+        flight = ac.get("flight", "")
+
+        # Common derived values
+        lat_dir = "N" if lat >= 0 else "S"
+        lon_dir = "W" if lon < 0 else "E"
+        fl = int(alt) // 100 if isinstance(alt, (int, float)) and alt > 0 else random.randint(300, 420)
+        alt_ft = int(alt) if isinstance(alt, (int, float)) else fl * 100
+        time_str = now.strftime("%H%M")
+        mach = random.uniform(0.78, 0.85)
+        fob = random.randint(8000, 45000)  # Fuel on board
+
+        # Build context for template formatting
+        ctx = {
+            "lat": abs(lat),
+            "lon": abs(lon),
+            "lat_dir": lat_dir,
+            "lon_dir": lon_dir,
+            "alt": alt_ft,
+            "fl": fl,
+            "gs": gs,
+            "track": track,
+            "time": time_str,
+            "mach": mach,
+            "fob": fob,
+            "tas": gs + random.randint(-20, 40),
+            "sat": random.randint(-60, -40),
+            "tat": random.randint(-30, -10),
+            "wind_dir": random.randint(0, 359),
+            "wind_spd": random.randint(10, 80),
+            "gust": random.randint(15, 35),
+            "fuel": random.randint(15000, 50000),
+            "dep": random.choice(AIRPORTS),
+            "arr": random.choice(AIRPORTS),
+            "airport": random.choice(AIRPORTS),
+            "altn": random.choice(AIRPORTS),
+            "flight": flight,
+        }
+
+        # Get templates for this label
+        templates = REALISTIC_TEMPLATES.get(label, [])
+        if not templates:
+            return ""
+
+        template = random.choice(templates)
+
+        # Handle special cases by label
+        try:
+            if label in ("20", "22"):  # Position reports
+                return template.format(**ctx)
+
+            elif label == "14":  # OOOI
+                event = random.choice(["OUT", "OFF", "ON", "IN"])
+                airport = ctx["dep"] if event in ("OUT", "OFF") else ctx["arr"]
+                ctx["event"] = event
+                ctx["airport"] = airport
+                ctx["date"] = now.strftime("%d%b").upper()
+                return template.format(**ctx)
+
+            elif label in ("15", "16", "44"):  # Weather
+                ctx["vis"] = random.choice(["10", "P6", "6", "3", "1/2"])
+                ctx["clouds"] = random.choice(["SKC", "FEW040", "SCT080", "BKN025", "OVC015", "FEW250"])
+                ctx["temp"] = random.randint(-10, 35)
+                ctx["dewpt"] = ctx["temp"] - random.randint(2, 15)
+                ctx["altimeter"] = random.randint(2950, 3050)
+                ctx["day"] = now.day
+                ctx["sct"] = random.randint(30, 80)
+                ctx["bkn"] = random.randint(80, 150)
+                return template.format(**ctx)
+
+            elif label in ("80", "81", "83"):  # Engine/performance
+                ctx["n1_1"] = random.uniform(88, 94)
+                ctx["n1_2"] = ctx["n1_1"] + random.uniform(-0.5, 0.5)
+                ctx["n2_1"] = random.uniform(95, 99)
+                ctx["n2_2"] = ctx["n2_1"] + random.uniform(-0.3, 0.3)
+                ctx["egt_1"] = random.randint(750, 850)
+                ctx["egt_2"] = ctx["egt_1"] + random.randint(-10, 10)
+                ctx["ff_1"] = random.randint(2800, 3500)
+                ctx["ff_2"] = ctx["ff_1"] + random.randint(-100, 100)
+                ctx["ff_tot"] = ctx["ff_1"] + ctx["ff_2"]
+                ctx["gw"] = random.randint(140000, 220000)
+                ctx["cg"] = random.uniform(22, 28)
+                ctx["phase"] = random.choice(FLIGHT_PHASES)
+                ctx["spd"] = gs
+                ctx["cas"] = gs - random.randint(50, 100)
+                return template.format(**ctx)
+
+            elif label == "SA":  # General
+                ctx["eta"] = f"{(now.hour + random.randint(1, 5)) % 24:02d}{random.randint(0, 59):02d}"
+                ctx["etd"] = f"{(now.hour + random.randint(0, 2)) % 24:02d}{random.randint(0, 59):02d}"
+                ctx["reason"] = random.choice(DELAY_REASONS)
+                ctx["pax"] = random.randint(80, 220)
+                ctx["crew"] = random.randint(4, 12)
+                ctx["conn_pax"] = random.randint(5, 30)
+                ctx["conn_flt"] = f"{random.choice(['UAL', 'DAL', 'AAL', 'SWA'])}{random.randint(100, 2000)}"
+                ctx["item"] = random.choice(["MEAL COUNT", "SPECIAL MEALS", "BEVERAGE SERVICE"])
+                ctx["system"] = random.choice(AIRCRAFT_SYSTEMS)
+                return template.format(**ctx)
+
+            elif label in ("H1", "H2"):  # Crew messages
+                msg_template = random.choice(CREW_MESSAGES)
+                ctx["msg"] = msg_template.format(
+                    fl=fl,
+                    ride=random.choice(RIDE_CONDITIONS),
+                    pirep=random.choice(PIREPS).format(fl=fl, dir=random.randint(0, 359), spd=random.randint(20, 100))
+                )
+                advisory_template = random.choice(WX_ADVISORIES)
+                ctx["advisory"] = advisory_template.format(
+                    id=f"{random.choice('ABCDEFGH')}{random.randint(1, 9)}",
+                    loc=random.choice(["PACIFIC NW", "MIDWEST", "GULF", "ATLANTIC"]),
+                    dir=random.choice(["N", "NE", "E", "SE", "S", "SW", "W", "NW"]),
+                    fl_lo=random.randint(200, 300),
+                    fl_hi=random.randint(350, 450),
+                    area=random.choice(["NORTH PACIFIC", "ALASKA", "HAWAII"])
+                )
+                return template.format(**ctx)
+
+            elif label == "10":  # Departure clearance
+                ctx["sid"] = random.choice(SIDS)
+                route_parts = random.sample(WAYPOINTS, 3) + random.sample(AIRWAYS, 2)
+                random.shuffle(route_parts)
+                ctx["route"] = " ".join(route_parts[:4])
+                ctx["squawk"] = f"{random.randint(0, 7)}{random.randint(0, 7)}{random.randint(0, 7)}{random.randint(0, 7)}"
+                ctx["rwy"] = random.choice(["16L", "16R", "34L", "34R", "28L", "28R", "10L", "10R"])
+                ctx["freq"] = f"1{random.randint(18, 36)}.{random.randint(0, 99):02d}"
+                return template.format(**ctx)
+
+            elif label == "12":  # ATIS
+                ctx["letter"] = random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+                ctx["rwy"] = random.choice(["16L/16R", "34L/34R", "28L", "10R"])
+                ctx["vis"] = random.choice(["10", "P6", "6"])
+                ctx["clouds"] = random.choice(["FEW040", "SCT080", "BKN025"])
+                ctx["temp"] = random.randint(40, 85)
+                ctx["dewpt"] = ctx["temp"] - random.randint(5, 20)
+                ctx["altimeter"] = random.randint(2980, 3030)
+                return template.format(**ctx)
+
+            elif label == "30":  # Oceanic clearance
+                ctx["entry"] = random.choice(WAYPOINTS)
+                route_pts = random.sample(WAYPOINTS, 4)
+                ctx["route"] = "/".join(route_pts)
+                ctx["selcal"] = f"{random.choice('ABCDEFGHJKLMPQRS')}{random.choice('ABCDEFGHJKLMPQRS')}-{random.choice('ABCDEFGHJKLMPQRS')}{random.choice('ABCDEFGHJKLMPQRS')}"
+                return template.format(**ctx)
+
+            elif label == "B9":  # Arrival/departure info
+                ctx["gate"] = f"{random.choice('ABCDEFGN')}{random.randint(1, 45)}"
+                ctx["reason"] = random.choice(["LOW VIS", "CONVECTIVE", "WINDS"])
+                return template.format(**ctx)
+
+            elif label == "SQ":
+                ctx["squawk"] = f"{random.randint(0, 7)}{random.randint(0, 7)}{random.randint(0, 7)}{random.randint(0, 7)}"
+                return template.format(**ctx)
+
+            elif label == "21":
+                ctx["waypoint"] = random.choice(WAYPOINTS)
+                return template.format(**ctx)
+
+            else:
+                return template.format(**ctx) if template else ""
+
+        except (KeyError, ValueError) as e:
+            logger.debug(f"Template format error for label {label}: {e}")
+            return f"MSG {time_str}"
     
     def generate_message(self) -> ACARSMessage:
-        """Generate a random mock ACARS message"""
-        airline = random.choice(AIRLINES)
-        airline_code, airline_name, reg_prefix = airline
-        
+        """Generate a random mock ACARS message using real callsigns when available"""
         label, label_desc = random.choice(ACARS_LABELS)
-        
-        # Generate flight number
-        flight = f"{airline_code}{random.randint(1, 9999)}"
-        
-        # Generate registration
-        tail = self.generate_registration(reg_prefix)
-        
-        # Generate message text based on label
         now = datetime.now(timezone.utc)
-        text = self._generate_text(label, now)
+
+        # Use real callsign from API if available
+        if self._callsigns:
+            ac = random.choice(self._callsigns)
+            flight = ac["flight"]
+            # Derive registration from hex or generate one
+            tail = self._hex_to_tail(ac["hex"])
+            # Use real position data for more realistic messages
+            text = self._generate_text_from_aircraft(label, now, ac)
+        else:
+            # Fallback to random generation
+            airline = random.choice(AIRLINES)
+            airline_code, airline_name, reg_prefix = airline
+            flight = f"{airline_code}{random.randint(1, 9999)}"
+            tail = self.generate_registration(reg_prefix)
+            text = self._generate_text(label, now)
         
         # Select message type and frequency
         msg_type = random.choices(
@@ -352,44 +698,23 @@ class MockGenerator:
         )
     
     def _generate_text(self, label: str, now: datetime) -> str:
-        """Generate realistic message text based on label"""
-        dep = random.choice(AIRPORTS)
-        arr = random.choice([a for a in AIRPORTS if a != dep])
-        
-        if label == "20" or label == "22":  # Position report
-            lat = random.uniform(25.0, 50.0)
-            lon = random.uniform(65.0, 125.0)
-            return f"/POSC {lat:.3f}N/{lon:.3f}W,{random.randint(300, 450):03d},{now.strftime('%H%M')},M{random.uniform(0.7, 0.85):.2f},{random.randint(400, 550)}"
-        
-        elif label == "14":  # OOOI
-            return f"OFF/{dep} {now.strftime('%H%M')}"
-        
-        elif label == "44":  # METAR
-            return f"METAR {arr} {now.strftime('%d%H%M')}Z {random.randint(0, 360):03d}/{random.randint(5, 25):02d}KT {random.randint(1, 10)}SM FEW{random.randint(20, 100):03d}"
-        
-        elif label == "SA" or label == "H1":  # General text
-            templates = [
-                f"POS RPT N{random.uniform(30, 50):.2f} W{random.uniform(80, 120):.2f} FL{random.randint(300, 450)}",
-                f"REQUEST LATEST WX {arr}",
-                f"ETA {arr} {(now.hour + random.randint(1, 4)) % 24:02d}{random.randint(0, 59):02d}Z",
-                f"FUEL REM {random.randint(15000, 50000)} LBS",
-                f"MAINTENANCE STATUS: ALL SYSTEMS NORMAL",
-            ]
-            return random.choice(templates)
-        
-        elif label == "80" or label == "81":  # Engine data
-            return f"ENG DATA: N1={random.uniform(85, 95):.1f} N2={random.uniform(90, 100):.1f} EGT={random.randint(700, 900)} FF={random.randint(3000, 6000)}"
-        
-        elif label == "_d" or label == "Q0":  # Link test / Demand
-            return ""
-        
-        else:
-            return f"MSG {now.strftime('%H%M%S')}"
+        """Generate realistic message text based on label (fallback when no aircraft data)"""
+        # Create a mock aircraft context with random data
+        mock_ac = {
+            "lat": random.uniform(30, 50),
+            "lon": random.uniform(-125, -70),
+            "alt_baro": random.randint(30000, 42000),
+            "gs": random.randint(420, 520),
+            "track": random.randint(0, 359),
+            "flight": "",
+        }
+        return self._generate_text_from_aircraft(label, now, mock_ac)
     
     async def start(self):
         """Start generating mock messages"""
         self.running = True
         self._task = asyncio.create_task(self._generate_loop())
+        self._callsign_refresh_task = asyncio.create_task(self._refresh_callsigns())
         logger.info("Mock message generator started")
     
     async def stop(self):
@@ -399,6 +724,12 @@ class MockGenerator:
             self._task.cancel()
             try:
                 await self._task
+            except asyncio.CancelledError:
+                pass
+        if self._callsign_refresh_task:
+            self._callsign_refresh_task.cancel()
+            try:
+                await self._callsign_refresh_task
             except asyncio.CancelledError:
                 pass
         logger.info("Mock message generator stopped")

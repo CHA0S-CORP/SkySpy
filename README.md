@@ -41,6 +41,7 @@ Click any aircraft to view detailed information including registration, operator
 ![Aircraft Detail](docs/screenshots/detail.png)
 ![Aircraft Detail](docs/screenshots/airplane1.png)
 ![Aircraft Detail](docs/screenshots/airplane2.png)
+![Aircraft Detail](docs/screenshots/airplane3.png)
 
 ### Safety Alerts & Proximity Warnings
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, Map as MapIcon, Play, Pause, SkipBack, SkipForward, Shield, Search } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, Map as MapIcon, Play, Pause, SkipBack, SkipForward, Shield, Search, MessageCircle } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useApi } from '../../hooks';
@@ -24,6 +24,142 @@ export function HistoryView({ apiBase, onSelectAircraft, targetEventId, onEventV
   const [showMilitaryOnly, setShowMilitaryOnly] = useState(false);
   const [sortField, setSortField] = useState('last_seen');
   const [sortAsc, setSortAsc] = useState(false);
+
+  // ACARS filters
+  const [acarsSearch, setAcarsSearch] = useState('');
+  const [acarsSource, setAcarsSource] = useState('all');
+  const [acarsHideEmpty, setAcarsHideEmpty] = useState(true);
+  const [acarsMessages, setAcarsMessages] = useState([]);
+  const [acarsSelectedLabels, setAcarsSelectedLabels] = useState([]);
+  const [showLabelDropdown, setShowLabelDropdown] = useState(false);
+  const labelDropdownRef = useRef(null);
+
+  // ACARS message label descriptions
+  const acarsLabelDescriptions = {
+    // Common operational labels
+    '_d': 'Command/Response',
+    'H1': 'Departure Message',
+    'H2': 'Arrival Message',
+    '5Z': 'Airline Designated',
+    '80': 'Terminal Weather',
+    '81': 'Terminal Weather',
+    '83': 'Request Terminal Weather',
+    'B1': 'Request Departure Clearance',
+    'B2': 'Departure Clearance',
+    'B3': 'Request Oceanic Clearance',
+    'B4': 'Oceanic Clearance',
+    'B5': 'Departure Slot',
+    'B6': 'Expected Departure Clearance',
+    'BA': 'Beacon Request',
+    'C1': 'Position Report',
+    'CA': 'CPDLC',
+    'Q0': 'Link Test',
+    'Q1': 'Link Test',
+    'Q2': 'Link Test',
+    'QA': 'ACARS Test',
+    'SA': 'System Report',
+    'SQ': 'Squawk Report',
+    // OOOI Messages
+    '10': 'OUT - Leaving Gate',
+    '11': 'OFF - Takeoff',
+    '12': 'ON - Landing',
+    '13': 'IN - Arrived Gate',
+    '14': 'ETA Report',
+    '15': 'Flight Status',
+    '16': 'Route Change',
+    '17': 'Fuel Report',
+    '20': 'Delay Report',
+    '21': 'Delay Report',
+    '22': 'Ground Delay',
+    '23': 'Estimated Gate Arrival',
+    '24': 'Crew Report',
+    '25': 'Passenger Count',
+    '26': 'Connecting Passengers',
+    '27': 'Load Report',
+    '28': 'Weight & Balance',
+    '29': 'Cargo/Mail',
+    '2Z': 'Progress Report',
+    // Weather
+    '30': 'Request Weather',
+    '31': 'METAR',
+    '32': 'TAF',
+    '33': 'ATIS',
+    '34': 'PIREP',
+    '35': 'Wind Data',
+    '36': 'SIGMET',
+    '37': 'NOTAM',
+    '38': 'Turbulence Report',
+    '39': 'Weather Update',
+    '3M': 'METAR Request',
+    '3S': 'SIGMET Request',
+    // Flight planning
+    '40': 'Flight Plan',
+    '41': 'Flight Plan Amendment',
+    '42': 'Route Request',
+    '43': 'Oceanic Report',
+    '44': 'Position Report',
+    '45': 'Flight Level Change',
+    '46': 'Speed Change',
+    '47': 'Waypoint Report',
+    '48': 'ETA Update',
+    '49': 'Fuel Status',
+    '4A': 'Company Specific',
+    '4M': 'Company Specific',
+    // Maintenance
+    '50': 'Maintenance Message',
+    '51': 'Engine Report',
+    '52': 'APU Report',
+    '53': 'Fault Report',
+    '54': 'System Status',
+    '55': 'Configuration',
+    '56': 'Performance Data',
+    '57': 'Trend Data',
+    '58': 'Oil Status',
+    '59': 'Exceedance Report',
+    '5A': 'Technical Log',
+    '5U': 'Airline Specific',
+    // Free text
+    'AA': 'Free Text',
+    'AB': 'Free Text Reply',
+    'F3': 'Free Text',
+    'F5': 'Free Text',
+    'F7': 'Departure Info',
+    'FA': 'Free Text',
+    'FF': 'Free Text',
+    // ADS-C
+    'AD': 'ADS-C Report',
+    'AE': 'ADS-C Emergency',
+    'AF': 'ADS-C Contract',
+    // FANS/CPDLC
+    'A0': 'FANS Application',
+    'A1': 'CPDLC Connect',
+    'A2': 'CPDLC Disconnect',
+    'A3': 'CPDLC Uplink',
+    'A4': 'CPDLC Downlink',
+    'A5': 'CPDLC Cancel',
+    'A6': 'CPDLC Status',
+    'A7': 'CPDLC Error',
+    'CR': 'CPDLC Request',
+    'CC': 'CPDLC Communication',
+    // Data link
+    'D1': 'Data Link',
+    'D2': 'Data Link',
+    // Miscellaneous
+    'RA': 'ACARS Uplink',
+    'RF': 'Radio Frequency',
+    'MA': 'Media Advisory',
+    '00': 'Heartbeat',
+    '7A': 'Telex',
+    '8A': 'Company Specific',
+    '8D': 'Telex Delivery',
+    '8E': 'Telex Error',
+  };
+
+  // Get human-readable label description
+  const getAcarsLabelDescription = (label) => {
+    if (!label) return null;
+    return acarsLabelDescriptions[label.toUpperCase()] || acarsLabelDescriptions[label] || null;
+  };
 
   // Toggle snapshot expansion
   const toggleSnapshot = (eventId) => {
@@ -619,11 +755,99 @@ export function HistoryView({ apiBase, onSelectAircraft, targetEventId, onEventV
     ? `/api/v1/history/sessions?hours=${hours[timeRange]}`
     : viewType === 'sightings'
     ? `/api/v1/history/sightings?hours=${hours[timeRange]}&limit=100`
+    : viewType === 'acars'
+    ? `/api/v1/acars/messages?hours=${hours[timeRange]}&limit=200`
     : `/api/v1/safety/events?hours=${hours[timeRange]}&limit=100`;
 
   const { data, refetch } = useApi(endpoint, null, apiBase);
 
   useEffect(() => { refetch(); }, [timeRange, viewType, refetch]);
+
+  // Fetch ACARS messages when viewing ACARS tab
+  useEffect(() => {
+    if (viewType !== 'acars') return;
+
+    const fetchAcars = async () => {
+      try {
+        const sourceParam = acarsSource !== 'all' ? `&source=${acarsSource}` : '';
+        const res = await fetch(`${apiBase}/api/v1/acars/messages?hours=${hours[timeRange]}&limit=200${sourceParam}`);
+        if (res.ok) {
+          const result = await res.json();
+          setAcarsMessages(result.messages || []);
+        }
+      } catch (err) {
+        console.log('ACARS fetch error:', err.message);
+      }
+    };
+    fetchAcars();
+  }, [viewType, timeRange, acarsSource, apiBase]);
+
+  // Close label dropdown when clicking outside
+  useEffect(() => {
+    if (!showLabelDropdown) return;
+
+    const handleClickOutside = (e) => {
+      if (labelDropdownRef.current && !labelDropdownRef.current.contains(e.target)) {
+        setShowLabelDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showLabelDropdown]);
+
+  // Get available labels from ACARS messages for the filter dropdown
+  const availableLabels = useMemo(() => {
+    if (!acarsMessages.length) return [];
+
+    const labelCounts = {};
+    acarsMessages.forEach(msg => {
+      if (msg.label) {
+        const label = msg.label.toUpperCase();
+        labelCounts[label] = (labelCounts[label] || 0) + 1;
+      }
+    });
+
+    return Object.entries(labelCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, count]) => ({
+        label,
+        count,
+        description: getAcarsLabelDescription(label)
+      }));
+  }, [acarsMessages]);
+
+  // Filter ACARS messages
+  const filteredAcarsMessages = useMemo(() => {
+    if (!acarsMessages.length) return [];
+
+    let filtered = acarsMessages;
+
+    // Filter out empty messages if hideEmpty is enabled
+    if (acarsHideEmpty) {
+      filtered = filtered.filter(msg => msg.text && msg.text.trim().length > 0);
+    }
+
+    // Apply label filter
+    if (acarsSelectedLabels.length > 0) {
+      filtered = filtered.filter(msg =>
+        msg.label && acarsSelectedLabels.includes(msg.label.toUpperCase())
+      );
+    }
+
+    // Apply search filter
+    if (acarsSearch) {
+      const search = acarsSearch.toLowerCase();
+      filtered = filtered.filter(msg =>
+        msg.icao_hex?.toLowerCase().includes(search) ||
+        msg.callsign?.toLowerCase().includes(search) ||
+        msg.text?.toLowerCase().includes(search) ||
+        msg.label?.toLowerCase().includes(search)
+      );
+    }
+
+    return filtered;
+  }, [acarsMessages, acarsSearch, acarsHideEmpty, acarsSelectedLabels]);
 
   // Handle navigation to a specific safety event (from aircraft detail page)
   useEffect(() => {
@@ -763,6 +987,10 @@ export function HistoryView({ apiBase, onSelectAircraft, targetEventId, onEventV
           <button className={`time-btn ${viewType === 'sightings' ? 'active' : ''}`} onClick={() => setViewType('sightings')}>
             Sightings
           </button>
+          <button className={`time-btn ${viewType === 'acars' ? 'active' : ''}`} onClick={() => setViewType('acars')}>
+            <MessageCircle size={14} style={{ marginRight: 4 }} />
+            ACARS
+          </button>
           <button className={`time-btn ${viewType === 'safety' ? 'active' : ''}`} onClick={() => setViewType('safety')}>
             <AlertTriangle size={14} style={{ marginRight: 4 }} />
             Safety Events
@@ -821,68 +1049,117 @@ export function HistoryView({ apiBase, onSelectAircraft, targetEventId, onEventV
             </div>
           </div>
           <div className="sessions-grid">
-            {filteredSessions.map((session, i) => (
-              <div key={i} className={`session-card ${session.is_military ? 'military' : ''} ${session.safety_event_count > 0 ? 'has-safety-events' : ''}`}>
-                <div className="session-header">
-                  <div>
-                    <div className="session-callsign">
-                      {session.callsign || session.icao_hex}
-                      {session.safety_event_count > 0 && (
-                        <span className="safety-badge" title={`${session.safety_event_count} safety event${session.safety_event_count > 1 ? 's' : ''}`}>
-                          <AlertTriangle size={14} />
-                          {session.safety_event_count}
+            {filteredSessions.map((session, i) => {
+              // Determine category color based on aircraft type
+              const getTypeCategory = (type) => {
+                if (!type) return 'unknown';
+                const t = type.toUpperCase();
+                if (['A388', 'A380', 'B748', 'B744', 'A346', 'A345', 'A343', 'A342', 'B77W', 'B77L', 'B789', 'B78X'].includes(t)) return 'heavy';
+                if (['A320', 'A321', 'A319', 'A318', 'B737', 'B738', 'B739', 'B38M', 'B39M', 'E190', 'E195', 'E170', 'E175'].includes(t)) return 'medium';
+                if (['C172', 'C182', 'C208', 'PA28', 'PA32', 'SR22', 'DA40', 'DA42', 'BE36', 'M20P'].includes(t)) return 'light';
+                if (['R22', 'R44', 'EC35', 'EC45', 'AS50', 'B06', 'B407', 'S76', 'A109', 'H145', 'H160'].includes(t)) return 'helicopter';
+                if (['F16', 'F15', 'F18', 'F22', 'F35', 'B1', 'B2', 'B52', 'C17', 'C130', 'C5', 'KC10', 'KC135', 'E3', 'E8'].includes(t)) return 'military-type';
+                return 'airliner';
+              };
+              const typeCategory = getTypeCategory(session.type);
+
+              return (
+                <div
+                  key={i}
+                  className={`session-card ${session.is_military ? 'military' : ''} ${session.safety_event_count > 0 ? 'has-safety-events' : ''} type-${typeCategory}`}
+                  onClick={() => onSelectAircraft?.(session.icao_hex)}
+                >
+                  <div className="session-header">
+                    <div className="session-identity">
+                      <div className="session-callsign">
+                        {session.callsign || session.icao_hex}
+                        {session.is_military && <span className="military-badge">MIL</span>}
+                        {session.safety_event_count > 0 && (
+                          <span className="safety-badge" title={`${session.safety_event_count} safety event${session.safety_event_count > 1 ? 's' : ''}`}>
+                            <AlertTriangle size={14} />
+                            {session.safety_event_count}
+                          </span>
+                        )}
+                      </div>
+                      <div className="session-icao-row">
+                        <span
+                          className="icao-link"
+                          onClick={(e) => { e.stopPropagation(); onSelectAircraft?.(session.icao_hex); }}
+                        >
+                          {session.icao_hex}
                         </span>
-                      )}
+                        {session.type && <span className={`session-type type-${typeCategory}`}>{session.type}</span>}
+                        {session.registration && <span className="session-reg">{session.registration}</span>}
+                      </div>
                     </div>
-                    <div className="session-icao">
-                      <span
-                        className="icao-link"
-                        onClick={(e) => { e.stopPropagation(); onSelectAircraft?.(session.icao_hex); }}
-                      >
-                        {session.icao_hex}
+                    <div className="session-duration-badge">
+                      <span className="duration-value">{Math.round(session.duration_min || 0)}</span>
+                      <span className="duration-unit">min</span>
+                    </div>
+                  </div>
+
+                  <div className="session-visual-stats">
+                    <div className="session-altitude-bar">
+                      <div className="altitude-bar-label">Altitude</div>
+                      <div className="altitude-bar-container">
+                        <div
+                          className="altitude-bar-fill"
+                          style={{ width: `${Math.min(100, ((session.max_alt || 0) / 45000) * 100)}%` }}
+                        />
+                        <span className="altitude-bar-value">
+                          {session.max_alt != null ? `${(session.max_alt / 1000).toFixed(0)}k ft` : '--'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="session-signal-indicator">
+                      <div className="signal-label">Signal</div>
+                      <div className={`signal-bars ${session.max_rssi >= -3 ? 'excellent' : session.max_rssi >= -10 ? 'good' : session.max_rssi >= -20 ? 'fair' : 'weak'}`}>
+                        <span className="bar bar-1"></span>
+                        <span className="bar bar-2"></span>
+                        <span className="bar bar-3"></span>
+                        <span className="bar bar-4"></span>
+                      </div>
+                      <span className="signal-value">{session.max_rssi?.toFixed(0) || '--'} dB</span>
+                    </div>
+                  </div>
+
+                  <div className="session-stats">
+                    <div className="session-stat">
+                      <span className="session-stat-label">Distance</span>
+                      <span className="session-stat-value">
+                        {session.min_distance_nm != null ? `${session.min_distance_nm.toFixed(1)}` : '--'}
+                        {session.max_distance_nm != null ? ` - ${session.max_distance_nm.toFixed(1)}` : ''} nm
                       </span>
-                      {session.type && <span className="session-type">{session.type}</span>}
+                    </div>
+                    <div className="session-stat">
+                      <span className="session-stat-label">Max V/S</span>
+                      <span className={`session-stat-value ${session.max_vr > 0 ? 'climbing' : session.max_vr < 0 ? 'descending' : ''}`}>
+                        {session.max_vr != null ? `${session.max_vr > 0 ? '+' : ''}${session.max_vr}` : '--'} fpm
+                      </span>
+                    </div>
+                    <div className="session-stat">
+                      <span className="session-stat-label">Messages</span>
+                      <span className="session-stat-value">{session.message_count?.toLocaleString() || '--'}</span>
+                    </div>
+                    <div className="session-stat">
+                      <span className="session-stat-label">Squawks</span>
+                      <span className={`session-stat-value ${session.squawk === '7500' || session.squawk === '7600' || session.squawk === '7700' ? 'emergency-squawk' : ''}`}>
+                        {session.squawk || '--'}
+                      </span>
                     </div>
                   </div>
-                  <div className="session-duration">{Math.round(session.duration_min || 0)}m</div>
-                </div>
-                <div className="session-stats">
-                  <div className="session-stat">
-                    <span className="session-stat-label">Distance</span>
-                    <span className="session-stat-value">
-                      {session.min_distance_nm != null ? `${session.min_distance_nm.toFixed(1)}` : '--'}
-                      {session.max_distance_nm != null ? ` - ${session.max_distance_nm.toFixed(1)}` : ''} nm
+
+                  <div className="session-times">
+                    <span className="session-time">
+                      <span className="time-label">First:</span> {new Date(session.first_seen).toLocaleTimeString()}
                     </span>
-                  </div>
-                  <div className="session-stat">
-                    <span className="session-stat-label">Altitude</span>
-                    <span className="session-stat-value">
-                      {session.min_alt != null ? session.min_alt.toLocaleString() : '--'}
-                      {session.max_alt != null ? ` - ${session.max_alt.toLocaleString()}` : ''} ft
+                    <span className="session-time">
+                      <span className="time-label">Last:</span> {new Date(session.last_seen).toLocaleTimeString()}
                     </span>
-                  </div>
-                  <div className="session-stat">
-                    <span className="session-stat-label">Max V/S</span>
-                    <span className="session-stat-value">{session.max_vr != null ? `${session.max_vr > 0 ? '+' : ''}${session.max_vr}` : '--'} fpm</span>
-                  </div>
-                  <div className="session-stat">
-                    <span className="session-stat-label">Signal</span>
-                    <span className="session-stat-value">
-                      {session.max_rssi != null ? `${session.max_rssi.toFixed(1)}` : '--'}
-                      {session.min_rssi != null && session.max_rssi != null ? ` / ${session.min_rssi.toFixed(1)}` : ''} dB
-                    </span>
-                  </div>
-                  <div className="session-stat">
-                    <span className="session-stat-label">First Seen</span>
-                    <span className="session-stat-value">{new Date(session.first_seen).toLocaleTimeString()}</span>
-                  </div>
-                  <div className="session-stat">
-                    <span className="session-stat-label">Last Seen</span>
-                    <span className="session-stat-value">{new Date(session.last_seen).toLocaleTimeString()}</span>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}
@@ -1125,6 +1402,143 @@ export function HistoryView({ apiBase, onSelectAircraft, targetEventId, onEventV
             );
           })}
         </div>
+      )}
+
+      {viewType === 'acars' && (
+        <>
+          <div className="acars-history-filters">
+            <div className="search-box">
+              <Search size={16} />
+              <input
+                type="text"
+                placeholder="Search ICAO, callsign, text, label..."
+                value={acarsSearch}
+                onChange={(e) => setAcarsSearch(e.target.value)}
+              />
+            </div>
+            <select
+              className="source-filter"
+              value={acarsSource}
+              onChange={(e) => setAcarsSource(e.target.value)}
+            >
+              <option value="all">All Sources</option>
+              <option value="acars">ACARS</option>
+              <option value="vdlm2">VDL Mode 2</option>
+            </select>
+            <div className="label-filter-container" ref={labelDropdownRef}>
+              <button
+                className={`label-filter-btn ${acarsSelectedLabels.length > 0 ? 'active' : ''}`}
+                onClick={() => setShowLabelDropdown(!showLabelDropdown)}
+              >
+                Message Types
+                {acarsSelectedLabels.length > 0 && (
+                  <span className="label-filter-count">{acarsSelectedLabels.length}</span>
+                )}
+                <ChevronDown size={14} className={showLabelDropdown ? 'rotated' : ''} />
+              </button>
+              {showLabelDropdown && (
+                <div className="label-filter-dropdown">
+                  <div className="label-filter-header">
+                    <span>Filter by Message Type</span>
+                    {acarsSelectedLabels.length > 0 && (
+                      <button
+                        className="label-clear-btn"
+                        onClick={() => setAcarsSelectedLabels([])}
+                      >
+                        Clear all
+                      </button>
+                    )}
+                  </div>
+                  <div className="label-filter-list">
+                    {availableLabels.map(({ label, count, description }) => (
+                      <label key={label} className="label-filter-item">
+                        <input
+                          type="checkbox"
+                          checked={acarsSelectedLabels.includes(label)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setAcarsSelectedLabels([...acarsSelectedLabels, label]);
+                            } else {
+                              setAcarsSelectedLabels(acarsSelectedLabels.filter(l => l !== label));
+                            }
+                          }}
+                        />
+                        <span className="label-code">{label}</span>
+                        <span className="label-desc">{description || label}</span>
+                        <span className="label-count">{count}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <label className="hide-empty-toggle">
+              <input
+                type="checkbox"
+                checked={acarsHideEmpty}
+                onChange={(e) => setAcarsHideEmpty(e.target.checked)}
+              />
+              Hide empty
+            </label>
+            <div className="acars-history-count">
+              {filteredAcarsMessages.length} message{filteredAcarsMessages.length !== 1 ? 's' : ''}
+            </div>
+          </div>
+          <div className="acars-history-list">
+            {filteredAcarsMessages.length === 0 ? (
+              <div className="no-events-message">
+                <MessageCircle size={32} />
+                <p>No ACARS messages in the selected time range</p>
+              </div>
+            ) : (
+              filteredAcarsMessages.map((msg, i) => {
+                const timestamp = typeof msg.timestamp === 'number'
+                  ? new Date(msg.timestamp * 1000)
+                  : new Date(msg.timestamp);
+
+                return (
+                  <div key={i} className="acars-history-item">
+                    <div className="acars-history-header">
+                      <span className="acars-history-time">{timestamp.toLocaleString()}</span>
+                      {msg.label && (
+                        <span className="acars-history-label" title={getAcarsLabelDescription(msg.label) || msg.label}>
+                          {msg.label}
+                          {getAcarsLabelDescription(msg.label) && (
+                            <span className="acars-label-desc">{getAcarsLabelDescription(msg.label)}</span>
+                          )}
+                        </span>
+                      )}
+                      <span className={`acars-history-source ${msg.source}`}>{msg.source?.toUpperCase()}</span>
+                      {msg.frequency && <span className="acars-history-freq">{msg.frequency} MHz</span>}
+                    </div>
+                    <div className="acars-history-aircraft">
+                      {msg.callsign && (
+                        <span
+                          className="acars-history-callsign clickable"
+                          onClick={() => onSelectAircraft?.(msg.icao_hex)}
+                        >
+                          {msg.callsign}
+                        </span>
+                      )}
+                      {msg.icao_hex && (
+                        <span
+                          className="acars-history-icao clickable"
+                          onClick={() => onSelectAircraft?.(msg.icao_hex)}
+                        >
+                          {msg.icao_hex}
+                        </span>
+                      )}
+                      {msg.registration && (
+                        <span className="acars-history-reg">{msg.registration}</span>
+                      )}
+                    </div>
+                    {msg.text && <pre className="acars-history-text">{msg.text}</pre>}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </>
       )}
     </div>
   );

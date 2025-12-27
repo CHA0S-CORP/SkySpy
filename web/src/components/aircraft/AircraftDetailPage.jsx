@@ -28,6 +28,49 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
   };
   const [photoInfo, setPhotoInfo] = useState(null);
   const [acarsMessages, setAcarsMessages] = useState([]);
+  const [acarsHours, setAcarsHours] = useState(24);
+
+  // ACARS message label descriptions
+  const acarsLabelDescriptions = {
+    '_d': 'Command/Response', 'H1': 'Departure Message', 'H2': 'Arrival Message',
+    '5Z': 'Airline Designated', '80': 'Terminal Weather', '81': 'Terminal Weather',
+    '83': 'Request Terminal Weather', 'B1': 'Request Departure Clearance',
+    'B2': 'Departure Clearance', 'B3': 'Request Oceanic Clearance',
+    'B4': 'Oceanic Clearance', 'B5': 'Departure Slot', 'B6': 'Expected Departure Clearance',
+    'BA': 'Beacon Request', 'C1': 'Position Report', 'CA': 'CPDLC',
+    'Q0': 'Link Test', 'Q1': 'Link Test', 'Q2': 'Link Test', 'QA': 'ACARS Test',
+    'SA': 'System Report', 'SQ': 'Squawk Report',
+    '10': 'OUT - Leaving Gate', '11': 'OFF - Takeoff', '12': 'ON - Landing',
+    '13': 'IN - Arrived Gate', '14': 'ETA Report', '15': 'Flight Status',
+    '16': 'Route Change', '17': 'Fuel Report', '20': 'Delay Report',
+    '21': 'Delay Report', '22': 'Ground Delay', '23': 'Estimated Gate Arrival',
+    '24': 'Crew Report', '25': 'Passenger Count', '26': 'Connecting Passengers',
+    '27': 'Load Report', '28': 'Weight & Balance', '29': 'Cargo/Mail', '2Z': 'Progress Report',
+    '30': 'Request Weather', '31': 'METAR', '32': 'TAF', '33': 'ATIS',
+    '34': 'PIREP', '35': 'Wind Data', '36': 'SIGMET', '37': 'NOTAM',
+    '38': 'Turbulence Report', '39': 'Weather Update', '3M': 'METAR Request', '3S': 'SIGMET Request',
+    '40': 'Flight Plan', '41': 'Flight Plan Amendment', '42': 'Route Request',
+    '43': 'Oceanic Report', '44': 'Position Report', '45': 'Flight Level Change',
+    '46': 'Speed Change', '47': 'Waypoint Report', '48': 'ETA Update', '49': 'Fuel Status',
+    '4A': 'Company Specific', '4M': 'Company Specific',
+    '50': 'Maintenance Message', '51': 'Engine Report', '52': 'APU Report',
+    '53': 'Fault Report', '54': 'System Status', '55': 'Configuration',
+    '56': 'Performance Data', '57': 'Trend Data', '58': 'Oil Status',
+    '59': 'Exceedance Report', '5A': 'Technical Log', '5U': 'Airline Specific',
+    'AA': 'Free Text', 'AB': 'Free Text Reply', 'F3': 'Free Text', 'F5': 'Free Text',
+    'F7': 'Departure Info', 'FA': 'Free Text', 'FF': 'Free Text',
+    'AD': 'ADS-C Report', 'AE': 'ADS-C Emergency', 'AF': 'ADS-C Contract',
+    'A0': 'FANS Application', 'A1': 'CPDLC Connect', 'A2': 'CPDLC Disconnect',
+    'A3': 'CPDLC Uplink', 'A4': 'CPDLC Downlink', 'A5': 'CPDLC Cancel',
+    'A6': 'CPDLC Status', 'A7': 'CPDLC Error', 'CR': 'CPDLC Request', 'CC': 'CPDLC Communication',
+    'D1': 'Data Link', 'D2': 'Data Link', 'RA': 'ACARS Uplink', 'RF': 'Radio Frequency',
+    'MA': 'Media Advisory', '00': 'Heartbeat', '7A': 'Telex', '8A': 'Company Specific',
+    '8D': 'Telex Delivery', '8E': 'Telex Error',
+  };
+  const getAcarsLabelDescription = (label) => {
+    if (!label) return null;
+    return acarsLabelDescriptions[label.toUpperCase()] || acarsLabelDescriptions[label] || null;
+  };
   const [sightings, setSightings] = useState([]);
   const [safetyEvents, setSafetyEvents] = useState([]);
   const [safetyHours, setSafetyHours] = useState(24);
@@ -118,11 +161,29 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
           setPhotoInfo(data);
         }
         
-        const acarsRes = await fetch(`${baseUrl}/api/v1/acars/messages/${hex}?hours=24&limit=50`);
+        // Try database query first, then fall back to recent messages buffer
+        let acarsFound = [];
+        const acarsRes = await fetch(`${baseUrl}/api/v1/acars/messages?icao_hex=${hex}&hours=24&limit=50`);
         if (acarsRes.ok) {
           const data = await acarsRes.json();
-          setAcarsMessages(data.messages || []);
+          acarsFound = data.messages || [];
         }
+
+        // If no messages found in DB, try recent messages buffer and filter client-side
+        if (acarsFound.length === 0) {
+          const recentRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=100`);
+          if (recentRes.ok) {
+            const data = await recentRes.json();
+            const allRecent = data.messages || [];
+            // Filter by icao_hex or callsign
+            const callsign = aircraft?.flight?.trim()?.toUpperCase();
+            acarsFound = allRecent.filter(msg =>
+              (msg.icao_hex && msg.icao_hex.toUpperCase() === hex.toUpperCase()) ||
+              (callsign && msg.callsign && msg.callsign.toUpperCase() === callsign)
+            );
+          }
+        }
+        setAcarsMessages(acarsFound);
         
         const sightingsRes = await fetch(`${baseUrl}/api/v1/history/sightings/${hex}?hours=24&limit=100`);
         if (sightingsRes.ok) {
@@ -144,6 +205,43 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
     
     fetchData();
   }, [hex, baseUrl, info]);
+
+  // Refetch ACARS messages when hours filter changes
+  useEffect(() => {
+    const fetchAcarsMessages = async () => {
+      try {
+        let acarsFound = [];
+        const acarsRes = await fetch(`${baseUrl}/api/v1/acars/messages?icao_hex=${hex}&hours=${acarsHours}&limit=100`);
+        if (acarsRes.ok) {
+          const data = await acarsRes.json();
+          acarsFound = data.messages || [];
+        }
+
+        // If no messages found in DB, try recent messages buffer and filter client-side
+        if (acarsFound.length === 0) {
+          const recentRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=100`);
+          if (recentRes.ok) {
+            const data = await recentRes.json();
+            const allRecent = data.messages || [];
+            const callsign = aircraft?.flight?.trim()?.toUpperCase();
+            const cutoffTime = Date.now() - (acarsHours * 60 * 60 * 1000);
+            acarsFound = allRecent.filter(msg => {
+              const msgTime = typeof msg.timestamp === 'number'
+                ? msg.timestamp * 1000
+                : new Date(msg.timestamp).getTime();
+              const matchesAircraft = (msg.icao_hex && msg.icao_hex.toUpperCase() === hex.toUpperCase()) ||
+                (callsign && msg.callsign && msg.callsign.toUpperCase() === callsign);
+              return matchesAircraft && msgTime >= cutoffTime;
+            });
+          }
+        }
+        setAcarsMessages(acarsFound);
+      } catch (err) {
+        console.log('ACARS messages fetch error:', err.message);
+      }
+    };
+    fetchAcarsMessages();
+  }, [hex, baseUrl, acarsHours, aircraft]);
 
   // Refetch safety events when hours filter changes
   useEffect(() => {
@@ -1593,25 +1691,52 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
             
             {activeTab === 'acars' && (
               <div className="detail-acars">
+                <div className="acars-filter">
+                  <label>Time Range:</label>
+                  <select value={acarsHours} onChange={(e) => setAcarsHours(Number(e.target.value))}>
+                    <option value={1}>Last 1 hour</option>
+                    <option value={6}>Last 6 hours</option>
+                    <option value={12}>Last 12 hours</option>
+                    <option value={24}>Last 24 hours</option>
+                    <option value={48}>Last 48 hours</option>
+                    <option value={72}>Last 72 hours</option>
+                    <option value={168}>Last 7 days</option>
+                  </select>
+                </div>
                 {acarsMessages.length === 0 ? (
                   <div className="detail-empty">
                     <MessageCircle size={48} />
                     <p>No ACARS messages</p>
-                    <span>No messages received from this aircraft in the last 24 hours</span>
+                    <span>No messages received from this aircraft in the selected time range</span>
                   </div>
                 ) : (
                   <div className="acars-list">
-                    {acarsMessages.map((msg, i) => (
-                      <div key={i} className="acars-item">
-                        <div className="acars-item-header">
-                          <span className="acars-item-time">{new Date(msg.timestamp).toLocaleString()}</span>
-                          <span className="acars-item-label">{msg.label || '--'}</span>
-                          <span className="acars-item-source">{msg.source}</span>
-                          {msg.frequency && <span className="acars-item-freq">{msg.frequency} MHz</span>}
+                    <p className="acars-count">{acarsMessages.length} message{acarsMessages.length !== 1 ? 's' : ''} in the last {acarsHours} hour{acarsHours !== 1 ? 's' : ''}</p>
+                    {acarsMessages.map((msg, i) => {
+                      // Handle both Unix timestamp (number) and ISO string formats
+                      const timestamp = typeof msg.timestamp === 'number'
+                        ? new Date(msg.timestamp * 1000)
+                        : new Date(msg.timestamp);
+
+                      return (
+                        <div key={i} className="acars-item">
+                          <div className="acars-item-header">
+                            <span className="acars-item-time">{timestamp.toLocaleString()}</span>
+                            <span className="acars-item-label" title={getAcarsLabelDescription(msg.label) || msg.label}>
+                              {msg.label || '--'}
+                              {getAcarsLabelDescription(msg.label) && (
+                                <span className="acars-label-desc">{getAcarsLabelDescription(msg.label)}</span>
+                              )}
+                            </span>
+                            <span className="acars-item-source">{msg.source}</span>
+                            {msg.frequency && <span className="acars-item-freq">{msg.frequency} MHz</span>}
+                          </div>
+                          {msg.callsign && <div className="acars-item-callsign">Callsign: {msg.callsign}</div>}
+                          {msg.icao_hex && <div className="acars-item-icao">ICAO: {msg.icao_hex}</div>}
+                          {msg.text && <pre className="acars-item-text">{msg.text}</pre>}
                         </div>
-                        {msg.text && <pre className="acars-item-text">{msg.text}</pre>}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

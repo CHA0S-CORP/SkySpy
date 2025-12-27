@@ -507,6 +507,40 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     }
   }, [soundMuted, stopAlarmLoop]);
   
+  // Screen Wake Lock - prevent screen from sleeping while on map
+  useEffect(() => {
+    let wakeLock = null;
+
+    const requestWakeLock = async () => {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          console.log('Wake lock acquired');
+        } catch (err) {
+          console.log('Wake lock request failed:', err.message);
+        }
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+
+    requestWakeLock();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLock) {
+        wakeLock.release().then(() => {
+          console.log('Wake lock released');
+        });
+      }
+    };
+  }, []);
+
   // Save aircraft list visibility preference
   useEffect(() => {
     localStorage.setItem('adsb-show-aircraft-list', showAircraftList.toString());
@@ -516,6 +550,15 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   useEffect(() => {
     localStorage.setItem('adsb-list-expanded', listExpanded.toString());
   }, [listExpanded]);
+
+  // Invalidate map size when panel is pinned/unpinned or ACARS panel toggled
+  useEffect(() => {
+    if (config.mapMode === 'map' && leafletMapRef.current) {
+      setTimeout(() => {
+        leafletMapRef.current?.invalidateSize();
+      }, 350); // Wait for CSS transition
+    }
+  }, [panelPinned, showAcarsPanel, config.mapMode]);
   
   // Reset photo error state when selected aircraft changes
   useEffect(() => {
@@ -775,33 +818,45 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  // Fetch ACARS messages and status
+  // Fetch ACARS status (always, for badge display)
   useEffect(() => {
-    if (!showAcarsPanel) return;
-    
-    const fetchAcars = async () => {
+    const fetchAcarsStatus = async () => {
       const baseUrl = config.apiBaseUrl || '';
       try {
-        // Fetch recent messages
-        const msgRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=50`);
-        if (msgRes.ok) {
-          const data = await msgRes.json();
-          setAcarsMessages(data.messages || []);
-        }
-        
-        // Fetch status
         const statusRes = await fetch(`${baseUrl}/api/v1/acars/status`);
         if (statusRes.ok) {
           const data = await statusRes.json();
           setAcarsStatus(data);
         }
       } catch (err) {
-        console.log('ACARS fetch error:', err.message);
+        // Silently fail - ACARS may not be available
       }
     };
-    
-    fetchAcars();
-    const interval = setInterval(fetchAcars, 5000);
+
+    fetchAcarsStatus();
+    const interval = setInterval(fetchAcarsStatus, 10000); // Check status every 10s
+    return () => clearInterval(interval);
+  }, [config.apiBaseUrl]);
+
+  // Fetch ACARS messages (only when panel is open)
+  useEffect(() => {
+    if (!showAcarsPanel) return;
+
+    const fetchAcarsMessages = async () => {
+      const baseUrl = config.apiBaseUrl || '';
+      try {
+        const msgRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=50`);
+        if (msgRes.ok) {
+          const data = await msgRes.json();
+          setAcarsMessages(data.messages || []);
+        }
+      } catch (err) {
+        console.log('ACARS messages fetch error:', err.message);
+      }
+    };
+
+    fetchAcarsMessages();
+    const interval = setInterval(fetchAcarsMessages, 5000);
     return () => clearInterval(interval);
   }, [showAcarsPanel, config.apiBaseUrl]);
 
@@ -3103,7 +3158,21 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         const labelHeight = 32;
         ctx.fillStyle = isPro ? 'rgba(10, 13, 18, 0.85)' : 'rgba(10, 15, 10, 0.8)';
         ctx.fillRect(blockX - 4, blockY - 2, labelWidth, labelHeight);
-        
+
+        // ACARS indicator - small green dot at top-right corner if aircraft has ACARS messages
+        const hasAcars = acarsMessages.some(msg =>
+          (msg.icao_hex && msg.icao_hex.toUpperCase() === ac.hex?.toUpperCase()) ||
+          (msg.callsign && ac.flight && msg.callsign.toUpperCase() === ac.flight.trim().toUpperCase())
+        );
+        if (hasAcars) {
+          ctx.save();
+          ctx.fillStyle = 'rgba(0, 255, 100, 0.9)';
+          ctx.beginPath();
+          ctx.arc(blockX + labelWidth - 8, blockY + 2, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
         // Callsign
         ctx.fillStyle = textColor;
         ctx.fillText(callsign, blockX, blockY);
@@ -3515,8 +3584,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
   return (
     <div className="map-container" onClick={initAudioContext}>
-      {/* Safety Event Banner - Shows highest priority event (not in pro mode which has its own) */}
-      {activeConflicts.length > 0 && config.mapMode !== 'pro' && (
+      {/* Safety Event Banner - Shows highest priority event (only in map/radar mode) */}
+      {activeConflicts.length > 0 && config.mapMode !== 'pro' && config.mapMode !== 'crt' && (
         <div className="conflict-banners-container">
           {activeConflicts
             .filter(event => !acknowledgedEvents.has(event.id))
@@ -3769,12 +3838,15 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             
             // Handle click based on type
             if (closest) {
-              setSelectedAircraft(null);
+              // Only clear aircraft selection if not pinned, or if selecting a new aircraft
+              if (!panelPinned || closestType === 'aircraft') {
+                setSelectedAircraft(null);
+              }
               setSelectedMetar(null);
               setSelectedPirep(null);
               setSelectedNavaid(null);
               setSelectedAirport(null);
-              
+
               if (closestType === 'aircraft') {
                 setSelectedAircraft(closest);
               } else if (closestType === 'metar') {
@@ -3787,8 +3859,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 setSelectedAirport(closest);
               }
             } else {
-              // Clicked on empty area - clear all selections
-              setSelectedAircraft(null);
+              // Clicked on empty area - clear all selections (unless panel is pinned)
+              if (!panelPinned) {
+                setSelectedAircraft(null);
+              }
               setSelectedMetar(null);
               setSelectedPirep(null);
               setSelectedNavaid(null);
@@ -3877,11 +3951,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             </div>
             <div className="crt-info-row">
               <span className="crt-label">CTR</span>
-              <span className="crt-value">{feederLat.toFixed(2)}°N</span>
+              <span className="crt-value">{feederLat.toFixed(1)}°N</span>
             </div>
             <div className="crt-info-row">
               <span className="crt-label"></span>
-              <span className="crt-value">{Math.abs(feederLon).toFixed(2)}°W</span>
+              <span className="crt-value">{Math.abs(feederLon).toFixed(1)}°W</span>
             </div>
           </div>
         </div>
@@ -5772,19 +5846,43 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 return <div className="acars-empty">No messages match filters</div>;
               }
               
-              return filtered.slice(0, 50).map((msg, i) => (
-                <div key={i} className="acars-message">
-                  <div className="acars-msg-header">
-                    <span className="acars-callsign">{msg.callsign || msg.icao_hex || 'Unknown'}</span>
-                    <span className="acars-label">{msg.label || '--'}</span>
-                    <span className={`acars-source-badge ${msg.source}`}>{msg.source}</span>
-                    <span className="acars-time">
-                      {msg.timestamp ? new Date(msg.timestamp * 1000).toLocaleTimeString() : '--'}
-                    </span>
+              return filtered.slice(0, 50).map((msg, i) => {
+                // Find matching aircraft by ICAO hex or callsign
+                const matchingAircraft = aircraft.find(ac =>
+                  (msg.icao_hex && ac.hex?.toUpperCase() === msg.icao_hex.toUpperCase()) ||
+                  (msg.callsign && ac.flight?.trim().toUpperCase() === msg.callsign.toUpperCase())
+                );
+
+                return (
+                  <div
+                    key={i}
+                    className={`acars-message ${matchingAircraft ? 'clickable' : ''}`}
+                    onClick={() => {
+                      if (matchingAircraft) {
+                        setSelectedAircraft(matchingAircraft);
+                        // Pan to aircraft if on map mode
+                        if (config.mapMode === 'map' && leafletMapRef.current && matchingAircraft.lat && matchingAircraft.lon) {
+                          leafletMapRef.current.flyTo([matchingAircraft.lat, matchingAircraft.lon], 12, {
+                            duration: 1,
+                            easeLinearity: 0.25
+                          });
+                        }
+                      }
+                    }}
+                    title={matchingAircraft ? 'Click to select aircraft' : 'Aircraft not in range'}
+                  >
+                    <div className="acars-msg-header">
+                      <span className="acars-callsign">{msg.callsign || msg.icao_hex || 'Unknown'}</span>
+                      <span className="acars-label">{msg.label || '--'}</span>
+                      <span className={`acars-source-badge ${msg.source}`}>{msg.source}</span>
+                      <span className="acars-time">
+                        {msg.timestamp ? new Date(msg.timestamp * 1000).toLocaleTimeString() : '--'}
+                      </span>
+                    </div>
+                    {msg.text && <div className="acars-text">{msg.text}</div>}
                   </div>
-                  {msg.text && <div className="acars-text">{msg.text}</div>}
-                </div>
-              ));
+                );
+              });
             })()}
           </div>
         </div>
