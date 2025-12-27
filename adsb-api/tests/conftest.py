@@ -46,13 +46,17 @@ def anyio_backend():
 
 @pytest_asyncio.fixture
 async def db_engine():
-    """Create async test database engine using PostgreSQL from environment."""
+    """Create async test database engine."""
     database_url = os.getenv(
         "DATABASE_URL",
-        "postgresql+asyncpg://adsb:adsb@localhost:5432/adsb_test"
+        "sqlite+aiosqlite:///:memory:"
     )
 
-    engine = create_async_engine(database_url, echo=False, pool_pre_ping=True)
+    # SQLite doesn't support pool_pre_ping
+    if database_url.startswith("sqlite"):
+        engine = create_async_engine(database_url, echo=False)
+    else:
+        engine = create_async_engine(database_url, echo=False, pool_pre_ping=True)
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

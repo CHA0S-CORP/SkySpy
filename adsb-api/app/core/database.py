@@ -26,14 +26,21 @@ def get_async_database_url(url: str) -> str:
 settings = get_settings()
 async_url = get_async_database_url(settings.database_url)
 
-engine = create_async_engine(
-    async_url,
-    echo=False,
-    pool_pre_ping=True,
-    pool_recycle=280,
-    pool_size=5,
-    max_overflow=10,
-)
+# SQLite doesn't support pool_size/max_overflow, only use them for PostgreSQL
+if async_url.startswith("sqlite"):
+    engine = create_async_engine(
+        async_url,
+        echo=False,
+    )
+else:
+    engine = create_async_engine(
+        async_url,
+        echo=False,
+        pool_pre_ping=True,
+        pool_recycle=280,
+        pool_size=5,
+        max_overflow=10,
+    )
 
 AsyncSessionLocal = async_sessionmaker(
     engine,
