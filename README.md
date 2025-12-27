@@ -79,6 +79,7 @@ Real-time statistics showing aircraft counts, altitude distribution, closest/hig
 Browse historical sightings with filters and detailed flight session information.
 
 ![History View](docs/screenshots/history.png)
+![History View](docs/screenshots/history2.png)
 
 ### Alert Configuration
 
