@@ -34,6 +34,12 @@ Real-time aircraft tracking with position updates, flight labels, range rings, a
 
 ![Aircraft Detail](docs/screenshots/aircraft-detail.gif)
 
+### CRT Radar Mode
+
+Classic ATC radar display with sweep animation and phosphor glow effects.
+
+![CRT Mode](docs/screenshots/crt-mode.gif)
+
 ### Aircraft Detail Panel
 
 Click any aircraft to view detailed information including registration, operator, altitude, speed, and external links.
@@ -43,6 +49,13 @@ Click any aircraft to view detailed information including registration, operator
 ![Aircraft Detail](docs/screenshots/airplane2.png)
 ![Aircraft Detail](docs/screenshots/airplane3.png)
 
+### Statistics Dashboard
+
+Real-time statistics showing aircraft counts, altitude distribution, closest/highest/fastest aircraft.
+
+![Stats View](docs/screenshots/stats.png)
+
+
 ### Safety Alerts & Proximity Warnings
 
 Automatic detection and alerting for emergency squawks (7700/7600/7500) and proximity events.
@@ -50,11 +63,18 @@ Automatic detection and alerting for emergency squawks (7700/7600/7500) and prox
 ![Safety Banner](docs/screenshots/saftey-1.png)
 ![Safety Banner2](docs/screenshots/saftey2.png)
 
-### CRT Radar Mode
 
-Classic ATC radar display with sweep animation and phosphor glow effects.
+### Flight History
 
-![CRT Mode](docs/screenshots/crt-mode.gif)
+Browse historical sightings with filters and detailed flight session information.
+
+![History View](docs/screenshots/history-1.png)
+
+### ACARS Message History
+
+Browse historical ACARS messages with filters and detailed flight session information.
+
+![ACARS History View](docs/screenshots/history2.png)
 
 ### PIREP Weather Reports
 
@@ -68,23 +88,6 @@ Interactive navigation aid markers showing VORs, NDBs, and waypoints with freque
 
 ![NavAid Popup](docs/screenshots/nav.png)
 
-### Statistics Dashboard
-
-Real-time statistics showing aircraft counts, altitude distribution, closest/highest/fastest aircraft.
-
-![Stats View](docs/screenshots/stats.png)
-
-### Flight History
-
-Browse historical sightings with filters and detailed flight session information.
-
-![History View](docs/screenshots/history-1.png)
-
-### Flight History
-
-Browse historical ACARS messages with filters and detailed flight session information.
-
-![ACARS History View](docs/screenshots/history2.png)
 
 ### Alert Configuration
 
