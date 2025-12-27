@@ -80,9 +80,9 @@ jobs:
           - dockerfile: Dockerfile
             image-suffix: ""
             context: .
-          - dockerfile: test/Dockerfile.mock
+          - dockerfile: test/mock-1090/Dockerfile
             image-suffix: -1090-mock
-            context: test
+            context: test/mock-1090
           - dockerfile: test/acars-mock/Dockerfile
             image-suffix: -acarshub-mock
             context: test/acars-mock
