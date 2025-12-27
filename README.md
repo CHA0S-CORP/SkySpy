@@ -47,7 +47,7 @@ Click any aircraft to view detailed information including registration, operator
 
 Automatic detection and alerting for emergency squawks (7700/7600/7500) and proximity events.
 
-![Safety Banner](docs/screenshots/safety1.png)
+![Safety Banner](docs/screenshots/saftey-1.png)
 ![Safety Banner2](docs/screenshots/saftey2.png)
 
 ### CRT Radar Mode
