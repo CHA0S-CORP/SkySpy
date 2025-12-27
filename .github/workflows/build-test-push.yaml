@@ -1,4 +1,4 @@
-name: Build, Test, and Push
+name: CI
 
 on:
   push:
@@ -19,14 +19,14 @@ env:
 
 jobs:
   test:
-    name: Run Tests
+    name: Test
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create test environment file
+      - name: Create .env.test
         run: |
           cat > .env.test << 'EOF'
           POSTGRES_USER=adsb
@@ -81,22 +81,18 @@ jobs:
           S3_ENABLED=false
           EOF
 
-      - name: Start test infrastructure
+      - name: Start services
         run: |
-          docker compose -f docker-compose.test.yaml --env-file .env.test --profile test up -d --build --wait
-        timeout-minutes: 10
+          docker compose -f docker-compose.test.yaml --env-file .env.test up -d --build postgres redis ultrafeeder dump978
+          docker compose -f docker-compose.test.yaml --env-file .env.test up -d --wait postgres redis ultrafeeder dump978
+        timeout-minutes: 5
 
       - name: Run tests
         run: |
-          docker compose -f docker-compose.test.yaml --env-file .env.test logs api-test
+          docker compose -f docker-compose.test.yaml --env-file .env.test --profile test run --rm api-test
+        timeout-minutes: 10
 
-      - name: Copy test results
-        if: always()
-        run: |
-          mkdir -p test-results
-          docker cp adsb_api_test:/app/test-results/. test-results/ || true
-
-      - name: Upload test results
+      - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -104,15 +100,14 @@ jobs:
           path: test-results/
           retention-days: 30
 
-      - name: Stop test infrastructure
+      - name: Cleanup
         if: always()
-        run: |
-          docker compose -f docker-compose.test.yaml --env-file .env.test --profile test down -v
+        run: docker compose -f docker-compose.test.yaml --env-file .env.test down -v
 
-  build-and-push:
-    name: Build and Push Multi-Platform Images
+  build:
+    name: Build ${{ matrix.name }}
     runs-on: ubuntu-latest
-    # needs: test
+    needs: test
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
 
     permissions:
@@ -124,18 +119,21 @@ jobs:
     strategy:
       matrix:
         include:
-          - dockerfile: Dockerfile
+          - name: API
+            dockerfile: Dockerfile
             image-suffix: ""
             context: .
-          - dockerfile: test/mock-1090/Dockerfile
+          - name: 1090 Mock
+            dockerfile: test/mock-1090/Dockerfile
             image-suffix: -1090-mock
             context: test/mock-1090
-          - dockerfile: test/acars-mock/Dockerfile
+          - name: ACARS Mock
+            dockerfile: test/acars-mock/Dockerfile
             image-suffix: -acarshub-mock
             context: test/acars-mock
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up QEMU
@@ -143,10 +141,10 @@ jobs:
         with:
           platforms: linux/amd64,linux/arm64
 
-      - name: Set up Docker Buildx
+      - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Container Registry
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -167,7 +165,7 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push Docker image
+      - name: Build and push
         id: build
         uses: docker/build-push-action@v5
         with:
@@ -180,26 +178,22 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Generate artifact attestation
+      - name: Attest
         uses: actions/attest-build-provenance@v1
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image-suffix }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
-  build-summary:
-    name: Build Summary
-    runs-on: ubuntu-latest
-    needs: build-and-push
-    if: always()
-
-    steps:
-      - name: Check build status
+      - name: Summary
         run: |
-          if [ "${{ needs.build-and-push.result }}" == "success" ]; then
-            echo "✅ All images built and pushed successfully"
-            echo "Images available at: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          else
-            echo "❌ Build failed"
-            exit 1
-          fi
+          echo "### ${{ matrix.name }} Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image-suffix }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Digest:** \`${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
