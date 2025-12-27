@@ -32,19 +32,22 @@ SkySpy is a sophisticated aircraft tracking platform that captures position data
 
 Real-time aircraft tracking with position updates, flight labels, range rings, and interactive markers.
 
-![Map View](docs/screenshots/map-view.gif)
+![Aircraft Detail](docs/screenshots/aircraft-detail.gif)
 
 ### Aircraft Detail Panel
 
 Click any aircraft to view detailed information including registration, operator, altitude, speed, and external links.
 
-![Aircraft Detail](docs/screenshots/aircraft-detail.gif)
+![Aircraft Detail](docs/screenshots/detail.png)
+![Aircraft Detail](docs/screenshots/airplane1.png)
+![Aircraft Detail](docs/screenshots/airplane2.png)
 
 ### Safety Alerts & Proximity Warnings
 
 Automatic detection and alerting for emergency squawks (7700/7600/7500) and proximity events.
 
-![Safety Banner](docs/screenshots/safety-banner.gif)
+![Safety Banner](docs/screenshots/safety.png)
+![Safety Banner2](docs/screenshots/saftey2.png)
 
 ### CRT Radar Mode
 
@@ -56,25 +59,25 @@ Classic ATC radar display with sweep animation and phosphor glow effects.
 
 View pilot reports (PIREPs) for real-time weather conditions including turbulence, icing, and visibility.
 
-![PIREP Popup](docs/screenshots/pirep-popup.gif)
+![PIREP Popup](docs/screenshots/pirep.png)
 
 ### NavAid Information
 
 Interactive navigation aid markers showing VORs, NDBs, and waypoints with frequency and identifier information.
 
-![NavAid Popup](docs/screenshots/navaid-popup.gif)
+![NavAid Popup](docs/screenshots/nav.png)
 
 ### Statistics Dashboard
 
 Real-time statistics showing aircraft counts, altitude distribution, closest/highest/fastest aircraft.
 
-![Stats View](docs/screenshots/stats-view.gif)
+![Stats View](docs/screenshots/stats.png)
 
 ### Flight History
 
 Browse historical sightings with filters and detailed flight session information.
 
-![History View](docs/screenshots/history-view.gif)
+![History View](docs/screenshots/history.png)
 
 ### Alert Configuration
 
