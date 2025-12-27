@@ -79,7 +79,12 @@ Real-time statistics showing aircraft counts, altitude distribution, closest/hig
 Browse historical sightings with filters and detailed flight session information.
 
 ![History View](docs/screenshots/history-1.png)
-![History View](docs/screenshots/history2.png)
+
+### Flight History
+
+Browse historical ACARS messages with filters and detailed flight session information.
+
+![ACARS History View](docs/screenshots/history2.png)
 
 ### Alert Configuration
 
