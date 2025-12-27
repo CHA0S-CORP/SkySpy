@@ -1,6 +1,12 @@
-# SkySpy
+<p align="center">
+  <img src="docs/logo.png" alt="SkySpy Logo" width="200">
+</p>
 
-Real-time ADS-B aircraft tracking and monitoring system with a web-based dashboard.
+<h1 align="center">SkySpy</h1>
+
+<p align="center">
+  Real-time ADS-B aircraft tracking and monitoring system with a web-based dashboard.
+</p>
 
 <video src="docs/screenshots/map-view.webm" autoplay loop muted playsinline></video>
 
