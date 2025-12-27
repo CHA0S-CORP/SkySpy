@@ -1,33 +1,33 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
-  Plane, Radio, Activity, Bell, BarChart3, History,
-  Map as MapIcon, Radar, Layers, ExternalLink, LayoutDashboard,
-  LineChart, MessageSquare, Ship, Database, ChevronDown,
-  ChevronLeft, ChevronRight
+  Plane, Radio, Bell, Activity, BarChart3, History,
+  Map as MapIcon, Radar, ChevronLeft, ChevronRight, ChevronDown,
+  Layers, ExternalLink, Ship, LineChart, MessageSquare,
+  LayoutDashboard, Database
 } from 'lucide-react';
+
+const tabs = [
+  { id: 'map', icon: Radar, label: 'Live Map' },
+  { id: 'aircraft', icon: Plane, label: 'Aircraft List' },
+  { id: 'stats', icon: BarChart3, label: 'Statistics' },
+  { id: 'history', icon: History, label: 'History' },
+  { id: 'alerts', icon: Bell, label: 'Alerts' },
+  { id: 'system', icon: Activity, label: 'System' }
+];
+
+const externalServices = [
+  { id: 'tar1090', icon: MapIcon, label: 'tar1090', path: '/tar1090/', desc: 'ADS-B Map' },
+  { id: 'graphs', icon: LineChart, label: 'Graphs1090', path: '/graphs1090/', desc: 'Statistics' },
+  { id: 'piaware', icon: Plane, label: 'PiAware', path: '/piaware/', desc: 'FlightAware' },
+  { id: 'uat', icon: Radio, label: 'UAT 978', path: '/uat/', desc: 'UAT Receiver' },
+  { id: 'acars', icon: MessageSquare, label: 'ACARS', path: '/acars/', desc: 'ACARS Hub' },
+  { id: 'ais', icon: Ship, label: 'AIS', path: '/ais/', desc: 'Ship Tracking' },
+  { id: 'grafana', icon: LayoutDashboard, label: 'Grafana', path: '/grafana/', desc: 'Dashboards' },
+  { id: 'prometheus', icon: Database, label: 'Prometheus', path: '/prometheus/', desc: 'Metrics' },
+];
 
 export function Sidebar({ activeTab, setActiveTab, connected, collapsed, setCollapsed }) {
   const [servicesExpanded, setServicesExpanded] = useState(false);
-  
-  const tabs = [
-    { id: 'map', icon: Radar, label: 'Live Map' },
-    { id: 'aircraft', icon: Plane, label: 'Aircraft List' },
-    { id: 'stats', icon: BarChart3, label: 'Statistics' },
-    { id: 'history', icon: History, label: 'History' },
-    { id: 'alerts', icon: Bell, label: 'Alerts' },
-    { id: 'system', icon: Activity, label: 'System' }
-  ];
-
-  const externalServices = [
-    { id: 'tar1090', icon: MapIcon, label: 'tar1090', path: '/tar1090/', desc: 'ADS-B Map' },
-    { id: 'graphs', icon: LineChart, label: 'Graphs1090', path: '/graphs1090/', desc: 'Statistics' },
-    { id: 'piaware', icon: Plane, label: 'PiAware', path: '/piaware/', desc: 'FlightAware' },
-    { id: 'uat', icon: Radio, label: 'UAT 978', path: '/uat/', desc: 'UAT Receiver' },
-    { id: 'acars', icon: MessageSquare, label: 'ACARS', path: '/acars/', desc: 'ACARS Hub' },
-    { id: 'ais', icon: Ship, label: 'AIS', path: '/ais/', desc: 'Ship Tracking' },
-    { id: 'grafana', icon: LayoutDashboard, label: 'Grafana', path: '/grafana/', desc: 'Dashboards' },
-    { id: 'prometheus', icon: Database, label: 'Prometheus', path: '/prometheus/', desc: 'Metrics' },
-  ];
 
   return (
     <div className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
@@ -43,7 +43,7 @@ export function Sidebar({ activeTab, setActiveTab, connected, collapsed, setColl
         </div>
       </div>
 
-      <button 
+      <button
         className="sidebar-toggle"
         onClick={() => setCollapsed(!collapsed)}
         title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -65,7 +65,7 @@ export function Sidebar({ activeTab, setActiveTab, connected, collapsed, setColl
         ))}
 
         <div className="nav-divider" />
-        
+
         <button
           className={`nav-item services-toggle ${servicesExpanded ? 'expanded' : ''}`}
           onClick={() => setServicesExpanded(!servicesExpanded)}
@@ -124,3 +124,5 @@ export function Sidebar({ activeTab, setActiveTab, connected, collapsed, setColl
     </div>
   );
 }
+
+export default Sidebar;

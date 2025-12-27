@@ -241,3 +241,77 @@ class AcarsMessage(Base):
         Index("idx_acars_icao_time", "icao_hex", "timestamp"),
         Index("idx_acars_label", "label", "timestamp"),
     )
+
+
+class AirspaceAdvisory(Base):
+    """Active airspace advisories (G-AIRMETs, SIGMETs) from Aviation Weather Center."""
+    __tablename__ = "airspace_advisories"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    # Advisory identification
+    advisory_id: Mapped[str] = mapped_column(String(50), index=True, nullable=False)
+    advisory_type: Mapped[str] = mapped_column(String(20), index=True, nullable=False)  # GAIRMET, SIGMET, etc.
+    hazard: Mapped[Optional[str]] = mapped_column(String(20), index=True)  # IFR, TURB, ICE, etc.
+    severity: Mapped[Optional[str]] = mapped_column(String(20))
+
+    # Time validity
+    valid_from: Mapped[Optional[datetime]] = mapped_column(DateTime, index=True)
+    valid_to: Mapped[Optional[datetime]] = mapped_column(DateTime, index=True)
+
+    # Altitude range
+    lower_alt_ft: Mapped[Optional[int]] = mapped_column(Integer)
+    upper_alt_ft: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # Geographic info
+    region: Mapped[Optional[str]] = mapped_column(String(20))
+    polygon: Mapped[Optional[dict]] = mapped_column(JSON)  # GeoJSON polygon coordinates
+
+    # Raw data
+    raw_text: Mapped[Optional[str]] = mapped_column(Text)
+    source_data: Mapped[Optional[dict]] = mapped_column(JSON)
+
+    __table_args__ = (
+        Index("idx_airspace_advisory_valid", "valid_from", "valid_to"),
+        Index("idx_airspace_advisory_type_hazard", "advisory_type", "hazard"),
+    )
+
+
+class AirspaceBoundary(Base):
+    """Static airspace boundary data (Class B/C/D, MOAs, Restricted)."""
+    __tablename__ = "airspace_boundaries"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    # Airspace identification
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    icao: Mapped[Optional[str]] = mapped_column(String(4), index=True)
+    airspace_class: Mapped[str] = mapped_column(String(20), index=True, nullable=False)  # B, C, D, MOA, Restricted
+
+    # Altitude range
+    floor_ft: Mapped[int] = mapped_column(Integer, default=0)
+    ceiling_ft: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Geographic info
+    center_lat: Mapped[float] = mapped_column(Float, index=True)
+    center_lon: Mapped[float] = mapped_column(Float, index=True)
+    radius_nm: Mapped[Optional[float]] = mapped_column(Float)  # For circular airspaces (Class D)
+    polygon: Mapped[Optional[dict]] = mapped_column(JSON)  # GeoJSON polygon coordinates
+
+    # Additional info
+    controlling_agency: Mapped[Optional[str]] = mapped_column(String(100))
+    schedule: Mapped[Optional[str]] = mapped_column(String(200))
+
+    # Source tracking
+    source: Mapped[str] = mapped_column(String(50), default="faa")  # faa, openaip, embedded
+    source_id: Mapped[Optional[str]] = mapped_column(String(100))  # External ID for updates
+
+    # Cache management
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index("idx_airspace_boundary_class", "airspace_class"),
+        Index("idx_airspace_boundary_location", "center_lat", "center_lon"),
+    )

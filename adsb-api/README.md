@@ -1,306 +1,366 @@
-# ADS-B Metrics API v2.6.0
+# SkySpyAPI
 
-FastAPI-based aircraft tracking API with PostgreSQL storage, alert rules, safety monitoring, ACARS messages, and push notifications.
+A FastAPI-based REST and WebSocket API for real-time ADS-B aircraft tracking with historical data storage, customizable alerts, safety monitoring, and push notifications.
+
+## Features
+
+- **Live Aircraft Tracking** - Real-time positions from 1090MHz Mode S and 978MHz UAT receivers
+- **Real-Time Streaming** - Server-Sent Events (SSE) and Socket.IO for live updates
+- **Historical Data** - PostgreSQL-backed sighting history and session tracking
+- **Custom Alerts** - Flexible alert rules with AND/OR logic and scheduling
+- **Safety Monitoring** - TCAS detection, proximity alerts, extreme vertical speed changes
+- **Aviation Weather** - METARs, TAFs, PIREPs, SIGMETs from Aviation Weather Center
+- **Airspace Data** - G-AIRMET advisories and static airspace boundaries
+- **ACARS/VDL2** - Aircraft communication message reception and storage
+- **Push Notifications** - Apprise-based notifications (80+ services supported)
+- **Aircraft Info** - Registration, photos, and airframe data from multiple sources
 
 ## Quick Start
 
+### Prerequisites
+
+- Python 3.12+
+- PostgreSQL 12+
+- Redis (optional, for multi-worker deployments)
+
+### Installation
+
 ```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Set environment variables
-export DATABASE_URL="postgresql://user:pass@localhost/adsb"
-export ULTRAFEEDER_HOST="localhost"
-export ULTRAFEEDER_PORT="8080"
-export FEEDER_LAT="47.7511"
-export FEEDER_LON="-122.2055"
-
-# Run development server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 5000
+cd adsb-api
+pip install -e .
 ```
+
+### Running
+
+```bash
+# Development
+uvicorn app.main:app --host 0.0.0.0 --port 5000 --reload
+
+# Production
+uvicorn app.main:app --host 0.0.0.0 --port 5000 --workers 4
+```
+
+### Docker Compose
+
+```yaml
+services:
+  api:
+    build: ./adsb-api
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: postgresql://adsb:adsb@postgres:5432/adsb
+      ULTRAFEEDER_HOST: ultrafeeder
+      FEEDER_LAT: 47.9377
+      FEEDER_LON: -121.9687
+    depends_on:
+      - postgres
+```
+
+## API Documentation
+
+Interactive documentation is available at:
+
+- **Swagger UI**: `http://localhost:5000/docs`
+- **ReDoc**: `http://localhost:5000/redoc`
+- **OpenAPI JSON**: `http://localhost:5000/openapi.json`
+
+## Endpoints
+
+### Aircraft Tracking
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/aircraft` | All tracked aircraft |
+| GET | `/api/v1/aircraft/top` | Top 5 by category (closest, highest, fastest, climbing, military) |
+| GET | `/api/v1/aircraft/stats` | Aggregate statistics |
+| GET | `/api/v1/aircraft/{hex}` | Single aircraft by ICAO hex |
+| GET | `/api/v1/uat/aircraft` | 978MHz UAT aircraft |
+
+### Aircraft Information
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/aircraft/{icao_hex}/info` | Full aircraft info (registration, photos, airframe) |
+| GET | `/api/v1/aircraft/{icao_hex}/photo` | Photo URLs |
+| GET | `/api/v1/aircraft/{icao_hex}/photo/download` | Proxy/download aircraft photo |
+| POST | `/api/v1/aircraft/info/bulk` | Bulk lookup (cached data only) |
+| GET | `/api/v1/aircraft/info/cache/stats` | Cache statistics |
+
+### Map Data
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/map/geojson` | GeoJSON FeatureCollection for map visualization |
+| GET | `/api/v1/map/sse` | Server-Sent Events stream |
+| GET | `/api/v1/map/sse/status` | SSE service status |
+
+### Historical Data
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/history/sightings` | Query sightings with filters |
+| GET | `/api/v1/history/sightings/{icao_hex}` | Flight path for specific aircraft |
+| GET | `/api/v1/history/sessions` | Tracking sessions |
+| GET | `/api/v1/history/stats` | Historical statistics |
+
+### Alert Rules
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/alerts/rules` | List all rules |
+| POST | `/api/v1/alerts/rules` | Create rule |
+| PUT | `/api/v1/alerts/rules/{rule_id}` | Update rule |
+| DELETE | `/api/v1/alerts/rules/{rule_id}` | Delete rule |
+| GET | `/api/v1/alerts/history` | Alert trigger history |
+
+### Safety Monitoring
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/safety/events` | Query safety events |
+| GET | `/api/v1/safety/stats` | Safety monitoring statistics |
+
+**Event Types:**
+- `tcas_ra` - TCAS Resolution Advisory
+- `tcas_ta` - TCAS Traffic Advisory
+- `extreme_vs` - Extreme vertical speed (>4500 ft/min)
+- `proximity` - Aircraft in close proximity
+
+### Aviation Weather & Airspace
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/aviation/metars` | METAR observations by location |
+| GET | `/api/v1/aviation/metar/{station}` | Single station METAR |
+| GET | `/api/v1/aviation/taf/{station}` | Terminal Aerodrome Forecast |
+| GET | `/api/v1/aviation/pireps` | Pilot reports by location |
+| GET | `/api/v1/aviation/sigmets` | Active SIGMETs |
+| GET | `/api/v1/aviation/airports` | Nearby airports |
+| GET | `/api/v1/aviation/navaids` | Navigation aids |
+| GET | `/api/v1/aviation/airspaces` | G-AIRMET advisories |
+| GET | `/api/v1/aviation/airspace-boundaries` | Static airspace boundaries |
+
+### ACARS/VDL2
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/acars/messages` | Query ACARS/VDL2 messages |
+| GET | `/api/v1/acars/stats` | Message statistics |
+| GET | `/api/v1/acars/status` | Receiver service status |
+| GET | `/api/v1/acars/labels` | ACARS label reference |
+
+### Notifications
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/notifications/config` | Get configuration |
+| PUT | `/api/v1/notifications/config` | Update configuration |
+| POST | `/api/v1/notifications/test` | Send test notification |
+
+### System
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/health` | Health check |
+| GET | `/api/v1/status` | System status |
+| GET | `/api/v1/info` | API information |
+
+## Real-Time Streaming
+
+### Socket.IO (Recommended)
+
+```javascript
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:5000', {
+  path: '/socket.io',
+  query: { topics: 'aircraft,safety,alerts' },
+  transports: ['websocket', 'polling']
+});
+
+socket.on('aircraft:update', (data) => {
+  console.log('Aircraft update:', data);
+});
+
+socket.on('safety:event', (event) => {
+  console.log('Safety event:', event);
+});
+
+socket.on('alert:triggered', (alert) => {
+  console.log('Alert triggered:', alert);
+});
+```
+
+**Available Topics:** `aircraft`, `airspace`, `safety`, `alerts`, `acars`, `all`
+
+**Event Types:**
+- `aircraft:snapshot` - Full aircraft state
+- `aircraft:update` - Position/state updates
+- `aircraft:new` - New aircraft detected
+- `aircraft:remove` - Aircraft left coverage
+- `aircraft:heartbeat` - Connection keepalive
+- `safety:event` - Safety monitoring events
+- `alert:triggered` - Alert rule matches
+- `acars:message` - ACARS/VDL2 messages
+- `airspace:advisory` - Airspace advisories
+
+See [WEBSOCKET_API.md](WEBSOCKET_API.md) for detailed Socket.IO documentation.
+
+### Server-Sent Events (Legacy)
+
+```javascript
+const eventSource = new EventSource('/api/v1/map/sse');
+
+eventSource.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Update:', data);
+};
+```
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# ADS-B Sources
+ULTRAFEEDER_HOST=ultrafeeder
+ULTRAFEEDER_PORT=80
+DUMP978_HOST=dump978
+DUMP978_PORT=80
+
+# Database
+DATABASE_URL=postgresql://user:pass@postgres:5432/adsb
+
+# Feeder Location (for distance calculations)
+FEEDER_LAT=47.9377
+FEEDER_LON=-121.9687
+
+# Polling & Storage
+POLLING_INTERVAL=2        # Seconds between aircraft updates
+DB_STORE_INTERVAL=10      # Seconds between database writes
+
+# Caching
+CACHE_TTL=5               # Response cache TTL in seconds
+
+# Redis (optional)
+REDIS_URL=redis://localhost:6379
+REDIS_ENABLED=true
+
+# Notifications (Apprise URLs)
+APPRISE_URLS="pushover://key@token;telegram://token/chatid"
+NOTIFICATION_COOLDOWN=300
+
+# Safety Monitoring
+SAFETY_MONITORING_ENABLED=true
+SAFETY_VS_CHANGE_THRESHOLD=3000      # ft/min
+SAFETY_VS_EXTREME_THRESHOLD=4500     # ft/min
+SAFETY_PROXIMITY_NM=1.0              # nautical miles
+SAFETY_ALTITUDE_DIFF_FT=1000         # feet
+
+# ACARS
+ACARS_ENABLED=true
+ACARS_PORT=5555
+VDLM2_PORT=5556
+
+# Aircraft Info Cache
+PHOTO_CACHE_ENABLED=true
+PHOTO_CACHE_DIR=/data/photos
+
+# OpenSky Database
+OPENSKY_DB_ENABLED=true
+OPENSKY_DB_PATH=/data/opensky/aircraft-database.csv
+
+# Server
+PORT=5000
+```
+
+## Alert Rules
+
+Create custom alerts with flexible conditions:
+
+```json
+{
+  "name": "Military Aircraft Alert",
+  "description": "Alert when military aircraft detected",
+  "enabled": true,
+  "priority": "warning",
+  "conditions": {
+    "type": "simple",
+    "field": "military",
+    "operator": "eq",
+    "value": true
+  }
+}
+```
+
+**Complex rules with AND/OR logic:**
+
+```json
+{
+  "name": "Low Flying Fast Aircraft",
+  "conditions": {
+    "type": "group",
+    "logic": "and",
+    "conditions": [
+      { "type": "simple", "field": "altitude", "operator": "lt", "value": 5000 },
+      { "type": "simple", "field": "speed", "operator": "gt", "value": 300 }
+    ]
+  }
+}
+```
+
+**Condition Fields:** `icao`, `callsign`, `squawk`, `altitude`, `distance`, `type`, `military`
+
+**Operators:** `eq`, `ne`, `lt`, `gt`, `le`, `ge`, `contains`, `startswith`
 
 ## Project Structure
 
 ```
-app/
-├── core/
-│   ├── config.py      # Pydantic Settings
-│   ├── database.py    # AsyncPG + SQLAlchemy
-│   ├── cache.py       # Caching decorator
-│   └── utils.py       # Helper functions
-├── services/
-│   ├── sse.py         # SSE with Redis pub/sub
-│   ├── notifications.py
-│   ├── safety.py      # TCAS/safety monitoring
-│   ├── alerts.py      # Alert rule evaluation
-│   ├── aircraft_info.py  # Airframe data & photos
-│   ├── photo_cache.py # Local photo caching
-│   ├── opensky_db.py  # OpenSky offline database
-│   └── acars.py       # ACARS/VDL2 message handling
-├── routers/
-│   ├── aircraft.py    # Live aircraft endpoints
-│   ├── airframe.py    # Aircraft info & photos
-│   ├── map.py         # GeoJSON + SSE streaming
-│   ├── history.py     # Historical queries
-│   ├── alerts.py      # Alert CRUD
-│   ├── safety.py      # Safety events
-│   ├── notifications.py
-│   ├── aviation.py    # Weather, airports, airspace
-│   ├── acars.py       # ACARS messages
-│   └── system.py      # Health/status
-├── models.py          # SQLAlchemy ORM
-├── schemas.py         # Pydantic schemas
-└── main.py            # FastAPI app
-scripts/
-└── download-opensky-db.sh  # Download OpenSky database
+adsb-api/
+├── app/
+│   ├── main.py              # FastAPI app entry point
+│   ├── models.py            # SQLAlchemy ORM models
+│   ├── schemas.py           # Pydantic request/response models
+│   ├── core/
+│   │   ├── config.py        # Settings (environment variables)
+│   │   ├── database.py      # Database setup
+│   │   ├── cache.py         # Response caching
+│   │   └── utils.py         # Helper functions
+│   ├── routers/
+│   │   ├── aircraft.py      # Aircraft tracking endpoints
+│   │   ├── airframe.py      # Aircraft info endpoints
+│   │   ├── map.py           # GeoJSON and SSE endpoints
+│   │   ├── history.py       # Historical data endpoints
+│   │   ├── alerts.py        # Alert rule endpoints
+│   │   ├── safety.py        # Safety event endpoints
+│   │   ├── aviation.py      # Weather/airspace endpoints
+│   │   ├── acars.py         # ACARS message endpoints
+│   │   ├── notifications.py # Notification endpoints
+│   │   └── system.py        # Health/status endpoints
+│   └── services/
+│       ├── aircraft_info.py     # Aircraft data lookup
+│       ├── safety.py            # Safety event detection
+│       ├── alerts.py            # Alert rule checking
+│       ├── notifications.py     # Push notifications
+│       ├── acars.py             # ACARS receiver
+│       ├── sse.py               # SSE manager
+│       ├── socketio_manager.py  # Socket.IO implementation
+│       └── airspace.py          # Airspace data
+├── tests/
+├── pyproject.toml
+├── requirements.txt
+└── Dockerfile
 ```
 
-## API Endpoints
+## Data Sources
 
-| Group | Endpoints |
-|-------|-----------|
-| Live | `/api/v1/aircraft`, `/api/v1/aircraft/top`, `/api/v1/aircraft/stats` |
-| Airframe | `/api/v1/aircraft/{icao}/info`, `/api/v1/aircraft/{icao}/photo` |
-| Map | `/api/v1/map/geojson`, `/api/v1/map/sse` |
-| History | `/api/v1/history/sightings`, `/api/v1/history/sessions` |
-| Alerts | `/api/v1/alerts/rules`, `/api/v1/alerts/history` |
-| Safety | `/api/v1/safety/events`, `/api/v1/safety/stats` |
-| Notifications | `/api/v1/notifications/config`, `/api/v1/notifications/test` |
-| Aviation | `/api/v1/aviation/metars`, `/api/v1/aviation/airports`, `/api/v1/aviation/pireps` |
-| ACARS | `/api/v1/acars/messages`, `/api/v1/acars/stats`, `/api/v1/acars/status` |
-| System | `/api/v1/health`, `/api/v1/status` |
+- **Aircraft Positions**: Ultrafeeder (readsb/dump1090) via JSON API
+- **UAT Positions**: dump978 for 978MHz reception
+- **Aircraft Info**: hexdb.io, OpenSky Network, Planespotters.net
+- **Aviation Weather**: Aviation Weather Center (aviationweather.gov)
+- **ACARS/VDL2**: dumpvdl2, acarsdec receivers
 
-Interactive docs at `/docs` (Swagger UI) and `/redoc`.
+## License
 
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | required | PostgreSQL connection string |
-| `ULTRAFEEDER_HOST` | `ultrafeeder` | tar1090 hostname |
-| `ULTRAFEEDER_PORT` | `80` | tar1090 port |
-| `FEEDER_LAT` | `0.0` | Feeder latitude |
-| `FEEDER_LON` | `0.0` | Feeder longitude |
-| `POLLING_INTERVAL` | `2` | Aircraft fetch interval (seconds) |
-| `DB_STORE_INTERVAL` | `10` | Database write interval (seconds) |
-| `REDIS_URL` | `None` | Redis URL for multi-worker SSE |
-| `APPRISE_URLS` | `""` | Apprise notification URLs |
-| `SAFETY_MONITORING_ENABLED` | `true` | Enable safety event detection |
-| `ACARS_ENABLED` | `true` | Enable ACARS message reception |
-| `ACARS_PORT` | `5555` | UDP port for ACARS messages |
-| `VDLM2_PORT` | `5556` | UDP port for VDL2 messages |
-| `PHOTO_CACHE_ENABLED` | `true` | Enable photo caching |
-| `PHOTO_CACHE_DIR` | `/data/photos` | Local photo cache directory |
-| `PHOTO_AUTO_DOWNLOAD` | `true` | Auto-download photos for new aircraft |
-| `S3_ENABLED` | `false` | Use S3 for photo storage |
-| `S3_BUCKET` | `""` | S3 bucket name |
-| `S3_REGION` | `us-east-1` | S3 region |
-| `S3_ACCESS_KEY` | `None` | S3 access key (or use IAM) |
-| `S3_SECRET_KEY` | `None` | S3 secret key |
-| `S3_ENDPOINT_URL` | `None` | Custom S3 endpoint (MinIO, Wasabi) |
-| `S3_PREFIX` | `aircraft-photos` | S3 key prefix |
-| `S3_PUBLIC_URL` | `None` | Public URL base for CDN |
-| `OPENSKY_DB_ENABLED` | `true` | Enable local OpenSky database |
-| `OPENSKY_DB_PATH` | `/data/opensky/aircraft-database.csv` | Path to OpenSky CSV |
-
-## ACARS/VDL2 Configuration
-
-The API receives ACARS and VDL2 messages via UDP from `acars_router` (acarshub).
-
-### Option 1: Using docker-acarshub
-
-```yaml
-# docker-compose.yml
-acars_router:
-  image: ghcr.io/sdr-enthusiasts/docker-acarshub:latest
-  environment:
-    - FEED_ID=my-station
-    - TZ=America/Los_Angeles
-    # Enable decoders
-    - ENABLE_ACARS=true
-    - ENABLE_VDLM2=true
-    # SDR device serials (find with rtl_test)
-    - ACARS_SDR_SERIAL=00000001
-    - VDLM2_SDR_SERIAL=00000002
-    # Frequencies
-    - ACARS_FREQS=130.025;130.450;131.125;131.550
-    - VDLM2_FREQS=136.650;136.800;136.975
-    # Send to our API
-    - AR_SEND_UDP_ACARS=adsb-api:5555
-    - AR_SEND_UDP_VDLM2=adsb-api:5556
-  devices:
-    - /dev/bus/usb:/dev/bus/usb
-```
-
-### Option 2: Standalone acarsdec/vdlm2dec
-
-```bash
-# ACARS decoder
-acarsdec -v -o 4 -j adsb-api:5555 -r 0 130.025 130.450 131.125 131.550
-
-# VDL2 decoder
-vdlm2dec -v -J -j adsb-api:5556 -r 1 136.650 136.800 136.975
-```
-
-### Common ACARS Frequencies
-
-**VHF ACARS (acarsdec):**
-- North America: 130.025, 130.450, 131.125, 131.550
-- Europe: 131.525, 131.725, 131.825
-
-**VDL2 (vdlm2dec):**
-- Worldwide: 136.650, 136.800, 136.975
-
-### SSE Events
-
-ACARS messages are broadcast via SSE:
-```javascript
-const sse = new EventSource('/api/v1/map/sse');
-sse.addEventListener('acars_message', (e) => {
-  const msg = JSON.parse(e.data);
-  console.log(`${msg.callsign}: ${msg.text}`);
-});
-```
-
-## Aircraft Info & Photos
-
-The API fetches aircraft information from open sources and caches it in the database:
-
-- **Local OpenSky Database** - Offline aircraft metadata (fastest)
-- **hexdb.io** - Aircraft registration, type, operator
-- **OpenSky Network API** - Aircraft metadata
-- **Planespotters.net** - Aircraft photos
-
-### OpenSky Database (Offline Lookup)
-
-For fastest lookups and offline operation, download the OpenSky aircraft database:
-
-```bash
-# Download the database (~500MB)
-./scripts/download-opensky-db.sh
-
-# Or manually:
-curl -L -o /data/opensky/aircraft-database.csv \
-  "https://s3.opensky-network.org/data-samples/metadata/aircraft-database-complete-2025-08.csv"
-```
-
-The database contains ~600,000 aircraft and is checked first before any external API calls.
-
-### Photo Caching
-
-Photos are automatically downloaded and cached when new aircraft are seen.
-Supports local filesystem (default) or S3-compatible storage.
-
-**Local Storage (default):**
-```bash
-PHOTO_CACHE_ENABLED=true
-PHOTO_CACHE_DIR=/data/photos
-PHOTO_AUTO_DOWNLOAD=true
-```
-
-Photos stored as:
-```
-/data/photos/A12345.jpg       # Full-size
-/data/photos/A12345_thumb.jpg # Thumbnail
-```
-
-**S3/MinIO/Wasabi Storage:**
-```bash
-# Enable S3
-S3_ENABLED=true
-S3_BUCKET=my-aircraft-photos
-S3_REGION=us-east-1
-
-# Credentials (or use IAM role)
-S3_ACCESS_KEY=AKIAXXXXXXXX
-S3_SECRET_KEY=xxxxxxxx
-
-# Optional: Key prefix
-S3_PREFIX=aircraft-photos
-
-# Optional: Custom endpoint for MinIO, Wasabi, etc.
-S3_ENDPOINT_URL=https://minio.local:9000
-
-# Optional: Public URL base for CDN
-S3_PUBLIC_URL=https://cdn.example.com/aircraft-photos
-```
-
-S3 keys:
-```
-s3://my-bucket/aircraft-photos/A12345.jpg
-s3://my-bucket/aircraft-photos/A12345_thumb.jpg
-```
-
-**Comparison:**
-
-| Feature | Local | S3 |
-|---------|-------|-----|
-| Setup | Simple | Requires bucket |
-| Scaling | Single server | Multi-server |
-| Cost | Disk only | Per-request + storage |
-| CDN | Manual | Native |
-| Backup | Manual | Built-in |
-
-Environment variables:
-```bash
-PHOTO_CACHE_ENABLED=true
-PHOTO_CACHE_DIR=/data/photos
-PHOTO_AUTO_DOWNLOAD=true
-OPENSKY_DB_ENABLED=true
-OPENSKY_DB_PATH=/data/opensky/aircraft-database.csv
-```
-
-### Endpoints
-
-```bash
-# Get aircraft info (uses local DB first, then external APIs)
-curl http://localhost:5000/api/v1/aircraft/A12345/info
-
-# Get photo URLs
-curl http://localhost:5000/api/v1/aircraft/A12345/photo
-
-# Download photo (serves from local cache if available)
-curl http://localhost:5000/api/v1/aircraft/A12345/photo/download -o photo.jpg
-
-# Get thumbnail
-curl "http://localhost:5000/api/v1/aircraft/A12345/photo/download?thumbnail=true"
-
-# Direct local database lookup
-curl http://localhost:5000/api/v1/opensky/lookup/A12345
-
-# Check database stats
-curl http://localhost:5000/api/v1/opensky/stats
-
-# Check photo cache stats
-curl http://localhost:5000/api/v1/photos/cache
-
-# Bulk lookup (cached only)
-curl -X POST http://localhost:5000/api/v1/aircraft/info/bulk \
-  -H "Content-Type: application/json" \
-  -d '["A12345", "A67890"]'
-```
-
-## Production Deployment
-
-```bash
-# Single worker
-uvicorn app.main:app --host 0.0.0.0 --port 5000
-
-# Multi-worker with Redis
-export REDIS_URL="redis://localhost:6379"
-gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:5000
-```
-
-## Key Features
-
-- **Async/Await**: Full async support with asyncpg
-- **SSE Streaming**: Real-time aircraft and ACARS updates
-- **Alert Rules**: Complex AND/OR conditions with scheduling
-- **Safety Monitoring**: TCAS RA detection, extreme VS alerts, proximity conflicts
-- **Aircraft Info**: Airframe data, photos, age from open sources
-- **Offline Database**: Local OpenSky database for fast lookups (~600k aircraft)
-- **Photo Caching**: Automatic local caching of aircraft photos
-- **ACARS/VDL2**: Receive and display aircraft data link messages
-- **Aviation Weather**: METARs, TAFs, PIREPs, airports, navaids
-- **Push Notifications**: Via Apprise (Pushover, Telegram, Discord, etc.)
-- **Historical Data**: PostgreSQL-backed sightings and session tracking
+MIT

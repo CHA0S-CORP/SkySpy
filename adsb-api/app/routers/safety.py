@@ -348,3 +348,150 @@ async def get_monitor_status():
         "tracked_aircraft": len(safety_monitor._aircraft_state),
         "thresholds": safety_monitor.get_thresholds(),
     }
+
+
+# ============================================================================
+# Active Events API - Real-time event tracking and acknowledgment
+# ============================================================================
+
+@router.get(
+    "/active",
+    summary="Get Active Safety Events",
+    description="""
+Get all currently active safety events being tracked by the monitor.
+
+Active events include:
+- Emergency squawks (7500, 7600, 7700)
+- TCAS RAs and VS reversals
+- Proximity conflicts
+- Extreme vertical speeds
+
+Events are automatically removed after 5 minutes of inactivity.
+    """,
+    responses={
+        200: {
+            "description": "List of active events",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "events": [
+                            {
+                                "id": "squawk_hijack:A12345",
+                                "event_type": "squawk_hijack",
+                                "severity": "critical",
+                                "icao": "A12345",
+                                "callsign": "UAL123",
+                                "message": "HIJACK: UAL123 squawking 7500",
+                                "acknowledged": False,
+                                "created_at": 1703174400.0,
+                                "last_seen": 1703174410.0
+                            }
+                        ],
+                        "count": 1,
+                        "unacknowledged_count": 1
+                    }
+                }
+            }
+        }
+    }
+)
+async def get_active_events(
+    include_acknowledged: bool = Query(
+        True,
+        description="Include acknowledged events in response"
+    )
+):
+    """Get all active safety events."""
+    events = safety_monitor.get_active_events(include_acknowledged=include_acknowledged)
+    unacked = sum(1 for e in events if not e.get("acknowledged", False))
+
+    return {
+        "events": events,
+        "count": len(events),
+        "unacknowledged_count": unacked
+    }
+
+
+@router.post(
+    "/active/{event_id}/acknowledge",
+    summary="Acknowledge Safety Event",
+    description="""
+Acknowledge a safety event by its ID.
+
+Acknowledged events are still tracked but won't trigger alarms
+in the UI. The event will be cleared when it naturally expires.
+    """,
+    responses={
+        200: {"description": "Event acknowledged"},
+        404: {"model": ErrorResponse, "description": "Event not found"}
+    }
+)
+async def acknowledge_event(
+    event_id: str = Path(..., description="Event ID to acknowledge")
+):
+    """Acknowledge a safety event."""
+    from fastapi import HTTPException
+
+    success = safety_monitor.acknowledge_event(event_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    return {"success": True, "message": f"Event {event_id} acknowledged", "event_id": event_id}
+
+
+@router.post(
+    "/active/{event_id}/unacknowledge",
+    summary="Unacknowledge Safety Event",
+    description="Remove acknowledgment from a safety event.",
+    responses={
+        200: {"description": "Event unacknowledged"},
+        404: {"model": ErrorResponse, "description": "Event not found"}
+    }
+)
+async def unacknowledge_event(
+    event_id: str = Path(..., description="Event ID to unacknowledge")
+):
+    """Remove acknowledgment from a safety event."""
+    from fastapi import HTTPException
+
+    success = safety_monitor.unacknowledge_event(event_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    return {"success": True, "message": f"Event {event_id} unacknowledged", "event_id": event_id}
+
+
+@router.delete(
+    "/active/{event_id}",
+    summary="Clear Safety Event",
+    description="Manually clear/remove a safety event.",
+    responses={
+        200: {"description": "Event cleared"},
+        404: {"model": ErrorResponse, "description": "Event not found"}
+    }
+)
+async def clear_event(
+    event_id: str = Path(..., description="Event ID to clear")
+):
+    """Clear a safety event."""
+    from fastapi import HTTPException
+
+    success = safety_monitor.clear_event(event_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    return {"success": True, "message": f"Event {event_id} cleared", "event_id": event_id}
+
+
+@router.delete(
+    "/active",
+    summary="Clear All Safety Events",
+    description="Clear all active safety events and acknowledgments.",
+    responses={
+        200: {"description": "All events cleared"}
+    }
+)
+async def clear_all_events():
+    """Clear all active safety events."""
+    safety_monitor.clear_all_events()
+    return {"success": True, "message": "All events cleared"}

@@ -5,7 +5,7 @@ import { useApi } from '../../hooks';
 export function SystemView({ apiBase }) {
   const { data: status, refetch: refetchStatus } = useApi('/api/v1/status', 10000, apiBase);
   const { data: health } = useApi('/api/v1/health', 10000, apiBase);
-  const { data: sseStatus } = useApi('/api/v1/map/sse/status', 5000, apiBase);
+  const { data: wsStatus } = useApi('/api/v1/ws/status', 5000, apiBase);
   const { data: notifConfig } = useApi('/api/v1/notifications/config', null, apiBase);
   const [testResult, setTestResult] = useState(null);
 
@@ -41,14 +41,14 @@ export function SystemView({ apiBase }) {
             </div>
             <div className="status-item">
               <span>Redis</span>
-              <span className={`status-badge ${health?.services?.redis || sseStatus?.redis_enabled ? 'online' : 'warning'}`}>
-                {health?.services?.redis || sseStatus?.redis_enabled ? 'Connected' : 'Disabled'}
+              <span className={`status-badge ${health?.services?.redis || wsStatus?.redis_enabled ? 'online' : 'warning'}`}>
+                {health?.services?.redis || wsStatus?.redis_enabled ? 'Connected' : 'Disabled'}
               </span>
             </div>
             <div className="status-item">
-              <span>SSE Stream</span>
-              <span className={`status-badge ${sseStatus?.redis_enabled ? 'online' : 'warning'}`}>
-                {sseStatus?.mode || 'Unknown'}
+              <span>WebSocket</span>
+              <span className={`status-badge ${wsStatus?.redis_enabled ? 'online' : 'warning'}`}>
+                {wsStatus?.mode || 'Unknown'}
               </span>
             </div>
             <div className="status-item">
@@ -72,14 +72,14 @@ export function SystemView({ apiBase }) {
         <div className="system-card">
           <div className="card-header"><Zap size={20} /><span>Real-time</span></div>
           <div className="stats-list">
-            <div className="stat-row"><span>SSE Subscribers</span><span className="mono">{sseStatus?.subscribers || 0}</span></div>
-            <div className="stat-row"><span>Tracked Aircraft</span><span className="mono">{sseStatus?.tracked_aircraft || 0}</span></div>
+            <div className="stat-row"><span>WS Clients</span><span className="mono">{wsStatus?.subscribers || 0}</span></div>
+            <div className="stat-row"><span>Tracked Aircraft</span><span className="mono">{wsStatus?.tracked_aircraft || 0}</span></div>
             <div className="stat-row"><span>Poll Interval</span><span className="mono">{status?.polling_interval_seconds || '--'}s</span></div>
             <div className="stat-row"><span>DB Store Interval</span><span className="mono">{status?.db_store_interval_seconds || '--'}s</span></div>
-            {sseStatus?.redis_enabled && (
+            {wsStatus?.redis_enabled && (
               <>
                 <div className="stat-row"><span>Redis Pub/Sub</span><span className="mono">Active</span></div>
-                <div className="stat-row"><span>Last Publish</span><span className="mono">{sseStatus?.last_publish ? new Date(sseStatus.last_publish).toLocaleTimeString() : '--'}</span></div>
+                <div className="stat-row"><span>Last Publish</span><span className="mono">{wsStatus?.last_publish ? new Date(wsStatus.last_publish).toLocaleTimeString() : '--'}</span></div>
               </>
             )}
           </div>

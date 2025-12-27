@@ -301,7 +301,7 @@ async def download_aircraft_photo(
             photo_url = fallback_url
     
     logger.info(f"Fetching photo for {icao_hex} (thumbnail={thumbnail}): {photo_url}")
-    
+
     # Fetch from remote
     import httpx
     try:
@@ -314,25 +314,49 @@ async def download_aircraft_photo(
                 },
                 follow_redirects=True
             )
+
+            # If 404 and we modified the URL for higher res, try fallback
+            if response.status_code == 404 and "_1000.jpg" in photo_url:
+                fallback_url = photo_url.replace("_1000.jpg", "_280.jpg")
+                logger.info(f"1000px not available for {icao_hex}, trying 280px: {fallback_url}")
+                response = await client.get(
+                    fallback_url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (compatible; ADS-B API/2.6)",
+                        "Accept": "image/*",
+                    },
+                    follow_redirects=True
+                )
+                if response.status_code == 200:
+                    photo_url = fallback_url
+
             response.raise_for_status()
-            
+
             # Get content while still in context
             content = response.content
             content_type = response.headers.get("content-type", "image/jpeg")
             if ";" in content_type:
                 content_type = content_type.split(";")[0].strip()
-            
+
             # Validate it's actually an image
             if not content_type.startswith("image/"):
                 logger.error(f"Photo URL for {icao_hex} returned non-image content-type: {content_type}, URL: {photo_url}")
                 raise HTTPException(
-                    status_code=502, 
+                    status_code=502,
                     detail=f"Source returned non-image content ({content_type}). URL may be a webpage, not an image."
                 )
             
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="Timeout fetching photo from source")
     except httpx.HTTPStatusError as e:
+        if e.response.status_code == 429:
+            retry_after = e.response.headers.get("Retry-After", "60")
+            logger.warning(f"Rate limited (429) fetching photo for {icao_hex} from {photo_url}")
+            raise HTTPException(
+                status_code=429,
+                detail="Photo source rate limit exceeded. Please try again later.",
+                headers={"Retry-After": retry_after}
+            )
         logger.error(f"HTTP error fetching photo for {icao_hex}: {e.response.status_code}, URL: {photo_url}")
         raise HTTPException(status_code=502, detail=f"Source returned error: {e.response.status_code}")
     except HTTPException:

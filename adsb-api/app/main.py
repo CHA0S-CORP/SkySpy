@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -30,6 +30,8 @@ from app.models import (
     AircraftSighting, AircraftSession, NotificationConfig, SafetyEvent
 )
 from app.services.sse import create_sse_manager, get_sse_manager
+from app.services.websocket import create_ws_manager, get_ws_manager, handle_websocket
+from app.services.socketio_manager import create_socketio_manager, get_socketio_manager, get_socketio_app
 from app.services.safety import safety_monitor
 from app.services.notifications import notifier
 from app.services.alerts import check_alerts, store_alert_history
@@ -39,6 +41,7 @@ from app.services.aircraft_info import (
     get_seen_aircraft_count
 )
 from app.services import opensky_db
+from app.services import airspace as airspace_service
 from app.routers import aircraft, map, history, alerts, safety, notifications, system, aviation, airframe, acars
 
 logging.basicConfig(level=logging.INFO)
@@ -236,7 +239,20 @@ async def process_aircraft_data(db: AsyncSession, aircraft_list: list[dict], sou
                         priority=alert["priority"],
                         aircraft_data=aircraft_data
                     )
-                    
+
+                    # Also publish via Socket.IO
+                    sio_mgr = get_socketio_manager()
+                    if sio_mgr:
+                        await sio_mgr.publish_alert_triggered(
+                            rule_id=alert.get("rule_id") or 0,
+                            rule_name=alert["rule_name"],
+                            icao=icao,
+                            callsign=callsign or "",
+                            message=alert["message"],
+                            priority=alert["priority"],
+                            aircraft_data=aircraft_data
+                        )
+
                     await notifier.send(
                         db=db,
                         title=alert["title"],
@@ -299,18 +315,21 @@ async def fetch_and_process_aircraft():
     
     # Safety monitoring
     sse_manager = get_sse_manager()
+    sio_manager = get_socketio_manager()
     if all_aircraft and safety_monitor.enabled:
         try:
             safety_events = safety_monitor.update_aircraft(all_aircraft)
-            
+
             if safety_events:
                 async with AsyncSessionLocal() as db:
                     for event in safety_events:
                         event_id = await store_safety_event(db, event)
                         if event_id:
                             event["id"] = event_id
-                        
+
                         await sse_manager.publish_safety_event(event)
+                        if sio_manager:
+                            await sio_manager.publish_safety_event(event)
                         
                         if event["severity"] == "critical":
                             emoji = "⚠️" if event["event_type"] == "proximity_conflict" else "🔴"
@@ -329,8 +348,10 @@ async def fetch_and_process_aircraft():
         except Exception as e:
             logger.error(f"Error in safety monitoring: {e}")
     
-    # Always publish SSE updates
+    # Always publish SSE and Socket.IO updates
     await sse_manager.publish_aircraft_update(all_aircraft)
+    if sio_manager:
+        await sio_manager.publish_aircraft_update(all_aircraft)
 
 
 async def background_polling_task():
@@ -401,9 +422,17 @@ async def lifespan(app: FastAPI):
             db.add(config)
             await db.commit()
     
-    # Initialize SSE manager
+    # Initialize SSE manager (legacy, still supported)
     await create_sse_manager()
     logger.info("SSE manager initialized")
+
+    # Initialize WebSocket manager (legacy native WebSocket)
+    ws_manager = await create_ws_manager()
+    logger.info("WebSocket manager initialized")
+
+    # Initialize Socket.IO manager (primary real-time connection)
+    sio_manager = create_socketio_manager()
+    logger.info(f"Socket.IO manager initialized (Redis: {sio_manager.is_using_redis()})")
     
     # Load OpenSky aircraft database
     if settings.opensky_db_enabled:
@@ -429,15 +458,17 @@ async def lifespan(app: FastAPI):
     
     # Start ACARS service
     sse_manager = get_sse_manager()
-    
-    async def acars_sse_callback(msg: dict):
-        """Publish ACARS messages to SSE."""
+
+    async def acars_callback(msg: dict):
+        """Publish ACARS messages to SSE and Socket.IO."""
         await sse_manager.publish_acars_message(msg)
+        if sio_manager:
+            await sio_manager.publish_acars_message(msg)
         # Also store in database
         async with AsyncSessionLocal() as db:
             await store_acars_message(db, msg)
-    
-    acars_service.set_sse_callback(acars_sse_callback)
+
+    acars_service.set_sse_callback(acars_callback)
     if settings.acars_enabled:
         await acars_service.start(
             acars_port=settings.acars_port,
@@ -446,11 +477,18 @@ async def lifespan(app: FastAPI):
         logger.info(f"ACARS service started (ACARS:{settings.acars_port}, VDL2:{settings.vdlm2_port})")
     else:
         logger.info("ACARS service disabled")
-    
+
+    # Start airspace data refresh service (with WebSocket and Socket.IO managers for broadcasts)
+    airspace_task = await airspace_service.start_refresh_task(AsyncSessionLocal, ws_manager, sio_manager)
+    logger.info("Airspace refresh service started (advisories: 5min, boundaries: 24h)")
+
     # Update scheduler state for status endpoint
     system.set_scheduler_state(
         running=True,
-        jobs=[{"id": "aircraft_fetch", "interval": settings.polling_interval}]
+        jobs=[
+            {"id": "aircraft_fetch", "interval": settings.polling_interval},
+            {"id": "airspace_refresh", "interval": 300},
+        ]
     )
     
     logger.info(f"Ultrafeeder: {settings.ultrafeeder_url}")
@@ -479,14 +517,23 @@ async def lifespan(app: FastAPI):
         await lookup_task
     except asyncio.CancelledError:
         pass
-    
+
+    # Stop airspace refresh service
+    await airspace_service.stop_refresh_task()
+
     # Stop ACARS service
     await acars_service.stop()
-    
+
+    # Stop SSE manager (legacy)
     sse_manager = get_sse_manager()
     if hasattr(sse_manager, "stop"):
         await sse_manager.stop()
-    
+
+    # Stop WebSocket manager
+    ws_mgr = get_ws_manager()
+    if hasattr(ws_mgr, "stop"):
+        await ws_mgr.stop()
+
     await close_db()
     logger.info("Shutdown complete")
 
@@ -592,6 +639,39 @@ app.include_router(airframe.router)
 app.include_router(acars.router)
 
 
+# WebSocket endpoint for real-time data
+@app.websocket("/ws")
+async def websocket_endpoint(
+    websocket: WebSocket,
+    topics: str = Query(default="all", description="Comma-separated topics: aircraft,airspace,safety,acars,alerts,all")
+):
+    """
+    WebSocket endpoint for real-time data streaming.
+
+    Topics:
+    - aircraft: Aircraft position updates, new/removed aircraft
+    - airspace: Airspace advisories and boundary updates
+    - safety: Safety events (TCAS, proximity alerts)
+    - acars: ACARS/VDL2 messages
+    - alerts: Triggered alert notifications
+    - all: Receive all event types
+
+    Message format:
+    {
+        "type": "event_type",
+        "data": {...},
+        "timestamp": "2024-01-15T12:00:00Z"
+    }
+
+    Client can send messages to subscribe/unsubscribe:
+    {"action": "subscribe", "topics": ["aircraft", "airspace"]}
+    {"action": "unsubscribe", "topics": ["acars"]}
+    {"action": "ping"} -> receives {"type": "pong", ...}
+    """
+    topic_list = [t.strip() for t in topics.split(",") if t.strip()]
+    await handle_websocket(websocket, topic_list)
+
+
 # Static files and frontend
 @app.get("/")
 async def serve_frontend():
@@ -601,6 +681,10 @@ async def serve_frontend():
         return FileResponse(static_path)
     return JSONResponse({"message": "ADS-B API v2.6.0", "docs": "/docs"})
 
+
+# Mount Socket.IO ASGI app for real-time communication
+# Socket.IO handles its own /socket.io path internally
+app.mount("/socket.io", get_socketio_app())
 
 # Mount static files if directory exists
 static_dir = os.path.join(os.path.dirname(__file__), "static")

@@ -1,98 +1,139 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 /**
- * Hook for fetching aviation data (navaids, airports, airspace, METARs, PIREPs)
+ * Hook for fetching aviation data via WebSocket requests
+ * Replaces HTTP polling with WebSocket request/response pattern
+ *
+ * @param {Function} wsRequest - WebSocket request function from useWebSocket
+ * @param {boolean} wsConnected - Whether WebSocket is connected
+ * @param {number} feederLat - Feeder latitude
+ * @param {number} feederLon - Feeder longitude
+ * @param {number} radarRange - Radar range in nm
+ * @param {object} overlays - Which overlays are enabled
  */
-export function useAviationData(config, feederLat, feederLon, radarRange, overlays) {
+export function useAviationData(wsRequest, wsConnected, feederLat, feederLon, radarRange, overlays) {
   const [aviationData, setAviationData] = useState({
     navaids: [],
     airports: [],
-    airspace: [],
+    airspace: [],           // Static boundaries (Class B/C/D, MOAs)
+    airspaceAdvisories: [], // Active G-AIRMETs
     metars: [],
     pireps: [],
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const lastFetchRef = useRef(0);
 
-  // Helper to extract data from GeoJSON format or direct array
-  const extractData = useCallback((response, type = 'generic') => {
-    let data = [];
-    if (Array.isArray(response)) {
-      data = response;
-    } else if (response?.features) {
-      // GeoJSON FeatureCollection format from aviationweather.gov
-      data = response.features.map(f => ({
+  // Helper to normalize airport fields
+  const normalizeAirport = useCallback((apt) => ({
+    ...apt,
+    icao: apt.icao || apt.icaoId || apt.faaId || apt.id || 'UNK',
+    id: apt.id || apt.icaoId || apt.faaId || 'UNK',
+    name: apt.name || apt.site || null,
+    city: apt.city || apt.assocCity || null,
+    state: apt.state || apt.stateProv || null,
+    elev: apt.elev ?? apt.elev_ft ?? apt.elevation ?? null,
+    class: apt.class || apt.airspaceClass || null,
+  }), []);
+
+  // Extract data from various response formats
+  const extractData = useCallback((response) => {
+    if (!response) return [];
+    if (Array.isArray(response)) return response;
+    if (response.data && Array.isArray(response.data)) return response.data;
+    if (response.features) {
+      // GeoJSON FeatureCollection
+      return response.features.map(f => ({
         ...f.properties,
         lat: f.geometry?.coordinates?.[1],
         lon: f.geometry?.coordinates?.[0]
       }));
-    } else if (response?.data) {
-      data = response.data;
     }
-    
-    // Normalize airport fields
-    if (type === 'airport') {
-      data = data.map(apt => ({
-        ...apt,
-        icao: apt.icao || apt.icaoId || apt.faaId || apt.id || 'UNK',
-        id: apt.id || apt.icaoId || apt.faaId || 'UNK',
-        name: apt.name || apt.site || null,
-        city: apt.city || apt.assocCity || null,
-        state: apt.state || apt.stateProv || null,
-        elev: apt.elev ?? apt.elev_ft ?? apt.elevation ?? null,
-        class: apt.class || apt.airspaceClass || null,
-      }));
-    }
-    
-    return data;
+    return [];
   }, []);
 
-  // Fetch all aviation data
+  // Fetch all aviation data via WebSocket
   const fetchAviationData = useCallback(async () => {
-    if (!feederLat || !feederLon) return;
-    
-    const baseUrl = config?.apiUrl || '';
+    if (!wsRequest || !wsConnected || !feederLat || !feederLon) return;
+
+    // Debounce - don't fetch more than once per 5 seconds
+    const now = Date.now();
+    if (now - lastFetchRef.current < 5000) return;
+    lastFetchRef.current = now;
+
     setLoading(true);
     setError(null);
-    
+
+    const baseParams = { lat: feederLat, lon: feederLon };
+
     try {
-      // Fetch NAVAIDs
-      const navRes = await fetch(`${baseUrl}/api/v1/aviation/navaids?lat=${feederLat}&lon=${feederLon}&radius=${radarRange * 1.5}`);
-      if (navRes.ok) {
-        const navData = await navRes.json();
-        setAviationData(prev => ({ ...prev, navaids: extractData(navData) }));
-      }
-      
-      // Fetch airports
-      const aptRes = await fetch(`${baseUrl}/api/v1/aviation/airports?lat=${feederLat}&lon=${feederLon}&radius=${radarRange * 1.2}`);
-      if (aptRes.ok) {
-        const aptData = await aptRes.json();
-        setAviationData(prev => ({ ...prev, airports: extractData(aptData, 'airport') }));
-      }
-      
-      // Fetch airspace
-      const asRes = await fetch(`${baseUrl}/api/v1/aviation/airspace?lat=${feederLat}&lon=${feederLon}`);
-      if (asRes.ok) {
-        const asData = await asRes.json();
-        setAviationData(prev => ({ ...prev, airspace: extractData(asData) }));
-      }
-      
-      // Fetch METARs if enabled
+      // Fetch all data in parallel using WebSocket requests
+      const promises = [];
+
+      // NAVAIDs
+      promises.push(
+        wsRequest('navaids', { ...baseParams, radius: Math.round(radarRange * 1.5) })
+          .then(data => ({ type: 'navaids', data: extractData(data) }))
+          .catch(err => ({ type: 'navaids', error: err.message }))
+      );
+
+      // Airports
+      promises.push(
+        wsRequest('airports', { ...baseParams, radius: Math.round(radarRange * 1.2), limit: 50 })
+          .then(data => ({ type: 'airports', data: extractData(data).map(normalizeAirport) }))
+          .catch(err => ({ type: 'airports', error: err.message }))
+      );
+
+      // Airspace boundaries (static)
+      promises.push(
+        wsRequest('airspace-boundaries', { ...baseParams, radius: Math.round(radarRange * 1.5) })
+          .then(data => ({ type: 'airspace', data: extractData(data) }))
+          .catch(err => ({ type: 'airspace', error: err.message }))
+      );
+
+      // Airspace advisories (G-AIRMETs)
+      promises.push(
+        wsRequest('airspaces', baseParams)
+          .then(data => ({ type: 'airspaceAdvisories', data: data?.advisories || extractData(data) }))
+          .catch(err => ({ type: 'airspaceAdvisories', error: err.message }))
+      );
+
+      // METARs (only if overlay enabled)
       if (overlays?.metars) {
-        const metarRes = await fetch(`${baseUrl}/api/v1/aviation/metars?lat=${feederLat}&lon=${feederLon}&radius=${radarRange}`);
-        if (metarRes.ok) {
-          const metarData = await metarRes.json();
-          setAviationData(prev => ({ ...prev, metars: extractData(metarData) }));
-        }
+        promises.push(
+          wsRequest('metars', { ...baseParams, radius: Math.round(radarRange) })
+            .then(data => ({ type: 'metars', data: extractData(data) }))
+            .catch(err => ({ type: 'metars', error: err.message }))
+        );
       }
-      
-      // Fetch PIREPs if enabled
+
+      // PIREPs (only if overlay enabled)
       if (overlays?.pireps) {
-        const pirepRes = await fetch(`${baseUrl}/api/v1/aviation/pireps?lat=${feederLat}&lon=${feederLon}&radius=${radarRange}`);
-        if (pirepRes.ok) {
-          const pirepData = await pirepRes.json();
-          setAviationData(prev => ({ ...prev, pireps: extractData(pirepData) }));
-        }
+        promises.push(
+          wsRequest('pireps', { ...baseParams, radius: Math.round(radarRange * 1.5), hours: 3 })
+            .then(data => ({ type: 'pireps', data: extractData(data) }))
+            .catch(err => ({ type: 'pireps', error: err.message }))
+        );
+      }
+
+      // Wait for all requests
+      const results = await Promise.all(promises);
+
+      // Update state with results
+      setAviationData(prev => {
+        const updated = { ...prev };
+        results.forEach(result => {
+          if (!result.error && result.data) {
+            updated[result.type] = result.data;
+          }
+        });
+        return updated;
+      });
+
+      // Check for errors
+      const errors = results.filter(r => r.error);
+      if (errors.length > 0) {
+        console.warn('Some aviation data requests failed:', errors);
       }
     } catch (err) {
       console.error('Aviation data fetch error:', err);
@@ -100,24 +141,75 @@ export function useAviationData(config, feederLat, feederLon, radarRange, overla
     } finally {
       setLoading(false);
     }
-  }, [config?.apiUrl, feederLat, feederLon, radarRange, overlays?.metars, overlays?.pireps, extractData]);
+  }, [wsRequest, wsConnected, feederLat, feederLon, radarRange, overlays?.metars, overlays?.pireps, extractData, normalizeAirport]);
 
-  // Fetch on mount and when dependencies change
+  // Fetch when WebSocket connects or location changes
+  // Add a small delay after connection to ensure server is ready
   useEffect(() => {
-    fetchAviationData();
-  }, [fetchAviationData]);
+    if (wsConnected) {
+      const timeout = setTimeout(() => {
+        fetchAviationData();
+      }, 500);
+      return () => clearTimeout(timeout);
+    }
+  }, [wsConnected, feederLat, feederLon, radarRange, fetchAviationData]);
 
-  // Refresh data periodically (every 5 minutes for weather data)
+  // Refresh weather data periodically (every 5 minutes)
   useEffect(() => {
-    const interval = setInterval(fetchAviationData, 300000);
+    if (!wsConnected) return;
+
+    const interval = setInterval(() => {
+      fetchAviationData();
+    }, 300000); // 5 minutes
+
     return () => clearInterval(interval);
-  }, [fetchAviationData]);
+  }, [wsConnected, fetchAviationData]);
+
+  // Fetch single METAR for a station
+  const fetchMetar = useCallback(async (station) => {
+    if (!wsRequest || !wsConnected) return null;
+    try {
+      const data = await wsRequest('metar', { station });
+      return data;
+    } catch (err) {
+      console.error('METAR fetch error:', err);
+      return null;
+    }
+  }, [wsRequest, wsConnected]);
+
+  // Fetch TAF for a station
+  const fetchTaf = useCallback(async (station) => {
+    if (!wsRequest || !wsConnected) return null;
+    try {
+      const data = await wsRequest('taf', { station });
+      return data;
+    } catch (err) {
+      console.error('TAF fetch error:', err);
+      return null;
+    }
+  }, [wsRequest, wsConnected]);
+
+  // Fetch aircraft info by ICAO
+  const fetchAircraftInfo = useCallback(async (icao) => {
+    if (!wsRequest || !wsConnected) return null;
+    try {
+      const data = await wsRequest('aircraft-info', { icao });
+      return data;
+    } catch (err) {
+      console.error('Aircraft info fetch error:', err);
+      return null;
+    }
+  }, [wsRequest, wsConnected]);
 
   return {
     aviationData,
     loading,
     error,
     refresh: fetchAviationData,
+    // Individual data fetchers
+    fetchMetar,
+    fetchTaf,
+    fetchAircraftInfo,
   };
 }
 

@@ -246,13 +246,18 @@ async def download_photo(
         
         logger.info(f"Downloading photo for {icao_hex}: {url}")
         
+        # Build headers - add Referer for planespotters to avoid 403
+        headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; ADS-B API/2.6)",
+            "Accept": "image/*",
+        }
+        if "plnspttrs.net" in url or "planespotters.net" in url:
+            headers["Referer"] = "https://www.planespotters.net/"
+
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.get(
                 url,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (compatible; ADS-B API/2.6)",
-                    "Accept": "image/*",
-                },
+                headers=headers,
                 follow_redirects=True
             )
             response.raise_for_status()

@@ -17,7 +17,7 @@ const windDirToCardinal = (deg) => {
  * METAR weather popup
  */
 export function MetarPopup({ metar, onClose, mapMode, getDistanceNm, getBearing }) {
-  const { position, isDragging, handleMouseDown } = useDraggable({ x: 16, y: 16 });
+  const { position, isDragging, handleMouseDown } = useDraggable({ x: 100, y: 100 });
   
   if (!metar) return null;
   
@@ -124,7 +124,7 @@ export function MetarPopup({ metar, onClose, mapMode, getDistanceNm, getBearing 
  * PIREP popup
  */
 export function PirepPopup({ pirep, onClose, mapMode, getDistanceNm, getBearing }) {
-  const { position, isDragging, handleMouseDown } = useDraggable({ x: 16, y: 16 });
+  const { position, isDragging, handleMouseDown } = useDraggable({ x: 100, y: 100 });
   
   if (!pirep) return null;
   
@@ -248,7 +248,7 @@ export function PirepPopup({ pirep, onClose, mapMode, getDistanceNm, getBearing 
  * Navaid popup
  */
 export function NavaidPopup({ navaid, onClose, mapMode, getDistanceNm, getBearing }) {
-  const { position, isDragging, handleMouseDown } = useDraggable({ x: 16, y: 16 });
+  const { position, isDragging, handleMouseDown } = useDraggable({ x: 100, y: 100 });
   
   if (!navaid) return null;
 
@@ -327,7 +327,7 @@ export function NavaidPopup({ navaid, onClose, mapMode, getDistanceNm, getBearin
  * Airport popup
  */
 export function AirportPopup({ airport, onClose, mapMode, getDistanceNm, getBearing }) {
-  const { position, isDragging, handleMouseDown } = useDraggable({ x: 16, y: 16 });
+  const { position, isDragging, handleMouseDown } = useDraggable({ x: 100, y: 100 });
   
   if (!airport) return null;
   

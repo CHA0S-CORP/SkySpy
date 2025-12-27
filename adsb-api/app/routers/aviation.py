@@ -4,14 +4,17 @@ Aviation data API endpoints.
 Provides access to aviation weather (METAR/TAF), airports, navaids,
 and other aviation reference data from aviationweather.gov.
 """
+from datetime import datetime, timedelta
 from math import radians, sin, cos, sqrt, atan2
 from typing import Optional
 
-from fastapi import APIRouter, Query, Path, HTTPException
+from fastapi import APIRouter, Query, Path, HTTPException, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 import httpx
 
-from app.core import get_settings, cached
+from app.core import get_settings, cached, get_db
 from app.schemas import AviationDataResponse, ErrorResponse
+from app.services import airspace as airspace_service
 
 router = APIRouter(prefix="/api/v1/aviation", tags=["Aviation"])
 settings = get_settings()
@@ -856,7 +859,6 @@ https://udds-faa.opendata.arcgis.com/
         }
     }
 )
-@cached(ttl_seconds=300)
 async def get_airspaces_by_location(
     lat: float = Query(..., ge=-90, le=90, description="Center latitude"),
     lon: float = Query(..., ge=-180, le=180, description="Center longitude"),
@@ -864,51 +866,191 @@ async def get_airspaces_by_location(
         None,
         description="Filter by hazard type",
         enum=["IFR", "MT_OBSC", "TURB-LO", "TURB-HI", "ICE", "FZLVL", "SFC_WND", "LLWS"]
-    )
+    ),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Get active airspace advisories (G-AIRMETs)."""
-    all_airspaces = []
-    
-    # Get G-AIRMET data from AWC
-    params = {"format": "json"}
-    if hazard:
-        params["hazard"] = hazard
-    
-    gairmet_data = await fetch_awc_data("gairmet", params)
-    
-    if isinstance(gairmet_data, dict) and "error" in gairmet_data:
-        return {
-            "data": [],
-            "count": 0,
-            "center": {"lat": lat, "lon": lon},
-            "source": "aviationweather.gov",
-            "error": gairmet_data.get("error")
-        }
-    
-    if isinstance(gairmet_data, list):
-        for g in gairmet_data:
-            airspace = {
-                "name": g.get("tag") or f"GAIRMET-{g.get('hazard', 'UNK')}",
-                "type": "GAIRMET",
-                "hazard": g.get("hazard"),
-                "severity": g.get("severity"),
-                "lower_alt": g.get("base") or g.get("altLow") or 0,
-                "upper_alt": g.get("top") or g.get("altHi") or 0,
-                "valid_from": g.get("validTimeFrom"),
-                "valid_to": g.get("validTimeTo"),
-                "forecast_region": g.get("region"),
-                "raw_text": g.get("rawAirSigmet"),
-            }
-            all_airspaces.append(airspace)
-    
+    """Get active airspace advisories (G-AIRMETs) from database."""
+    advisories = await airspace_service.get_advisories(db, lat=lat, lon=lon, hazard=hazard)
+
     # Sort by hazard type then validity
-    all_airspaces.sort(key=lambda x: (x.get("hazard", ""), x.get("valid_from", "")))
-    
+    advisories.sort(key=lambda x: (x.get("hazard", ""), x.get("valid_from", "")))
+
     return {
-        "data": all_airspaces,
-        "count": len(all_airspaces),
+        "data": advisories,
+        "count": len(advisories),
         "center": {"lat": lat, "lon": lon},
-        "source": "aviationweather.gov",
-        "note": "For static airspace boundaries (Class B/C/D, MOAs), see FAA charts",
-        "cached": False
+        "source": "database",
+        "note": "For static airspace boundaries, see /api/v1/aviation/airspace-boundaries",
+    }
+
+
+@router.get(
+    "/airspace-boundaries",
+    summary="Get Static Airspace Boundaries",
+    description="""
+Get static airspace boundary polygons for controlled airspace areas.
+
+Returns GeoJSON-style polygon data for:
+- **Class B** - Major hub airports (LAX, JFK, ORD, etc.)
+- **Class C** - Busy airports with radar approach control
+- **Class D** - Airports with control towers
+- **MOA** - Military Operations Areas
+- **Restricted** - Restricted airspace
+
+**Note:** These are approximate boundaries for visualization purposes.
+Refer to official FAA sectional charts for precise limits.
+
+**Parameters:**
+- `lat`, `lon` - Center point to filter nearby airspaces (optional)
+- `radius` - Search radius in nautical miles (default 100, max 500)
+- `airspace_class` - Filter by class (B, C, D, MOA, Restricted)
+
+**Data:** Embedded static data covering major US airspaces
+    """,
+    responses={
+        200: {
+            "description": "Static airspace boundaries",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "data": [
+                            {
+                                "name": "Los Angeles Class B",
+                                "icao": "KLAX",
+                                "class": "B",
+                                "floor_ft": 0,
+                                "ceiling_ft": 10000,
+                                "center": {"lat": 33.9425, "lon": -118.4081},
+                                "polygon": [[-118.60, 34.10], [-118.20, 34.15]]
+                            }
+                        ],
+                        "count": 1,
+                        "source": "embedded"
+                    }
+                }
+            }
+        }
+    }
+)
+async def get_airspace_boundaries(
+    lat: Optional[float] = Query(None, ge=-90, le=90, description="Center latitude for filtering"),
+    lon: Optional[float] = Query(None, ge=-180, le=180, description="Center longitude for filtering"),
+    radius: float = Query(100, ge=1, le=500, description="Search radius in nautical miles"),
+    airspace_class: Optional[str] = Query(
+        None,
+        description="Filter by airspace class",
+        enum=["B", "C", "D", "MOA", "Restricted"]
+    ),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get static airspace boundary polygons from database."""
+    airspaces = await airspace_service.get_boundaries(
+        db,
+        lat=lat,
+        lon=lon,
+        radius_nm=radius,
+        airspace_class=airspace_class
+    )
+
+    # Sort by class priority (B, C, D, then others)
+    class_order = {"B": 0, "C": 1, "D": 2, "MOA": 3, "Restricted": 4}
+    airspaces.sort(key=lambda x: (class_order.get(x.get("class"), 99), x.get("name", "")))
+
+    response = {
+        "data": airspaces,
+        "count": len(airspaces),
+        "source": "database",
+        "note": "Approximate boundaries for visualization - refer to FAA charts for precise limits"
+    }
+
+    if lat is not None and lon is not None:
+        response["center"] = {"lat": lat, "lon": lon}
+        response["radius_nm"] = radius
+
+    return response
+
+
+@router.get(
+    "/airspaces/history",
+    summary="Get Historical Airspace Advisories",
+    description="""
+Get historical airspace advisories for a time range.
+
+Returns past G-AIRMET advisories stored in the database.
+
+**Parameters:**
+- `start` - Start time (ISO 8601 format, default: 24 hours ago)
+- `end` - End time (ISO 8601 format, default: now)
+- `hazard` - Filter by hazard type
+
+**Data Source:** Database (refreshed every 5 minutes from aviationweather.gov)
+    """,
+    responses={
+        200: {
+            "description": "Historical airspace advisories",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "data": [
+                            {
+                                "name": "GAIRMET-SIERRA-3",
+                                "type": "GAIRMET",
+                                "hazard": "IFR",
+                                "fetched_at": "2024-01-15T12:00:00"
+                            }
+                        ],
+                        "count": 1,
+                        "time_range": {
+                            "start": "2024-01-14T12:00:00",
+                            "end": "2024-01-15T12:00:00"
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
+async def get_airspace_history(
+    start: Optional[str] = Query(None, description="Start time (ISO 8601)"),
+    end: Optional[str] = Query(None, description="End time (ISO 8601)"),
+    hazard: Optional[str] = Query(
+        None,
+        description="Filter by hazard type",
+        enum=["IFR", "MT_OBSC", "TURB-LO", "TURB-HI", "ICE", "FZLVL", "SFC_WND", "LLWS"]
+    ),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get historical airspace advisories."""
+    # Parse time range
+    now = datetime.utcnow()
+    start_time = now - timedelta(hours=24)
+    end_time = now
+
+    if start:
+        try:
+            start_time = datetime.fromisoformat(start.replace("Z", "+00:00")).replace(tzinfo=None)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid start time format")
+
+    if end:
+        try:
+            end_time = datetime.fromisoformat(end.replace("Z", "+00:00")).replace(tzinfo=None)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid end time format")
+
+    advisories = await airspace_service.get_advisory_history(
+        db,
+        start_time=start_time,
+        end_time=end_time,
+        hazard=hazard
+    )
+
+    return {
+        "data": advisories,
+        "count": len(advisories),
+        "time_range": {
+            "start": start_time.isoformat(),
+            "end": end_time.isoformat()
+        },
+        "source": "database"
     }

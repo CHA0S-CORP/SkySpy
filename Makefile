@@ -5,9 +5,8 @@ help:
 	@echo "SkySpy Test Commands:"
 	@echo ""
 	@echo "  make test          - Run tests in Docker (recommended)"
-	@echo "  make test-local    - Run tests locally with SQLite"
-	@echo "  make test-verbose  - Run tests with verbose output"
-	@echo "  make test-html     - Run tests and generate HTML report"
+	@echo "  make dev           - Start dev services"
+	@echo "  make dev-down      - Remove dev services"
 	@echo "  make build         - Build Docker images only"
 	@echo "  make clean         - Clean up containers and volumes"
 	@echo "  make logs          - Show test container logs"
@@ -25,8 +24,8 @@ test:
 # Mock Server Commands
 # =============================================================================
 
-# Start mock servers for dashboard development
-mock:
+# Start dev servers for dashboard development
+dev:
 	@echo "🛫 Starting mock ADS-B servers..."
 	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml --profile dev up --build -d
 	@echo ""
@@ -50,30 +49,13 @@ mock:
 	@echo "Stop with: make mock-down"
 
 # Stop mock servers
-mock-down:
+dev-down:
 	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml --profile dev down
 	@echo "🛬 Mock servers stopped"
 
 # Show mock server logs
-mock-logs:
+dev-logs:
 	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml --profile dev logs -f
-
-# Run tests with verbose output
-test-verbose:
-	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml --profile test up --build test pytest test_adsb_api.py -v --tb=long
-
-# Generate HTML report
-test-html:
-	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml --profile test up --build --abort-on-container-exit --exit-code-from test
-	@echo ""
-	@echo "📊 HTML report: ./test-results/report.html"
-
-# Run tests locally (requires Python environment)
-test-local:
-	DATABASE_URL=sqlite:///:memory: \
-	ULTRAFEEDER_HOST=localhost \
-	DUMP978_HOST=localhost \
-	pytest test/test_adsb_api.py -v --tb=short
 
 # Build Docker images
 build:

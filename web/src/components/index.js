@@ -1,7 +1,7 @@
-// Common components
-export { Sidebar } from './Sidebar';
-export { Header } from './Header';
-export { SettingsModal } from './SettingsModal';
+// Layout components
+export { Sidebar } from './layout/Sidebar';
+export { Header } from './layout/Header';
+export { SettingsModal } from './layout/SettingsModal';
 
 // Views
 export * from './views';

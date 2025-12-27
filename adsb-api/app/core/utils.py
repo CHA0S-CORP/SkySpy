@@ -1,15 +1,31 @@
 """
 Utility functions for distance calculations, validation, and data processing.
 """
+import asyncio
+import logging
 import math
+import time
 from datetime import datetime
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 import httpx
 
 from app.core.config import get_settings
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
+
+# Rate limiting: track last request time per domain
+_domain_last_request: dict[str, float] = {}
+_domain_rate_limits: dict[str, float] = {
+    "airport-data.com": 2.0,      # 1 request per 2 seconds
+    "planespotters.net": 1.0,     # 1 request per second
+    "api.planespotters.net": 1.0,
+    "hexdb.io": 0.5,              # 2 requests per second
+    "opensky-network.org": 1.0,   # 1 request per second
+}
+_domain_backoff_until: dict[str, float] = {}  # Backoff after 429
 
 
 def calculate_distance_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -81,15 +97,83 @@ def parse_iso_timestamp(ts_str: str) -> Optional[float]:
         return None
 
 
-async def safe_request(url: str, timeout: float = 5.0) -> Optional[dict]:
-    """Make a safe HTTP request with timeout."""
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            return response.json()
-    except Exception:
+async def safe_request(url: str, timeout: float = 5.0, max_retries: int = 2) -> Optional[dict]:
+    """
+    Make a safe HTTP request with timeout, rate limiting, and 429 handling.
+
+    Features:
+    - Per-domain rate limiting to avoid hitting rate limits
+    - Automatic retry with exponential backoff on 429 responses
+    - Respects Retry-After header when provided
+    """
+    # Extract domain for rate limiting
+    parsed = urlparse(url)
+    domain = parsed.netloc.lower()
+
+    # Check if we're in backoff period for this domain
+    now = time.time()
+    backoff_until = _domain_backoff_until.get(domain, 0)
+    if now < backoff_until:
+        wait_time = backoff_until - now
+        logger.debug(f"Rate limited: {domain} in backoff for {wait_time:.1f}s more")
         return None
+
+    # Apply rate limiting - wait if we've made a recent request to this domain
+    min_interval = _domain_rate_limits.get(domain, 0.2)  # Default 5 req/sec
+    last_request = _domain_last_request.get(domain, 0)
+    elapsed = now - last_request
+
+    if elapsed < min_interval:
+        wait_time = min_interval - elapsed
+        await asyncio.sleep(wait_time)
+
+    _domain_last_request[domain] = time.time()
+
+    # Make request with retry logic
+    for attempt in range(max_retries + 1):
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.get(
+                    url,
+                    headers={"User-Agent": "ADS-B-API/2.6 (aircraft-tracker)"}
+                )
+
+                # Handle rate limiting
+                if response.status_code == 429:
+                    # Get retry delay from header or use exponential backoff
+                    retry_after = response.headers.get("Retry-After")
+                    if retry_after:
+                        try:
+                            delay = int(retry_after)
+                        except ValueError:
+                            delay = 60  # Default if header is invalid
+                    else:
+                        delay = min(60, 5 * (2 ** attempt))  # Exponential backoff, max 60s
+
+                    logger.warning(f"Rate limited (429) from {domain}, backing off for {delay}s")
+                    _domain_backoff_until[domain] = time.time() + delay
+
+                    if attempt < max_retries:
+                        await asyncio.sleep(delay)
+                        continue
+                    return None
+
+                response.raise_for_status()
+                return response.json()
+
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429 and attempt < max_retries:
+                delay = min(60, 5 * (2 ** attempt))
+                logger.warning(f"Rate limited (429) from {domain}, retrying in {delay}s")
+                await asyncio.sleep(delay)
+                continue
+            logger.debug(f"HTTP error from {domain}: {e.response.status_code}")
+            return None
+        except Exception as e:
+            logger.debug(f"Request failed for {url}: {e}")
+            return None
+
+    return None
 
 
 def get_aircraft_icon(ac: dict) -> str:

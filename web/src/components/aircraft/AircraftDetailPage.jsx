@@ -1,30 +1,48 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   X, RefreshCw, Camera, Info, Radar, MessageCircle, History,
-  Plane, Building2, Hash, ExternalLink, WifiOff
+  Plane, Building2, Hash, ExternalLink, WifiOff, AlertTriangle
 } from 'lucide-react';
 import { getTailInfo, getCardinalDirection } from '../../utils';
 
-export function AircraftDetailPage({ hex, apiUrl, onClose, aircraft, aircraftInfo }) {
+export function AircraftDetailPage({ hex, apiUrl, onClose, aircraft, aircraftInfo, trackHistory }) {
   const [info, setInfo] = useState(aircraftInfo || null);
   const [photoInfo, setPhotoInfo] = useState(null);
   const [acarsMessages, setAcarsMessages] = useState([]);
   const [sightings, setSightings] = useState([]);
+  const [safetyEvents, setSafetyEvents] = useState([]);
+  const [safetyHours, setSafetyHours] = useState(24);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('info');
   const [photoState, setPhotoState] = useState('loading');
   const [photoRetryCount, setPhotoRetryCount] = useState(0);
-  
+  const [useThumbnail, setUseThumbnail] = useState(false);
+
   const baseUrl = apiUrl || '';
-  const photoUrl = `${baseUrl}/api/v1/aircraft/${hex}/photo/download${photoRetryCount > 0 ? `?t=${photoRetryCount}` : ''}`;
-  
+  const photoUrl = useThumbnail
+    ? `${baseUrl}/api/v1/aircraft/${hex}/photo/download?thumbnail=true${photoRetryCount > 0 ? `&t=${photoRetryCount}` : ''}`
+    : `${baseUrl}/api/v1/aircraft/${hex}/photo/download${photoRetryCount > 0 ? `?t=${photoRetryCount}` : ''}`;
+
   useEffect(() => {
     setPhotoState('loading');
     setPhotoRetryCount(0);
+    setUseThumbnail(false);
   }, [hex]);
-  
+
+  const handlePhotoError = () => {
+    if (!useThumbnail) {
+      // Try thumbnail as fallback
+      setUseThumbnail(true);
+      setPhotoState('loading');
+    } else {
+      // Both failed, show error
+      setPhotoState('error');
+    }
+  };
+
   const retryPhoto = () => {
     setPhotoState('loading');
+    setUseThumbnail(false);
     setPhotoRetryCount(c => c + 1);
   };
   
@@ -58,6 +76,12 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, aircraft, aircraftInf
           const data = await sightingsRes.json();
           setSightings(data.sightings || []);
         }
+
+        const safetyRes = await fetch(`${baseUrl}/api/v1/safety/events?icao_hex=${hex}&hours=24&limit=100`);
+        if (safetyRes.ok) {
+          const data = await safetyRes.json();
+          setSafetyEvents(data.events || []);
+        }
       } catch (err) {
         console.log('Aircraft detail fetch error:', err.message);
       }
@@ -67,8 +91,49 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, aircraft, aircraftInf
     
     fetchData();
   }, [hex, baseUrl, info]);
-  
+
+  // Refetch safety events when hours filter changes
+  useEffect(() => {
+    const fetchSafetyEvents = async () => {
+      try {
+        const safetyRes = await fetch(`${baseUrl}/api/v1/safety/events?icao_hex=${hex}&hours=${safetyHours}&limit=100`);
+        if (safetyRes.ok) {
+          const data = await safetyRes.json();
+          setSafetyEvents(data.events || []);
+        }
+      } catch (err) {
+        console.log('Safety events fetch error:', err.message);
+      }
+    };
+    fetchSafetyEvents();
+  }, [hex, baseUrl, safetyHours]);
+
   const tailInfo = getTailInfo(hex, aircraft?.flight);
+
+  // Helper to get severity class
+  const getSeverityClass = (severity) => {
+    switch (severity) {
+      case 'critical': return 'severity-critical';
+      case 'warning': return 'severity-warning';
+      case 'low': return 'severity-low';
+      default: return '';
+    }
+  };
+
+  // Helper to format event type
+  const formatEventType = (type) => {
+    const types = {
+      'tcas_ra': 'TCAS RA',
+      'tcas_ta': 'TCAS TA',
+      'extreme_vs': 'Extreme VS',
+      'vs_reversal': 'VS Reversal',
+      'proximity_conflict': 'Proximity',
+      'squawk_hijack': 'Squawk 7500',
+      'squawk_radio_failure': 'Squawk 7600',
+      'squawk_emergency': 'Squawk 7700'
+    };
+    return types[type] || type;
+  };
   
   return (
     <div className="aircraft-detail-page">
@@ -105,18 +170,18 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, aircraft, aircraftInf
             </button>
           </div>
         )}
-        {photoState !== 'error' && (
-          <img 
-            src={photoUrl} 
-            alt={info?.registration || hex} 
-            onLoad={() => setPhotoState('loaded')}
-            onError={() => setPhotoState('error')}
-            style={{ 
-              opacity: photoState === 'loaded' ? 1 : 0,
-              position: photoState === 'loading' ? 'absolute' : 'relative'
-            }}
-          />
-        )}
+        <img
+          key={`${photoRetryCount}-${useThumbnail}`}
+          src={photoUrl}
+          alt={info?.registration || hex}
+          onLoad={() => setPhotoState('loaded')}
+          onError={handlePhotoError}
+          style={{
+            opacity: photoState === 'loaded' ? 1 : 0,
+            position: photoState !== 'loaded' ? 'absolute' : 'relative',
+            pointerEvents: photoState !== 'loaded' ? 'none' : 'auto'
+          }}
+        />
         {photoState === 'loaded' && photoInfo?.photographer && (
           <span className="photo-credit">📷 {photoInfo.photographer} via {photoInfo.source || 'planespotters.net'}</span>
         )}
@@ -131,6 +196,9 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, aircraft, aircraftInf
         </button>
         <button className={`detail-tab ${activeTab === 'acars' ? 'active' : ''}`} onClick={() => setActiveTab('acars')}>
           <MessageCircle size={16} /> ACARS ({acarsMessages.length})
+        </button>
+        <button className={`detail-tab ${activeTab === 'safety' ? 'active' : ''}`} onClick={() => setActiveTab('safety')}>
+          <AlertTriangle size={16} /> Safety ({safetyEvents.length})
         </button>
         <button className={`detail-tab ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>
           <History size={16} /> History
@@ -215,20 +283,32 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, aircraft, aircraftInf
                   </div>
                   <div className="live-stat">
                     <span className="live-label">Vertical Rate</span>
-                    <span className={`live-value ${(aircraft.baro_rate || 0) > 0 ? 'climbing' : (aircraft.baro_rate || 0) < 0 ? 'descending' : ''}`}>
-                      {aircraft.baro_rate || '--'}
-                    </span>
+                    {(() => {
+                      const vs = aircraft.vr ?? aircraft.baro_rate ?? aircraft.geom_rate ?? 0;
+                      const isExtreme = Math.abs(vs) > 3000;
+                      const vsClass = vs > 0 ? 'climbing' : vs < 0 ? 'descending' : '';
+                      return (
+                        <span className={`live-value ${vsClass} ${isExtreme ? 'extreme-vs' : ''}`}>
+                          {vs}
+                        </span>
+                      );
+                    })()}
                     <span className="live-unit">ft/min</span>
                   </div>
                   <div className="live-stat">
                     <span className="live-label">Track</span>
-                    <span className="live-value">{aircraft.track?.toFixed(0) || '--'}°</span>
+                    <span className="live-value">{aircraft.track?.toFixed(0) ?? '--'}°</span>
                     <span className="live-unit">{getCardinalDirection(aircraft.track)}</span>
                   </div>
                   <div className="live-stat">
                     <span className="live-label">Distance</span>
-                    <span className="live-value">{aircraft.distance_nm?.toFixed(1) || '--'}</span>
+                    <span className="live-value">{aircraft.distance_nm?.toFixed(1) ?? '--'}</span>
                     <span className="live-unit">nm</span>
+                  </div>
+                  <div className="live-stat">
+                    <span className="live-label">Track History</span>
+                    <span className="live-value">{trackHistory?.length || 0}</span>
+                    <span className="live-unit">points</span>
                   </div>
                   <div className="live-stat">
                     <span className="live-label">Squawk</span>
@@ -281,6 +361,55 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, aircraft, aircraftInf
               </div>
             )}
             
+            {activeTab === 'safety' && (
+              <div className="detail-safety">
+                <div className="safety-filter">
+                  <label>Time Range:</label>
+                  <select value={safetyHours} onChange={(e) => setSafetyHours(Number(e.target.value))}>
+                    <option value={1}>Last 1 hour</option>
+                    <option value={6}>Last 6 hours</option>
+                    <option value={12}>Last 12 hours</option>
+                    <option value={24}>Last 24 hours</option>
+                    <option value={48}>Last 48 hours</option>
+                    <option value={72}>Last 72 hours</option>
+                    <option value={168}>Last 7 days</option>
+                  </select>
+                </div>
+                {safetyEvents.length === 0 ? (
+                  <div className="detail-empty">
+                    <AlertTriangle size={48} />
+                    <p>No safety events</p>
+                    <span>No safety events recorded for this aircraft in the selected time range</span>
+                  </div>
+                ) : (
+                  <div className="safety-events-list">
+                    <p className="safety-count">{safetyEvents.length} safety event{safetyEvents.length !== 1 ? 's' : ''} in the last {safetyHours} hour{safetyHours !== 1 ? 's' : ''}</p>
+                    {safetyEvents.map((event, i) => (
+                      <div key={event.id || i} className={`safety-event-item ${getSeverityClass(event.severity)}`}>
+                        <div className="safety-event-header">
+                          <span className={`safety-severity-badge ${getSeverityClass(event.severity)}`}>
+                            {event.severity?.toUpperCase()}
+                          </span>
+                          <span className="safety-event-type">{formatEventType(event.event_type)}</span>
+                          <span className="safety-event-time">{new Date(event.timestamp).toLocaleString()}</span>
+                        </div>
+                        <div className="safety-event-message">{event.message}</div>
+                        {event.details && (
+                          <div className="safety-event-details">
+                            {event.details.altitude && <span>Alt: {event.details.altitude?.toLocaleString()}ft</span>}
+                            {event.details.vertical_rate && <span>VS: {event.details.vertical_rate > 0 ? '+' : ''}{event.details.vertical_rate}fpm</span>}
+                            {event.details.distance_nm && <span>Dist: {event.details.distance_nm}nm</span>}
+                            {event.details.altitude_diff_ft && <span>ΔAlt: {event.details.altitude_diff_ft}ft</span>}
+                            {event.icao_2 && <span>With: {event.callsign_2 || event.icao_2}</span>}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {activeTab === 'history' && (
               <div className="detail-history">
                 {sightings.length === 0 ? (

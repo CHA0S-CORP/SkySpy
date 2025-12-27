@@ -19,11 +19,12 @@ src/
 │
 ├── hooks/                     # Custom React hooks
 │   ├── index.js               # Barrel export
-│   ├── useSSE.js              # SSE connection for real-time updates
+│   ├── useWebSocket.js        # WebSocket connection for real-time updates
 │   ├── useApi.js              # API fetch with polling
-│   ├── useAudioAlarms.js      # TCAS-style audio alarm system
+│   ├── useMapAlarms.js        # TCAS-style audio alarm system
 │   ├── useAviationData.js     # Aviation data fetching (NAVAIDs, METARs, etc)
-│   ├── useConflictDetection.js # Proximity conflict detection
+│   ├── useSafetyEvents.js     # Safety event and conflict management
+│   ├── useTrackHistory.js     # Aircraft position history tracking
 │   └── useDraggable.js        # Draggable panel functionality
 │
 └── components/                # React components
@@ -77,9 +78,10 @@ Clean orchestration of views with tab-based navigation.
 The map view has been fully decomposed from ~5000 lines into:
 
 **Custom Hooks:**
-- `useAudioAlarms` - Three-stage Web Audio alarm system
+- `useMapAlarms` - Three-stage Web Audio alarm system
 - `useAviationData` - Fetches NAVAIDs, airports, METARs, PIREPs
-- `useConflictDetection` - TCAS-style proximity detection
+- `useSafetyEvents` - Safety event and conflict management
+- `useTrackHistory` - Aircraft position history for trails
 - `useDraggable` - Generic panel drag functionality
 
 **Sub-components:**
@@ -108,8 +110,8 @@ import {
 
 ### Importing Hooks
 ```javascript
-import { useSSE, useApi } from './hooks';
-import { useAudioAlarms, useConflictDetection } from './hooks';
+import { useWebSocket, useApi } from './hooks';
+import { useMapAlarms, useSafetyEvents, useTrackHistory } from './hooks';
 ```
 
 ### Importing Components

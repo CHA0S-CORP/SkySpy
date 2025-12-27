@@ -117,9 +117,9 @@ services:
     ports:
       - "${DASHBOARD_PORT}:3000"
     volumes:
-      - ../web/src:/app/src
-      - ../web/public:/app/public
-      - ../web/index.html:/app/index.html
+      - ./web/src:/app/src
+      - ./web/public:/app/public
+      - ./web/index.html:/app/index.html
     environment:
       - NODE_ENV=${NODE_ENV}
     stdin_open: true
@@ -204,7 +204,7 @@ services:
   
   acarshub-mock:
     build: 
-      context: ./test/acars/
+      context: ./test/acars-mock/
       dockerfile: Dockerfile
     image: ghcr.io/cha0s-corp/acarshub-mock:latest
     profiles: ["dev","test"]

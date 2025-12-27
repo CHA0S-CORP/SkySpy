@@ -12,7 +12,8 @@
     "leaflet": "^1.9.4",
     "lucide-react": "^0.263.1",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
     "@babel/cli": "^7.23.0",

@@ -5,3 +5,4 @@ node_modules/
 .DS_Store
 test/api-cache/
 .vscode/
+__pycache__/

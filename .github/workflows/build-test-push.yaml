@@ -81,11 +81,11 @@ jobs:
             image-suffix: ""
             context: .
           - dockerfile: test/Dockerfile.mock
-            image-suffix: -mock-1090
+            image-suffix: -1090-mock
             context: test
-          - dockerfile: test/acars/Dockerfile
+          - dockerfile: test/acars-mock/Dockerfile
             image-suffix: -acarshub-mock
-            context: test/acars
+            context: test/acars-mock
 
     steps:
       - name: Checkout code

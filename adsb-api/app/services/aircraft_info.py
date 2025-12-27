@@ -90,13 +90,25 @@ async def get_aircraft_info(db: AsyncSession, icao_hex: str, force_refresh: bool
         # Check if cache is still valid
         cache_age = datetime.utcnow() - cached.updated_at
         max_age = timedelta(hours=FAILED_CACHE_HOURS if cached.fetch_failed else CACHE_DURATION_HOURS)
-        
+
         if cache_age < max_age:
+            # Check if we have a low-res photo that should be upgraded
+            needs_photo_upgrade = False
+            if cached.photo_url:
+                # Detect low-res planespotters URLs (_280.jpg or _t.jpg)
+                if "_280.jpg" in cached.photo_url or "_t.jpg" in cached.photo_url:
+                    needs_photo_upgrade = True
+                    logger.debug(f"Low-res photo detected for {icao_hex}, will upgrade")
+
             # If we have photo URLs but no local paths, trigger background caching
             if cached.photo_url and not cached.photo_local_path:
                 asyncio.create_task(_background_cache_photos(
                     icao_hex, cached.photo_url, cached.photo_thumbnail_url
                 ))
+            # If photo needs upgrade, trigger background refresh for higher res
+            elif needs_photo_upgrade:
+                asyncio.create_task(_background_upgrade_photo(icao_hex))
+
             return _model_to_dict(cached)
     
     # Prevent duplicate lookups
@@ -151,23 +163,132 @@ async def get_aircraft_info(db: AsyncSession, icao_hex: str, force_refresh: bool
         _pending_lookups.discard(icao_hex)
 
 
-async def _background_cache_photos(icao_hex: str, photo_url: str, thumbnail_url: Optional[str] = None):
+async def _background_cache_photos(icao_hex: str, photo_url: Optional[str] = None, thumbnail_url: Optional[str] = None):
     """
-    Background task to download and cache photos to filesystem.
+    Background task to fetch photos from hexdb.io and cache to filesystem/S3.
+    If no URLs provided, attempts to fetch from hexdb.io first.
     Updates database with local paths when complete.
     """
-    from app.core.database import async_session_factory
+    from app.core.database import AsyncSessionLocal
     from app.services.photo_cache import cache_aircraft_photos
-    
+
     try:
-        async with async_session_factory() as db:
-            photo_path, thumb_path = await cache_aircraft_photos(
-                db, icao_hex, photo_url, thumbnail_url
-            )
-            if photo_path:
-                logger.debug(f"Cached photo for {icao_hex}: {photo_path}")
+        async with AsyncSessionLocal() as db:
+            # If no photo URL provided, try to fetch from hexdb.io
+            if not photo_url:
+                hexdb_photo = await _fetch_photo_from_hexdb(icao_hex)
+                if hexdb_photo:
+                    photo_url = hexdb_photo.get("photo_url")
+                    thumbnail_url = hexdb_photo.get("photo_thumbnail_url")
+
+                    # Update database with the URLs
+                    result = await db.execute(
+                        select(AircraftInfo).where(AircraftInfo.icao_hex == icao_hex.upper())
+                    )
+                    cached = result.scalar_one_or_none()
+                    if cached and not cached.photo_url:
+                        cached.photo_url = photo_url
+                        cached.photo_thumbnail_url = thumbnail_url
+                        cached.photo_source = "hexdb.io"
+                        await db.commit()
+
+            if photo_url:
+                photo_path, thumb_path = await cache_aircraft_photos(
+                    db, icao_hex, photo_url, thumbnail_url
+                )
+                if photo_path:
+                    logger.info(f"Cached photo for {icao_hex}: {photo_path}")
     except Exception as e:
         logger.error(f"Background photo caching failed for {icao_hex}: {e}")
+
+
+# Set of aircraft currently being upgraded (prevent duplicate upgrades)
+_pending_upgrades: set[str] = set()
+
+
+async def _background_upgrade_photo(icao_hex: str):
+    """
+    Background task to upgrade a low-res photo to higher resolution.
+    Fetches fresh photo URLs and re-caches if a better version is available.
+    """
+    from app.core.database import AsyncSessionLocal
+    from app.services.photo_cache import cache_aircraft_photos
+
+    icao_hex = icao_hex.upper()
+
+    # Prevent duplicate upgrade attempts
+    if icao_hex in _pending_upgrades:
+        return
+    _pending_upgrades.add(icao_hex)
+
+    try:
+        async with AsyncSessionLocal() as db:
+            # Get current cached info
+            result = await db.execute(
+                select(AircraftInfo).where(AircraftInfo.icao_hex == icao_hex)
+            )
+            cached = result.scalar_one_or_none()
+            if not cached:
+                return
+
+            old_photo_url = cached.photo_url
+            new_photo_url = None
+            new_thumb_url = None
+
+            # First try hexdb.io for full-size images
+            hexdb_photo = await _fetch_photo_from_hexdb(icao_hex)
+            if hexdb_photo and hexdb_photo.get("photo_url"):
+                new_photo_url = hexdb_photo["photo_url"]
+                new_thumb_url = hexdb_photo.get("photo_thumbnail_url")
+                logger.info(f"Found hexdb.io photo for {icao_hex}, upgrading from planespotters")
+            else:
+                # Try to upgrade planespotters URL to 1000px
+                if old_photo_url and ("_280.jpg" in old_photo_url or "_t.jpg" in old_photo_url):
+                    upgraded_url = old_photo_url.replace("_280.jpg", "_1000.jpg").replace("_t.jpg", "_1000.jpg")
+
+                    # Verify the 1000px version exists
+                    try:
+                        async with httpx.AsyncClient(timeout=10) as client:
+                            response = await client.head(
+                                upgraded_url,
+                                follow_redirects=True,
+                                headers={
+                                    "User-Agent": "ADS-B-API/2.6 (aircraft-tracker)",
+                                    "Referer": "https://www.planespotters.net/"
+                                }
+                            )
+                            if response.status_code == 200:
+                                content_type = response.headers.get("content-type", "")
+                                if content_type.startswith("image/"):
+                                    new_photo_url = upgraded_url
+                                    new_thumb_url = cached.photo_thumbnail_url
+                                    logger.info(f"Upgraded {icao_hex} photo to 1000px version")
+                            elif response.status_code == 429:
+                                logger.warning(f"Rate limited checking 1000px photo for {icao_hex}")
+                                return  # Skip upgrade, try again later
+                    except Exception as e:
+                        logger.debug(f"Failed to verify 1000px photo for {icao_hex}: {e}")
+
+            # Update database and re-cache if we found a better URL
+            if new_photo_url and new_photo_url != old_photo_url:
+                cached.photo_url = new_photo_url
+                if new_thumb_url:
+                    cached.photo_thumbnail_url = new_thumb_url
+                cached.photo_local_path = None  # Clear old cached path
+                cached.photo_thumbnail_local_path = None
+                await db.commit()
+
+                # Re-cache the higher res photo
+                photo_path, thumb_path = await cache_aircraft_photos(
+                    db, icao_hex, new_photo_url, new_thumb_url
+                )
+                if photo_path:
+                    logger.info(f"Upgraded and cached photo for {icao_hex}: {photo_path}")
+
+    except Exception as e:
+        logger.error(f"Background photo upgrade failed for {icao_hex}: {e}")
+    finally:
+        _pending_upgrades.discard(icao_hex)
 
 
 async def _fetch_aircraft_info(icao_hex: str) -> Optional[dict]:
@@ -400,29 +521,40 @@ async def _fetch_photo_from_planespotters(icao_hex: str) -> Optional[dict]:
     try:
         url = f"https://api.planespotters.net/pub/photos/hex/{icao_hex}"
         data = await safe_request(url)
-        
+
         if not data or "photos" not in data or not data["photos"]:
             return None
-        
+
         photo = data["photos"][0]
-        
+
         # Debug: log what keys are available
         logger.debug(f"Planespotters response keys for {icao_hex}: {list(photo.keys())}")
-        
+
         # Planespotters API provides:
-        # - thumbnail_large: larger thumbnail (usually ~640px wide) 
-        # - thumbnail: smaller thumbnail (~232px wide)
+        # - thumbnail_large: larger thumbnail (usually ~280px wide, suffix _280.jpg)
+        # - thumbnail: smaller thumbnail (~232px wide, suffix _t.jpg)
         # - link: webpage URL (NOT a direct image)
         # The public API does NOT provide direct URLs to full-resolution images
-        
-        # Get the larger thumbnail for "full" image (best available via public API)
+        # BUT we can modify the URL suffix to get larger versions:
+        # _t.jpg = tiny, _280.jpg = 280px, _1000.jpg = 1000px, _o.jpg = original
+
+        # Get the larger thumbnail URL and try to upgrade to 1000px version
         large_thumb = photo.get("thumbnail_large", {})
         photo_url = large_thumb.get("src") if isinstance(large_thumb, dict) else None
-        
-        # Get the smaller thumbnail
+
+        # Try to get a higher resolution by modifying the URL suffix
+        if photo_url:
+            # URL format: https://t.plnspttrs.net/xxxxx/photo_id_280.jpg
+            # Try _1000.jpg for ~1000px width (good balance of quality/size)
+            if "_280.jpg" in photo_url:
+                photo_url = photo_url.replace("_280.jpg", "_1000.jpg")
+            elif "_t.jpg" in photo_url:
+                photo_url = photo_url.replace("_t.jpg", "_1000.jpg")
+
+        # Get the smaller thumbnail for thumbnail_url
         small_thumb = photo.get("thumbnail", {})
         thumbnail_url = small_thumb.get("src") if isinstance(small_thumb, dict) else None
-        
+
         # Fallback: if no large, use small for both
         if not photo_url:
             photo_url = thumbnail_url

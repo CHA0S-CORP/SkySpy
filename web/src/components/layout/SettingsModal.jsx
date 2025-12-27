@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X } from 'lucide-react';
-import { saveConfig } from '../utils';
+import { saveConfig } from '../../utils/config';
 
 export function SettingsModal({ config, setConfig, onClose }) {
   const [form, setForm] = useState(config);
@@ -71,3 +71,5 @@ export function SettingsModal({ config, setConfig, onClose }) {
     </div>
   );
 }
+
+export default SettingsModal;

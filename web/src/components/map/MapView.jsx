@@ -30,12 +30,12 @@ import { AircraftDetailPage } from '../aircraft/AircraftDetailPage';
 const getOverlays = () => {
   const stored = localStorage.getItem('adsb-dashboard-overlays');
   if (stored) return JSON.parse(stored);
-  return { 
-    aircraft: true, 
-    vors: false, 
-    airports: true, 
-    airspace: false, 
-    metars: false, 
+  return {
+    aircraft: true,
+    navaids: false,
+    airports: true,
+    airspace: false,
+    metars: false,
     pireps: false,
     rangeRings: true,
     trails: true,
@@ -54,7 +54,7 @@ const saveOverlays = (overlays) => {
 // MapView Component
 // ============================================================================
 
-function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: sseSafetyEvents }) {
+function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: wsSafetyEvents, wsRequest, wsConnected }) {
   // ============================================================================
   // State
   // ============================================================================
@@ -135,13 +135,25 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ss
   
   const feederLat = feederLocation?.lat || 47.9377;
   const feederLon = feederLocation?.lon || -121.9687;
-  
+
+  // Map viewport center for dynamic data loading (updated on pan/zoom)
+  const [viewportCenter, setViewportCenter] = useState({ lat: feederLat, lon: feederLon });
+  const viewportUpdateTimeoutRef = useRef(null);
+
   // ============================================================================
   // Custom Hooks
   // ============================================================================
 
   // Aviation data (navaids, airports, airspace, METARs, PIREPs)
-  const { aviationData } = useAviationData(config, feederLat, feederLon, radarRange, overlays);
+  // Uses viewport center for dynamic loading as user pans the map
+  const { aviationData, refresh: refreshAviationData } = useAviationData(
+    wsRequest,
+    wsConnected,
+    viewportCenter.lat,
+    viewportCenter.lon,
+    radarRange,
+    overlays
+  );
   
   // Send notification helper
   const sendNotification = useCallback((title, body, tag, urgent = false) => {
@@ -243,14 +255,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ss
   // ============================================================================
   
   useEffect(() => {
-    if (sseSafetyEvents && sseSafetyEvents.length > 0) {
+    if (wsSafetyEvents && wsSafetyEvents.length > 0) {
       setSafetyEvents(prev => {
         const existing = new Set(prev.map(e => e.id));
-        const newEvents = sseSafetyEvents.filter(e => !existing.has(e.id));
+        const newEvents = wsSafetyEvents.filter(e => !existing.has(e.id));
         return [...newEvents, ...prev].slice(0, 100);
       });
     }
-  }, [sseSafetyEvents]);
+  }, [wsSafetyEvents]);
   
   useEffect(() => {
     const emergencySquawks = { '7500': 'HIJACK', '7600': 'RADIO FAILURE', '7700': 'EMERGENCY' };
@@ -305,22 +317,35 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ss
   useEffect(() => {
     if (!selectedAircraft?.hex) return;
     if (aircraftInfo[selectedAircraft.hex]) return;
-    
+
     const fetchInfo = async () => {
-      const baseUrl = config.apiUrl || '';
-      try {
-        const res = await fetch(`${baseUrl}/api/v1/aircraft/${selectedAircraft.hex}/info`);
-        if (res.ok) {
-          const data = await res.json();
-          setAircraftInfo(prev => ({ ...prev, [selectedAircraft.hex]: data }));
+      // Prefer Socket.IO request if available
+      if (wsRequest && wsConnected) {
+        try {
+          const data = await wsRequest('aircraft-info', { icao: selectedAircraft.hex });
+          if (data && !data.error) {
+            setAircraftInfo(prev => ({ ...prev, [selectedAircraft.hex]: data }));
+          }
+        } catch (err) {
+          console.log('Aircraft info WS request error:', err.message);
         }
-      } catch (err) {
-        console.log('Aircraft info fetch error:', err.message);
+      } else {
+        // Fallback to HTTP
+        const baseUrl = config.apiBaseUrl || '';
+        try {
+          const res = await fetch(`${baseUrl}/api/v1/aircraft/${selectedAircraft.hex}/info`);
+          if (res.ok) {
+            const data = await res.json();
+            setAircraftInfo(prev => ({ ...prev, [selectedAircraft.hex]: data }));
+          }
+        } catch (err) {
+          console.log('Aircraft info fetch error:', err.message);
+        }
       }
     };
-    
+
     fetchInfo();
-  }, [selectedAircraft?.hex, config.apiUrl, aircraftInfo]);
+  }, [selectedAircraft?.hex, config.apiBaseUrl, aircraftInfo, wsRequest, wsConnected]);
   
   // ============================================================================
   // Effects - Track History
@@ -385,7 +410,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ss
     }).addTo(map);
     
     leafletMapRef.current = map;
-    
+
     feederMarkerRef.current = L.circleMarker([feederLat, feederLon], {
       radius: 8,
       fillColor: '#00d4ff',
@@ -394,8 +419,28 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ss
       opacity: 1,
       fillOpacity: 0.8
     }).addTo(map);
-    
+
+    // Update viewport center on map move/zoom for dynamic data loading
+    const handleViewportChange = () => {
+      // Debounce viewport updates to avoid excessive API calls
+      if (viewportUpdateTimeoutRef.current) {
+        clearTimeout(viewportUpdateTimeoutRef.current);
+      }
+      viewportUpdateTimeoutRef.current = setTimeout(() => {
+        const center = map.getCenter();
+        setViewportCenter({ lat: center.lat, lon: center.lng });
+      }, 500); // 500ms debounce
+    };
+
+    map.on('moveend', handleViewportChange);
+    map.on('zoomend', handleViewportChange);
+
     return () => {
+      map.off('moveend', handleViewportChange);
+      map.off('zoomend', handleViewportChange);
+      if (viewportUpdateTimeoutRef.current) {
+        clearTimeout(viewportUpdateTimeoutRef.current);
+      }
       map.remove();
       leafletMapRef.current = null;
     };
@@ -499,14 +544,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ss
   // ============================================================================
   
   return (
-    <div 
+    <div
       ref={containerRef}
-      className={`map-view ${config.mapMode || 'crt'} ${isFullscreen ? 'fullscreen' : ''}`}
+      className={`map-container ${config.mapMode || 'crt'} ${isFullscreen ? 'fullscreen' : ''}`}
       onMouseMove={handleContainerMouseMove}
       onMouseLeave={handleContainerMouseLeave}
     >
       {/* Leaflet Map */}
-      <div ref={mapRef} className="leaflet-container" style={{ height: '100%', width: '100%' }} />
+      <div ref={mapRef} className="leaflet-map" />
       
       {/* Radar Canvas Overlay (for CRT mode) */}
       {config.mapMode === 'crt' && (
@@ -599,7 +644,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ss
       {/* ACARS Panel */}
       {showAcarsPanel && (
         <AcarsPanel
-          apiUrl={config.apiUrl}
+          apiUrl={config.apiBaseUrl}
           onClose={() => setShowAcarsPanel(false)}
           onSelectAircraft={handleSelectAircraftByHex}
         />
@@ -608,13 +653,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ss
       {/* Aircraft Popup */}
       {selectedAircraft && (
         <AircraftPopup
-          aircraft={selectedAircraft}
+          aircraft={sortedAircraft.find(a => a.hex === selectedAircraft.hex) || selectedAircraft}
           aircraftInfo={aircraftInfo[selectedAircraft.hex]}
           onClose={() => setSelectedAircraft(null)}
           onShowDetails={(hex) => setAircraftDetailHex(hex)}
           mapMode={config.mapMode}
           getDistanceNm={getDistanceNm}
           getBearing={getBearing}
+          trackHistory={trackHistory[selectedAircraft.hex]}
         />
       )}
       
@@ -663,12 +709,13 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ss
       {aircraftDetailHex && (
         <div className="aircraft-detail-overlay" onClick={() => setAircraftDetailHex(null)}>
           <div className="aircraft-detail-modal" onClick={e => e.stopPropagation()}>
-            <AircraftDetailPage 
-              hex={aircraftDetailHex} 
-              apiUrl={config.apiUrl}
+            <AircraftDetailPage
+              hex={aircraftDetailHex}
+              apiUrl={config.apiBaseUrl}
               onClose={() => setAircraftDetailHex(null)}
               aircraft={sortedAircraft.find(a => a.hex === aircraftDetailHex)}
               aircraftInfo={aircraftInfo[aircraftDetailHex]}
+              trackHistory={trackHistory[aircraftDetailHex]}
             />
           </div>
         </div>

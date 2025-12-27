@@ -44,6 +44,9 @@ dependencies = [
     # S3 Storage (for photo cache)
     "boto3>=1.34.0",
 
+    # Socket.IO for real-time communication
+    "python-socketio>=5.11.0",
+
     # Development
     "python-multipart>=0.0.6",
 ]
@@ -76,7 +79,7 @@ Issues = "https://github.com/CHA0S-CORP/skyspy/issues"
 packages = ["app"]
 
 [tool.pytest.ini_options]
-testpaths = ["test"]
+testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"

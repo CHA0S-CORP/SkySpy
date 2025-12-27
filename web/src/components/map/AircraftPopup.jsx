@@ -1,29 +1,30 @@
 import React from 'react';
-import { 
-  Plane, X, ArrowUp, ArrowDown, Minus, Navigation, 
+import {
+  Plane, X, ArrowUp, ArrowDown, Navigation,
   AlertTriangle, ExternalLink, Info
 } from 'lucide-react';
 import { useDraggable } from '../../hooks/useDraggable';
-import { icaoToNNumber, getTailInfo } from '../../utils/aircraft';
+import { getTailInfo } from '../../utils/aircraft';
 
 /**
  * Popup showing selected aircraft details
  */
-export function AircraftPopup({ 
+export function AircraftPopup({
   aircraft,
   aircraftInfo,
   onClose,
   onShowDetails,
   mapMode = 'crt',
   getDistanceNm,
-  getBearing
+  getBearing,
+  trackHistory
 }) {
-  const { position, isDragging, handleMouseDown } = useDraggable({ x: 16, y: 16 });
+  const { position, isDragging, handleMouseDown } = useDraggable({ x: 100, y: 100 });
 
   if (!aircraft) return null;
 
   const tailInfo = getTailInfo(aircraft);
-  const vs = aircraft.baro_rate || aircraft.geom_rate || 0;
+  const vs = aircraft.vr ?? aircraft.baro_rate ?? aircraft.geom_rate ?? 0;
   const emergencySquawks = { '7500': 'HIJACK', '7600': 'RADIO', '7700': 'EMERGENCY' };
   const isEmergency = aircraft.emergency || emergencySquawks[aircraft.squawk];
   
@@ -67,10 +68,17 @@ export function AircraftPopup({
           <span className="mono">{aircraft.hex?.toUpperCase()}</span>
         </div>
         
-        {tailInfo && (
+        {tailInfo?.tailNumber && (
           <div className="detail-row">
             <span>Tail</span>
-            <span>{tailInfo}</span>
+            <span>{tailInfo.tailNumber}</span>
+          </div>
+        )}
+
+        {tailInfo?.country && (
+          <div className="detail-row">
+            <span>Reg</span>
+            <span>{tailInfo.country}</span>
           </div>
         )}
         
@@ -103,7 +111,7 @@ export function AircraftPopup({
           <span className="altitude-value">
             {aircraft.alt?.toLocaleString() || aircraft.baro_alt?.toLocaleString() || '---'} ft
             {vs !== 0 && (
-              <span className={`vs-indicator ${vs > 0 ? 'climbing' : 'descending'}`}>
+              <span className={`vs-indicator ${vs > 0 ? 'climbing' : 'descending'} ${Math.abs(vs) > 3000 ? 'extreme-vs' : ''}`}>
                 {vs > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
                 {Math.abs(vs).toLocaleString()} fpm
               </span>
@@ -137,7 +145,14 @@ export function AircraftPopup({
             <span>{Math.round(bearing)}°</span>
           </div>
         )}
-        
+
+        {trackHistory?.length > 0 && (
+          <div className="detail-row">
+            <span>Track Pts</span>
+            <span>{trackHistory.length}</span>
+          </div>
+        )}
+
         {/* Transponder */}
         {aircraft.squawk && (
           <>

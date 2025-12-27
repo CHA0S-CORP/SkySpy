@@ -43,12 +43,12 @@ class Settings(BaseSettings):
     
     # Safety Monitoring
     safety_monitoring_enabled: bool = True
-    safety_vs_change_threshold: int = 3000
-    safety_vs_extreme_threshold: int = 4500
-    safety_proximity_nm: float = 1.0
-    safety_altitude_diff_ft: int = 1000
+    safety_vs_change_threshold: int = 2000  # Min VS change for reversal alerts
+    safety_vs_extreme_threshold: int = 6000  # Extreme VS (6000+ fpm is unusual)
+    safety_proximity_nm: float = 0.5  # Tighter proximity threshold (was 1.0)
+    safety_altitude_diff_ft: int = 500  # Tighter altitude threshold (was 1000)
     safety_closure_rate_kt: float = 200
-    safety_tcas_vs_threshold: int = 1500
+    safety_tcas_vs_threshold: int = 1500  # Min VS for TCAS RA detection
     
     # Default Alerts
     proximity_alert_nm: float = 5.0

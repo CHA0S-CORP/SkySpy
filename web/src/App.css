@@ -992,6 +992,27 @@ body {
   color: rgba(180, 220, 255, 0.9);
 }
 
+/* VS Indicator in popups */
+.vs-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+  font-size: 11px;
+}
+
+.vs-indicator.climbing {
+  color: #22c55e; /* Green */
+}
+
+.vs-indicator.descending {
+  color: #f97316; /* Orange */
+}
+
+.vs-indicator.extreme-vs {
+  animation: extreme-vs-flash 0.5s ease-in-out infinite;
+}
+
 /* Emergency popup styling */
 .aircraft-popup.emergency-popup {
   border-color: rgba(255, 80, 80, 0.7) !important;
@@ -1084,11 +1105,12 @@ body {
   z-index: 1000;
   border-radius: 10px;
   font-family: 'JetBrains Mono', monospace;
-  padding: 0 10px;
+  padding: 0 16px 16px 16px;
+  box-sizing: border-box;
 }
 
 .weather-popup .popup-header {
-  padding: 14px 6px;
+  padding: 14px 0;
   border-bottom: 1px solid rgba(255,255,255,0.1);
   display: flex;
   align-items: center;
@@ -1096,7 +1118,7 @@ body {
 }
 
 .weather-popup .popup-details {
-  padding: 12px 6px;
+  padding: 12px 0;
 }
 
 .weather-popup .detail-row {
@@ -1346,7 +1368,10 @@ body {
   flex-direction: column;
   gap: 8px;
   width: 100%;
+  max-width: 100%;
   text-align: left !important;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .decoded-value strong {
@@ -1425,15 +1450,18 @@ body {
 /* Turbulence severity levels */
 .turb-section {
   border-left: 4px solid #666;
-  padding-left: 16px;
-  padding-right: 14px;
-  margin-left: -12px;
+  padding-left: 12px;
+  padding-right: 12px;
+  margin-left: 0;
+  margin-right: 0;
   padding-top: 14px;
   padding-bottom: 14px;
   margin-top: 10px;
   margin-bottom: 10px;
   background: rgba(255, 150, 50, 0.05);
   border-radius: 0 8px 8px 0;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .turb-section.level-1 { border-color: #88cc44; background: rgba(136, 204, 68, 0.05); }
@@ -1457,15 +1485,18 @@ body {
 /* Icing severity levels */
 .icing-section {
   border-left: 4px solid #666;
-  padding-left: 16px;
-  padding-right: 14px;
-  margin-left: -12px;
+  padding-left: 12px;
+  padding-right: 12px;
+  margin-left: 0;
+  margin-right: 0;
   padding-top: 14px;
   padding-bottom: 14px;
   margin-top: 10px;
   margin-bottom: 10px;
   background: rgba(100, 200, 255, 0.05);
   border-radius: 0 8px 8px 0;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .icing-section.level-1 { border-color: #88ccff; background: rgba(136, 204, 255, 0.05); }
@@ -1487,15 +1518,18 @@ body {
 /* Wind Shear / LLWS severity levels */
 .ws-section {
   border-left: 4px solid #666;
-  padding-left: 16px;
-  padding-right: 14px;
-  margin-left: -12px;
+  padding-left: 12px;
+  padding-right: 12px;
+  margin-left: 0;
+  margin-right: 0;
   padding-top: 14px;
   padding-bottom: 14px;
   margin-top: 10px;
   margin-bottom: 10px;
   background: rgba(200, 100, 255, 0.05);
   border-radius: 0 8px 8px 0;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .ws-section.level-0 { border-color: #88cc88; background: rgba(136, 204, 136, 0.05); }
@@ -1536,6 +1570,9 @@ body {
   color: #ff6666;
   font-size: 11px;
   font-weight: 600;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
 }
 
 /* Urgent PIREP styling */
@@ -3215,56 +3252,59 @@ body {
   will-change: opacity;
 }
 
-/* Proximity Conflict Banners Container - Mobile Only */
+/* Safety Event Banners Container - Full Width Across Map */
 .conflict-banners-container {
   position: absolute;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 70px; /* Below the header */
+  left: 16px;
+  right: 340px; /* Leave space for sidebar (320px + padding) */
   z-index: 1100;
-  display: none; /* Hidden on desktop, shown on mobile */
+  display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: calc(100% - 100px);
+  gap: 12px;
+  max-height: calc(100% - 150px);
   overflow-y: auto;
   scrollbar-width: none;
+  pointer-events: none;
 }
 
 .conflict-banners-container::-webkit-scrollbar {
   display: none;
 }
 
-/* Individual Proximity Conflict Banner */
+/* Individual Safety Event Banner - Large and Prominent */
 .conflict-banners-container .conflict-banner {
   position: relative;
   top: auto;
   left: auto;
   transform: none;
-  background: linear-gradient(135deg, rgba(255, 200, 0, 0.3), rgba(255, 150, 0, 0.25));
-  border: 2px solid #ffcc00;
-  border-radius: 8px;
-  padding: 10px 16px;
+  background: linear-gradient(135deg, rgba(255, 200, 0, 0.35), rgba(255, 150, 0, 0.3));
+  border: 3px solid #ffcc00;
+  border-radius: 12px;
+  padding: 16px 24px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 16px;
   font-family: 'JetBrains Mono', monospace;
-  box-shadow: 0 4px 20px rgba(255, 200, 0, 0.35);
+  box-shadow: 0 8px 40px rgba(255, 200, 0, 0.5), 0 0 60px rgba(255, 200, 0, 0.2);
   transition: all 0.2s ease;
   cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(10px);
 }
 
 .conflict-banners-container .conflict-banner:hover {
-  background: linear-gradient(135deg, rgba(255, 200, 0, 0.45), rgba(255, 150, 0, 0.4));
-  box-shadow: 0 4px 30px rgba(255, 200, 0, 0.5);
-  transform: scale(1.02);
+  background: linear-gradient(135deg, rgba(255, 200, 0, 0.5), rgba(255, 150, 0, 0.45));
+  box-shadow: 0 8px 50px rgba(255, 200, 0, 0.6), 0 0 80px rgba(255, 200, 0, 0.3);
+  transform: scale(1.01);
 }
 
 .conflict-banners-container .conflict-banner::before {
   content: '';
   position: absolute;
-  inset: -2px;
-  border-radius: 10px;
-  box-shadow: 0 0 25px rgba(255, 200, 0, 0.4);
+  inset: -3px;
+  border-radius: 14px;
+  box-shadow: 0 0 40px rgba(255, 200, 0, 0.5);
   opacity: 0;
   animation: glow-pulse 1.5s ease-in-out infinite;
   pointer-events: none;
@@ -3274,6 +3314,8 @@ body {
 .conflict-banners-container .conflict-banner svg {
   color: #ffcc00;
   flex-shrink: 0;
+  width: 28px;
+  height: 28px;
   animation: icon-pulse 1s ease-in-out infinite;
   will-change: opacity;
 }
@@ -3282,36 +3324,145 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1;
+  min-width: 0;
 }
 
 .conflict-banners-container .conflict-banner-content strong {
   color: #fff;
-  font-size: 11px;
-  letter-spacing: 0.5px;
+  font-size: 16px;
+  letter-spacing: 1px;
   text-transform: uppercase;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .conflict-banners-container .conflict-details {
   display: flex;
-  gap: 10px;
+  gap: 16px;
   color: rgba(255, 255, 255, 0.95);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .conflict-banners-container .conflict-separation {
   color: rgba(255, 220, 100, 1);
   font-weight: 700;
+  font-size: 15px;
 }
 
-/* Conflict acknowledge button */
+/* Event-specific banner content styles */
+.banner-event-type {
+  font-size: 14px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  opacity: 0.9;
+  margin-bottom: 4px;
+}
+
+.banner-main-info {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.banner-aircraft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-top: 4px;
+}
+
+/* Squawk-specific styles */
+.banner-squawk-code {
+  font-size: 32px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  letter-spacing: 4px;
+}
+
+.banner-squawk-meaning {
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+/* Proximity-specific styles */
+.banner-separation-horiz,
+.banner-separation-vert {
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.banner-separation-divider {
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0 4px;
+}
+
+.banner-vs-aircraft {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 16px;
+}
+
+/* VS-related styles */
+.banner-vs-change {
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.banner-vs-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.banner-vs-unit {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  margin-left: 4px;
+}
+
+/* Aircraft info styles */
+.banner-callsign {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.banner-callsign-2 {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.banner-altitude {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 2px 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+}
+
+.banner-message {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 4px;
+}
+
+/* Conflict acknowledge button - larger for prominent banners */
 .conflict-ack-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: 1px solid rgba(100, 255, 100, 0.4);
-  background: rgba(20, 60, 20, 0.8);
-  color: rgba(100, 255, 100, 0.9);
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: 2px solid rgba(100, 255, 100, 0.5);
+  background: rgba(20, 60, 20, 0.9);
+  color: rgba(100, 255, 100, 0.95);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -3322,14 +3473,17 @@ body {
 }
 
 .conflict-ack-btn:hover {
-  background: rgba(30, 80, 30, 0.95);
-  border-color: rgba(100, 255, 100, 0.7);
+  background: rgba(30, 100, 30, 0.95);
+  border-color: rgba(100, 255, 100, 0.8);
   transform: scale(1.1);
+  box-shadow: 0 0 20px rgba(100, 255, 100, 0.4);
 }
 
 .conflict-ack-btn svg {
   animation: none !important;
-  color: rgba(100, 255, 100, 0.9) !important;
+  color: rgba(100, 255, 100, 0.95) !important;
+  width: 20px;
+  height: 20px;
 }
 
 /* Legacy single conflict banner (for popup use) */
@@ -4725,36 +4879,45 @@ body {
     padding: 4px 0;
   }
   
-  /* Conflict Banners */
+  /* Conflict Banners - Mobile responsive */
   .conflict-banners-container {
-    display: flex; /* Show on mobile */
+    display: flex;
     top: 60px;
     left: 8px;
     right: 8px;
-    transform: none;
-    width: auto;
-  }
-  
-  .conflict-banner {
-    padding: 8px 12px;
     gap: 8px;
   }
-  
-  .conflict-banner-content strong {
-    font-size: 10px;
+
+  .conflict-banners-container .conflict-banner {
+    padding: 12px 16px;
+    gap: 12px;
   }
-  
-  .conflict-details {
-    font-size: 11px;
+
+  .conflict-banners-container .conflict-banner svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .conflict-banners-container .conflict-banner-content strong {
+    font-size: 13px;
+  }
+
+  .conflict-banners-container .conflict-details {
+    font-size: 12px;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 8px;
   }
-  
+
   .conflict-ack-btn {
-    width: 24px;
-    height: 24px;
+    width: 34px;
+    height: 34px;
   }
-  
+
+  .conflict-ack-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
   /* Sidebar mobile toggle */
   .sidebar-mobile-toggle {
     display: flex;
@@ -5109,11 +5272,24 @@ body {
 
 /* Vertical Speed Colors */
 .pro-stat-value.climbing {
-  color: var(--accent-cyan);
+  color: #22c55e; /* Green for climbing */
 }
 
 .pro-stat-value.descending {
-  color: var(--accent-red);
+  color: #f97316; /* Orange for descending */
+}
+
+.pro-stat-value.extreme-vs {
+  animation: extreme-vs-flash 0.5s ease-in-out infinite;
+}
+
+@keyframes extreme-vs-flash {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 /* Cardinal Indicator */
@@ -5155,6 +5331,31 @@ body {
 
 .pro-photo-placeholder svg {
   opacity: 0.3;
+}
+
+.pro-photo-retry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  margin-top: 8px;
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 4px;
+  color: rgba(0, 212, 255, 0.8);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pro-photo-retry:hover {
+  background: rgba(0, 212, 255, 0.2);
+  border-color: rgba(0, 212, 255, 0.5);
+  color: rgba(0, 212, 255, 1);
+}
+
+.pro-photo-retry svg {
+  opacity: 1;
 }
 
 /* Legacy Image Placeholder */
@@ -5199,6 +5400,40 @@ body {
   display: block;
   width: 100%;
   height: 80px;
+}
+
+/* Aircraft Info Section */
+.pro-aircraft-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+}
+
+.pro-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.pro-info-label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  color: rgba(138, 148, 158, 0.6);
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.pro-info-value {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Stats Grid */
@@ -5675,8 +5910,8 @@ body {
 /* Low severity - Yellow */
 .conflict-banner.severity-low,
 .pro-conflict-alert.severity-low {
-  background: linear-gradient(135deg, rgba(255, 200, 0, 0.2), rgba(255, 180, 0, 0.15));
-  border-color: rgba(255, 200, 0, 0.5);
+  background: linear-gradient(135deg, rgba(255, 200, 0, 0.3), rgba(255, 180, 0, 0.25));
+  border-color: rgba(255, 200, 0, 0.7);
   animation: severity-low-pulse 2s ease-in-out infinite;
 }
 
@@ -5687,15 +5922,15 @@ body {
 }
 
 @keyframes severity-low-pulse {
-  0%, 100% { box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 10px rgba(255, 200, 0, 0.1); }
-  50% { box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 200, 0, 0.2); }
+  0%, 100% { box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4), 0 0 30px rgba(255, 200, 0, 0.2); }
+  50% { box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4), 0 0 50px rgba(255, 200, 0, 0.35); }
 }
 
 /* Warning severity - Orange */
 .conflict-banner.severity-warning,
 .pro-conflict-alert.severity-warning {
-  background: linear-gradient(135deg, rgba(255, 140, 0, 0.25), rgba(255, 100, 0, 0.2));
-  border-color: rgba(255, 140, 0, 0.6);
+  background: linear-gradient(135deg, rgba(255, 140, 0, 0.35), rgba(255, 100, 0, 0.3));
+  border-color: rgba(255, 140, 0, 0.8);
   animation: severity-warning-pulse 1.5s ease-in-out infinite;
 }
 
@@ -5711,15 +5946,15 @@ body {
 }
 
 @keyframes severity-warning-pulse {
-  0%, 100% { box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 15px rgba(255, 140, 0, 0.15); }
-  50% { box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 30px rgba(255, 140, 0, 0.35); }
+  0%, 100% { box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4), 0 0 40px rgba(255, 140, 0, 0.25); }
+  50% { box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4), 0 0 70px rgba(255, 140, 0, 0.5); }
 }
 
 /* Critical severity - Bright Pink */
 .conflict-banner.severity-critical,
 .pro-conflict-alert.severity-critical {
-  background: linear-gradient(135deg, rgba(255, 80, 150, 0.3), rgba(255, 50, 120, 0.25));
-  border-color: rgba(255, 80, 150, 0.7);
+  background: linear-gradient(135deg, rgba(255, 80, 150, 0.4), rgba(255, 50, 120, 0.35));
+  border-color: rgba(255, 80, 150, 0.9);
   animation: severity-critical-pulse 0.8s ease-in-out infinite;
 }
 
@@ -5735,12 +5970,12 @@ body {
 }
 
 @keyframes severity-critical-pulse {
-  0%, 100% { 
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 80, 150, 0.25);
-    border-color: rgba(255, 80, 150, 0.7);
+  0%, 100% {
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4), 0 0 50px rgba(255, 80, 150, 0.35);
+    border-color: rgba(255, 80, 150, 0.9);
   }
-  50% { 
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 40px rgba(255, 80, 150, 0.5);
+  50% {
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4), 0 0 90px rgba(255, 80, 150, 0.7);
     border-color: rgba(255, 80, 150, 1);
   }
 }
@@ -5753,7 +5988,7 @@ body {
 
 @keyframes critical-flash {
   0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(1.1); }
+  50% { opacity: 0.6; transform: scale(1.15); }
 }
 
 /* Panel state modifiers */
@@ -6240,6 +6475,7 @@ body {
 
 .detail-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 12px 24px;
   background: rgba(20, 30, 40, 0.5);
@@ -6413,11 +6649,15 @@ body {
 }
 
 .live-value.climbing {
-  color: var(--accent-cyan);
+  color: #22c55e; /* Green for climbing */
 }
 
 .live-value.descending {
-  color: #f85149;
+  color: #f97316; /* Orange for descending */
+}
+
+.live-value.extreme-vs {
+  animation: extreme-vs-flash 0.5s ease-in-out infinite;
 }
 
 .live-unit {
@@ -6559,6 +6799,146 @@ body {
 .history-row span {
   font-family: 'JetBrains Mono', monospace;
   color: var(--text-secondary);
+}
+
+/* Safety Events Tab */
+.detail-safety {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.safety-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(30, 40, 50, 0.5);
+  border: 1px solid rgba(90, 122, 154, 0.2);
+  border-radius: 8px;
+}
+
+.safety-filter label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.safety-filter select {
+  background: rgba(20, 30, 40, 0.8);
+  border: 1px solid rgba(90, 122, 154, 0.3);
+  border-radius: 4px;
+  padding: 6px 12px;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.safety-filter select:hover {
+  border-color: var(--accent-cyan);
+}
+
+.safety-events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.safety-count {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.safety-event-item {
+  background: rgba(30, 40, 50, 0.5);
+  border: 1px solid rgba(90, 122, 154, 0.2);
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.safety-event-item.severity-critical {
+  border-left: 3px solid #ff4444;
+  background: rgba(255, 68, 68, 0.1);
+}
+
+.safety-event-item.severity-warning {
+  border-left: 3px solid #ffaa00;
+  background: rgba(255, 170, 0, 0.1);
+}
+
+.safety-event-item.severity-low {
+  border-left: 3px solid #ffdd44;
+  background: rgba(255, 221, 68, 0.1);
+}
+
+.safety-event-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.safety-severity-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.safety-severity-badge.severity-critical {
+  background: #ff4444;
+  color: white;
+}
+
+.safety-severity-badge.severity-warning {
+  background: #ffaa00;
+  color: #1a1a1a;
+}
+
+.safety-severity-badge.severity-low {
+  background: #ffdd44;
+  color: #1a1a1a;
+}
+
+.safety-event-type {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.safety-event-time {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  margin-left: auto;
+}
+
+.safety-event-message {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.safety-event-details {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.safety-event-details span {
+  background: rgba(20, 30, 40, 0.5);
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
 .detail-links {

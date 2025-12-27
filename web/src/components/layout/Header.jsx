@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Plane, MapPin, Clock, Settings, BellRing, BellOff } from 'lucide-react';
-import { saveConfig } from '../utils';
+import { saveConfig } from '../../utils/config';
 
 export function Header({ stats, location, config, setConfig, setShowSettings }) {
   const [time, setTime] = useState(new Date());
   const [notifPermission, setNotifPermission] = useState(
-    typeof Notification !== 'undefined' ? Notification.permission : 'denied'
+    'Notification' in window ? Notification.permission : 'denied'
   );
 
   useEffect(() => {
@@ -67,3 +67,5 @@ export function Header({ stats, location, config, setConfig, setShowSettings }) 
     </header>
   );
 }
+
+export default Header;
