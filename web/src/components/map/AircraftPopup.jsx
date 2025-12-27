@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Plane, X, ArrowUp, ArrowDown, Navigation,
-  AlertTriangle, ExternalLink, Info
+  AlertTriangle, ExternalLink, Info, Crosshair
 } from 'lucide-react';
 import { useDraggable } from '../../hooks/useDraggable';
 import { getTailInfo } from '../../utils/aircraft';
@@ -14,6 +14,7 @@ export function AircraftPopup({
   aircraftInfo,
   onClose,
   onShowDetails,
+  onJumpTo,
   mapMode = 'crt',
   getDistanceNm,
   getBearing,
@@ -52,6 +53,9 @@ export function AircraftPopup({
         <span className="popup-callsign">
           {aircraft.flight?.trim() || aircraft.hex}
         </span>
+        {(aircraftInfo?.typeLong || aircraft.type) && (
+          <span className={`model-tag ${aircraft.military ? 'military' : ''}`}>{aircraftInfo?.typeLong || aircraft.type}</span>
+        )}
         {aircraft.military && <span className="mil-badge">MIL</span>}
         {isEmergency && (
           <span className="emergency-badge">
@@ -179,6 +183,12 @@ export function AircraftPopup({
       </div>
       
       <div className="popup-actions">
+        {onJumpTo && (
+          <button className="popup-action-btn no-drag" onClick={() => onJumpTo(aircraft)}>
+            <Crosshair size={14} />
+            Jump
+          </button>
+        )}
         {onShowDetails && (
           <button className="popup-action-btn no-drag" onClick={() => onShowDetails(aircraft.hex)}>
             <Info size={14} />

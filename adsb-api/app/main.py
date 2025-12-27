@@ -70,7 +70,9 @@ async def store_safety_event(db: AsyncSession, event: dict) -> Optional[int]:
             callsign=event.get("callsign"),
             callsign_2=event.get("callsign_2"),
             message=event["message"],
-            details=event.get("details", {})
+            details=event.get("details", {}),
+            aircraft_snapshot=event.get("aircraft_snapshot"),
+            aircraft_snapshot_2=event.get("aircraft_snapshot_2"),
         )
         db.add(safety_event)
         await db.commit()
@@ -166,6 +168,12 @@ async def process_aircraft_data(db: AsyncSession, aircraft_list: list[dict], sou
                         existing.min_distance_nm = distance_nm
                     if existing.max_distance_nm is None or distance_nm > existing.max_distance_nm:
                         existing.max_distance_nm = distance_nm
+                rssi = ac.get("rssi")
+                if rssi is not None:
+                    if existing.min_rssi is None or rssi < existing.min_rssi:
+                        existing.min_rssi = rssi
+                    if existing.max_rssi is None or rssi > existing.max_rssi:
+                        existing.max_rssi = rssi
             else:
                 _active_sessions.pop(session_key, None)
         
@@ -185,6 +193,7 @@ async def process_aircraft_data(db: AsyncSession, aircraft_list: list[dict], sou
                 recent.total_positions += 1
             else:
                 # New session
+                rssi = ac.get("rssi")
                 session = AircraftSession(
                     icao_hex=icao,
                     callsign=callsign,
@@ -196,6 +205,8 @@ async def process_aircraft_data(db: AsyncSession, aircraft_list: list[dict], sou
                     min_distance_nm=distance_nm,
                     max_distance_nm=distance_nm,
                     max_vertical_rate=abs(vr) if vr else None,
+                    min_rssi=rssi,
+                    max_rssi=rssi,
                     is_military=is_military,
                     category=ac.get("category"),
                     aircraft_type=ac.get("t")
@@ -323,9 +334,9 @@ async def fetch_and_process_aircraft():
             if safety_events:
                 async with AsyncSessionLocal() as db:
                     for event in safety_events:
-                        event_id = await store_safety_event(db, event)
-                        if event_id:
-                            event["id"] = event_id
+                        db_id = await store_safety_event(db, event)
+                        if db_id:
+                            event["db_id"] = db_id  # Store as db_id, not id (id is the string event ID)
 
                         await sse_manager.publish_safety_event(event)
                         if sio_manager:

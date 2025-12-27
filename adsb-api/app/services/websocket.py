@@ -347,6 +347,8 @@ class ConnectionManager:
             "callsign_2": event.get("callsign_2"),
             "message": event["message"],
             "details": event.get("details", {}),
+            "aircraft_snapshot": event.get("aircraft_snapshot"),
+            "aircraft_snapshot_2": event.get("aircraft_snapshot_2"),
         })
 
     # =========================================================================
@@ -911,39 +913,36 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
         }
 
     elif request_type == "safety-events":
-        from sqlalchemy import select, desc
-        from app.models import SafetyEvent
+        # Return active events from safety monitor (real-time, with proper IDs for acknowledgment)
+        from app.services.safety import safety_monitor
+        from datetime import datetime
 
-        limit = params.get("limit", 50)
-        event_type = params.get("event_type")
-        severity = params.get("severity")
+        include_acknowledged = params.get("include_acknowledged", True)
+        active_events = safety_monitor.get_active_events(include_acknowledged=include_acknowledged)
 
-        query = select(SafetyEvent).order_by(desc(SafetyEvent.timestamp)).limit(limit)
-
-        if event_type:
-            query = query.where(SafetyEvent.event_type == event_type)
-        if severity:
-            query = query.where(SafetyEvent.severity == severity)
-
-        result = await db.execute(query)
-        events = result.scalars().all()
+        # Format events for frontend
+        events = []
+        for e in active_events:
+            events.append({
+                "id": e.get("id"),  # String ID like "proximity_conflict:AC01FD:AB19DF"
+                "event_type": e.get("event_type"),
+                "severity": e.get("severity"),
+                "icao": e.get("icao"),
+                "icao_2": e.get("icao_2"),
+                "callsign": e.get("callsign"),
+                "callsign_2": e.get("callsign_2"),
+                "message": e.get("message"),
+                "details": e.get("details", {}),
+                "aircraft_snapshot": e.get("aircraft_snapshot"),
+                "aircraft_snapshot_2": e.get("aircraft_snapshot_2"),
+                "acknowledged": e.get("acknowledged", False),
+                "created_at": e.get("created_at"),
+                "last_seen": e.get("last_seen"),
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            })
 
         return {
-            "events": [
-                {
-                    "id": e.id,
-                    "timestamp": e.timestamp.isoformat() + "Z" if e.timestamp else None,
-                    "event_type": e.event_type,
-                    "severity": e.severity,
-                    "icao": e.icao_hex,
-                    "icao_2": e.icao_hex_2,
-                    "callsign": e.callsign,
-                    "callsign_2": e.callsign_2,
-                    "message": e.message,
-                    "details": e.details or {}
-                }
-                for e in events
-            ],
+            "events": events,
             "count": len(events)
         }
 
@@ -1135,6 +1134,57 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
         return {
             "status": overall_status,
             "services": services,
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+
+    elif request_type == "ws-status":
+        # WebSocket/Socket.IO status
+        from app.services.sse import get_sse_manager
+        from app.services.socketio_manager import get_socketio_manager
+
+        sse_manager = get_sse_manager()
+        sio_manager = get_socketio_manager()
+
+        sse_subscribers = 0
+        sse_mode = "not_initialized"
+        if sse_manager:
+            try:
+                sse_subscribers = await sse_manager.get_subscriber_count()
+                sse_mode = "redis" if sse_manager._using_redis else "memory"
+            except Exception:
+                pass
+
+        sio_connections = 0
+        sio_mode = "not_initialized"
+        redis_enabled = False
+        tracked_aircraft = 0
+        last_publish = None
+        if sio_manager:
+            sio_connections = sio_manager.get_connection_count()
+            sio_mode = "redis" if sio_manager.is_using_redis() else "memory"
+            redis_enabled = sio_manager.is_using_redis()
+            tracked_aircraft = len(sio_manager._last_aircraft_state)
+            last_publish = sio_manager.get_last_publish_time()
+
+        return {
+            "subscribers": sse_subscribers + sio_connections,
+            "sse_subscribers": sse_subscribers,
+            "socketio_connections": sio_connections,
+            "mode": sio_mode if sio_manager else sse_mode,
+            "redis_enabled": redis_enabled,
+            "tracked_aircraft": tracked_aircraft,
+            "last_publish": last_publish,
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+
+    elif request_type == "safety-status":
+        # Safety monitor status
+        from app.services.safety import safety_monitor
+
+        return {
+            "enabled": safety_monitor.enabled,
+            "tracked_aircraft": len(safety_monitor._aircraft_state),
+            "thresholds": safety_monitor.get_thresholds(),
             "timestamp": datetime.utcnow().isoformat() + "Z"
         }
 

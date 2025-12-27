@@ -375,6 +375,7 @@ class SocketIOManager:
     async def publish_safety_event(self, event: dict):
         """Publish safety event."""
         await self.broadcast_to_room('safety', 'safety:event', {
+            'id': event.get('id'),  # Event ID for acknowledgment
             'event_type': event['event_type'],
             'severity': event['severity'],
             'icao': event['icao'],
@@ -383,6 +384,9 @@ class SocketIOManager:
             'callsign_2': event.get('callsign_2'),
             'message': event['message'],
             'details': event.get('details', {}),
+            'aircraft_snapshot': event.get('aircraft_snapshot'),
+            'aircraft_snapshot_2': event.get('aircraft_snapshot_2'),
+            'acknowledged': event.get('acknowledged', False),
             'timestamp': datetime.utcnow().isoformat() + 'Z'
         })
 

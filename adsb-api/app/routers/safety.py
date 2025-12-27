@@ -139,6 +139,8 @@ async def get_events(
             "callsign_2": e.callsign_2,
             "message": e.message,
             "details": e.details,
+            "aircraft_snapshot": e.aircraft_snapshot,
+            "aircraft_snapshot_2": e.aircraft_snapshot_2,
             "timestamp": e.timestamp.isoformat() + "Z",
         })
     
@@ -180,6 +182,8 @@ async def get_event(
         "callsign_2": event.callsign_2,
         "message": event.message,
         "details": event.details,
+        "aircraft_snapshot": event.aircraft_snapshot,
+        "aircraft_snapshot_2": event.aircraft_snapshot_2,
         "timestamp": event.timestamp.isoformat() + "Z",
     }
 
@@ -420,6 +424,13 @@ Acknowledge a safety event by its ID.
 
 Acknowledged events are still tracked but won't trigger alarms
 in the UI. The event will be cleared when it naturally expires.
+
+Accepts either:
+- String event ID (e.g., "proximity_conflict:A1801C:AC940A") for active events
+- Numeric database ID (e.g., "123") which will find the matching active event
+
+Note: Only currently active events (within the last 5 minutes) can be acknowledged.
+Historical events from the database cannot be acknowledged after they expire.
     """,
     responses={
         200: {"description": "Event acknowledged"},
@@ -432,9 +443,11 @@ async def acknowledge_event(
     """Acknowledge a safety event."""
     from fastapi import HTTPException
 
+    # Safety monitor now handles both string IDs and numeric db_ids
     success = safety_monitor.acknowledge_event(event_id)
+
     if not success:
-        raise HTTPException(status_code=404, detail="Event not found")
+        raise HTTPException(status_code=404, detail="Event not found or not currently active")
 
     return {"success": True, "message": f"Event {event_id} acknowledged", "event_id": event_id}
 
@@ -495,3 +508,46 @@ async def clear_all_events():
     """Clear all active safety events."""
     safety_monitor.clear_all_events()
     return {"success": True, "message": "All events cleared"}
+
+
+@router.post(
+    "/test",
+    summary="Generate Test Safety Events",
+    description="""
+Generate test events for all safety event types.
+
+Creates one test event for each type:
+- Emergency squawk (7700)
+- TCAS RA
+- VS reversal
+- Extreme vertical speed
+- Proximity conflict
+
+Test events are marked with is_test=True and will appear in the active events list.
+They will expire normally after 5 minutes or can be cleared manually.
+    """,
+    responses={
+        200: {
+            "description": "Test events generated",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "message": "Generated 5 test safety events",
+                        "count": 5,
+                        "events": []
+                    }
+                }
+            }
+        }
+    }
+)
+async def generate_test_events():
+    """Generate test safety events for all event types."""
+    events = safety_monitor.generate_test_events()
+    return {
+        "success": True,
+        "message": f"Generated {len(events)} test safety events",
+        "count": len(events),
+        "events": events
+    }

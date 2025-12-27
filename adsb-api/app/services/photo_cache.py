@@ -5,24 +5,13 @@ Downloads and caches aircraft photos to local filesystem or S3.
 Storage backends:
 - Local filesystem (default): /data/photos/
 - S3/MinIO/Wasabi: s3://bucket/prefix/
-
-Configuration:
-- PHOTO_CACHE_ENABLED=true
-- PHOTO_CACHE_DIR=/data/photos (for local)
-- S3_ENABLED=true (for S3)
-- S3_BUCKET=my-bucket
-- S3_REGION=us-east-1
-- S3_ACCESS_KEY=xxx
-- S3_SECRET_KEY=xxx
-- S3_ENDPOINT_URL=https://minio.local:9000 (for S3-compatible)
-- S3_PREFIX=aircraft-photos
-- S3_PUBLIC_URL=https://cdn.example.com/aircraft-photos (optional)
 """
 import asyncio
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 import httpx
 from sqlalchemy import select, update
@@ -43,6 +32,9 @@ _download_queue: asyncio.Queue = None
 # S3 client (lazy initialized)
 _s3_client = None
 
+# Regex to extract Planespotters Photo ID
+# Matches: https://t.plnspttrs.net/16653/1531024_35907ab605_t.jpg -> 1531024
+PLANESPOTTERS_ID_REGEX = re.compile(r"plnspttrs\.net/\d+/(\d+)_")
 
 def _get_s3_client():
     """Get or create S3 client (lazy initialization)."""
@@ -169,6 +161,71 @@ async def _check_s3_exists(icao_hex: str, is_thumbnail: bool = False) -> bool:
         return False
 
 
+async def _scrape_planespotters_full_size(page_url: str, client: httpx.AsyncClient) -> Optional[str]:
+    """
+    Scrape a Planespotters photo page to find the full-size image URL.
+
+    The Planespotters API provides a 'link' field with the photo page URL.
+    We scrape this page to find the CDN URL for the original/large image.
+
+    Args:
+        page_url: The photo page URL (e.g., https://www.planespotters.net/photo/1234567)
+        client: httpx AsyncClient to use
+
+    Returns:
+        Full-size image URL if found, None otherwise
+    """
+    if not page_url or "planespotters.net/photo" not in page_url:
+        return None
+
+    try:
+        logger.info(f"Scraping Planespotters page for full-size: {page_url}")
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Cache-Control": "no-cache",
+            "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Upgrade-Insecure-Requests": "1",
+        }
+
+        resp = await client.get(page_url, headers=headers, follow_redirects=True)
+        resp.raise_for_status()
+        html = resp.text
+
+        # Try to find original size URL (_o.jpg) in the HTML
+        # Pattern matches: https://cdn.plnspttrs.net/xxxxx/photo_hash_o.jpg
+        original_match = re.search(r'https://cdn\.plnspttrs\.net/[^"\'<>\s]+_o\.jpg', html)
+        if original_match:
+            original_url = original_match.group(0)
+            logger.info(f"Found original size: {original_url}")
+            return original_url
+
+        # Fallback: try large size (_l.jpg)
+        large_match = re.search(r'https://cdn\.plnspttrs\.net/[^"\'<>\s]+_l\.jpg', html)
+        if large_match:
+            large_url = large_match.group(0)
+            logger.info(f"Found large size (fallback): {large_url}")
+            return large_url
+
+        logger.warning(f"No full-size URL found in page: {page_url}")
+
+    except httpx.HTTPStatusError as e:
+        logger.warning(f"HTTP {e.response.status_code} scraping {page_url}")
+    except Exception as e:
+        logger.warning(f"Failed to scrape {page_url}: {e}")
+
+    return None
+
+
 # ============================================================================
 # Local filesystem functions
 # ============================================================================
@@ -211,61 +268,99 @@ async def download_photo(
     url: str,
     icao_hex: str,
     is_thumbnail: bool = False,
-    timeout: float = 30.0
+    timeout: float = 30.0,
+    photo_page_link: Optional[str] = None,
+    force: bool = False
 ) -> Optional[str]:
     """
     Download a photo and save to cache (local or S3).
-    
+
+    If photo_page_link is provided (Planespotters), it will scrape the page
+    to get the full-size image URL instead of using the thumbnail URL.
+
+    Args:
+        url: Fallback URL if scraping fails
+        icao_hex: Aircraft ICAO hex code
+        is_thumbnail: Whether this is a thumbnail download
+        timeout: Request timeout in seconds
+        photo_page_link: Planespotters page URL to scrape for full-size
+        force: If True, skip cache check and re-download (for upgrades)
+
     Returns:
         Path/URL to cached file or None on failure
     """
     if not settings.photo_cache_enabled:
         return None
-    
+
     if not url:
         return None
-    
+
     icao_hex = icao_hex.upper()
     cache_key = f"{icao_hex}:{'thumb' if is_thumbnail else 'full'}"
-    
+
     # Prevent duplicate downloads
     if cache_key in _pending_downloads:
         return None
-    
+
     _pending_downloads.add(cache_key)
-    
+
     try:
-        # Check if already cached
-        if settings.s3_enabled:
-            if await _check_s3_exists(icao_hex, is_thumbnail):
-                return _get_s3_url(icao_hex, is_thumbnail)
-        else:
-            path = get_photo_path(icao_hex, is_thumbnail)
-            if path.exists() and path.stat().st_size > 0:
-                return str(path)
-        
-        logger.info(f"Downloading photo for {icao_hex}: {url}")
-        
-        # Build headers - add Referer for planespotters to avoid 403
-        headers = {
-            "User-Agent": "Mozilla/5.0 (compatible; ADS-B API/2.6)",
-            "Accept": "image/*",
-        }
-        if "plnspttrs.net" in url or "planespotters.net" in url:
-            headers["Referer"] = "https://www.planespotters.net/"
+        # Check if already cached (skip if force=True for upgrades)
+        if not force:
+            if settings.s3_enabled:
+                if await _check_s3_exists(icao_hex, is_thumbnail):
+                    return _get_s3_url(icao_hex, is_thumbnail)
+            else:
+                path = get_photo_path(icao_hex, is_thumbnail)
+                if path.exists() and path.stat().st_size > 0:
+                    return str(path)
 
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.get(
-                url,
-                headers=headers,
-                follow_redirects=True
-            )
-            response.raise_for_status()
-            
+            target_url = url
+
+            # For full-size Planespotters photos, try to scrape the page for high-res URL
+            if not is_thumbnail and photo_page_link:
+                logger.info(f"Will scrape page link for {icao_hex}: {photo_page_link}")
+                scraped_url = await _scrape_planespotters_full_size(photo_page_link, client)
+                if scraped_url:
+                    target_url = scraped_url
+
+            logger.info(f"Downloading photo for {icao_hex}: {target_url}")
+
+            # Build headers - use browser-like headers for Planespotters
+            if "plnspttrs.net" in target_url or "planespotters.net" in target_url:
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Referer": "https://www.planespotters.net/",
+                    "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                    "Sec-Ch-Ua-Mobile": "?0",
+                    "Sec-Ch-Ua-Platform": '"Windows"',
+                    "Sec-Fetch-Dest": "image",
+                    "Sec-Fetch-Mode": "no-cors",
+                    "Sec-Fetch-Site": "cross-site",
+                }
+            else:
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (compatible; ADS-B API/2.6)",
+                    "Accept": "image/*",
+                }
+
+            try:
+                response = await client.get(
+                    target_url,
+                    headers=headers,
+                    follow_redirects=True
+                )
+                response.raise_for_status()
+            except Exception as e:
+                raise e
+
             # Verify it's an image
             content_type = response.headers.get("content-type", "")
             if not content_type.startswith("image/"):
-                logger.warning(f"Not an image ({content_type}): {url}")
+                logger.warning(f"Not an image ({content_type}): {target_url}")
                 return None
             
             data = response.content
@@ -299,29 +394,42 @@ async def cache_aircraft_photos(
     db: AsyncSession,
     icao_hex: str,
     photo_url: Optional[str] = None,
-    thumbnail_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None,
+    photo_page_link: Optional[str] = None,
+    force: bool = False
 ) -> Tuple[Optional[str], Optional[str]]:
     """
     Download and cache both full-size and thumbnail photos.
     Updates database with local cache paths or S3 URLs.
-    
+
+    Args:
+        db: Database session
+        icao_hex: Aircraft ICAO hex code
+        photo_url: URL to full-size photo (or thumbnail if full-size unavailable)
+        thumbnail_url: URL to thumbnail photo
+        photo_page_link: Optional Planespotters page URL to scrape for full-size
+        force: If True, skip cache check and re-download (for upgrades)
+
     Returns:
         Tuple of (photo_path_or_url, thumbnail_path_or_url)
     """
     if not settings.photo_cache_enabled:
         return None, None
-    
+
     icao_hex = icao_hex.upper()
     photo_path = None
     thumb_path = None
-    
-    # Download full-size photo
+
+    # Download full-size photo (pass photo_page_link to try scraping for high-res)
     if photo_url:
-        result = await download_photo(photo_url, icao_hex, is_thumbnail=False)
+        result = await download_photo(
+            photo_url, icao_hex, is_thumbnail=False,
+            photo_page_link=photo_page_link, force=force
+        )
         if result:
             photo_path = result
-    
-    # Download thumbnail
+
+    # Download thumbnail (no scraping needed)
     if thumbnail_url:
         result = await download_photo(thumbnail_url, icao_hex, is_thumbnail=True)
         if result:
@@ -448,13 +556,19 @@ async def init_download_queue():
     _download_queue = asyncio.Queue()
 
 
-async def queue_photo_download(icao_hex: str, photo_url: str, thumbnail_url: str = None):
+async def queue_photo_download(
+    icao_hex: str,
+    photo_url: str,
+    thumbnail_url: str = None,
+    photo_page_link: str = None
+):
     """Add photo download to background queue."""
     if _download_queue is not None:
         await _download_queue.put({
             "icao_hex": icao_hex,
             "photo_url": photo_url,
             "thumbnail_url": thumbnail_url,
+            "photo_page_link": photo_page_link,
         })
 
 
@@ -478,11 +592,12 @@ async def process_download_queue(db_session_factory):
             icao_hex = item["icao_hex"]
             photo_url = item.get("photo_url")
             thumbnail_url = item.get("thumbnail_url")
-            
+            photo_page_link = item.get("photo_page_link")
+
             if photo_url or thumbnail_url:
                 async with db_session_factory() as db:
                     await cache_aircraft_photos(
-                        db, icao_hex, photo_url, thumbnail_url
+                        db, icao_hex, photo_url, thumbnail_url, photo_page_link
                     )
             
             _download_queue.task_done()

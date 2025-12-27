@@ -8,11 +8,11 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Path
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import get_db
-from app.models import AircraftSighting, AircraftSession
+from app.models import AircraftSighting, AircraftSession, SafetyEvent
 from app.schemas import (
     SightingsListResponse, SessionsListResponse, HistoryStatsResponse
 )
@@ -121,8 +121,9 @@ async def get_sightings(
             "distance_nm": s.distance_nm,
             "is_military": s.is_military,
             "squawk": s.squawk,
+            "rssi": round(s.rssi, 1) if s.rssi else None,
         })
-    
+
     return {"sightings": sightings, "count": len(sightings), "total": total}
 
 
@@ -186,8 +187,10 @@ async def get_aircraft_sightings(
             "vr": s.vertical_rate,
             "track": s.track,
             "distance_nm": s.distance_nm,
+            "rssi": round(s.rssi, 1) if s.rssi else None,
+            "callsign": s.callsign,
         })
-    
+
     return {
         "icao_hex": icao_hex.upper(),
         "sightings": sightings,
@@ -268,12 +271,48 @@ async def get_sessions(
     
     result = await db.execute(query)
     sessions = []
-    
+
+    # Collect all session icao_hex values and time ranges for batch safety event lookup
+    session_list = []
     for s in result.scalars():
         duration = (s.last_seen - s.first_seen).total_seconds() / 60
         if min_duration and duration < min_duration:
             continue
-        
+        session_list.append(s)
+
+    # Build a map of icao_hex to safety event counts within session time ranges
+    safety_counts = {}
+    if session_list:
+        # Get all relevant safety events in one query
+        icao_hexes = list(set(s.icao_hex for s in session_list))
+        safety_query = select(
+            SafetyEvent.icao_hex,
+            SafetyEvent.icao_hex_2,
+            SafetyEvent.timestamp
+        ).where(
+            and_(
+                SafetyEvent.timestamp > cutoff,
+                or_(
+                    SafetyEvent.icao_hex.in_(icao_hexes),
+                    SafetyEvent.icao_hex_2.in_(icao_hexes)
+                )
+            )
+        )
+        safety_result = await db.execute(safety_query)
+        safety_events = safety_result.all()
+
+        # Count safety events for each session
+        for s in session_list:
+            count = 0
+            for event in safety_events:
+                # Check if event involves this aircraft and falls within session time
+                if (event.icao_hex == s.icao_hex or event.icao_hex_2 == s.icao_hex):
+                    if s.first_seen <= event.timestamp <= s.last_seen:
+                        count += 1
+            safety_counts[s.id] = count
+
+    for s in session_list:
+        duration = (s.last_seen - s.first_seen).total_seconds() / 60
         sessions.append({
             "icao_hex": s.icao_hex,
             "callsign": s.callsign,
@@ -282,13 +321,17 @@ async def get_sessions(
             "duration_min": round(duration, 1),
             "positions": s.total_positions,
             "min_distance_nm": round(s.min_distance_nm, 1) if s.min_distance_nm else None,
+            "max_distance_nm": round(s.max_distance_nm, 1) if s.max_distance_nm else None,
             "min_alt": s.min_altitude,
             "max_alt": s.max_altitude,
             "max_vr": s.max_vertical_rate,
+            "min_rssi": round(s.min_rssi, 1) if s.min_rssi else None,
+            "max_rssi": round(s.max_rssi, 1) if s.max_rssi else None,
             "is_military": s.is_military,
             "type": s.aircraft_type,
+            "safety_event_count": safety_counts.get(s.id, 0),
         })
-    
+
     return {"sessions": sessions, "count": len(sessions)}
 
 

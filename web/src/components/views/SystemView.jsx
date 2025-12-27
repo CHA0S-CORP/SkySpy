@@ -1,13 +1,95 @@
-import React, { useState } from 'react';
-import { Activity, Database, Zap, Bell, MapPin, RefreshCw, TestTube2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Activity, Database, Zap, Bell, MapPin, RefreshCw, TestTube2, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
 import { useApi } from '../../hooks';
 
-export function SystemView({ apiBase }) {
-  const { data: status, refetch: refetchStatus } = useApi('/api/v1/status', 10000, apiBase);
-  const { data: health } = useApi('/api/v1/health', 10000, apiBase);
-  const { data: wsStatus } = useApi('/api/v1/ws/status', 5000, apiBase);
-  const { data: notifConfig } = useApi('/api/v1/notifications/config', null, apiBase);
+export function SystemView({ apiBase, wsRequest, wsConnected }) {
+  // Local state for data - will be populated by WebSocket or HTTP fallback
+  const [status, setStatus] = useState(null);
+  const [health, setHealth] = useState(null);
+  const [wsStatus, setWsStatus] = useState(null);
+  const [notifConfig, setNotifConfig] = useState(null);
+  const [safetyStatus, setSafetyStatus] = useState(null);
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [testResult, setTestResult] = useState(null);
+  const [safetyTestResult, setSafetyTestResult] = useState(null);
+
+  // Fallback HTTP fetchers (used when WebSocket is not available)
+  const { data: httpStatus, refetch: refetchHttpStatus } = useApi('/api/v1/status', wsConnected ? null : 10000, apiBase);
+  const { data: httpHealth } = useApi('/api/v1/health', wsConnected ? null : 10000, apiBase);
+  const { data: httpWsStatus } = useApi('/api/v1/ws/status', wsConnected ? null : 5000, apiBase);
+  const { data: httpNotifConfig } = useApi('/api/v1/notifications/config', null, apiBase);
+  const { data: httpSafetyStatus } = useApi('/api/v1/safety/monitor/status', wsConnected ? null : 10000, apiBase);
+
+  // Fetch all status data via WebSocket
+  const fetchViaSocket = useCallback(async () => {
+    if (!wsRequest || !wsConnected) return false;
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Fetch all data in parallel via WebSocket
+      const [statusData, healthData, wsStatusData, safetyData] = await Promise.all([
+        wsRequest('status', {}).catch(() => null),
+        wsRequest('health', {}).catch(() => null),
+        wsRequest('ws-status', {}).catch(() => null),
+        wsRequest('safety-status', {}).catch(() => null),
+      ]);
+
+      if (statusData && !statusData.error) setStatus(statusData);
+      if (healthData && !healthData.error) setHealth(healthData);
+      if (wsStatusData && !wsStatusData.error) setWsStatus(wsStatusData);
+      if (safetyData && !safetyData.error) setSafetyStatus(safetyData);
+
+      setLastUpdate(new Date());
+      setLoading(false);
+      return true;
+    } catch (err) {
+      console.error('SystemView WebSocket fetch error:', err);
+      setError('WebSocket fetch failed');
+      setLoading(false);
+      return false;
+    }
+  }, [wsRequest, wsConnected]);
+
+  // Use HTTP fallback data when WebSocket is not connected
+  useEffect(() => {
+    if (!wsConnected) {
+      if (httpStatus) setStatus(httpStatus);
+      if (httpHealth) setHealth(httpHealth);
+      if (httpWsStatus) setWsStatus(httpWsStatus);
+      if (httpSafetyStatus) setSafetyStatus(httpSafetyStatus);
+      setLoading(false);
+    }
+  }, [wsConnected, httpStatus, httpHealth, httpWsStatus, httpSafetyStatus]);
+
+  // Always use HTTP for notification config (not available via WebSocket)
+  useEffect(() => {
+    if (httpNotifConfig) setNotifConfig(httpNotifConfig);
+  }, [httpNotifConfig]);
+
+  // Initial fetch and periodic refresh via WebSocket
+  useEffect(() => {
+    if (!wsConnected || !wsRequest) return;
+
+    // Initial fetch
+    fetchViaSocket();
+
+    // Refresh every 5 seconds via WebSocket
+    const interval = setInterval(fetchViaSocket, 5000);
+    return () => clearInterval(interval);
+  }, [wsConnected, wsRequest, fetchViaSocket]);
+
+  // Manual refresh handler
+  const handleRefresh = useCallback(() => {
+    if (wsConnected && wsRequest) {
+      fetchViaSocket();
+    } else {
+      refetchHttpStatus?.();
+    }
+  }, [wsConnected, wsRequest, fetchViaSocket, refetchHttpStatus]);
 
   const handleTestNotification = async () => {
     setTestResult('Sending...');
@@ -21,6 +103,18 @@ export function SystemView({ apiBase }) {
     setTimeout(() => setTestResult(null), 3000);
   };
 
+  const handleTestSafetyEvents = async () => {
+    setSafetyTestResult('Generating...');
+    try {
+      const res = await fetch(`${apiBase}/api/v1/safety/test`, { method: 'POST' });
+      const data = await res.json();
+      setSafetyTestResult(data.success ? `Generated ${data.count} events` : 'Failed to generate');
+    } catch {
+      setSafetyTestResult('Error generating events');
+    }
+    setTimeout(() => setSafetyTestResult(null), 3000);
+  };
+
   return (
     <div className="system-container">
       <div className="system-grid">
@@ -28,15 +122,25 @@ export function SystemView({ apiBase }) {
           <div className="card-header"><Activity size={20} /><span>Services</span></div>
           <div className="status-list">
             <div className="status-item">
+              <span>Client Connection</span>
+              <span className={`status-badge ${wsConnected ? 'online' : 'warning'}`}>
+                {wsConnected ? (
+                  <><Wifi size={12} style={{ marginRight: 4 }} /> Socket.IO</>
+                ) : (
+                  <><WifiOff size={12} style={{ marginRight: 4 }} /> HTTP Polling</>
+                )}
+              </span>
+            </div>
+            <div className="status-item">
               <span>ADS-B Receiver</span>
               <span className={`status-badge ${status?.adsb_online ? 'online' : 'offline'}`}>
-                {status?.adsb_online ? 'Online' : 'Offline'}
+                {status?.adsb_online ? 'Online' : status === null ? 'Loading...' : 'Offline'}
               </span>
             </div>
             <div className="status-item">
               <span>Database</span>
-              <span className={`status-badge ${health?.services?.database ? 'online' : 'offline'}`}>
-                {health?.services?.database ? 'Connected' : 'Error'}
+              <span className={`status-badge ${health?.services?.database ? 'online' : health === null ? 'warning' : 'offline'}`}>
+                {health?.services?.database ? 'Connected' : health === null ? 'Loading...' : 'Error'}
               </span>
             </div>
             <div className="status-item">
@@ -46,15 +150,15 @@ export function SystemView({ apiBase }) {
               </span>
             </div>
             <div className="status-item">
-              <span>WebSocket</span>
+              <span>WebSocket Server</span>
               <span className={`status-badge ${wsStatus?.redis_enabled ? 'online' : 'warning'}`}>
-                {wsStatus?.mode || 'Unknown'}
+                {wsStatus?.mode || (wsStatus === null ? 'Loading...' : 'Unknown')}
               </span>
             </div>
             <div className="status-item">
               <span>Scheduler</span>
-              <span className={`status-badge ${status?.scheduler_running ? 'online' : 'offline'}`}>
-                {status?.scheduler_running ? 'Running' : 'Stopped'}
+              <span className={`status-badge ${status?.scheduler_running ? 'online' : status === null ? 'warning' : 'offline'}`}>
+                {status?.scheduler_running ? 'Running' : status === null ? 'Loading...' : 'Stopped'}
               </span>
             </div>
           </div>
@@ -109,6 +213,23 @@ export function SystemView({ apiBase }) {
           {testResult && <div className="test-result">{testResult}</div>}
         </div>
 
+        <div className="system-card">
+          <div className="card-header"><AlertTriangle size={20} /><span>Safety Monitor</span></div>
+          <div className="stats-list">
+            <div className="stat-row">
+              <span>Status</span>
+              <span className={`status-badge ${safetyStatus?.enabled ? 'online' : 'offline'}`}>
+                {safetyStatus?.enabled ? 'Enabled' : 'Disabled'}
+              </span>
+            </div>
+            <div className="stat-row"><span>Tracked Aircraft</span><span className="mono">{safetyStatus?.tracked_aircraft || 0}</span></div>
+          </div>
+          <button className="btn-secondary test-btn" onClick={handleTestSafetyEvents}>
+            <TestTube2 size={16} /> Test Safety Events
+          </button>
+          {safetyTestResult && <div className="test-result">{safetyTestResult}</div>}
+        </div>
+
         <div className="system-card wide">
           <div className="card-header"><MapPin size={20} /><span>Feeder Location</span></div>
           <div className="location-info">
@@ -127,7 +248,22 @@ export function SystemView({ apiBase }) {
       <div className="system-footer">
         <span>API Version: {status?.version || '--'}</span>
         <span>Worker PID: {status?.worker_pid || '--'}</span>
-        <button className="btn-icon" onClick={() => refetchStatus()}><RefreshCw size={16} /></button>
+        {lastUpdate && (
+          <span className="last-update">
+            Updated: {lastUpdate.toLocaleTimeString()}
+          </span>
+        )}
+        <span className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
+          {wsConnected ? <Wifi size={14} /> : <WifiOff size={14} />}
+        </span>
+        <button
+          className={`btn-icon ${loading ? 'loading' : ''}`}
+          onClick={handleRefresh}
+          disabled={loading}
+          title={wsConnected ? 'Refresh via WebSocket' : 'Refresh via HTTP'}
+        >
+          <RefreshCw size={16} className={loading ? 'spin' : ''} />
+        </button>
       </div>
     </div>
   );

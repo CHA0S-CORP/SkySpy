@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useApi } from '../../hooks';
 
-export function StatsView({ apiBase }) {
+export function StatsView({ apiBase, onSelectAircraft }) {
   const { data: stats } = useApi('/api/v1/aircraft/stats', 5000, apiBase);
   const { data: top } = useApi('/api/v1/aircraft/top', 5000, apiBase);
   const { data: histStats } = useApi('/api/v1/history/stats?hours=24', 60000, apiBase);
@@ -28,7 +28,20 @@ export function StatsView({ apiBase }) {
           <AlertTriangle size={24} />
           <div>
             <strong>Emergency Squawk Detected</strong>
-            <div>{emergencyAircraft.map(a => `${a.hex} (${a.squawk})`).join(', ')}</div>
+            <div>
+              {emergencyAircraft.map((a, i) => (
+                <span key={a.hex}>
+                  {i > 0 && ', '}
+                  {onSelectAircraft ? (
+                    <button className="emergency-aircraft-link" onClick={() => onSelectAircraft(a.hex)}>
+                      {a.hex} ({a.squawk})
+                    </button>
+                  ) : (
+                    `${a.hex} (${a.squawk})`
+                  )}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -72,7 +85,11 @@ export function StatsView({ apiBase }) {
           <div className="card-title">Closest Aircraft</div>
           <div className="top-list">
             {top?.closest?.slice(0, 5).map((ac, i) => (
-              <div key={ac.hex} className="top-item">
+              <div
+                key={ac.hex}
+                className={`top-item ${onSelectAircraft ? 'clickable' : ''}`}
+                onClick={() => onSelectAircraft?.(ac.hex)}
+              >
                 <span className="top-rank">{i + 1}</span>
                 <div className="top-info">
                   <div className="top-callsign">{ac.flight || ac.hex}</div>
@@ -88,7 +105,11 @@ export function StatsView({ apiBase }) {
           <div className="card-title">Highest Aircraft</div>
           <div className="top-list">
             {top?.highest?.slice(0, 5).map((ac, i) => (
-              <div key={ac.hex} className="top-item">
+              <div
+                key={ac.hex}
+                className={`top-item ${onSelectAircraft ? 'clickable' : ''}`}
+                onClick={() => onSelectAircraft?.(ac.hex)}
+              >
                 <span className="top-rank">{i + 1}</span>
                 <div className="top-info">
                   <div className="top-callsign">{ac.flight || ac.hex}</div>
@@ -104,7 +125,11 @@ export function StatsView({ apiBase }) {
           <div className="card-title">Fastest Aircraft</div>
           <div className="top-list">
             {top?.fastest?.slice(0, 5).map((ac, i) => (
-              <div key={ac.hex} className="top-item">
+              <div
+                key={ac.hex}
+                className={`top-item ${onSelectAircraft ? 'clickable' : ''}`}
+                onClick={() => onSelectAircraft?.(ac.hex)}
+              >
                 <span className="top-rank">{i + 1}</span>
                 <div className="top-info">
                   <div className="top-callsign">{ac.flight || ac.hex}</div>

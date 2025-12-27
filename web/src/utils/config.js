@@ -16,6 +16,11 @@ export const DEFAULT_OVERLAYS = {
   airspace: true,
   metars: false,
   pireps: false,
+  // Terrain overlays (pro mode only)
+  water: false,
+  counties: false,
+  states: false,
+  countries: false,
 };
 
 export const getConfig = () => {

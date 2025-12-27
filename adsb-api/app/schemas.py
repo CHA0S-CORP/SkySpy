@@ -240,11 +240,15 @@ class SessionResponse(BaseModel):
     duration_min: float = Field(..., description="Session duration in minutes")
     positions: int = Field(0, description="Number of position reports")
     min_distance_nm: Optional[float] = Field(None, description="Closest approach distance")
+    max_distance_nm: Optional[float] = Field(None, description="Furthest distance observed")
     min_alt: Optional[int] = Field(None, description="Minimum altitude observed")
     max_alt: Optional[int] = Field(None, description="Maximum altitude observed")
     max_vr: Optional[int] = Field(None, description="Maximum vertical rate")
+    min_rssi: Optional[float] = Field(None, description="Minimum RSSI (best signal)")
+    max_rssi: Optional[float] = Field(None, description="Maximum RSSI (weakest signal)")
     is_military: bool = Field(False, description="Military aircraft flag")
     type: Optional[str] = Field(None, description="Aircraft type code")
+    safety_event_count: int = Field(0, description="Number of safety events during session")
 
 
 class SessionsListResponse(BaseModel):
@@ -386,6 +390,8 @@ class SafetyEventResponse(BaseModel):
     callsign_2: Optional[str] = Field(None, description="Secondary aircraft callsign")
     message: Optional[str] = Field(None, description="Event description")
     details: Optional[dict] = Field(None, description="Additional event details")
+    aircraft_snapshot: Optional[dict] = Field(None, description="Primary aircraft telemetry at event time")
+    aircraft_snapshot_2: Optional[dict] = Field(None, description="Secondary aircraft telemetry (proximity events)")
     timestamp: str = Field(..., description="Event timestamp")
 
 

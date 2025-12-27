@@ -2,7 +2,7 @@
 OpenSky Network aircraft database service.
 
 Loads and queries the OpenSky aircraft metadata CSV for fast local lookups.
-Download from: https://s3.opensky-network.org/data-samples/metadata/aircraft-database-complete-2025-08.csv
+Automatically downloads the database if not found locally.
 
 CSV columns:
 icao24,registration,manufacturericao,manufacturername,model,typecode,serialnumber,
@@ -18,12 +18,18 @@ from pathlib import Path
 from typing import Optional, Dict
 import asyncio
 
+import httpx
+
 logger = logging.getLogger(__name__)
 
 # In-memory database indexed by ICAO hex
 _aircraft_db: Dict[str, dict] = {}
 _db_loaded = False
 _db_loading = False
+_db_downloading = False
+
+# OpenSky database download URL
+OPENSKY_DB_URL = "https://opensky-network.org/datasets/metadata/aircraftDatabase.csv"
 
 # Default paths to check for the database
 DEFAULT_DB_PATHS = [
@@ -35,6 +41,9 @@ DEFAULT_DB_PATHS = [
     "./aircraft-database.csv",
 ]
 
+# Default download location
+DEFAULT_DOWNLOAD_PATH = Path("/data/opensky/aircraft-database.csv")
+
 
 def get_db_path() -> Optional[Path]:
     """Find the database file."""
@@ -44,19 +53,109 @@ def get_db_path() -> Optional[Path]:
         p = Path(env_path)
         if p.exists():
             return p
-    
+
     # Check default locations
     for path_str in DEFAULT_DB_PATHS:
         p = Path(path_str)
         if p.exists():
             return p
-    
+
     return None
+
+
+def get_download_path() -> Path:
+    """Get the path where the database should be downloaded."""
+    # Check environment variable first
+    env_path = os.environ.get("OPENSKY_DB_PATH")
+    if env_path:
+        return Path(env_path)
+
+    # Use default download path
+    return DEFAULT_DOWNLOAD_PATH
+
+
+async def download_database(target_path: Optional[Path] = None) -> Optional[Path]:
+    """
+    Download the OpenSky aircraft database.
+
+    Args:
+        target_path: Where to save the file (auto-detected if not provided)
+
+    Returns:
+        Path to downloaded file, or None on failure
+    """
+    global _db_downloading
+
+    if _db_downloading:
+        logger.info("Database download already in progress...")
+        while _db_downloading:
+            await asyncio.sleep(1)
+        return get_db_path()
+
+    _db_downloading = True
+
+    try:
+        if target_path is None:
+            target_path = get_download_path()
+
+        # Create parent directory if needed
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Downloading OpenSky database from {OPENSKY_DB_URL}...")
+        logger.info(f"This may take a few minutes (file is ~150MB)...")
+
+        async with httpx.AsyncClient(timeout=600.0, follow_redirects=True) as client:
+            async with client.stream("GET", OPENSKY_DB_URL) as response:
+                response.raise_for_status()
+
+                total_size = int(response.headers.get("content-length", 0))
+                downloaded = 0
+                last_log_percent = 0
+
+                with open(target_path, "wb") as f:
+                    async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):
+                        f.write(chunk)
+                        downloaded += len(chunk)
+
+                        # Log progress every 10%
+                        if total_size > 0:
+                            percent = int(downloaded / total_size * 100)
+                            if percent >= last_log_percent + 10:
+                                logger.info(f"Download progress: {percent}% ({downloaded / 1024 / 1024:.1f}MB / {total_size / 1024 / 1024:.1f}MB)")
+                                last_log_percent = percent
+
+        file_size = target_path.stat().st_size
+        logger.info(f"Downloaded OpenSky database: {target_path} ({file_size / 1024 / 1024:.1f}MB)")
+        return target_path
+
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error downloading OpenSky database: {e.response.status_code}")
+        return None
+    except Exception as e:
+        logger.error(f"Error downloading OpenSky database: {e}")
+        # Clean up partial download
+        if target_path and target_path.exists():
+            try:
+                target_path.unlink()
+            except Exception:
+                pass
+        return None
+    finally:
+        _db_downloading = False
 
 
 def _parse_row(row: dict) -> dict:
     """Parse a CSV row into our format."""
-    # Map OpenSky columns to our format
+    # Build extra_data for fields not in AircraftInfo model
+    extra_data = {}
+    if row.get("engines"):
+        extra_data["engines"] = row.get("engines")
+    if row.get("notes"):
+        extra_data["notes"] = row.get("notes")
+    if row.get("seatconfiguration"):
+        extra_data["seat_configuration"] = row.get("seatconfiguration")
+
+    # Map OpenSky columns to our format (only fields that exist in AircraftInfo model)
     return {
         "registration": row.get("registration") or None,
         "type_code": row.get("typecode") or None,
@@ -73,8 +172,7 @@ def _parse_row(row: dict) -> dict:
         "country": _extract_country(row.get("registration")),
         "category": row.get("icaoaircrafttype") or None,
         "is_military": _is_military(row),
-        "engines": row.get("engines") or None,
-        "notes": row.get("notes") or None,
+        "extra_data": extra_data if extra_data else None,
     }
 
 
@@ -190,51 +288,63 @@ def _extract_country(registration: str) -> Optional[str]:
     return None
 
 
-async def load_database(path: Optional[Path] = None) -> bool:
+async def load_database(path: Optional[Path] = None, auto_download: bool = True) -> bool:
     """
     Load the OpenSky aircraft database into memory.
-    
+
+    If the database is not found locally and auto_download is True,
+    it will be automatically downloaded from OpenSky Network.
+
     Args:
         path: Path to CSV file (auto-detected if not provided)
-    
+        auto_download: If True, download the database if not found
+
     Returns:
         True if loaded successfully
     """
     global _aircraft_db, _db_loaded, _db_loading
-    
+
     if _db_loaded:
         return True
-    
+
     if _db_loading:
         # Wait for other loader to finish
         while _db_loading:
             await asyncio.sleep(0.1)
         return _db_loaded
-    
+
     _db_loading = True
-    
+
     try:
         if path is None:
             path = get_db_path()
-        
+
+        # If database not found, try to download it
         if path is None:
-            logger.warning("OpenSky database not found. Checked: %s", DEFAULT_DB_PATHS)
-            return False
-        
+            if auto_download:
+                logger.info("OpenSky database not found locally, downloading...")
+                path = await download_database()
+                if path is None:
+                    logger.error("Failed to download OpenSky database")
+                    return False
+            else:
+                logger.warning("OpenSky database not found. Checked: %s", DEFAULT_DB_PATHS)
+                return False
+
         logger.info(f"Loading OpenSky database from {path}...")
-        
+
         # Run in executor to avoid blocking
         loop = asyncio.get_event_loop()
         count = await loop.run_in_executor(None, _load_csv, path)
-        
+
         _db_loaded = True
         logger.info(f"Loaded {count:,} aircraft from OpenSky database")
         return True
-    
+
     except Exception as e:
         logger.error(f"Error loading OpenSky database: {e}")
         return False
-    
+
     finally:
         _db_loading = False
 

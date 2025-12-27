@@ -53,6 +53,8 @@ class AircraftSession(Base):
     min_distance_nm: Mapped[Optional[float]] = mapped_column(Float)
     max_distance_nm: Mapped[Optional[float]] = mapped_column(Float)
     max_vertical_rate: Mapped[Optional[int]] = mapped_column(Integer)
+    min_rssi: Mapped[Optional[float]] = mapped_column(Float)
+    max_rssi: Mapped[Optional[float]] = mapped_column(Float)
     is_military: Mapped[bool] = mapped_column(Boolean, default=False)
     category: Mapped[Optional[str]] = mapped_column(String(4))
     aircraft_type: Mapped[Optional[str]] = mapped_column(String(10))
@@ -126,7 +128,7 @@ class NotificationConfig(Base):
 class SafetyEvent(Base):
     """Safety events including TCAS conflicts and dangerous flight parameters."""
     __tablename__ = "safety_events"
-    
+
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     event_type: Mapped[str] = mapped_column(String(50), index=True, nullable=False)
@@ -137,7 +139,9 @@ class SafetyEvent(Base):
     callsign_2: Mapped[Optional[str]] = mapped_column(String(10))
     message: Mapped[Optional[str]] = mapped_column(Text)
     details: Mapped[Optional[dict]] = mapped_column(JSON)
-    
+    aircraft_snapshot: Mapped[Optional[dict]] = mapped_column(JSON)  # Telemetry at event time
+    aircraft_snapshot_2: Mapped[Optional[dict]] = mapped_column(JSON)  # Second aircraft (proximity events)
+
     __table_args__ = (
         Index("idx_safety_events_type_time", "event_type", "timestamp"),
     )
@@ -183,6 +187,7 @@ class AircraftInfo(Base):
     photo_thumbnail_url: Mapped[Optional[str]] = mapped_column(String(500))
     photo_photographer: Mapped[Optional[str]] = mapped_column(String(100))
     photo_source: Mapped[Optional[str]] = mapped_column(String(50))
+    photo_page_link: Mapped[Optional[str]] = mapped_column(String(500))
     
     # Local cached photos
     photo_local_path: Mapped[Optional[str]] = mapped_column(String(500))

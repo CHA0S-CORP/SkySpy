@@ -103,7 +103,8 @@ async def get_aircraft_info(db: AsyncSession, icao_hex: str, force_refresh: bool
             # If we have photo URLs but no local paths, trigger background caching
             if cached.photo_url and not cached.photo_local_path:
                 asyncio.create_task(_background_cache_photos(
-                    icao_hex, cached.photo_url, cached.photo_thumbnail_url
+                    icao_hex, cached.photo_url, cached.photo_thumbnail_url,
+                    cached.photo_page_link
                 ))
             # If photo needs upgrade, trigger background refresh for higher res
             elif needs_photo_upgrade:
@@ -138,8 +139,11 @@ async def get_aircraft_info(db: AsyncSession, icao_hex: str, force_refresh: bool
             # Trigger background photo caching
             photo_url = info.get("photo_url")
             thumb_url = info.get("photo_thumbnail_url")
+            photo_page_link = info.get("photo_page_link")
             if photo_url:
-                asyncio.create_task(_background_cache_photos(icao_hex, photo_url, thumb_url))
+                asyncio.create_task(_background_cache_photos(
+                    icao_hex, photo_url, thumb_url, photo_page_link
+                ))
             
             return _model_to_dict(cached)
         else:
@@ -163,11 +167,22 @@ async def get_aircraft_info(db: AsyncSession, icao_hex: str, force_refresh: bool
         _pending_lookups.discard(icao_hex)
 
 
-async def _background_cache_photos(icao_hex: str, photo_url: Optional[str] = None, thumbnail_url: Optional[str] = None):
+async def _background_cache_photos(
+    icao_hex: str,
+    photo_url: Optional[str] = None,
+    thumbnail_url: Optional[str] = None,
+    photo_page_link: Optional[str] = None
+):
     """
     Background task to fetch photos from hexdb.io and cache to filesystem/S3.
     If no URLs provided, attempts to fetch from hexdb.io first.
     Updates database with local paths when complete.
+
+    Args:
+        icao_hex: Aircraft ICAO hex code
+        photo_url: Direct URL to photo
+        thumbnail_url: Direct URL to thumbnail
+        photo_page_link: Planespotters page URL to scrape for full-size image
     """
     from app.core.database import AsyncSessionLocal
     from app.services.photo_cache import cache_aircraft_photos
@@ -194,7 +209,7 @@ async def _background_cache_photos(icao_hex: str, photo_url: Optional[str] = Non
 
             if photo_url:
                 photo_path, thumb_path = await cache_aircraft_photos(
-                    db, icao_hex, photo_url, thumbnail_url
+                    db, icao_hex, photo_url, thumbnail_url, photo_page_link
                 )
                 if photo_path:
                     logger.info(f"Cached photo for {icao_hex}: {photo_path}")
@@ -210,6 +225,9 @@ async def _background_upgrade_photo(icao_hex: str):
     """
     Background task to upgrade a low-res photo to higher resolution.
     Fetches fresh photo URLs and re-caches if a better version is available.
+
+    For Planespotters photos without a stored page link, fetches the API
+    to get the link and then scrapes for the full-size image.
     """
     from app.core.database import AsyncSessionLocal
     from app.services.photo_cache import cache_aircraft_photos
@@ -234,42 +252,29 @@ async def _background_upgrade_photo(icao_hex: str):
             old_photo_url = cached.photo_url
             new_photo_url = None
             new_thumb_url = None
+            photo_page_link = cached.photo_page_link
 
             # First try hexdb.io for full-size images
             hexdb_photo = await _fetch_photo_from_hexdb(icao_hex)
             if hexdb_photo and hexdb_photo.get("photo_url"):
                 new_photo_url = hexdb_photo["photo_url"]
                 new_thumb_url = hexdb_photo.get("photo_thumbnail_url")
+                photo_page_link = None  # hexdb provides direct URLs
                 logger.info(f"Found hexdb.io photo for {icao_hex}, upgrading from planespotters")
-            else:
-                # Try to upgrade planespotters URL to 1000px
-                if old_photo_url and ("_280.jpg" in old_photo_url or "_t.jpg" in old_photo_url):
-                    upgraded_url = old_photo_url.replace("_280.jpg", "_1000.jpg").replace("_t.jpg", "_1000.jpg")
 
-                    # Verify the 1000px version exists
-                    try:
-                        async with httpx.AsyncClient(timeout=10) as client:
-                            response = await client.head(
-                                upgraded_url,
-                                follow_redirects=True,
-                                headers={
-                                    "User-Agent": "ADS-B-API/2.6 (aircraft-tracker)",
-                                    "Referer": "https://www.planespotters.net/"
-                                }
-                            )
-                            if response.status_code == 200:
-                                content_type = response.headers.get("content-type", "")
-                                if content_type.startswith("image/"):
-                                    new_photo_url = upgraded_url
-                                    new_thumb_url = cached.photo_thumbnail_url
-                                    logger.info(f"Upgraded {icao_hex} photo to 1000px version")
-                            elif response.status_code == 429:
-                                logger.warning(f"Rate limited checking 1000px photo for {icao_hex}")
-                                return  # Skip upgrade, try again later
-                    except Exception as e:
-                        logger.debug(f"Failed to verify 1000px photo for {icao_hex}: {e}")
+            # If no hexdb photo and no page link but we have a planespotters URL,
+            # fetch the API to get the page link for scraping
+            if not new_photo_url and not photo_page_link and old_photo_url:
+                if "plnspttrs.net" in old_photo_url or cached.photo_source == "planespotters.net":
+                    logger.info(f"Fetching Planespotters API to get page link for {icao_hex}")
+                    ps_photo = await _fetch_photo_from_planespotters(icao_hex)
+                    if ps_photo and ps_photo.get("photo_page_link"):
+                        photo_page_link = ps_photo["photo_page_link"]
+                        # Store the page link for future use
+                        cached.photo_page_link = photo_page_link
+                        logger.info(f"Got page link for {icao_hex}: {photo_page_link}")
 
-            # Update database and re-cache if we found a better URL
+            # Update database and re-cache if we found a better URL or have a page link to scrape
             if new_photo_url and new_photo_url != old_photo_url:
                 cached.photo_url = new_photo_url
                 if new_thumb_url:
@@ -278,12 +283,23 @@ async def _background_upgrade_photo(icao_hex: str):
                 cached.photo_thumbnail_local_path = None
                 await db.commit()
 
-                # Re-cache the higher res photo
+                # Re-cache the higher res photo (force=True to skip cache check)
                 photo_path, thumb_path = await cache_aircraft_photos(
-                    db, icao_hex, new_photo_url, new_thumb_url
+                    db, icao_hex, new_photo_url, new_thumb_url, photo_page_link, force=True
                 )
                 if photo_path:
                     logger.info(f"Upgraded and cached photo for {icao_hex}: {photo_path}")
+            elif photo_page_link and old_photo_url:
+                # We have a page link - try to re-cache using scraping
+                cached.photo_local_path = None
+                await db.commit()
+
+                # Force re-download to trigger scraping for full-size image
+                photo_path, thumb_path = await cache_aircraft_photos(
+                    db, icao_hex, old_photo_url, cached.photo_thumbnail_url, photo_page_link, force=True
+                )
+                if photo_path:
+                    logger.info(f"Upgraded photo via scraping for {icao_hex}: {photo_path}")
 
     except Exception as e:
         logger.error(f"Background photo upgrade failed for {icao_hex}: {e}")
@@ -538,18 +554,12 @@ async def _fetch_photo_from_planespotters(icao_hex: str) -> Optional[dict]:
         # BUT we can modify the URL suffix to get larger versions:
         # _t.jpg = tiny, _280.jpg = 280px, _1000.jpg = 1000px, _o.jpg = original
 
-        # Get the larger thumbnail URL and try to upgrade to 1000px version
+        # Get the photo page link - this is used by photo_cache to scrape full-size URL
+        photo_page_link = photo.get("link")
+
+        # Get the larger thumbnail URL (use as-is, don't try to upgrade suffix)
         large_thumb = photo.get("thumbnail_large", {})
         photo_url = large_thumb.get("src") if isinstance(large_thumb, dict) else None
-
-        # Try to get a higher resolution by modifying the URL suffix
-        if photo_url:
-            # URL format: https://t.plnspttrs.net/xxxxx/photo_id_280.jpg
-            # Try _1000.jpg for ~1000px width (good balance of quality/size)
-            if "_280.jpg" in photo_url:
-                photo_url = photo_url.replace("_280.jpg", "_1000.jpg")
-            elif "_t.jpg" in photo_url:
-                photo_url = photo_url.replace("_t.jpg", "_1000.jpg")
 
         # Get the smaller thumbnail for thumbnail_url
         small_thumb = photo.get("thumbnail", {})
@@ -560,14 +570,15 @@ async def _fetch_photo_from_planespotters(icao_hex: str) -> Optional[dict]:
             photo_url = thumbnail_url
         if not thumbnail_url:
             thumbnail_url = photo_url
-        
-        logger.debug(f"Planespotters for {icao_hex}: photo_url={photo_url}, thumbnail={thumbnail_url}")
-        
+
+        logger.debug(f"Planespotters for {icao_hex}: photo_url={photo_url}, thumbnail={thumbnail_url}, link={photo_page_link}")
+
         return {
             "photo_url": photo_url,
             "photo_thumbnail_url": thumbnail_url,
             "photo_photographer": photo.get("photographer"),
             "photo_source": "planespotters.net",
+            "photo_page_link": photo_page_link,
         }
     except Exception as e:
         logger.debug(f"Planespotters lookup failed for {icao_hex}: {e}")
