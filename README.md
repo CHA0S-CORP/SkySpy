@@ -8,7 +8,7 @@
   Real-time ADS-B aircraft tracking and monitoring system with a web-based dashboard.
 </p>
 
-<video src="docs/screenshots/map-view.webm" autoplay loop muted playsinline></video>
+![SkySpy Demo](docs/screenshots/map-view.gif)
 
 ## Overview
 
@@ -32,61 +32,61 @@ SkySpy is a sophisticated aircraft tracking platform that captures position data
 
 Real-time aircraft tracking with position updates, flight labels, range rings, and interactive markers.
 
-<video src="docs/screenshots/map-view.webm" autoplay loop muted playsinline></video>
+![Map View](docs/screenshots/map-view.gif)
 
 ### Aircraft Detail Panel
 
 Click any aircraft to view detailed information including registration, operator, altitude, speed, and external links.
 
-<video src="docs/screenshots/aircraft-detail.webm" autoplay loop muted playsinline></video>
+![Aircraft Detail](docs/screenshots/aircraft-detail.gif)
 
 ### Safety Alerts & Proximity Warnings
 
 Automatic detection and alerting for emergency squawks (7700/7600/7500) and proximity events.
 
-<video src="docs/screenshots/safety-banner.webm" autoplay loop muted playsinline></video>
+![Safety Banner](docs/screenshots/safety-banner.gif)
 
 ### CRT Radar Mode
 
 Classic ATC radar display with sweep animation and phosphor glow effects.
 
-<video src="docs/screenshots/crt-mode.webm" autoplay loop muted playsinline></video>
+![CRT Mode](docs/screenshots/crt-mode.gif)
 
 ### PIREP Weather Reports
 
 View pilot reports (PIREPs) for real-time weather conditions including turbulence, icing, and visibility.
 
-<video src="docs/screenshots/pirep-popup.webm" autoplay loop muted playsinline></video>
+![PIREP Popup](docs/screenshots/pirep-popup.gif)
 
 ### NavAid Information
 
 Interactive navigation aid markers showing VORs, NDBs, and waypoints with frequency and identifier information.
 
-<video src="docs/screenshots/navaid-popup.webm" autoplay loop muted playsinline></video>
+![NavAid Popup](docs/screenshots/navaid-popup.gif)
 
 ### Statistics Dashboard
 
 Real-time statistics showing aircraft counts, altitude distribution, closest/highest/fastest aircraft.
 
-<video src="docs/screenshots/stats-view.webm" autoplay loop muted playsinline></video>
+![Stats View](docs/screenshots/stats-view.gif)
 
 ### Flight History
 
 Browse historical sightings with filters and detailed flight session information.
 
-<video src="docs/screenshots/history-view.webm" autoplay loop muted playsinline></video>
+![History View](docs/screenshots/history-view.gif)
 
 ### Alert Configuration
 
 Create custom alert rules with flexible conditions and scheduling.
 
-<video src="docs/screenshots/alerts-view.webm" autoplay loop muted playsinline></video>
+![Alerts View](docs/screenshots/alerts-view.gif)
 
 ### Settings
 
 Configure API endpoints, map display modes, and themes.
 
-<video src="docs/screenshots/settings.webm" autoplay loop muted playsinline></video>
+![Settings](docs/screenshots/settings.gif)
 
 ## Architecture
 
