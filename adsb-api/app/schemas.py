@@ -637,6 +637,110 @@ class ErrorResponse(BaseModel):
             }
         }
     )
-    
+
     error: str = Field(..., description="Error type")
     detail: Optional[str] = Field(None, description="Error details")
+
+
+# ============================================================================
+# Audio Transmission Schemas
+# ============================================================================
+
+class AudioTransmissionCreate(BaseModel):
+    """Request body for creating an audio transmission record."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "frequency_mhz": 121.5,
+                "channel_name": "Guard",
+                "duration_seconds": 5.2,
+                "metadata": {"squelch_level": -85.0}
+            }
+        }
+    )
+
+    frequency_mhz: Optional[float] = Field(None, description="Frequency in MHz")
+    channel_name: Optional[str] = Field(None, description="Channel name")
+    duration_seconds: Optional[float] = Field(None, description="Audio duration in seconds")
+    metadata: Optional[dict] = Field(None, description="Additional metadata")
+
+
+class AudioTransmissionResponse(BaseModel):
+    """Single audio transmission record."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": 1,
+                "created_at": "2024-12-28T12:00:00Z",
+                "filename": "transmission_1735387200.mp3",
+                "s3_url": "https://bucket.s3.amazonaws.com/audio/transmission_1735387200.mp3",
+                "file_size_bytes": 45678,
+                "duration_seconds": 5.2,
+                "frequency_mhz": 121.5,
+                "channel_name": "Guard",
+                "transcription_status": "completed",
+                "transcript": "United 123, cleared for takeoff runway 28L"
+            }
+        }
+    )
+
+    id: int = Field(..., description="Transmission ID")
+    created_at: str = Field(..., description="Creation timestamp")
+    filename: str = Field(..., description="Audio filename")
+    s3_key: Optional[str] = Field(None, description="S3 object key")
+    s3_url: Optional[str] = Field(None, description="S3 public URL")
+    file_size_bytes: Optional[int] = Field(None, description="File size in bytes")
+    duration_seconds: Optional[float] = Field(None, description="Audio duration")
+    format: str = Field("mp3", description="Audio format")
+    frequency_mhz: Optional[float] = Field(None, description="Frequency in MHz")
+    channel_name: Optional[str] = Field(None, description="Channel name")
+    transcription_status: str = Field("pending", description="Transcription status")
+    transcription_queued_at: Optional[str] = Field(None, description="When queued")
+    transcription_completed_at: Optional[str] = Field(None, description="When completed")
+    transcription_error: Optional[str] = Field(None, description="Error message if failed")
+    transcript: Optional[str] = Field(None, description="Transcription text")
+    transcript_confidence: Optional[float] = Field(None, description="Confidence score 0-1")
+    transcript_language: Optional[str] = Field(None, description="Detected language")
+    metadata: Optional[dict] = Field(None, description="Additional metadata")
+
+
+class AudioTransmissionListResponse(BaseModel):
+    """Response containing list of audio transmissions."""
+    transmissions: list[AudioTransmissionResponse] = Field(
+        default_factory=list, description="Audio transmissions"
+    )
+    count: int = Field(0, description="Number of transmissions returned")
+    total: int = Field(0, description="Total transmissions matching query")
+
+
+class AudioUploadResponse(BaseModel):
+    """Response from audio upload endpoint."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": 1,
+                "filename": "transmission_1735387200.mp3",
+                "s3_url": "https://bucket.s3.amazonaws.com/audio/transmission_1735387200.mp3",
+                "transcription_queued": True,
+                "message": "Audio uploaded and queued for transcription"
+            }
+        }
+    )
+
+    id: int = Field(..., description="Transmission ID")
+    filename: str = Field(..., description="Stored filename")
+    s3_url: Optional[str] = Field(None, description="S3 URL if uploaded")
+    transcription_queued: bool = Field(False, description="Whether transcription was queued")
+    message: str = Field(..., description="Status message")
+
+
+class AudioStatsResponse(BaseModel):
+    """Audio transmission statistics."""
+    total_transmissions: int = Field(0, description="Total transmission records")
+    total_transcribed: int = Field(0, description="Successfully transcribed")
+    pending_transcription: int = Field(0, description="Awaiting transcription")
+    failed_transcription: int = Field(0, description="Failed transcriptions")
+    total_duration_hours: float = Field(0.0, description="Total audio hours")
+    total_size_mb: float = Field(0.0, description="Total storage size in MB")
+    by_channel: dict = Field(default_factory=dict, description="Count by channel")
+    by_status: dict = Field(default_factory=dict, description="Count by status")

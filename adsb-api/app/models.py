@@ -320,3 +320,47 @@ class AirspaceBoundary(Base):
         Index("idx_airspace_boundary_class", "airspace_class"),
         Index("idx_airspace_boundary_location", "center_lat", "center_lon"),
     )
+
+
+class AudioTransmission(Base):
+    """Audio transmissions captured from rtl-airband for transcription."""
+    __tablename__ = "audio_transmissions"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    # Audio file info
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    s3_key: Mapped[Optional[str]] = mapped_column(String(500))
+    s3_url: Mapped[Optional[str]] = mapped_column(String(500))
+    file_size_bytes: Mapped[Optional[int]] = mapped_column(Integer)
+    duration_seconds: Mapped[Optional[float]] = mapped_column(Float)
+    format: Mapped[str] = mapped_column(String(10), default="mp3")  # mp3, wav, ogg
+
+    # Source info
+    frequency_mhz: Mapped[Optional[float]] = mapped_column(Float, index=True)
+    channel_name: Mapped[Optional[str]] = mapped_column(String(100))
+    squelch_level: Mapped[Optional[float]] = mapped_column(Float)
+
+    # Transcription status
+    transcription_status: Mapped[str] = mapped_column(
+        String(20), default="pending", index=True
+    )  # pending, queued, processing, completed, failed
+    transcription_queued_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    transcription_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    transcription_completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    transcription_error: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Transcription result
+    transcript: Mapped[Optional[str]] = mapped_column(Text)
+    transcript_confidence: Mapped[Optional[float]] = mapped_column(Float)
+    transcript_language: Mapped[Optional[str]] = mapped_column(String(10))
+    transcript_segments: Mapped[Optional[dict]] = mapped_column(JSON)  # Word-level timestamps
+
+    # Metadata
+    metadata: Mapped[Optional[dict]] = mapped_column(JSON)
+
+    __table_args__ = (
+        Index("idx_audio_transmission_status", "transcription_status", "created_at"),
+        Index("idx_audio_transmission_frequency", "frequency_mhz"),
+    )

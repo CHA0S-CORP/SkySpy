@@ -83,7 +83,18 @@ class Settings(BaseSettings):
     
     # Server
     port: int = 5000
-    
+
+    # RTL-Airband Radio
+    radio_enabled: bool = True
+    radio_audio_dir: str = "/data/radio"  # Directory for storing audio files
+    radio_max_file_size_mb: int = 50  # Max upload size in MB
+    radio_retention_days: int = 7  # Days to keep audio files
+    radio_s3_prefix: str = "radio-transmissions"  # S3 prefix for audio files
+
+    # Transcription
+    transcription_enabled: bool = False
+    transcription_service_url: Optional[str] = None  # External transcription API endpoint
+
     @property
     def ultrafeeder_url(self) -> str:
         return f"http://{self.ultrafeeder_host}:{self.ultrafeeder_port}"

@@ -42,7 +42,8 @@ from app.services.aircraft_info import (
 )
 from app.services import opensky_db
 from app.services import airspace as airspace_service
-from app.routers import aircraft, map, history, alerts, safety, notifications, system, aviation, airframe, acars
+from app.services import audio as audio_service
+from app.routers import aircraft, map, history, alerts, safety, notifications, system, aviation, airframe, acars, audio
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -493,6 +494,17 @@ async def lifespan(app: FastAPI):
     airspace_task = await airspace_service.start_refresh_task(AsyncSessionLocal, ws_manager, sio_manager)
     logger.info("Airspace refresh service started (advisories: 5min, boundaries: 24h)")
 
+    # Start audio transcription queue if enabled
+    transcription_task = None
+    if settings.transcription_enabled:
+        await audio_service.init_transcription_queue()
+        transcription_task = asyncio.create_task(
+            audio_service.process_transcription_queue(AsyncSessionLocal)
+        )
+        logger.info("Audio transcription queue started")
+    else:
+        logger.info("Audio transcription disabled")
+
     # Update scheduler state for status endpoint
     system.set_scheduler_state(
         running=True,
@@ -528,6 +540,14 @@ async def lifespan(app: FastAPI):
         await lookup_task
     except asyncio.CancelledError:
         pass
+
+    # Stop transcription queue
+    if transcription_task:
+        transcription_task.cancel()
+        try:
+            await transcription_task
+        except asyncio.CancelledError:
+            pass
 
     # Stop airspace refresh service
     await airspace_service.stop_refresh_task()
@@ -625,6 +645,10 @@ Aircraft endpoints are cached for 2 seconds. Aviation weather data is cached for
             "name": "System",
             "description": "Health checks, status, and configuration"
         },
+        {
+            "name": "Audio",
+            "description": "Radio audio transmissions and transcription"
+        },
     ]
 )
 
@@ -648,6 +672,7 @@ app.include_router(system.router)
 app.include_router(aviation.router)
 app.include_router(airframe.router)
 app.include_router(acars.router)
+app.include_router(audio.router)
 
 
 # WebSocket endpoint for real-time data
