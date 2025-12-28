@@ -606,6 +606,22 @@ class SafetyMonitor:
                     continue
 
                 closure_rate = self._calculate_closure_rate(pos1, pos2)
+
+                # Skip if aircraft are diverging (not on a collision course)
+                # If distance > 0.5nm and closure rate is negative or zero, they're moving apart
+                if dist_nm > 0.5 and closure_rate is not None and closure_rate <= 0:
+                    continue
+
+                # Also check track difference - if flying opposite directions (150-210° diff)
+                # and already > 0.5nm apart, they've already passed each other
+                if dist_nm > 0.5 and pos1["track"] is not None and pos2["track"] is not None:
+                    track_diff = abs(pos1["track"] - pos2["track"])
+                    # Normalize to 0-180 range
+                    if track_diff > 180:
+                        track_diff = 360 - track_diff
+                    # Opposite directions (roughly 180° apart) and already separated
+                    if track_diff > 150:
+                        continue
                 
                 if self._can_trigger_event("proximity_conflict", icao1, icao2):
                     # Severity levels based on separation (thresholds: 0.5nm, 500ft)

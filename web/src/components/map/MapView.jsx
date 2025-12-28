@@ -91,6 +91,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         maxAltitude: 60000,
         showWithSquawk: true,
         showWithoutSquawk: true,
+        safetyEventsOnly: false,
+        showGA: true,
+        showAirliners: true,
       };
     } catch {
       return {
@@ -102,6 +105,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         maxAltitude: 60000,
         showWithSquawk: true,
         showWithoutSquawk: true,
+        safetyEventsOnly: false,
+        showGA: true,
+        showAirliners: true,
       };
     }
   });
@@ -165,19 +171,17 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const sweepAngleRef = useRef(0);
   const historyRef = useRef({}); // Store position history for trails
   const conflictsRef = useRef([]); // Track conflicts for banner
-  const preConflictSelectionRef = useRef(null); // Store selection before conflict auto-select
-  
+
   // Pro panel canvas refs
   const trackCanvasRef = useRef(null);
   const altProfileCanvasRef = useRef(null);
   const speedProfileCanvasRef = useRef(null);
   const vsProfileCanvasRef = useRef(null);
   const distProfileCanvasRef = useRef(null);
-  
+
   // Notification tracking refs
   const notifiedConflictsRef = useRef(new Set()); // Track notified conflict pairs
   const notifiedEmergenciesRef = useRef(new Set()); // Track notified emergency aircraft
-  const focusedSafetyEventsRef = useRef(new Set()); // Track events we've already focused on
   const alarmAudioRef = useRef(null); // Audio element for conflict alarm
   const alarmPlayingRef = useRef(false); // Track if alarm is currently playing
   const alarmIntervalRef = useRef(null); // Interval for looping alarm
@@ -710,32 +714,6 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           eventKey,
           event.severity === 'critical'
         );
-
-        // Auto-focus on new critical or warning events (not low severity)
-        if ((event.severity === 'critical' || event.severity === 'warning') &&
-            !focusedSafetyEventsRef.current.has(eventKey)) {
-          focusedSafetyEventsRef.current.add(eventKey);
-
-          // Find the aircraft and auto-select it
-          const ac = aircraft.find(a => a.hex?.toUpperCase() === event.icao?.toUpperCase());
-          if (ac) {
-            // Clear other selections and select this aircraft
-            setSelectedMetar(null);
-            setSelectedPirep(null);
-            setSelectedNavaid(null);
-            setSelectedAirport(null);
-            setPopupPosition({ x: 16, y: 16 });
-            setSelectedAircraft(ac);
-
-            // Pan the map to the aircraft if we have valid coordinates
-            if (ac.lat && ac.lon && leafletMapRef.current) {
-              leafletMapRef.current.flyTo([ac.lat, ac.lon], 10, {
-                duration: 1.5,
-                easeLinearity: 0.25
-              });
-            }
-          }
-        }
       }
     });
     
@@ -1581,8 +1559,12 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   }, [selectedAircraft, trackHistory]);
 
   // Fetch aviation data via WebSocket - uses viewport center for dynamic loading
+  // Debounced to avoid timeouts during panning/zooming
   useEffect(() => {
     if (!wsRequest || !wsConnected) return;
+
+    // Don't fetch while actively panning
+    if (isProPanning) return;
 
     // Use viewport center if available, otherwise fall back to feeder location
     const centerLat = viewportCenter.lat ?? feederLat;
@@ -1707,11 +1689,19 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       }
     };
 
-    fetchAviationData();
+    // Debounce the fetch to wait for pan/zoom to settle
+    const debounceTimeout = setTimeout(() => {
+      fetchAviationData();
+    }, 500);
+
     // Refresh every 5 minutes
     const interval = setInterval(fetchAviationData, 300000);
-    return () => clearInterval(interval);
-  }, [wsRequest, wsConnected, viewportCenter.lat, viewportCenter.lon, feederLat, feederLon, radarRange, overlays.metars, overlays.pireps, overlays.airspace]);
+
+    return () => {
+      clearTimeout(debounceTimeout);
+      clearInterval(interval);
+    };
+  }, [wsRequest, wsConnected, viewportCenter.lat, viewportCenter.lon, feederLat, feederLon, radarRange, overlays.metars, overlays.pireps, overlays.airspace, isProPanning]);
 
   // Fetch terrain overlay data (pro mode only) - simplified GeoJSON boundaries
   useEffect(() => {
@@ -1821,28 +1811,54 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const sortedAircraft = useMemo(() => {
     let filtered = [...aircraft].filter(a => a.lat && a.lon);
 
+    // Build set of aircraft with safety events for safetyEventsOnly filter
+    const safetyHexes = new Set();
+    if (trafficFilters.safetyEventsOnly) {
+      safetyEvents.forEach(event => {
+        if (event.icao) safetyHexes.add(event.icao.toUpperCase());
+        if (event.icao_2) safetyHexes.add(event.icao_2.toUpperCase());
+      });
+    }
+
     // Apply traffic filters
     filtered = filtered.filter(ac => {
+      // Safety events only filter
+      if (trafficFilters.safetyEventsOnly) {
+        if (!safetyHexes.has(ac.hex?.toUpperCase())) return false;
+      }
+
       // Military/Civil filter
       if (ac.military && !trafficFilters.showMilitary) return false;
       if (!ac.military && !trafficFilters.showCivil) return false;
-      
+
       // Ground/Airborne filter
       const isGround = ac.alt_baro === 'ground' || ac.on_ground || (ac.alt && ac.alt < 100);
       if (isGround && !trafficFilters.showGround) return false;
       if (!isGround && !trafficFilters.showAirborne) return false;
-      
+
       // Altitude filter (only for airborne)
       if (!isGround && ac.alt) {
         if (ac.alt < trafficFilters.minAltitude) return false;
         if (ac.alt > trafficFilters.maxAltitude) return false;
       }
-      
+
       // Squawk filter
       const hasSquawk = ac.squawk && ac.squawk !== '0000';
       if (hasSquawk && !trafficFilters.showWithSquawk) return false;
       if (!hasSquawk && !trafficFilters.showWithoutSquawk) return false;
-      
+
+      // GA/Airliner category filter
+      // GA: A1 (Light), A2 (Small), A7 (Rotorcraft), B1 (Glider), B4 (Ultralight)
+      // Airliners: A3 (Large), A4 (High Vortex/757), A5 (Heavy)
+      const gaCategories = ['A1', 'A2', 'A7', 'B1', 'B4'];
+      const airlinerCategories = ['A3', 'A4', 'A5'];
+      const category = ac.category?.toUpperCase();
+      const isGA = gaCategories.includes(category);
+      const isAirliner = airlinerCategories.includes(category);
+
+      if (isGA && !trafficFilters.showGA) return false;
+      if (isAirliner && !trafficFilters.showAirliners) return false;
+
       return true;
     });
     
@@ -1862,7 +1878,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     }
     
     return filtered.sort((a, b) => (a.distance_nm || 999) - (b.distance_nm || 999));
-  }, [aircraft, searchQuery, trafficFilters]);
+  }, [aircraft, searchQuery, trafficFilters, safetyEvents]);
 
   // Live aircraft data for selected aircraft (updates in real-time)
   const liveAircraft = useMemo(() => {
@@ -3287,7 +3303,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [config.mapMode, sortedAircraft, radarRange, feederLat, feederLon, selectedAircraft, selectedMetar, selectedPirep, selectedNavaid, selectedAirport, overlays, aviationData, proPanOffset, followingAircraft, trackHistory, showSelectedTrack]);
+  }, [config.mapMode, sortedAircraft, radarRange, feederLat, feederLon, selectedAircraft, selectedMetar, selectedPirep, selectedNavaid, selectedAirport, overlays, aviationData, proPanOffset, followingAircraft, trackHistory, showSelectedTrack, safetyEvents]);
 
   // Leaflet map setup
   useEffect(() => {
@@ -4123,24 +4139,57 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             <span>Traffic Filters</span>
             <button onClick={() => setShowFilterMenu(false)}><X size={14} /></button>
           </div>
-          
+
+          <div className="filter-section">
+            <label className="overlay-toggle">
+              <input
+                type="checkbox"
+                checked={trafficFilters.safetyEventsOnly}
+                onChange={() => setTrafficFilters(prev => ({ ...prev, safetyEventsOnly: !prev.safetyEventsOnly }))}
+              />
+              <span className="toggle-label"><AlertTriangle size={12} /> Safety Events Only</span>
+            </label>
+          </div>
+
+          <div className="overlay-divider" />
+
           <div className="filter-section">
             <div className="filter-section-title">Type</div>
             <label className="overlay-toggle">
-              <input 
-                type="checkbox" 
-                checked={trafficFilters.showMilitary} 
+              <input
+                type="checkbox"
+                checked={trafficFilters.showMilitary}
                 onChange={() => setTrafficFilters(prev => ({ ...prev, showMilitary: !prev.showMilitary }))}
               />
               <span className="toggle-label"><Shield size={12} /> Military</span>
             </label>
             <label className="overlay-toggle">
-              <input 
-                type="checkbox" 
-                checked={trafficFilters.showCivil} 
+              <input
+                type="checkbox"
+                checked={trafficFilters.showCivil}
                 onChange={() => setTrafficFilters(prev => ({ ...prev, showCivil: !prev.showCivil }))}
               />
               <span className="toggle-label"><Plane size={12} /> Civil</span>
+            </label>
+          </div>
+
+          <div className="filter-section">
+            <div className="filter-section-title">Category</div>
+            <label className="overlay-toggle">
+              <input
+                type="checkbox"
+                checked={trafficFilters.showGA}
+                onChange={() => setTrafficFilters(prev => ({ ...prev, showGA: !prev.showGA }))}
+              />
+              <span className="toggle-label">GA / Light</span>
+            </label>
+            <label className="overlay-toggle">
+              <input
+                type="checkbox"
+                checked={trafficFilters.showAirliners}
+                onChange={() => setTrafficFilters(prev => ({ ...prev, showAirliners: !prev.showAirliners }))}
+              />
+              <span className="toggle-label">Airliners / Heavy</span>
             </label>
           </div>
           
@@ -4218,7 +4267,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           </div>
           
           <div className="overlay-divider" />
-          <button 
+          <button
             className="filter-reset-btn"
             onClick={() => setTrafficFilters({
               showMilitary: true,
@@ -4229,6 +4278,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               maxAltitude: 60000,
               showWithSquawk: true,
               showWithoutSquawk: true,
+              safetyEventsOnly: false,
+              showGA: true,
+              showAirliners: true,
             })}
           >
             <RefreshCw size={14} />
@@ -5371,72 +5423,6 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         </div>
       )}
 
-      {/* Pro Mode Safety Event Alert - Shows highest priority event */}
-      {config.mapMode === 'pro' && activeConflicts.length > 0 && (
-        <div className="pro-conflict-alerts">
-          {activeConflicts
-            .filter(event => !acknowledgedEvents.has(event.id))
-            .slice(0, 1)
-            .map((event, idx) => (
-            <div
-              key={event.id || `pro-conflict-${event.icao}-${idx}`}
-              className={`pro-conflict-alert ${getSeverityClass(event.severity)}`}
-              onClick={() => {
-                const ac = aircraft.find(a => a.hex?.toUpperCase() === event.icao?.toUpperCase());
-                if (ac) {
-                  setSelectedMetar(null);
-                  setSelectedPirep(null);
-                  setSelectedNavaid(null);
-                  setSelectedAirport(null);
-                  setSelectedAircraft(ac);
-
-                  // Pan to the aircraft location in Pro mode
-                  if (ac.lat && ac.lon && canvasRef.current) {
-                    const rect = canvasRef.current.getBoundingClientRect();
-                    const pixelsPerNm = (Math.min(rect.width, rect.height) * 0.45) / radarRange;
-
-                    const dLat = ac.lat - feederLat;
-                    const dLon = ac.lon - feederLon;
-                    const nmY = dLat * 60;
-                    const nmX = dLon * 60 * Math.cos(feederLat * Math.PI / 180);
-
-                    setProPanOffset({ x: -(nmX * pixelsPerNm), y: nmY * pixelsPerNm });
-                  }
-                }
-              }}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="pro-conflict-icon">
-                <AlertTriangle size={20} />
-              </div>
-              <div className="pro-conflict-content">
-                <div className="pro-conflict-title">{getEventTypeName(event.event_type)}</div>
-                <div className="pro-conflict-aircraft">
-                  {event.callsign || event.icao}
-                  {event.callsign_2 ? ` ↔ ${event.callsign_2}` : ''}
-                </div>
-                {event.hex2 && (
-                  <div className="pro-conflict-sep">{event.horizontalNm}nm / {event.verticalFt}ft</div>
-                )}
-                {!event.hex2 && event.verticalFt && (
-                  <div className="pro-conflict-sep">{event.verticalFt}</div>
-                )}
-              </div>
-              <button
-                className="pro-conflict-ack"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  acknowledgeEvent(event.id);
-                }}
-                title="Acknowledge"
-              >
-                <Check size={16} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      
 
       {/* Pro Mode Details Panel */}
       {config.mapMode === 'pro' && liveAircraft && (() => {
