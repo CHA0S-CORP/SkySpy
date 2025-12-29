@@ -1010,7 +1010,7 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
         settings = get_settings()
 
         # ADS-B source check
-        url = f"{settings.ultrafeeder_url}/tar1090/data/aircraft.json"
+        url = f"{settings.ultrafeeder_url}/data/aircraft.json"
         data = await safe_request(url, timeout=5)
         adsb_online = data is not None
         aircraft_count = len(data.get("aircraft", [])) if data else 0
@@ -1083,7 +1083,7 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
 
         # Ultrafeeder check
         try:
-            url = f"{settings.ultrafeeder_url}/tar1090/data/aircraft.json"
+            url = f"{settings.ultrafeeder_url}/data/aircraft.json"
             data = await safe_request(url, timeout=5)
             if data:
                 count = len(data.get("aircraft", []))

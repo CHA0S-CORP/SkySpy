@@ -79,7 +79,7 @@ Perfect for use with mapping libraries like Leaflet, MapLibre, or OpenLayers.
 @cached(ttl_seconds=2)
 async def get_geojson():
     """Get aircraft positions as GeoJSON FeatureCollection."""
-    url = f"{settings.ultrafeeder_url}/tar1090/data/aircraft.json"
+    url = f"{settings.ultrafeeder_url}/data/aircraft.json"
     data = await safe_request(url)
     
     features = []

@@ -73,7 +73,7 @@ Data is refreshed every 2 seconds.
 @cached(ttl_seconds=2)
 async def get_aircraft():
     """Get all currently tracked aircraft with calculated distance from feeder."""
-    url = f"{settings.ultrafeeder_url}/tar1090/data/aircraft.json"
+    url = f"{settings.ultrafeeder_url}/data/aircraft.json"
     data = await safe_request(url)
     
     if not data:
@@ -139,7 +139,7 @@ Each category returns simplified aircraft data for quick overview.
 @cached(ttl_seconds=5)
 async def get_top_aircraft():
     """Get top aircraft by various criteria (closest, highest, fastest, climbing, military)."""
-    url = f"{settings.ultrafeeder_url}/tar1090/data/aircraft.json"
+    url = f"{settings.ultrafeeder_url}/data/aircraft.json"
     data = await safe_request(url)
     
     if not data:
@@ -244,7 +244,7 @@ Altitude bands:
 @cached(ttl_seconds=5)
 async def get_aircraft_stats():
     """Get aggregate statistics about currently tracked aircraft."""
-    url = f"{settings.ultrafeeder_url}/tar1090/data/aircraft.json"
+    url = f"{settings.ultrafeeder_url}/data/aircraft.json"
     data = await safe_request(url)
     
     if not data:
@@ -349,7 +349,7 @@ async def get_aircraft_by_hex(
     )
 ):
     """Get specific aircraft by ICAO hex code."""
-    url = f"{settings.ultrafeeder_url}/tar1090/data/aircraft.json"
+    url = f"{settings.ultrafeeder_url}/data/aircraft.json"
     data = await safe_request(url)
     
     if not data:

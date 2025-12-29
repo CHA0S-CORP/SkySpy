@@ -106,7 +106,7 @@ async def health_check(db: AsyncSession = Depends(get_db)):
     
     # Ultrafeeder check
     try:
-        url = f"{settings.ultrafeeder_url}/tar1090/data/aircraft.json"
+        url = f"{settings.ultrafeeder_url}/data/aircraft.json"
         data = await safe_request(url, timeout=5)
         if data:
             count = len(data.get("aircraft", []))
@@ -206,7 +206,7 @@ Returns detailed information about:
 async def get_status(db: AsyncSession = Depends(get_db)):
     """Get comprehensive system status."""
     # ADS-B source check
-    url = f"{settings.ultrafeeder_url}/tar1090/data/aircraft.json"
+    url = f"{settings.ultrafeeder_url}/data/aircraft.json"
     data = await safe_request(url, timeout=5)
     adsb_online = data is not None
     aircraft_count = len(data.get("aircraft", [])) if data else 0

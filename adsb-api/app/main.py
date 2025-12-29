@@ -288,7 +288,7 @@ async def fetch_and_process_aircraft():
     
     # Fetch from 1090MHz
     try:
-        url = f"{settings.ultrafeeder_url}/tar1090/data/aircraft.json"
+        url = f"{settings.ultrafeeder_url}/data/aircraft.json"
         data = await safe_request(url)
         if data:
             aircraft_1090 = data.get("aircraft", [])
