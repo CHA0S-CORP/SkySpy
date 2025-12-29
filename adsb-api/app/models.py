@@ -357,8 +357,8 @@ class AudioTransmission(Base):
     transcript_language: Mapped[Optional[str]] = mapped_column(String(10))
     transcript_segments: Mapped[Optional[dict]] = mapped_column(JSON)  # Word-level timestamps
 
-    # Metadata
-    metadata: Mapped[Optional[dict]] = mapped_column(JSON)
+    # Extra metadata
+    extra_metadata: Mapped[Optional[dict]] = mapped_column(JSON)
 
     __table_args__ = (
         Index("idx_audio_transmission_status", "transcription_status", "created_at"),

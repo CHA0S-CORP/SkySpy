@@ -244,8 +244,8 @@ async def create_transmission(
 
     logger.info(f"Created audio transmission {transmission.id}: {filename}")
 
-    # Queue for transcription if enabled
-    if queue_transcription and settings.transcription_enabled:
+    # Queue for transcription if enabled (whisper or external service)
+    if queue_transcription and (settings.transcription_enabled or settings.whisper_enabled):
         await queue_transcription_job(db, transmission.id)
 
     return transmission
@@ -262,8 +262,8 @@ async def queue_transcription_job(db: AsyncSession, transmission_id: int) -> boo
     Returns:
         True if queued successfully
     """
-    if not settings.transcription_enabled:
-        logger.debug("Transcription is not enabled")
+    if not settings.transcription_enabled and not settings.whisper_enabled:
+        logger.debug("Transcription is not enabled (neither whisper nor external)")
         return False
 
     try:
@@ -292,6 +292,45 @@ async def queue_transcription_job(db: AsyncSession, transmission_id: int) -> boo
         return False
 
 
+async def _transcribe_with_whisper(
+    client: httpx.AsyncClient,
+    audio_url: str
+) -> dict:
+    """
+    Transcribe audio using local Whisper service.
+
+    The onerahmet/openai-whisper-asr-webservice API accepts audio_url as query param.
+    """
+    whisper_url = f"{settings.whisper_url}/asr"
+    params = {
+        "task": "transcribe",
+        "language": "en",
+        "output": "json",
+        "audio_url": audio_url,
+    }
+
+    response = await client.post(whisper_url, params=params)
+    response.raise_for_status()
+    return response.json()
+
+
+async def _transcribe_with_external_service(
+    client: httpx.AsyncClient,
+    audio_url: str
+) -> dict:
+    """Transcribe audio using external transcription service."""
+    response = await client.post(
+        settings.transcription_service_url,
+        json={
+            "audio_url": audio_url,
+            "language": "en",
+            "task": "transcribe",
+        }
+    )
+    response.raise_for_status()
+    return response.json()
+
+
 async def process_transcription(
     db_session_factory,
     transmission_id: int
@@ -306,8 +345,9 @@ async def process_transcription(
     Returns:
         True if transcription succeeded
     """
-    if not settings.transcription_service_url:
-        logger.error("Transcription service URL not configured")
+    # Check if we have a transcription service configured
+    if not settings.whisper_enabled and not settings.transcription_service_url:
+        logger.error("No transcription service configured (whisper or external)")
         return False
 
     async with db_session_factory() as db:
@@ -327,27 +367,20 @@ async def process_transcription(
         await db.commit()
 
         try:
+            # Need S3 URL for transcription
+            if not transmission.s3_url:
+                logger.error(f"No S3 URL for transmission {transmission_id}")
+                transmission.transcription_status = "failed"
+                transmission.transcription_error = "No S3 URL available"
+                await db.commit()
+                return False
+
             # Call transcription service
             async with httpx.AsyncClient(timeout=120.0) as client:
-                # If we have S3 URL, send that; otherwise would need to send file
-                if transmission.s3_url:
-                    response = await client.post(
-                        settings.transcription_service_url,
-                        json={
-                            "audio_url": transmission.s3_url,
-                            "language": "en",
-                            "task": "transcribe",
-                        }
-                    )
+                if settings.whisper_enabled:
+                    result_data = await _transcribe_with_whisper(client, transmission.s3_url)
                 else:
-                    logger.error(f"No S3 URL for transmission {transmission_id}")
-                    transmission.transcription_status = "failed"
-                    transmission.transcription_error = "No S3 URL available"
-                    await db.commit()
-                    return False
-
-                response.raise_for_status()
-                result_data = response.json()
+                    result_data = await _transcribe_with_external_service(client, transmission.s3_url)
 
                 # Update with transcription result
                 transmission.transcription_status = "completed"
@@ -541,7 +574,9 @@ def get_service_stats() -> dict:
     return {
         "radio_enabled": settings.radio_enabled,
         "radio_audio_dir": settings.radio_audio_dir,
-        "transcription_enabled": settings.transcription_enabled,
+        "transcription_enabled": settings.transcription_enabled or settings.whisper_enabled,
+        "whisper_enabled": settings.whisper_enabled,
+        "whisper_url": settings.whisper_url if settings.whisper_enabled else None,
         "s3_enabled": settings.s3_enabled,
         "s3_prefix": settings.radio_s3_prefix,
         "queue_size": _transcription_queue.qsize() if _transcription_queue else 0,

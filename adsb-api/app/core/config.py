@@ -95,6 +95,10 @@ class Settings(BaseSettings):
     transcription_enabled: bool = False
     transcription_service_url: Optional[str] = None  # External transcription API endpoint
 
+    # Whisper (local speech-to-text)
+    whisper_enabled: bool = False
+    whisper_url: str = "http://whisper:9000"
+
     @property
     def ultrafeeder_url(self) -> str:
         return f"http://{self.ultrafeeder_host}:{self.ultrafeeder_port}"
