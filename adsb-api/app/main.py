@@ -297,9 +297,9 @@ async def fetch_and_process_aircraft():
     except Exception as e:
         logger.warning(f"Failed to fetch 1090 data: {e}")
     
-    # Fetch from 978MHz
+    # Fetch from 978MHz (UAT)
     try:
-        url = f"{settings.dump978_url}/data/aircraft.json"
+        url = f"{settings.dump978_url}/skyaware978/data/aircraft.json"
         data = await safe_request(url)
         if data:
             aircraft_978 = data.get("aircraft", [])

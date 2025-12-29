@@ -400,7 +400,7 @@ Requires a separate 978 MHz SDR receiver (dump978).
 @cached(ttl_seconds=2)
 async def get_uat_aircraft():
     """Get aircraft from 978MHz UAT receiver (US general aviation)."""
-    url = f"{settings.dump978_url}/data/aircraft.json"
+    url = f"{settings.dump978_url}/skyaware978/data/aircraft.json"
     data = await safe_request(url)
     
     if not data:
