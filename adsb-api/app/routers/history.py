@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Query, Path
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import get_db
+from app.core import get_db, db_execute_safe
 from app.models import AircraftSighting, AircraftSession, SafetyEvent
 from app.schemas import (
     SightingsListResponse, SessionsListResponse, HistoryStatsResponse
@@ -269,8 +269,11 @@ async def get_sessions(
         .order_by(AircraftSession.last_seen.desc())
         .limit(limit)
     )
-    
-    result = await db.execute(query)
+
+    result = await db_execute_safe(db, query)
+    if not result:
+        return {"sessions": [], "count": 0, "time_range_hours": hours}
+
     sessions = []
 
     # Collect all session icao_hex values and time ranges for batch safety event lookup
@@ -299,8 +302,8 @@ async def get_sessions(
                 )
             )
         )
-        safety_result = await db.execute(safety_query)
-        safety_events = safety_result.all()
+        safety_result = await db_execute_safe(db, safety_query)
+        safety_events = safety_result.all() if safety_result else []
 
         # Count safety events for each session
         for s in session_list:

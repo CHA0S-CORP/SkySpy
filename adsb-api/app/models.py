@@ -16,7 +16,7 @@ from app.core.database import Base
 class AircraftSighting(Base):
     """Individual aircraft position reports."""
     __tablename__ = "aircraft_sightings"
-    
+
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     icao_hex: Mapped[str] = mapped_column(String(10), index=True, nullable=False)  # TIS-B can have ~ prefix
@@ -37,16 +37,20 @@ class AircraftSighting(Base):
     is_emergency: Mapped[bool] = mapped_column(Boolean, default=False)
     source: Mapped[str] = mapped_column(String(10), default="1090")
 
+    __table_args__ = (
+        Index("idx_sightings_icao_time", "icao_hex", "timestamp"),
+    )
+
 
 class AircraftSession(Base):
     """Continuous tracking session for an aircraft."""
     __tablename__ = "aircraft_sessions"
-    
+
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     icao_hex: Mapped[str] = mapped_column(String(10), index=True, nullable=False)  # TIS-B can have ~ prefix
     callsign: Mapped[Optional[str]] = mapped_column(String(10), index=True)
     first_seen: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
-    last_seen: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_seen: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     total_positions: Mapped[int] = mapped_column(Integer, default=0)
     min_altitude: Mapped[Optional[int]] = mapped_column(Integer)
     max_altitude: Mapped[Optional[int]] = mapped_column(Integer)
@@ -58,6 +62,10 @@ class AircraftSession(Base):
     is_military: Mapped[bool] = mapped_column(Boolean, default=False)
     category: Mapped[Optional[str]] = mapped_column(String(4))
     aircraft_type: Mapped[Optional[str]] = mapped_column(String(10))
+
+    __table_args__ = (
+        Index("idx_sessions_last_seen_icao", "last_seen", "icao_hex"),
+    )
 
 
 class NotificationLog(Base):

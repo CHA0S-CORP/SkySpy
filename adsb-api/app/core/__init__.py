@@ -1,6 +1,6 @@
 """Core package containing configuration, database, and utilities."""
 from app.core.config import get_settings, Settings
-from app.core.database import get_db, init_db, close_db, Base
+from app.core.database import get_db, init_db, close_db, Base, db_execute_safe
 from app.core.cache import cached, clear_cache
 from app.core.utils import (
     calculate_distance_nm,
@@ -19,6 +19,7 @@ __all__ = [
     "init_db",
     "close_db",
     "Base",
+    "db_execute_safe",
     "cached",
     "clear_cache",
     "calculate_distance_nm",

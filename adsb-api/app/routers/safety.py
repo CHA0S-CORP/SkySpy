@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, Query, Path
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import get_db
+from app.core import get_db, db_execute_safe
 from app.models import SafetyEvent
 from app.services.safety import safety_monitor
 from app.schemas import (
@@ -233,33 +233,33 @@ async def get_stats(
 ):
     """Get safety monitoring statistics."""
     cutoff = datetime.utcnow() - timedelta(hours=hours)
-    
-    # Events by type
+
+    # Events by type (with graceful timeout handling)
     type_query = (
         select(SafetyEvent.event_type, func.count(SafetyEvent.id))
         .where(SafetyEvent.timestamp > cutoff)
         .group_by(SafetyEvent.event_type)
     )
-    type_result = await db.execute(type_query)
-    events_by_type = {row[0]: row[1] for row in type_result}
-    
-    # Events by severity
+    type_result = await db_execute_safe(db, type_query)
+    events_by_type = {row[0]: row[1] for row in type_result} if type_result else {}
+
+    # Events by severity (with graceful timeout handling)
     severity_query = (
         select(SafetyEvent.severity, func.count(SafetyEvent.id))
         .where(SafetyEvent.timestamp > cutoff)
         .group_by(SafetyEvent.severity)
     )
-    severity_result = await db.execute(severity_query)
-    events_by_severity = {row[0]: row[1] for row in severity_result}
-    
-    # Recent events
+    severity_result = await db_execute_safe(db, severity_query)
+    events_by_severity = {row[0]: row[1] for row in severity_result} if severity_result else {}
+
+    # Recent events (with graceful timeout handling)
     recent_query = (
         select(SafetyEvent)
         .where(SafetyEvent.timestamp > cutoff)
         .order_by(SafetyEvent.timestamp.desc())
         .limit(10)
     )
-    recent_result = await db.execute(recent_query)
+    recent_result = await db_execute_safe(db, recent_query)
     recent_events = [
         {
             "id": e.id,
@@ -269,10 +269,10 @@ async def get_stats(
             "timestamp": e.timestamp.isoformat() + "Z",
         }
         for e in recent_result.scalars()
-    ]
-    
+    ] if recent_result else []
+
     total_events = sum(events_by_type.values())
-    
+
     return {
         "monitoring_enabled": safety_monitor.enabled,
         "thresholds": safety_monitor.get_thresholds(),
