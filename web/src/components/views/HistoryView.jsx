@@ -1549,8 +1549,9 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
                     <div className="acars-history-aircraft">
                       {msg.callsign && (
                         <span
-                          className="acars-history-callsign clickable"
-                          onClick={() => onSelectAircraft?.(msg.icao_hex)}
+                          className={`acars-history-callsign ${msg.icao_hex ? 'clickable' : ''}`}
+                          onClick={() => msg.icao_hex && onSelectAircraft?.(msg.icao_hex)}
+                          title={msg.icao_hex ? 'View aircraft details' : 'No ICAO hex available'}
                         >
                           {msg.callsign}
                         </span>
@@ -1559,6 +1560,7 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
                         <span
                           className="acars-history-icao clickable"
                           onClick={() => onSelectAircraft?.(msg.icao_hex)}
+                          title="View aircraft details"
                         >
                           {msg.icao_hex}
                         </span>

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { getTailInfo, getCardinalDirection } from '../../utils';
+import { getTailInfo, getCardinalDirection, callsignsMatch } from '../../utils';
 
 export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onViewHistoryEvent, onViewEvent, aircraft, aircraftInfo, trackHistory, feederLocation }) {
   const [info, setInfo] = useState(aircraftInfo || null);
@@ -161,25 +161,36 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
           setPhotoInfo(data);
         }
         
-        // Try database query first, then fall back to recent messages buffer
+        // Try database query first by ICAO hex, then by callsign, then fall back to recent buffer
         let acarsFound = [];
+        const callsign = aircraft?.flight?.trim();
+
+        // Query by ICAO hex
         const acarsRes = await fetch(`${baseUrl}/api/v1/acars/messages?icao_hex=${hex}&hours=24&limit=50`);
         if (acarsRes.ok) {
           const data = await acarsRes.json();
           acarsFound = data.messages || [];
         }
 
-        // If no messages found in DB, try recent messages buffer and filter client-side
+        // If no results by hex, try by callsign (ACARS often has callsign but not hex)
+        if (acarsFound.length === 0 && callsign) {
+          const callsignRes = await fetch(`${baseUrl}/api/v1/acars/messages?callsign=${encodeURIComponent(callsign)}&hours=24&limit=50`);
+          if (callsignRes.ok) {
+            const data = await callsignRes.json();
+            acarsFound = data.messages || [];
+          }
+        }
+
+        // If still no messages found, try recent messages buffer and filter client-side
         if (acarsFound.length === 0) {
           const recentRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=100`);
           if (recentRes.ok) {
             const data = await recentRes.json();
             const allRecent = data.messages || [];
-            // Filter by icao_hex or callsign
-            const callsign = aircraft?.flight?.trim()?.toUpperCase();
+            // Filter by icao_hex or callsign (handles IATA/ICAO conversion)
             acarsFound = allRecent.filter(msg =>
               (msg.icao_hex && msg.icao_hex.toUpperCase() === hex.toUpperCase()) ||
-              (callsign && msg.callsign && msg.callsign.toUpperCase() === callsign)
+              callsignsMatch(msg.callsign, callsign)
             );
           }
         }
@@ -211,26 +222,37 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
     const fetchAcarsMessages = async () => {
       try {
         let acarsFound = [];
+        const callsign = aircraft?.flight?.trim();
+
+        // Query by ICAO hex
         const acarsRes = await fetch(`${baseUrl}/api/v1/acars/messages?icao_hex=${hex}&hours=${acarsHours}&limit=100`);
         if (acarsRes.ok) {
           const data = await acarsRes.json();
           acarsFound = data.messages || [];
         }
 
-        // If no messages found in DB, try recent messages buffer and filter client-side
+        // If no results by hex, try by callsign
+        if (acarsFound.length === 0 && callsign) {
+          const callsignRes = await fetch(`${baseUrl}/api/v1/acars/messages?callsign=${encodeURIComponent(callsign)}&hours=${acarsHours}&limit=100`);
+          if (callsignRes.ok) {
+            const data = await callsignRes.json();
+            acarsFound = data.messages || [];
+          }
+        }
+
+        // If still no messages found, try recent messages buffer and filter client-side
         if (acarsFound.length === 0) {
           const recentRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=100`);
           if (recentRes.ok) {
             const data = await recentRes.json();
             const allRecent = data.messages || [];
-            const callsign = aircraft?.flight?.trim()?.toUpperCase();
             const cutoffTime = Date.now() - (acarsHours * 60 * 60 * 1000);
             acarsFound = allRecent.filter(msg => {
               const msgTime = typeof msg.timestamp === 'number'
                 ? msg.timestamp * 1000
                 : new Date(msg.timestamp).getTime();
               const matchesAircraft = (msg.icao_hex && msg.icao_hex.toUpperCase() === hex.toUpperCase()) ||
-                (callsign && msg.callsign && msg.callsign.toUpperCase() === callsign);
+                callsignsMatch(msg.callsign, callsign);
               return matchesAircraft && msgTime >= cutoffTime;
             });
           }
