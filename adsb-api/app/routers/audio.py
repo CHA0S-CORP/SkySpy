@@ -7,8 +7,11 @@ Provides endpoints for:
 - Managing transcription queue
 - Audio statistics
 """
+import logging
 import time
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, Query, Path, UploadFile, File, Form, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -98,7 +101,13 @@ async def upload_audio(
     db: AsyncSession = Depends(get_db)
 ):
     """Upload an audio transmission from rtl-airband."""
+    logger.info(
+        "Audio upload request: filename=%s, channel=%s, frequency=%s",
+        file.filename, channel_name, frequency_mhz
+    )
+
     if not settings.radio_enabled:
+        logger.warning("Audio upload rejected: radio service disabled")
         raise HTTPException(
             status_code=503,
             detail="Radio audio service is disabled"
@@ -110,6 +119,10 @@ async def upload_audio(
     if content_type not in valid_types and not file.filename.endswith(
         (".mp3", ".wav", ".ogg", ".flac")
     ):
+        logger.warning(
+            "Audio upload rejected: invalid format %s for file %s",
+            content_type, file.filename
+        )
         raise HTTPException(
             status_code=400,
             detail=f"Invalid audio format. Supported: MP3, WAV, OGG, FLAC"
@@ -121,6 +134,10 @@ async def upload_audio(
     # Check file size
     max_size = settings.radio_max_file_size_mb * 1024 * 1024
     if len(audio_data) > max_size:
+        logger.warning(
+            "Audio upload rejected: file too large (%d bytes, max %d)",
+            len(audio_data), max_size
+        )
         raise HTTPException(
             status_code=413,
             detail=f"File too large. Maximum size: {settings.radio_max_file_size_mb}MB"
@@ -139,6 +156,12 @@ async def upload_audio(
         duration_seconds=duration_seconds,
         metadata={"content_type": content_type},
         queue_transcription=queue_transcription and settings.transcription_enabled,
+    )
+
+    logger.info(
+        "Audio uploaded successfully: id=%d, filename=%s, size=%d bytes, transcription_queued=%s",
+        transmission.id, transmission.filename, len(audio_data),
+        transmission.transcription_status == "queued"
     )
 
     return {
@@ -208,6 +231,11 @@ async def list_transmissions(
     db: AsyncSession = Depends(get_db)
 ):
     """Get audio transmissions with optional filters."""
+    logger.debug(
+        "Listing transmissions: status=%s, channel=%s, hours=%d, limit=%d, offset=%d",
+        status, channel, hours, limit, offset
+    )
+
     transmissions, total = await audio_service.get_transmissions(
         db=db,
         status=status,
@@ -216,6 +244,8 @@ async def list_transmissions(
         limit=limit,
         offset=offset,
     )
+
+    logger.debug("Found %d transmissions (total: %d)", len(transmissions), total)
 
     return {
         "transmissions": [_transmission_to_response(t) for t in transmissions],
@@ -239,9 +269,12 @@ async def get_transmission(
     db: AsyncSession = Depends(get_db)
 ):
     """Get a single audio transmission by ID."""
+    logger.debug("Fetching transmission id=%d", transmission_id)
+
     transmission = await audio_service.get_transmission(db, transmission_id)
 
     if not transmission:
+        logger.debug("Transmission id=%d not found", transmission_id)
         raise HTTPException(status_code=404, detail="Transmission not found")
 
     return _transmission_to_response(transmission)
@@ -272,7 +305,13 @@ async def queue_transcription(
     db: AsyncSession = Depends(get_db)
 ):
     """Queue a transmission for transcription."""
+    logger.info(
+        "Transcription queue request: transmission_id=%d, force=%s",
+        transmission_id, force
+    )
+
     if not settings.transcription_enabled:
+        logger.warning("Transcription queue rejected: service disabled")
         raise HTTPException(
             status_code=503,
             detail="Transcription service is disabled"
@@ -280,15 +319,30 @@ async def queue_transcription(
 
     transmission = await audio_service.get_transmission(db, transmission_id)
     if not transmission:
+        logger.warning(
+            "Transcription queue rejected: transmission id=%d not found",
+            transmission_id
+        )
         raise HTTPException(status_code=404, detail="Transmission not found")
 
     if transmission.transcription_status == "completed" and not force:
+        logger.info(
+            "Transcription queue rejected: transmission id=%d already transcribed",
+            transmission_id
+        )
         raise HTTPException(
             status_code=409,
             detail="Transmission already transcribed. Use force=true to re-transcribe."
         )
 
     success = await audio_service.queue_transcription_job(db, transmission_id)
+
+    if success:
+        logger.info("Transcription queued: transmission_id=%d", transmission_id)
+    else:
+        logger.error(
+            "Failed to queue transcription: transmission_id=%d", transmission_id
+        )
 
     return {
         "success": success,
@@ -331,7 +385,13 @@ Includes:
 )
 async def get_audio_stats(db: AsyncSession = Depends(get_db)):
     """Get audio transmission and transcription statistics."""
-    return await audio_service.get_audio_stats(db)
+    logger.debug("Fetching audio stats")
+    stats = await audio_service.get_audio_stats(db)
+    logger.debug(
+        "Audio stats: total=%s, transcribed=%s",
+        stats.get("total_transmissions"), stats.get("total_transcribed")
+    )
+    return stats
 
 
 @router.get(
@@ -367,4 +427,5 @@ Shows:
 )
 async def get_audio_status():
     """Get audio service status and configuration."""
+    logger.debug("Fetching audio service status")
     return audio_service.get_service_stats()
