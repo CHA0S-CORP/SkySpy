@@ -11,6 +11,7 @@ const tabs = [
   { id: 'aircraft', icon: Plane, label: 'Aircraft List' },
   { id: 'stats', icon: BarChart3, label: 'Statistics' },
   { id: 'history', icon: History, label: 'History' },
+  { id: 'audio', icon: Radio, label: 'Radio' },
   { id: 'alerts', icon: Bell, label: 'Alerts' },
   { id: 'system', icon: Activity, label: 'System' }
 ];

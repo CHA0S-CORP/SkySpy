@@ -131,7 +131,7 @@ class SocketIOManager:
                 topics = [topics]
 
             for topic in topics:
-                if topic in ['aircraft', 'airspace', 'safety', 'alerts', 'acars', 'all']:
+                if topic in ['aircraft', 'airspace', 'safety', 'alerts', 'acars', 'audio', 'all']:
                     await self.sio.enter_room(sid, topic)
                     logger.debug(f"Client {sid} subscribed to {topic}")
 
@@ -417,6 +417,19 @@ class SocketIOManager:
             'text': msg.get('text'),
             'frequency': msg.get('frequency'),
             'signal_level': msg.get('signal_level'),
+            'timestamp': datetime.utcnow().isoformat() + 'Z'
+        })
+
+    async def publish_audio_transmission(self, transmission: dict):
+        """Publish new audio transmission event."""
+        await self.broadcast_to_room('audio', 'audio:transmission', {
+            'id': transmission.get('id'),
+            'filename': transmission.get('filename'),
+            's3_url': transmission.get('s3_url'),
+            'frequency_mhz': transmission.get('frequency_mhz'),
+            'channel_name': transmission.get('channel_name'),
+            'duration_seconds': transmission.get('duration_seconds'),
+            'transcription_status': transmission.get('transcription_status'),
             'timestamp': datetime.utcnow().isoformat() + 'Z'
         })
 

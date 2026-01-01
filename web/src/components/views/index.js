@@ -1,6 +1,7 @@
 export { AircraftList } from './AircraftList';
 export { StatsView } from './StatsView';
 export { HistoryView } from './HistoryView';
+export { AudioView } from './AudioView';
 export { AlertsView } from './AlertsView';
 export { AlertHistory } from './AlertHistory';
 export { RuleForm } from './RuleForm';

@@ -352,6 +352,70 @@ async def api_info():
 
 
 @router.get(
+    "/ws/status",
+    summary="WebSocket Status",
+    description="""
+Get the current WebSocket/Socket.IO server status.
+
+Returns information about:
+- Total subscriber count
+- Redis mode status
+- Tracked aircraft count
+- Last publish timestamp
+    """,
+    responses={
+        200: {
+            "description": "WebSocket server status",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "subscribers": 3,
+                        "mode": "redis",
+                        "redis_enabled": True,
+                        "tracked_aircraft": 45,
+                        "last_publish": "2024-12-21T12:00:00Z"
+                    }
+                }
+            }
+        }
+    }
+)
+async def get_ws_status():
+    """Get WebSocket/Socket.IO server status."""
+    from app.services.socketio_manager import get_socketio_manager
+
+    sio_manager = get_socketio_manager()
+    sse_manager = get_sse_manager()
+
+    sio_connections = 0
+    sio_mode = "not_initialized"
+    redis_enabled = False
+    tracked_aircraft = 0
+    last_publish = None
+
+    if sio_manager:
+        sio_connections = sio_manager.get_connection_count()
+        sio_mode = "redis" if sio_manager.is_using_redis() else "memory"
+        redis_enabled = sio_manager.is_using_redis()
+        tracked_aircraft = len(sio_manager._last_aircraft_state)
+        last_publish = sio_manager.get_last_publish_time()
+
+    sse_subscribers = 0
+    if sse_manager:
+        sse_subscribers = await sse_manager.get_subscriber_count()
+
+    return {
+        "subscribers": sse_subscribers + sio_connections,
+        "sse_subscribers": sse_subscribers,
+        "socketio_connections": sio_connections,
+        "mode": sio_mode,
+        "redis_enabled": redis_enabled,
+        "tracked_aircraft": tracked_aircraft,
+        "last_publish": last_publish,
+    }
+
+
+@router.get(
     "/config",
     summary="Get Configuration",
     description="""

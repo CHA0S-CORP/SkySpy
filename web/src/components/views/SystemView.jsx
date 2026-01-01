@@ -139,20 +139,20 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
             </div>
             <div className="status-item">
               <span>Database</span>
-              <span className={`status-badge ${health?.services?.database ? 'online' : health === null ? 'warning' : 'offline'}`}>
-                {health?.services?.database ? 'Connected' : health === null ? 'Loading...' : 'Error'}
+              <span className={`status-badge ${health?.services?.database?.status === 'up' ? 'online' : health === null ? 'warning' : 'offline'}`}>
+                {health?.services?.database?.status === 'up' ? 'Connected' : health === null ? 'Loading...' : 'Error'}
               </span>
             </div>
             <div className="status-item">
               <span>Redis</span>
-              <span className={`status-badge ${health?.services?.redis || wsStatus?.redis_enabled ? 'online' : 'warning'}`}>
-                {health?.services?.redis || wsStatus?.redis_enabled ? 'Connected' : 'Disabled'}
+              <span className={`status-badge ${health?.services?.redis?.status === 'up' || wsStatus?.redis_enabled ? 'online' : 'warning'}`}>
+                {health?.services?.redis?.status === 'up' || wsStatus?.redis_enabled ? 'Connected' : (health?.services?.redis?.status === 'not_configured' ? 'Not Configured' : 'Disabled')}
               </span>
             </div>
             <div className="status-item">
               <span>WebSocket Server</span>
-              <span className={`status-badge ${wsStatus?.redis_enabled ? 'online' : 'warning'}`}>
-                {wsStatus?.mode || (wsStatus === null ? 'Loading...' : 'Unknown')}
+              <span className={`status-badge ${wsStatus?.mode ? 'online' : wsStatus === null ? 'warning' : 'offline'}`}>
+                {wsStatus?.mode ? (wsStatus.mode === 'redis' ? 'Redis Mode' : 'Memory Mode') : (wsStatus === null ? 'Loading...' : 'Unknown')}
               </span>
             </div>
             <div className="status-item">

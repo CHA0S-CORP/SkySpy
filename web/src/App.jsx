@@ -6,7 +6,7 @@ import './App.css';
 import { Sidebar, Header, SettingsModal } from './components/layout';
 
 // View components
-import { AircraftList, StatsView, HistoryView, AlertsView, SystemView } from './components/views';
+import { AircraftList, StatsView, HistoryView, AudioView, AlertsView, SystemView } from './components/views';
 
 // Map components
 import { MapView } from './components/map';
@@ -119,6 +119,7 @@ export default function App() {
               onEventViewed={() => setTargetSafetyEventId(null)}
             />
           )}
+          {activeTab === 'audio' && <AudioView apiBase={config.apiBaseUrl} />}
           {activeTab === 'alerts' && <AlertsView apiBase={config.apiBaseUrl} />}
           {activeTab === 'system' && <SystemView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={connected} />}
         </div>

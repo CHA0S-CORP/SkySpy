@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import get_db
 from app.core.config import get_settings
 from app.services import audio as audio_service
+from app.services.socketio_manager import get_socketio_manager
 from app.schemas import (
     AudioTransmissionResponse,
     AudioTransmissionListResponse,
@@ -164,6 +165,19 @@ async def upload_audio(
         transmission.id, transmission.filename, len(audio_data),
         transmission.transcription_status == "queued"
     )
+
+    # Broadcast to socket subscribers
+    sio_mgr = get_socketio_manager()
+    if sio_mgr:
+        await sio_mgr.publish_audio_transmission({
+            "id": transmission.id,
+            "filename": transmission.filename,
+            "s3_url": transmission.s3_url,
+            "frequency_mhz": transmission.frequency_mhz,
+            "channel_name": transmission.channel_name,
+            "duration_seconds": transmission.duration_seconds,
+            "transcription_status": transmission.transcription_status,
+        })
 
     return {
         "id": transmission.id,
