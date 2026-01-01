@@ -8807,6 +8807,60 @@ body {
   color: var(--text-secondary);
 }
 
+.photo-refresh-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.photo-refresh-btn:hover {
+  background: rgba(74, 222, 128, 0.25);
+  border-color: rgba(74, 222, 128, 0.5);
+  color: var(--accent-green);
+}
+
+.photo-status {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  animation: photoStatusFadeIn 0.2s ease;
+}
+
+.photo-status-info {
+  background: rgba(59, 130, 246, 0.9);
+  color: white;
+}
+
+.photo-status-error {
+  background: rgba(239, 68, 68, 0.9);
+  color: white;
+}
+
+.photo-status-success {
+  background: rgba(74, 222, 128, 0.9);
+  color: #1a1a2e;
+}
+
+@keyframes photoStatusFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .detail-tabs {
   display: flex;
   flex-wrap: wrap;

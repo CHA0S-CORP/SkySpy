@@ -87,6 +87,7 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
   const [photoState, setPhotoState] = useState('loading');
   const [photoRetryCount, setPhotoRetryCount] = useState(0);
   const [useThumbnail, setUseThumbnail] = useState(false);
+  const [photoStatus, setPhotoStatus] = useState(null); // { message, type: 'info' | 'error' | 'success' }
   const [showTrackMap, setShowTrackMap] = useState(false);
   const [replayPosition, setReplayPosition] = useState(100);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -130,16 +131,30 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
       // Try thumbnail as fallback
       setUseThumbnail(true);
       setPhotoState('loading');
+      setPhotoStatus({ message: 'High quality failed, trying thumbnail...', type: 'info' });
     } else {
       // Both failed, show error
       setPhotoState('error');
+      setPhotoStatus({ message: 'No photo available', type: 'error' });
     }
+  };
+
+  const handlePhotoLoad = () => {
+    setPhotoState('loaded');
+    if (useThumbnail) {
+      setPhotoStatus({ message: 'Showing thumbnail (high quality unavailable)', type: 'info' });
+    } else {
+      setPhotoStatus({ message: 'High quality photo loaded', type: 'success' });
+    }
+    // Auto-hide success messages after 3 seconds
+    setTimeout(() => setPhotoStatus(null), 3000);
   };
 
   const retryPhoto = () => {
     setPhotoState('loading');
     setUseThumbnail(false);
     setPhotoRetryCount(c => c + 1);
+    setPhotoStatus({ message: 'Fetching high quality photo...', type: 'info' });
   };
   
   useEffect(() => {
@@ -1538,7 +1553,7 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
           key={`${photoRetryCount}-${useThumbnail}`}
           src={photoUrl}
           alt={info?.registration || hex}
-          onLoad={() => setPhotoState('loaded')}
+          onLoad={handlePhotoLoad}
           onError={handlePhotoError}
           style={{
             opacity: photoState === 'loaded' ? 1 : 0,
@@ -1549,8 +1564,18 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
         {photoState === 'loaded' && photoInfo?.photographer && (
           <span className="photo-credit">📷 {photoInfo.photographer} via {photoInfo.source || 'planespotters.net'}</span>
         )}
+        {photoState === 'loaded' && (
+          <button className="photo-refresh-btn" onClick={retryPhoto} title="Refresh photo">
+            <RefreshCw size={14} />
+          </button>
+        )}
+        {photoStatus && (
+          <div className={`photo-status photo-status-${photoStatus.type}`}>
+            {photoStatus.message}
+          </div>
+        )}
       </div>
-      
+
       <div className="detail-tabs">
         <button className={`detail-tab ${activeTab === 'info' ? 'active' : ''}`} onClick={() => setActiveTab('info')}>
           <Info size={16} /> Aircraft Info
