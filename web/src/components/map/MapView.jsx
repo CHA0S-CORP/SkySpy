@@ -18,13 +18,13 @@ import {
   getConfig, saveConfig, getOverlays, saveOverlays,
   getTailInfo, getCountryFromIcao, getTailNumber, getCategoryName,
   decodeMetar, decodePirep, getPirepType, windDirToCardinal,
-  utcToLocal, utcToLocalTime
+  utcToLocal, utcToLocalTime, callsignsMatch
 } from '../../utils';
 
 // Import AircraftDetailPage
 import { AircraftDetailPage } from '../aircraft/AircraftDetailPage';
 
-function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: wsSafetyEvents, wsRequest, wsConnected, onViewHistoryEvent }) {
+function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: wsSafetyEvents, wsRequest, wsConnected, onViewHistoryEvent, hashParams = {}, setHashParams }) {
   const [selectedAircraft, setSelectedAircraft] = useState(null);
   const [selectedMetar, setSelectedMetar] = useState(null);
   const [selectedPirep, setSelectedPirep] = useState(null);
@@ -189,7 +189,81 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   // Use feeder location or default
   const feederLat = feederLocation?.lat || 47.9377;
   const feederLon = feederLocation?.lon || -121.9687;
-  
+
+  // Sync map settings from URL hash params on mount
+  const VALID_MODES = ['radar', 'crt', 'pro', 'map'];
+  useEffect(() => {
+    let newConfig = { ...config };
+    let configChanged = false;
+
+    // Sync mode from URL
+    if (hashParams.mode && VALID_MODES.includes(hashParams.mode) && hashParams.mode !== config.mapMode) {
+      newConfig.mapMode = hashParams.mode;
+      configChanged = true;
+    }
+
+    // Sync dark mode from URL
+    if (hashParams.dark !== undefined) {
+      const darkMode = hashParams.dark === '1' || hashParams.dark === 'true';
+      if (darkMode !== config.mapDarkMode) {
+        newConfig.mapDarkMode = darkMode;
+        configChanged = true;
+      }
+    }
+
+    if (configChanged) {
+      setConfig(newConfig);
+      saveConfig(newConfig);
+    }
+
+    // Sync range from URL
+    if (hashParams.range) {
+      const range = parseInt(hashParams.range, 10);
+      if (!isNaN(range) && range >= 5 && range <= 250 && range !== radarRange) {
+        setRadarRange(range);
+      }
+    }
+
+    // Sync overlays from URL (comma-separated list of enabled overlays)
+    if (hashParams.overlays) {
+      const enabledOverlays = hashParams.overlays.split(',').map(s => s.trim());
+      const newOverlays = { ...overlays };
+      Object.keys(newOverlays).forEach(key => {
+        newOverlays[key] = enabledOverlays.includes(key);
+      });
+      setOverlays(newOverlays);
+      saveOverlays(newOverlays);
+    }
+
+    // If no mode in URL, set current mode to URL
+    if (!hashParams.mode && setHashParams && config.mapMode) {
+      setHashParams({ mode: config.mapMode });
+    }
+
+    // Open aircraft detail from URL if specified
+    if (hashParams.aircraft) {
+      setAircraftDetailHex(hashParams.aircraft);
+    }
+  }, []); // Only run on mount
+
+  // Track if user intentionally deselected (to prevent URL sync from re-selecting)
+  const userDeselectedRef = useRef(false);
+
+  // Sync selected aircraft from URL (needs to watch aircraft data since it may load after mount)
+  useEffect(() => {
+    // Don't re-select if user just deselected
+    if (userDeselectedRef.current) {
+      userDeselectedRef.current = false;
+      return;
+    }
+    if (hashParams.selected && aircraft.length > 0 && !selectedAircraft) {
+      const ac = aircraft.find(a => a.hex?.toLowerCase() === hashParams.selected.toLowerCase());
+      if (ac) {
+        setSelectedAircraft(ac);
+      }
+    }
+  }, [hashParams.selected, aircraft, selectedAircraft]);
+
   // Send browser notification helper
   const sendNotification = useCallback((title, body, tag, urgent = false) => {
     // Always log to console for debugging/testing
@@ -2003,7 +2077,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           x: prev.x * scaleFactor,
           y: prev.y * scaleFactor
         }));
-        setRadarRange(clampedRange);
+        updateRadarRange(clampedRange);
       }
     };
     canvas.addEventListener('wheel', handleWheel, { passive: false });
@@ -3178,7 +3252,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         // ACARS indicator - small green dot at top-right corner if aircraft has ACARS messages
         const hasAcars = acarsMessages.some(msg =>
           (msg.icao_hex && msg.icao_hex.toUpperCase() === ac.hex?.toUpperCase()) ||
-          (msg.callsign && ac.flight && msg.callsign.toUpperCase() === ac.flight.trim().toUpperCase())
+          callsignsMatch(msg.callsign, ac.flight)
         );
         if (hasAcars) {
           ctx.save();
@@ -3429,8 +3503,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       } else {
         const marker = L.marker([ac.lat, ac.lon], { icon, zIndexOffset: zOffset })
           .addTo(leafletMapRef.current)
-          .on('click', () => setSelectedAircraft(ac))
-          .on('dblclick', () => setAircraftDetailHex(ac.hex));
+          .on('click', () => selectAircraft(ac))
+          .on('dblclick', () => openAircraftDetail(ac.hex));
         marker.bindTooltip(`${ac.flight || ac.hex}<br>${ac.alt || '?'}ft`, {
           permanent: false,
           direction: 'top'
@@ -3447,12 +3521,66 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     const newConfig = { ...config, mapMode: nextMode };
     setConfig(newConfig);
     saveConfig(newConfig);
+    // Update URL hash with new mode
+    if (setHashParams) {
+      setHashParams({ mode: nextMode });
+    }
   };
 
   const toggleDarkMode = () => {
-    const newConfig = { ...config, mapDarkMode: !config.mapDarkMode };
+    const newDarkMode = !config.mapDarkMode;
+    const newConfig = { ...config, mapDarkMode: newDarkMode };
     setConfig(newConfig);
     saveConfig(newConfig);
+    // Update URL hash with dark mode
+    if (setHashParams) {
+      setHashParams({ dark: newDarkMode ? '1' : '0' });
+    }
+  };
+
+  // Update URL when range changes
+  const updateRadarRange = (newRange) => {
+    setRadarRange(newRange);
+    if (setHashParams) {
+      setHashParams({ range: String(newRange) });
+    }
+  };
+
+  // Update URL when overlays change
+  const updateOverlays = (newOverlays) => {
+    setOverlays(newOverlays);
+    saveOverlays(newOverlays);
+    if (setHashParams) {
+      const enabledOverlays = Object.entries(newOverlays)
+        .filter(([, enabled]) => enabled)
+        .map(([key]) => key)
+        .join(',');
+      setHashParams({ overlays: enabledOverlays || undefined });
+    }
+  };
+
+  // Update URL when opening aircraft detail (and clear when closing)
+  const openAircraftDetail = (hex) => {
+    setAircraftDetailHex(hex);
+    if (setHashParams && hex) {
+      setHashParams({ aircraft: hex });
+    } else if (setHashParams) {
+      setHashParams({ aircraft: undefined });
+    }
+  };
+
+  // Update URL when selecting aircraft (popup, not full detail)
+  const selectAircraft = (ac) => {
+    // Mark intentional deselection to prevent URL sync from re-selecting
+    if (!ac) {
+      userDeselectedRef.current = true;
+    }
+    setSelectedAircraft(ac);
+    if (setHashParams && ac?.hex) {
+      setHashParams({ selected: ac.hex });
+    } else if (setHashParams) {
+      setHashParams({ selected: undefined });
+    }
   };
 
   // Get feeder position for simple radar
@@ -3619,7 +3747,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   setSelectedNavaid(null);
                   setSelectedAirport(null);
                   setPopupPosition({ x: 16, y: 16 });
-                  setSelectedAircraft(ac);
+                  selectAircraft(ac);
 
                   // Fly to the aircraft location based on map mode
                   if (ac.lat && ac.lon) {
@@ -3694,7 +3822,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                     top: `${pos.y}%`,
                     transform: `translate(-50%, -50%) rotate(${ac.track || 0}deg)`
                   }}
-                  onClick={() => setSelectedAircraft(ac)}
+                  onClick={() => selectAircraft(ac)}
                   title={`${ac.flight || ac.hex} - ${ac.alt || '?'}ft`}
                 >
                   <Plane size={16} />
@@ -3856,7 +3984,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             if (closest) {
               // Only clear aircraft selection if not pinned, or if selecting a new aircraft
               if (!panelPinned || closestType === 'aircraft') {
-                setSelectedAircraft(null);
+                selectAircraft(null);
               }
               setSelectedMetar(null);
               setSelectedPirep(null);
@@ -3864,7 +3992,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               setSelectedAirport(null);
 
               if (closestType === 'aircraft') {
-                setSelectedAircraft(closest);
+                selectAircraft(closest);
               } else if (closestType === 'metar') {
                 setSelectedMetar(closest);
               } else if (closestType === 'pirep') {
@@ -3877,7 +4005,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             } else {
               // Clicked on empty area - clear all selections (unless panel is pinned)
               if (!panelPinned) {
-                setSelectedAircraft(null);
+                selectAircraft(null);
               }
               setSelectedMetar(null);
               setSelectedPirep(null);
@@ -3930,7 +4058,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             }
 
             if (closestAircraft) {
-              setAircraftDetailHex(closestAircraft.hex);
+              openAircraftDetail(closestAircraft.hex);
             }
           }} />
           
@@ -3948,7 +4076,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               <button
                 key={r}
                 className={`crt-range-btn ${radarRange === r ? 'active' : ''}`}
-                onClick={() => setRadarRange(r)}
+                onClick={() => updateRadarRange(r)}
               >
                 {r}
               </button>
@@ -4032,51 +4160,51 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             <button onClick={() => setShowOverlayMenu(false)}><X size={14} /></button>
           </div>
           <label className="overlay-toggle">
-            <input 
-              type="checkbox" 
-              checked={overlays.aircraft} 
-              onChange={() => setOverlays(prev => ({ ...prev, aircraft: !prev.aircraft }))}
+            <input
+              type="checkbox"
+              checked={overlays.aircraft}
+              onChange={() => updateOverlays({ ...overlays, aircraft: !overlays.aircraft })}
             />
             <span className="toggle-label">Aircraft</span>
           </label>
           <div className="overlay-divider" />
           <label className="overlay-toggle">
-            <input 
-              type="checkbox" 
-              checked={overlays.vors} 
-              onChange={() => setOverlays(prev => ({ ...prev, vors: !prev.vors }))}
+            <input
+              type="checkbox"
+              checked={overlays.vors}
+              onChange={() => updateOverlays({ ...overlays, vors: !overlays.vors })}
             />
             <span className="toggle-label">VORs & NAVAIDs</span>
           </label>
           <label className="overlay-toggle">
-            <input 
-              type="checkbox" 
-              checked={overlays.airports} 
-              onChange={() => setOverlays(prev => ({ ...prev, airports: !prev.airports }))}
+            <input
+              type="checkbox"
+              checked={overlays.airports}
+              onChange={() => updateOverlays({ ...overlays, airports: !overlays.airports })}
             />
             <span className="toggle-label">Airports</span>
           </label>
           <label className="overlay-toggle">
-            <input 
-              type="checkbox" 
-              checked={overlays.airspace} 
-              onChange={() => setOverlays(prev => ({ ...prev, airspace: !prev.airspace }))}
+            <input
+              type="checkbox"
+              checked={overlays.airspace}
+              onChange={() => updateOverlays({ ...overlays, airspace: !overlays.airspace })}
             />
             <span className="toggle-label">Airspace</span>
           </label>
           <label className="overlay-toggle">
-            <input 
-              type="checkbox" 
-              checked={overlays.metars} 
-              onChange={() => setOverlays(prev => ({ ...prev, metars: !prev.metars }))}
+            <input
+              type="checkbox"
+              checked={overlays.metars}
+              onChange={() => updateOverlays({ ...overlays, metars: !overlays.metars })}
             />
             <span className="toggle-label">METARs (Weather)</span>
           </label>
           <label className="overlay-toggle">
-            <input 
-              type="checkbox" 
-              checked={overlays.pireps} 
-              onChange={() => setOverlays(prev => ({ ...prev, pireps: !prev.pireps }))}
+            <input
+              type="checkbox"
+              checked={overlays.pireps}
+              onChange={() => updateOverlays({ ...overlays, pireps: !overlays.pireps })}
             />
             <span className="toggle-label">PIREPs</span>
           </label>
@@ -4088,7 +4216,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 <input
                   type="checkbox"
                   checked={overlays.countries}
-                  onChange={() => setOverlays(prev => ({ ...prev, countries: !prev.countries }))}
+                  onChange={() => updateOverlays({ ...overlays, countries: !overlays.countries })}
                 />
                 <span className="toggle-label">Countries</span>
               </label>
@@ -4096,7 +4224,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 <input
                   type="checkbox"
                   checked={overlays.states}
-                  onChange={() => setOverlays(prev => ({ ...prev, states: !prev.states }))}
+                  onChange={() => updateOverlays({ ...overlays, states: !overlays.states })}
                 />
                 <span className="toggle-label">States</span>
               </label>
@@ -4104,7 +4232,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 <input
                   type="checkbox"
                   checked={overlays.counties}
-                  onChange={() => setOverlays(prev => ({ ...prev, counties: !prev.counties }))}
+                  onChange={() => updateOverlays({ ...overlays, counties: !overlays.counties })}
                 />
                 <span className="toggle-label">Counties</span>
               </label>
@@ -4112,7 +4240,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 <input
                   type="checkbox"
                   checked={overlays.water}
-                  onChange={() => setOverlays(prev => ({ ...prev, water: !prev.water }))}
+                  onChange={() => updateOverlays({ ...overlays, water: !overlays.water })}
                 />
                 <span className="toggle-label">Water Bodies</span>
               </label>
@@ -4510,7 +4638,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                         <div 
                           key={ac.hex}
                           className={`aircraft-list-item ${selectedAircraft?.hex === ac.hex ? 'selected' : ''} ${isEmergency ? 'emergency flash-emergency' : ''} ${isConflict ? `conflict flash-conflict ${getSeverityClass(conflictSeverity)}` : ''} ${ac.military ? 'military' : ''}`}
-                          onClick={() => setSelectedAircraft(ac)}
+                          onClick={() => selectAircraft(ac)}
                           title={safetyEvent ? `${getEventTypeName(safetyEvent.event_type)}: ${safetyEvent.message}` : ''}
                         >
                           <div className="aircraft-list-primary">
@@ -4527,7 +4655,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                             <span className="aircraft-dist">{ac.distance_nm?.toFixed(1) || '--'}nm</span>
                             <button 
                               className="aircraft-detail-link"
-                              onClick={(e) => { e.stopPropagation(); setAircraftDetailHex(ac.hex); }}
+                              onClick={(e) => { e.stopPropagation(); openAircraftDetail(ac.hex); }}
                               title="View full details"
                             >
                               <ExternalLink size={10} />
@@ -4629,7 +4757,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             className={`aircraft-popup ${config.mapMode === 'crt' ? 'crt-popup' : ''} ${config.mapMode === 'pro' ? 'pro-popup' : ''} ${isEmergency ? 'emergency-popup' : ''} ${isConflict ? `conflict-popup ${getSeverityClass(conflictSeverity)}` : ''} ${isDragging ? 'dragging' : ''}`}
             onMouseDown={handlePopupMouseDown}
           >
-            <button className="popup-close" onClick={() => setSelectedAircraft(null)}>
+            <button className="popup-close" onClick={() => selectAircraft(null)}>
               <X size={16} />
             </button>
             <div className={`popup-header ${isEmergency ? 'emergency-header' : ''} ${isConflict ? `conflict-header ${getSeverityClass(conflictSeverity)}` : ''}`}>
@@ -4779,7 +4907,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             </button>
             <button
               className="popup-action-btn"
-              onClick={() => setAircraftDetailHex(selectedAircraft.hex)}
+              onClick={() => openAircraftDetail(selectedAircraft.hex)}
             >
               <ExternalLink size={14} />
               Full Details
@@ -4794,7 +4922,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               window.dispatchEvent(new CustomEvent('createAlertFromAircraft', {
                 detail: selectedAircraft
               }));
-              setSelectedAircraft(null);
+              selectAircraft(null);
             }}
           >
             <Bell size={14} />
@@ -4857,7 +4985,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             </div>
             <button 
               className={`conflict-select-btn ${getSeverityClass(conflictSeverity)}`}
-              onClick={() => setSelectedAircraft(otherAircraft)}
+              onClick={() => selectAircraft(otherAircraft)}
             >
               Select {otherAircraft.flight?.trim() || otherAircraft.hex}
             </button>
@@ -5471,12 +5599,12 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               </button>
               <button
                 className="pro-panel-btn"
-                onClick={() => setAircraftDetailHex(liveAircraft.hex)}
+                onClick={() => openAircraftDetail(liveAircraft.hex)}
                 title="View full aircraft details"
               >
                 <ExternalLink size={14} />
               </button>
-              <button className="pro-panel-close" onClick={() => !panelPinned && setSelectedAircraft(null)}>
+              <button className="pro-panel-close" onClick={() => !panelPinned && selectAircraft(null)}>
                 <X size={18} />
               </button>
             </div>
@@ -5833,10 +5961,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               }
               
               return filtered.slice(0, 50).map((msg, i) => {
-                // Find matching aircraft by ICAO hex or callsign
+                // Find matching aircraft by ICAO hex or callsign (handles IATA/ICAO conversion)
                 const matchingAircraft = aircraft.find(ac =>
                   (msg.icao_hex && ac.hex?.toUpperCase() === msg.icao_hex.toUpperCase()) ||
-                  (msg.callsign && ac.flight?.trim().toUpperCase() === msg.callsign.toUpperCase())
+                  callsignsMatch(msg.callsign, ac.flight)
                 );
 
                 return (
@@ -5845,7 +5973,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                     className={`acars-message ${matchingAircraft ? 'clickable' : ''}`}
                     onClick={() => {
                       if (matchingAircraft) {
-                        setSelectedAircraft(matchingAircraft);
+                        selectAircraft(matchingAircraft);
                         // Pan to aircraft if on map mode
                         if (config.mapMode === 'map' && leafletMapRef.current && matchingAircraft.lat && matchingAircraft.lon) {
                           leafletMapRef.current.flyTo([matchingAircraft.lat, matchingAircraft.lon], 12, {
@@ -5876,13 +6004,13 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
       {/* Aircraft Detail Modal */}
       {aircraftDetailHex && (
-        <div className="aircraft-detail-overlay" onClick={() => setAircraftDetailHex(null)}>
+        <div className="aircraft-detail-overlay" onClick={() => openAircraftDetail(null)}>
           <div className="aircraft-detail-modal" onClick={e => e.stopPropagation()}>
             <AircraftDetailPage
               hex={aircraftDetailHex}
               apiUrl={config.apiBaseUrl}
-              onClose={() => setAircraftDetailHex(null)}
-              onSelectAircraft={(newHex) => setAircraftDetailHex(newHex)}
+              onClose={() => openAircraftDetail(null)}
+              onSelectAircraft={(newHex) => openAircraftDetail(newHex)}
               aircraft={aircraft.find(a => a.hex === aircraftDetailHex)}
               aircraftInfo={aircraftInfo[aircraftDetailHex]}
               feederLocation={{ lat: feederLat, lon: feederLon }}

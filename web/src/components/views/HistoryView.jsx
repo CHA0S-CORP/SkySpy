@@ -4,8 +4,32 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useApi } from '../../hooks';
 
-export function HistoryView({ apiBase, onSelectAircraft, targetEventId, onEventViewed }) {
-  const [viewType, setViewType] = useState('sessions');
+const VALID_DATA_TYPES = ['sessions', 'sightings', 'acars', 'safety'];
+
+export function HistoryView({ apiBase, onSelectAircraft, targetEventId, onEventViewed, hashParams = {}, setHashParams }) {
+  // Sync viewType with URL hash params
+  const [viewType, setViewTypeState] = useState(() => {
+    if (hashParams.data && VALID_DATA_TYPES.includes(hashParams.data)) {
+      return hashParams.data;
+    }
+    return 'sessions';
+  });
+
+  // Wrapper to update both state and URL
+  const setViewType = (type) => {
+    setViewTypeState(type);
+    if (setHashParams) {
+      setHashParams({ data: type });
+    }
+  };
+
+  // Sync with hash params changes (back/forward navigation)
+  useEffect(() => {
+    if (hashParams.data && VALID_DATA_TYPES.includes(hashParams.data) && hashParams.data !== viewType) {
+      setViewTypeState(hashParams.data);
+    }
+  }, [hashParams.data]);
+
   const [timeRange, setTimeRange] = useState('24h');
   const [expandedSnapshots, setExpandedSnapshots] = useState({});
   const [expandedMaps, setExpandedMaps] = useState({});

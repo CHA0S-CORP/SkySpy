@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Menu } from 'lucide-react';
 import './App.css';
 
@@ -21,18 +21,81 @@ import { useWebSocket } from './hooks';
 import { getConfig } from './utils';
 
 // ============================================================================
+// Hash Routing Utilities
+// ============================================================================
+
+const VALID_TABS = ['map', 'aircraft', 'stats', 'history', 'audio', 'alerts', 'system', 'airframe'];
+
+function parseHash() {
+  const hash = window.location.hash.slice(1); // Remove #
+  if (!hash) return { tab: 'map', params: {} };
+
+  const [path, queryString] = hash.split('?');
+  const tab = VALID_TABS.includes(path) ? path : 'map';
+  const params = {};
+
+  if (queryString) {
+    const searchParams = new URLSearchParams(queryString);
+    for (const [key, value] of searchParams) {
+      params[key] = value;
+    }
+  }
+
+  return { tab, params };
+}
+
+function buildHash(tab, params = {}) {
+  const paramEntries = Object.entries(params).filter(([, v]) => v != null && v !== '');
+  if (paramEntries.length === 0) return `#${tab}`;
+  const queryString = new URLSearchParams(paramEntries).toString();
+  return `#${tab}?${queryString}`;
+}
+
+// ============================================================================
 // Main App
 // ============================================================================
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('map');
+  const [hashState, setHashState] = useState(parseHash);
   const [config, setConfig] = useState(getConfig);
   const [showSettings, setShowSettings] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [status, setStatus] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState(0);
   const [selectedAircraftHex, setSelectedAircraftHex] = useState(null);
   const [targetSafetyEventId, setTargetSafetyEventId] = useState(null);
+
+  const activeTab = hashState.tab;
+  const hashParams = hashState.params;
+
+  // Update hash when navigating
+  const setActiveTab = useCallback((tab, params = {}) => {
+    const newHash = buildHash(tab, params);
+    window.location.hash = newHash;
+  }, []);
+
+  // Update hash params without changing tab
+  const setHashParams = useCallback((params) => {
+    const newHash = buildHash(hashState.tab, { ...hashState.params, ...params });
+    window.location.hash = newHash;
+  }, [hashState]);
+
+  // Listen for hash changes (back/forward navigation, manual URL changes)
+  useEffect(() => {
+    const handleHashChange = () => {
+      setHashState(parseHash());
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+
+    // Set initial hash if empty
+    if (!window.location.hash) {
+      window.location.hash = '#map';
+    }
+
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   const { aircraft, connected, stats, safetyEvents, request: wsRequest } = useWebSocket(true, config.apiBaseUrl, 'all');
 
@@ -60,6 +123,25 @@ export default function App() {
     const interval = setInterval(fetchStatus, 30000);
     return () => clearInterval(interval);
   }, [wsRequest, connected, config.apiBaseUrl]);
+
+  // Fetch online users count more frequently
+  useEffect(() => {
+    const fetchOnlineUsers = async () => {
+      try {
+        const res = await fetch(`${config.apiBaseUrl}/api/v1/ws/status`);
+        if (res.ok) {
+          const data = await res.json();
+          setOnlineUsers(data.subscribers || data.socketio_connections || 0);
+        }
+      } catch (err) {
+        // Silently fail
+      }
+    };
+
+    fetchOnlineUsers();
+    const interval = setInterval(fetchOnlineUsers, 5000);
+    return () => clearInterval(interval);
+  }, [config.apiBaseUrl]);
 
   return (
     <div className={`app ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileMenuOpen ? 'mobile-menu-open' : ''}`}>
@@ -89,7 +171,7 @@ export default function App() {
         <Header
           stats={stats}
           location={status?.location}
-          onlineUsers={status?.socketio_connections || status?.sse_subscribers || 0}
+          onlineUsers={onlineUsers}
           config={config}
           setConfig={setConfig}
           setShowSettings={setShowSettings}
@@ -108,21 +190,65 @@ export default function App() {
                 setTargetSafetyEventId(eventId);
                 setActiveTab('history');
               }}
+              hashParams={hashParams}
+              setHashParams={setHashParams}
             />
           )}
-          {activeTab === 'aircraft' && <AircraftList aircraft={aircraft} onSelectAircraft={setSelectedAircraftHex} />}
-          {activeTab === 'stats' && <StatsView apiBase={config.apiBaseUrl} onSelectAircraft={setSelectedAircraftHex} />}
+          {activeTab === 'aircraft' && <AircraftList aircraft={aircraft} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} />}
+          {activeTab === 'stats' && <StatsView apiBase={config.apiBaseUrl} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} />}
           {activeTab === 'history' && (
             <HistoryView
               apiBase={config.apiBaseUrl}
-              onSelectAircraft={setSelectedAircraftHex}
+              onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
               targetEventId={targetSafetyEventId}
               onEventViewed={() => setTargetSafetyEventId(null)}
+              hashParams={hashParams}
+              setHashParams={setHashParams}
             />
           )}
           {activeTab === 'audio' && <AudioView apiBase={config.apiBaseUrl} />}
           {activeTab === 'alerts' && <AlertsView apiBase={config.apiBaseUrl} />}
           {activeTab === 'system' && <SystemView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={connected} />}
+          {activeTab === 'airframe' && (hashParams.icao || hashParams.call || hashParams.tail) && (() => {
+            // Find aircraft by icao, callsign, or tail number
+            const findAircraft = () => {
+              if (hashParams.icao) {
+                return aircraft.find(a => a.hex?.toLowerCase() === hashParams.icao.toLowerCase());
+              }
+              if (hashParams.call) {
+                return aircraft.find(a => a.flight?.trim().toLowerCase() === hashParams.call.toLowerCase());
+              }
+              if (hashParams.tail) {
+                return aircraft.find(a => a.r?.toLowerCase() === hashParams.tail.toLowerCase());
+              }
+              return null;
+            };
+            const foundAircraft = findAircraft();
+            // Use the hex from found aircraft, or fall back to the icao param
+            const hex = foundAircraft?.hex || hashParams.icao;
+
+            return hex ? (
+              <AircraftDetailPage
+                hex={hex}
+                apiUrl={config.apiBaseUrl}
+                onClose={() => setActiveTab('map')}
+                onSelectAircraft={(h) => setActiveTab('airframe', { icao: h })}
+                onViewHistoryEvent={(eventId) => {
+                  setTargetSafetyEventId(eventId);
+                  setActiveTab('history', { data: 'safety' });
+                }}
+                aircraft={foundAircraft}
+                feederLocation={status?.location}
+              />
+            ) : (
+              <div className="not-found-message" style={{ padding: '2rem', textAlign: 'center' }}>
+                <p>Aircraft not found: {hashParams.call || hashParams.tail || hashParams.icao}</p>
+                <button onClick={() => setActiveTab('map')} style={{ marginTop: '1rem', padding: '0.5rem 1rem', cursor: 'pointer' }}>
+                  Return to Map
+                </button>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -141,11 +267,14 @@ export default function App() {
               hex={selectedAircraftHex}
               apiUrl={config.apiBaseUrl}
               onClose={() => setSelectedAircraftHex(null)}
-              onSelectAircraft={setSelectedAircraftHex}
+              onSelectAircraft={(hex) => {
+                setSelectedAircraftHex(null);
+                setActiveTab('airframe', { icao: hex });
+              }}
               onViewHistoryEvent={(eventId) => {
                 setSelectedAircraftHex(null);
                 setTargetSafetyEventId(eventId);
-                setActiveTab('history');
+                setActiveTab('history', { data: 'safety' });
               }}
               aircraft={aircraft.find(a => a.hex === selectedAircraftHex)}
               feederLocation={status?.location}
