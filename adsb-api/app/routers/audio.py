@@ -116,9 +116,10 @@ async def upload_audio(
     # Validate file type
     content_type = file.content_type or ""
     valid_types = ["audio/mpeg", "audio/wav", "audio/ogg", "audio/flac", "audio/x-wav"]
-    if content_type not in valid_types and not file.filename.endswith(
+    has_valid_extension = file.filename and file.filename.endswith(
         (".mp3", ".wav", ".ogg", ".flac")
-    ):
+    )
+    if content_type not in valid_types and not has_valid_extension:
         logger.warning(
             "Audio upload rejected: invalid format %s for file %s",
             content_type, file.filename
@@ -324,6 +325,16 @@ async def queue_transcription(
             transmission_id
         )
         raise HTTPException(status_code=404, detail="Transmission not found")
+
+    if transmission.transcription_status in ("queued", "processing") and not force:
+        logger.info(
+            "Transcription queue rejected: transmission id=%d already in progress (status=%s)",
+            transmission_id, transmission.transcription_status
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=f"Transmission already {transmission.transcription_status}. Use force=true to re-queue."
+        )
 
     if transmission.transcription_status == "completed" and not force:
         logger.info(

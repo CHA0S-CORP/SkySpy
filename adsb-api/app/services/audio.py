@@ -266,7 +266,14 @@ async def queue_transcription_job(db: AsyncSession, transmission_id: int) -> boo
         logger.debug("Transcription is not enabled (neither whisper nor external)")
         return False
 
+    if _transcription_queue is None:
+        logger.error("Transcription queue not initialized")
+        return False
+
     try:
+        # Add to queue first to ensure it succeeds before updating DB
+        await _transcription_queue.put(transmission_id)
+
         # Update status to queued
         await db.execute(
             update(AudioTransmission)
@@ -278,14 +285,9 @@ async def queue_transcription_job(db: AsyncSession, transmission_id: int) -> boo
         )
         await db.commit()
 
-        # Add to queue
-        if _transcription_queue is not None:
-            await _transcription_queue.put(transmission_id)
-            _stats["transcriptions_queued"] += 1
-            logger.info(f"Queued transcription for transmission {transmission_id}")
-            return True
-
-        return False
+        _stats["transcriptions_queued"] += 1
+        logger.info(f"Queued transcription for transmission {transmission_id}")
+        return True
 
     except Exception as e:
         logger.error(f"Failed to queue transcription for {transmission_id}: {e}")
