@@ -251,6 +251,11 @@ class AcarsService:
                     if isinstance(app, dict):
                         station_id = app.get("name")
 
+                # ack can be False (bool) or a string - convert to string if present
+                ack_val = msg.get("ack")
+                if ack_val is not None:
+                    ack_val = str(ack_val) if ack_val else None
+
                 return {
                     "timestamp": msg.get("timestamp", datetime.utcnow().timestamp()),
                     "source": "acars",
@@ -262,7 +267,7 @@ class AcarsService:
                     "label": msg.get("label"),
                     "block_id": msg.get("block_id"),
                     "msg_num": msg.get("msgno"),
-                    "ack": msg.get("ack"),
+                    "ack": ack_val,
                     "mode": msg.get("mode"),
                     "text": msg.get("text", ""),
                     "signal_level": msg.get("level"),
@@ -300,6 +305,11 @@ class AcarsService:
                         if isinstance(app, dict):
                             station_id = app.get("name")
 
+                    # ack can be False (bool) or a string - convert to string if present
+                    ack_val = acars_data.get("ack")
+                    if ack_val is not None:
+                        ack_val = str(ack_val) if ack_val else None
+
                     return {
                         "timestamp": msg.get("timestamp", vdl2.get("t", {}).get("sec", datetime.utcnow().timestamp())),
                         "source": "vdlm2",
@@ -311,7 +321,7 @@ class AcarsService:
                         "label": acars_data.get("label"),
                         "block_id": acars_data.get("blk_id"),
                         "msg_num": acars_data.get("msg_num"),
-                        "ack": acars_data.get("ack"),
+                        "ack": ack_val,
                         "mode": acars_data.get("mode"),
                         "text": acars_data.get("msg_text", ""),
                         "signal_level": vdl2.get("sig_level"),
@@ -337,6 +347,11 @@ class AcarsService:
                         if isinstance(app, dict):
                             station_id = app.get("name")
 
+                    # ack can be False (bool) or a string - convert to string if present
+                    ack_val = msg.get("ack")
+                    if ack_val is not None:
+                        ack_val = str(ack_val) if ack_val else None
+
                     return {
                         "timestamp": msg.get("timestamp", datetime.utcnow().timestamp()),
                         "source": "vdlm2",
@@ -348,7 +363,7 @@ class AcarsService:
                         "label": msg.get("label"),
                         "block_id": msg.get("block_id"),
                         "msg_num": msg.get("msgno"),
-                        "ack": msg.get("ack"),
+                        "ack": ack_val,
                         "mode": msg.get("mode"),
                         "text": msg.get("text", ""),
                         "signal_level": msg.get("level"),
