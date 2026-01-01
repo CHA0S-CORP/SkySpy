@@ -1035,6 +1035,9 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
         # ACARS status
         acars_stats = acars_service.get_stats()
 
+        # Get scheduler state
+        from app.routers.system import _scheduler_state
+
         return {
             "version": "2.6.0",
             "adsb_online": adsb_online,
@@ -1047,11 +1050,17 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
             "safety_monitoring_enabled": safety_monitor.enabled,
             "safety_tracked_aircraft": len(safety_monitor._aircraft_state),
             "notifications_configured": notifier.server_count > 0,
+            "redis_enabled": sse_manager._using_redis if sse_manager else False,
             "sse_subscribers": sse_subscribers,
+            "sse_tracked_aircraft": len(sse_manager._last_aircraft_state) if sse_manager else 0,
+            "sse_redis_enabled": sse_manager._using_redis if sse_manager else False,
             "socketio_connections": sio_connections,
             "acars_enabled": settings.acars_enabled,
             "acars_running": acars_stats["running"],
             "polling_interval_seconds": settings.polling_interval,
+            "db_store_interval_seconds": settings.db_store_interval,
+            "scheduler_running": _scheduler_state["running"],
+            "scheduler_jobs": _scheduler_state["jobs"],
             "worker_pid": os.getpid(),
             "location": {
                 "lat": settings.feeder_lat,
@@ -1095,8 +1104,21 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
             services["ultrafeeder"] = {"status": "down", "error": str(e)}
             overall_status = "degraded"
 
-        # SSE check
+        # Redis check
         sse_manager = get_sse_manager()
+        if sse_manager and sse_manager._using_redis:
+            try:
+                if hasattr(sse_manager, "_redis") and sse_manager._redis:
+                    await sse_manager._redis.ping()
+                    services["redis"] = {"status": "up"}
+                else:
+                    services["redis"] = {"status": "not_connected"}
+            except Exception as e:
+                services["redis"] = {"status": "down", "error": str(e)}
+        else:
+            services["redis"] = {"status": "not_configured"}
+
+        # SSE check
         if sse_manager:
             try:
                 subscriber_count = await sse_manager.get_subscriber_count()

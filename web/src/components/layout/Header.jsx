@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Plane, MapPin, Clock, Settings, BellRing, BellOff } from 'lucide-react';
+import { Plane, MapPin, Clock, Settings, BellRing, BellOff, Users } from 'lucide-react';
 import { saveConfig } from '../../utils/config';
 
-export function Header({ stats, location, config, setConfig, setShowSettings }) {
+export function Header({ stats, location, onlineUsers, config, setConfig, setShowSettings }) {
   const [time, setTime] = useState(new Date());
   const [notifPermission, setNotifPermission] = useState(
     'Notification' in window ? Notification.permission : 'denied'
@@ -46,6 +46,11 @@ export function Header({ stats, location, config, setConfig, setShowSettings }) 
           <MapPin size={16} />
           <span className="stat-value">{location?.lon?.toFixed(1) || '--'}</span>
           <span className="stat-label">Lon</span>
+        </div>
+        <div className="stat-item">
+          <Users size={16} />
+          <span className="stat-value">{onlineUsers}</span>
+          <span className="stat-label">Online</span>
         </div>
       </div>
       <div className="header-actions">

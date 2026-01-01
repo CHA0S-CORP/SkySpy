@@ -15,12 +15,12 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
   const [testResult, setTestResult] = useState(null);
   const [safetyTestResult, setSafetyTestResult] = useState(null);
 
-  // Fallback HTTP fetchers (used when WebSocket is not available)
-  const { data: httpStatus, refetch: refetchHttpStatus } = useApi('/api/v1/status', wsConnected ? null : 10000, apiBase);
-  const { data: httpHealth } = useApi('/api/v1/health', wsConnected ? null : 10000, apiBase);
-  const { data: httpWsStatus } = useApi('/api/v1/ws/status', wsConnected ? null : 5000, apiBase);
+  // HTTP fetchers - always fetch these as fallback/supplement
+  const { data: httpStatus, refetch: refetchHttpStatus } = useApi('/api/v1/status', 10000, apiBase);
+  const { data: httpHealth } = useApi('/api/v1/health', 10000, apiBase);
+  const { data: httpWsStatus } = useApi('/api/v1/ws/status', 5000, apiBase);
   const { data: httpNotifConfig } = useApi('/api/v1/notifications/config', null, apiBase);
-  const { data: httpSafetyStatus } = useApi('/api/v1/safety/monitor/status', wsConnected ? null : 10000, apiBase);
+  const { data: httpSafetyStatus } = useApi('/api/v1/safety/monitor/status', 10000, apiBase);
 
   // Fetch all status data via WebSocket
   const fetchViaSocket = useCallback(async () => {
@@ -54,16 +54,16 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
     }
   }, [wsRequest, wsConnected]);
 
-  // Use HTTP fallback data when WebSocket is not connected
+  // Use HTTP data as fallback/supplement (updates state if not already set or newer)
   useEffect(() => {
-    if (!wsConnected) {
-      if (httpStatus) setStatus(httpStatus);
-      if (httpHealth) setHealth(httpHealth);
-      if (httpWsStatus) setWsStatus(httpWsStatus);
-      if (httpSafetyStatus) setSafetyStatus(httpSafetyStatus);
+    if (httpStatus && !status) setStatus(httpStatus);
+    if (httpHealth && !health) setHealth(httpHealth);
+    if (httpWsStatus && !wsStatus) setWsStatus(httpWsStatus);
+    if (httpSafetyStatus && !safetyStatus) setSafetyStatus(httpSafetyStatus);
+    if (httpStatus || httpHealth || httpWsStatus || httpSafetyStatus) {
       setLoading(false);
     }
-  }, [wsConnected, httpStatus, httpHealth, httpWsStatus, httpSafetyStatus]);
+  }, [httpStatus, httpHealth, httpWsStatus, httpSafetyStatus, status, health, wsStatus, safetyStatus]);
 
   // Always use HTTP for notification config (not available via WebSocket)
   useEffect(() => {

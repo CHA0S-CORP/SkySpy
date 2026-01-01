@@ -89,6 +89,7 @@ export default function App() {
         <Header
           stats={stats}
           location={status?.location}
+          onlineUsers={status?.socketio_connections || status?.sse_subscribers || 0}
           config={config}
           setConfig={setConfig}
           setShowSettings={setShowSettings}
