@@ -50,7 +50,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const [searchQuery, setSearchQuery] = useState(''); // Search filter
   const [trackHistory, setTrackHistory] = useState({}); // Per-aircraft position history for trails
   const [showSelectedTrack, setShowSelectedTrack] = useState(false); // Show track line for selected aircraft
-  
+  const [showShortTracks, setShowShortTracks] = useState(() => localStorage.getItem('adsb-show-short-tracks') === 'true'); // Show short ~5nm trails for all aircraft (ATC style)
+  const [shortTrackHistory, setShortTrackHistory] = useState({}); // Historical positions for short tracks (from API)
+
   // New feature states
   const [isFullscreen, setIsFullscreen] = useState(false); // Fullscreen mode
   const [panelPinned, setPanelPinned] = useState(false); // Pin pro details panel
@@ -137,7 +139,13 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const [proPanOffset, setProPanOffset] = useState({ x: 0, y: 0 });
   const [isProPanning, setIsProPanning] = useState(false);
   const proPanStartRef = useRef({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
+  const proPanOffsetRef = useRef(proPanOffset); // Ref to access latest pan offset in callbacks
   const [followingAircraft, setFollowingAircraft] = useState(null); // ICAO hex of aircraft to follow
+
+  // Keep pan offset ref in sync
+  useEffect(() => {
+    proPanOffsetRef.current = proPanOffset;
+  }, [proPanOffset]);
   
   // Aviation data from REST endpoints
   const [aviationData, setAviationData] = useState({
@@ -161,9 +169,21 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const [viewportCenter, setViewportCenter] = useState({ lat: null, lon: null });
   const viewportUpdateTimeoutRef = useRef(null);
 
+  // Store initial center from URL to apply when map initializes
+  const initialCenterRef = useRef(null);
+  const initialZoomRef = useRef(null);
+  const centerUpdateTimeoutRef = useRef(null);
+
+  // Ref to always have access to latest setHashParams in event handlers
+  const setHashParamsRef = useRef(setHashParams);
+  useEffect(() => {
+    setHashParamsRef.current = setHashParams;
+  }, [setHashParams]);
+
   const mapRef = useRef(null);
   const leafletMapRef = useRef(null);
   const markersRef = useRef({});
+  const shortTrackPolylinesRef = useRef({}); // Leaflet polylines for short tracks in map mode
   const feederMarkerRef = useRef(null);
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
@@ -171,6 +191,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const sweepAngleRef = useRef(0);
   const historyRef = useRef({}); // Store position history for trails
   const conflictsRef = useRef([]); // Track conflicts for banner
+  const shortTrackFetchedRef = useRef(new Set()); // Track which aircraft have had history fetched
 
   // Pro panel canvas refs
   const trackCanvasRef = useRef(null);
@@ -189,6 +210,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   // Use feeder location or default
   const feederLat = feederLocation?.lat || 47.9377;
   const feederLon = feederLocation?.lon || -121.9687;
+
+  // Refs to access latest feeder location in event handlers
+  const feederLatRef = useRef(feederLat);
+  const feederLonRef = useRef(feederLon);
+  useEffect(() => {
+    feederLatRef.current = feederLat;
+    feederLonRef.current = feederLon;
+  }, [feederLat, feederLon]);
 
   // Sync map settings from URL hash params on mount
   const VALID_MODES = ['radar', 'crt', 'pro', 'map'];
@@ -235,14 +264,94 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       saveOverlays(newOverlays);
     }
 
+    // Sync traffic filters from URL (comma-separated list of enabled filters + altitude range)
+    if (hashParams.filters || hashParams.minAlt !== undefined || hashParams.maxAlt !== undefined) {
+      const newFilters = { ...trafficFilters };
+
+      if (hashParams.filters) {
+        const enabledFilters = hashParams.filters.split(',').map(s => s.trim());
+        // Boolean filter keys
+        const boolKeys = ['showMilitary', 'showCivil', 'showGround', 'showAirborne',
+                          'showWithSquawk', 'showWithoutSquawk', 'safetyEventsOnly',
+                          'showGA', 'showAirliners'];
+        boolKeys.forEach(key => {
+          newFilters[key] = enabledFilters.includes(key);
+        });
+      }
+
+      if (hashParams.minAlt !== undefined) {
+        const minAlt = parseInt(hashParams.minAlt, 10);
+        if (!isNaN(minAlt) && minAlt >= 0) {
+          newFilters.minAltitude = minAlt;
+        }
+      }
+
+      if (hashParams.maxAlt !== undefined) {
+        const maxAlt = parseInt(hashParams.maxAlt, 10);
+        if (!isNaN(maxAlt) && maxAlt >= 0) {
+          newFilters.maxAltitude = maxAlt;
+        }
+      }
+
+      setTrafficFilters(newFilters);
+    }
+
     // If no mode in URL, set current mode to URL
     if (!hashParams.mode && setHashParams && config.mapMode) {
       setHashParams({ mode: config.mapMode });
     }
 
+    // If no overlays in URL, set current overlays to URL
+    if (!hashParams.overlays && setHashParams) {
+      const enabledOverlays = Object.entries(overlays)
+        .filter(([, enabled]) => enabled)
+        .map(([key]) => key)
+        .join(',');
+      if (enabledOverlays) {
+        setHashParams({ overlays: enabledOverlays });
+      }
+    }
+
+    // If no filters in URL, set current filters to URL
+    if (!hashParams.filters && setHashParams) {
+      const boolKeys = ['showMilitary', 'showCivil', 'showGround', 'showAirborne',
+                        'showWithSquawk', 'showWithoutSquawk', 'safetyEventsOnly',
+                        'showGA', 'showAirliners'];
+      const enabledFilters = boolKeys.filter(key => trafficFilters[key]).join(',');
+      setHashParams({
+        filters: enabledFilters || undefined,
+        minAlt: trafficFilters.minAltitude !== 0 ? String(trafficFilters.minAltitude) : undefined,
+        maxAlt: trafficFilters.maxAltitude !== 60000 ? String(trafficFilters.maxAltitude) : undefined,
+      });
+    }
+
     // Open aircraft detail from URL if specified
     if (hashParams.aircraft) {
       setAircraftDetailHex(hashParams.aircraft);
+    }
+
+    // Store initial center/zoom from URL to apply when map initializes
+    if (hashParams.lat && hashParams.lon) {
+      const lat = parseFloat(hashParams.lat);
+      const lon = parseFloat(hashParams.lon);
+      if (!isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+        initialCenterRef.current = { lat, lon };
+      }
+    }
+    if (hashParams.zoom) {
+      const zoom = parseInt(hashParams.zoom, 10);
+      if (!isNaN(zoom) && zoom >= 1 && zoom <= 20) {
+        initialZoomRef.current = zoom;
+      }
+    }
+
+    // Restore pro/crt mode pan offset from URL
+    if (hashParams.panX && hashParams.panY) {
+      const panX = parseInt(hashParams.panX, 10);
+      const panY = parseInt(hashParams.panY, 10);
+      if (!isNaN(panX) && !isNaN(panY)) {
+        setProPanOffset({ x: panX, y: panY });
+      }
     }
   }, []); // Only run on mount
 
@@ -259,6 +368,12 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     if (hashParams.selected && aircraft.length > 0 && !selectedAircraft) {
       const ac = aircraft.find(a => a.hex?.toLowerCase() === hashParams.selected.toLowerCase());
       if (ac) {
+        // Clear other selections and set popup position
+        setSelectedMetar(null);
+        setSelectedPirep(null);
+        setSelectedNavaid(null);
+        setSelectedAirport(null);
+        setPopupPosition({ x: 16, y: 16 });
         setSelectedAircraft(ac);
       }
     }
@@ -584,7 +699,12 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       stopAlarmLoop();
     }
   }, [soundMuted, stopAlarmLoop]);
-  
+
+  // Save short tracks preference
+  useEffect(() => {
+    localStorage.setItem('adsb-show-short-tracks', showShortTracks.toString());
+  }, [showShortTracks]);
+
   // Screen Wake Lock - prevent screen from sleeping while on map
   useEffect(() => {
     let wakeLock = null;
@@ -1105,6 +1225,17 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
   const handleProPanEnd = useCallback(() => {
     setIsProPanning(false);
+    // Update URL with pan offset for pro/crt mode (store as pixels since lat/lon conversion is complex)
+    const updateHash = setHashParamsRef.current;
+    const offset = proPanOffsetRef.current;
+    if (updateHash && (offset.x !== 0 || offset.y !== 0)) {
+      updateHash({
+        panX: String(Math.round(offset.x)),
+        panY: String(Math.round(offset.y))
+      });
+    } else if (updateHash) {
+      updateHash({ panX: undefined, panY: undefined });
+    }
   }, []);
 
   // Reset pan offset and stop following when switching away from pro mode
@@ -1224,6 +1355,61 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       return updated;
     });
   }, [aircraft, feederLat, feederLon]);
+
+  // Fetch historical positions for short tracks when enabled
+  useEffect(() => {
+    if (!showShortTracks) return;
+
+    const baseUrl = config.apiBaseUrl || '';
+    const visibleAircraft = aircraft.filter(ac => ac.hex && ac.lat && ac.lon);
+
+    // Fetch history for aircraft we haven't fetched yet
+    const fetchPromises = visibleAircraft
+      .filter(ac => !shortTrackFetchedRef.current.has(ac.hex))
+      .slice(0, 10) // Limit concurrent fetches
+      .map(async (ac) => {
+        shortTrackFetchedRef.current.add(ac.hex);
+        try {
+          const res = await fetch(`${baseUrl}/api/v1/history/sightings/${ac.hex}?hours=1&limit=50`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.sightings && data.sightings.length > 0) {
+              // Convert to our format and filter to ~5nm trail (about 30 positions at typical speeds)
+              const positions = data.sightings
+                .reverse() // API returns newest first, we want oldest first
+                .slice(-30) // Keep last 30 positions
+                .map(s => ({
+                  lat: s.lat,
+                  lon: s.lon,
+                  time: new Date(s.timestamp).getTime()
+                }));
+
+              setShortTrackHistory(prev => ({
+                ...prev,
+                [ac.hex]: positions
+              }));
+            }
+          }
+        } catch (e) {
+          // Silently fail - real-time data will still work
+        }
+      });
+
+    Promise.all(fetchPromises);
+
+    // Cleanup old entries when aircraft disappear
+    const activeHexes = new Set(aircraft.map(a => a.hex));
+    setShortTrackHistory(prev => {
+      const updated = { ...prev };
+      Object.keys(updated).forEach(hex => {
+        if (!activeHexes.has(hex)) {
+          delete updated[hex];
+          shortTrackFetchedRef.current.delete(hex);
+        }
+      });
+      return updated;
+    });
+  }, [showShortTracks, aircraft, config.apiBaseUrl]);
 
   // Draw track history canvas when selected aircraft or history changes
   useEffect(() => {
@@ -1906,7 +2092,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       if (!ac.military && !trafficFilters.showCivil) return false;
 
       // Ground/Airborne filter
-      const isGround = ac.alt_baro === 'ground' || ac.on_ground || (ac.alt && ac.alt < 100);
+      const isGround = ac.alt_baro === 'ground' || ac.on_ground || (typeof ac.alt === 'number' && ac.alt < 100);
       if (isGround && !trafficFilters.showGround) return false;
       if (!isGround && !trafficFilters.showAirborne) return false;
 
@@ -3009,6 +3195,77 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         ctx.restore();
       }
 
+      // Draw short tracks for all aircraft (ATC-style history trails)
+      if (showShortTracks && overlays.aircraft) {
+        ctx.save();
+        ctx.lineWidth = 1.5;
+
+        sortedAircraft.forEach(ac => {
+          if (!ac.hex || !ac.lat || !ac.lon) return;
+
+          const dist = ac.distance_nm || getDistanceNm(ac.lat, ac.lon);
+          if (!isPro && dist > radarRange) return;
+          if (isPro && dist > radarRange * 1.5) return;
+
+          // Combine historical data (from API) with real-time trackHistory
+          const historicPositions = shortTrackHistory[ac.hex] || [];
+          const realtimePositions = trackHistory[ac.hex] || [];
+
+          // Merge: use historic for old data, realtime for recent
+          // Filter to keep only positions that would create ~5nm trail
+          const now = Date.now();
+          const maxAge = 90000; // 90 seconds max for short track
+          const allPositions = [
+            ...historicPositions.filter(p => now - p.time < maxAge),
+            ...realtimePositions.filter(p => now - p.time < maxAge)
+          ].sort((a, b) => a.time - b.time);
+
+          // Need at least 2 points to draw a line
+          if (allPositions.length < 2) return;
+
+          // Keep only last ~15 positions for short trail
+          const positions = allPositions.slice(-15);
+
+          // Draw trail with fading opacity (older = more transparent)
+          const isSelected = selectedAircraft?.hex === ac.hex;
+          const baseColor = 'rgba(255, 255, 255,';
+
+          ctx.beginPath();
+          let started = false;
+
+          positions.forEach((point, i) => {
+            const pos = latLonToScreen(point.lat, point.lon);
+            if (pos.x < -50 || pos.x > width + 50 || pos.y < -50 || pos.y > height + 50) return;
+
+            if (!started) {
+              ctx.moveTo(pos.x, pos.y);
+              started = true;
+            } else {
+              ctx.lineTo(pos.x, pos.y);
+            }
+          });
+
+          // Use slightly brighter for selected aircraft
+          const opacity = isSelected ? 0.6 : 0.35;
+          ctx.strokeStyle = `${baseColor} ${opacity})`;
+          ctx.stroke();
+
+          // Draw small dots at each position for ATC-style display
+          positions.forEach((point, i) => {
+            const pos = latLonToScreen(point.lat, point.lon);
+            if (pos.x < -50 || pos.x > width + 50 || pos.y < -50 || pos.y > height + 50) return;
+
+            const dotOpacity = 0.15 + (i / positions.length) * 0.35;
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, isPro ? 2 : 1.5, 0, Math.PI * 2);
+            ctx.fillStyle = `${baseColor} ${dotOpacity})`;
+            ctx.fill();
+          });
+        });
+
+        ctx.restore();
+      }
+
       // Draw aircraft (if overlay enabled)
       // Sort so aircraft with safety events are drawn last (on top)
       if (overlays.aircraft) {
@@ -3377,17 +3634,22 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [config.mapMode, sortedAircraft, radarRange, feederLat, feederLon, selectedAircraft, selectedMetar, selectedPirep, selectedNavaid, selectedAirport, overlays, aviationData, proPanOffset, followingAircraft, trackHistory, showSelectedTrack, safetyEvents]);
+  }, [config.mapMode, sortedAircraft, radarRange, feederLat, feederLon, selectedAircraft, selectedMetar, selectedPirep, selectedNavaid, selectedAirport, overlays, aviationData, proPanOffset, followingAircraft, trackHistory, showSelectedTrack, safetyEvents, showShortTracks, shortTrackHistory]);
 
   // Leaflet map setup
   useEffect(() => {
     if (config.mapMode !== 'map' || !mapRef.current) return;
 
     if (!leafletMapRef.current) {
-      const center = [feederLat, feederLon];
+      // Use initial center from URL if available, otherwise use feeder location
+      const center = initialCenterRef.current
+        ? [initialCenterRef.current.lat, initialCenterRef.current.lon]
+        : [feederLat, feederLon];
+      const zoom = initialZoomRef.current || 8;
+
       leafletMapRef.current = L.map(mapRef.current, {
         center,
-        zoom: 8,
+        zoom,
         zoomControl: true
       });
 
@@ -3406,16 +3668,38 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         .addTo(leafletMapRef.current)
         .bindTooltip('Feeder Location', { permanent: false });
 
-      // Update viewport center on map move/zoom for dynamic aviation data loading
+      // Update viewport center on map move/zoom for dynamic aviation data loading and URL sync
       const handleViewportChange = () => {
-        // Debounce viewport updates to avoid excessive API calls
+        // Debounce viewport updates to avoid excessive API calls and URL spam
         if (viewportUpdateTimeoutRef.current) {
           clearTimeout(viewportUpdateTimeoutRef.current);
         }
         viewportUpdateTimeoutRef.current = setTimeout(() => {
           const mapCenter = leafletMapRef.current?.getCenter();
+          const mapZoom = leafletMapRef.current?.getZoom();
           if (mapCenter) {
             setViewportCenter({ lat: mapCenter.lat, lon: mapCenter.lng });
+
+            // Update URL with center if significantly different from feeder location
+            // Use refs to get latest values
+            const currentFeederLat = feederLatRef.current;
+            const currentFeederLon = feederLonRef.current;
+            const latDiff = Math.abs(mapCenter.lat - currentFeederLat);
+            const lonDiff = Math.abs(mapCenter.lng - currentFeederLon);
+            const zoomDiff = Math.abs(mapZoom - 8);
+
+            // Use ref to get latest setHashParams function
+            const updateHash = setHashParamsRef.current;
+            if (updateHash && (latDiff > 0.01 || lonDiff > 0.01 || zoomDiff > 0)) {
+              updateHash({
+                lat: mapCenter.lat.toFixed(4),
+                lon: mapCenter.lng.toFixed(4),
+                zoom: String(mapZoom)
+              });
+            } else if (updateHash && latDiff <= 0.01 && lonDiff <= 0.01 && zoomDiff === 0) {
+              // Clear center params if back to default
+              updateHash({ lat: undefined, lon: undefined, zoom: undefined });
+            }
           }
         }, 500); // 500ms debounce
       };
@@ -3449,6 +3733,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         leafletMapRef.current.remove();
         leafletMapRef.current = null;
         markersRef.current = {};
+        shortTrackPolylinesRef.current = {};
         feederMarkerRef.current = null;
       }
     };
@@ -3514,6 +3799,71 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     });
   }, [sortedAircraft, config.mapMode, safetyEvents]);
 
+  // Leaflet polyline updates for short tracks in map mode
+  useEffect(() => {
+    if (config.mapMode !== 'map' || !leafletMapRef.current) return;
+
+    // Remove all polylines if short tracks disabled
+    if (!showShortTracks) {
+      Object.values(shortTrackPolylinesRef.current).forEach(polyline => polyline.remove());
+      shortTrackPolylinesRef.current = {};
+      return;
+    }
+
+    const currentHexes = new Set(sortedAircraft.map(a => a.hex));
+    const now = Date.now();
+    const maxAge = 90000; // 90 seconds
+
+    // Remove polylines for aircraft no longer present
+    Object.keys(shortTrackPolylinesRef.current).forEach(hex => {
+      if (!currentHexes.has(hex)) {
+        shortTrackPolylinesRef.current[hex].remove();
+        delete shortTrackPolylinesRef.current[hex];
+      }
+    });
+
+    // Update or create polylines for each aircraft
+    sortedAircraft.slice(0, 150).forEach(ac => {
+      if (!ac.lat || !ac.lon || !ac.hex) return;
+
+      // Combine historical and realtime positions
+      const historicPositions = shortTrackHistory[ac.hex] || [];
+      const realtimePositions = trackHistory[ac.hex] || [];
+
+      const allPositions = [
+        ...historicPositions.filter(p => now - p.time < maxAge),
+        ...realtimePositions.filter(p => now - p.time < maxAge)
+      ].sort((a, b) => a.time - b.time);
+
+      // Keep only last 15 positions
+      const positions = allPositions.slice(-15);
+
+      if (positions.length < 2) {
+        // Remove existing polyline if not enough points
+        if (shortTrackPolylinesRef.current[ac.hex]) {
+          shortTrackPolylinesRef.current[ac.hex].remove();
+          delete shortTrackPolylinesRef.current[ac.hex];
+        }
+        return;
+      }
+
+      const latlngs = positions.map(p => [p.lat, p.lon]);
+      const color = '#ffffff';
+
+      if (shortTrackPolylinesRef.current[ac.hex]) {
+        shortTrackPolylinesRef.current[ac.hex].setLatLngs(latlngs);
+      } else {
+        const polyline = L.polyline(latlngs, {
+          color: color,
+          weight: 2,
+          opacity: 0.5,
+          dashArray: '4, 4'
+        }).addTo(leafletMapRef.current);
+        shortTrackPolylinesRef.current[ac.hex] = polyline;
+      }
+    });
+  }, [sortedAircraft, config.mapMode, showShortTracks, shortTrackHistory, trackHistory]);
+
   const cycleMapMode = () => {
     const modes = ['radar', 'crt', 'pro', 'map'];
     const currentIndex = modes.indexOf(config.mapMode);
@@ -3557,6 +3907,30 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         .join(',');
       setHashParams({ overlays: enabledOverlays || undefined });
     }
+  };
+
+  // Update URL when traffic filters change
+  const updateTrafficFilters = (newFiltersOrUpdater) => {
+    setTrafficFilters(prev => {
+      const newFilters = typeof newFiltersOrUpdater === 'function'
+        ? newFiltersOrUpdater(prev)
+        : newFiltersOrUpdater;
+
+      // Update URL with enabled boolean filters and altitude range
+      if (setHashParams) {
+        const boolKeys = ['showMilitary', 'showCivil', 'showGround', 'showAirborne',
+                          'showWithSquawk', 'showWithoutSquawk', 'safetyEventsOnly',
+                          'showGA', 'showAirliners'];
+        const enabledFilters = boolKeys.filter(key => newFilters[key]).join(',');
+        setHashParams({
+          filters: enabledFilters || undefined,
+          minAlt: newFilters.minAltitude !== 0 ? String(newFilters.minAltitude) : undefined,
+          maxAlt: newFilters.maxAltitude !== 60000 ? String(newFilters.maxAltitude) : undefined,
+        });
+      }
+
+      return newFilters;
+    });
   };
 
   // Update URL when opening aircraft detail (and clear when closing)
@@ -4113,10 +4487,20 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       {/* Map Controls */}
       <div className="map-controls">
         {config.mapMode === 'map' && (
-          <button className={`map-control-btn ${config.mapDarkMode ? 'active' : ''}`} onClick={toggleDarkMode}>
-            {config.mapDarkMode ? <Moon size={16} /> : <Sun size={16} />}
-            <span>{config.mapDarkMode ? 'Dark' : 'Light'}</span>
-          </button>
+          <>
+            <button className={`map-control-btn ${config.mapDarkMode ? 'active' : ''}`} onClick={toggleDarkMode}>
+              {config.mapDarkMode ? <Moon size={16} /> : <Sun size={16} />}
+              <span>{config.mapDarkMode ? 'Dark' : 'Light'}</span>
+            </button>
+            <button
+              className={`map-control-btn ${showShortTracks ? 'active' : ''}`}
+              onClick={() => setShowShortTracks(!showShortTracks)}
+              title={showShortTracks ? 'Hide short tracks' : 'Show short tracks (ATC trails)'}
+            >
+              <Navigation size={16} />
+              <span>Trails</span>
+            </button>
+          </>
         )}
         {(config.mapMode === 'crt' || config.mapMode === 'pro') && (
           <>
@@ -4133,6 +4517,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             >
               <Layers size={16} />
               <span>Layers</span>
+            </button>
+            <button
+              className={`map-control-btn ${showShortTracks ? 'active' : ''}`}
+              onClick={() => setShowShortTracks(!showShortTracks)}
+              title={showShortTracks ? 'Hide short tracks' : 'Show short tracks (ATC trails)'}
+            >
+              <Navigation size={16} />
+              <span>Trails</span>
             </button>
           </>
         )}
@@ -4273,7 +4665,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               <input
                 type="checkbox"
                 checked={trafficFilters.safetyEventsOnly}
-                onChange={() => setTrafficFilters(prev => ({ ...prev, safetyEventsOnly: !prev.safetyEventsOnly }))}
+                onChange={() => updateTrafficFilters(prev => ({ ...prev, safetyEventsOnly: !prev.safetyEventsOnly }))}
               />
               <span className="toggle-label"><AlertTriangle size={12} /> Safety Events Only</span>
             </label>
@@ -4287,7 +4679,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               <input
                 type="checkbox"
                 checked={trafficFilters.showMilitary}
-                onChange={() => setTrafficFilters(prev => ({ ...prev, showMilitary: !prev.showMilitary }))}
+                onChange={() => updateTrafficFilters(prev => ({ ...prev, showMilitary: !prev.showMilitary }))}
               />
               <span className="toggle-label"><Shield size={12} /> Military</span>
             </label>
@@ -4295,7 +4687,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               <input
                 type="checkbox"
                 checked={trafficFilters.showCivil}
-                onChange={() => setTrafficFilters(prev => ({ ...prev, showCivil: !prev.showCivil }))}
+                onChange={() => updateTrafficFilters(prev => ({ ...prev, showCivil: !prev.showCivil }))}
               />
               <span className="toggle-label"><Plane size={12} /> Civil</span>
             </label>
@@ -4307,7 +4699,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               <input
                 type="checkbox"
                 checked={trafficFilters.showGA}
-                onChange={() => setTrafficFilters(prev => ({ ...prev, showGA: !prev.showGA }))}
+                onChange={() => updateTrafficFilters(prev => ({ ...prev, showGA: !prev.showGA }))}
               />
               <span className="toggle-label">GA / Light</span>
             </label>
@@ -4315,7 +4707,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               <input
                 type="checkbox"
                 checked={trafficFilters.showAirliners}
-                onChange={() => setTrafficFilters(prev => ({ ...prev, showAirliners: !prev.showAirliners }))}
+                onChange={() => updateTrafficFilters(prev => ({ ...prev, showAirliners: !prev.showAirliners }))}
               />
               <span className="toggle-label">Airliners / Heavy</span>
             </label>
@@ -4327,7 +4719,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               <input 
                 type="checkbox" 
                 checked={trafficFilters.showAirborne} 
-                onChange={() => setTrafficFilters(prev => ({ ...prev, showAirborne: !prev.showAirborne }))}
+                onChange={() => updateTrafficFilters(prev => ({ ...prev, showAirborne: !prev.showAirborne }))}
               />
               <span className="toggle-label">Airborne</span>
             </label>
@@ -4335,7 +4727,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               <input 
                 type="checkbox" 
                 checked={trafficFilters.showGround} 
-                onChange={() => setTrafficFilters(prev => ({ ...prev, showGround: !prev.showGround }))}
+                onChange={() => updateTrafficFilters(prev => ({ ...prev, showGround: !prev.showGround }))}
               />
               <span className="toggle-label">On Ground</span>
             </label>
@@ -4347,7 +4739,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               <input 
                 type="checkbox" 
                 checked={trafficFilters.showWithSquawk} 
-                onChange={() => setTrafficFilters(prev => ({ ...prev, showWithSquawk: !prev.showWithSquawk }))}
+                onChange={() => updateTrafficFilters(prev => ({ ...prev, showWithSquawk: !prev.showWithSquawk }))}
               />
               <span className="toggle-label">With Squawk</span>
             </label>
@@ -4355,7 +4747,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               <input 
                 type="checkbox" 
                 checked={trafficFilters.showWithoutSquawk} 
-                onChange={() => setTrafficFilters(prev => ({ ...prev, showWithoutSquawk: !prev.showWithoutSquawk }))}
+                onChange={() => updateTrafficFilters(prev => ({ ...prev, showWithoutSquawk: !prev.showWithoutSquawk }))}
               />
               <span className="toggle-label">No Squawk (ADS-B)</span>
             </label>
@@ -4368,8 +4760,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 type="number" 
                 className="filter-range-input"
                 value={trafficFilters.minAltitude}
-                onChange={(e) => setTrafficFilters(prev => ({ 
-                  ...prev, 
+                onChange={(e) => updateTrafficFilters(prev => ({
+                  ...prev,
                   minAltitude: Math.max(0, parseInt(e.target.value) || 0)
                 }))}
                 min="0"
@@ -4382,8 +4774,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 type="number" 
                 className="filter-range-input"
                 value={trafficFilters.maxAltitude}
-                onChange={(e) => setTrafficFilters(prev => ({ 
-                  ...prev, 
+                onChange={(e) => updateTrafficFilters(prev => ({
+                  ...prev,
                   maxAltitude: Math.min(60000, parseInt(e.target.value) || 60000)
                 }))}
                 min="0"
@@ -4397,10 +4789,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           <div className="overlay-divider" />
           <button
             className="filter-reset-btn"
-            onClick={() => setTrafficFilters({
+            onClick={() => updateTrafficFilters({
               showMilitary: true,
               showCivil: true,
-              showGround: false, // Hide ground aircraft by default
+              showGround: false,
               showAirborne: true,
               minAltitude: 0,
               maxAltitude: 60000,
@@ -5521,6 +5913,13 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               title="Map Layers"
             >
               <Layers size={18} />
+            </button>
+            <button
+              className={`pro-header-btn ${showShortTracks ? 'active' : ''}`}
+              onClick={() => setShowShortTracks(!showShortTracks)}
+              title={showShortTracks ? 'Hide short tracks (ATC trails)' : 'Show short tracks (ATC trails)'}
+            >
+              <Navigation size={18} />
             </button>
             <button
               className={`pro-header-btn ${showSelectedTrack ? 'active' : ''}`}

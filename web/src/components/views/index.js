@@ -6,3 +6,4 @@ export { AlertsView } from './AlertsView';
 export { AlertHistory } from './AlertHistory';
 export { RuleForm } from './RuleForm';
 export { SystemView } from './SystemView';
+export { SafetyEventPage } from './SafetyEventPage';

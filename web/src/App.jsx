@@ -6,7 +6,7 @@ import './App.css';
 import { Sidebar, Header, SettingsModal } from './components/layout';
 
 // View components
-import { AircraftList, StatsView, HistoryView, AudioView, AlertsView, SystemView } from './components/views';
+import { AircraftList, StatsView, HistoryView, AudioView, AlertsView, SystemView, SafetyEventPage } from './components/views';
 
 // Map components
 import { MapView } from './components/map';
@@ -24,7 +24,7 @@ import { getConfig } from './utils';
 // Hash Routing Utilities
 // ============================================================================
 
-const VALID_TABS = ['map', 'aircraft', 'stats', 'history', 'audio', 'alerts', 'system', 'airframe'];
+const VALID_TABS = ['map', 'aircraft', 'stats', 'history', 'audio', 'alerts', 'system', 'airframe', 'event'];
 
 function parseHash() {
   const hash = window.location.hash.slice(1); // Remove #
@@ -200,6 +200,7 @@ export default function App() {
             <HistoryView
               apiBase={config.apiBaseUrl}
               onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
+              onViewEvent={(eventId) => setActiveTab('event', { id: eventId })}
               targetEventId={targetSafetyEventId}
               onEventViewed={() => setTargetSafetyEventId(null)}
               hashParams={hashParams}
@@ -237,6 +238,7 @@ export default function App() {
                   setTargetSafetyEventId(eventId);
                   setActiveTab('history', { data: 'safety' });
                 }}
+                onViewEvent={(eventId) => setActiveTab('event', { id: eventId })}
                 aircraft={foundAircraft}
                 feederLocation={status?.location}
               />
@@ -249,6 +251,14 @@ export default function App() {
               </div>
             );
           })()}
+          {activeTab === 'event' && hashParams.id && (
+            <SafetyEventPage
+              eventId={hashParams.id}
+              apiBase={config.apiBaseUrl}
+              onClose={() => setActiveTab('map')}
+              onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
+            />
+          )}
         </div>
       </div>
 
@@ -275,6 +285,10 @@ export default function App() {
                 setSelectedAircraftHex(null);
                 setTargetSafetyEventId(eventId);
                 setActiveTab('history', { data: 'safety' });
+              }}
+              onViewEvent={(eventId) => {
+                setSelectedAircraftHex(null);
+                setActiveTab('event', { id: eventId });
               }}
               aircraft={aircraft.find(a => a.hex === selectedAircraftHex)}
               feederLocation={status?.location}

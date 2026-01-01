@@ -8,7 +8,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { getTailInfo, getCardinalDirection } from '../../utils';
 
-export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onViewHistoryEvent, aircraft, aircraftInfo, trackHistory, feederLocation }) {
+export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onViewHistoryEvent, onViewEvent, aircraft, aircraftInfo, trackHistory, feederLocation }) {
   const [info, setInfo] = useState(aircraftInfo || null);
 
   // Calculate distance from feeder if not provided
@@ -1839,6 +1839,16 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
                               >
                                 <History size={14} />
                                 View in History
+                              </button>
+                            )}
+                            {onViewEvent && event.id && (
+                              <button
+                                className="view-details-btn small"
+                                onClick={() => onViewEvent(event.id)}
+                                title="View full event details page"
+                              >
+                                <ExternalLink size={14} />
+                                View Details
                               </button>
                             )}
                           </div>

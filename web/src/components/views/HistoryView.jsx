@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, Map as MapIcon, Play, Pause, SkipBack, SkipForward, Shield, Search, MessageCircle } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, Map as MapIcon, Play, Pause, SkipBack, SkipForward, Shield, Search, MessageCircle, ExternalLink } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useApi } from '../../hooks';
 
 const VALID_DATA_TYPES = ['sessions', 'sightings', 'acars', 'safety'];
 
-export function HistoryView({ apiBase, onSelectAircraft, targetEventId, onEventViewed, hashParams = {}, setHashParams }) {
+export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEventId, onEventViewed, hashParams = {}, setHashParams }) {
   // Sync viewType with URL hash params
   const [viewType, setViewTypeState] = useState(() => {
     if (hashParams.data && VALID_DATA_TYPES.includes(hashParams.data)) {
@@ -1281,8 +1281,8 @@ export function HistoryView({ apiBase, onSelectAircraft, targetEventId, onEventV
                   )}
                 </div>
 
-                {hasSnapshot && (
-                  <div className="safety-event-actions">
+                <div className="safety-event-actions">
+                  {hasSnapshot && (
                     <button
                       className="snapshot-toggle"
                       onClick={() => toggleSnapshot(eventKey)}
@@ -1290,18 +1290,29 @@ export function HistoryView({ apiBase, onSelectAircraft, targetEventId, onEventV
                       {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                       {isExpanded ? 'Hide' : 'Show'} Telemetry
                     </button>
+                  )}
 
-                    {(event.aircraft_snapshot?.lat || event.aircraft_snapshot_2?.lat) && (
-                      <button
-                        className="snapshot-toggle map-toggle"
-                        onClick={() => toggleMap(eventKey, event)}
-                      >
-                        <MapIcon size={14} />
-                        {expandedMaps[eventKey] ? 'Hide' : 'Show'} Map
-                      </button>
-                    )}
-                  </div>
-                )}
+                  {(event.aircraft_snapshot?.lat || event.aircraft_snapshot_2?.lat) && (
+                    <button
+                      className="snapshot-toggle map-toggle"
+                      onClick={() => toggleMap(eventKey, event)}
+                    >
+                      <MapIcon size={14} />
+                      {expandedMaps[eventKey] ? 'Hide' : 'Show'} Map
+                    </button>
+                  )}
+
+                  {onViewEvent && event.id && (
+                    <button
+                      className="snapshot-toggle view-details-btn"
+                      onClick={() => onViewEvent(event.id)}
+                      title="View full event details"
+                    >
+                      <ExternalLink size={14} />
+                      View Details
+                    </button>
+                  )}
+                </div>
 
                 {isExpanded && (
                   <div className="snapshot-container">
