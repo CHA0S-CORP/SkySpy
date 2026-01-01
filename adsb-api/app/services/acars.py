@@ -3,22 +3,23 @@ ACARS and VDL2 message service.
 Receives messages from acarsdec/vdlm2dec via acars_router.
 
 acars_router configuration:
-  The acars_router container outputs JSON messages over UDP or TCP.
-  Configure it to send to this API.
+  The acars_router container receives messages from decoders and forwards
+  them as JSON over UDP. Configure acars_router to send to this service.
 
   Example docker-compose for acars_router:
-  
+
   acars_router:
-    image: ghcr.io/sdr-enthusiasts/docker-acarshub:latest
+    image: ghcr.io/sdr-enthusiasts/acars_router:latest
     environment:
-      - FEED_ID=my-station
-      - ENABLE_ACARS=true
-      - ENABLE_VDLM2=true
-      # Output to our API
-      - AR_SEND_UDP_ACARS=adsb-api:5555
-      - AR_SEND_UDP_VDLM2=adsb-api:5556
-    depends_on:
-      - adsb-api
+      - AR_LISTEN_UDP_ACARS=5550
+      - AR_LISTEN_UDP_VDLM2=5555
+      - AR_SEND_UDP_ACARS=skyspy:5550
+      - AR_SEND_UDP_VDLM2=skyspy:5555
+
+Message formats handled:
+  - acarsdec: flat JSON with timestamp, freq, tail, flight, text, label, etc.
+  - vdlm2dec: flat JSON similar to acarsdec
+  - dumpvdl2: nested JSON with vdl2/avlc/acars structure
 """
 import asyncio
 import json
@@ -66,164 +67,303 @@ class AcarsService:
         """Set callback function for publishing to SSE."""
         self._sse_callback = callback
     
-    async def start(self, acars_port: int = 5555, vdlm2_port: int = 5556):
+    async def start(self, acars_port: int = 5550, vdlm2_port: int = 5555):
         """Start listening for ACARS and VDL2 messages."""
         if self._running:
+            logger.warning("ACARS service already running, ignoring start request")
             return
-        
+
         self._running = True
-        
+        logger.info("Starting ACARS service...")
+
         # Start UDP listeners
         if acars_port:
             self._acars_task = asyncio.create_task(
                 self._udp_listener(acars_port, "acars")
             )
-            logger.info(f"ACARS UDP listener started on port {acars_port}")
-        
+            logger.info(f"ACARS UDP listener started on 0.0.0.0:{acars_port}")
+
         if vdlm2_port:
             self._vdlm2_task = asyncio.create_task(
                 self._udp_listener(vdlm2_port, "vdlm2")
             )
-            logger.info(f"VDL2 UDP listener started on port {vdlm2_port}")
+            logger.info(f"VDL2 UDP listener started on 0.0.0.0:{vdlm2_port}")
+
+        logger.info("ACARS service started successfully")
     
     async def stop(self):
         """Stop all listeners."""
+        logger.info("Stopping ACARS service...")
         self._running = False
-        
+
         if self._acars_task:
             self._acars_task.cancel()
             try:
                 await self._acars_task
             except asyncio.CancelledError:
                 pass
-        
+            logger.debug("ACARS listener stopped")
+
         if self._vdlm2_task:
             self._vdlm2_task.cancel()
             try:
                 await self._vdlm2_task
             except asyncio.CancelledError:
                 pass
-        
-        logger.info("ACARS service stopped")
+            logger.debug("VDL2 listener stopped")
+
+        # Log final stats
+        stats = self.get_stats()
+        logger.info(
+            f"ACARS service stopped. Final stats: "
+            f"ACARS={stats['acars']['total']} msgs ({stats['acars']['errors']} errors), "
+            f"VDL2={stats['vdlm2']['total']} msgs ({stats['vdlm2']['errors']} errors)"
+        )
     
     async def _udp_listener(self, port: int, source: str):
         """Listen for UDP messages on a port."""
         loop = asyncio.get_event_loop()
-        
+        service = self  # Capture reference for inner class
+
         class UDPProtocol(asyncio.DatagramProtocol):
-            def __init__(self, service, source):
-                self.service = service
-                self.source = source
-            
+            def __init__(self, svc, src):
+                self.service = svc
+                self.source = src
+                self.packet_count = 0
+
+            def connection_made(self, transport):
+                logger.info(f"UDP listener for {self.source} ready to receive")
+
             def datagram_received(self, data, addr):
+                self.packet_count += 1
+                if self.packet_count == 1:
+                    logger.info(f"First {self.source} packet received from {addr[0]}:{addr[1]}")
+                elif self.packet_count % 100 == 0:
+                    logger.debug(f"Received {self.packet_count} {self.source} packets so far")
+
                 asyncio.create_task(
                     self.service._process_message(data, self.source)
                 )
-        
-        transport, protocol = await loop.create_datagram_endpoint(
-            lambda: UDPProtocol(self, source),
-            local_addr=('0.0.0.0', port)
-        )
-        
+
+            def error_received(self, exc):
+                logger.error(f"UDP error on {self.source} listener: {exc}")
+
+        try:
+            transport, protocol = await loop.create_datagram_endpoint(
+                lambda: UDPProtocol(service, source),
+                local_addr=('0.0.0.0', port)
+            )
+            logger.debug(f"UDP endpoint created for {source} on port {port}")
+        except Exception as e:
+            logger.error(f"Failed to create UDP listener for {source} on port {port}: {e}")
+            return
+
         try:
             while self._running:
                 await asyncio.sleep(1)
         finally:
             transport.close()
+            logger.debug(f"UDP transport closed for {source}")
     
     async def _process_message(self, data: bytes, source: str):
         """Process a received message."""
         try:
             # Parse JSON message
-            msg = json.loads(data.decode('utf-8'))
-            
+            raw_text = data.decode('utf-8')
+            msg = json.loads(raw_text)
+
+            # Debug: log raw message keys to help troubleshoot format issues
+            logger.debug(f"Received {source} message with keys: {list(msg.keys())}")
+
             # Normalize message format
             normalized = self._normalize_message(msg, source)
-            
+
             if normalized:
                 # Update statistics
                 with self._stats_lock:
                     self._stats[source]["total"] += 1
                     self._hourly_counts[source].append(datetime.utcnow())
-                
+                    total = self._stats[source]["total"]
+
                 # Add to recent buffer
                 with self._recent_lock:
                     self._recent_messages.append(normalized)
                     if len(self._recent_messages) > self._max_recent:
                         self._recent_messages.pop(0)
-                
+
                 # Publish to SSE
                 if self._sse_callback:
                     await self._sse_callback(normalized)
-                
-                logger.debug(f"Processed {source} message: {normalized.get('callsign', 'N/A')}")
-        
+
+                # Log message details
+                flight = normalized.get('callsign') or normalized.get('registration') or 'unknown'
+                label = normalized.get('label') or '-'
+                freq = normalized.get('frequency')
+                freq_str = f"{freq:.3f}MHz" if freq else "unknown freq"
+                logger.debug(f"[{source.upper()}] #{total} {flight} label={label} @ {freq_str}")
+
+                # Periodic info-level summary
+                if total == 1:
+                    logger.info(f"First {source.upper()} message received: {flight}")
+                elif total % 100 == 0:
+                    errors = self._stats[source]["errors"]
+                    logger.info(f"{source.upper()} milestone: {total} messages processed ({errors} errors)")
+            else:
+                logger.warning(f"Failed to normalize {source} message: {list(msg.keys())}")
+
         except json.JSONDecodeError as e:
             with self._stats_lock:
                 self._stats[source]["errors"] += 1
-            logger.warning(f"Invalid JSON from {source}: {e}")
+            # Log first 100 chars of bad data for debugging
+            preview = data[:100].decode('utf-8', errors='replace')
+            logger.warning(f"Invalid JSON from {source}: {e} | Data preview: {preview!r}")
+        except UnicodeDecodeError as e:
+            with self._stats_lock:
+                self._stats[source]["errors"] += 1
+            logger.warning(f"Unicode decode error from {source}: {e}")
         except Exception as e:
             with self._stats_lock:
                 self._stats[source]["errors"] += 1
-            logger.error(f"Error processing {source} message: {e}")
+            logger.error(f"Error processing {source} message: {e}", exc_info=True)
     
     def _normalize_message(self, msg: dict, source: str) -> Optional[dict]:
-        """Normalize message to common format."""
+        """Normalize message to common format.
+
+        Handles message formats from acars_router which forwards messages from:
+        - acarsdec: flat JSON with fields like timestamp, freq, tail, flight, text, etc.
+        - vdlm2dec/dumpvdl2: can be flat or nested with vdl2/avlc/acars structure
+        """
         try:
-            # Handle different message formats from acarsdec/vdlm2dec
-            
-            # ACARS format from acarsdec
+            # ACARS format from acarsdec via acars_router
+            # Fields: timestamp, station_id, channel, freq, level, noise, error, mode, label,
+            #         tail, flight, msgno, block_id, ack, text, end, sublabel, mfi, depa, dsta,
+            #         eta, gtout, gtin, wloff, wlin, libacars, app{name,ver}
             if source == "acars":
+                # Get ICAO from various possible fields
+                icao = msg.get("icao") or msg.get("icao_hex") or msg.get("hex")
+                if icao:
+                    icao = str(icao).upper()
+
+                # Get station_id from message or app info
+                station_id = msg.get("station_id")
+                if not station_id:
+                    app = msg.get("app", {})
+                    if isinstance(app, dict):
+                        station_id = app.get("name")
+
                 return {
                     "timestamp": msg.get("timestamp", datetime.utcnow().timestamp()),
                     "source": "acars",
                     "channel": str(msg.get("channel", "")),
                     "frequency": msg.get("freq"),
-                    "icao_hex": msg.get("icao", "").upper() if msg.get("icao") else None,
-                    "registration": msg.get("tail", msg.get("reg")),
+                    "icao_hex": icao,
+                    "registration": msg.get("tail"),
                     "callsign": msg.get("flight", "").strip() if msg.get("flight") else None,
                     "label": msg.get("label"),
                     "block_id": msg.get("block_id"),
                     "msg_num": msg.get("msgno"),
                     "ack": msg.get("ack"),
                     "mode": msg.get("mode"),
-                    "text": msg.get("text", msg.get("message", "")),
+                    "text": msg.get("text", ""),
                     "signal_level": msg.get("level"),
-                    "error_count": msg.get("err"),
-                    "station_id": msg.get("station_id", msg.get("app", {}).get("name")),
+                    "error_count": msg.get("error"),
+                    "station_id": station_id,
+                    # Additional fields from acarsdec
+                    "depa": msg.get("depa"),
+                    "dsta": msg.get("dsta"),
+                    "eta": msg.get("eta"),
+                    "libacars": msg.get("libacars"),
                 }
-            
-            # VDL2 format from vdlm2dec
+
+            # VDL2 format from vdlm2dec/dumpvdl2 via acars_router
+            # Can be flat (vdlm2dec style) or nested (dumpvdl2 style with vdl2/avlc/acars)
             elif source == "vdlm2":
-                vdl2 = msg.get("vdl2", msg)
-                avlc = vdl2.get("avlc", {})
-                acars = avlc.get("acars", {})
-                
-                return {
-                    "timestamp": msg.get("timestamp", datetime.utcnow().timestamp()),
-                    "source": "vdlm2",
-                    "channel": str(vdl2.get("channel", "")),
-                    "frequency": vdl2.get("freq"),
-                    "icao_hex": avlc.get("src", {}).get("addr", "").upper() if avlc.get("src") else None,
-                    "registration": acars.get("reg", "").replace(".", "") if acars.get("reg") else None,
-                    "callsign": acars.get("flight", "").strip() if acars.get("flight") else None,
-                    "label": acars.get("label"),
-                    "block_id": acars.get("blk_id"),
-                    "msg_num": acars.get("msg_num"),
-                    "ack": acars.get("ack"),
-                    "mode": acars.get("mode"),
-                    "text": acars.get("msg_text", ""),
-                    "signal_level": vdl2.get("sig_level"),
-                    "error_count": vdl2.get("noise_level"),
-                    "station_id": msg.get("station_id", msg.get("app", {}).get("name")),
-                }
-            
+                # Check if it's dumpvdl2 nested format or vdlm2dec flat format
+                if "vdl2" in msg:
+                    # dumpvdl2 nested format: {"vdl2": {"freq": ..., "avlc": {"acars": {...}}}}
+                    vdl2 = msg.get("vdl2", {})
+                    avlc = vdl2.get("avlc", {})
+                    acars_data = avlc.get("acars", {})
+
+                    # Get ICAO from src address
+                    icao = None
+                    src = avlc.get("src", {})
+                    if isinstance(src, dict):
+                        icao = src.get("addr")
+                    if icao:
+                        icao = str(icao).upper()
+
+                    # Get station_id
+                    station_id = msg.get("station_id")
+                    if not station_id:
+                        app = msg.get("app", {})
+                        if isinstance(app, dict):
+                            station_id = app.get("name")
+
+                    return {
+                        "timestamp": msg.get("timestamp", vdl2.get("t", {}).get("sec", datetime.utcnow().timestamp())),
+                        "source": "vdlm2",
+                        "channel": str(vdl2.get("channel", vdl2.get("idx", ""))),
+                        "frequency": vdl2.get("freq"),
+                        "icao_hex": icao,
+                        "registration": acars_data.get("reg", "").replace(".", "") if acars_data.get("reg") else None,
+                        "callsign": acars_data.get("flight", "").strip() if acars_data.get("flight") else None,
+                        "label": acars_data.get("label"),
+                        "block_id": acars_data.get("blk_id"),
+                        "msg_num": acars_data.get("msg_num"),
+                        "ack": acars_data.get("ack"),
+                        "mode": acars_data.get("mode"),
+                        "text": acars_data.get("msg_text", ""),
+                        "signal_level": vdl2.get("sig_level"),
+                        "error_count": vdl2.get("noise_level"),
+                        "station_id": station_id,
+                        "libacars": msg.get("libacars") or vdl2.get("libacars"),
+                    }
+                else:
+                    # vdlm2dec flat format (similar to acarsdec)
+                    # Fields: timestamp, freq, icao/hex, tail, flight, label, mode, text, etc.
+                    icao = msg.get("icao") or msg.get("hex") or msg.get("icao_hex")
+                    if icao:
+                        # Handle numeric ICAO from vdlm2dec
+                        if isinstance(icao, int):
+                            icao = format(icao, '06X')
+                        else:
+                            icao = str(icao).upper()
+
+                    # Get station_id
+                    station_id = msg.get("station_id")
+                    if not station_id:
+                        app = msg.get("app", {})
+                        if isinstance(app, dict):
+                            station_id = app.get("name")
+
+                    return {
+                        "timestamp": msg.get("timestamp", datetime.utcnow().timestamp()),
+                        "source": "vdlm2",
+                        "channel": str(msg.get("channel", "")),
+                        "frequency": msg.get("freq"),
+                        "icao_hex": icao,
+                        "registration": msg.get("tail", "").replace(".", "") if msg.get("tail") else None,
+                        "callsign": msg.get("flight", "").strip() if msg.get("flight") else None,
+                        "label": msg.get("label"),
+                        "block_id": msg.get("block_id"),
+                        "msg_num": msg.get("msgno"),
+                        "ack": msg.get("ack"),
+                        "mode": msg.get("mode"),
+                        "text": msg.get("text", ""),
+                        "signal_level": msg.get("level"),
+                        "error_count": msg.get("error"),
+                        "station_id": station_id,
+                        "libacars": msg.get("libacars"),
+                    }
+
+            logger.debug(f"Unknown source type: {source}")
             return None
-        
+
         except Exception as e:
-            logger.error(f"Error normalizing {source} message: {e}")
+            logger.error(f"Error normalizing {source} message: {e}", exc_info=True)
             return None
-    
+
     def get_recent_messages(self, limit: int = 50) -> list[dict]:
         """Get recent messages from buffer."""
         with self._recent_lock:
@@ -265,7 +405,7 @@ async def store_acars_message(db: AsyncSession, msg: dict) -> Optional[int]:
             ts = datetime.fromisoformat(ts.replace("Z", "+00:00"))
         else:
             ts = datetime.utcnow()
-        
+
         record = AcarsMessage(
             timestamp=ts,
             source=msg.get("source", "acars"),
@@ -285,14 +425,19 @@ async def store_acars_message(db: AsyncSession, msg: dict) -> Optional[int]:
             error_count=msg.get("error_count"),
             station_id=msg.get("station_id"),
         )
-        
+
         db.add(record)
         await db.commit()
         await db.refresh(record)
+
+        logger.debug(
+            f"Stored {msg.get('source', 'acars')} message id={record.id} "
+            f"flight={msg.get('callsign') or msg.get('registration') or 'N/A'}"
+        )
         return record.id
-    
+
     except Exception as e:
-        logger.error(f"Error storing ACARS message: {e}")
+        logger.error(f"Error storing ACARS message: {e}", exc_info=True)
         await db.rollback()
         return None
 
@@ -406,10 +551,18 @@ async def get_acars_stats(db: AsyncSession) -> dict:
 async def cleanup_old_messages(db: AsyncSession, days: int = 7) -> int:
     """Delete messages older than specified days."""
     cutoff = datetime.utcnow() - timedelta(days=days)
-    
+
+    logger.info(f"Cleaning up ACARS messages older than {days} days (before {cutoff.isoformat()})")
+
     result = await db.execute(
         delete(AcarsMessage).where(AcarsMessage.timestamp < cutoff)
     )
     await db.commit()
-    
-    return result.rowcount
+
+    deleted = result.rowcount
+    if deleted > 0:
+        logger.info(f"Deleted {deleted} old ACARS messages")
+    else:
+        logger.debug("No old ACARS messages to delete")
+
+    return deleted
