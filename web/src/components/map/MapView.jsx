@@ -9,7 +9,7 @@ import {
   Ship, Radio as RadioIcon, LayoutDashboard, LineChart, MessageSquare, Anchor,
   Wind, Snowflake, CloudRain, Thermometer, Navigation, Info, HelpCircle, Compass,
   Volume2, VolumeX, Check, Menu, Search, Signal, Crosshair, BellPlus, TrendingUp, TrendingDown, Minus,
-  ArrowUpRight, LocateFixed, Maximize2, Minimize2, Pin, PinOff, MessageCircle,
+  ArrowUpRight, ArrowDownRight, ArrowRight, LocateFixed, Maximize2, Minimize2, Pin, PinOff, MessageCircle,
   Camera, Calendar, Building2, Flag, Hash, Wifi, WifiOff
 } from 'lucide-react';
 
@@ -6285,11 +6285,13 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 proDistanceTrendRef.current = null;
               } else if (proPrevDistanceRef.current !== null) {
                 const delta = proDistanceNm - proPrevDistanceRef.current;
-                if (Math.abs(delta) > 0.05) {
-                  proDistanceTrendRef.current = delta < 0 ? 'approaching' : 'receding';
-                } else {
-                  proDistanceTrendRef.current = 'stable';
+                // Use very small threshold (0.01 nm = ~60 feet) to detect movement
+                if (delta < -0.01) {
+                  proDistanceTrendRef.current = 'approaching';
+                } else if (delta > 0.01) {
+                  proDistanceTrendRef.current = 'receding';
                 }
+                // Keep previous trend if no significant change (don't reset to stable)
                 proPrevDistanceRef.current = proDistanceNm;
               }
               const proDistTrend = proDistanceTrendRef.current;
@@ -6340,11 +6342,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                     <div className="pro-stat-label"><MapPin size={14} /> DISTANCE</div>
                     <div className={`pro-stat-value distance-value ${proDistTrend || ''}`}>
                       {proDistTrend === 'approaching' ? (
-                        <TrendingDown size={12} className="trend-icon approaching" />
+                        <ArrowDownRight size={14} className="trend-icon approaching" />
                       ) : proDistTrend === 'receding' ? (
-                        <TrendingUp size={12} className="trend-icon receding" />
+                        <ArrowUpRight size={14} className="trend-icon receding" />
                       ) : (
-                        <Minus size={12} className="trend-icon stable" />
+                        <ArrowRight size={14} className="trend-icon stable" />
                       )}
                       {proDistanceNm.toFixed(1)} <span className="unit">nm</span>
                     </div>
