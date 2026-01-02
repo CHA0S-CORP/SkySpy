@@ -82,10 +82,12 @@ export function useSocketIO(enabled, apiBase, topics = 'all') {
   const [aircraft, setAircraft] = useState({});
   const [connected, setConnected] = useState(false);
   const [stats, setStats] = useState({ count: 0 });
+  const [filteredStats, setFilteredStats] = useState(null);
   const [safetyEvents, setSafetyEvents] = useState([]);
   const [airspaceData, setAirspaceData] = useState({ advisories: [], boundaries: [] });
   const socketRef = useRef(null);
   const mountedRef = useRef(true);
+  const statsFiltersRef = useRef(null);
 
   // Pending requests map: request_id -> { resolve, reject, timeout }
   const pendingRequests = useRef(new Map());
@@ -261,6 +263,13 @@ export function useSocketIO(enabled, apiBase, topics = 'all') {
       // Could be handled separately if needed
     });
 
+    // Stats events (filtered)
+    socket.on('stats:update', (data) => {
+      if (data) {
+        setFilteredStats(data);
+      }
+    });
+
     // Request/response events
     socket.on('response', (data) => {
       if (data.request_id && pendingRequests.current.has(data.request_id)) {
@@ -373,12 +382,42 @@ export function useSocketIO(enabled, apiBase, topics = 'all') {
     }
   }, []);
 
+  /**
+   * Subscribe to filtered stats updates.
+   * @param {object} filters - Filter parameters
+   * @param {boolean} filters.military_only - Only military aircraft
+   * @param {string} filters.category - Aircraft category filter (comma-separated)
+   * @param {number} filters.min_altitude - Minimum altitude in feet
+   * @param {number} filters.max_altitude - Maximum altitude in feet
+   * @param {number} filters.min_distance - Minimum distance in nautical miles
+   * @param {number} filters.max_distance - Maximum distance in nautical miles
+   * @param {string} filters.aircraft_type - Aircraft type filter
+   */
+  const subscribeStats = useCallback((filters = {}) => {
+    if (socketRef.current?.connected) {
+      statsFiltersRef.current = filters;
+      socketRef.current.emit('subscribe_stats', filters);
+    }
+  }, []);
+
+  /**
+   * Update stats filter preferences.
+   * @param {object} filters - Updated filter parameters
+   */
+  const updateStatsFilters = useCallback((filters = {}) => {
+    if (socketRef.current?.connected) {
+      statsFiltersRef.current = { ...statsFiltersRef.current, ...filters };
+      socketRef.current.emit('update_stats_filters', filters);
+    }
+  }, []);
+
   return {
     // Real-time data
     aircraft: Object.values(aircraft),
     aircraftMap: aircraft,
     connected,
     stats,
+    filteredStats,
     safetyEvents,
     airspaceData,
 
@@ -388,6 +427,8 @@ export function useSocketIO(enabled, apiBase, topics = 'all') {
     // Subscription management
     subscribe,
     unsubscribe,
+    subscribeStats,
+    updateStatsFilters,
   };
 }
 

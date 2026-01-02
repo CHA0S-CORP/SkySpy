@@ -1,24 +1,56 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { AlertTriangle, TrendingUp, Radio, Plane, Activity, Hash, Building2, Factory, Filter, Clock, Shield } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Radio, Plane, Activity, Hash, Building2, Factory, Filter, Clock, Shield, ChevronDown, Award, BarChart3, Zap, Target, MapPin } from 'lucide-react';
 import { useApi } from '../../hooks';
 
 export function StatsView({ apiBase, onSelectAircraft }) {
   // Filter state
   const [timeRange, setTimeRange] = useState('24h');
   const [showMilitaryOnly, setShowMilitaryOnly] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [minAltitude, setMinAltitude] = useState('');
+  const [maxAltitude, setMaxAltitude] = useState('');
+  const [minDistance, setMinDistance] = useState('');
+  const [maxDistance, setMaxDistance] = useState('');
+  const [aircraftType, setAircraftType] = useState('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [activeAnalyticsTab, setActiveAnalyticsTab] = useState('trends');
+  const [topPerformersTab, setTopPerformersTab] = useState('longest');
 
   // Convert time range to hours
   const hours = { '1h': 1, '6h': 6, '24h': 24, '48h': 48, '7d': 168 };
   const selectedHours = hours[timeRange] || 24;
 
-  const { data: stats } = useApi('/api/v1/aircraft/stats', 5000, apiBase);
+  // Build filter query params
+  const buildFilterParams = () => {
+    const params = new URLSearchParams();
+    params.append('hours', selectedHours);
+    if (showMilitaryOnly) params.append('military_only', 'true');
+    if (categoryFilter) params.append('category', categoryFilter);
+    if (minAltitude) params.append('min_altitude', minAltitude);
+    if (maxAltitude) params.append('max_altitude', maxAltitude);
+    if (minDistance) params.append('min_distance', minDistance);
+    if (maxDistance) params.append('max_distance', maxDistance);
+    if (aircraftType) params.append('aircraft_type', aircraftType);
+    return params.toString();
+  };
+
+  const filterParams = buildFilterParams();
+
+  // Core stats with filters
+  const { data: stats } = useApi(`/api/v1/aircraft/stats?${filterParams}`, 5000, apiBase);
   const { data: top } = useApi('/api/v1/aircraft/top', 5000, apiBase);
-  const { data: histStats } = useApi(`/api/v1/history/stats?hours=${selectedHours}`, 60000, apiBase);
-  const { data: acarsStats } = useApi('/api/v1/acars/stats', 30000, apiBase);
+  const { data: histStats } = useApi(`/api/v1/history/stats?${filterParams}`, 60000, apiBase);
+  const { data: acarsStats } = useApi(`/api/v1/acars/stats?hours=${selectedHours}`, 30000, apiBase);
   const { data: safetyStats } = useApi(`/api/v1/safety/stats?hours=${selectedHours}`, 30000, apiBase);
   const { data: aircraftData } = useApi('/api/v1/aircraft', 5000, apiBase);
-  const { data: sessionsData } = useApi(`/api/v1/history/sessions?hours=${selectedHours}&limit=500`, 60000, apiBase);
+  const { data: sessionsData } = useApi(`/api/v1/history/sessions?hours=${selectedHours}&limit=500${showMilitaryOnly ? '&military_only=true' : ''}`, 60000, apiBase);
+
+  // New analytics endpoints
+  const { data: trendsData } = useApi(`/api/v1/history/trends?${filterParams}&interval=hour`, 60000, apiBase);
+  const { data: topPerformersData } = useApi(`/api/v1/history/top?${filterParams}&limit=10`, 60000, apiBase);
+  const { data: distanceAnalytics } = useApi(`/api/v1/history/analytics/distance?${filterParams}`, 60000, apiBase);
+  const { data: speedAnalytics } = useApi(`/api/v1/history/analytics/speed?${filterParams}`, 60000, apiBase);
+  const { data: correlationData } = useApi(`/api/v1/history/analytics/correlation?${filterParams}`, 60000, apiBase);
 
   // Throughput history for graphs
   const [throughputHistory, setThroughputHistory] = useState([]);
@@ -808,7 +840,110 @@ export function StatsView({ apiBase, onSelectAircraft }) {
           <span className="toggle-indicator" />
           <span>Military Only</span>
         </div>
+        <div className="filter-divider" />
+        <button
+          className={`advanced-filter-btn ${showAdvancedFilters ? 'active' : ''}`}
+          onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+        >
+          <Filter size={14} />
+          <span>Filters</span>
+          <ChevronDown size={14} className={`chevron ${showAdvancedFilters ? 'open' : ''}`} />
+        </button>
       </div>
+
+      {/* Advanced Filters Panel */}
+      {showAdvancedFilters && (
+        <div className="advanced-filters-panel">
+          <div className="filter-row">
+            <div className="filter-field">
+              <label>Category</label>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+              >
+                <option value="">All Categories</option>
+                <option value="A0">A0 - No ADS-B</option>
+                <option value="A1">A1 - Light</option>
+                <option value="A2">A2 - Small</option>
+                <option value="A3">A3 - Large</option>
+                <option value="A4">A4 - High Vortex</option>
+                <option value="A5">A5 - Heavy</option>
+                <option value="A6">A6 - High Performance</option>
+                <option value="A7">A7 - Rotorcraft</option>
+                <option value="B1,B2">B - Glider/Balloon</option>
+                <option value="C1,C2,C3">C - UAV/Drone</option>
+              </select>
+            </div>
+            <div className="filter-field">
+              <label>Aircraft Type</label>
+              <input
+                type="text"
+                placeholder="e.g. B738, A320"
+                value={aircraftType}
+                onChange={(e) => setAircraftType(e.target.value.toUpperCase())}
+              />
+            </div>
+          </div>
+          <div className="filter-row">
+            <div className="filter-field">
+              <label>Min Altitude (ft)</label>
+              <input
+                type="number"
+                placeholder="0"
+                value={minAltitude}
+                onChange={(e) => setMinAltitude(e.target.value)}
+              />
+            </div>
+            <div className="filter-field">
+              <label>Max Altitude (ft)</label>
+              <input
+                type="number"
+                placeholder="60000"
+                value={maxAltitude}
+                onChange={(e) => setMaxAltitude(e.target.value)}
+              />
+            </div>
+            <div className="filter-field">
+              <label>Min Distance (nm)</label>
+              <input
+                type="number"
+                placeholder="0"
+                value={minDistance}
+                onChange={(e) => setMinDistance(e.target.value)}
+              />
+            </div>
+            <div className="filter-field">
+              <label>Max Distance (nm)</label>
+              <input
+                type="number"
+                placeholder="250"
+                value={maxDistance}
+                onChange={(e) => setMaxDistance(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="filter-actions">
+            <button
+              className="clear-filters-btn"
+              onClick={() => {
+                setCategoryFilter('');
+                setAircraftType('');
+                setMinAltitude('');
+                setMaxAltitude('');
+                setMinDistance('');
+                setMaxDistance('');
+              }}
+            >
+              Clear Filters
+            </button>
+            {stats?.filters_applied && Object.keys(stats.filters_applied).length > 0 && (
+              <span className="active-filters-count">
+                {Object.keys(stats.filters_applied).length} filter(s) active
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="stats-grid">
         <div className="stat-card">
@@ -1493,6 +1628,253 @@ export function StatsView({ apiBase, onSelectAircraft }) {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Analytics Section with Tabs */}
+      <div className="analytics-section">
+        <div className="analytics-header">
+          <div className="analytics-title">
+            <BarChart3 size={18} />
+            Historical Analytics
+          </div>
+          <div className="analytics-tabs">
+            {[
+              { key: 'trends', label: 'Trends', icon: TrendingUp },
+              { key: 'top', label: 'Top Performers', icon: Award },
+              { key: 'distance', label: 'Distance', icon: Target },
+              { key: 'speed', label: 'Speed', icon: Zap },
+              { key: 'patterns', label: 'Patterns', icon: Activity }
+            ].map(tab => (
+              <button
+                key={tab.key}
+                className={`analytics-tab ${activeAnalyticsTab === tab.key ? 'active' : ''}`}
+                onClick={() => setActiveAnalyticsTab(tab.key)}
+              >
+                <tab.icon size={14} />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Trends Tab */}
+        {activeAnalyticsTab === 'trends' && trendsData && (
+          <div className="analytics-content">
+            <div className="trends-summary">
+              <div className="trend-stat">
+                <span className="trend-label">Total Unique Aircraft</span>
+                <span className="trend-value">{trendsData.summary?.total_unique_aircraft || 0}</span>
+              </div>
+              <div className="trend-stat">
+                <span className="trend-label">Peak Concurrent</span>
+                <span className="trend-value">{trendsData.summary?.peak_concurrent || 0}</span>
+              </div>
+              <div className="trend-stat">
+                <span className="trend-label">Intervals</span>
+                <span className="trend-value">{trendsData.summary?.total_intervals || 0}</span>
+              </div>
+            </div>
+            <div className="trends-chart">
+              {trendsData.intervals?.length > 0 && (
+                <div className="trend-bars">
+                  {trendsData.intervals.map((interval, i) => {
+                    const maxCount = Math.max(...trendsData.intervals.map(i => i.unique_aircraft || 0));
+                    const height = maxCount > 0 ? ((interval.unique_aircraft || 0) / maxCount) * 100 : 0;
+                    return (
+                      <div
+                        key={i}
+                        className="trend-bar"
+                        style={{ height: `${height}%` }}
+                        title={`${new Date(interval.timestamp).toLocaleTimeString()}: ${interval.unique_aircraft} aircraft`}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Top Performers Tab */}
+        {activeAnalyticsTab === 'top' && topPerformersData && (
+          <div className="analytics-content">
+            <div className="top-performers-tabs">
+              {[
+                { key: 'longest', label: 'Longest Tracked' },
+                { key: 'furthest', label: 'Furthest Distance' },
+                { key: 'highest', label: 'Highest Altitude' },
+                { key: 'closest', label: 'Closest Approach' }
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  className={`top-tab ${topPerformersTab === tab.key ? 'active' : ''}`}
+                  onClick={() => setTopPerformersTab(tab.key)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div className="top-performers-list">
+              {(topPerformersData[topPerformersTab === 'longest' ? 'longest_tracked' :
+                topPerformersTab === 'furthest' ? 'furthest_distance' :
+                topPerformersTab === 'highest' ? 'highest_altitude' : 'closest_approach'] || [])
+                .slice(0, 8).map((ac, i) => (
+                  <div
+                    key={ac.icao_hex}
+                    className={`performer-item ${onSelectAircraft ? 'clickable' : ''} ${ac.is_military ? 'military' : ''}`}
+                    onClick={() => onSelectAircraft?.(ac.icao_hex)}
+                  >
+                    <span className="performer-rank">{i + 1}</span>
+                    <div className="performer-info">
+                      <div className="performer-callsign">
+                        {ac.callsign || ac.icao_hex}
+                        {ac.is_military && <span className="mil-badge">MIL</span>}
+                      </div>
+                      <div className="performer-type">{ac.aircraft_type || 'Unknown'}</div>
+                    </div>
+                    <div className="performer-value">
+                      {topPerformersTab === 'longest' && `${ac.duration_min?.toFixed(0)} min`}
+                      {topPerformersTab === 'furthest' && `${ac.max_distance_nm?.toFixed(1)} nm`}
+                      {topPerformersTab === 'highest' && `${ac.max_altitude?.toLocaleString()} ft`}
+                      {topPerformersTab === 'closest' && `${ac.min_distance_nm?.toFixed(1)} nm`}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* Distance Analytics Tab */}
+        {activeAnalyticsTab === 'distance' && distanceAnalytics && (
+          <div className="analytics-content">
+            <div className="distance-stats">
+              <div className="stat-box">
+                <span className="stat-label">Mean Distance</span>
+                <span className="stat-value">{distanceAnalytics.statistics?.mean_nm?.toFixed(1) || '--'} nm</span>
+              </div>
+              <div className="stat-box">
+                <span className="stat-label">Max Distance</span>
+                <span className="stat-value">{distanceAnalytics.statistics?.max_nm?.toFixed(1) || '--'} nm</span>
+              </div>
+              <div className="stat-box">
+                <span className="stat-label">Median</span>
+                <span className="stat-value">{distanceAnalytics.statistics?.median_nm?.toFixed(1) || '--'} nm</span>
+              </div>
+              <div className="stat-box">
+                <span className="stat-label">90th Percentile</span>
+                <span className="stat-value">{distanceAnalytics.statistics?.percentile_90?.toFixed(1) || '--'} nm</span>
+              </div>
+            </div>
+            <div className="distribution-chart">
+              <div className="distribution-title">Distance Distribution</div>
+              {distanceAnalytics.distribution && (
+                <div className="dist-bars">
+                  {Object.entries(distanceAnalytics.distribution).map(([band, count]) => {
+                    const maxCount = Math.max(...Object.values(distanceAnalytics.distribution));
+                    const width = maxCount > 0 ? (count / maxCount) * 100 : 0;
+                    return (
+                      <div key={band} className="dist-bar-row">
+                        <span className="dist-label">{band}</span>
+                        <div className="dist-bar-container">
+                          <div className="dist-bar-fill" style={{ width: `${width}%` }} />
+                        </div>
+                        <span className="dist-count">{count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Speed Analytics Tab */}
+        {activeAnalyticsTab === 'speed' && speedAnalytics && (
+          <div className="analytics-content">
+            <div className="speed-stats">
+              <div className="stat-box">
+                <span className="stat-label">Mean Speed</span>
+                <span className="stat-value">{speedAnalytics.statistics?.mean_kt || '--'} kt</span>
+              </div>
+              <div className="stat-box">
+                <span className="stat-label">Max Speed</span>
+                <span className="stat-value">{speedAnalytics.statistics?.max_kt || '--'} kt</span>
+              </div>
+              <div className="stat-box">
+                <span className="stat-label">90th Percentile</span>
+                <span className="stat-value">{speedAnalytics.statistics?.percentile_90 || '--'} kt</span>
+              </div>
+            </div>
+            <div className="fastest-aircraft">
+              <div className="fastest-title">Fastest Aircraft</div>
+              {speedAnalytics.fastest_sessions?.slice(0, 5).map((ac, i) => (
+                <div
+                  key={ac.icao_hex}
+                  className={`fastest-item ${onSelectAircraft ? 'clickable' : ''}`}
+                  onClick={() => onSelectAircraft?.(ac.icao_hex)}
+                >
+                  <span className="fastest-rank">{i + 1}</span>
+                  <span className="fastest-callsign">{ac.callsign || ac.icao_hex}</span>
+                  <span className="fastest-speed">{ac.max_speed} kt</span>
+                </div>
+              ))}
+            </div>
+            {speedAnalytics.by_type?.length > 0 && (
+              <div className="speed-by-type">
+                <div className="speed-type-title">Speed by Aircraft Type</div>
+                {speedAnalytics.by_type.slice(0, 6).map((type, i) => (
+                  <div key={type.type} className="speed-type-row">
+                    <span className="speed-type-name">{type.type}</span>
+                    <span className="speed-type-value">{type.peak_speed} kt peak</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Patterns Tab */}
+        {activeAnalyticsTab === 'patterns' && correlationData && (
+          <div className="analytics-content">
+            <div className="patterns-grid">
+              <div className="pattern-card">
+                <div className="pattern-title">Altitude vs Speed</div>
+                {correlationData.altitude_vs_speed?.map((band, i) => (
+                  <div key={band.altitude_band} className="pattern-row">
+                    <span className="pattern-label">{band.altitude_band}</span>
+                    <span className="pattern-value">{band.avg_speed || '--'} kt avg</span>
+                  </div>
+                ))}
+              </div>
+              <div className="pattern-card">
+                <div className="pattern-title">Time of Day Activity</div>
+                <div className="time-pattern-info">
+                  <div className="peak-hour">
+                    Peak Hour: {correlationData.time_of_day_patterns?.peak_hour !== undefined ?
+                      `${correlationData.time_of_day_patterns.peak_hour}:00` : '--'}
+                  </div>
+                  <div className="peak-count">
+                    {correlationData.time_of_day_patterns?.peak_aircraft_count || 0} aircraft
+                  </div>
+                </div>
+                <div className="hourly-bars">
+                  {correlationData.time_of_day_patterns?.hourly_counts?.slice(0, 12).map((hour, i) => {
+                    const maxCount = Math.max(...(correlationData.time_of_day_patterns?.hourly_counts?.map(h => h.unique_aircraft) || [1]));
+                    const height = maxCount > 0 ? (hour.unique_aircraft / maxCount) * 40 : 0;
+                    return (
+                      <div
+                        key={i}
+                        className="hourly-bar"
+                        style={{ height: `${height}px` }}
+                        title={`${hour.hour}:00 - ${hour.unique_aircraft} aircraft`}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

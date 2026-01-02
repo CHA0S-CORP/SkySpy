@@ -8,7 +8,7 @@ import {
   Map as MapIcon, Radar, Moon, Sun, BellRing, BellOff, Layers, ExternalLink,
   Ship, Radio as RadioIcon, LayoutDashboard, LineChart, MessageSquare, Anchor,
   Wind, Snowflake, CloudRain, Thermometer, Navigation, Info, HelpCircle, Compass,
-  Volume2, VolumeX, Check, Menu, Search, Signal, Crosshair, BellPlus, TrendingUp,
+  Volume2, VolumeX, Check, Menu, Search, Signal, Crosshair, BellPlus, TrendingUp, TrendingDown, Minus,
   ArrowUpRight, LocateFixed, Maximize2, Minimize2, Pin, PinOff, MessageCircle,
   Camera, Calendar, Building2, Flag, Hash, Wifi, WifiOff
 } from 'lucide-react';
@@ -200,6 +200,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const speedProfileCanvasRef = useRef(null);
   const vsProfileCanvasRef = useRef(null);
   const distProfileCanvasRef = useRef(null);
+
+  // Pro panel distance trend tracking
+  const proPrevDistanceRef = useRef(null);
+  const proDistanceTrendRef = useRef(null); // 'approaching', 'receding', or 'stable'
 
   // Notification tracking refs
   const notifiedConflictsRef = useRef(new Set()); // Track notified conflict pairs
@@ -2248,6 +2252,37 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     const latNm = dLat * 60;
     const lonNm = dLon * 60 * Math.cos(feederLat * Math.PI / 180);
     return (Math.atan2(lonNm, latNm) * 180 / Math.PI + 360) % 360;
+  };
+
+  // Get color class for speed based on value and altitude (for pro panel)
+  const getSpeedColorClass = (speed, altitude) => {
+    if (!speed) return '';
+    const isBelowTransition = altitude && altitude < 10000;
+    const isOverLimit = isBelowTransition && speed > 250;
+    if (isOverLimit) return 'speed-violation';
+    if (speed > 500) return 'speed-high';
+    if (speed > 300) return 'speed-medium';
+    return 'speed-normal';
+  };
+
+  // Get color class for altitude (for pro panel)
+  const getAltitudeColorClass = (altitude) => {
+    if (!altitude) return '';
+    if (altitude >= 40000) return 'alt-fl400';
+    if (altitude >= 30000) return 'alt-fl300';
+    if (altitude >= 20000) return 'alt-fl200';
+    if (altitude >= 10000) return 'alt-fl100';
+    if (altitude >= 5000) return 'alt-5k';
+    return 'alt-low';
+  };
+
+  // Get signal strength class based on RSSI
+  // RSSI typically ranges from about -20 (excellent) to -50 (poor) dBFS
+  const getSignalStrengthClass = (rssi) => {
+    if (rssi > -20) return 'excellent';
+    if (rssi > -30) return 'good';
+    if (rssi > -40) return 'fair';
+    return 'weak';
   };
 
   // Update aircraft history for trails
@@ -6233,50 +6268,99 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           )}
 
           <div className="pro-stats-grid">
-            <div className="pro-stat">
-              <div className="pro-stat-label"><Crosshair size={14} /> ALTITUDE</div>
-              <div className="pro-stat-value">{(liveAircraft.alt_baro || liveAircraft.alt_geom || liveAircraft.alt || 0).toLocaleString()} <span className="unit">ft</span></div>
-            </div>
-            <div className="pro-stat">
-              <div className="pro-stat-label"><Navigation size={14} /> SPEED</div>
-              <div className="pro-stat-value">{liveAircraft.gs || liveAircraft.tas || '--'} <span className="unit">kts</span></div>
-            </div>
-            <div className="pro-stat">
-              <div className="pro-stat-label"><Plane size={14} /> TYPE</div>
-              <div className="pro-stat-value">{liveAircraft.type || '--'}</div>
-            </div>
-            <div className="pro-stat">
-              <div className="pro-stat-label"><Radio size={14} /> SQUAWK</div>
-              <div className="pro-stat-value">{liveAircraft.squawk || '1200'}</div>
-            </div>
-            <div className="pro-stat">
-              <div className="pro-stat-label"><TrendingUp size={14} /> V/S</div>
-              {(() => {
-                const vs = liveAircraft.vr ?? liveAircraft.baro_rate ?? liveAircraft.geom_rate ?? 0;
-                const isExtreme = Math.abs(vs) > 3000;
-                const vsClass = vs > 0 ? 'climbing' : vs < 0 ? 'descending' : '';
-                return (
-                  <div className={`pro-stat-value ${vsClass} ${isExtreme ? 'extreme-vs' : ''}`}>
-                    {vs > 0 ? '+' : ''}{vs} <span className="unit">fpm</span>
+            {(() => {
+              // Calculate values for color coding
+              const proAltitude = liveAircraft.alt_baro || liveAircraft.alt_geom || liveAircraft.alt || 0;
+              const proSpeed = liveAircraft.gs || liveAircraft.tas;
+              const proAltClass = getAltitudeColorClass(proAltitude);
+              const proSpeedClass = getSpeedColorClass(proSpeed, proAltitude);
+
+              // Track distance trend
+              const proDistanceNm = liveAircraft.distance_nm || getDistanceNm(liveAircraft.lat, liveAircraft.lon);
+              if (proPrevDistanceRef.current !== null) {
+                const delta = proDistanceNm - proPrevDistanceRef.current;
+                if (Math.abs(delta) > 0.05) {
+                  proDistanceTrendRef.current = delta < 0 ? 'approaching' : 'receding';
+                } else {
+                  proDistanceTrendRef.current = 'stable';
+                }
+              }
+              proPrevDistanceRef.current = proDistanceNm;
+              const proDistTrend = proDistanceTrendRef.current;
+
+              // RSSI signal strength
+              const proRssi = liveAircraft.rssi;
+              const proSignalClass = proRssi !== undefined ? getSignalStrengthClass(proRssi) : 'weak';
+
+              return (
+                <>
+                  <div className="pro-stat">
+                    <div className="pro-stat-label"><Crosshair size={14} /> ALTITUDE</div>
+                    <div className={`pro-stat-value ${proAltClass}`}>{proAltitude.toLocaleString()} <span className="unit">ft</span></div>
                   </div>
-                );
-              })()}
-            </div>
-            <div className="pro-stat">
-              <div className="pro-stat-label"><LocateFixed size={14} /> TRACK</div>
-              <div className="pro-stat-value">
-                {Math.round(liveAircraft.track || liveAircraft.true_heading || 0)}°
-                <span className="unit cardinal">{windDirToCardinal(liveAircraft.track || liveAircraft.true_heading)}</span>
-              </div>
-            </div>
-            <div className="pro-stat">
-              <div className="pro-stat-label"><MapPin size={14} /> DISTANCE</div>
-              <div className="pro-stat-value">{(liveAircraft.distance_nm || getDistanceNm(liveAircraft.lat, liveAircraft.lon)).toFixed(1)} <span className="unit">nm</span></div>
-            </div>
-            <div className="pro-stat">
-              <div className="pro-stat-label"><Signal size={14} /> RSSI</div>
-              <div className="pro-stat-value">{liveAircraft.rssi?.toFixed(1) || '--'} <span className="unit">dBFS</span></div>
-            </div>
+                  <div className="pro-stat">
+                    <div className="pro-stat-label"><Navigation size={14} /> SPEED</div>
+                    <div className={`pro-stat-value ${proSpeedClass}`}>{proSpeed || '--'} <span className="unit">kts</span></div>
+                  </div>
+                  <div className="pro-stat">
+                    <div className="pro-stat-label"><Plane size={14} /> TYPE</div>
+                    <div className="pro-stat-value">{liveAircraft.type || '--'}</div>
+                  </div>
+                  <div className="pro-stat">
+                    <div className="pro-stat-label"><Radio size={14} /> SQUAWK</div>
+                    <div className="pro-stat-value">{liveAircraft.squawk || '1200'}</div>
+                  </div>
+                  <div className="pro-stat">
+                    <div className="pro-stat-label"><TrendingUp size={14} /> V/S</div>
+                    {(() => {
+                      const vs = liveAircraft.vr ?? liveAircraft.baro_rate ?? liveAircraft.geom_rate ?? 0;
+                      const isExtreme = Math.abs(vs) > 3000;
+                      const vsClass = vs > 0 ? 'climbing' : vs < 0 ? 'descending' : '';
+                      return (
+                        <div className={`pro-stat-value ${vsClass} ${isExtreme ? 'extreme-vs' : ''}`}>
+                          {vs > 0 ? '+' : ''}{vs} <span className="unit">fpm</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <div className="pro-stat">
+                    <div className="pro-stat-label"><LocateFixed size={14} /> TRACK</div>
+                    <div className="pro-stat-value">
+                      {Math.round(liveAircraft.track || liveAircraft.true_heading || 0)}°
+                      <span className="unit cardinal">{windDirToCardinal(liveAircraft.track || liveAircraft.true_heading)}</span>
+                    </div>
+                  </div>
+                  <div className="pro-stat">
+                    <div className="pro-stat-label"><MapPin size={14} /> DISTANCE</div>
+                    <div className={`pro-stat-value distance-value ${proDistTrend || ''}`}>
+                      {proDistTrend === 'approaching' && <TrendingDown size={12} className="trend-icon approaching" />}
+                      {proDistTrend === 'receding' && <TrendingUp size={12} className="trend-icon receding" />}
+                      {proDistTrend === 'stable' && <Minus size={12} className="trend-icon stable" />}
+                      {proDistanceNm.toFixed(1)} <span className="unit">nm</span>
+                    </div>
+                  </div>
+                  <div className="pro-stat">
+                    <div className="pro-stat-label"><Signal size={14} /> RSSI</div>
+                    <div className="pro-stat-value rssi-stat">
+                      {proRssi !== undefined ? (
+                        <>
+                          <span className={`signal-bars ${proSignalClass}`}>
+                            <span className="bar bar-1"></span>
+                            <span className="bar bar-2"></span>
+                            <span className="bar bar-3"></span>
+                            <span className="bar bar-4"></span>
+                          </span>
+                          <span>{proRssi.toFixed(0)}</span>
+                          <span className="unit">dB</span>
+                        </>
+                      ) : (
+                        <>-- <span className="unit">dB</span></>
+                      )}
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
           </div>
 
           <div className="pro-profile-chart">

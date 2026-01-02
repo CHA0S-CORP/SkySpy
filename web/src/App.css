@@ -3027,6 +3027,118 @@ body {
   font-weight: 600;
 }
 
+/* Speed color coding */
+.speed-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.speed-value.speed-normal {
+  color: var(--accent-green, #22c55e);
+}
+
+.speed-value.speed-medium {
+  color: var(--accent-yellow, #eab308);
+}
+
+.speed-value.speed-high {
+  color: var(--accent-orange, #f97316);
+}
+
+.speed-value.speed-violation {
+  color: var(--accent-red, #ef4444);
+  font-weight: 600;
+  animation: speed-flash 0.5s ease-in-out infinite;
+}
+
+@keyframes speed-flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Altitude color coding */
+.altitude-value.alt-low {
+  color: var(--accent-green, #22c55e);
+}
+
+.altitude-value.alt-5k {
+  color: #4ade80;
+}
+
+.altitude-value.alt-fl100 {
+  color: var(--accent-cyan, #06b6d4);
+}
+
+.altitude-value.alt-fl200 {
+  color: var(--accent-blue, #3b82f6);
+}
+
+.altitude-value.alt-fl300 {
+  color: #a78bfa;
+}
+
+.altitude-value.alt-fl400 {
+  color: var(--accent-purple, #a855f7);
+}
+
+/* Distance trend indicator */
+.distance-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.trend-icon {
+  flex-shrink: 0;
+}
+
+.trend-icon.approaching {
+  color: var(--accent-green, #22c55e);
+}
+
+.trend-icon.receding {
+  color: var(--accent-red, #ef4444);
+}
+
+.trend-icon.stable {
+  color: var(--text-dim, #64748b);
+}
+
+.distance-value.approaching {
+  color: var(--accent-green, #22c55e);
+}
+
+.distance-value.receding {
+  color: var(--accent-orange, #f97316);
+}
+
+/* Signal indicator inline (for popups) */
+.signal-indicator-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.signal-indicator-inline .signal-bars {
+  height: 14px;
+}
+
+.signal-indicator-inline .signal-bars .bar {
+  width: 4px;
+}
+
+.signal-indicator-inline .signal-bars .bar-1 { height: 4px; }
+.signal-indicator-inline .signal-bars .bar-2 { height: 7px; }
+.signal-indicator-inline .signal-bars .bar-3 { height: 10px; }
+.signal-indicator-inline .signal-bars .bar-4 { height: 14px; }
+
+.signal-indicator-inline .signal-value {
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
 /* Popup External Links */
 .popup-links {
   margin-top: 12px;
@@ -7695,6 +7807,101 @@ body {
     opacity: 0.4;
   }
 }
+
+/* Pro Panel Speed Color Coding */
+.pro-stat-value.speed-normal {
+  color: var(--accent-green, #22c55e);
+}
+
+.pro-stat-value.speed-medium {
+  color: var(--accent-yellow, #eab308);
+}
+
+.pro-stat-value.speed-high {
+  color: var(--accent-orange, #f97316);
+}
+
+.pro-stat-value.speed-violation {
+  color: var(--accent-red, #ef4444);
+  font-weight: 600;
+  animation: speed-flash 0.5s ease-in-out infinite;
+}
+
+/* Pro Panel Altitude Color Coding */
+.pro-stat-value.alt-low {
+  color: var(--accent-green, #22c55e);
+}
+
+.pro-stat-value.alt-5k {
+  color: #4ade80;
+}
+
+.pro-stat-value.alt-fl100 {
+  color: var(--accent-cyan, #06b6d4);
+}
+
+.pro-stat-value.alt-fl200 {
+  color: var(--accent-blue, #3b82f6);
+}
+
+.pro-stat-value.alt-fl300 {
+  color: #a78bfa;
+}
+
+.pro-stat-value.alt-fl400 {
+  color: var(--accent-purple, #a855f7);
+}
+
+/* Pro Panel Distance Trend */
+.pro-stat-value.distance-value {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pro-stat-value .trend-icon {
+  flex-shrink: 0;
+}
+
+.pro-stat-value .trend-icon.approaching {
+  color: var(--accent-green, #22c55e);
+}
+
+.pro-stat-value .trend-icon.receding {
+  color: var(--accent-red, #ef4444);
+}
+
+.pro-stat-value .trend-icon.stable {
+  color: var(--text-dim, #64748b);
+}
+
+.pro-stat-value.distance-value.approaching {
+  color: var(--accent-green, #22c55e);
+}
+
+.pro-stat-value.distance-value.receding {
+  color: var(--accent-orange, #f97316);
+}
+
+/* Pro Panel RSSI Signal Bars */
+.pro-stat-value.rssi-stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pro-stat-value.rssi-stat .signal-bars {
+  height: 16px;
+}
+
+.pro-stat-value.rssi-stat .signal-bars .bar {
+  width: 5px;
+}
+
+.pro-stat-value.rssi-stat .signal-bars .bar-1 { height: 4px; }
+.pro-stat-value.rssi-stat .signal-bars .bar-2 { height: 8px; }
+.pro-stat-value.rssi-stat .signal-bars .bar-3 { height: 12px; }
+.pro-stat-value.rssi-stat .signal-bars .bar-4 { height: 16px; }
 
 /* Cardinal Indicator */
 .pro-stat-value .cardinal {

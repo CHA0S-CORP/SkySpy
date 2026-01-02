@@ -264,6 +264,174 @@ class HistoryStatsResponse(BaseModel):
     unique_aircraft: int = Field(0, description="Unique aircraft seen")
     military_sessions: int = Field(0, description="Military aircraft sessions")
     time_range_hours: int = Field(24, description="Statistics time range")
+    avg_altitude: Optional[int] = Field(None, description="Average altitude in feet")
+    max_altitude: Optional[int] = Field(None, description="Maximum altitude in feet")
+    min_altitude: Optional[int] = Field(None, description="Minimum altitude in feet")
+    avg_distance_nm: Optional[float] = Field(None, description="Average distance in nautical miles")
+    max_distance_nm: Optional[float] = Field(None, description="Maximum distance in nautical miles")
+    avg_speed: Optional[int] = Field(None, description="Average ground speed in knots")
+    max_speed: Optional[int] = Field(None, description="Maximum ground speed in knots")
+    filters_applied: Optional[dict] = Field(None, description="Filters that were applied")
+
+
+class TrendInterval(BaseModel):
+    """Single interval in trend data."""
+    timestamp: Optional[str] = Field(None, description="Interval start timestamp")
+    position_count: int = Field(0, description="Position reports in interval")
+    unique_aircraft: int = Field(0, description="Unique aircraft in interval")
+    military_count: int = Field(0, description="Military aircraft count")
+    avg_altitude: Optional[int] = Field(None, description="Average altitude")
+    max_altitude: Optional[int] = Field(None, description="Maximum altitude")
+    avg_distance_nm: Optional[float] = Field(None, description="Average distance")
+    max_distance_nm: Optional[float] = Field(None, description="Maximum distance")
+    avg_speed: Optional[int] = Field(None, description="Average speed")
+    max_speed: Optional[int] = Field(None, description="Maximum speed")
+
+
+class TrendSummary(BaseModel):
+    """Summary of trend data."""
+    total_unique_aircraft: int = Field(0, description="Total unique aircraft in range")
+    peak_concurrent: int = Field(0, description="Peak concurrent aircraft")
+    peak_interval: Optional[str] = Field(None, description="Interval with peak aircraft")
+    total_intervals: int = Field(0, description="Number of intervals")
+
+
+class TrendsResponse(BaseModel):
+    """Response for trends endpoint."""
+    intervals: list[TrendInterval] = Field(default_factory=list, description="Trend data per interval")
+    interval_type: str = Field("hour", description="Interval type (15min, hour, day)")
+    time_range_hours: int = Field(24, description="Time range in hours")
+    summary: TrendSummary = Field(default_factory=TrendSummary, description="Summary statistics")
+
+
+class TopPerformerEntry(BaseModel):
+    """Single entry in top performers list."""
+    icao_hex: str = Field(..., description="Aircraft ICAO hex")
+    callsign: Optional[str] = Field(None, description="Flight callsign")
+    aircraft_type: Optional[str] = Field(None, description="Aircraft type code")
+    is_military: bool = Field(False, description="Military aircraft flag")
+    first_seen: Optional[str] = Field(None, description="First seen timestamp")
+    last_seen: Optional[str] = Field(None, description="Last seen timestamp")
+    duration_min: Optional[float] = Field(None, description="Tracking duration in minutes")
+    positions: Optional[int] = Field(None, description="Position report count")
+    min_distance_nm: Optional[float] = Field(None, description="Minimum distance")
+    max_distance_nm: Optional[float] = Field(None, description="Maximum distance")
+    min_altitude: Optional[int] = Field(None, description="Minimum altitude")
+    max_altitude: Optional[int] = Field(None, description="Maximum altitude")
+    max_speed: Optional[int] = Field(None, description="Maximum ground speed")
+
+
+class TopPerformersResponse(BaseModel):
+    """Response for top performers endpoint."""
+    longest_tracked: list[TopPerformerEntry] = Field(default_factory=list, description="Longest tracked sessions")
+    furthest_distance: list[TopPerformerEntry] = Field(default_factory=list, description="Furthest distance sessions")
+    highest_altitude: list[TopPerformerEntry] = Field(default_factory=list, description="Highest altitude sessions")
+    most_positions: list[TopPerformerEntry] = Field(default_factory=list, description="Most positions sessions")
+    closest_approach: list[TopPerformerEntry] = Field(default_factory=list, description="Closest approach sessions")
+    time_range_hours: int = Field(24, description="Time range in hours")
+    limit: int = Field(10, description="Max entries per category")
+
+
+class DistributionBucket(BaseModel):
+    """Statistics distribution bucket."""
+    bucket: str = Field(..., description="Bucket label")
+    count: int = Field(0, description="Count in bucket")
+
+
+class DistanceStatistics(BaseModel):
+    """Distance statistics summary."""
+    count: int = Field(0, description="Total samples")
+    mean_nm: Optional[float] = Field(None, description="Mean distance")
+    median_nm: Optional[float] = Field(None, description="Median distance")
+    std_dev_nm: Optional[float] = Field(None, description="Standard deviation")
+    min_nm: Optional[float] = Field(None, description="Minimum distance")
+    max_nm: Optional[float] = Field(None, description="Maximum distance")
+    percentile_25: Optional[float] = Field(None, description="25th percentile")
+    percentile_75: Optional[float] = Field(None, description="75th percentile")
+    percentile_90: Optional[float] = Field(None, description="90th percentile")
+    percentile_95: Optional[float] = Field(None, description="95th percentile")
+
+
+class TypeDistanceEntry(BaseModel):
+    """Distance stats by aircraft type."""
+    type: str = Field(..., description="Aircraft type code")
+    count: int = Field(0, description="Number of aircraft")
+    mean_nm: float = Field(0, description="Mean distance")
+    max_nm: float = Field(0, description="Maximum distance")
+
+
+class DistanceAnalyticsResponse(BaseModel):
+    """Response for distance analytics endpoint."""
+    distribution: dict = Field(default_factory=dict, description="Count by distance band")
+    statistics: DistanceStatistics = Field(default_factory=DistanceStatistics, description="Statistical summary")
+    by_type: list[TypeDistanceEntry] = Field(default_factory=list, description="Stats by aircraft type")
+    time_range_hours: int = Field(24, description="Time range in hours")
+
+
+class SpeedStatistics(BaseModel):
+    """Speed statistics summary."""
+    count: int = Field(0, description="Total samples")
+    mean_kt: Optional[int] = Field(None, description="Mean speed in knots")
+    median_kt: Optional[int] = Field(None, description="Median speed")
+    max_kt: Optional[int] = Field(None, description="Maximum speed")
+    percentile_90: Optional[int] = Field(None, description="90th percentile speed")
+
+
+class FastestSessionEntry(BaseModel):
+    """Fastest session entry."""
+    icao_hex: str = Field(..., description="Aircraft ICAO hex")
+    callsign: Optional[str] = Field(None, description="Callsign")
+    max_speed: int = Field(0, description="Maximum speed recorded")
+    avg_speed: Optional[int] = Field(None, description="Average speed")
+    samples: int = Field(0, description="Number of samples")
+
+
+class TypeSpeedEntry(BaseModel):
+    """Speed stats by aircraft type."""
+    type: str = Field(..., description="Aircraft type code")
+    avg_max_speed: Optional[int] = Field(None, description="Average max speed")
+    peak_speed: Optional[int] = Field(None, description="Peak speed recorded")
+    count: int = Field(0, description="Number of aircraft")
+
+
+class SpeedAnalyticsResponse(BaseModel):
+    """Response for speed analytics endpoint."""
+    distribution: dict = Field(default_factory=dict, description="Count by speed band")
+    statistics: SpeedStatistics = Field(default_factory=SpeedStatistics, description="Statistical summary")
+    fastest_sessions: list[FastestSessionEntry] = Field(default_factory=list, description="Fastest sessions")
+    by_type: list[TypeSpeedEntry] = Field(default_factory=list, description="Stats by aircraft type")
+    time_range_hours: int = Field(24, description="Time range in hours")
+
+
+class AltitudeSpeedCorrelation(BaseModel):
+    """Altitude vs speed correlation data point."""
+    altitude_band: str = Field(..., description="Altitude band label")
+    avg_speed: Optional[int] = Field(None, description="Average speed in band")
+    sample_count: int = Field(0, description="Number of samples")
+
+
+class HourlyPattern(BaseModel):
+    """Hourly activity pattern."""
+    hour: int = Field(..., description="Hour of day (0-23)")
+    unique_aircraft: int = Field(0, description="Unique aircraft count")
+    position_count: int = Field(0, description="Position reports")
+    military_count: int = Field(0, description="Military aircraft count")
+    military_pct: float = Field(0, description="Military percentage")
+
+
+class TimeOfDayPatterns(BaseModel):
+    """Time of day activity patterns."""
+    hourly_counts: list[HourlyPattern] = Field(default_factory=list, description="Hourly activity")
+    peak_hour: Optional[int] = Field(None, description="Hour with peak activity")
+    peak_aircraft_count: int = Field(0, description="Aircraft count at peak")
+
+
+class CorrelationAnalyticsResponse(BaseModel):
+    """Response for correlation analytics endpoint."""
+    altitude_vs_speed: list[AltitudeSpeedCorrelation] = Field(default_factory=list, description="Altitude/speed correlation")
+    distance_vs_altitude: list[dict] = Field(default_factory=list, description="Distance/altitude correlation")
+    time_of_day_patterns: TimeOfDayPatterns = Field(default_factory=TimeOfDayPatterns, description="Time patterns")
+    time_range_hours: int = Field(24, description="Time range in hours")
 
 
 # ============================================================================

@@ -249,12 +249,21 @@ async def get_aircraft_acars(
     response_model=AcarsStatsResponse,
     summary="Get ACARS Statistics",
     description="""
-Get comprehensive ACARS service and database statistics.
+Get comprehensive ACARS service and database statistics with optional filters.
+
+**Filters:**
+- **hours**: Time range for statistics (1-168 hours)
+- **source**: Filter by source (acars, vdlm2)
+- **label**: Filter by ACARS label code(s), comma-separated
+- **icao_hex**: Filter by aircraft ICAO hex
+- **callsign**: Filter by callsign (partial match)
 
 Includes:
-- Total message counts (all time, last hour, last 24h)
+- Total message counts (all time, last hour, filtered range)
 - Breakdown by source (ACARS vs VDL2)
 - Top 10 most common message labels
+- Top 10 aircraft by message count
+- Hourly message distribution
 - Real-time receiver service statistics
     """,
     responses={
@@ -264,27 +273,50 @@ Includes:
                 "application/json": {
                     "example": {
                         "total_messages": 15234,
+                        "filtered_count": 12456,
                         "last_hour": 523,
                         "last_24h": 12456,
+                        "time_range_hours": 24,
                         "by_source": {"acars": 8000, "vdlm2": 7234},
                         "top_labels": [
                             {"label": "H1", "count": 2345},
                             {"label": "SA", "count": 1234}
                         ],
+                        "top_aircraft": [
+                            {"icao_hex": "A12345", "callsign": "UAL123", "count": 45}
+                        ],
+                        "hourly_distribution": [
+                            {"hour": "2024-01-01T12:00:00Z", "count": 523}
+                        ],
                         "service_stats": {
                             "running": True,
                             "acars": {"total": 8000, "last_hour": 256, "errors": 12},
                             "vdlm2": {"total": 7234, "last_hour": 267, "errors": 5}
-                        }
+                        },
+                        "filters_applied": None
                     }
                 }
             }
         }
     }
 )
-async def acars_statistics(db: AsyncSession = Depends(get_db)):
-    """Get ACARS service and database statistics."""
-    return await get_acars_stats(db)
+async def acars_statistics(
+    hours: int = Query(24, ge=1, le=168, description="Time range in hours"),
+    source: Optional[str] = Query(None, description="Filter by source", enum=["acars", "vdlm2"]),
+    label: Optional[str] = Query(None, description="Filter by ACARS label code(s), comma-separated"),
+    icao_hex: Optional[str] = Query(None, description="Filter by aircraft ICAO hex"),
+    callsign: Optional[str] = Query(None, description="Filter by callsign (partial match)"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get ACARS service and database statistics with filters."""
+    return await get_acars_stats(
+        db,
+        hours=hours,
+        source=source,
+        label=label,
+        icao_hex=icao_hex,
+        callsign=callsign
+    )
 
 
 @router.get(

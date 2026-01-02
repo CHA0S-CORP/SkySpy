@@ -91,6 +91,10 @@ class SocketIOManager:
         self._last_publish_time: Optional[float] = None
         self._connection_count = 0
 
+        # Filter tracking for stats subscriptions
+        # Maps sid -> filter dict
+        self._client_filters: dict[str, dict] = {}
+
         # Register event handlers
         self._register_handlers()
 
@@ -121,6 +125,9 @@ class SocketIOManager:
         async def disconnect(sid):
             """Handle client disconnection."""
             self._connection_count = max(0, self._connection_count - 1)
+            # Clean up client filters
+            if sid in self._client_filters:
+                del self._client_filters[sid]
             logger.info(f"Socket.IO client disconnected: {sid} (total: {self._connection_count})")
 
         @self.sio.event
@@ -131,12 +138,57 @@ class SocketIOManager:
                 topics = [topics]
 
             for topic in topics:
-                if topic in ['aircraft', 'airspace', 'safety', 'alerts', 'acars', 'audio', 'all']:
+                if topic in ['aircraft', 'airspace', 'safety', 'alerts', 'acars', 'audio', 'stats', 'all']:
                     await self.sio.enter_room(sid, topic)
                     logger.debug(f"Client {sid} subscribed to {topic}")
 
             # Send initial state for new topics
             await self._send_initial_state(sid, topics)
+
+        @self.sio.event
+        async def subscribe_stats(sid, data):
+            """Handle stats subscription with filters."""
+            filters = data if isinstance(data, dict) else {}
+
+            # Store client's filter preferences
+            self._client_filters[sid] = {
+                'military_only': filters.get('military_only', False),
+                'category': filters.get('category'),
+                'min_altitude': filters.get('min_altitude'),
+                'max_altitude': filters.get('max_altitude'),
+                'min_distance': filters.get('min_distance'),
+                'max_distance': filters.get('max_distance'),
+                'aircraft_type': filters.get('aircraft_type'),
+            }
+
+            # Join stats room
+            await self.sio.enter_room(sid, 'stats')
+            logger.debug(f"Client {sid} subscribed to stats with filters: {self._client_filters[sid]}")
+
+            # Send initial filtered stats
+            await self._send_filtered_stats(sid)
+
+        @self.sio.event
+        async def update_stats_filters(sid, data):
+            """Update stats filters for a client."""
+            if sid not in self._client_filters:
+                self._client_filters[sid] = {}
+
+            filters = data if isinstance(data, dict) else {}
+            self._client_filters[sid].update({
+                'military_only': filters.get('military_only', self._client_filters[sid].get('military_only', False)),
+                'category': filters.get('category', self._client_filters[sid].get('category')),
+                'min_altitude': filters.get('min_altitude', self._client_filters[sid].get('min_altitude')),
+                'max_altitude': filters.get('max_altitude', self._client_filters[sid].get('max_altitude')),
+                'min_distance': filters.get('min_distance', self._client_filters[sid].get('min_distance')),
+                'max_distance': filters.get('max_distance', self._client_filters[sid].get('max_distance')),
+                'aircraft_type': filters.get('aircraft_type', self._client_filters[sid].get('aircraft_type')),
+            })
+
+            logger.debug(f"Client {sid} updated stats filters: {self._client_filters[sid]}")
+
+            # Send updated filtered stats
+            await self._send_filtered_stats(sid)
 
         @self.sio.event
         async def unsubscribe(sid, data):
@@ -191,6 +243,88 @@ class SocketIOManager:
         except Exception as e:
             logger.warning(f"Failed to send initial state to {sid}: {e}")
 
+    async def _send_filtered_stats(self, sid: str):
+        """Send filtered stats to a specific client based on their filters."""
+        try:
+            filters = self._client_filters.get(sid, {})
+
+            # Apply filters to current aircraft state
+            aircraft_list = list(self._last_aircraft_state.values())
+            filtered_aircraft = self._apply_aircraft_filters(aircraft_list, filters)
+
+            # Calculate stats from filtered aircraft
+            stats = self._calculate_stats(filtered_aircraft)
+            stats['filters_applied'] = {k: v for k, v in filters.items() if v is not None}
+            stats['timestamp'] = datetime.utcnow().isoformat() + 'Z'
+
+            await self.sio.emit('stats:update', stats, room=sid)
+
+        except Exception as e:
+            logger.warning(f"Failed to send filtered stats to {sid}: {e}")
+
+    def _apply_aircraft_filters(self, aircraft: list[dict], filters: dict) -> list[dict]:
+        """Apply filters to aircraft list."""
+        result = aircraft.copy()
+
+        if filters.get('military_only'):
+            result = [a for a in result if a.get('dbFlags', 0) & 1]
+
+        if filters.get('category'):
+            categories = [c.strip().upper() for c in filters['category'].split(',')]
+            result = [a for a in result if a.get('category', '').upper() in categories]
+
+        if filters.get('min_altitude') is not None:
+            result = [a for a in result
+                      if isinstance(a.get('alt_baro'), int) and a['alt_baro'] >= filters['min_altitude']]
+
+        if filters.get('max_altitude') is not None:
+            result = [a for a in result
+                      if isinstance(a.get('alt_baro'), int) and a['alt_baro'] <= filters['max_altitude']]
+
+        if filters.get('min_distance') is not None:
+            result = [a for a in result
+                      if a.get('distance_nm') is not None and a['distance_nm'] >= filters['min_distance']]
+
+        if filters.get('max_distance') is not None:
+            result = [a for a in result
+                      if a.get('distance_nm') is not None and a['distance_nm'] <= filters['max_distance']]
+
+        return result
+
+    def _calculate_stats(self, aircraft: list[dict]) -> dict:
+        """Calculate stats from aircraft list."""
+        total = len(aircraft)
+        with_position = sum(1 for a in aircraft if a.get('lat') and a.get('lon'))
+        military = sum(1 for a in aircraft if a.get('dbFlags', 0) & 1)
+
+        # Category breakdown
+        categories = {}
+        for a in aircraft:
+            cat = a.get('category', 'unknown')
+            categories[cat] = categories.get(cat, 0) + 1
+
+        # Altitude breakdown
+        altitudes = [a['alt_baro'] for a in aircraft if isinstance(a.get('alt_baro'), int)]
+        alt_ground = sum(1 for alt in altitudes if alt <= 0)
+        alt_low = sum(1 for alt in altitudes if 0 < alt < 10000)
+        alt_med = sum(1 for alt in altitudes if 10000 <= alt < 30000)
+        alt_high = sum(1 for alt in altitudes if alt >= 30000)
+
+        return {
+            'total': total,
+            'with_position': with_position,
+            'military': military,
+            'categories': categories,
+            'altitude': {
+                'ground': alt_ground,
+                'low': alt_low,
+                'medium': alt_med,
+                'high': alt_high
+            },
+            'avg_altitude': round(sum(altitudes) / len(altitudes)) if altitudes else None,
+            'max_altitude': max(altitudes) if altitudes else None,
+        }
+
     async def _handle_request(self, sid: str, data: dict):
         """Handle on-demand data request."""
         request_type = data.get('type')
@@ -236,6 +370,14 @@ class SocketIOManager:
         # Also emit to 'all' room if not already the target
         if room != 'all':
             await self.sio.emit(event, data, room='all')
+
+    async def broadcast_filtered_stats(self):
+        """Broadcast filtered stats to all clients with stats subscriptions."""
+        for sid, filters in self._client_filters.items():
+            try:
+                await self._send_filtered_stats(sid)
+            except Exception as e:
+                logger.warning(f"Failed to broadcast stats to {sid}: {e}")
 
     async def publish_aircraft_update(self, aircraft_list: list[dict]):
         """Publish aircraft updates, detecting changes."""
@@ -287,6 +429,9 @@ class SocketIOManager:
             'count': len(current_state),
             'timestamp': timestamp
         })
+
+        # Send filtered stats to all stats subscribers
+        await self.broadcast_filtered_stats()
 
     def _has_significant_change(self, old: dict, new: dict) -> bool:
         """Check if aircraft has changed significantly."""

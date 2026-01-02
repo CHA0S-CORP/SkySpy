@@ -515,51 +515,127 @@ async def get_acars_messages(
     return messages
 
 
-async def get_acars_stats(db: AsyncSession) -> dict:
-    """Get ACARS database statistics."""
+async def get_acars_stats(
+    db: AsyncSession,
+    hours: int = 24,
+    source: str = None,
+    label: str = None,
+    icao_hex: str = None,
+    callsign: str = None
+) -> dict:
+    """Get ACARS database statistics with optional filters."""
+    from sqlalchemy import and_
+
     now = datetime.utcnow()
     hour_ago = now - timedelta(hours=1)
-    day_ago = now - timedelta(days=1)
-    
+    cutoff = now - timedelta(hours=hours)
+
+    filters_applied = {}
+
+    # Build base conditions
+    base_conditions = [AcarsMessage.timestamp > cutoff]
+    if source:
+        base_conditions.append(AcarsMessage.source == source)
+        filters_applied["source"] = source
+    if label:
+        labels = [l.strip() for l in label.split(",")]
+        if len(labels) == 1:
+            base_conditions.append(AcarsMessage.label == labels[0])
+        else:
+            base_conditions.append(AcarsMessage.label.in_(labels))
+        filters_applied["label"] = labels
+    if icao_hex:
+        base_conditions.append(AcarsMessage.icao_hex == icao_hex.upper())
+        filters_applied["icao_hex"] = icao_hex.upper()
+    if callsign:
+        base_conditions.append(AcarsMessage.callsign.ilike(f"%{callsign}%"))
+        filters_applied["callsign"] = callsign
+
+    # Total messages (all time, no filters except source/label/icao)
     total = (await db.execute(select(func.count(AcarsMessage.id)))).scalar()
-    
+
+    # Count with filters
+    filtered_count = (await db.execute(
+        select(func.count(AcarsMessage.id)).where(and_(*base_conditions))
+    )).scalar()
+
+    # Last hour (with filters)
+    hour_conditions = base_conditions.copy()
+    hour_conditions[0] = AcarsMessage.timestamp > hour_ago
     last_hour = (await db.execute(
-        select(func.count(AcarsMessage.id)).where(AcarsMessage.timestamp > hour_ago)
+        select(func.count(AcarsMessage.id)).where(and_(*hour_conditions))
     )).scalar()
-    
-    last_24h = (await db.execute(
-        select(func.count(AcarsMessage.id)).where(AcarsMessage.timestamp > day_ago)
-    )).scalar()
-    
-    # Count by source
+
+    # Count by source (within time range)
     acars_count = (await db.execute(
-        select(func.count(AcarsMessage.id)).where(AcarsMessage.source == "acars")
+        select(func.count(AcarsMessage.id)).where(
+            and_(AcarsMessage.timestamp > cutoff, AcarsMessage.source == "acars")
+        )
     )).scalar()
-    
+
     vdlm2_count = (await db.execute(
-        select(func.count(AcarsMessage.id)).where(AcarsMessage.source == "vdlm2")
+        select(func.count(AcarsMessage.id)).where(
+            and_(AcarsMessage.timestamp > cutoff, AcarsMessage.source == "vdlm2")
+        )
     )).scalar()
-    
-    # Top labels
+
+    # Top labels (with filters)
     label_query = await db.execute(
         select(AcarsMessage.label, func.count(AcarsMessage.id).label("count"))
-        .where(AcarsMessage.timestamp > day_ago)
+        .where(and_(*base_conditions))
         .group_by(AcarsMessage.label)
         .order_by(func.count(AcarsMessage.id).desc())
         .limit(10)
     )
     top_labels = [{"label": r[0], "count": r[1]} for r in label_query if r[0]]
-    
+
+    # Top aircraft by message count
+    aircraft_query = await db.execute(
+        select(
+            AcarsMessage.icao_hex,
+            AcarsMessage.callsign,
+            func.count(AcarsMessage.id).label("count")
+        )
+        .where(and_(*base_conditions, AcarsMessage.icao_hex.isnot(None)))
+        .group_by(AcarsMessage.icao_hex, AcarsMessage.callsign)
+        .order_by(func.count(AcarsMessage.id).desc())
+        .limit(10)
+    )
+    top_aircraft = [
+        {"icao_hex": r[0], "callsign": r[1], "count": r[2]}
+        for r in aircraft_query if r[0]
+    ]
+
+    # Hourly distribution
+    hourly_query = await db.execute(
+        select(
+            func.date_trunc('hour', AcarsMessage.timestamp).label('hour'),
+            func.count(AcarsMessage.id).label('count')
+        )
+        .where(and_(*base_conditions))
+        .group_by(func.date_trunc('hour', AcarsMessage.timestamp))
+        .order_by(func.date_trunc('hour', AcarsMessage.timestamp))
+    )
+    hourly_distribution = [
+        {"hour": r[0].isoformat() + "Z" if r[0] else None, "count": r[1]}
+        for r in hourly_query
+    ]
+
     return {
         "total_messages": total,
+        "filtered_count": filtered_count,
         "last_hour": last_hour,
-        "last_24h": last_24h,
+        "last_24h": filtered_count if hours == 24 else None,
+        "time_range_hours": hours,
         "by_source": {
             "acars": acars_count,
             "vdlm2": vdlm2_count,
         },
         "top_labels": top_labels,
+        "top_aircraft": top_aircraft,
+        "hourly_distribution": hourly_distribution,
         "service_stats": acars_service.get_stats(),
+        "filters_applied": filters_applied if filters_applied else None,
     }
 
 

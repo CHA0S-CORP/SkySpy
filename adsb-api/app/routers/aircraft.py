@@ -203,10 +203,16 @@ async def get_top_aircraft():
     response_model=AircraftStatsResponse,
     summary="Get Aircraft Statistics",
     description="""
-Get aggregate statistics about currently tracked aircraft.
+Get aggregate statistics about currently tracked aircraft with optional filters.
+
+**Filters:**
+- **category**: Filter by aircraft category (A0-D7, comma-separated)
+- **military_only**: Only include military aircraft
+- **min_altitude/max_altitude**: Filter by altitude range in feet
+- **min_distance/max_distance**: Filter by distance range in nautical miles
 
 Returns:
-- **total**: Total aircraft count
+- **total**: Total aircraft count (after filters)
 - **with_position**: Aircraft with valid GPS position
 - **military**: Military aircraft count
 - **emergency**: Aircraft squawking emergency codes (7500/7600/7700)
@@ -233,7 +239,8 @@ Altitude bands:
                         "categories": {"A3": 25, "A5": 10, "A1": 5, "unknown": 5},
                         "altitude": {"ground": 3, "low": 5, "medium": 12, "high": 25},
                         "messages": 152340,
-                        "timestamp": "2024-12-21T12:00:00Z"
+                        "timestamp": "2024-12-21T12:00:00Z",
+                        "filters_applied": {"military_only": False}
                     }
                 }
             }
@@ -241,30 +248,110 @@ Altitude bands:
         503: {"model": ErrorResponse, "description": "ADS-B data source unavailable"}
     }
 )
-@cached(ttl_seconds=5)
-async def get_aircraft_stats():
-    """Get aggregate statistics about currently tracked aircraft."""
+async def get_aircraft_stats(
+    category: Optional[str] = Query(
+        None,
+        description="Filter by aircraft category (A0-D7), comma-separated for multiple",
+        example="A3,A5"
+    ),
+    military_only: bool = Query(
+        False,
+        description="Only include military aircraft"
+    ),
+    min_altitude: Optional[int] = Query(
+        None,
+        description="Minimum altitude in feet",
+        example=10000
+    ),
+    max_altitude: Optional[int] = Query(
+        None,
+        description="Maximum altitude in feet",
+        example=40000
+    ),
+    min_distance: Optional[float] = Query(
+        None,
+        description="Minimum distance from feeder in nautical miles",
+        example=0
+    ),
+    max_distance: Optional[float] = Query(
+        None,
+        description="Maximum distance from feeder in nautical miles",
+        example=100
+    )
+):
+    """Get aggregate statistics about currently tracked aircraft with optional filters."""
     url = f"{settings.ultrafeeder_url}/data/aircraft.json"
     data = await safe_request(url)
-    
+
     if not data:
         raise HTTPException(status_code=503, detail="Unable to fetch aircraft data")
-    
+
     aircraft = data.get("aircraft", [])
-    
+
+    # Add distance to all aircraft for filtering
+    for ac in aircraft:
+        lat, lon = ac.get("lat"), ac.get("lon")
+        if is_valid_position(lat, lon):
+            ac["distance_nm"] = calculate_distance_nm(
+                settings.feeder_lat, settings.feeder_lon, lat, lon
+            )
+        else:
+            ac["distance_nm"] = None
+
+    # Build filters applied tracking
+    filters_applied = {}
+
+    # Apply filters
+    if category:
+        categories_list = [c.strip().upper() for c in category.split(",")]
+        aircraft = [a for a in aircraft if a.get("category", "").upper() in categories_list]
+        filters_applied["category"] = categories_list
+
+    if military_only:
+        aircraft = [a for a in aircraft if a.get("dbFlags", 0) & 1]
+        filters_applied["military_only"] = True
+
+    if min_altitude is not None:
+        aircraft = [
+            a for a in aircraft
+            if isinstance(a.get("alt_baro"), int) and a["alt_baro"] >= min_altitude
+        ]
+        filters_applied["min_altitude"] = min_altitude
+
+    if max_altitude is not None:
+        aircraft = [
+            a for a in aircraft
+            if isinstance(a.get("alt_baro"), int) and a["alt_baro"] <= max_altitude
+        ]
+        filters_applied["max_altitude"] = max_altitude
+
+    if min_distance is not None:
+        aircraft = [
+            a for a in aircraft
+            if a.get("distance_nm") is not None and a["distance_nm"] >= min_distance
+        ]
+        filters_applied["min_distance"] = min_distance
+
+    if max_distance is not None:
+        aircraft = [
+            a for a in aircraft
+            if a.get("distance_nm") is not None and a["distance_nm"] <= max_distance
+        ]
+        filters_applied["max_distance"] = max_distance
+
     with_pos = sum(1 for a in aircraft if is_valid_position(a.get("lat"), a.get("lon")))
-    military = sum(1 for a in aircraft if a.get("dbFlags", 0) & 1)
+    military_count = sum(1 for a in aircraft if a.get("dbFlags", 0) & 1)
     emergency = [
         {"hex": a.get("hex"), "flight": a.get("flight"), "squawk": a.get("squawk")}
         for a in aircraft if a.get("squawk") in ["7500", "7600", "7700"]
     ]
-    
+
     # Category breakdown
-    categories = {}
+    categories_count = {}
     for a in aircraft:
         cat = a.get("category", "unknown")
-        categories[cat] = categories.get(cat, 0) + 1
-    
+        categories_count[cat] = categories_count.get(cat, 0) + 1
+
     # Altitude breakdown
     alt_ground = sum(
         1 for a in aircraft
@@ -283,17 +370,31 @@ async def get_aircraft_stats():
         1 for a in aircraft
         if isinstance(a.get("alt_baro"), int) and a["alt_baro"] >= 30000
     )
-    
-    return AircraftStatsResponse(
-        total=len(aircraft),
-        with_position=with_pos,
-        military=military,
-        emergency=emergency,
-        categories=categories,
-        altitude={"ground": alt_ground, "low": alt_low, "medium": alt_med, "high": alt_high},
-        messages=data.get("messages", 0),
-        timestamp=datetime.utcnow().isoformat() + "Z"
-    )
+
+    # Distance breakdown
+    dist_close = sum(1 for a in aircraft if a.get("distance_nm") is not None and a["distance_nm"] < 25)
+    dist_near = sum(1 for a in aircraft if a.get("distance_nm") is not None and 25 <= a["distance_nm"] < 50)
+    dist_mid = sum(1 for a in aircraft if a.get("distance_nm") is not None and 50 <= a["distance_nm"] < 100)
+    dist_far = sum(1 for a in aircraft if a.get("distance_nm") is not None and a["distance_nm"] >= 100)
+
+    # Speed breakdown
+    speed_slow = sum(1 for a in aircraft if a.get("gs") and a["gs"] < 200)
+    speed_med = sum(1 for a in aircraft if a.get("gs") and 200 <= a["gs"] < 400)
+    speed_fast = sum(1 for a in aircraft if a.get("gs") and a["gs"] >= 400)
+
+    return {
+        "total": len(aircraft),
+        "with_position": with_pos,
+        "military": military_count,
+        "emergency": emergency,
+        "categories": categories_count,
+        "altitude": {"ground": alt_ground, "low": alt_low, "medium": alt_med, "high": alt_high},
+        "distance": {"close": dist_close, "near": dist_near, "mid": dist_mid, "far": dist_far},
+        "speed": {"slow": speed_slow, "medium": speed_med, "fast": speed_fast},
+        "messages": data.get("messages", 0),
+        "filters_applied": filters_applied if filters_applied else None,
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
 
 
 @router.get(
