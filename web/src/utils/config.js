@@ -3,10 +3,11 @@
 // ============================================================================
 
 export const DEFAULT_CONFIG = {
-  apiBaseUrl: '',
+  apiBaseUrl: import.meta.env.VITE_API_TARGET || '',
   mapMode: 'pro',  // 'radar', 'crt', 'pro', 'map'
   mapDarkMode: true,
-  browserNotifications: false
+  browserNotifications: false,
+  shortTrackLength: 15,  // Number of positions to show in short track trails (5-50)
 };
 
 export const DEFAULT_OVERLAYS = {

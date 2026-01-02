@@ -8,25 +8,25 @@
   NODE_VERSION = "20"
   VITE_API_TARGET = "https://v1-radar.chaos.navy"
 
-# Redirect all non-matching routes to index.html for React Router
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-
 # Proxy API requests to the backend
 [[redirects]]
   from = "/api/*"
   to = "https://v1-radar.chaos.navy/api/:splat"
   status = 200
-  force = false
+  force = true
 
-# Proxy socket.io requests
+# Proxy static assets (icons, etc) to the backend
 [[redirects]]
-  from = "/socket.io/*"
-  to = "https://v1-radar.chaos.navy/socket.io/:splat"
+  from = "/static/*"
+  to = "https://v1-radar.chaos.navy/static/:splat"
   status = 200
-  force = false
+  force = true
+
+# Redirect all non-matching routes to index.html for React Router
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
 
 # Cache headers for assets
 [[headers]]
