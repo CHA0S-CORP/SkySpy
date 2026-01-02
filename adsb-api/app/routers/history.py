@@ -993,21 +993,21 @@ async def get_speed_analytics(
     # Fastest sessions
     fastest_sessions = sorted(aircraft_speeds, key=lambda x: x['max_speed'], reverse=True)[:10]
 
-    # Get speed by aircraft type from sessions
+    # Get speed by aircraft type from sightings
     type_speed_query = (
         select(
-            AircraftSession.aircraft_type,
-            func.avg(AircraftSession.max_speed).label('avg_max_speed'),
-            func.max(AircraftSession.max_speed).label('peak_speed'),
-            func.count(AircraftSession.id).label('count')
+            AircraftSighting.aircraft_type,
+            func.avg(AircraftSighting.ground_speed).label('avg_max_speed'),
+            func.max(AircraftSighting.ground_speed).label('peak_speed'),
+            func.count(AircraftSighting.id).label('count')
         )
         .where(and_(
-            AircraftSession.last_seen > cutoff,
-            AircraftSession.max_speed.isnot(None),
-            AircraftSession.aircraft_type.isnot(None)
+            AircraftSighting.timestamp > cutoff,
+            AircraftSighting.ground_speed.isnot(None),
+            AircraftSighting.aircraft_type.isnot(None)
         ))
-        .group_by(AircraftSession.aircraft_type)
-        .order_by(func.max(AircraftSession.max_speed).desc())
+        .group_by(AircraftSighting.aircraft_type)
+        .order_by(func.max(AircraftSighting.ground_speed).desc())
         .limit(15)
     )
 
