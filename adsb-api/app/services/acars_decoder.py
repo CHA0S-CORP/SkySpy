@@ -2,6 +2,13 @@
 ACARS message decoder and enrichment.
 Parses callsigns to extract airline information and decodes message labels.
 
+Uses libacars (when available) for decoding complex message formats like:
+- FANS-1/A ADS-C and CPDLC
+- MIAM compressed messages
+- Various airline-specific encoded formats
+
+Falls back to regex-based decoding when libacars is not available.
+
 Based on logic from:
 https://github.com/sdr-enthusiasts/docker-acarshub/blob/main/rootfs/webapp/acarshub_helpers.py
 """
@@ -12,7 +19,20 @@ from typing import Optional
 from app.data.airlines import find_airline_by_iata, find_airline_by_icao
 from app.data.message_labels import lookup_label, get_label_name
 
+# Import libacars bindings (optional - gracefully handles missing library)
+try:
+    from app.services import libacars_binding
+    LIBACARS_AVAILABLE = libacars_binding.is_available()
+except ImportError:
+    libacars_binding = None
+    LIBACARS_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+if LIBACARS_AVAILABLE:
+    logger.info("libacars library loaded - advanced ACARS decoding enabled")
+else:
+    logger.info("libacars library not available - using regex-based decoding only")
 
 
 def parse_callsign(callsign: str) -> dict:
@@ -124,6 +144,282 @@ def decode_label(label: str) -> dict:
     }
 
 
+def decode_h1_message(text: str) -> dict | None:
+    """
+    Decode H1 (Datalink) message sub-types.
+
+    H1 messages have various preambles identifying the message type:
+    - FPN: Flight Plan
+    - POS: Position Report
+    - PRG: Progress Report
+    - PWI: Predicted Wind
+    - WRN: Warning
+    - FLR: Fault Log Report
+    - INI: Initialization
+
+    Returns decoded dict or None if format not recognized.
+    """
+    if not text:
+        return None
+
+    decoded = {}
+    text_clean = text.replace('\n', '').replace('\r', '')
+
+    # ========== FPN - Flight Plan ==========
+    # Format: FPN/RI:DA:KEWR:AA:KDFW:CR:... or #M1BFPN/...
+    fpn_match = re.search(r'(?:#[A-Z0-9]+)?FPN/([A-Z0-9]+/)?(?:RI:)?(?:DA:)?([A-Z]{4}):(?:AA:)?([A-Z]{4})', text_clean)
+    if fpn_match or 'FPN/' in text_clean:
+        decoded["message_type"] = "Flight Plan"
+        decoded["description"] = "FPN flight plan/route data"
+
+        # Extract origin/destination
+        da_match = re.search(r'DA:([A-Z]{4})', text_clean)
+        aa_match = re.search(r'AA:([A-Z]{4})', text_clean)
+        if da_match:
+            decoded["origin"] = da_match.group(1)
+        if aa_match:
+            decoded["destination"] = aa_match.group(1)
+
+        # Extract runway info
+        dr_match = re.search(r'DR:([A-Z0-9]+)', text_clean)  # Departure runway
+        ar_match = re.search(r'AR:([A-Z0-9]+)', text_clean)  # Arrival runway
+        if dr_match:
+            decoded["departure_runway"] = dr_match.group(1)
+        if ar_match:
+            decoded["arrival_runway"] = ar_match.group(1)
+
+        # Extract waypoints from route - format like F:KCLT..KILNS..ZORAK
+        route_match = re.search(r'F:([A-Z0-9./]+)', text_clean)
+        if route_match:
+            route_str = route_match.group(1)
+            waypoints = re.findall(r'([A-Z]{3,5})', route_str)
+            if waypoints:
+                decoded["route"] = ' → '.join(waypoints[:10])
+                decoded["waypoints"] = waypoints[:10]
+
+        # Extract company route
+        cr_match = re.search(r'CR:([A-Z0-9]+)', text_clean)
+        if cr_match:
+            decoded["company_route"] = cr_match.group(1)
+
+        # Extract ETA
+        eta_match = re.search(r'ETA:?(\d{4})', text_clean)
+        if eta_match:
+            eta = eta_match.group(1)
+            decoded["eta"] = f"{eta[:2]}:{eta[2:]}"
+
+        return decoded
+
+    # ========== POS - Position Report ==========
+    # Format: /..POS/TS... or #M1BPOS/...
+    if '/POS/' in text_clean or re.match(r'^[A-Z0-9#]*POS/', text_clean):
+        decoded["message_type"] = "Position Report"
+        decoded["description"] = "H1 position report"
+
+        # Extract timestamp - TS140017,021724 (HHMMSS,DDMMYY)
+        ts_match = re.search(r'TS(\d{6}),(\d{6})', text_clean)
+        if ts_match:
+            time_str = ts_match.group(1)
+            decoded["time"] = f"{time_str[:2]}:{time_str[2:4]}:{time_str[4:]} UTC"
+
+        # Extract position - format varies
+        # Try N12345W123456 format (degrees and decimal minutes)
+        pos_match = re.search(r'([NS])(\d{2})(\d{3})([EW])(\d{3})(\d{3})', text_clean)
+        if pos_match:
+            lat_deg = int(pos_match.group(2))
+            lat_min = int(pos_match.group(3)) / 10
+            lat = lat_deg + lat_min / 60
+            if pos_match.group(1) == 'S':
+                lat = -lat
+
+            lon_deg = int(pos_match.group(4))
+            lon_min = int(pos_match.group(6)) / 10
+            lon = lon_deg + lon_min / 60
+            if pos_match.group(4) == 'W':
+                lon = -lon
+
+            decoded["position"] = {"lat": round(lat, 4), "lon": round(lon, 4)}
+
+        # Extract altitude
+        alt_match = re.search(r'/A(\d{5})', text_clean)
+        if alt_match:
+            decoded["altitude_ft"] = int(alt_match.group(1))
+            decoded["flight_level"] = f"FL{int(alt_match.group(1)) // 100}"
+
+        # Extract Mach number
+        mach_match = re.search(r'/M(\d{3})', text_clean)
+        if mach_match:
+            decoded["mach"] = f"0.{mach_match.group(1)}"
+
+        return decoded
+
+    # ========== PRG - Progress Report ==========
+    # Format: PRG/FMWJA120/DTCYYC,17L,94,043427,3056B5
+    if 'PRG/' in text_clean:
+        decoded["message_type"] = "Progress Report"
+        decoded["description"] = "Flight progress update"
+
+        prg_match = re.search(r'PRG/([A-Z0-9]+)/DT([A-Z]{4}),([^,]+),(\d+),(\d+)', text_clean)
+        if prg_match:
+            decoded["progress_id"] = prg_match.group(1)
+            decoded["destination"] = prg_match.group(2)
+            decoded["runway"] = prg_match.group(3)
+            decoded["sequence"] = prg_match.group(4)
+
+        # Extract ETA
+        eta_match = re.search(r'ETA:?(\d{4})', text_clean)
+        if eta_match:
+            eta = eta_match.group(1)
+            decoded["eta"] = f"{eta[:2]}:{eta[2:]}"
+
+        return decoded
+
+    # ========== PWI - Predicted Wind Information ==========
+    if 'PWI/' in text_clean or 'REQPWI' in text_clean:
+        decoded["message_type"] = "Wind Information"
+        decoded["description"] = "Predicted wind data request/response"
+
+        # Extract waypoint and altitude
+        pwi_match = re.search(r'([A-Z]{5})/([A-Z]{2}\d+)', text_clean)
+        if pwi_match:
+            decoded["waypoint"] = pwi_match.group(1)
+            decoded["flight_id"] = pwi_match.group(2)
+
+        return decoded
+
+    # ========== WRN - Warning Message ==========
+    if '/WRN/' in text_clean or text_clean.startswith('WRN/'):
+        decoded["message_type"] = "Warning"
+        decoded["description"] = "System warning message"
+
+        # Extract warning code if present
+        wrn_match = re.search(r'WRN/([A-Z0-9]+)', text_clean)
+        if wrn_match:
+            decoded["warning_code"] = wrn_match.group(1)
+
+        return decoded
+
+    # ========== CFB - Clearance from Tower ==========
+    if '#CFB' in text_clean or 'CFB/' in text_clean:
+        decoded["message_type"] = "Clearance"
+        decoded["description"] = "Departure clearance from tower"
+
+        # Extract clearance limit
+        cl_match = re.search(r'/CL([A-Z0-9]+)', text_clean)
+        if cl_match:
+            decoded["clearance_limit"] = cl_match.group(1)
+
+        # Extract SID
+        sid_match = re.search(r'/([A-Z0-9]+)\.([A-Z0-9]+)', text_clean)
+        if sid_match:
+            decoded["sid"] = f"{sid_match.group(1)}.{sid_match.group(2)}"
+
+        return decoded
+
+    # ========== Generic slash-separated H1 format ==========
+    # Many H1 messages use slash-separated fields
+    if '/' in text_clean and len(text_clean) > 10:
+        fields = text_clean.split('/')
+        if len(fields) >= 3:
+            decoded["message_type"] = "H1 Data"
+            decoded["description"] = "Encoded datalink message"
+
+            # Try to identify airports in fields
+            airports = []
+            for field in fields:
+                airport_matches = re.findall(r'\b([CKPEGLS][A-Z]{3})\b', field)
+                airports.extend(airport_matches)
+            if airports:
+                decoded["airports"] = list(dict.fromkeys(airports))[:5]
+
+            # Extract waypoints
+            waypoints = []
+            for field in fields:
+                wp_matches = re.findall(r'\b([A-Z]{5})\b', field)
+                waypoints.extend(wp_matches)
+            if waypoints:
+                decoded["waypoints"] = list(dict.fromkeys(waypoints))[:10]
+
+            if decoded.get("airports") or decoded.get("waypoints"):
+                return decoded
+
+    return None
+
+
+def try_libacars_decode(label: str, text: str) -> dict | None:
+    """
+    Try to decode message using libacars library.
+
+    This handles complex encoded formats that cannot be decoded with regex,
+    such as FANS-1/A ADS-C, CPDLC, and MIAM messages.
+
+    Returns decoded dict or None if libacars is not available or decoding failed.
+    """
+    if not LIBACARS_AVAILABLE or not libacars_binding:
+        return None
+
+    if not label or not text:
+        return None
+
+    try:
+        # Try to decode using libacars
+        libacars_json = libacars_binding.decode_acars_apps(label, text)
+
+        if not libacars_json:
+            return None
+
+        decoded = {}
+        decoded["message_type"] = "Decoded (libacars)"
+        decoded["libacars_decoded"] = libacars_json
+
+        # Extract common fields from libacars JSON output
+        # The structure varies by message type (ADS-C, CPDLC, etc.)
+
+        # Check for ADS-C data
+        if "adsc" in libacars_json:
+            adsc = libacars_json["adsc"]
+            decoded["message_type"] = "ADS-C"
+            decoded["description"] = "Automatic Dependent Surveillance - Contract"
+
+            # Extract position if present
+            if "basic_report" in adsc:
+                report = adsc["basic_report"]
+                if "lat" in report and "lon" in report:
+                    decoded["position"] = {
+                        "lat": report["lat"],
+                        "lon": report["lon"]
+                    }
+                if "alt" in report:
+                    decoded["altitude_ft"] = report["alt"]
+                    decoded["flight_level"] = f"FL{report['alt'] // 100}"
+
+        # Check for CPDLC data
+        if "cpdlc" in libacars_json:
+            cpdlc = libacars_json["cpdlc"]
+            decoded["message_type"] = "CPDLC"
+            decoded["description"] = "Controller-Pilot Data Link Communications"
+
+            # Extract message text if present
+            if "msg_text" in cpdlc:
+                decoded["cpdlc_text"] = cpdlc["msg_text"]
+
+        # Check for MIAM data
+        if "miam" in libacars_json:
+            decoded["message_type"] = "MIAM"
+            decoded["description"] = "Media Independent Aircraft Messaging"
+
+        # Get formatted text output
+        formatted = libacars_binding.decode_acars_apps_text(label, text)
+        if formatted:
+            decoded["libacars_formatted"] = formatted.strip()
+
+        return decoded if len(decoded) > 1 else None
+
+    except Exception as e:
+        logger.debug(f"libacars decode failed for label {label}: {e}")
+        return None
+
+
 def decode_message_text(text: str, label: str = None, libacars_data: dict = None) -> dict:
     """
     Attempt to decode the text content of an ACARS message.
@@ -231,35 +527,31 @@ def decode_message_text(text: str, label: str = None, libacars_data: dict = None
         if airport_codes:
             decoded["airports"] = list(set(airport_codes))
 
-    # ========== Pre-Departure Clearance (Label H1) ==========
+    # ========== Pre-Departure Clearance / H1 Messages ==========
+    # H1 messages have sub-types identified by preambles: FPN, POS, PRG, PWI, WRN, etc.
     if label == "H1":
-        decoded["message_type"] = "Pre-Departure Clearance"
-        decoded["description"] = "PDC/DCL departure clearance data"
+        h1_decoded = decode_h1_message(text_stripped)
+        if h1_decoded:
+            decoded.update(h1_decoded)
+        else:
+            # Try libacars for complex encoded H1 messages
+            libacars_result = try_libacars_decode(label, text_stripped)
+            if libacars_result:
+                decoded.update(libacars_result)
+            else:
+                # Fallback for unrecognized H1 formats
+                decoded["message_type"] = "H1 Message"
+                decoded["description"] = "Datalink message"
 
-        # Try to find routing info - format: REQPWI/WQ370:PETLI/DQ370/SPC85A
-        route_match = re.search(r'([A-Z]{3,6})/([A-Z]{2}\d+):([A-Z0-9/:]+)', text_stripped)
-        if route_match:
-            decoded["request_type"] = route_match.group(1)
-            decoded["flight_id"] = route_match.group(2)
-            decoded["route"] = route_match.group(3)
+                # Extract airports (4-letter ICAO codes starting with common prefixes)
+                airports = re.findall(r'\b([CKPEGLS][A-Z]{3})\b', text_stripped)
+                if airports:
+                    decoded["airports"] = list(dict.fromkeys(airports))[:5]
 
-        # Format: PRG/FMWJA120/DTCYYC,17L,94,043427,3056B5
-        prg_match = re.search(r'PRG/([A-Z0-9]+)/DT([A-Z]{4}),([^,]+),(\d+),(\d+),([A-Z0-9]+)', text_stripped)
-        if prg_match:
-            decoded["progress_id"] = prg_match.group(1)
-            decoded["destination"] = prg_match.group(2)
-            decoded["runway"] = prg_match.group(3)
-            decoded["sequence"] = prg_match.group(4)
-
-        # Extract airports (4-letter ICAO codes starting with common prefixes)
-        airports = re.findall(r'\b([CKPEGLS][A-Z]{3})\b', text_stripped)
-        if airports:
-            decoded["airports"] = list(dict.fromkeys(airports))[:5]
-
-        # Extract waypoints (5-letter codes)
-        waypoints = re.findall(r'\b([A-Z]{5})\b', text_stripped)
-        if waypoints:
-            decoded["waypoints"] = list(dict.fromkeys(waypoints))[:10]
+                # Extract waypoints (5-letter codes)
+                waypoints = re.findall(r'\b([A-Z]{5})\b', text_stripped)
+                if waypoints:
+                    decoded["waypoints"] = list(dict.fromkeys(waypoints))[:10]
 
     # ========== Label B9 - General Communication ==========
     if label == "B9":
@@ -378,14 +670,21 @@ def format_decoded_text(decoded: dict) -> str:
         return ""
 
     # Skip formatting if there's not enough meaningful data
-    # Only format if we have a message_type or significant decoded fields
+    # Only format if we have actual decoded content (not just message_type)
     has_meaningful_data = (
-        decoded.get("message_type") or
         decoded.get("ground_station") or
         decoded.get("position") or
         decoded.get("location") or
         decoded.get("destination") or
-        decoded.get("route")
+        decoded.get("origin") or
+        decoded.get("route") or
+        decoded.get("waypoints") or
+        decoded.get("altitude_ft") or
+        decoded.get("clearance_limit") or
+        decoded.get("sid") or
+        decoded.get("company_route") or
+        decoded.get("libacars_formatted") or
+        decoded.get("cpdlc_text")
     )
     if not has_meaningful_data:
         return ""
@@ -431,11 +730,26 @@ def format_decoded_text(decoded: dict) -> str:
     if decoded.get("time"):
         lines.append(f"Time: {decoded['time']} UTC")
 
-    # PDC/Clearance info
+    # Flight Plan / Route info
+    if decoded.get("origin"):
+        lines.append(f"Origin: {decoded['origin']}")
     if decoded.get("destination"):
         lines.append(f"Destination: {decoded['destination']}")
+    if decoded.get("departure_runway"):
+        lines.append(f"Departure Runway: {decoded['departure_runway']}")
+    if decoded.get("arrival_runway"):
+        lines.append(f"Arrival Runway: {decoded['arrival_runway']}")
     if decoded.get("runway"):
         lines.append(f"Runway: {decoded['runway']}")
+
+    # Clearance info
+    if decoded.get("clearance_limit"):
+        lines.append(f"Clearance Limit: {decoded['clearance_limit']}")
+    if decoded.get("sid"):
+        lines.append(f"SID: {decoded['sid']}")
+    if decoded.get("company_route"):
+        lines.append(f"Company Route: {decoded['company_route']}")
+
     if decoded.get("request_type"):
         lines.append(f"Request: {decoded['request_type']}")
     if decoded.get("flight_id"):
@@ -445,7 +759,7 @@ def format_decoded_text(decoded: dict) -> str:
     if decoded.get("route"):
         lines.append(f"Route: {decoded['route']}")
     if decoded.get("waypoints"):
-        lines.append(f"Waypoints: {', '.join(decoded['waypoints'][:5])}")
+        lines.append(f"Waypoints: {', '.join(decoded['waypoints'][:8])}")
 
     # Airports
     if decoded.get("airports") or decoded.get("airports_mentioned"):
@@ -461,6 +775,16 @@ def format_decoded_text(decoded: dict) -> str:
         lines.append(f"ETA: {decoded['eta']}")
     if decoded.get("times"):
         lines.append(f"Times: {', '.join(decoded['times'])}")
+
+    # CPDLC text
+    if decoded.get("cpdlc_text"):
+        lines.append(f"CPDLC: {decoded['cpdlc_text']}")
+
+    # libacars formatted output (if we decoded with libacars)
+    if decoded.get("libacars_formatted"):
+        # Add libacars output, but avoid duplication if we already have info
+        if len(lines) <= 2:  # Only type and description
+            lines.append(decoded["libacars_formatted"])
 
     return "\n".join(lines)
 

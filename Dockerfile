@@ -16,9 +16,29 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install dependencies
+# Install dependencies including libacars for ACARS message decoding
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    build-essential \
+    cmake \
+    git \
+    zlib1g-dev \
+    libxml2-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Build and install libacars from source
+RUN git clone --depth 1 --branch v2.2.0 https://github.com/szpajder/libacars.git /tmp/libacars \
+    && cd /tmp/libacars \
+    && mkdir build && cd build \
+    && cmake .. \
+    && make -j$(nproc) \
+    && make install \
+    && ldconfig \
+    && rm -rf /tmp/libacars
+
+# Clean up build dependencies
+RUN apt-get purge -y build-essential cmake git \
+    && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY adsb-api/pyproject.toml .
