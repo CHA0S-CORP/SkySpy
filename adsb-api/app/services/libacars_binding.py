@@ -73,8 +73,13 @@ def _load_libacars():
 class la_proto_node(ctypes.Structure):
     pass
 
+# la_vstring structure - has str and len members
 class la_vstring(ctypes.Structure):
-    pass
+    _fields_ = [
+        ("str", ctypes.c_char_p),
+        ("len", ctypes.c_size_t),
+        ("allocated_size", ctypes.c_size_t),
+    ]
 
 
 def _setup_function_signatures():
@@ -124,11 +129,6 @@ def _setup_function_signatures():
     # void la_vstring_destroy(la_vstring *vstr, bool destroy_buffer)
     _libacars.la_vstring_destroy.argtypes = [ctypes.POINTER(la_vstring), ctypes.c_bool]
     _libacars.la_vstring_destroy.restype = None
-
-    # la_vstring_access - get the string buffer
-    # char *la_vstring_access(la_vstring const *vstr)
-    _libacars.la_vstring_access.argtypes = [ctypes.POINTER(la_vstring)]
-    _libacars.la_vstring_access.restype = ctypes.c_char_p
 
     # la_acars_extract_sublabel_and_mfi - extract sublabel and MFI from H1 messages
     # int la_acars_extract_sublabel_and_mfi(char const *label, la_msg_dir msg_dir,
@@ -193,7 +193,8 @@ def decode_acars_apps(label: str, text: str, direction: MsgDir = MsgDir.UNKNOWN)
 
             try:
                 _libacars.la_proto_tree_format_json(vstr, node)
-                json_str = _libacars.la_vstring_access(vstr)
+                # Access the str member directly from the structure
+                json_str = vstr.contents.str
 
                 if json_str:
                     decoded = json.loads(json_str.decode('utf-8'))
@@ -245,7 +246,8 @@ def decode_acars_apps_text(label: str, text: str, direction: MsgDir = MsgDir.UNK
 
             try:
                 _libacars.la_proto_tree_format_text(vstr, node, 0)
-                text_result = _libacars.la_vstring_access(vstr)
+                # Access the str member directly from the structure
+                text_result = vstr.contents.str
 
                 if text_result:
                     return text_result.decode('utf-8')
