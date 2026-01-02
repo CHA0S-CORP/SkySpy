@@ -57,7 +57,7 @@ def _transmission_to_response(t) -> dict:
         "transcript": t.transcript,
         "transcript_confidence": t.transcript_confidence,
         "transcript_language": t.transcript_language,
-        "metadata": t.metadata,
+        "metadata": t.extra_metadata,
     }
 
 
