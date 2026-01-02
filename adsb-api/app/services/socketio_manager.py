@@ -51,6 +51,7 @@ from typing import Optional
 import socketio
 
 from app.core.config import get_settings
+from app.core.utils import calculate_distance_nm, is_valid_position
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -459,11 +460,20 @@ class SocketIOManager:
 
     def _simplify_aircraft(self, ac: dict) -> dict:
         """Simplify aircraft data for transmission."""
+        # Calculate distance from feeder if position is valid
+        lat, lon = ac.get('lat'), ac.get('lon')
+        distance_nm = None
+        if is_valid_position(lat, lon):
+            distance_nm = round(
+                calculate_distance_nm(settings.feeder_lat, settings.feeder_lon, lat, lon),
+                1
+            )
+
         return {
             'hex': ac.get('hex'),
             'flight': (ac.get('flight') or '').strip(),
-            'lat': ac.get('lat'),
-            'lon': ac.get('lon'),
+            'lat': lat,
+            'lon': lon,
             'alt': ac.get('alt_baro'),
             'gs': ac.get('gs'),
             'track': ac.get('track'),
@@ -472,6 +482,7 @@ class SocketIOManager:
             'category': ac.get('category'),
             'type': ac.get('t'),
             'rssi': ac.get('rssi'),
+            'distance_nm': distance_nm,
             'military': bool(ac.get('dbFlags', 0) & 1),
             'emergency': ac.get('squawk') in ['7500', '7600', '7700'],
         }
@@ -553,7 +564,7 @@ class SocketIOManager:
         })
 
     async def publish_acars_message(self, msg: dict):
-        """Publish ACARS message."""
+        """Publish ACARS message with enriched data (airline, decoded text, etc.)."""
         await self.broadcast_to_room('acars', 'acars:message', {
             'source': msg.get('source', 'acars'),
             'icao_hex': msg.get('icao_hex'),
@@ -563,7 +574,12 @@ class SocketIOManager:
             'text': msg.get('text'),
             'frequency': msg.get('frequency'),
             'signal_level': msg.get('signal_level'),
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
+            # Enriched fields from ACARS decoder
+            'airline': msg.get('airline'),
+            'label_info': msg.get('label_info'),
+            'decoded_text': msg.get('decoded_text'),
+            'formatted_text': msg.get('formatted_text'),
+            'timestamp': msg.get('timestamp') or datetime.utcnow().isoformat() + 'Z'
         })
 
     async def publish_audio_transmission(self, transmission: dict):
