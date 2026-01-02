@@ -15,13 +15,6 @@
   status = 200
   force = true
 
-# Proxy static assets (icons, etc) to the backend
-[[redirects]]
-  from = "/static/*"
-  to = "https://v1-radar.chaos.navy/static/:splat"
-  status = 200
-  force = true
-
 # Redirect all non-matching routes to index.html for React Router
 [[redirects]]
   from = "/*"
