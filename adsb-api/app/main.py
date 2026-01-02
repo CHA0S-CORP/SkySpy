@@ -708,6 +708,13 @@ async def websocket_endpoint(
     await handle_websocket(websocket, topic_list)
 
 
+# Root-level health endpoint for reverse proxies/load balancers
+@app.get("/health")
+async def root_health_check():
+    """Simple health check endpoint at root level for load balancers."""
+    return {"status": "ok"}
+
+
 # Static files and frontend
 @app.get("/")
 async def serve_frontend():

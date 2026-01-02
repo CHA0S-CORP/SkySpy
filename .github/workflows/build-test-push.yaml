@@ -26,6 +26,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: network=host
+
+      - name: Expose GitHub Actions cache for Docker
+        uses: crazy-max/ghaction-github-runtime@v3
+
       - name: Create .env.test
         run: |
           cat > .env.test << 'EOF'
@@ -81,9 +89,15 @@ jobs:
           S3_ENABLED=false
           EOF
 
+      - name: Build test images with cache
+        run: |
+          docker buildx bake -f docker-compose.test.yaml --set "*.cache-from=type=gha" --set "*.cache-to=type=gha,mode=max" --load
+        timeout-minutes: 10
+        env:
+          DOCKER_BUILDKIT: 1
+
       - name: Start services
         run: |
-          docker compose -f docker-compose.test.yaml --env-file .env.test up -d --build postgres redis ultrafeeder dump978
           docker compose -f docker-compose.test.yaml --env-file .env.test up -d --wait postgres redis ultrafeeder dump978
         timeout-minutes: 5
 

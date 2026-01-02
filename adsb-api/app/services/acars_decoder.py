@@ -20,17 +20,14 @@ from app.data.airlines import find_airline_by_iata, find_airline_by_icao
 from app.data.message_labels import lookup_label, get_label_name
 
 # Import libacars bindings (optional - gracefully handles missing library)
-# Temporarily disabled to debug container crash
-LIBACARS_AVAILABLE = False
-libacars_binding = None
-# try:
-#     from app.services import libacars_binding
-#     LIBACARS_AVAILABLE = libacars_binding.is_available()
-# except (ImportError, OSError, Exception) as e:
-#     # Catch any errors including C library loading issues
-#     libacars_binding = None
-#     LIBACARS_AVAILABLE = False
-#     logging.getLogger(__name__).debug(f"libacars not available: {e}")
+try:
+    from app.services import libacars_binding
+    LIBACARS_AVAILABLE = libacars_binding.is_available()
+except (ImportError, OSError, Exception) as e:
+    # Catch any errors including C library loading issues
+    libacars_binding = None
+    LIBACARS_AVAILABLE = False
+    logging.getLogger(__name__).debug(f"libacars not available: {e}")
 
 logger = logging.getLogger(__name__)
 

@@ -492,7 +492,7 @@ async def get_stats(
         "avg_distance_nm": round(dist_stats.avg_dist, 1) if dist_stats and dist_stats.avg_dist else None,
         "max_distance_nm": round(dist_stats.max_dist, 1) if dist_stats and dist_stats.max_dist else None,
         "avg_speed": round(speed_stats.avg_speed) if speed_stats and speed_stats.avg_speed else None,
-        "max_speed": speed_stats.max_speed if speed_stats else None,
+        "max_speed": round(speed_stats.max_speed) if speed_stats and speed_stats.max_speed else None,
         "filters_applied": filters_applied if filters_applied else None,
     }
 
