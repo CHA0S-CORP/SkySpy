@@ -73,12 +73,13 @@ def _load_libacars():
 class la_proto_node(ctypes.Structure):
     pass
 
-# la_vstring structure - has str and len members
+# la_vstring structure - must match libacars internal layout exactly
+# From libacars/vstring.c: str, allocated_size, len
 class la_vstring(ctypes.Structure):
     _fields_ = [
         ("str", ctypes.c_char_p),
-        ("len", ctypes.c_size_t),
         ("allocated_size", ctypes.c_size_t),
+        ("len", ctypes.c_size_t),
     ]
 
 
