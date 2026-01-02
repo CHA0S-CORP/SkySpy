@@ -1,12 +1,11 @@
 # Netlify configuration for SkySpy web deployment
 
 [build]
-  command = "cd web && npm install && npm run build"
+  command = "cd web && npm install && VITE_API_TARGET=https://v1-radar.chaos.navy npm run build"
   publish = "web/dist"
 
 [build.environment]
   NODE_VERSION = "20"
-  VITE_API_TARGET = "https://v1-radar.chaos.navy"
 
 # Proxy API requests to the backend
 [[redirects]]
