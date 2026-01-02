@@ -1093,7 +1093,7 @@ export function StatsView({ apiBase, onSelectAircraft }) {
             )}
           </div>
           <div className="safety-stats-content">
-            {/* Stats grid */}
+            {/* Stats grid - expanded with new metrics */}
             <div className="safety-stats-grid">
               <div className="safety-stat-item">
                 <span className="safety-stat-label">Total Events</span>
@@ -1109,7 +1109,15 @@ export function StatsView({ apiBase, onSelectAircraft }) {
               </div>
               <div className="safety-stat-item info">
                 <span className="safety-stat-label">Info</span>
-                <span className="safety-stat-value">{safetyStats.events_by_severity?.info || 0}</span>
+                <span className="safety-stat-value">{safetyStats.events_by_severity?.low || 0}</span>
+              </div>
+              <div className="safety-stat-item">
+                <span className="safety-stat-label">Aircraft Involved</span>
+                <span className="safety-stat-value">{safetyStats.unique_aircraft || 0}</span>
+              </div>
+              <div className="safety-stat-item">
+                <span className="safety-stat-label">Events/Hour</span>
+                <span className="safety-stat-value">{safetyStats.event_rate_per_hour?.toFixed(1) || '0.0'}</span>
               </div>
             </div>
 
@@ -1127,13 +1135,21 @@ export function StatsView({ apiBase, onSelectAircraft }) {
                           tcas_ra: 'TCAS RA',
                           tcas_ta: 'TCAS TA',
                           extreme_vs: 'Extreme V/S',
-                          proximity: 'Proximity'
+                          vs_reversal: 'VS Reversal',
+                          proximity_conflict: 'Proximity',
+                          squawk_emergency: 'Emergency',
+                          squawk_hijack: 'Hijack',
+                          squawk_radio_failure: 'Radio Fail'
                         };
                         const typeColors = {
                           tcas_ra: '#ff4757',
                           tcas_ta: '#ff9f43',
                           extreme_vs: '#f7d794',
-                          proximity: '#a371f7'
+                          vs_reversal: '#f7d794',
+                          proximity_conflict: '#a371f7',
+                          squawk_emergency: '#ff4757',
+                          squawk_hijack: '#ff4757',
+                          squawk_radio_failure: '#ff9f43'
                         };
                         const pct = safetyStats.total_events > 0 ? (count / safetyStats.total_events) * 100 : 0;
                         return (
@@ -1160,7 +1176,7 @@ export function StatsView({ apiBase, onSelectAircraft }) {
                       {renderPieChart([
                         { value: safetyStats.events_by_severity?.critical || 0, color: '#ff4757', label: 'Critical' },
                         { value: safetyStats.events_by_severity?.warning || 0, color: '#ff9f43', label: 'Warning' },
-                        { value: safetyStats.events_by_severity?.info || 0, color: '#00c8ff', label: 'Info' }
+                        { value: safetyStats.events_by_severity?.low || 0, color: '#00c8ff', label: 'Info' }
                       ].filter(d => d.value > 0))}
                     </div>
                     <div className="safety-legend">
@@ -1178,15 +1194,66 @@ export function StatsView({ apiBase, onSelectAircraft }) {
                           <span className="safety-legend-value">{safetyStats.events_by_severity.warning}</span>
                         </div>
                       )}
-                      {safetyStats.events_by_severity?.info > 0 && (
+                      {safetyStats.events_by_severity?.low > 0 && (
                         <div className="safety-legend-item">
                           <span className="safety-legend-dot info"></span>
                           <span className="safety-legend-label">Info</span>
-                          <span className="safety-legend-value">{safetyStats.events_by_severity.info}</span>
+                          <span className="safety-legend-value">{safetyStats.events_by_severity.low}</span>
                         </div>
                       )}
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Hourly Event Timeline */}
+            {safetyStats.events_by_hour?.length > 0 && (
+              <div className="safety-timeline-section">
+                <div className="safety-chart-title">Event Timeline</div>
+                <div className="safety-timeline-chart">
+                  {renderThroughputBars(
+                    safetyStats.events_by_hour.map(h => ({ ...h, value: h.count })),
+                    'count',
+                    '#ff9f43',
+                    60
+                  )}
+                </div>
+                <div className="safety-timeline-footer">
+                  <span>Hourly distribution over {timeRange}</span>
+                  <span>Peak: {Math.max(...safetyStats.events_by_hour.map(h => h.count))} events/hr</span>
+                </div>
+              </div>
+            )}
+
+            {/* Top Aircraft with Events */}
+            {safetyStats.top_aircraft?.length > 0 && (
+              <div className="safety-top-aircraft">
+                <div className="safety-chart-title">Top Aircraft by Events</div>
+                <div className="safety-aircraft-list">
+                  {safetyStats.top_aircraft.slice(0, 5).map((ac, i) => {
+                    const severityColors = { critical: '#ff4757', warning: '#ff9f43', low: '#00c8ff' };
+                    return (
+                      <div
+                        key={ac.icao}
+                        className={`safety-aircraft-item ${onSelectAircraft ? 'clickable' : ''}`}
+                        onClick={() => onSelectAircraft?.(ac.icao)}
+                      >
+                        <span className="safety-aircraft-rank">{i + 1}</span>
+                        <div className="safety-aircraft-info">
+                          <span className="safety-aircraft-callsign">{ac.callsign || ac.icao}</span>
+                          <span className="safety-aircraft-icao">{ac.icao}</span>
+                        </div>
+                        <span
+                          className="safety-aircraft-severity"
+                          style={{ color: severityColors[ac.worst_severity] || '#6b7280' }}
+                        >
+                          {ac.worst_severity}
+                        </span>
+                        <span className="safety-aircraft-count">{ac.count} events</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

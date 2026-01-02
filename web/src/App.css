@@ -4720,7 +4720,7 @@ body {
 
 .safety-stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 12px;
 }
 
@@ -4926,9 +4926,106 @@ body {
   margin-left: auto;
 }
 
+/* Safety Timeline Section */
+.safety-timeline-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.safety-timeline-chart {
+  height: 60px;
+  margin: 8px 0;
+}
+
+.safety-timeline-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* Safety Top Aircraft */
+.safety-top-aircraft {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.safety-aircraft-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.safety-aircraft-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(20, 30, 40, 0.4);
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+
+.safety-aircraft-item.clickable {
+  cursor: pointer;
+}
+
+.safety-aircraft-item.clickable:hover {
+  background: rgba(30, 45, 60, 0.6);
+}
+
+.safety-aircraft-rank {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  width: 20px;
+  text-align: center;
+}
+
+.safety-aircraft-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.safety-aircraft-callsign {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.safety-aircraft-icao {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.safety-aircraft-severity {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+}
+
+.safety-aircraft-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 @media (max-width: 768px) {
   .safety-stats-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 
   .safety-charts-row {
@@ -4938,6 +5035,12 @@ body {
   .safety-chart-container {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .safety-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 

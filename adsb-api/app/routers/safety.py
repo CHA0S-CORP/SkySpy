@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Path
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, Integer, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import get_db, db_execute_safe
@@ -19,7 +19,7 @@ from app.models import SafetyEvent
 from app.services.safety import safety_monitor
 from app.schemas import (
     SafetyEventsListResponse, SafetyStatsResponse, SafetyEventResponse,
-    SuccessResponse, ErrorResponse
+    AircraftSafetyStatsResponse, SuccessResponse, ErrorResponse
 )
 
 router = APIRouter(prefix="/api/v1/safety", tags=["Safety"])
@@ -193,13 +193,21 @@ async def get_event(
     response_model=SafetyStatsResponse,
     summary="Get Safety Statistics",
     description="""
-Get comprehensive safety monitoring statistics.
+Get comprehensive safety monitoring statistics with optional filters.
 
-Returns:
+**Filters:**
+- **event_type**: Filter by specific event type(s) - comma-separated
+- **severity**: Filter by severity level(s) - comma-separated
+- **icao_hex**: Filter by aircraft ICAO hex
+
+**Returns:**
 - Current monitoring status and thresholds
 - Event counts by type and severity
+- Per-type severity breakdown
+- Hourly event distribution
+- Top aircraft involved in events
 - Recent events summary
-- Monitor internal state (tracked aircraft count)
+- Monitor internal state
     """,
     responses={
         200: {
@@ -217,7 +225,12 @@ Returns:
                         "time_range_hours": 24,
                         "events_by_type": {"tcas_ra": 2, "extreme_vs": 5},
                         "events_by_severity": {"critical": 2, "warning": 5},
+                        "events_by_type_severity": {"tcas_ra": {"critical": 2}, "extreme_vs": {"warning": 3, "low": 2}},
                         "total_events": 7,
+                        "unique_aircraft": 5,
+                        "event_rate_per_hour": 0.29,
+                        "events_by_hour": [{"hour": "2024-12-21T10:00:00Z", "count": 2, "critical": 1, "warning": 1}],
+                        "top_aircraft": [{"icao": "A12345", "callsign": "UAL123", "count": 3, "worst_severity": "critical"}],
                         "recent_events": [],
                         "monitor_state": {"tracked_aircraft": 45},
                         "timestamp": "2024-12-21T12:00:00Z"
@@ -229,33 +242,131 @@ Returns:
 )
 async def get_stats(
     hours: int = Query(24, ge=1, le=168, description="Time range for statistics"),
+    event_type: Optional[str] = Query(None, description="Filter by event type(s), comma-separated"),
+    severity: Optional[str] = Query(None, description="Filter by severity level(s), comma-separated"),
+    icao_hex: Optional[str] = Query(None, description="Filter by aircraft ICAO hex"),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get safety monitoring statistics."""
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    """Get safety monitoring statistics with optional filters."""
+    now = datetime.utcnow()
+    cutoff = now - timedelta(hours=hours)
 
-    # Events by type (with graceful timeout handling)
+    # Build base conditions
+    conditions = [SafetyEvent.timestamp > cutoff]
+
+    # Apply filters
+    if event_type:
+        types = [t.strip() for t in event_type.split(",")]
+        conditions.append(SafetyEvent.event_type.in_(types))
+
+    if severity:
+        severities = [s.strip() for s in severity.split(",")]
+        conditions.append(SafetyEvent.severity.in_(severities))
+
+    if icao_hex:
+        icao_upper = icao_hex.upper()
+        conditions.append(
+            (SafetyEvent.icao_hex == icao_upper) |
+            (SafetyEvent.icao_hex_2 == icao_upper)
+        )
+
+    # Events by type
     type_query = (
         select(SafetyEvent.event_type, func.count(SafetyEvent.id))
-        .where(SafetyEvent.timestamp > cutoff)
+        .where(and_(*conditions))
         .group_by(SafetyEvent.event_type)
     )
     type_result = await db_execute_safe(db, type_query)
     events_by_type = {row[0]: row[1] for row in type_result} if type_result else {}
 
-    # Events by severity (with graceful timeout handling)
+    # Events by severity
     severity_query = (
         select(SafetyEvent.severity, func.count(SafetyEvent.id))
-        .where(SafetyEvent.timestamp > cutoff)
+        .where(and_(*conditions))
         .group_by(SafetyEvent.severity)
     )
     severity_result = await db_execute_safe(db, severity_query)
     events_by_severity = {row[0]: row[1] for row in severity_result} if severity_result else {}
 
-    # Recent events (with graceful timeout handling)
+    # Events by type AND severity (cross-tabulation)
+    type_severity_query = (
+        select(SafetyEvent.event_type, SafetyEvent.severity, func.count(SafetyEvent.id))
+        .where(and_(*conditions))
+        .group_by(SafetyEvent.event_type, SafetyEvent.severity)
+    )
+    type_severity_result = await db_execute_safe(db, type_severity_query)
+    events_by_type_severity = {}
+    if type_severity_result:
+        for event_type_val, sev, count in type_severity_result:
+            if event_type_val not in events_by_type_severity:
+                events_by_type_severity[event_type_val] = {}
+            events_by_type_severity[event_type_val][sev] = count
+
+    # Unique aircraft count
+    unique_query = (
+        select(func.count(func.distinct(SafetyEvent.icao_hex)))
+        .where(and_(*conditions))
+    )
+    unique_result = await db_execute_safe(db, unique_query)
+    unique_aircraft = unique_result.scalar() if unique_result else 0
+
+    # Hourly distribution
+    # Use date_trunc to bucket by hour
+    hour_query = (
+        select(
+            func.date_trunc('hour', SafetyEvent.timestamp).label('hour'),
+            func.count(SafetyEvent.id).label('count'),
+            func.sum(case((SafetyEvent.severity == 'critical', 1), else_=0)).label('critical'),
+            func.sum(case((SafetyEvent.severity == 'warning', 1), else_=0)).label('warning'),
+            func.sum(case((SafetyEvent.severity == 'low', 1), else_=0)).label('low')
+        )
+        .where(and_(*conditions))
+        .group_by(func.date_trunc('hour', SafetyEvent.timestamp))
+        .order_by(func.date_trunc('hour', SafetyEvent.timestamp))
+    )
+    hour_result = await db_execute_safe(db, hour_query)
+    events_by_hour = []
+    if hour_result:
+        for row in hour_result:
+            events_by_hour.append({
+                "hour": row.hour.isoformat() + "Z" if row.hour else None,
+                "count": row.count or 0,
+                "critical": row.critical or 0,
+                "warning": row.warning or 0,
+                "low": row.low or 0
+            })
+
+    # Top aircraft by event count
+    top_aircraft_query = (
+        select(
+            SafetyEvent.icao_hex,
+            SafetyEvent.callsign,
+            func.count(SafetyEvent.id).label('count'),
+            func.max(SafetyEvent.severity).label('worst_severity')
+        )
+        .where(and_(*conditions))
+        .group_by(SafetyEvent.icao_hex, SafetyEvent.callsign)
+        .order_by(func.count(SafetyEvent.id).desc())
+        .limit(10)
+    )
+    top_aircraft_result = await db_execute_safe(db, top_aircraft_query)
+    top_aircraft = []
+    if top_aircraft_result:
+        severity_order = {'critical': 3, 'warning': 2, 'low': 1}
+        for row in top_aircraft_result:
+            top_aircraft.append({
+                "icao": row.icao_hex,
+                "callsign": row.callsign,
+                "count": row.count,
+                "worst_severity": row.worst_severity
+            })
+        # Sort by severity priority then count
+        top_aircraft.sort(key=lambda x: (-severity_order.get(x['worst_severity'], 0), -x['count']))
+
+    # Recent events
     recent_query = (
         select(SafetyEvent)
-        .where(SafetyEvent.timestamp > cutoff)
+        .where(and_(*conditions))
         .order_by(SafetyEvent.timestamp.desc())
         .limit(10)
     )
@@ -265,6 +376,8 @@ async def get_stats(
             "id": e.id,
             "event_type": e.event_type,
             "severity": e.severity,
+            "icao": e.icao_hex,
+            "callsign": e.callsign,
             "message": e.message,
             "timestamp": e.timestamp.isoformat() + "Z",
         }
@@ -272,6 +385,7 @@ async def get_stats(
     ] if recent_result else []
 
     total_events = sum(events_by_type.values())
+    event_rate = total_events / hours if hours > 0 else 0
 
     return {
         "monitoring_enabled": safety_monitor.enabled,
@@ -279,10 +393,196 @@ async def get_stats(
         "time_range_hours": hours,
         "events_by_type": events_by_type,
         "events_by_severity": events_by_severity,
+        "events_by_type_severity": events_by_type_severity,
         "total_events": total_events,
+        "unique_aircraft": unique_aircraft or 0,
+        "event_rate_per_hour": round(event_rate, 2),
+        "events_by_hour": events_by_hour,
+        "top_aircraft": top_aircraft,
         "recent_events": recent_events,
         "monitor_state": safety_monitor.get_state(),
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": now.isoformat() + "Z",
+    }
+
+
+@router.get(
+    "/stats/aircraft",
+    response_model=AircraftSafetyStatsResponse,
+    summary="Get Per-Aircraft Safety Statistics",
+    description="""
+Get safety event statistics aggregated by aircraft.
+
+Shows which aircraft have been involved in the most safety events,
+their event breakdown, and worst severity levels.
+
+**Filters:**
+- **event_type**: Filter by specific event type(s) - comma-separated
+- **severity**: Filter by severity level(s) - comma-separated
+- **min_events**: Only include aircraft with at least this many events
+    """,
+    responses={
+        200: {
+            "description": "Per-aircraft safety statistics",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "aircraft": [
+                            {
+                                "icao_hex": "A12345",
+                                "callsign": "UAL123",
+                                "total_events": 5,
+                                "events_by_type": {"proximity_conflict": 3, "extreme_vs": 2},
+                                "events_by_severity": {"warning": 4, "low": 1},
+                                "worst_severity": "warning",
+                                "last_event_time": "2024-12-21T12:00:00Z",
+                                "last_event_type": "proximity_conflict"
+                            }
+                        ],
+                        "total_aircraft": 15,
+                        "time_range_hours": 24,
+                        "timestamp": "2024-12-21T12:00:00Z"
+                    }
+                }
+            }
+        }
+    }
+)
+async def get_aircraft_stats(
+    hours: int = Query(24, ge=1, le=168, description="Time range for statistics"),
+    event_type: Optional[str] = Query(None, description="Filter by event type(s), comma-separated"),
+    severity: Optional[str] = Query(None, description="Filter by severity level(s), comma-separated"),
+    min_events: int = Query(1, ge=1, le=100, description="Minimum events to include aircraft"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum aircraft to return"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get per-aircraft safety event statistics."""
+    now = datetime.utcnow()
+    cutoff = now - timedelta(hours=hours)
+
+    # Build base conditions
+    conditions = [SafetyEvent.timestamp > cutoff]
+
+    if event_type:
+        types = [t.strip() for t in event_type.split(",")]
+        conditions.append(SafetyEvent.event_type.in_(types))
+
+    if severity:
+        severities = [s.strip() for s in severity.split(",")]
+        conditions.append(SafetyEvent.severity.in_(severities))
+
+    # Get all events matching conditions
+    events_query = (
+        select(SafetyEvent)
+        .where(and_(*conditions))
+        .order_by(SafetyEvent.timestamp.desc())
+    )
+    events_result = await db_execute_safe(db, events_query)
+
+    if not events_result:
+        return {
+            "aircraft": [],
+            "total_aircraft": 0,
+            "time_range_hours": hours,
+            "timestamp": now.isoformat() + "Z"
+        }
+
+    # Aggregate by aircraft
+    aircraft_stats = {}
+    severity_priority = {'critical': 3, 'warning': 2, 'low': 1}
+
+    for event in events_result.scalars():
+        # Process primary aircraft
+        icao = event.icao_hex
+        if icao:
+            if icao not in aircraft_stats:
+                aircraft_stats[icao] = {
+                    "icao_hex": icao,
+                    "callsign": event.callsign,
+                    "total_events": 0,
+                    "events_by_type": {},
+                    "events_by_severity": {},
+                    "worst_severity": None,
+                    "worst_severity_priority": 0,
+                    "last_event_time": None,
+                    "last_event_type": None
+                }
+
+            stats = aircraft_stats[icao]
+            stats["total_events"] += 1
+            stats["events_by_type"][event.event_type] = stats["events_by_type"].get(event.event_type, 0) + 1
+            stats["events_by_severity"][event.severity] = stats["events_by_severity"].get(event.severity, 0) + 1
+
+            # Update callsign if newer
+            if event.callsign:
+                stats["callsign"] = event.callsign
+
+            # Track worst severity
+            sev_priority = severity_priority.get(event.severity, 0)
+            if sev_priority > stats["worst_severity_priority"]:
+                stats["worst_severity"] = event.severity
+                stats["worst_severity_priority"] = sev_priority
+
+            # Track most recent event
+            if stats["last_event_time"] is None:
+                stats["last_event_time"] = event.timestamp
+                stats["last_event_type"] = event.event_type
+
+        # Process secondary aircraft (for proximity events)
+        icao_2 = event.icao_hex_2
+        if icao_2:
+            if icao_2 not in aircraft_stats:
+                aircraft_stats[icao_2] = {
+                    "icao_hex": icao_2,
+                    "callsign": event.callsign_2,
+                    "total_events": 0,
+                    "events_by_type": {},
+                    "events_by_severity": {},
+                    "worst_severity": None,
+                    "worst_severity_priority": 0,
+                    "last_event_time": None,
+                    "last_event_type": None
+                }
+
+            stats_2 = aircraft_stats[icao_2]
+            stats_2["total_events"] += 1
+            stats_2["events_by_type"][event.event_type] = stats_2["events_by_type"].get(event.event_type, 0) + 1
+            stats_2["events_by_severity"][event.severity] = stats_2["events_by_severity"].get(event.severity, 0) + 1
+
+            if event.callsign_2:
+                stats_2["callsign"] = event.callsign_2
+
+            sev_priority = severity_priority.get(event.severity, 0)
+            if sev_priority > stats_2["worst_severity_priority"]:
+                stats_2["worst_severity"] = event.severity
+                stats_2["worst_severity_priority"] = sev_priority
+
+            if stats_2["last_event_time"] is None:
+                stats_2["last_event_time"] = event.timestamp
+                stats_2["last_event_type"] = event.event_type
+
+    # Filter by min_events and format output
+    aircraft_list = []
+    for icao, stats in aircraft_stats.items():
+        if stats["total_events"] >= min_events:
+            aircraft_list.append({
+                "icao_hex": stats["icao_hex"],
+                "callsign": stats["callsign"],
+                "total_events": stats["total_events"],
+                "events_by_type": stats["events_by_type"],
+                "events_by_severity": stats["events_by_severity"],
+                "worst_severity": stats["worst_severity"],
+                "last_event_time": stats["last_event_time"].isoformat() + "Z" if stats["last_event_time"] else None,
+                "last_event_type": stats["last_event_type"]
+            })
+
+    # Sort by worst severity then by event count
+    aircraft_list.sort(key=lambda x: (-severity_priority.get(x['worst_severity'] or '', 0), -x['total_events']))
+
+    return {
+        "aircraft": aircraft_list[:limit],
+        "total_aircraft": len(aircraft_list),
+        "time_range_hours": hours,
+        "timestamp": now.isoformat() + "Z"
     }
 
 

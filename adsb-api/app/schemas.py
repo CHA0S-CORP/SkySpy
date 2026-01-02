@@ -408,9 +408,34 @@ class SafetyStatsResponse(BaseModel):
     time_range_hours: int = Field(24, description="Statistics time range")
     events_by_type: dict = Field(default_factory=dict, description="Event count by type")
     events_by_severity: dict = Field(default_factory=dict, description="Event count by severity")
+    events_by_type_severity: dict = Field(default_factory=dict, description="Per-type severity breakdown")
     total_events: int = Field(0, description="Total events in time range")
+    unique_aircraft: int = Field(0, description="Unique aircraft involved in events")
+    event_rate_per_hour: float = Field(0.0, description="Average events per hour")
+    events_by_hour: list[dict] = Field(default_factory=list, description="Hourly event distribution")
+    top_aircraft: list[dict] = Field(default_factory=list, description="Aircraft with most events")
     recent_events: list[dict] = Field(default_factory=list, description="Most recent events")
     monitor_state: dict = Field(default_factory=dict, description="Monitor internal state")
+    timestamp: str = Field(..., description="Response timestamp")
+
+
+class AircraftSafetyStats(BaseModel):
+    """Safety statistics for a specific aircraft."""
+    icao_hex: str = Field(..., description="Aircraft ICAO hex")
+    callsign: Optional[str] = Field(None, description="Last known callsign")
+    total_events: int = Field(0, description="Total events involving this aircraft")
+    events_by_type: dict = Field(default_factory=dict, description="Events by type")
+    events_by_severity: dict = Field(default_factory=dict, description="Events by severity")
+    worst_severity: Optional[str] = Field(None, description="Worst severity level")
+    last_event_time: Optional[str] = Field(None, description="Most recent event timestamp")
+    last_event_type: Optional[str] = Field(None, description="Most recent event type")
+
+
+class AircraftSafetyStatsResponse(BaseModel):
+    """Response for aircraft safety statistics."""
+    aircraft: list[AircraftSafetyStats] = Field(default_factory=list, description="Aircraft statistics")
+    total_aircraft: int = Field(0, description="Total unique aircraft")
+    time_range_hours: int = Field(24, description="Statistics time range")
     timestamp: str = Field(..., description="Response timestamp")
 
 
