@@ -256,17 +256,48 @@ export function AcarsPanel({
                   </span>
                 </div>
               </div>
-              {msg.text && <div className="acars-text">{msg.text}</div>}
-              {msg.decoded_text && Object.keys(msg.decoded_text).length > 0 && (
+              {/* Show decoded/formatted text if available, otherwise raw text */}
+              {msg.formatted_text ? (
+                <div className="acars-formatted">
+                  <pre className="acars-formatted-content">{msg.formatted_text}</pre>
+                  {msg.text && (
+                    <details className="acars-raw-toggle">
+                      <summary>Raw</summary>
+                      <div className="acars-text">{msg.text}</div>
+                    </details>
+                  )}
+                </div>
+              ) : (
+                msg.text && <div className="acars-text">{msg.text}</div>
+              )}
+              {msg.decoded_text && Object.keys(msg.decoded_text).length > 0 && !msg.formatted_text && (
                 <div className="acars-decoded">
+                  {msg.decoded_text.message_type && (
+                    <span className="acars-decoded-type">{msg.decoded_text.message_type}</span>
+                  )}
                   {msg.decoded_text.airports_mentioned && (
                     <span className="acars-decoded-item" title="Airports mentioned">
                       ✈ {msg.decoded_text.airports_mentioned.join(', ')}
                     </span>
                   )}
+                  {msg.decoded_text.airports && (
+                    <span className="acars-decoded-item" title="Airports">
+                      ✈ {msg.decoded_text.airports.join(', ')}
+                    </span>
+                  )}
                   {msg.decoded_text.flight_levels && (
                     <span className="acars-decoded-item" title="Flight levels">
-                      ⬆ FL{msg.decoded_text.flight_levels.join(', FL')}
+                      ⬆ {msg.decoded_text.flight_levels.join(', ')}
+                    </span>
+                  )}
+                  {msg.decoded_text.position && (
+                    <span className="acars-decoded-item" title="Position">
+                      📍 {msg.decoded_text.position.lat.toFixed(3)}, {msg.decoded_text.position.lon.toFixed(3)}
+                    </span>
+                  )}
+                  {msg.decoded_text.ground_station && (
+                    <span className="acars-decoded-item" title="Ground Station">
+                      📡 {msg.decoded_text.ground_station}
                     </span>
                   )}
                 </div>

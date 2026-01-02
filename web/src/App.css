@@ -9177,6 +9177,62 @@ body {
   border-radius: 4px;
 }
 
+.acars-decoded-type {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent-purple);
+  background: rgba(168, 85, 247, 0.15);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* Formatted/decoded message display in AcarsPanel */
+.acars-formatted {
+  margin-top: 6px;
+}
+
+.acars-panel .acars-formatted-content {
+  background: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.acars-panel .acars-raw-toggle {
+  margin-top: 6px;
+}
+
+.acars-panel .acars-raw-toggle summary {
+  cursor: pointer;
+  font-size: 10px;
+  color: var(--text-dim);
+  padding: 2px 0;
+  user-select: none;
+}
+
+.acars-panel .acars-raw-toggle summary:hover {
+  color: var(--text-secondary);
+}
+
+.acars-panel .acars-raw-toggle[open] summary {
+  margin-bottom: 4px;
+}
+
+.acars-panel .acars-raw-toggle .acars-text {
+  font-size: 10px;
+  opacity: 0.8;
+  max-height: 80px;
+}
+
 .acars-status-badge {
   display: flex;
   align-items: center;
@@ -10571,6 +10627,68 @@ body {
   line-height: 1.5;
   max-height: 200px;
   overflow-y: auto;
+}
+
+/* Decoded/formatted ACARS text display */
+.acars-formatted-text {
+  margin-top: 8px;
+}
+
+.acars-formatted-header {
+  font-size: 10px;
+  color: var(--accent-green);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.acars-formatted-content {
+  background: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+}
+
+.acars-raw-toggle {
+  margin-top: 8px;
+}
+
+.acars-raw-toggle summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 4px 0;
+  user-select: none;
+}
+
+.acars-raw-toggle summary:hover {
+  color: var(--text-secondary);
+}
+
+.acars-raw-toggle[open] summary {
+  margin-bottom: 6px;
+}
+
+.acars-raw-toggle .acars-history-text {
+  font-size: 11px;
+  opacity: 0.8;
+  max-height: 150px;
+}
+
+.acars-decoded-type {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent-purple);
+  background: rgba(168, 85, 247, 0.15);
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
 .safety-aircraft-link,
