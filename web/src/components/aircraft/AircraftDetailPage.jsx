@@ -67,8 +67,10 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
     'MA': 'Media Advisory', '00': 'Heartbeat', '7A': 'Telex', '8A': 'Company Specific',
     '8D': 'Telex Delivery', '8E': 'Telex Error',
   };
-  const getAcarsLabelDescription = (label) => {
+  const getAcarsLabelDescription = (label, msgLabelInfo = null) => {
     if (!label) return null;
+    // Prefer API-provided label info
+    if (msgLabelInfo?.name) return msgLabelInfo.name;
     return acarsLabelDescriptions[label.toUpperCase()] || acarsLabelDescriptions[label] || null;
   };
   const [sightings, setSightings] = useState([]);
@@ -1764,23 +1766,46 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
                       const timestamp = typeof msg.timestamp === 'number'
                         ? new Date(msg.timestamp * 1000)
                         : new Date(msg.timestamp);
+                      const labelDesc = getAcarsLabelDescription(msg.label, msg.label_info);
 
                       return (
                         <div key={i} className="acars-item">
                           <div className="acars-item-header">
                             <span className="acars-item-time">{timestamp.toLocaleString()}</span>
-                            <span className="acars-item-label" title={getAcarsLabelDescription(msg.label) || msg.label}>
+                            <span className="acars-item-label" title={msg.label_info?.description || labelDesc || msg.label}>
                               {msg.label || '--'}
-                              {getAcarsLabelDescription(msg.label) && (
-                                <span className="acars-label-desc">{getAcarsLabelDescription(msg.label)}</span>
+                              {labelDesc && (
+                                <span className="acars-label-desc">{labelDesc}</span>
                               )}
                             </span>
                             <span className="acars-item-source">{msg.source}</span>
                             {msg.frequency && <span className="acars-item-freq">{msg.frequency} MHz</span>}
                           </div>
-                          {msg.callsign && <div className="acars-item-callsign">Callsign: {msg.callsign}</div>}
-                          {msg.icao_hex && <div className="acars-item-icao">ICAO: {msg.icao_hex}</div>}
+                          <div className="acars-item-aircraft">
+                            {msg.callsign && <span className="acars-item-callsign">{msg.callsign}</span>}
+                            {msg.airline?.name && (
+                              <span className="acars-item-airline" title={msg.airline.icao || msg.airline.iata}>
+                                <Plane size={10} />
+                                {msg.airline.name}
+                              </span>
+                            )}
+                            {msg.icao_hex && <span className="acars-item-icao">{msg.icao_hex}</span>}
+                          </div>
                           {msg.text && <pre className="acars-item-text">{msg.text}</pre>}
+                          {msg.decoded_text && Object.keys(msg.decoded_text).length > 0 && (
+                            <div className="acars-item-decoded">
+                              {msg.decoded_text.airports_mentioned && (
+                                <span className="decoded-tag" title="Airports mentioned">
+                                  ✈ {msg.decoded_text.airports_mentioned.join(', ')}
+                                </span>
+                              )}
+                              {msg.decoded_text.flight_levels && (
+                                <span className="decoded-tag" title="Flight levels">
+                                  ⬆ FL{msg.decoded_text.flight_levels.join(', FL')}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}

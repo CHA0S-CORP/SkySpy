@@ -204,6 +204,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   // Pro panel distance trend tracking
   const proPrevDistanceRef = useRef(null);
   const proDistanceTrendRef = useRef(null); // 'approaching', 'receding', or 'stable'
+  const proTrackedAircraftRef = useRef(null); // Track which aircraft we're monitoring
 
   // Notification tracking refs
   const notifiedConflictsRef = useRef(new Set()); // Track notified conflict pairs
@@ -6275,17 +6276,22 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               const proAltClass = getAltitudeColorClass(proAltitude);
               const proSpeedClass = getSpeedColorClass(proSpeed, proAltitude);
 
-              // Track distance trend
+              // Track distance trend - reset if aircraft changed
               const proDistanceNm = liveAircraft.distance_nm || getDistanceNm(liveAircraft.lat, liveAircraft.lon);
-              if (proPrevDistanceRef.current !== null) {
+              if (proTrackedAircraftRef.current !== liveAircraft.hex) {
+                // Aircraft changed, reset tracking
+                proTrackedAircraftRef.current = liveAircraft.hex;
+                proPrevDistanceRef.current = proDistanceNm;
+                proDistanceTrendRef.current = null;
+              } else if (proPrevDistanceRef.current !== null) {
                 const delta = proDistanceNm - proPrevDistanceRef.current;
                 if (Math.abs(delta) > 0.05) {
                   proDistanceTrendRef.current = delta < 0 ? 'approaching' : 'receding';
                 } else {
                   proDistanceTrendRef.current = 'stable';
                 }
+                proPrevDistanceRef.current = proDistanceNm;
               }
-              proPrevDistanceRef.current = proDistanceNm;
               const proDistTrend = proDistanceTrendRef.current;
 
               // RSSI signal strength
@@ -6333,9 +6339,13 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   <div className="pro-stat">
                     <div className="pro-stat-label"><MapPin size={14} /> DISTANCE</div>
                     <div className={`pro-stat-value distance-value ${proDistTrend || ''}`}>
-                      {proDistTrend === 'approaching' && <TrendingDown size={12} className="trend-icon approaching" />}
-                      {proDistTrend === 'receding' && <TrendingUp size={12} className="trend-icon receding" />}
-                      {proDistTrend === 'stable' && <Minus size={12} className="trend-icon stable" />}
+                      {proDistTrend === 'approaching' ? (
+                        <TrendingDown size={12} className="trend-icon approaching" />
+                      ) : proDistTrend === 'receding' ? (
+                        <TrendingUp size={12} className="trend-icon receding" />
+                      ) : (
+                        <Minus size={12} className="trend-icon stable" />
+                      )}
                       {proDistanceNm.toFixed(1)} <span className="unit">nm</span>
                     </div>
                   </div>

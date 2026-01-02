@@ -84,10 +84,15 @@ async def list_acars_messages(
         description="Filter by callsign (partial match)",
         example="UAL"
     ),
+    airline: Optional[str] = Query(
+        None,
+        description="Filter by airline ICAO or IATA code",
+        example="UAL"
+    ),
     label: Optional[str] = Query(
         None,
-        description="Filter by ACARS label code",
-        example="H1"
+        description="Filter by ACARS label code(s), comma-separated",
+        example="H1,SA"
     ),
     source: Optional[str] = Query(
         None,
@@ -113,18 +118,20 @@ async def list_acars_messages(
         db=db,
         icao_hex=icao_hex,
         callsign=callsign,
+        airline=airline,
         label=label,
         source=source,
         hours=hours,
         limit=limit,
     )
-    
+
     return {
         "messages": messages,
         "count": len(messages),
         "filters": {
             "icao_hex": icao_hex,
             "callsign": callsign,
+            "airline": airline,
             "label": label,
             "source": source,
             "hours": hours,
@@ -427,9 +434,9 @@ This endpoint provides descriptions for the most common labels.
                 "application/json": {
                     "example": {
                         "labels": {
-                            "H1": "Flight plan / Departure clearance",
-                            "SA": "Position report",
-                            "B6": "Departure message"
+                            "H1": {"name": "Pre-Departure Clearance", "description": "DCL - Departure Clearance"},
+                            "SA": {"name": "Position Report", "description": "Automated position report from aircraft"},
+                            "B6": {"name": "Departure Message", "description": "Gate departure or pushback notification"}
                         },
                         "sources": {
                             "acars": "VHF ACARS (118-137 MHz)",
@@ -443,26 +450,10 @@ This endpoint provides descriptions for the most common labels.
 )
 async def get_label_reference():
     """Get reference for common ACARS message labels."""
+    from app.data.message_labels import MESSAGE_LABELS
+
     return {
-        "labels": {
-            "H1": "Flight plan / Departure clearance",
-            "H2": "Flight plan update",
-            "5Z": "Squawk code assignment",
-            "SA": "Position report",
-            "SQ": "Position request",
-            "B6": "Departure message",
-            "BA": "Arrival message",
-            "QA": "Weather request (ATIS/METAR)",
-            "QB": "Weather response",
-            "Q0": "Airline-specific",
-            "_d": "Air-ground voice / Data",
-            "80": "OOOI message (Out/Off/On/In times)",
-            "44": "Weather data",
-            "10": "Crew terminal message",
-            "15": "TWIP (Terminal Weather)",
-            "20": "Crew scheduling",
-            "RA": "ACARS link test",
-        },
+        "labels": MESSAGE_LABELS,
         "sources": {
             "acars": "VHF ACARS (118-137 MHz)",
             "vdlm2": "VDL Mode 2 data link",

@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import get_settings
 from app.models import AcarsMessage
+from app.services.acars_decoder import enrich_acars_message, parse_callsign, decode_label
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -179,6 +180,9 @@ class AcarsService:
             normalized = self._normalize_message(msg, source)
 
             if normalized:
+                # Enrich message with airline and label info
+                enriched = enrich_acars_message(normalized)
+
                 # Update statistics
                 with self._stats_lock:
                     self._stats[source]["total"] += 1
@@ -187,13 +191,13 @@ class AcarsService:
 
                 # Add to recent buffer
                 with self._recent_lock:
-                    self._recent_messages.append(normalized)
+                    self._recent_messages.append(enriched)
                     if len(self._recent_messages) > self._max_recent:
                         self._recent_messages.pop(0)
 
                 # Publish to SSE
                 if self._sse_callback:
-                    await self._sse_callback(normalized)
+                    await self._sse_callback(enriched)
 
                 # Log message details
                 flight = normalized.get('callsign') or normalized.get('registration') or 'unknown'
@@ -461,22 +465,38 @@ async def get_acars_messages(
     db: AsyncSession,
     icao_hex: Optional[str] = None,
     callsign: Optional[str] = None,
+    airline: Optional[str] = None,
     label: Optional[str] = None,
     source: Optional[str] = None,
     hours: int = 24,
     limit: int = 100,
 ) -> list[dict]:
     """Query ACARS messages from database."""
-    
+    from sqlalchemy import or_
+
     query = select(AcarsMessage).order_by(AcarsMessage.timestamp.desc())
-    
+
     # Apply filters
     if icao_hex:
         query = query.where(AcarsMessage.icao_hex == icao_hex.upper())
     if callsign:
         query = query.where(AcarsMessage.callsign.ilike(f"%{callsign}%"))
+    if airline:
+        # Match airline code at start of callsign (ICAO 3-letter or IATA 2-letter)
+        airline_upper = airline.upper()
+        query = query.where(
+            or_(
+                AcarsMessage.callsign.ilike(f"{airline_upper}%"),
+                AcarsMessage.callsign.ilike(f"{airline_upper[:2]}%") if len(airline_upper) >= 2 else False
+            )
+        )
     if label:
-        query = query.where(AcarsMessage.label == label)
+        # Support comma-separated labels
+        labels = [l.strip() for l in label.split(",")]
+        if len(labels) == 1:
+            query = query.where(AcarsMessage.label == labels[0])
+        else:
+            query = query.where(AcarsMessage.label.in_(labels))
     if source:
         query = query.where(AcarsMessage.source == source)
     
@@ -489,9 +509,9 @@ async def get_acars_messages(
     
     result = await db.execute(query)
     messages = []
-    
+
     for msg in result.scalars():
-        messages.append({
+        msg_dict = {
             "id": msg.id,
             "timestamp": msg.timestamp.isoformat() + "Z",
             "source": msg.source,
@@ -510,8 +530,12 @@ async def get_acars_messages(
             "signal_level": msg.signal_level,
             "error_count": msg.error_count,
             "station_id": msg.station_id,
-        })
-    
+        }
+
+        # Enrich with airline and label info
+        enriched = enrich_acars_message(msg_dict)
+        messages.append(enriched)
+
     return messages
 
 
@@ -606,6 +630,59 @@ async def get_acars_stats(
         for r in aircraft_query if r[0]
     ]
 
+    # Top airlines by message count (extracted from callsigns)
+    # Group by first 3 characters of callsign (ICAO code) or first 2 (IATA code)
+    from app.data.airlines import find_airline_by_icao, find_airline_by_iata
+
+    airline_query = await db.execute(
+        select(
+            AcarsMessage.callsign,
+            func.count(AcarsMessage.id).label("count")
+        )
+        .where(and_(*base_conditions, AcarsMessage.callsign.isnot(None)))
+        .group_by(AcarsMessage.callsign)
+    )
+
+    # Aggregate by airline
+    airline_counts = {}
+    for row in airline_query:
+        callsign = row[0]
+        count = row[1]
+        if not callsign:
+            continue
+
+        # Try to extract airline code from callsign
+        airline_info = None
+        if len(callsign) >= 3:
+            # Try ICAO (3-letter) first
+            icao_code = callsign[:3].upper()
+            airline_info = find_airline_by_icao(icao_code)
+            if airline_info:
+                key = icao_code
+            elif len(callsign) >= 2:
+                # Try IATA (2-letter)
+                iata_code = callsign[:2].upper()
+                airline_info = find_airline_by_iata(iata_code)
+                if airline_info:
+                    key = airline_info.get("icao", iata_code)
+
+        if airline_info:
+            if key not in airline_counts:
+                airline_counts[key] = {
+                    "icao": airline_info.get("icao"),
+                    "iata": airline_info.get("iata"),
+                    "name": airline_info.get("name"),
+                    "count": 0
+                }
+            airline_counts[key]["count"] += count
+
+    # Sort by count and take top 10
+    top_airlines = sorted(
+        airline_counts.values(),
+        key=lambda x: x["count"],
+        reverse=True
+    )[:10]
+
     # Hourly distribution
     hourly_query = await db.execute(
         select(
@@ -633,6 +710,7 @@ async def get_acars_stats(
         },
         "top_labels": top_labels,
         "top_aircraft": top_aircraft,
+        "top_airlines": top_airlines,
         "hourly_distribution": hourly_distribution,
         "service_stats": acars_service.get_stats(),
         "filters_applied": filters_applied if filters_applied else None,

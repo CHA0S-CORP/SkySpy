@@ -1212,6 +1212,47 @@ export function StatsView({ apiBase, onSelectAircraft }) {
                   </div>
                 );
               })()}
+
+              {/* Top Airlines Chart */}
+              {acarsStats.top_airlines?.length > 0 && (() => {
+                const airlineColors = ['#a371f7', '#00c8ff', '#00ff88', '#f7d794', '#ff9f43', '#ff6b6b', '#5a7a9a', '#6b7280'];
+                const topAirlines = acarsStats.top_airlines.slice(0, 8);
+                const totalAirlines = topAirlines.reduce((sum, item) => sum + (item.count || 0), 0);
+                return (
+                  <div className="acars-top-airlines">
+                    <div className="top-airlines-title">
+                      <Plane size={14} />
+                      Top Airlines (24h)
+                    </div>
+                    <div className="top-airlines-chart-container">
+                      <div className="pie-chart-wrapper">
+                        {renderPieChart(
+                          topAirlines.map((item, i) => ({
+                            value: item.count || 0,
+                            color: airlineColors[i % airlineColors.length],
+                            label: item.icao || item.iata || '--'
+                          }))
+                        )}
+                      </div>
+                      <div className="top-airlines-legend">
+                        {topAirlines.map((item, i) => (
+                          <div key={i} className="airline-legend-item">
+                            <span className="airline-legend-dot" style={{ backgroundColor: airlineColors[i % airlineColors.length] }}></span>
+                            <span className="airline-legend-code" title={`${item.icao || ''} / ${item.iata || ''}`}>
+                              {item.icao || item.iata || '--'}
+                            </span>
+                            <span className="airline-legend-name">{item.name || 'Unknown'}</span>
+                            <span className="airline-legend-count">{item.count?.toLocaleString()}</span>
+                            <span className="airline-legend-pct">
+                              {totalAirlines > 0 ? `${Math.round((item.count / totalAirlines) * 100)}%` : ''}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>

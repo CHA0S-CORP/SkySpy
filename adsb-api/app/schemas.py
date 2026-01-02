@@ -611,6 +611,20 @@ class AircraftSafetyStatsResponse(BaseModel):
 # ACARS Schemas
 # ============================================================================
 
+class AcarsAirlineInfo(BaseModel):
+    """Decoded airline information from callsign."""
+    icao: Optional[str] = Field(None, description="Airline ICAO code (3 letters)")
+    iata: Optional[str] = Field(None, description="Airline IATA code (2 letters)")
+    name: Optional[str] = Field(None, description="Full airline name")
+    flight_number: Optional[str] = Field(None, description="Flight number portion of callsign")
+
+
+class AcarsLabelInfo(BaseModel):
+    """Decoded ACARS message label information."""
+    name: Optional[str] = Field(None, description="Human-readable label name")
+    description: Optional[str] = Field(None, description="Detailed label description")
+
+
 class AcarsMessageResponse(BaseModel):
     """Single ACARS/VDL2 message."""
     model_config = ConfigDict(
@@ -626,11 +640,21 @@ class AcarsMessageResponse(BaseModel):
                 "callsign": "UAL123",
                 "label": "H1",
                 "text": "DEPARTURE CLEARANCE...",
-                "signal_level": -5.2
+                "signal_level": -5.2,
+                "airline": {
+                    "icao": "UAL",
+                    "iata": "UA",
+                    "name": "United Airlines",
+                    "flight_number": "123"
+                },
+                "label_info": {
+                    "name": "Pre-Departure Clearance",
+                    "description": "DCL - Departure Clearance"
+                }
             }
         }
     )
-    
+
     id: Optional[int] = Field(None, description="Database ID")
     timestamp: str = Field(..., description="Message timestamp")
     source: str = Field(..., description="Message source (acars, vdlm2)")
@@ -649,6 +673,8 @@ class AcarsMessageResponse(BaseModel):
     signal_level: Optional[float] = Field(None, description="Signal level in dB")
     error_count: Optional[int] = Field(None, description="Bit error count")
     station_id: Optional[str] = Field(None, description="Receiving station ID")
+    airline: Optional[AcarsAirlineInfo] = Field(None, description="Decoded airline information")
+    label_info: Optional[AcarsLabelInfo] = Field(None, description="Decoded label information")
 
 
 class AcarsMessagesListResponse(BaseModel):

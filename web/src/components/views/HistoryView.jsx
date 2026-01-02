@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, Map as MapIcon, Play, Pause, SkipBack, SkipForward, Shield, Search, MessageCircle, ExternalLink } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, Map as MapIcon, Play, Pause, SkipBack, SkipForward, Shield, Search, MessageCircle, ExternalLink, Plane } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useApi } from '../../hooks';
@@ -55,8 +55,10 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
   const [acarsHideEmpty, setAcarsHideEmpty] = useState(true);
   const [acarsMessages, setAcarsMessages] = useState([]);
   const [acarsSelectedLabels, setAcarsSelectedLabels] = useState([]);
+  const [acarsAirlineFilter, setAcarsAirlineFilter] = useState('');
   const [showLabelDropdown, setShowLabelDropdown] = useState(false);
   const [callsignHexCache, setCallsignHexCache] = useState({}); // Callsign → ICAO hex cache
+  const [labelReference, setLabelReference] = useState({}); // Label reference from API
   const labelDropdownRef = useRef(null);
 
   // ACARS message label descriptions
@@ -180,9 +182,14 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
     '8E': 'Telex Error',
   };
 
-  // Get human-readable label description
-  const getAcarsLabelDescription = (label) => {
+  // Get human-readable label description (prefer API data, fall back to local)
+  const getAcarsLabelDescription = (label, msgLabelInfo = null) => {
     if (!label) return null;
+    // First check if message has label_info from API
+    if (msgLabelInfo?.name) return msgLabelInfo.name;
+    // Check API-fetched label reference
+    if (labelReference[label]?.name) return labelReference[label].name;
+    // Fall back to local descriptions
     return acarsLabelDescriptions[label.toUpperCase()] || acarsLabelDescriptions[label] || null;
   };
 
@@ -788,14 +795,36 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
 
   useEffect(() => { refetch(); }, [timeRange, viewType, refetch]);
 
+  // Fetch label reference once
+  useEffect(() => {
+    const fetchLabels = async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/v1/acars/labels`);
+        if (res.ok) {
+          const data = await res.json();
+          setLabelReference(data.labels || {});
+        }
+      } catch (err) {
+        console.log('Labels fetch error:', err.message);
+      }
+    };
+    fetchLabels();
+  }, [apiBase]);
+
   // Fetch ACARS messages when viewing ACARS tab
   useEffect(() => {
     if (viewType !== 'acars') return;
 
     const fetchAcars = async () => {
       try {
-        const sourceParam = acarsSource !== 'all' ? `&source=${acarsSource}` : '';
-        const res = await fetch(`${apiBase}/api/v1/acars/messages?hours=${hours[timeRange]}&limit=200${sourceParam}`);
+        const params = new URLSearchParams();
+        params.set('hours', hours[timeRange]);
+        params.set('limit', '200');
+        if (acarsSource !== 'all') params.set('source', acarsSource);
+        if (acarsAirlineFilter) params.set('airline', acarsAirlineFilter);
+        if (acarsSelectedLabels.length > 0) params.set('label', acarsSelectedLabels.join(','));
+
+        const res = await fetch(`${apiBase}/api/v1/acars/messages?${params.toString()}`);
         if (res.ok) {
           const result = await res.json();
           setAcarsMessages(result.messages || []);
@@ -805,7 +834,7 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
       }
     };
     fetchAcars();
-  }, [viewType, timeRange, acarsSource, apiBase]);
+  }, [viewType, timeRange, acarsSource, acarsAirlineFilter, acarsSelectedLabels, apiBase]);
 
   // Lookup hex values from sightings for ACARS messages with callsign but no icao_hex
   useEffect(() => {
@@ -897,26 +926,22 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
       filtered = filtered.filter(msg => msg.text && msg.text.trim().length > 0);
     }
 
-    // Apply label filter
-    if (acarsSelectedLabels.length > 0) {
-      filtered = filtered.filter(msg =>
-        msg.label && acarsSelectedLabels.includes(msg.label.toUpperCase())
-      );
-    }
-
-    // Apply search filter
+    // Apply search filter (includes airline name search)
     if (acarsSearch) {
       const search = acarsSearch.toLowerCase();
       filtered = filtered.filter(msg =>
         msg.icao_hex?.toLowerCase().includes(search) ||
         msg.callsign?.toLowerCase().includes(search) ||
         msg.text?.toLowerCase().includes(search) ||
-        msg.label?.toLowerCase().includes(search)
+        msg.label?.toLowerCase().includes(search) ||
+        msg.airline?.name?.toLowerCase().includes(search) ||
+        msg.airline?.icao?.toLowerCase().includes(search) ||
+        msg.airline?.iata?.toLowerCase().includes(search)
       );
     }
 
     return filtered;
-  }, [acarsMessages, acarsSearch, acarsHideEmpty, acarsSelectedLabels]);
+  }, [acarsMessages, acarsSearch, acarsHideEmpty]);
 
   // Handle navigation to a specific safety event (from aircraft detail page)
   useEffect(() => {
@@ -1491,9 +1516,18 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
               <Search size={16} />
               <input
                 type="text"
-                placeholder="Search ICAO, callsign, text, label..."
+                placeholder="Search ICAO, callsign, airline, text..."
                 value={acarsSearch}
                 onChange={(e) => setAcarsSearch(e.target.value)}
+              />
+            </div>
+            <div className="airline-filter">
+              <Plane size={14} />
+              <input
+                type="text"
+                placeholder="Airline..."
+                value={acarsAirlineFilter}
+                onChange={(e) => setAcarsAirlineFilter(e.target.value)}
               />
             </div>
             <select
@@ -1581,6 +1615,7 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
                 const linkHex = msg.icao_hex || cachedHex;
                 const canLink = !!linkHex;
                 const isFromHistory = !msg.icao_hex && cachedHex;
+                const labelDesc = getAcarsLabelDescription(msg.label, msg.label_info);
 
                 return (
                   <div
@@ -1592,10 +1627,10 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
                     <div className="acars-history-header">
                       <span className="acars-history-time">{timestamp.toLocaleString()}</span>
                       {msg.label && (
-                        <span className="acars-history-label" title={getAcarsLabelDescription(msg.label) || msg.label}>
+                        <span className="acars-history-label" title={msg.label_info?.description || labelDesc || msg.label}>
                           {msg.label}
-                          {getAcarsLabelDescription(msg.label) && (
-                            <span className="acars-label-desc">{getAcarsLabelDescription(msg.label)}</span>
+                          {labelDesc && (
+                            <span className="acars-label-desc">{labelDesc}</span>
                           )}
                         </span>
                       )}
@@ -1608,6 +1643,12 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
                           {msg.callsign}
                         </span>
                       )}
+                      {msg.airline?.name && (
+                        <span className="acars-history-airline" title={`${msg.airline.icao || msg.airline.iata}`}>
+                          <Plane size={10} />
+                          {msg.airline.name}
+                        </span>
+                      )}
                       {(msg.icao_hex || cachedHex) && (
                         <span className="acars-history-icao clickable">
                           {msg.icao_hex || cachedHex}
@@ -1618,6 +1659,20 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
                       )}
                     </div>
                     {msg.text && <pre className="acars-history-text">{msg.text}</pre>}
+                    {msg.decoded_text && Object.keys(msg.decoded_text).length > 0 && (
+                      <div className="acars-decoded-info">
+                        {msg.decoded_text.airports_mentioned && (
+                          <span className="acars-decoded-item" title="Airports mentioned">
+                            ✈ {msg.decoded_text.airports_mentioned.join(', ')}
+                          </span>
+                        )}
+                        {msg.decoded_text.flight_levels && (
+                          <span className="acars-decoded-item" title="Flight levels">
+                            ⬆ FL{msg.decoded_text.flight_levels.join(', FL')}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })
