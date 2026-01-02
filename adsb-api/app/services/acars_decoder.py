@@ -190,7 +190,8 @@ def decode_message_text(text: str, label: str = None, libacars_data: dict = None
 
     # ========== Position Report Decoding ==========
     # Format: N 49.128,W122.374,37000,033758, 129,.C-FMWJ,0429
-    pos_pattern = r'^([NS])\s*(\d+\.?\d*),\s*([EW])(\d+\.?\d*),\s*(\d+),\s*(\d+),\s*(\d+),\.?([A-Z0-9-]+),(\d+)$'
+    # More flexible pattern to handle varying spaces
+    pos_pattern = r'^([NS])\s*(\d+\.?\d*)\s*,\s*([EW])\s*(\d+\.?\d*)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*\.?([A-Z0-9-]+)\s*,\s*(\d+)$'
     pos_match = re.match(pos_pattern, text_stripped)
     if pos_match:
         lat = float(pos_match.group(2))
@@ -234,16 +235,41 @@ def decode_message_text(text: str, label: str = None, libacars_data: dict = None
     if label == "H1":
         decoded["message_type"] = "Pre-Departure Clearance"
         decoded["description"] = "PDC/DCL departure clearance data"
-        # Try to find routing info
-        route_match = re.search(r'([A-Z]{4})/([A-Z0-9]+):([A-Z0-9/:]+)', text_stripped)
+
+        # Try to find routing info - format: REQPWI/WQ370:PETLI/DQ370/SPC85A
+        route_match = re.search(r'([A-Z]{3,6})/([A-Z]{2}\d+):([A-Z0-9/:]+)', text_stripped)
         if route_match:
-            decoded["departure"] = route_match.group(1)
-            decoded["procedure"] = route_match.group(2)
+            decoded["request_type"] = route_match.group(1)
+            decoded["flight_id"] = route_match.group(2)
             decoded["route"] = route_match.group(3)
-        # Extract waypoints
+
+        # Format: PRG/FMWJA120/DTCYYC,17L,94,043427,3056B5
+        prg_match = re.search(r'PRG/([A-Z0-9]+)/DT([A-Z]{4}),([^,]+),(\d+),(\d+),([A-Z0-9]+)', text_stripped)
+        if prg_match:
+            decoded["progress_id"] = prg_match.group(1)
+            decoded["destination"] = prg_match.group(2)
+            decoded["runway"] = prg_match.group(3)
+            decoded["sequence"] = prg_match.group(4)
+
+        # Extract airports (4-letter ICAO codes starting with common prefixes)
+        airports = re.findall(r'\b([CKPEGLS][A-Z]{3})\b', text_stripped)
+        if airports:
+            decoded["airports"] = list(dict.fromkeys(airports))[:5]
+
+        # Extract waypoints (5-letter codes)
         waypoints = re.findall(r'\b([A-Z]{5})\b', text_stripped)
         if waypoints:
-            decoded["waypoints"] = list(dict.fromkeys(waypoints))[:10]  # Unique, max 10
+            decoded["waypoints"] = list(dict.fromkeys(waypoints))[:10]
+
+    # ========== Label B9 - General Communication ==========
+    if label == "B9":
+        decoded["message_type"] = "General Communication"
+        decoded["description"] = "Miscellaneous operational message"
+        # Format often: /CYYC.TI2/040CYYCAA6A1
+        # Extract airport codes
+        airports = re.findall(r'\b([CKPE][A-Z]{3})\b', text_stripped)
+        if airports:
+            decoded["airports"] = list(dict.fromkeys(airports))[:5]
 
     # ========== Weather Request/Data ==========
     if label in ("QA", "QB", "QC", "QD", "QE", "QF", "Q0", "Q1", "Q2"):
@@ -261,6 +287,28 @@ def decode_message_text(text: str, label: str = None, libacars_data: dict = None
         decoded["message_type"] = "OOOI Event"
         decoded["event_type"] = oooi_labels[label]
         decoded["description"] = f"Flight phase: {oooi_labels[label]}"
+
+        # OOOI messages with label 12 often contain position reports
+        # Format: N 49.128,W122.374,37000,033758, 129,.C-FMWJ,0429
+        oooi_pos = re.search(r'([NS])\s*(\d+\.?\d*)\s*,\s*([EW])\s*(\d+\.?\d*)\s*,\s*(\d+)', text_stripped)
+        if oooi_pos:
+            lat = float(oooi_pos.group(2))
+            if oooi_pos.group(1) == 'S':
+                lat = -lat
+            lon = float(oooi_pos.group(4))
+            if oooi_pos.group(3) == 'W':
+                lon = -lon
+            altitude = int(oooi_pos.group(5))
+            decoded["position"] = {"lat": lat, "lon": lon}
+            decoded["altitude_ft"] = altitude
+            decoded["flight_level"] = f"FL{altitude // 100}"
+            decoded["description"] = f"Flight phase: {oooi_labels[label]} at FL{altitude // 100}"
+
+        # Extract registration if present (.C-FMWJ format)
+        reg_match = re.search(r'\.([A-Z]-[A-Z0-9]+)', text_stripped)
+        if reg_match:
+            decoded["registration"] = reg_match.group(1)
+
         # Extract times
         time_pattern = r'\b(\d{2}):?(\d{2})\b'
         times = re.findall(time_pattern, text_stripped)
@@ -329,6 +377,19 @@ def format_decoded_text(decoded: dict) -> str:
     if not decoded:
         return ""
 
+    # Skip formatting if there's not enough meaningful data
+    # Only format if we have a message_type or significant decoded fields
+    has_meaningful_data = (
+        decoded.get("message_type") or
+        decoded.get("ground_station") or
+        decoded.get("position") or
+        decoded.get("location") or
+        decoded.get("destination") or
+        decoded.get("route")
+    )
+    if not has_meaningful_data:
+        return ""
+
     lines = []
 
     # Message type header
@@ -336,7 +397,7 @@ def format_decoded_text(decoded: dict) -> str:
         lines.append(f"Type: {decoded['message_type']}")
 
     if decoded.get("description"):
-        lines.append(f"Description: {decoded['description']}")
+        lines.append(decoded['description'])
 
     # Ground station info
     if decoded.get("ground_station"):
@@ -359,16 +420,28 @@ def format_decoded_text(decoded: dict) -> str:
         lines.append(f"Frequency: {decoded['frequency']}")
 
     # Flight info
-    if decoded.get("flight_level"):
+    if decoded.get("altitude_ft"):
+        lines.append(f"Altitude: {decoded['altitude_ft']:,} ft ({decoded.get('flight_level', '')})")
+    elif decoded.get("flight_level"):
         lines.append(f"Altitude: {decoded['flight_level']}")
     if decoded.get("groundspeed_kts"):
         lines.append(f"Ground Speed: {decoded['groundspeed_kts']} kts")
     if decoded.get("registration"):
         lines.append(f"Registration: {decoded['registration']}")
+    if decoded.get("time"):
+        lines.append(f"Time: {decoded['time']} UTC")
+
+    # PDC/Clearance info
+    if decoded.get("destination"):
+        lines.append(f"Destination: {decoded['destination']}")
+    if decoded.get("runway"):
+        lines.append(f"Runway: {decoded['runway']}")
+    if decoded.get("request_type"):
+        lines.append(f"Request: {decoded['request_type']}")
+    if decoded.get("flight_id"):
+        lines.append(f"Flight ID: {decoded['flight_id']}")
 
     # Route info
-    if decoded.get("departure"):
-        lines.append(f"Departure: {decoded['departure']}")
     if decoded.get("route"):
         lines.append(f"Route: {decoded['route']}")
     if decoded.get("waypoints"):
@@ -378,6 +451,10 @@ def format_decoded_text(decoded: dict) -> str:
     if decoded.get("airports") or decoded.get("airports_mentioned"):
         airports = decoded.get("airports") or decoded.get("airports_mentioned")
         lines.append(f"Airports: {', '.join(airports[:5])}")
+
+    # OOOI event info
+    if decoded.get("event_type"):
+        lines.append(f"Event: {decoded['event_type']}")
 
     # Times
     if decoded.get("eta"):
