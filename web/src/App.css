@@ -753,6 +753,52 @@ body {
   color: var(--accent-cyan);
 }
 
+.track-length-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.track-length-control input[type="range"] {
+  width: 80px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border-color);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.track-length-control input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: var(--accent-cyan);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.track-length-control input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: var(--accent-cyan);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.track-length-value {
+  font-size: 11px;
+  color: var(--text-secondary);
+  min-width: 20px;
+  text-align: right;
+}
+
 .leaflet-map {
   height: 100%;
   width: 100%;

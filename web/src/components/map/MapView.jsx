@@ -79,6 +79,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   });
   const [aircraftDetailHex, setAircraftDetailHex] = useState(null); // Aircraft for detail page
   const [aircraftInfo, setAircraftInfo] = useState({}); // Cached aircraft info
+  const [callsignHexCache, setCallsignHexCache] = useState({}); // Callsign → ICAO hex cache for ACARS linking
   
   // Traffic filters state
   const [trafficFilters, setTrafficFilters] = useState(() => {
@@ -1032,6 +1033,56 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     return () => clearInterval(interval);
   }, [showAcarsPanel, config.apiBaseUrl]);
 
+  // Lookup hex values from history API for ACARS messages with callsign but no icao_hex
+  useEffect(() => {
+    if (!showAcarsPanel || acarsMessages.length === 0) return;
+
+    // Find callsigns that need lookup (have callsign, no icao_hex, not in cache, no in-range match)
+    const callsignsToLookup = new Set();
+    for (const msg of acarsMessages) {
+      if (msg.callsign && !msg.icao_hex) {
+        const cs = msg.callsign.trim().toUpperCase();
+        // Skip if already cached
+        if (callsignHexCache[cs]) continue;
+        // Skip if we have a matching aircraft in range
+        const hasMatch = aircraft.some(ac => callsignsMatch(cs, ac.flight));
+        if (!hasMatch) {
+          callsignsToLookup.add(cs);
+        }
+      }
+    }
+
+    if (callsignsToLookup.size === 0) return;
+
+    // Lookup each callsign from history API (limit concurrent requests)
+    const lookupCallsigns = async () => {
+      const baseUrl = config.apiBaseUrl || '';
+      const lookups = Array.from(callsignsToLookup).slice(0, 10); // Limit to 10 at a time
+
+      for (const callsign of lookups) {
+        try {
+          const res = await fetch(`${baseUrl}/api/v1/history/sightings?callsign=${encodeURIComponent(callsign)}&hours=24&limit=1`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.sightings && data.sightings.length > 0 && data.sightings[0].icao_hex) {
+              setCallsignHexCache(prev => ({
+                ...prev,
+                [callsign]: data.sightings[0].icao_hex
+              }));
+            } else {
+              // Mark as not found to avoid re-querying
+              setCallsignHexCache(prev => ({ ...prev, [callsign]: null }));
+            }
+          }
+        } catch (err) {
+          // Silently fail - link just won't work for this callsign
+        }
+      }
+    };
+
+    lookupCallsigns();
+  }, [showAcarsPanel, acarsMessages, aircraft, callsignHexCache, config.apiBaseUrl]);
+
   // Fetch aircraft info when selecting aircraft
   useEffect(() => {
     if (!selectedAircraft?.hex) return;
@@ -1243,8 +1294,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     if (config.mapMode !== 'pro') {
       setProPanOffset({ x: 0, y: 0 });
       setFollowingAircraft(null);
+      if (setHashParams) {
+        setHashParams({ panX: undefined, panY: undefined });
+      }
     }
-  }, [config.mapMode]);
+  }, [config.mapMode, setHashParams]);
 
   // Follow aircraft - update pan offset as aircraft moves
   useEffect(() => {
@@ -3214,7 +3268,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           // Merge: use historic for old data, realtime for recent
           // Filter to keep only positions that would create ~5nm trail
           const now = Date.now();
-          const maxAge = 90000; // 90 seconds max for short track
+          const trackLength = config.shortTrackLength || 15;
+          const maxAge = trackLength * 6000; // ~6 seconds per position
           const allPositions = [
             ...historicPositions.filter(p => now - p.time < maxAge),
             ...realtimePositions.filter(p => now - p.time < maxAge)
@@ -3223,8 +3278,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           // Need at least 2 points to draw a line
           if (allPositions.length < 2) return;
 
-          // Keep only last ~15 positions for short trail
-          const positions = allPositions.slice(-15);
+          // Keep only last N positions for short trail (configurable)
+          const positions = allPositions.slice(-trackLength);
 
           // Draw trail with fading opacity (older = more transparent)
           const isSelected = selectedAircraft?.hex === ac.hex;
@@ -3812,7 +3867,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
     const currentHexes = new Set(sortedAircraft.map(a => a.hex));
     const now = Date.now();
-    const maxAge = 90000; // 90 seconds
+    const trackLength = config.shortTrackLength || 15;
+    const maxAge = trackLength * 6000; // ~6 seconds per position
 
     // Remove polylines for aircraft no longer present
     Object.keys(shortTrackPolylinesRef.current).forEach(hex => {
@@ -3835,8 +3891,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         ...realtimePositions.filter(p => now - p.time < maxAge)
       ].sort((a, b) => a.time - b.time);
 
-      // Keep only last 15 positions
-      const positions = allPositions.slice(-15);
+      // Keep only last N positions (configurable)
+      const positions = allPositions.slice(-trackLength);
 
       if (positions.length < 2) {
         // Remove existing polyline if not enough points
@@ -4500,6 +4556,19 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               <Navigation size={16} />
               <span>Trails</span>
             </button>
+            {showShortTracks && (
+              <div className="track-length-control">
+                <input
+                  type="range"
+                  min="5"
+                  max="50"
+                  value={config.shortTrackLength || 15}
+                  onChange={(e) => setConfig({ ...config, shortTrackLength: parseInt(e.target.value) })}
+                  title={`Trail length: ${config.shortTrackLength || 15} positions`}
+                />
+                <span className="track-length-value">{config.shortTrackLength || 15}</span>
+              </div>
+            )}
           </>
         )}
         {(config.mapMode === 'crt' || config.mapMode === 'pro') && (
@@ -4526,9 +4595,22 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               <Navigation size={16} />
               <span>Trails</span>
             </button>
+            {showShortTracks && (
+              <div className="track-length-control">
+                <input
+                  type="range"
+                  min="5"
+                  max="50"
+                  value={config.shortTrackLength || 15}
+                  onChange={(e) => setConfig({ ...config, shortTrackLength: parseInt(e.target.value) })}
+                  title={`Trail length: ${config.shortTrackLength || 15} positions`}
+                />
+                <span className="track-length-value">{config.shortTrackLength || 15}</span>
+              </div>
+            )}
           </>
         )}
-        <button 
+        <button
           className={`map-control-btn sound-mute-btn ${soundMuted ? 'muted' : ''}`}
           onClick={() => setSoundMuted(!soundMuted)}
           title={soundMuted ? 'Unmute alerts' : 'Mute alerts'}
@@ -5093,15 +5175,15 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       )}
 
       {/* Selected Aircraft Popup */}
-      {selectedAircraft && (() => {
-        const isEmergency = selectedAircraft.emergency || ['7500', '7600', '7700'].includes(selectedAircraft.squawk);
+      {liveAircraft && (() => {
+        const isEmergency = liveAircraft.emergency || ['7500', '7600', '7700'].includes(liveAircraft.squawk);
         const squawkMeanings = { '7500': 'HIJACK', '7600': 'RADIO', '7700': 'EMERG' };
-        const squawkLabel = squawkMeanings[selectedAircraft.squawk];
-        
+        const squawkLabel = squawkMeanings[liveAircraft.squawk];
+
         // Check if this aircraft has a safety event
         const safetyEvent = activeConflicts.find(e =>
-          e.icao?.toUpperCase() === selectedAircraft.hex?.toUpperCase() ||
-          e.icao_2?.toUpperCase() === selectedAircraft.hex?.toUpperCase()
+          e.icao?.toUpperCase() === liveAircraft.hex?.toUpperCase() ||
+          e.icao_2?.toUpperCase() === liveAircraft.hex?.toUpperCase()
         );
 
         const isConflict = !!safetyEvent;
@@ -5110,7 +5192,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
         // Get the other aircraft in a two-aircraft conflict from safety event
         const otherAircraftHex = safetyEvent?.icao_2
-          ? (safetyEvent.icao?.toUpperCase() === selectedAircraft.hex?.toUpperCase()
+          ? (safetyEvent.icao?.toUpperCase() === liveAircraft.hex?.toUpperCase()
               ? safetyEvent.icao_2
               : safetyEvent.icao)
           : null;
@@ -5127,7 +5209,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         } : null;
         
         // Vertical rate arrows - chevron style like ATC displays
-        const vr = selectedAircraft.vr || 0;
+        const vr = liveAircraft.vr || 0;
         const absVr = Math.abs(vr);
         const vrArrows = absVr > 2000 ? 3 : absVr > 1000 ? 2 : absVr > 300 ? 1 : 0;
         // Use chevron characters that look like the image
@@ -5154,16 +5236,16 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             </button>
             <div className={`popup-header ${isEmergency ? 'emergency-header' : ''} ${isConflict ? `conflict-header ${getSeverityClass(conflictSeverity)}` : ''}`}>
               <Plane size={20} />
-              <span className="popup-callsign">{selectedAircraft.flight || selectedAircraft.hex}</span>
+              <span className="popup-callsign">{liveAircraft.flight || liveAircraft.hex}</span>
               {isConflict && <span className={`popup-conflict-tag ${getSeverityClass(conflictSeverity)}`}>⚠️ {conflictTitle}</span>}
               {isEmergency && squawkLabel && <span className="popup-squawk-tag">{squawkLabel}</span>}
-              {selectedAircraft.military && <Shield size={14} className="military-badge" />}
+              {liveAircraft.military && <Shield size={14} className="military-badge" />}
             </div>
           
             <div className="popup-details">
-              <div className="detail-row"><span>ICAO</span><span>{selectedAircraft.hex}</span></div>
+              <div className="detail-row"><span>ICAO</span><span>{liveAircraft.hex}</span></div>
               {(() => {
-                const tailInfo = getTailInfo(selectedAircraft.hex, selectedAircraft.flight);
+                const tailInfo = getTailInfo(liveAircraft.hex, liveAircraft.flight);
                 return (
                   <>
                     <div className="detail-row">
@@ -5179,11 +5261,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   </>
                 );
               })()}
-            <div className="detail-row"><span>Type</span><span>{selectedAircraft.type || '--'}</span></div>
-            <div className="detail-row"><span>Altitude</span><span>{selectedAircraft.alt?.toLocaleString() || '--'} ft</span></div>
-            <div className="detail-row"><span>Speed</span><span>{selectedAircraft.gs?.toFixed(0) || '--'} kts</span></div>
-            <div className="detail-row"><span>Distance</span><span>{selectedAircraft.distance_nm?.toFixed(1) || '--'} nm</span></div>
-            <div className="detail-row"><span>Track</span><span>{selectedAircraft.track?.toFixed(0) || '--'}°</span></div>
+            <div className="detail-row"><span>Type</span><span>{liveAircraft.type || '--'}</span></div>
+            <div className="detail-row"><span>Altitude</span><span>{liveAircraft.alt?.toLocaleString() || '--'} ft</span></div>
+            <div className="detail-row"><span>Speed</span><span>{liveAircraft.gs?.toFixed(0) || '--'} kts</span></div>
+            <div className="detail-row"><span>Distance</span><span>{liveAircraft.distance_nm?.toFixed(1) || '--'} nm</span></div>
+            <div className="detail-row"><span>Track</span><span>{liveAircraft.track?.toFixed(0) || '--'}°</span></div>
             <div className="detail-row">
               <span>V/S</span>
               <span className={`vs-value ${vr > 0 ? 'climbing' : vr < 0 ? 'descending' : ''}`}>
@@ -5194,13 +5276,13 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                     ))}
                   </span>
                 )}
-                {selectedAircraft.vr || '--'} fpm
+                {liveAircraft.vr || '--'} fpm
               </span>
             </div>
             <div className="detail-row">
               <span>Squawk</span>
-              <span className={selectedAircraft.squawk?.match(/^7[567]00$/) ? 'emergency-squawk' : ''}>
-                {selectedAircraft.squawk || '--'}
+              <span className={liveAircraft.squawk?.match(/^7[567]00$/) ? 'emergency-squawk' : ''}>
+                {liveAircraft.squawk || '--'}
               </span>
             </div>
           </div>
@@ -5209,10 +5291,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           <div className="popup-links">
             <span className="links-label">Lookup:</span>
             <div className="links-row">
-              {selectedAircraft.flight && (
-                <a 
-                  href={`https://flightaware.com/live/flight/${selectedAircraft.flight.trim()}`}
-                  target="_blank" 
+              {liveAircraft.flight && (
+                <a
+                  href={`https://flightaware.com/live/flight/${liveAircraft.flight.trim()}`}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="lookup-link"
                   title="FlightAware"
@@ -5220,46 +5302,46 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   <ExternalLink size={12} /> FA
                 </a>
               )}
-              <a 
-                href={`https://globe.adsbexchange.com/?icao=${selectedAircraft.hex}`}
-                target="_blank" 
+              <a
+                href={`https://globe.adsbexchange.com/?icao=${liveAircraft.hex}`}
+                target="_blank"
                 rel="noopener noreferrer"
                 className="lookup-link"
                 title="ADS-B Exchange"
               >
                 <ExternalLink size={12} /> ADSBx
               </a>
-              <a 
-                href={`https://www.planespotters.net/hex/${selectedAircraft.hex.toUpperCase()}`}
-                target="_blank" 
+              <a
+                href={`https://www.planespotters.net/hex/${liveAircraft.hex.toUpperCase()}`}
+                target="_blank"
                 rel="noopener noreferrer"
                 className="lookup-link"
                 title="Planespotters"
               >
                 <ExternalLink size={12} /> PS
               </a>
-              <a 
-                href={`https://www.jetphotos.com/registration/${selectedAircraft.hex.toUpperCase()}`}
-                target="_blank" 
+              <a
+                href={`https://www.jetphotos.com/registration/${liveAircraft.hex.toUpperCase()}`}
+                target="_blank"
                 rel="noopener noreferrer"
                 className="lookup-link"
                 title="JetPhotos"
               >
                 <ExternalLink size={12} /> JP
               </a>
-              <a 
-                href={`https://opensky-network.org/aircraft-profile?icao24=${selectedAircraft.hex.toLowerCase()}`}
-                target="_blank" 
+              <a
+                href={`https://opensky-network.org/aircraft-profile?icao24=${liveAircraft.hex.toLowerCase()}`}
+                target="_blank"
                 rel="noopener noreferrer"
                 className="lookup-link"
                 title="OpenSky Network"
               >
                 <ExternalLink size={12} /> OSN
               </a>
-              {selectedAircraft.flight && (
-                <a 
-                  href={`https://www.flightradar24.com/${selectedAircraft.flight.trim()}`}
-                  target="_blank" 
+              {liveAircraft.flight && (
+                <a
+                  href={`https://www.flightradar24.com/${liveAircraft.flight.trim()}`}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="lookup-link"
                   title="Flightradar24"
@@ -5273,33 +5355,33 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           {/* Action Buttons */}
           <div className="popup-action-buttons">
             <button
-              className={`popup-action-btn ${followingAircraft === selectedAircraft.hex ? 'active' : ''}`}
+              className={`popup-action-btn ${followingAircraft === liveAircraft.hex ? 'active' : ''}`}
               onClick={() => {
-                if (!selectedAircraft.lat || !selectedAircraft.lon) return;
+                if (!liveAircraft.lat || !liveAircraft.lon) return;
 
                 if (config.mapMode === 'map' && leafletMapRef.current) {
                   // Leaflet map mode - fly to location
-                  leafletMapRef.current.flyTo([selectedAircraft.lat, selectedAircraft.lon], 14, {
+                  leafletMapRef.current.flyTo([liveAircraft.lat, liveAircraft.lon], 14, {
                     duration: 1.5,
                     easeLinearity: 0.25
                   });
                 } else if (config.mapMode === 'pro') {
                   // Pro mode - toggle following this aircraft
-                  if (followingAircraft === selectedAircraft.hex) {
+                  if (followingAircraft === liveAircraft.hex) {
                     setFollowingAircraft(null);
                   } else {
-                    setFollowingAircraft(selectedAircraft.hex);
+                    setFollowingAircraft(liveAircraft.hex);
                   }
                 }
                 // CRT/Radar modes are always centered on feeder, no jump needed
               }}
             >
               <Crosshair size={14} />
-              {followingAircraft === selectedAircraft.hex ? 'Following' : 'Follow Aircraft'}
+              {followingAircraft === liveAircraft.hex ? 'Following' : 'Follow Aircraft'}
             </button>
             <button
               className="popup-action-btn"
-              onClick={() => openAircraftDetail(selectedAircraft.hex)}
+              onClick={() => openAircraftDetail(liveAircraft.hex)}
             >
               <ExternalLink size={14} />
               Full Details
@@ -5312,7 +5394,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             onClick={() => {
               // Store selected aircraft for alert creation
               window.dispatchEvent(new CustomEvent('createAlertFromAircraft', {
-                detail: selectedAircraft
+                detail: liveAircraft
               }));
               selectAircraft(null);
             }}
@@ -5934,6 +6016,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               onClick={() => {
                 setProPanOffset({ x: 0, y: 0 });
                 setFollowingAircraft(null);
+                if (setHashParams) {
+                  setHashParams({ panX: undefined, panY: undefined });
+                }
               }}
               title="Re-center view (middle-click + drag to pan)"
             >
@@ -6158,7 +6243,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             </div>
             <div className="pro-stat">
               <div className="pro-stat-label"><Plane size={14} /> TYPE</div>
-              <div className="pro-stat-value">{liveAircraft.t || liveAircraft.type || '--'}</div>
+              <div className="pro-stat-value">{liveAircraft.type || '--'}</div>
             </div>
             <div className="pro-stat">
               <div className="pro-stat-label"><Radio size={14} /> SQUAWK</div>
@@ -6366,26 +6451,29 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   callsignsMatch(msg.callsign, ac.flight)
                 );
 
+                // Check cache for hex lookup by callsign (from history API)
+                const cachedHex = msg.callsign ? callsignHexCache[msg.callsign.trim().toUpperCase()] : null;
+
+                // Get hex for linking - prefer matched aircraft, then message icao_hex, then cached lookup
+                const linkHex = matchingAircraft?.hex || msg.icao_hex || cachedHex;
+                const canLink = !!linkHex;
+                const isMatched = !!matchingAircraft; // Aircraft is currently in range
+                const isFromHistory = !isMatched && !msg.icao_hex && cachedHex; // Linked via history lookup
+
                 return (
                   <div
                     key={i}
-                    className={`acars-message ${matchingAircraft ? 'clickable' : ''}`}
+                    className={`acars-message ${canLink ? 'clickable' : ''} ${isMatched ? 'matched' : ''}`}
                     onClick={() => {
-                      if (matchingAircraft) {
-                        selectAircraft(matchingAircraft);
-                        // Pan to aircraft if on map mode
-                        if (config.mapMode === 'map' && leafletMapRef.current && matchingAircraft.lat && matchingAircraft.lon) {
-                          leafletMapRef.current.flyTo([matchingAircraft.lat, matchingAircraft.lon], 12, {
-                            duration: 1,
-                            easeLinearity: 0.25
-                          });
-                        }
+                      if (canLink) {
+                        // Open aircraft detail page
+                        setAircraftDetailHex(linkHex);
                       }
                     }}
-                    title={matchingAircraft ? 'Click to select aircraft' : 'Aircraft not in range'}
+                    title={isMatched ? 'Click to view aircraft (in range)' : isFromHistory ? 'Click to view aircraft (from history)' : canLink ? 'Click to view aircraft details' : 'Aircraft not in range - no ICAO hex'}
                   >
                     <div className="acars-msg-header">
-                      <span className="acars-callsign">{msg.callsign || msg.icao_hex || 'Unknown'}</span>
+                      <span className={`acars-callsign ${canLink ? 'clickable' : ''}`}>{msg.callsign || msg.icao_hex || 'Unknown'}</span>
                       <span className="acars-label">{msg.label || '--'}</span>
                       <span className={`acars-source-badge ${msg.source}`}>{msg.source}</span>
                       <span className="acars-time">

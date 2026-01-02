@@ -207,7 +207,7 @@ def simplify_aircraft(ac: dict, distance_nm: Optional[float] = None) -> dict:
     return {
         "hex": ac.get("hex"),
         "flight": (ac.get("flight") or "").strip(),
-        "type": ac.get("t"),
+        "type": ac.get("t") or ac.get("type"),
         "alt": ac.get("alt_baro"),
         "gs": ac.get("gs"),
         "vr": ac.get("baro_rate"),

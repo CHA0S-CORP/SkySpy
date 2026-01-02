@@ -28,9 +28,10 @@ const normalizeAircraft = (data) => {
     seen: data.seen || 0,
     distance_nm: data.distance_nm || data.distance || null,
     military: data.military || false,
-    emergency: data.emergency || false,
+    emergency: data.emergency === true || (typeof data.emergency === 'string' && data.emergency !== 'none' && data.emergency !== ''),
     category: data.category || null,
     on_ground: data.on_ground || false,
+    rssi: data.rssi ?? data.signal ?? null,
   };
 };
 

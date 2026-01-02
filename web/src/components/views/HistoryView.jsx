@@ -56,6 +56,7 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
   const [acarsMessages, setAcarsMessages] = useState([]);
   const [acarsSelectedLabels, setAcarsSelectedLabels] = useState([]);
   const [showLabelDropdown, setShowLabelDropdown] = useState(false);
+  const [callsignHexCache, setCallsignHexCache] = useState({}); // Callsign → ICAO hex cache
   const labelDropdownRef = useRef(null);
 
   // ACARS message label descriptions
@@ -806,6 +807,50 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
     fetchAcars();
   }, [viewType, timeRange, acarsSource, apiBase]);
 
+  // Lookup hex values from sightings for ACARS messages with callsign but no icao_hex
+  useEffect(() => {
+    if (viewType !== 'acars' || acarsMessages.length === 0) return;
+
+    // Find callsigns that need lookup (have callsign, no icao_hex, not in cache)
+    const callsignsToLookup = new Set();
+    for (const msg of acarsMessages) {
+      if (msg.callsign && !msg.icao_hex) {
+        const cs = msg.callsign.trim().toUpperCase();
+        if (!callsignHexCache[cs]) {
+          callsignsToLookup.add(cs);
+        }
+      }
+    }
+
+    if (callsignsToLookup.size === 0) return;
+
+    // Lookup each callsign from sightings API
+    const lookupCallsigns = async () => {
+      const lookups = Array.from(callsignsToLookup).slice(0, 10);
+
+      for (const callsign of lookups) {
+        try {
+          const res = await fetch(`${apiBase}/api/v1/history/sightings?callsign=${encodeURIComponent(callsign)}&hours=24&limit=1`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.sightings?.length > 0 && data.sightings[0].icao_hex) {
+              setCallsignHexCache(prev => ({
+                ...prev,
+                [callsign]: data.sightings[0].icao_hex
+              }));
+            } else {
+              setCallsignHexCache(prev => ({ ...prev, [callsign]: null }));
+            }
+          }
+        } catch (err) {
+          // Silently fail
+        }
+      }
+    };
+
+    lookupCallsigns();
+  }, [viewType, acarsMessages, callsignHexCache, apiBase]);
+
   // Close label dropdown when clicking outside
   useEffect(() => {
     if (!showLabelDropdown) return;
@@ -1531,8 +1576,19 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
                   ? new Date(msg.timestamp * 1000)
                   : new Date(msg.timestamp);
 
+                // Check cache for hex lookup by callsign (from sightings API)
+                const cachedHex = msg.callsign ? callsignHexCache[msg.callsign.trim().toUpperCase()] : null;
+                const linkHex = msg.icao_hex || cachedHex;
+                const canLink = !!linkHex;
+                const isFromHistory = !msg.icao_hex && cachedHex;
+
                 return (
-                  <div key={i} className="acars-history-item">
+                  <div
+                    key={i}
+                    className={`acars-history-item ${canLink ? 'clickable' : ''}`}
+                    onClick={() => canLink && onSelectAircraft?.(linkHex)}
+                    title={canLink ? (isFromHistory ? 'Click to view aircraft (from sightings)' : 'Click to view aircraft details') : 'No ICAO hex available'}
+                  >
                     <div className="acars-history-header">
                       <span className="acars-history-time">{timestamp.toLocaleString()}</span>
                       {msg.label && (
@@ -1548,21 +1604,13 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
                     </div>
                     <div className="acars-history-aircraft">
                       {msg.callsign && (
-                        <span
-                          className={`acars-history-callsign ${msg.icao_hex ? 'clickable' : ''}`}
-                          onClick={() => msg.icao_hex && onSelectAircraft?.(msg.icao_hex)}
-                          title={msg.icao_hex ? 'View aircraft details' : 'No ICAO hex available'}
-                        >
+                        <span className={`acars-history-callsign ${canLink ? 'clickable' : ''}`}>
                           {msg.callsign}
                         </span>
                       )}
-                      {msg.icao_hex && (
-                        <span
-                          className="acars-history-icao clickable"
-                          onClick={() => onSelectAircraft?.(msg.icao_hex)}
-                          title="View aircraft details"
-                        >
-                          {msg.icao_hex}
+                      {(msg.icao_hex || cachedHex) && (
+                        <span className="acars-history-icao clickable">
+                          {msg.icao_hex || cachedHex}
                         </span>
                       )}
                       {msg.registration && (
