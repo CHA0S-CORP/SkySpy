@@ -325,7 +325,7 @@ class SocketIOManager:
             'vr': ac.get('baro_rate'),
             'squawk': ac.get('squawk'),
             'category': ac.get('category'),
-            'type': ac.get('t') or ac.get('type'),
+            'type': ac.get('t'),
             'rssi': ac.get('rssi'),
             'military': bool(ac.get('dbFlags', 0) & 1),
             'emergency': ac.get('squawk') in ['7500', '7600', '7700'],

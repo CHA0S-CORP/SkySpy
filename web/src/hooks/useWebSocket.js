@@ -9,7 +9,7 @@ const normalizeAircraft = (data) => {
   return {
     hex: hex.toUpperCase(),
     flight: data.flight || data.callsign || data.call || null,
-    type: data.type || data.t || data.aircraft_type || null,
+    type: data.t || data.aircraft_type || (data.type && !data.type.includes('_') ? data.type : null),
     alt: data.alt || data.altitude || data.alt_baro || data.alt_geom || null,
     alt_baro: data.alt_baro || data.baro_alt || null,
     alt_geom: data.alt_geom || data.geom_alt || null,
