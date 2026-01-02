@@ -14,10 +14,16 @@ import ctypes
 import ctypes.util
 import json
 import logging
+import os
 from typing import Optional
 from enum import IntEnum
 
 logger = logging.getLogger(__name__)
+
+# Allow disabling libacars via environment variable for troubleshooting
+LIBACARS_DISABLED = os.environ.get("LIBACARS_DISABLED", "").lower() in ("true", "1", "yes")
+if LIBACARS_DISABLED:
+    logger.info("libacars disabled via LIBACARS_DISABLED environment variable")
 
 # Message direction enum
 class MsgDir(IntEnum):
@@ -29,6 +35,11 @@ class MsgDir(IntEnum):
 # Try to load libacars
 _libacars = None
 _libacars_available = False
+
+# Error tracking - disable libacars if too many consecutive errors
+_consecutive_errors = 0
+_max_consecutive_errors = 5
+_libacars_disabled_due_to_errors = False
 
 
 def _load_libacars():
@@ -147,6 +158,8 @@ def _setup_function_signatures():
 
 def is_available() -> bool:
     """Check if libacars is available."""
+    if LIBACARS_DISABLED:
+        return False
     _load_libacars()
     return _libacars_available
 
@@ -169,10 +182,26 @@ def decode_acars_apps(label: str, text: str, direction: MsgDir = MsgDir.UNKNOWN)
     Returns:
         Decoded message as a dict, or None if decoding failed or libacars unavailable
     """
+    global _consecutive_errors, _libacars_disabled_due_to_errors
+
+    # Check if libacars is disabled
+    if LIBACARS_DISABLED or _libacars_disabled_due_to_errors:
+        return None
+
     if not _load_libacars():
         return None
 
     if not label or not text:
+        return None
+
+    # Safety check: skip very long messages that could cause issues
+    if len(text) > 10000:
+        logger.debug("Skipping libacars decode: message too long")
+        return None
+
+    # Safety check: skip messages with null bytes or invalid characters
+    if '\x00' in text:
+        logger.debug("Skipping libacars decode: message contains null bytes")
         return None
 
     try:
@@ -184,6 +213,8 @@ def decode_acars_apps(label: str, text: str, direction: MsgDir = MsgDir.UNKNOWN)
         node = _libacars.la_acars_decode_apps(label_bytes, text_bytes, int(direction))
 
         if not node:
+            # Successful call (even if no decode) - reset error counter
+            _consecutive_errors = 0
             return None
 
         try:
@@ -199,6 +230,8 @@ def decode_acars_apps(label: str, text: str, direction: MsgDir = MsgDir.UNKNOWN)
 
                 if json_str:
                     decoded = json.loads(json_str.decode('utf-8'))
+                    # Successful decode - reset error counter
+                    _consecutive_errors = 0
                     return decoded
                 return None
             finally:
@@ -207,7 +240,17 @@ def decode_acars_apps(label: str, text: str, direction: MsgDir = MsgDir.UNKNOWN)
             _libacars.la_proto_tree_destroy(node)
 
     except Exception as e:
-        logger.debug(f"libacars decode error: {e}")
+        _consecutive_errors += 1
+        logger.warning(f"libacars decode error ({_consecutive_errors}/{_max_consecutive_errors}): {e}")
+
+        # Disable libacars if too many consecutive errors
+        if _consecutive_errors >= _max_consecutive_errors:
+            _libacars_disabled_due_to_errors = True
+            logger.error(
+                f"libacars disabled after {_max_consecutive_errors} consecutive errors. "
+                "Restart the service to re-enable."
+            )
+
         return None
 
 
@@ -225,10 +268,26 @@ def decode_acars_apps_text(label: str, text: str, direction: MsgDir = MsgDir.UNK
     Returns:
         Formatted text string, or None if decoding failed
     """
+    global _consecutive_errors, _libacars_disabled_due_to_errors
+
+    # Check if libacars is disabled
+    if LIBACARS_DISABLED or _libacars_disabled_due_to_errors:
+        return None
+
     if not _load_libacars():
         return None
 
     if not label or not text:
+        return None
+
+    # Safety check: skip very long messages that could cause issues
+    if len(text) > 10000:
+        logger.debug("Skipping libacars decode: message too long")
+        return None
+
+    # Safety check: skip messages with null bytes or invalid characters
+    if '\x00' in text:
+        logger.debug("Skipping libacars decode: message contains null bytes")
         return None
 
     try:
@@ -238,6 +297,7 @@ def decode_acars_apps_text(label: str, text: str, direction: MsgDir = MsgDir.UNK
         node = _libacars.la_acars_decode_apps(label_bytes, text_bytes, int(direction))
 
         if not node:
+            _consecutive_errors = 0
             return None
 
         try:
@@ -251,6 +311,7 @@ def decode_acars_apps_text(label: str, text: str, direction: MsgDir = MsgDir.UNK
                 text_result = vstr.contents.str
 
                 if text_result:
+                    _consecutive_errors = 0
                     return text_result.decode('utf-8')
                 return None
             finally:
@@ -259,7 +320,16 @@ def decode_acars_apps_text(label: str, text: str, direction: MsgDir = MsgDir.UNK
             _libacars.la_proto_tree_destroy(node)
 
     except Exception as e:
-        logger.debug(f"libacars decode error: {e}")
+        _consecutive_errors += 1
+        logger.warning(f"libacars text decode error ({_consecutive_errors}/{_max_consecutive_errors}): {e}")
+
+        if _consecutive_errors >= _max_consecutive_errors:
+            _libacars_disabled_due_to_errors = True
+            logger.error(
+                f"libacars disabled after {_max_consecutive_errors} consecutive errors. "
+                "Restart the service to re-enable."
+            )
+
         return None
 
 

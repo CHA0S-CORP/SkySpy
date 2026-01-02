@@ -9,11 +9,13 @@ Provides endpoints for:
 """
 import logging
 import time
+from pathlib import Path as FilePath
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, Query, Path, UploadFile, File, Form, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import get_db
@@ -35,12 +37,17 @@ settings = get_settings()
 
 def _transmission_to_response(t) -> dict:
     """Convert AudioTransmission model to response dict."""
+    # If no S3 URL, provide a local file URL
+    audio_url = t.s3_url
+    if not audio_url and t.filename:
+        audio_url = f"/api/v1/audio/file/{t.filename}"
+
     return {
         "id": t.id,
         "created_at": t.created_at.isoformat() if t.created_at else None,
         "filename": t.filename,
         "s3_key": t.s3_key,
-        "s3_url": t.s3_url,
+        "s3_url": audio_url,  # Use S3 URL or fallback to local file URL
         "file_size_bytes": t.file_size_bytes,
         "duration_seconds": t.duration_seconds,
         "format": t.format,
@@ -166,13 +173,18 @@ async def upload_audio(
         transmission.transcription_status == "queued"
     )
 
+    # Use S3 URL if available, otherwise fallback to local file URL
+    audio_url = transmission.s3_url
+    if not audio_url and transmission.filename:
+        audio_url = f"/api/v1/audio/file/{transmission.filename}"
+
     # Broadcast to socket subscribers
     sio_mgr = get_socketio_manager()
     if sio_mgr:
         await sio_mgr.publish_audio_transmission({
             "id": transmission.id,
             "filename": transmission.filename,
-            "s3_url": transmission.s3_url,
+            "s3_url": audio_url,
             "frequency_mhz": transmission.frequency_mhz,
             "channel_name": transmission.channel_name,
             "duration_seconds": transmission.duration_seconds,
@@ -182,7 +194,7 @@ async def upload_audio(
     return {
         "id": transmission.id,
         "filename": transmission.filename,
-        "s3_url": transmission.s3_url,
+        "s3_url": audio_url,
         "transcription_queued": (
             transmission.transcription_status == "queued"
         ),
@@ -417,6 +429,47 @@ async def get_audio_stats(db: AsyncSession = Depends(get_db)):
         stats.get("total_transmissions"), stats.get("total_transcribed")
     )
     return stats
+
+
+@router.get(
+    "/file/{filename:path}",
+    summary="Get Audio File",
+    description="Serve an audio file from local storage.",
+    responses={
+        200: {"description": "Audio file"},
+        404: {"description": "File not found", "model": ErrorResponse},
+    }
+)
+async def get_audio_file(filename: str = Path(..., description="Audio filename")):
+    """Serve an audio file from local storage."""
+    # Sanitize filename to prevent directory traversal
+    safe_filename = FilePath(filename).name
+    if safe_filename != filename or ".." in filename:
+        logger.warning("Invalid audio filename requested: %s", filename)
+        raise HTTPException(status_code=404, detail="File not found")
+
+    audio_path = FilePath(settings.radio_audio_dir) / safe_filename
+
+    if not audio_path.exists() or not audio_path.is_file():
+        logger.debug("Audio file not found: %s", audio_path)
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Determine content type
+    suffix = audio_path.suffix.lower()
+    content_types = {
+        ".mp3": "audio/mpeg",
+        ".wav": "audio/wav",
+        ".ogg": "audio/ogg",
+        ".flac": "audio/flac",
+    }
+    content_type = content_types.get(suffix, "audio/mpeg")
+
+    logger.debug("Serving audio file: %s", audio_path)
+    return FileResponse(
+        path=audio_path,
+        media_type=content_type,
+        filename=safe_filename,
+    )
 
 
 @router.get(

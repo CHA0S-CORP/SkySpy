@@ -209,7 +209,7 @@ async def create_transmission(
     file_ext = Path(filename).suffix.lower().lstrip(".")
     audio_format = file_ext if file_ext in ("mp3", "wav", "ogg", "flac") else "mp3"
 
-    # Upload to S3
+    # Upload to S3 or save locally
     s3_url = None
     s3_key = None
     if settings.s3_enabled:
@@ -223,6 +223,9 @@ async def create_transmission(
         s3_url = await upload_to_s3(audio_data, filename, content_type)
         if s3_url:
             s3_key = _get_s3_key(filename)
+    else:
+        # Save locally when S3 is disabled
+        await save_audio_locally(audio_data, filename)
 
     # Create database record
     transmission = AudioTransmission(
