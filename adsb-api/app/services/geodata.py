@@ -109,13 +109,11 @@ def calculate_bbox(geometry: dict) -> tuple[float, float, float, float]:
     lats = [c[1] for c in coords]
     return (min(lats), max(lats), min(lons), max(lons))
 
-
 async def refresh_airports(db: AsyncSession) -> int:
-    """Fetch and cache airport data using UPSERT (Insert or Update)."""
+    """Fetch and cache airport data using UPSERT with Pre-Deduplication."""
     logger.info("Refreshing cached airports...")
     now = datetime.utcnow()
 
-    # Fetch airports for continental US + nearby areas
     bbox = "24,-130,50,-60"  # CONUS roughly
 
     data = await fetch_awc_data("airport", {
@@ -133,12 +131,13 @@ async def refresh_airports(db: AsyncSession) -> int:
         logger.warning(f"Unexpected airport data format: {type(data)}")
         return 0
 
-    # We typically delete old data first for a full refresh, but since we are doing
-    # an upsert, we can strictly rely on the upsert or keep the delete.
-    # Keeping delete ensures we remove airports that no longer exist in the feed.
+    # Optional: Delete isn't strictly necessary with Upsert, but keeps cache clean 
+    # of airports that disappeared from the source.
     await db.execute(delete(CachedAirport))
 
-    airport_values = []
+    # 1. DEDUPLICATE: Use a dict keyed by ICAO to ensure uniqueness in the batch
+    unique_airports = {}
+    
     for apt in data:
         icao = apt.get("icaoId")
         if not icao or len(icao) != 4:
@@ -149,8 +148,8 @@ async def refresh_airports(db: AsyncSession) -> int:
         if lat is None or lon is None:
             continue
 
-        # Build dictionary for bulk insert
-        airport_values.append({
+        # overwriting the key ensures we only have ONE entry per ICAO
+        unique_airports[icao] = {
             "fetched_at": now,
             "icao_id": icao,
             "name": apt.get("name"),
@@ -161,15 +160,16 @@ async def refresh_airports(db: AsyncSession) -> int:
             "country": apt.get("country"),
             "region": apt.get("state"),
             "source_data": apt,
-        })
+        }
+
+    airport_values = list(unique_airports.values())
 
     if airport_values:
-        # Create PostgreSQL-specific insert statement
+        # 2. UPSERT: Handle conflicts with the database
         stmt = pg_insert(CachedAirport).values(airport_values)
         
-        # Define Upsert logic: Update fields if 'icao_id' conflict occurs
         stmt = stmt.on_conflict_do_update(
-            index_elements=['icao_id'],  # Must match the unique constraint/index
+            index_elements=['icao_id'],
             set_={
                 "fetched_at": stmt.excluded.fetched_at,
                 "name": stmt.excluded.name,
@@ -189,9 +189,8 @@ async def refresh_airports(db: AsyncSession) -> int:
 
     return len(airport_values)
 
-
 async def refresh_navaids(db: AsyncSession) -> int:
-    """Fetch and cache navaid data using UPSERT."""
+    """Fetch and cache navaid data using UPSERT with Pre-Deduplication."""
     logger.info("Refreshing cached navaids...")
     now = datetime.utcnow()
 
@@ -212,7 +211,9 @@ async def refresh_navaids(db: AsyncSession) -> int:
 
     await db.execute(delete(CachedNavaid))
 
-    navaid_values = []
+    # 1. DEDUPLICATE
+    unique_navaids = {}
+
     for nav in data:
         ident = nav.get("id") or nav.get("ident")
         if not ident:
@@ -223,7 +224,8 @@ async def refresh_navaids(db: AsyncSession) -> int:
         if lat is None or lon is None:
             continue
 
-        navaid_values.append({
+        # Use ident as key to prevent batch duplicates
+        unique_navaids[ident] = {
             "fetched_at": now,
             "ident": ident,
             "name": nav.get("name"),
@@ -233,14 +235,14 @@ async def refresh_navaids(db: AsyncSession) -> int:
             "frequency": nav.get("freq"),
             "channel": nav.get("channel"),
             "source_data": nav,
-        })
+        }
+    
+    navaid_values = list(unique_navaids.values())
 
     if navaid_values:
+        # 2. UPSERT
         stmt = pg_insert(CachedNavaid).values(navaid_values)
         
-        # Define Upsert logic for Navaids
-        # Assuming 'ident' is the unique constraint. 
-        # Note: If your unique index includes other fields (like type), add them to index_elements.
         stmt = stmt.on_conflict_do_update(
             index_elements=['ident'], 
             set_={
