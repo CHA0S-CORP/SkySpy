@@ -189,7 +189,11 @@ async def refresh_airports(db: AsyncSession) -> int:
     return len(airport_values)
 
 async def refresh_navaids(db: AsyncSession) -> int:
-    """Fetch and cache navaid data using UPSERT with Python-side deduplication."""
+    """
+    Fetch and cache navaid data.
+    STRATEGY: Delete all + Insert (Batch). 
+    Upsert is not possible because 'ident' is not unique globally.
+    """
     logger.info("Refreshing cached navaids...")
     now = datetime.utcnow()
 
@@ -208,9 +212,12 @@ async def refresh_navaids(db: AsyncSession) -> int:
         logger.warning(f"Unexpected navaid data format: {type(data)}")
         return 0
 
+    # 1. Wipe the table first
     await db.execute(delete(CachedNavaid))
 
-    # --- KEY FIX: Use a Dictionary to Deduplicate ---
+    # 2. Python-side Deduplication
+    # We use a composite key (ID + Lat + Lon) because ID alone is NOT unique 
+    # for navaids, but we want to filter out exact API duplicates.
     unique_navaids = {}
 
     for nav in data:
@@ -223,8 +230,11 @@ async def refresh_navaids(db: AsyncSession) -> int:
         if lat is None or lon is None:
             continue
 
-        # Use ident as the unique key
-        unique_navaids[ident] = {
+        # Composite key to distinguish different VORs with same ID vs actual duplicates
+        # Key = (Ident, Latitude, Longitude)
+        unique_key = (ident, lat, lon)
+
+        unique_navaids[unique_key] = {
             "fetched_at": now,
             "ident": ident,
             "name": nav.get("name"),
@@ -239,23 +249,12 @@ async def refresh_navaids(db: AsyncSession) -> int:
     navaid_values = list(unique_navaids.values())
 
     if navaid_values:
-        stmt = pg_insert(CachedNavaid).values(navaid_values)
-        
-        stmt = stmt.on_conflict_do_update(
-            index_elements=['ident'], 
-            set_={
-                "fetched_at": stmt.excluded.fetched_at,
-                "name": stmt.excluded.name,
-                "navaid_type": stmt.excluded.navaid_type,
-                "latitude": stmt.excluded.latitude,
-                "longitude": stmt.excluded.longitude,
-                "frequency": stmt.excluded.frequency,
-                "channel": stmt.excluded.channel,
-                "source_data": stmt.excluded.source_data,
-            }
+        # 3. Simple Bulk Insert (No ON CONFLICT)
+        # Since we deleted the table and deduplicated in Python, 
+        # a standard insert is safe and correct.
+        await db.execute(
+            pg_insert(CachedNavaid).values(navaid_values)
         )
-        
-        await db.execute(stmt)
         await db.commit()
         logger.info(f"Cached {len(navaid_values)} navaids")
 
