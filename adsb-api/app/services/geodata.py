@@ -17,6 +17,7 @@ from typing import Optional
 import httpx
 from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.core import get_settings
 from app.models import CachedAirport, CachedNavaid, CachedGeoJSON
@@ -110,12 +111,11 @@ def calculate_bbox(geometry: dict) -> tuple[float, float, float, float]:
 
 
 async def refresh_airports(db: AsyncSession) -> int:
-    """Fetch and cache airport data for a large area (CONUS + nearby)."""
+    """Fetch and cache airport data using UPSERT (Insert or Update)."""
     logger.info("Refreshing cached airports...")
     now = datetime.utcnow()
 
     # Fetch airports for continental US + nearby areas
-    # Using a large bounding box
     bbox = "24,-130,50,-60"  # CONUS roughly
 
     data = await fetch_awc_data("airport", {
@@ -133,10 +133,12 @@ async def refresh_airports(db: AsyncSession) -> int:
         logger.warning(f"Unexpected airport data format: {type(data)}")
         return 0
 
-    # Clear old data and insert new
+    # We typically delete old data first for a full refresh, but since we are doing
+    # an upsert, we can strictly rely on the upsert or keep the delete.
+    # Keeping delete ensures we remove airports that no longer exist in the feed.
     await db.execute(delete(CachedAirport))
 
-    airports = []
+    airport_values = []
     for apt in data:
         icao = apt.get("icaoId")
         if not icao or len(icao) != 4:
@@ -147,34 +149,52 @@ async def refresh_airports(db: AsyncSession) -> int:
         if lat is None or lon is None:
             continue
 
-        airport = CachedAirport(
-            fetched_at=now,
-            icao_id=icao,
-            name=apt.get("name"),
-            latitude=lat,
-            longitude=lon,
-            elevation_ft=apt.get("elev"),
-            airport_type=apt.get("type"),
-            country=apt.get("country"),
-            region=apt.get("state"),
-            source_data=apt,
+        # Build dictionary for bulk insert
+        airport_values.append({
+            "fetched_at": now,
+            "icao_id": icao,
+            "name": apt.get("name"),
+            "latitude": lat,
+            "longitude": lon,
+            "elevation_ft": apt.get("elev"),
+            "airport_type": apt.get("type"),
+            "country": apt.get("country"),
+            "region": apt.get("state"),
+            "source_data": apt,
+        })
+
+    if airport_values:
+        # Create PostgreSQL-specific insert statement
+        stmt = pg_insert(CachedAirport).values(airport_values)
+        
+        # Define Upsert logic: Update fields if 'icao_id' conflict occurs
+        stmt = stmt.on_conflict_do_update(
+            index_elements=['icao_id'],  # Must match the unique constraint/index
+            set_={
+                "fetched_at": stmt.excluded.fetched_at,
+                "name": stmt.excluded.name,
+                "latitude": stmt.excluded.latitude,
+                "longitude": stmt.excluded.longitude,
+                "elevation_ft": stmt.excluded.elevation_ft,
+                "airport_type": stmt.excluded.airport_type,
+                "country": stmt.excluded.country,
+                "region": stmt.excluded.region,
+                "source_data": stmt.excluded.source_data,
+            }
         )
-        airports.append(airport)
-
-    if airports:
-        db.add_all(airports)
+        
+        await db.execute(stmt)
         await db.commit()
-        logger.info(f"Cached {len(airports)} airports")
+        logger.info(f"Cached {len(airport_values)} airports")
 
-    return len(airports)
+    return len(airport_values)
 
 
 async def refresh_navaids(db: AsyncSession) -> int:
-    """Fetch and cache navaid data for a large area."""
+    """Fetch and cache navaid data using UPSERT."""
     logger.info("Refreshing cached navaids...")
     now = datetime.utcnow()
 
-    # Fetch navaids for continental US
     bbox = "24,-130,50,-60"
 
     data = await fetch_awc_data("navaid", {
@@ -190,10 +210,9 @@ async def refresh_navaids(db: AsyncSession) -> int:
         logger.warning(f"Unexpected navaid data format: {type(data)}")
         return 0
 
-    # Clear old data and insert new
     await db.execute(delete(CachedNavaid))
 
-    navaids = []
+    navaid_values = []
     for nav in data:
         ident = nav.get("id") or nav.get("ident")
         if not ident:
@@ -204,26 +223,43 @@ async def refresh_navaids(db: AsyncSession) -> int:
         if lat is None or lon is None:
             continue
 
-        navaid = CachedNavaid(
-            fetched_at=now,
-            ident=ident,
-            name=nav.get("name"),
-            navaid_type=nav.get("type"),
-            latitude=lat,
-            longitude=lon,
-            frequency=nav.get("freq"),
-            channel=nav.get("channel"),
-            source_data=nav,
+        navaid_values.append({
+            "fetched_at": now,
+            "ident": ident,
+            "name": nav.get("name"),
+            "navaid_type": nav.get("type"),
+            "latitude": lat,
+            "longitude": lon,
+            "frequency": nav.get("freq"),
+            "channel": nav.get("channel"),
+            "source_data": nav,
+        })
+
+    if navaid_values:
+        stmt = pg_insert(CachedNavaid).values(navaid_values)
+        
+        # Define Upsert logic for Navaids
+        # Assuming 'ident' is the unique constraint. 
+        # Note: If your unique index includes other fields (like type), add them to index_elements.
+        stmt = stmt.on_conflict_do_update(
+            index_elements=['ident'], 
+            set_={
+                "fetched_at": stmt.excluded.fetched_at,
+                "name": stmt.excluded.name,
+                "navaid_type": stmt.excluded.navaid_type,
+                "latitude": stmt.excluded.latitude,
+                "longitude": stmt.excluded.longitude,
+                "frequency": stmt.excluded.frequency,
+                "channel": stmt.excluded.channel,
+                "source_data": stmt.excluded.source_data,
+            }
         )
-        navaids.append(navaid)
-
-    if navaids:
-        db.add_all(navaids)
+        
+        await db.execute(stmt)
         await db.commit()
-        logger.info(f"Cached {len(navaids)} navaids")
+        logger.info(f"Cached {len(navaid_values)} navaids")
 
-    return len(navaids)
-
+    return len(navaid_values)
 
 async def refresh_geojson(db: AsyncSession) -> int:
     """Fetch and cache GeoJSON boundary data."""
