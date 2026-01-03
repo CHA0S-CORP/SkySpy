@@ -275,12 +275,16 @@ async def refresh_geojson(db: AsyncSession) -> int:
             logger.warning(f"Failed to fetch {data_type} GeoJSON")
             continue
 
-        # Clear old data for this type
+        # Clear old data for this specific type (Safe full refresh)
         await db.execute(
             delete(CachedGeoJSON).where(CachedGeoJSON.data_type == data_type)
         )
 
         features = []
+        # Track unique items to prevent batch duplicate errors
+        # using a tuple of (data_type, identifier)
+        seen_items = set()
+
         for feature in geojson["features"]:
             geometry = feature.get("geometry")
             properties = feature.get("properties", {})
@@ -288,16 +292,31 @@ async def refresh_geojson(db: AsyncSession) -> int:
             if not geometry:
                 continue
 
-            # Get name and code based on data type
+            # Determine identity based on type
+            name = "Unknown"
+            code = None
+            unique_key = None
+
             if data_type == "countries":
                 name = properties.get("NAME", properties.get("ADMIN", "Unknown"))
                 code = properties.get("ISO_A2") or properties.get("ISO_A3")
+                # Use code for uniqueness if available, else name
+                unique_key = code if code else name
             elif data_type == "states":
                 name = properties.get("name", properties.get("NAME", "Unknown"))
                 code = properties.get("iso_3166_2") or properties.get("postal")
-            else:  # water
+                unique_key = code if code else name
+            else:  # water / lakes
                 name = properties.get("name", properties.get("NAME", "Unknown"))
                 code = None
+                unique_key = name
+
+            # DEDUPLICATION: Skip if we've already processed this entity in this batch
+            # (e.g. if the source GeoJSON lists a country twice)
+            if unique_key in seen_items:
+                continue
+            if unique_key:  # Only add to seen if we have a valid key
+                seen_items.add(unique_key)
 
             # Calculate bounding box
             bbox = calculate_bbox(geometry)
@@ -323,8 +342,6 @@ async def refresh_geojson(db: AsyncSession) -> int:
             total += len(features)
 
     return total
-
-
 async def refresh_all_geodata(session_factory: async_sessionmaker) -> dict:
     """Refresh all geographic data."""
     global _last_refresh
