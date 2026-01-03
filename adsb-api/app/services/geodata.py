@@ -110,7 +110,7 @@ def calculate_bbox(geometry: dict) -> tuple[float, float, float, float]:
     return (min(lats), max(lats), min(lons), max(lons))
 
 async def refresh_airports(db: AsyncSession) -> int:
-    """Fetch and cache airport data using UPSERT with Pre-Deduplication."""
+    """Fetch and cache airport data using UPSERT with Python-side deduplication."""
     logger.info("Refreshing cached airports...")
     now = datetime.utcnow()
 
@@ -131,13 +131,12 @@ async def refresh_airports(db: AsyncSession) -> int:
         logger.warning(f"Unexpected airport data format: {type(data)}")
         return 0
 
-    # Optional: Delete isn't strictly necessary with Upsert, but keeps cache clean 
-    # of airports that disappeared from the source.
+    # Clean old data (optional if using upsert, but keeps cache tidy)
     await db.execute(delete(CachedAirport))
 
-    # 1. DEDUPLICATE: Use a dict keyed by ICAO to ensure uniqueness in the batch
-    unique_airports = {}
-    
+    # --- KEY FIX: Use a Dictionary to Deduplicate ---
+    unique_airports = {} 
+
     for apt in data:
         icao = apt.get("icaoId")
         if not icao or len(icao) != 4:
@@ -148,7 +147,7 @@ async def refresh_airports(db: AsyncSession) -> int:
         if lat is None or lon is None:
             continue
 
-        # overwriting the key ensures we only have ONE entry per ICAO
+        # Overwriting the key here ensures we only ever have ONE record per ICAO
         unique_airports[icao] = {
             "fetched_at": now,
             "icao_id": icao,
@@ -162,10 +161,10 @@ async def refresh_airports(db: AsyncSession) -> int:
             "source_data": apt,
         }
 
+    # Convert the unique values back to a list for SQL
     airport_values = list(unique_airports.values())
 
     if airport_values:
-        # 2. UPSERT: Handle conflicts with the database
         stmt = pg_insert(CachedAirport).values(airport_values)
         
         stmt = stmt.on_conflict_do_update(
@@ -190,7 +189,7 @@ async def refresh_airports(db: AsyncSession) -> int:
     return len(airport_values)
 
 async def refresh_navaids(db: AsyncSession) -> int:
-    """Fetch and cache navaid data using UPSERT with Pre-Deduplication."""
+    """Fetch and cache navaid data using UPSERT with Python-side deduplication."""
     logger.info("Refreshing cached navaids...")
     now = datetime.utcnow()
 
@@ -211,7 +210,7 @@ async def refresh_navaids(db: AsyncSession) -> int:
 
     await db.execute(delete(CachedNavaid))
 
-    # 1. DEDUPLICATE
+    # --- KEY FIX: Use a Dictionary to Deduplicate ---
     unique_navaids = {}
 
     for nav in data:
@@ -224,7 +223,7 @@ async def refresh_navaids(db: AsyncSession) -> int:
         if lat is None or lon is None:
             continue
 
-        # Use ident as key to prevent batch duplicates
+        # Use ident as the unique key
         unique_navaids[ident] = {
             "fetched_at": now,
             "ident": ident,
@@ -240,7 +239,6 @@ async def refresh_navaids(db: AsyncSession) -> int:
     navaid_values = list(unique_navaids.values())
 
     if navaid_values:
-        # 2. UPSERT
         stmt = pg_insert(CachedNavaid).values(navaid_values)
         
         stmt = stmt.on_conflict_do_update(
