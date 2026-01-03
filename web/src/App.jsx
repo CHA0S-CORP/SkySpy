@@ -65,6 +65,7 @@ export default function App() {
   const [onlineUsers, setOnlineUsers] = useState(0);
   const [selectedAircraftHex, setSelectedAircraftHex] = useState(null);
   const [targetSafetyEventId, setTargetSafetyEventId] = useState(null);
+  const [tailHexLookup, setTailHexLookup] = useState({}); // Registration → ICAO hex lookup cache
 
   const activeTab = hashState.tab;
   const hashParams = hashState.params;
@@ -143,6 +144,44 @@ export default function App() {
     return () => clearInterval(interval);
   }, [config.apiBaseUrl]);
 
+  // Lookup ICAO hex from tail/registration when on airframe page with tail param
+  useEffect(() => {
+    if (activeTab !== 'airframe' || !hashParams.tail) return;
+
+    const tail = hashParams.tail.trim().toUpperCase();
+
+    // Check if already in cache
+    if (tail in tailHexLookup) return;
+
+    // Check if live aircraft has this tail
+    const liveAircraft = aircraft.find(a => a.r?.toUpperCase() === tail);
+    if (liveAircraft?.hex) {
+      setTailHexLookup(prev => ({ ...prev, [tail]: liveAircraft.hex }));
+      return;
+    }
+
+    // Look up from sightings API
+    const lookupTail = async () => {
+      try {
+        const res = await fetch(`${config.apiBaseUrl}/api/v1/history/sightings?registration=${encodeURIComponent(tail)}&hours=168&limit=1`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.sightings?.length > 0 && data.sightings[0].icao_hex) {
+            setTailHexLookup(prev => ({ ...prev, [tail]: data.sightings[0].icao_hex }));
+          } else {
+            setTailHexLookup(prev => ({ ...prev, [tail]: null }));
+          }
+        } else {
+          setTailHexLookup(prev => ({ ...prev, [tail]: null }));
+        }
+      } catch (err) {
+        setTailHexLookup(prev => ({ ...prev, [tail]: null }));
+      }
+    };
+
+    lookupTail();
+  }, [activeTab, hashParams.tail, aircraft, config.apiBaseUrl, tailHexLookup]);
+
   return (
     <div className={`app ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileMenuOpen ? 'mobile-menu-open' : ''}`}>
       <Sidebar
@@ -200,6 +239,7 @@ export default function App() {
             <HistoryView
               apiBase={config.apiBaseUrl}
               onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
+              onSelectByTail={(tail) => setActiveTab('airframe', { tail })}
               onViewEvent={(eventId) => setActiveTab('event', { id: eventId })}
               targetEventId={targetSafetyEventId}
               onEventViewed={() => setTargetSafetyEventId(null)}
@@ -227,8 +267,20 @@ export default function App() {
               return null;
             };
             const foundAircraft = findAircraft();
-            // Use the hex from found aircraft, or fall back to the icao param
-            const hex = foundAircraft?.hex || hashParams.icao;
+
+            // Use the hex from found aircraft, or fall back to the icao param, or lookup from tail
+            const tailKey = hashParams.tail?.trim().toUpperCase();
+            const lookedUpHex = tailKey ? tailHexLookup[tailKey] : null;
+            const hex = foundAircraft?.hex || hashParams.icao || lookedUpHex;
+
+            // Show loading state while looking up tail
+            if (hashParams.tail && !hashParams.icao && !foundAircraft && !(tailKey in tailHexLookup)) {
+              return (
+                <div className="not-found-message" style={{ padding: '2rem', textAlign: 'center' }}>
+                  <p>Looking up aircraft: {hashParams.tail}...</p>
+                </div>
+              );
+            }
 
             return hex ? (
               <AircraftDetailPage

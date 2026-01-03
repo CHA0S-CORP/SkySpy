@@ -2456,8 +2456,9 @@
 
   .pro-details-panel {
     width: 100%;
-    top: 50px;
-    height: calc(100% - 50px);
+    top: 0;
+    height: 100%;
+    padding-top: 66px;
     border-left: none;
     border-top: 1px solid rgba(90, 122, 154, 0.2);
   }
@@ -2842,9 +2843,6 @@
   transition: right 0.3s ease;
 }
 
-.map-container:has(.pro-details-panel) .pro-search-bar {
-  right: 340px;
-}
 
 .pro-search-bar .search-icon {
   color: rgba(138, 148, 158, 0.6);
@@ -2927,9 +2925,9 @@
   align-items: center;
   gap: 8px;
   padding: 0 8px;
-  background: rgba(30, 40, 50, 0.6);
-  border-radius: 6px;
   height: 36px;
+  margin: 0 4px;
+  flex-shrink: 0;
 }
 
 .pro-track-length-slider input[type="range"] {
@@ -2985,7 +2983,7 @@
   z-index: 1100;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 20px;
+  padding: 16px 20px 20px 20px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -3020,7 +3018,7 @@
 }
 
 .pro-panel-header {
-  margin-top: 4px;
+  margin-top: 0;
 }
 
 .pro-callsign-row {

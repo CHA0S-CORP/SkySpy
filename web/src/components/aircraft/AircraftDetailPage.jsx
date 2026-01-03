@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   X, RefreshCw, Camera, Info, Radar, MessageCircle, History,
   Plane, Building2, Hash, ExternalLink, WifiOff, AlertTriangle, ChevronDown, ChevronUp,
-  Map as MapIcon, Play, Pause, SkipBack, SkipForward, CircleDot, Radio
+  Map as MapIcon, Play, Pause, SkipBack, SkipForward, CircleDot, Radio, List, LayoutGrid
 } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -29,6 +29,22 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
   const [photoInfo, setPhotoInfo] = useState(null);
   const [acarsMessages, setAcarsMessages] = useState([]);
   const [acarsHours, setAcarsHours] = useState(24);
+
+  // ACARS UI states (matching HistoryView)
+  const [acarsCompactMode, setAcarsCompactMode] = useState(false);
+  const [acarsQuickFilters, setAcarsQuickFilters] = useState([]);
+  const [expandedMessages, setExpandedMessages] = useState({});
+  const [allMessagesExpanded, setAllMessagesExpanded] = useState(false);
+
+  // Quick filter categories with their associated labels
+  const quickFilterCategories = {
+    position: { name: 'Position', labels: ['C1', 'SQ', '47', '2Z', 'AD', 'AE'] },
+    weather: { name: 'Weather', labels: ['15', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '44', '80', '81', '83', '3M', '3S'] },
+    oooi: { name: 'OOOI', labels: ['10', '11', '12', '13', '14', '16', '17'] },
+    operational: { name: 'Operational', labels: ['H1', 'H2', '5Z', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', 'B1', 'B2', 'B9'] },
+    freetext: { name: 'Free Text', labels: ['AA', 'AB', 'FA', 'FF', 'F3', 'F5', 'F7'] },
+    maintenance: { name: 'Maintenance', labels: ['50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '5A', '5U'] },
+  };
 
   // ACARS message label descriptions
   const acarsLabelDescriptions = {
@@ -73,6 +89,28 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
     if (msgLabelInfo?.name) return msgLabelInfo.name;
     return acarsLabelDescriptions[label.toUpperCase()] || acarsLabelDescriptions[label] || null;
   };
+
+  // Get category for a label (matches HistoryView categories)
+  const getLabelCategory = (label) => {
+    if (!label) return null;
+    const upperLabel = label.toUpperCase();
+    // Position reports
+    if (['C1', 'SQ', '47', '2Z', 'AD', 'AE'].includes(upperLabel)) return 'position';
+    // Weather
+    if (['15', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '44', '80', '81', '83', '3M', '3S'].includes(upperLabel)) return 'weather';
+    // OOOI
+    if (['10', '11', '12', '13', '14', '16', '17'].includes(upperLabel)) return 'oooi';
+    // Operational
+    if (['H1', 'H2', '5Z', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', 'B1', 'B2', 'B9'].includes(upperLabel)) return 'operational';
+    // Free text
+    if (['AA', 'AB', 'FA', 'FF', 'F3', 'F5', 'F7'].includes(upperLabel)) return 'freetext';
+    // Maintenance
+    if (['50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '5A', '5U'].includes(upperLabel)) return 'maintenance';
+    // CPDLC/data link
+    if (['CA', 'CR', 'CC', 'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'AF', 'D1', 'D2'].includes(upperLabel)) return 'cpdlc';
+    return null;
+  };
+
   const [sightings, setSightings] = useState([]);
   const [safetyEvents, setSafetyEvents] = useState([]);
   const [safetyHours, setSafetyHours] = useState(24);
@@ -1778,81 +1816,192 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
               </div>
             )}
             
-            {activeTab === 'acars' && (
-              <div className="detail-acars">
-                <div className="acars-filter">
-                  <label>Time Range:</label>
-                  <select value={acarsHours} onChange={(e) => setAcarsHours(Number(e.target.value))}>
-                    <option value={1}>Last 1 hour</option>
-                    <option value={6}>Last 6 hours</option>
-                    <option value={12}>Last 12 hours</option>
-                    <option value={24}>Last 24 hours</option>
-                    <option value={48}>Last 48 hours</option>
-                    <option value={72}>Last 72 hours</option>
-                    <option value={168}>Last 7 days</option>
-                  </select>
-                </div>
-                {acarsMessages.length === 0 ? (
-                  <div className="detail-empty">
-                    <MessageCircle size={48} />
-                    <p>No ACARS messages</p>
-                    <span>No messages received from this aircraft in the selected time range</span>
-                  </div>
-                ) : (
-                  <div className="acars-list">
-                    <p className="acars-count">{acarsMessages.length} message{acarsMessages.length !== 1 ? 's' : ''} in the last {acarsHours} hour{acarsHours !== 1 ? 's' : ''}</p>
-                    {acarsMessages.map((msg, i) => {
-                      // Handle both Unix timestamp (number) and ISO string formats
-                      const timestamp = typeof msg.timestamp === 'number'
-                        ? new Date(msg.timestamp * 1000)
-                        : new Date(msg.timestamp);
-                      const labelDesc = getAcarsLabelDescription(msg.label, msg.label_info);
+            {activeTab === 'acars' && (() => {
+              // Filter messages based on quick filters
+              const filteredMessages = acarsQuickFilters.length > 0
+                ? acarsMessages.filter(msg => {
+                    const label = msg.label?.toUpperCase();
+                    if (!label) return false;
+                    return acarsQuickFilters.some(category =>
+                      quickFilterCategories[category]?.labels.includes(label)
+                    );
+                  })
+                : acarsMessages;
 
-                      return (
-                        <div key={i} className="acars-item">
-                          <div className="acars-item-header">
-                            <span className="acars-item-time">{timestamp.toLocaleString()}</span>
-                            <span className="acars-item-label" title={msg.label_info?.description || labelDesc || msg.label}>
-                              {msg.label || '--'}
-                              {labelDesc && (
-                                <span className="acars-label-desc">{labelDesc}</span>
-                              )}
-                            </span>
-                            <span className="acars-item-source">{msg.source}</span>
-                            {msg.frequency && <span className="acars-item-freq">{msg.frequency} MHz</span>}
-                          </div>
-                          <div className="acars-item-aircraft">
-                            {msg.callsign && <span className="acars-item-callsign">{msg.callsign}</span>}
-                            {msg.airline?.name && (
-                              <span className="acars-item-airline" title={msg.airline.icao || msg.airline.iata}>
-                                <Plane size={10} />
-                                {msg.airline.name}
-                              </span>
-                            )}
-                            {msg.icao_hex && <span className="acars-item-icao">{msg.icao_hex}</span>}
-                          </div>
-                          {msg.text && <pre className="acars-item-text">{msg.text}</pre>}
-                          {msg.decoded_text && Object.keys(msg.decoded_text).length > 0 && (
-                            <div className="acars-item-decoded">
-                              {msg.decoded_text.airports_mentioned && (
-                                <span className="decoded-tag" title="Airports mentioned">
-                                  ✈ {msg.decoded_text.airports_mentioned.join(', ')}
-                                </span>
-                              )}
-                              {msg.decoded_text.flight_levels && (
-                                <span className="decoded-tag" title="Flight levels">
-                                  ⬆ FL{msg.decoded_text.flight_levels.join(', FL')}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+              return (
+                <div className="detail-acars">
+                  <div className="acars-filter">
+                    <label>Time Range:</label>
+                    <select value={acarsHours} onChange={(e) => setAcarsHours(Number(e.target.value))}>
+                      <option value={1}>Last 1 hour</option>
+                      <option value={6}>Last 6 hours</option>
+                      <option value={12}>Last 12 hours</option>
+                      <option value={24}>Last 24 hours</option>
+                      <option value={48}>Last 48 hours</option>
+                      <option value={72}>Last 72 hours</option>
+                      <option value={168}>Last 7 days</option>
+                    </select>
+                    <div className="acars-view-toggle">
+                      <button
+                        className={`acars-view-btn ${!acarsCompactMode ? 'active' : ''}`}
+                        onClick={() => setAcarsCompactMode(false)}
+                        title="Expanded view"
+                      >
+                        <LayoutGrid size={14} />
+                      </button>
+                      <button
+                        className={`acars-view-btn ${acarsCompactMode ? 'active' : ''}`}
+                        onClick={() => setAcarsCompactMode(true)}
+                        title="Compact view"
+                      >
+                        <List size={14} />
+                      </button>
+                    </div>
+                    <button
+                      className="acars-expand-all-btn"
+                      onClick={() => {
+                        setAllMessagesExpanded(prev => !prev);
+                        setExpandedMessages({});
+                      }}
+                      title={allMessagesExpanded ? 'Collapse all messages' : 'Expand all messages'}
+                    >
+                      {allMessagesExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      {allMessagesExpanded ? 'Collapse' : 'Expand'}
+                    </button>
+                    <span className="acars-count">
+                      {filteredMessages.length === acarsMessages.length
+                        ? `${acarsMessages.length} message${acarsMessages.length !== 1 ? 's' : ''}`
+                        : `${filteredMessages.length} of ${acarsMessages.length}`}
+                    </span>
                   </div>
-                )}
-              </div>
-            )}
+                  {/* Quick Filter Chips */}
+                  <div className="acars-quick-filter-chips">
+                    {Object.entries(quickFilterCategories).map(([key, { name }]) => (
+                      <button
+                        key={key}
+                        className={`acars-filter-chip chip-${key} ${acarsQuickFilters.includes(key) ? 'active' : ''}`}
+                        onClick={() => setAcarsQuickFilters(prev =>
+                          prev.includes(key) ? prev.filter(c => c !== key) : [...prev, key]
+                        )}
+                      >
+                        <span className="chip-dot" />
+                        {name}
+                      </button>
+                    ))}
+                    {acarsQuickFilters.length > 0 && (
+                      <button className="acars-chips-clear" onClick={() => setAcarsQuickFilters([])}>
+                        <X size={12} /> Clear
+                      </button>
+                    )}
+                  </div>
+                  {filteredMessages.length === 0 ? (
+                    <div className="detail-empty">
+                      <MessageCircle size={48} />
+                      <p>No ACARS messages</p>
+                      <span>{acarsQuickFilters.length > 0 ? 'No messages match the selected filters' : 'No messages received from this aircraft in the selected time range'}</span>
+                    </div>
+                  ) : (
+                    <div className={`acars-list ${acarsCompactMode ? 'compact' : ''}`}>
+                      {filteredMessages.map((msg, i) => {
+                        // Handle both Unix timestamp (number) and ISO string formats
+                        const timestamp = typeof msg.timestamp === 'number'
+                          ? new Date(msg.timestamp * 1000)
+                          : new Date(msg.timestamp);
+                        const labelDesc = getAcarsLabelDescription(msg.label, msg.label_info);
+                        const labelCategory = getLabelCategory(msg.label);
+                        const msgId = `${msg.timestamp}-${i}`;
+                        const isExpanded = allMessagesExpanded || expandedMessages[msgId];
+                        const textContent = msg.formatted_text || msg.text || '';
+                        const isLongText = textContent.length > 100;
+
+                        return (
+                          <div key={i} className={`acars-item${labelCategory ? ` category-${labelCategory}` : ''}`}>
+                            <div className="acars-item-header">
+                              {msg.callsign && <span className="acars-item-callsign">{msg.callsign}</span>}
+                              {msg.airline?.name && (
+                                <span className="acars-item-airline" title={msg.airline.icao || msg.airline.iata}>
+                                  <Plane size={12} />
+                                  {msg.airline.name}
+                                </span>
+                              )}
+                              <span className="acars-item-time">{timestamp.toLocaleString()}</span>
+                              <span className={`acars-item-label${labelCategory ? ` category-${labelCategory}` : ''}`} title={msg.label_info?.description || labelDesc || msg.label}>
+                                {msg.label || '--'}
+                                {labelDesc && (
+                                  <span className="acars-label-desc">{labelDesc}</span>
+                                )}
+                              </span>
+                              <span className="acars-item-source">{msg.source}</span>
+                              {msg.frequency && <span className="acars-item-freq">{msg.frequency} MHz</span>}
+                              {/* Compact mode preview */}
+                              <span className="acars-compact-preview">
+                                {textContent.slice(0, 60)}{textContent.length > 60 ? '...' : ''}
+                              </span>
+                            </div>
+                            {msg.icao_hex && (
+                              <div className="acars-item-aircraft">
+                                <span className="acars-item-icao">{msg.icao_hex}</span>
+                              </div>
+                            )}
+                            {/* Show decoded/formatted text if available, otherwise show raw text */}
+                            {msg.formatted_text ? (
+                              <div className="acars-formatted-text">
+                                <div className="acars-formatted-header">Decoded:</div>
+                                <pre className={`acars-item-text ${!isExpanded && isLongText ? 'collapsed' : ''}`}>{msg.formatted_text}</pre>
+                                {isLongText && (
+                                  <button
+                                    className="acars-text-toggle"
+                                    onClick={() => setExpandedMessages(prev => ({ ...prev, [msgId]: !prev[msgId] }))}
+                                  >
+                                    {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                    {isExpanded ? 'Show less' : 'Show more'}
+                                  </button>
+                                )}
+                                {msg.text && (
+                                  <details className="acars-raw-toggle">
+                                    <summary>Raw Message</summary>
+                                    <pre className="acars-item-text">{msg.text}</pre>
+                                  </details>
+                                )}
+                              </div>
+                            ) : (
+                              msg.text && (
+                                <>
+                                  <pre className={`acars-item-text ${!isExpanded && isLongText ? 'collapsed' : ''}`}>{msg.text}</pre>
+                                  {isLongText && (
+                                    <button
+                                      className="acars-text-toggle"
+                                      onClick={() => setExpandedMessages(prev => ({ ...prev, [msgId]: !prev[msgId] }))}
+                                    >
+                                      {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                      {isExpanded ? 'Show less' : 'Show more'}
+                                    </button>
+                                  )}
+                                </>
+                              )
+                            )}
+                            {msg.decoded_text && Object.keys(msg.decoded_text).length > 0 && !msg.formatted_text && (
+                              <div className="acars-item-decoded">
+                                {msg.decoded_text.airports_mentioned && (
+                                  <span className="decoded-tag" title="Airports mentioned">
+                                    ✈ {msg.decoded_text.airports_mentioned.join(', ')}
+                                  </span>
+                                )}
+                                {msg.decoded_text.flight_levels && (
+                                  <span className="decoded-tag" title="Flight levels">
+                                    ⬆ FL{msg.decoded_text.flight_levels.join(', FL')}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             
             {activeTab === 'safety' && (
               <div className="detail-safety">

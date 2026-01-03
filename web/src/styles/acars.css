@@ -2022,6 +2022,271 @@
 }
 
 /* ============================================================================
+   Quick Filter Chips
+   ============================================================================ */
+
+.acars-quick-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(20, 30, 40, 0.4);
+  border-bottom: 1px solid var(--border);
+  margin: 0 16px;
+  border-radius: 0 0 8px 8px;
+  margin-top: -1px;
+}
+
+.acars-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: rgba(30, 40, 50, 0.6);
+  border: 1px solid rgba(90, 122, 154, 0.25);
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.acars-filter-chip:hover {
+  background: rgba(40, 55, 70, 0.7);
+  border-color: rgba(90, 122, 154, 0.4);
+  color: var(--text-primary);
+}
+
+.acars-filter-chip.active {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: rgba(0, 212, 255, 0.4);
+  color: var(--accent-cyan);
+}
+
+.acars-filter-chip .chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.acars-filter-chip.chip-position .chip-dot { background: #4ade80; }
+.acars-filter-chip.chip-weather .chip-dot { background: #60a5fa; }
+.acars-filter-chip.chip-oooi .chip-dot { background: #fb923c; }
+.acars-filter-chip.chip-operational .chip-dot { background: #a78bfa; }
+.acars-filter-chip.chip-freetext .chip-dot { background: var(--accent-cyan); }
+.acars-filter-chip.chip-maintenance .chip-dot { background: #f472b6; }
+
+.acars-filter-chip.active.chip-position {
+  background: rgba(74, 222, 128, 0.15);
+  border-color: rgba(74, 222, 128, 0.4);
+  color: #4ade80;
+}
+
+.acars-filter-chip.active.chip-weather {
+  background: rgba(96, 165, 250, 0.15);
+  border-color: rgba(96, 165, 250, 0.4);
+  color: #60a5fa;
+}
+
+.acars-filter-chip.active.chip-oooi {
+  background: rgba(251, 146, 60, 0.15);
+  border-color: rgba(251, 146, 60, 0.4);
+  color: #fb923c;
+}
+
+.acars-filter-chip.active.chip-operational {
+  background: rgba(167, 139, 250, 0.15);
+  border-color: rgba(167, 139, 250, 0.4);
+  color: #a78bfa;
+}
+
+.acars-filter-chip.active.chip-freetext {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: rgba(0, 212, 255, 0.4);
+  color: var(--accent-cyan);
+}
+
+.acars-filter-chip.active.chip-maintenance {
+  background: rgba(244, 114, 182, 0.15);
+  border-color: rgba(244, 114, 182, 0.4);
+  color: #f472b6;
+}
+
+.acars-chips-clear {
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px dashed rgba(90, 122, 154, 0.3);
+  border-radius: 16px;
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.acars-chips-clear:hover {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+  background: rgba(248, 81, 73, 0.1);
+}
+
+/* ============================================================================
+   Compact Mode Styles
+   ============================================================================ */
+
+.acars-view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(30, 40, 50, 0.6);
+  border: 1px solid rgba(90, 122, 154, 0.25);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.acars-view-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 8px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.acars-view-btn:hover {
+  color: var(--text-secondary);
+  background: rgba(90, 122, 154, 0.15);
+}
+
+.acars-view-btn.active {
+  background: rgba(0, 212, 255, 0.2);
+  color: var(--accent-cyan);
+}
+
+/* Compact mode card styles */
+.acars-history-list.compact .acars-history-item {
+  padding: 8px 12px;
+}
+
+.acars-history-list.compact .acars-history-header {
+  margin-bottom: 0;
+}
+
+.acars-history-list.compact .acars-history-aircraft {
+  display: none;
+}
+
+.acars-history-list.compact .acars-history-text,
+.acars-history-list.compact .acars-formatted-text {
+  display: none;
+}
+
+.acars-history-list.compact .acars-decoded-info {
+  display: none;
+}
+
+.acars-history-list.compact .acars-history-callsign {
+  font-size: 13px;
+}
+
+.acars-history-list.compact .acars-history-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.acars-history-list.compact .acars-history-header {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.acars-history-list.compact .acars-compact-preview {
+  display: block;
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+}
+
+/* Hide compact preview in expanded mode */
+.acars-history-list:not(.compact) .acars-compact-preview {
+  display: none;
+}
+
+/* ============================================================================
+   Collapsible Message Text
+   ============================================================================ */
+
+.acars-history-text.collapsed,
+.acars-formatted-content.collapsed {
+  max-height: 48px;
+  overflow: hidden;
+  position: relative;
+}
+
+.acars-history-text.collapsed::after,
+.acars-formatted-content.collapsed::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 24px;
+  background: linear-gradient(transparent, rgba(20, 30, 40, 0.95));
+  pointer-events: none;
+}
+
+.acars-text-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 3px 8px;
+  background: rgba(0, 212, 255, 0.1);
+  border: none;
+  border-radius: 4px;
+  font-size: 10px;
+  color: var(--accent-cyan);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.acars-text-toggle:hover {
+  background: rgba(0, 212, 255, 0.2);
+}
+
+.acars-expand-all-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  background: rgba(30, 40, 50, 0.6);
+  border: 1px solid rgba(90, 122, 154, 0.25);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.acars-expand-all-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+/* ============================================================================
    ACARS History List & Items
    ============================================================================ */
 
@@ -2034,20 +2299,88 @@
   flex: 1;
 }
 
+.acars-load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  color: var(--text-dim);
+  font-size: 12px;
+  border-top: 1px dashed rgba(90, 122, 154, 0.2);
+  margin-top: 8px;
+}
+
 .acars-history-item {
   background: rgba(30, 40, 50, 0.5);
   border: 1px solid rgba(90, 122, 154, 0.2);
   border-radius: 8px;
-  padding: 12px;
+  padding: 14px 16px;
   border-left: 3px solid var(--accent-cyan);
+  transition: all 0.15s ease;
+}
+
+.acars-history-item:hover {
+  background: rgba(40, 55, 70, 0.6);
+  border-color: rgba(90, 122, 154, 0.35);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.acars-history-item.clickable {
+  cursor: pointer;
+}
+
+/* Category-based left border colors */
+.acars-history-item.category-position {
+  border-left-color: #4ade80; /* Green - Position reports */
+}
+
+.acars-history-item.category-weather {
+  border-left-color: #60a5fa; /* Blue - Weather */
+}
+
+.acars-history-item.category-oooi {
+  border-left-color: #fb923c; /* Orange - OOOI messages */
+}
+
+.acars-history-item.category-operational {
+  border-left-color: #a78bfa; /* Purple - Operational */
+}
+
+.acars-history-item.category-freetext {
+  border-left-color: var(--accent-cyan); /* Cyan - Free text */
+}
+
+.acars-history-item.category-maintenance {
+  border-left-color: #f472b6; /* Pink - Maintenance */
+}
+
+.acars-history-item.category-cpdlc {
+  border-left-color: #fbbf24; /* Yellow - CPDLC/Data link */
 }
 
 .acars-history-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 10px;
   flex-wrap: wrap;
+}
+
+/* Two-row card layout for better hierarchy */
+.acars-history-item .acars-card-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.acars-history-item .acars-card-row.primary {
+  margin-bottom: 8px;
+}
+
+.acars-history-item .acars-card-row.secondary {
+  margin-bottom: 10px;
 }
 
 .acars-history-time {
@@ -2059,7 +2392,7 @@
 .acars-history-label {
   background: rgba(0, 200, 255, 0.2);
   color: var(--accent-cyan);
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 4px;
   font-size: 11px;
   font-weight: 600;
@@ -2069,9 +2402,46 @@
   gap: 6px;
 }
 
+/* Category-based label badge colors */
+.acars-history-label.category-position {
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+}
+
+.acars-history-label.category-weather {
+  background: rgba(96, 165, 250, 0.2);
+  color: #60a5fa;
+}
+
+.acars-history-label.category-oooi {
+  background: rgba(251, 146, 60, 0.2);
+  color: #fb923c;
+}
+
+.acars-history-label.category-operational {
+  background: rgba(167, 139, 250, 0.2);
+  color: #a78bfa;
+}
+
+.acars-history-label.category-freetext {
+  background: rgba(0, 212, 255, 0.2);
+  color: var(--accent-cyan);
+}
+
+.acars-history-label.category-maintenance {
+  background: rgba(244, 114, 182, 0.2);
+  color: #f472b6;
+}
+
+.acars-history-label.category-cpdlc {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+
 .acars-history-label .acars-label-desc {
   font-size: 10px;
-  color: var(--text-secondary);
+  color: inherit;
+  opacity: 0.85;
   font-weight: 400;
   font-family: inherit;
 }
@@ -2102,43 +2472,79 @@
 .acars-history-aircraft {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   margin-bottom: 8px;
   flex-wrap: wrap;
+  font-size: 10px;
+  color: var(--text-dim);
 }
 
 .acars-history-callsign {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--accent-cyan);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
-}
-
-.acars-history-airline {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--text-secondary);
-  background: rgba(90, 122, 154, 0.15);
+  font-size: 15px;
+  letter-spacing: 0.5px;
   padding: 2px 6px;
   border-radius: 4px;
 }
 
+.acars-history-airline {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: rgba(90, 122, 154, 0.2);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
 .acars-history-airline svg {
-  opacity: 0.7;
+  opacity: 0.6;
+  color: var(--accent-cyan);
 }
 
 .acars-history-icao {
   color: var(--text-secondary);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
+  font-size: 10px;
+  background: rgba(0, 212, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 3px;
 }
 
 .acars-history-reg {
-  color: var(--text-dim);
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
+  font-size: 11px;
+  background: rgba(74, 222, 128, 0.15);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.acars-history-reg.clickable {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.acars-history-reg.clickable svg {
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+}
+
+.acars-history-reg.clickable:hover {
+  background: rgba(74, 222, 128, 0.3);
+  color: #4ade80;
+}
+
+.acars-history-reg.clickable:hover svg {
+  opacity: 1;
 }
 
 .acars-decoded-info {
@@ -2161,13 +2567,30 @@
 .acars-history-callsign.clickable,
 .acars-history-icao.clickable {
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+  background: rgba(0, 212, 255, 0.1);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.acars-history-callsign.clickable svg,
+.acars-history-icao.clickable svg {
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
 }
 
 .acars-history-callsign.clickable:hover,
 .acars-history-icao.clickable:hover {
   color: var(--accent-bright, #00e5ff);
+  background: rgba(0, 212, 255, 0.25);
+}
+
+.acars-history-callsign.clickable:hover svg,
+.acars-history-icao.clickable:hover svg {
+  opacity: 1;
 }
 
 .acars-history-text {

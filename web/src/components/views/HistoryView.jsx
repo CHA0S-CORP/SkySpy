@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, Map as MapIcon, Play, Pause, SkipBack, SkipForward, Shield, Search, MessageCircle, ExternalLink, Plane } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, Map as MapIcon, Play, Pause, SkipBack, SkipForward, Shield, Search, MessageCircle, ExternalLink, Plane, List, LayoutGrid, X } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useApi } from '../../hooks';
 
 const VALID_DATA_TYPES = ['sessions', 'sightings', 'acars', 'safety'];
 
-export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEventId, onEventViewed, hashParams = {}, setHashParams, wsRequest, wsConnected }) {
+export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewEvent, targetEventId, onEventViewed, hashParams = {}, setHashParams, wsRequest, wsConnected }) {
   // Sync viewType with URL hash params
   const [viewType, setViewTypeState] = useState(() => {
     if (hashParams.data && VALID_DATA_TYPES.includes(hashParams.data)) {
@@ -58,8 +58,49 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
   const [acarsAirlineFilter, setAcarsAirlineFilter] = useState('');
   const [showLabelDropdown, setShowLabelDropdown] = useState(false);
   const [callsignHexCache, setCallsignHexCache] = useState({}); // Callsign → ICAO hex cache
+  const [regHexCache, setRegHexCache] = useState({}); // Registration → ICAO hex cache
   const [labelReference, setLabelReference] = useState({}); // Label reference from API
   const labelDropdownRef = useRef(null);
+
+  // New ACARS UI states
+  const [acarsCompactMode, setAcarsCompactMode] = useState(() => {
+    const saved = localStorage.getItem('acars-compact-mode');
+    return saved === 'true';
+  });
+  const [acarsQuickFilters, setAcarsQuickFilters] = useState(() => {
+    const saved = localStorage.getItem('acars-quick-filters');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [expandedMessages, setExpandedMessages] = useState({});
+  const [allMessagesExpanded, setAllMessagesExpanded] = useState(false);
+  const [visibleAcarsCount, setVisibleAcarsCount] = useState(50);
+  const acarsListRef = useRef(null);
+
+  // Quick filter categories with their associated labels
+  const quickFilterCategories = {
+    position: { name: 'Position', labels: ['C1', 'SQ', '47', '2Z', 'AD', 'AE'] },
+    weather: { name: 'Weather', labels: ['15', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '44', '80', '81', '83', '3M', '3S'] },
+    oooi: { name: 'OOOI', labels: ['10', '11', '12', '13', '14', '16', '17'] },
+    operational: { name: 'Operational', labels: ['H1', 'H2', '5Z', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', 'B1', 'B2', 'B9'] },
+    freetext: { name: 'Free Text', labels: ['AA', 'AB', 'FA', 'FF', 'F3', 'F5', 'F7'] },
+    maintenance: { name: 'Maintenance', labels: ['50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '5A', '5U'] },
+  };
+
+  // Get category for a label
+  const getLabelCategory = useCallback((label) => {
+    if (!label) return null;
+    const upperLabel = label.toUpperCase();
+    for (const [category, data] of Object.entries(quickFilterCategories)) {
+      if (data.labels.includes(upperLabel)) {
+        return category;
+      }
+    }
+    // Check for CPDLC/data link
+    if (['CA', 'CR', 'CC', 'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'AD', 'AE', 'AF', 'D1', 'D2'].includes(upperLabel)) {
+      return 'cpdlc';
+    }
+    return null;
+  }, []);
 
   // ACARS message label descriptions
   const acarsLabelDescriptions = {
@@ -911,6 +952,62 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
     lookupCallsigns();
   }, [viewType, acarsMessages.length, callsignHexCache, apiBase, wsRequest, wsConnected]);
 
+  // Lookup ICAO hex from registration for ACARS messages
+  useEffect(() => {
+    if (viewType !== 'acars' || acarsMessages.length === 0) return;
+
+    // Find registrations that need lookup (have registration, no icao_hex, not in cache)
+    const regsToLookup = new Set();
+    for (const msg of acarsMessages) {
+      if (msg.registration && !msg.icao_hex) {
+        const reg = msg.registration.trim().toUpperCase();
+        if (!(reg in regHexCache)) {
+          regsToLookup.add(reg);
+        }
+      }
+    }
+
+    if (regsToLookup.size === 0) return;
+
+    // Lookup each registration from sightings API
+    const lookupRegs = async () => {
+      const lookups = Array.from(regsToLookup).slice(0, 10);
+
+      for (const reg of lookups) {
+        try {
+          let data;
+          if (wsRequest && wsConnected) {
+            const result = await wsRequest('sightings', { registration: reg, hours: 168, limit: 1 });
+            if (result && result.sightings) {
+              data = result;
+            } else {
+              throw new Error('Invalid sightings response');
+            }
+          } else {
+            const res = await fetch(`${apiBase}/api/v1/history/sightings?registration=${encodeURIComponent(reg)}&hours=168&limit=1`);
+            if (res.ok) {
+              data = await res.json();
+            } else {
+              throw new Error('HTTP request failed');
+            }
+          }
+          if (data.sightings?.length > 0 && data.sightings[0].icao_hex) {
+            setRegHexCache(prev => ({
+              ...prev,
+              [reg]: data.sightings[0].icao_hex
+            }));
+          } else {
+            setRegHexCache(prev => ({ ...prev, [reg]: null }));
+          }
+        } catch (err) {
+          setRegHexCache(prev => ({ ...prev, [reg]: null }));
+        }
+      }
+    };
+
+    lookupRegs();
+  }, [viewType, acarsMessages.length, regHexCache, apiBase, wsRequest, wsConnected]);
+
   // Close label dropdown when clicking outside
   useEffect(() => {
     if (!showLabelDropdown) return;
@@ -924,6 +1021,57 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showLabelDropdown]);
+
+  // Persist compact mode to localStorage
+  useEffect(() => {
+    localStorage.setItem('acars-compact-mode', acarsCompactMode.toString());
+  }, [acarsCompactMode]);
+
+  // Persist quick filters to localStorage
+  useEffect(() => {
+    localStorage.setItem('acars-quick-filters', JSON.stringify(acarsQuickFilters));
+  }, [acarsQuickFilters]);
+
+  // Toggle quick filter
+  const toggleQuickFilter = useCallback((category) => {
+    setAcarsQuickFilters(prev =>
+      prev.includes(category)
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
+    );
+  }, []);
+
+  // Clear all quick filters
+  const clearQuickFilters = useCallback(() => {
+    setAcarsQuickFilters([]);
+  }, []);
+
+  // Toggle message expansion
+  const toggleMessageExpansion = useCallback((msgId) => {
+    setExpandedMessages(prev => ({
+      ...prev,
+      [msgId]: !prev[msgId]
+    }));
+  }, []);
+
+  // Toggle all messages expansion
+  const toggleAllMessages = useCallback(() => {
+    setAllMessagesExpanded(prev => !prev);
+    setExpandedMessages({});
+  }, []);
+
+  // Reset visible count when filters change
+  useEffect(() => {
+    setVisibleAcarsCount(50);
+  }, [acarsSearch, acarsQuickFilters, acarsHideEmpty, acarsSelectedLabels, acarsAirlineFilter, acarsSource]);
+
+  // Lazy load more messages on scroll
+  const handleAcarsScroll = useCallback((e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    if (scrollHeight - scrollTop - clientHeight < 200) {
+      setVisibleAcarsCount(prev => prev + 50);
+    }
+  }, []);
 
   // Get available labels from ACARS messages for the filter dropdown
   const availableLabels = useMemo(() => {
@@ -957,6 +1105,21 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
       filtered = filtered.filter(msg => msg.text && msg.text.trim().length > 0);
     }
 
+    // Apply quick filter chips
+    if (acarsQuickFilters.length > 0) {
+      const allowedLabels = new Set();
+      acarsQuickFilters.forEach(category => {
+        const catData = quickFilterCategories[category];
+        if (catData) {
+          catData.labels.forEach(l => allowedLabels.add(l));
+        }
+      });
+      filtered = filtered.filter(msg => {
+        const label = msg.label?.toUpperCase();
+        return label && allowedLabels.has(label);
+      });
+    }
+
     // Apply search filter (includes airline name search)
     if (acarsSearch) {
       const search = acarsSearch.toLowerCase();
@@ -972,7 +1135,7 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
     }
 
     return filtered;
-  }, [acarsMessages, acarsSearch, acarsHideEmpty]);
+  }, [acarsMessages, acarsSearch, acarsHideEmpty, acarsQuickFilters]);
 
   // Handle navigation to a specific safety event (from aircraft detail page)
   useEffect(() => {
@@ -1625,40 +1788,139 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
               />
               Hide empty
             </label>
+            <div className="acars-view-toggle">
+              <button
+                className={`acars-view-btn ${!acarsCompactMode ? 'active' : ''}`}
+                onClick={() => setAcarsCompactMode(false)}
+                title="Expanded view"
+              >
+                <LayoutGrid size={14} />
+              </button>
+              <button
+                className={`acars-view-btn ${acarsCompactMode ? 'active' : ''}`}
+                onClick={() => setAcarsCompactMode(true)}
+                title="Compact view"
+              >
+                <List size={14} />
+              </button>
+            </div>
+            <button
+              className="acars-expand-all-btn"
+              onClick={toggleAllMessages}
+              title={allMessagesExpanded ? 'Collapse all messages' : 'Expand all messages'}
+            >
+              {allMessagesExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              {allMessagesExpanded ? 'Collapse' : 'Expand'}
+            </button>
             <div className="acars-history-count">
-              {filteredAcarsMessages.length} message{filteredAcarsMessages.length !== 1 ? 's' : ''}
+              {filteredAcarsMessages.length === acarsMessages.length
+                ? `${acarsMessages.length} message${acarsMessages.length !== 1 ? 's' : ''}`
+                : `${filteredAcarsMessages.length} of ${acarsMessages.length}`}
             </div>
           </div>
-          <div className="acars-history-list">
+          {/* Quick Filter Chips */}
+          <div className="acars-quick-filter-chips">
+            {Object.entries(quickFilterCategories).map(([key, { name }]) => (
+              <button
+                key={key}
+                className={`acars-filter-chip chip-${key} ${acarsQuickFilters.includes(key) ? 'active' : ''}`}
+                onClick={() => toggleQuickFilter(key)}
+              >
+                <span className="chip-dot" />
+                {name}
+              </button>
+            ))}
+            {acarsQuickFilters.length > 0 && (
+              <button className="acars-chips-clear" onClick={clearQuickFilters}>
+                <X size={12} /> Clear
+              </button>
+            )}
+          </div>
+          <div
+            ref={acarsListRef}
+            className={`acars-history-list ${acarsCompactMode ? 'compact' : ''}`}
+            onScroll={handleAcarsScroll}
+          >
             {filteredAcarsMessages.length === 0 ? (
               <div className="no-events-message">
                 <MessageCircle size={32} />
                 <p>No ACARS messages in the selected time range</p>
               </div>
             ) : (
-              filteredAcarsMessages.map((msg, i) => {
+              filteredAcarsMessages.slice(0, visibleAcarsCount).map((msg, i) => {
                 const timestamp = typeof msg.timestamp === 'number'
                   ? new Date(msg.timestamp * 1000)
                   : new Date(msg.timestamp);
 
-                // Check cache for hex lookup by callsign (from sightings API)
+                // Check cache for hex lookup by callsign or registration (from sightings API)
                 const cachedHex = msg.callsign ? callsignHexCache[msg.callsign.trim().toUpperCase()] : null;
-                const linkHex = msg.icao_hex || cachedHex;
+                const regCachedHex = msg.registration ? regHexCache[msg.registration.trim().toUpperCase()] : null;
+                const linkHex = msg.icao_hex || cachedHex || regCachedHex;
                 const canLink = !!linkHex;
                 const isFromHistory = !msg.icao_hex && cachedHex;
                 const labelDesc = getAcarsLabelDescription(msg.label, msg.label_info);
+                const category = getLabelCategory(msg.label);
+                const msgId = `${msg.timestamp}-${i}`;
+                const isExpanded = allMessagesExpanded || expandedMessages[msgId];
+                const textContent = msg.formatted_text || msg.text || '';
+                const isLongText = textContent.length > 100;
 
                 return (
                   <div
                     key={i}
-                    className={`acars-history-item ${canLink ? 'clickable' : ''}`}
-                    onClick={() => canLink && onSelectAircraft?.(linkHex)}
+                    className={`acars-history-item ${canLink ? 'clickable' : ''} ${category ? `category-${category}` : ''}`}
+                    onClick={(e) => {
+                      if (canLink && onSelectAircraft) {
+                        e.preventDefault();
+                        onSelectAircraft(linkHex);
+                      }
+                    }}
                     title={canLink ? (isFromHistory ? 'Click to view aircraft (from sightings)' : 'Click to view aircraft details') : 'No ICAO hex available'}
                   >
                     <div className="acars-history-header">
+                      {msg.callsign && (
+                        <span
+                          className={`acars-history-callsign ${canLink ? 'clickable' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            if (canLink && onSelectAircraft) {
+                              onSelectAircraft(linkHex);
+                            }
+                          }}
+                        >
+                          {msg.callsign}
+                          {canLink && <ExternalLink size={10} />}
+                        </span>
+                      )}
+                      {msg.airline?.name && (
+                        <span className="acars-history-airline" title={`${msg.airline.icao || msg.airline.iata}`}>
+                          <Plane size={12} />
+                          {msg.airline.name}
+                        </span>
+                      )}
+                      {msg.registration && (
+                        <span
+                          className="acars-history-reg clickable"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            if (canLink && onSelectAircraft) {
+                              // Use ICAO hex if available
+                              onSelectAircraft(linkHex);
+                            } else if (onSelectByTail) {
+                              // Fall back to tail/registration lookup
+                              onSelectByTail(msg.registration);
+                            }
+                          }}
+                        >
+                          {msg.registration}
+                          <ExternalLink size={10} />
+                        </span>
+                      )}
                       <span className="acars-history-time">{timestamp.toLocaleString()}</span>
                       {msg.label && (
-                        <span className="acars-history-label" title={msg.label_info?.description || labelDesc || msg.label}>
+                        <span className={`acars-history-label ${category ? `category-${category}` : ''}`} title={msg.label_info?.description || labelDesc || msg.label}>
                           {msg.label}
                           {labelDesc && (
                             <span className="acars-label-desc">{labelDesc}</span>
@@ -1667,33 +1929,42 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
                       )}
                       <span className={`acars-history-source ${msg.source}`}>{msg.source?.toUpperCase()}</span>
                       {msg.frequency && <span className="acars-history-freq">{msg.frequency} MHz</span>}
+                      {/* Compact mode preview */}
+                      <span className="acars-compact-preview">
+                        {textContent.slice(0, 60)}{textContent.length > 60 ? '...' : ''}
+                      </span>
                     </div>
-                    <div className="acars-history-aircraft">
-                      {msg.callsign && (
-                        <span className={`acars-history-callsign ${canLink ? 'clickable' : ''}`}>
-                          {msg.callsign}
-                        </span>
-                      )}
-                      {msg.airline?.name && (
-                        <span className="acars-history-airline" title={`${msg.airline.icao || msg.airline.iata}`}>
-                          <Plane size={10} />
-                          {msg.airline.name}
-                        </span>
-                      )}
-                      {(msg.icao_hex || cachedHex) && (
-                        <span className="acars-history-icao clickable">
+                    {(msg.icao_hex || cachedHex) && (
+                      <div className="acars-history-aircraft">
+                        <span
+                          className="acars-history-icao clickable"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            if (onSelectAircraft) {
+                              onSelectAircraft(linkHex);
+                            }
+                          }}
+                        >
                           {msg.icao_hex || cachedHex}
+                          <ExternalLink size={10} />
                         </span>
-                      )}
-                      {msg.registration && (
-                        <span className="acars-history-reg">{msg.registration}</span>
-                      )}
-                    </div>
+                      </div>
+                    )}
                     {/* Show decoded/formatted text if available, otherwise show raw text */}
                     {msg.formatted_text ? (
                       <div className="acars-formatted-text">
                         <div className="acars-formatted-header">Decoded:</div>
-                        <pre className="acars-formatted-content">{msg.formatted_text}</pre>
+                        <pre className={`acars-formatted-content ${!isExpanded && isLongText ? 'collapsed' : ''}`}>{msg.formatted_text}</pre>
+                        {isLongText && (
+                          <button
+                            className="acars-text-toggle"
+                            onClick={(e) => { e.stopPropagation(); toggleMessageExpansion(msgId); }}
+                          >
+                            {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                            {isExpanded ? 'Show less' : 'Show more'}
+                          </button>
+                        )}
                         {msg.text && (
                           <details className="acars-raw-toggle">
                             <summary>Raw Message</summary>
@@ -1702,7 +1973,20 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
                         )}
                       </div>
                     ) : (
-                      msg.text && <pre className="acars-history-text">{msg.text}</pre>
+                      msg.text && (
+                        <>
+                          <pre className={`acars-history-text ${!isExpanded && isLongText ? 'collapsed' : ''}`}>{msg.text}</pre>
+                          {isLongText && (
+                            <button
+                              className="acars-text-toggle"
+                              onClick={(e) => { e.stopPropagation(); toggleMessageExpansion(msgId); }}
+                            >
+                              {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                              {isExpanded ? 'Show less' : 'Show more'}
+                            </button>
+                          )}
+                        </>
+                      )
                     )}
                     {msg.decoded_text && Object.keys(msg.decoded_text).length > 0 && !msg.formatted_text && (
                       <div className="acars-decoded-info">
@@ -1739,6 +2023,11 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
                   </div>
                 );
               })
+            )}
+            {visibleAcarsCount < filteredAcarsMessages.length && (
+              <div className="acars-load-more">
+                Showing {visibleAcarsCount} of {filteredAcarsMessages.length} — scroll for more
+              </div>
             )}
           </div>
         </>

@@ -1,7 +1,57 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, Map as MapIcon, Play, Pause, SkipBack, SkipForward, ArrowLeft, ExternalLink, Copy, Check } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, Play, Pause, SkipBack, SkipForward, ArrowLeft, Copy, Check, Zap, Radar, Clock, Plane, Activity, Navigation, Shield, Target } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+
+// Enhanced slider and animation styles
+const sliderStyles = `
+  .safety-page-slider::-webkit-slider-thumb {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    width: 16px !important;
+    height: 16px !important;
+    background: linear-gradient(135deg, #00d4ff, #00ff88) !important;
+    border-radius: 50% !important;
+    cursor: pointer !important;
+    border: 2px solid rgba(255,255,255,0.9) !important;
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.6), 0 0 40px rgba(0, 212, 255, 0.3) !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+  }
+  .safety-page-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2) !important;
+    box-shadow: 0 0 25px rgba(0, 212, 255, 0.8), 0 0 50px rgba(0, 212, 255, 0.4) !important;
+  }
+  .safety-page-slider::-moz-range-thumb {
+    width: 16px !important;
+    height: 16px !important;
+    background: linear-gradient(135deg, #00d4ff, #00ff88) !important;
+    border-radius: 50% !important;
+    border: 2px solid rgba(255,255,255,0.9) !important;
+    cursor: pointer !important;
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.6) !important;
+  }
+
+  @keyframes radarSweep {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  @keyframes pulseGlow {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+  }
+
+  @keyframes dataStream {
+    0% { background-position: 0% 0%; }
+    100% { background-position: 100% 100%; }
+  }
+
+  @keyframes scanLine {
+    0% { transform: translateY(-100%); opacity: 0; }
+    50% { opacity: 0.5; }
+    100% { transform: translateY(100vh); opacity: 0; }
+  }
+`;
 
 export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, wsRequest, wsConnected }) {
   const [event, setEvent] = useState(null);
@@ -19,6 +69,8 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
   const replayTracksRef = useRef({});
   const animationFrameRef = useRef(null);
   const graphDragRef = useRef({ isDragging: false, startX: 0, startOffset: 0 });
+  const replayControlsRef = useRef(null);
+  const flightGraphsRef = useRef(null);
 
   // Fetch event data
   useEffect(() => {
@@ -51,25 +103,34 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
         const icaos = [data.icao, data.icao_2].filter(Boolean);
         for (const icao of icaos) {
           try {
-            let trackResult;
+            let trackResult = null;
+
+            // Try WebSocket first
             if (wsRequest && wsConnected) {
-              // Use WebSocket for fetching sightings
-              const result = await wsRequest('sightings', { icao_hex: icao, hours: 2, limit: 500 });
-              if (result && result.sightings) {
-                trackResult = result;
-              } else {
-                throw new Error('Invalid sightings response');
-              }
-            } else {
-              // Fallback to HTTP if WebSocket unavailable
-              const trackRes = await fetch(`${apiBase}/api/v1/history/sightings/${icao}?hours=2&limit=500`);
-              if (trackRes.ok) {
-                trackResult = await trackRes.json();
-              } else {
-                throw new Error('HTTP request failed');
+              try {
+                const result = await wsRequest('sightings', { icao_hex: icao, hours: 2, limit: 500 });
+                if (result && Array.isArray(result.sightings)) {
+                  trackResult = result;
+                }
+              } catch (wsErr) {
+                console.warn('WebSocket sightings request failed, falling back to HTTP:', wsErr.message);
               }
             }
-            setTrackData(prev => ({ ...prev, [icao]: trackResult.sightings || [] }));
+
+            // Fallback to HTTP if WebSocket failed or unavailable
+            if (!trackResult) {
+              const trackRes = await fetch(`${apiBase}/api/v1/history/sightings/${icao}?hours=2&limit=500`);
+              if (trackRes.ok) {
+                const httpResult = await trackRes.json();
+                if (httpResult && Array.isArray(httpResult.sightings)) {
+                  trackResult = httpResult;
+                }
+              }
+            }
+
+            if (trackResult && trackResult.sightings) {
+              setTrackData(prev => ({ ...prev, [icao]: trackResult.sightings }));
+            }
           } catch (err) {
             console.error('Failed to fetch track data for', icao, err);
           }
@@ -334,6 +395,36 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
     setReplayState(prev => ({ ...prev, speed: newSpeed }));
   }, []);
 
+  // Handle mousewheel on replay controls and graphs to scrub through time
+  useEffect(() => {
+    const handleWheel = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const step = e.shiftKey ? 10 : 2;
+      // Scroll down = forward in time, scroll up = backward
+      const delta = e.deltaY > 0 ? step : -step;
+      setReplayState(prev => {
+        const newPosition = Math.max(0, Math.min(100, prev.position + delta));
+        updateReplayMarkers(newPosition);
+        return { ...prev, position: newPosition, isPlaying: false };
+      });
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+
+    const controls = replayControlsRef.current;
+    const graphs = flightGraphsRef.current;
+
+    if (controls) controls.addEventListener('wheel', handleWheel, { passive: false });
+    if (graphs) graphs.addEventListener('wheel', handleWheel, { passive: false });
+
+    return () => {
+      if (controls) controls.removeEventListener('wheel', handleWheel);
+      if (graphs) graphs.removeEventListener('wheel', handleWheel);
+    };
+  }, [updateReplayMarkers]);
+
   // Graph handlers
   const handleGraphWheel = useCallback((e) => {
     e.preventDefault();
@@ -558,12 +649,36 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
     };
   }, []);
 
+  // Get severity color
+  const getSeverityColor = (severity) => {
+    switch (severity) {
+      case 'critical': return '#ff4757';
+      case 'warning': return '#ff9f43';
+      case 'info': return '#00d4ff';
+      default: return '#00d4ff';
+    }
+  };
+
+  // Get current telemetry values for display
+  const getCurrentTelemetry = useCallback((icao) => {
+    const track = trackData[icao];
+    if (!track || track.length === 0) return null;
+    const pos = getInterpolatedPosition(track, replayState.position);
+    return pos;
+  }, [trackData, replayState.position, getInterpolatedPosition]);
+
   if (loading) {
     return (
-      <div className="safety-event-page">
-        <div className="safety-event-page-loading">
-          <AlertTriangle size={48} className="pulse" />
-          <span>Loading safety event...</span>
+      <div className="safety-event-page-v2">
+        <div className="sep-loading">
+          <div className="sep-loading-radar">
+            <Radar size={64} className="sep-radar-icon" />
+            <div className="sep-radar-sweep" />
+          </div>
+          <span className="sep-loading-text">Analyzing safety event data...</span>
+          <div className="sep-loading-dots">
+            <span /><span /><span />
+          </div>
         </div>
       </div>
     );
@@ -571,13 +686,15 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
 
   if (error || !event) {
     return (
-      <div className="safety-event-page">
-        <div className="safety-event-page-error">
-          <AlertTriangle size={48} />
+      <div className="safety-event-page-v2">
+        <div className="sep-error">
+          <div className="sep-error-icon">
+            <Shield size={64} />
+          </div>
           <h2>{error || 'Event not found'}</h2>
-          <p>The safety event could not be loaded.</p>
-          <button className="back-btn" onClick={onClose}>
-            <ArrowLeft size={16} /> Go Back
+          <p>Unable to retrieve safety event data</p>
+          <button className="sep-back-btn" onClick={() => { window.location.hash = '#history?data=safety'; onClose?.(); }}>
+            <ArrowLeft size={18} /> Return to Safety Events
           </button>
         </div>
       </div>
@@ -586,179 +703,317 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
 
   const hasSnapshot = event.aircraft_snapshot || event.aircraft_snapshot_2;
   const isExpanded = expandedSnapshots[eventId];
+  const severityColor = getSeverityColor(event.severity);
+  const telem1 = getCurrentTelemetry(event.icao);
+  const telem2 = event.icao_2 ? getCurrentTelemetry(event.icao_2) : null;
 
   return (
-    <div className="safety-event-page">
-      <div className="safety-event-page-header">
-        <button className="back-btn" onClick={onClose}>
-          <ArrowLeft size={18} /> Back
+    <div className="safety-event-page-v2">
+      <style>{sliderStyles}</style>
+
+      {/* Ambient background effects */}
+      <div className="sep-ambient">
+        <div className="sep-ambient-glow" style={{ '--severity-color': severityColor }} />
+        <div className="sep-grid-overlay" />
+      </div>
+
+      {/* Top bar with event info */}
+      <div className="sep-topbar">
+        <button className="sep-back-btn" onClick={() => { window.location.hash = '#history?data=safety'; onClose?.(); }}>
+          <ArrowLeft size={18} />
         </button>
-        <h1>Safety Event Details</h1>
-        <button className="copy-link-btn" onClick={copyLink} title="Copy link to this event">
-          {copied ? <Check size={18} /> : <Copy size={18} />}
-          {copied ? 'Copied!' : 'Copy Link'}
+
+        <div className="sep-event-badge" style={{ '--badge-color': severityColor }}>
+          <AlertTriangle size={16} />
+          <span className="sep-event-type">{event.event_type?.replace(/_/g, ' ')}</span>
+        </div>
+
+        <div className="sep-severity-indicator" style={{ '--severity-color': severityColor }}>
+          <Zap size={14} />
+          <span>{event.severity?.toUpperCase()}</span>
+        </div>
+
+        <div className="sep-timestamp">
+          <Clock size={14} />
+          <span>{new Date(event.timestamp).toLocaleString()}</span>
+        </div>
+
+        <button className="sep-copy-btn" onClick={copyLink}>
+          {copied ? <Check size={16} /> : <Copy size={16} />}
+          <span>{copied ? 'Copied!' : 'Share'}</span>
         </button>
       </div>
 
-      <div className="safety-event-page-content">
-        <div className={`safety-event-main-card severity-${event.severity}`}>
-          <div className="safety-event-title">
-            <span className={`safety-severity-badge large severity-${event.severity}`}>
-              {event.severity?.toUpperCase()}
-            </span>
-            <span className="safety-event-type large">
-              {event.event_type?.replace(/_/g, ' ').toUpperCase()}
-            </span>
-          </div>
-
-          <div className="safety-event-timestamp">
-            {new Date(event.timestamp).toLocaleString()}
-          </div>
-
-          <div className="safety-event-message large">{event.message}</div>
-
-          <div className="safety-event-aircraft-row">
-            <div className="aircraft-card" onClick={() => onSelectAircraft?.(event.icao)}>
-              <div className="aircraft-label">Aircraft 1</div>
-              <div className="aircraft-callsign">{event.callsign || event.icao}</div>
-              <div className="aircraft-icao">{event.icao}</div>
+      {/* Main content grid */}
+      <div className="sep-main-grid">
+        {/* Left column - Map and replay */}
+        <div className="sep-map-column">
+          <div className="sep-map-container">
+            <div className="sep-map-header">
+              <Target size={16} />
+              <span>Event Visualization</span>
+              <div className="sep-map-live-indicator">
+                <span className="sep-pulse-dot" />
+                REPLAY
+              </div>
             </div>
-            {event.icao_2 && (
-              <>
-                <div className="aircraft-separator">
-                  <span className="separator-icon">↔</span>
-                  {event.details?.horizontal_nm && (
-                    <span className="separation-info">{event.details.horizontal_nm.toFixed(1)} nm</span>
-                  )}
-                  {event.details?.vertical_ft && (
-                    <span className="separation-info">{event.details.vertical_ft} ft vert</span>
-                  )}
+            <div
+              className="sep-map"
+              ref={(el) => {
+                if (el && !mapRef.current) {
+                  mapContainerRef.current = el;
+                  setTimeout(() => initializeMap(el), 100);
+                }
+              }}
+            />
+            <div className="sep-map-overlay-gradient" />
+          </div>
+
+          {/* Timeline/Replay controls */}
+          <div className="sep-replay-panel" ref={replayControlsRef}>
+            <div className="sep-replay-header">
+              <Activity size={14} />
+              <span>Flight Timeline</span>
+              <span className="sep-replay-time">{getReplayTimestamp || '--:--:--'}</span>
+            </div>
+
+            <div className="sep-timeline-container">
+              <div className="sep-timeline-track">
+                <div
+                  className="sep-timeline-progress"
+                  style={{ width: `${replayState.position}%` }}
+                />
+                <div
+                  className="sep-timeline-event-marker"
+                  style={{ left: '50%' }}
+                  title="Event occurred here"
+                />
+                <input
+                  type="range"
+                  className="sep-timeline-slider safety-page-slider"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={replayState.position}
+                  onChange={(e) => handleReplayChange(parseFloat(e.target.value))}
+                />
+              </div>
+            </div>
+
+            <div className="sep-replay-controls">
+              <div className="sep-control-group">
+                <button className="sep-control-btn" onClick={skipToStart} title="Jump to start">
+                  <SkipBack size={16} />
+                </button>
+                <button className={`sep-control-btn sep-play-btn ${replayState.isPlaying ? 'playing' : ''}`} onClick={togglePlay}>
+                  {replayState.isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                </button>
+                <button className="sep-control-btn" onClick={skipToEnd} title="Jump to end">
+                  <SkipForward size={16} />
+                </button>
+              </div>
+
+              <button className="sep-jump-to-event" onClick={jumpToEvent}>
+                <AlertTriangle size={14} />
+                Jump to Event
+              </button>
+
+              <div className="sep-speed-control">
+                <span>Speed</span>
+                <div className="sep-speed-buttons">
+                  {[0.5, 1, 2, 4].map(speed => (
+                    <button
+                      key={speed}
+                      className={`sep-speed-btn ${replayState.speed === speed ? 'active' : ''}`}
+                      onClick={() => handleSpeedChange(speed)}
+                    >
+                      {speed}x
+                    </button>
+                  ))}
                 </div>
-                <div className="aircraft-card" onClick={() => onSelectAircraft?.(event.icao_2)}>
-                  <div className="aircraft-label">Aircraft 2</div>
-                  <div className="aircraft-callsign">{event.callsign_2 || event.icao_2}</div>
-                  <div className="aircraft-icao">{event.icao_2}</div>
-                </div>
-              </>
-            )}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Map Section */}
-        <div className="safety-event-map-section">
-          <h2><MapIcon size={20} /> Event Location & Replay</h2>
-          <div
-            className="safety-event-map large"
-            ref={(el) => {
-              if (el && !mapRef.current) {
-                mapContainerRef.current = el;
-                setTimeout(() => initializeMap(el), 100);
-              }
-            }}
-          />
-
-          {/* Flight data graphs */}
-          <div className="flight-graphs large">
-            {[event.icao, event.icao_2].filter(Boolean).map((icao, idx) => {
-              const track = trackData[icao];
-              if (!track || track.length < 2) return null;
-              const color = idx === 0 ? '#00ff88' : '#44aaff';
-              const position = replayState.position;
-              return (
-                <div key={icao} className="aircraft-graphs large">
-                  <div className="graphs-header" style={{ color }}>
-                    {event[idx === 0 ? 'callsign' : 'callsign_2'] || icao}
-                  </div>
-                  <div className="graphs-row">
-                    {renderMiniGraph(track, 'altitude', color, 'Altitude', 'ft', null, position)}
-                    {renderMiniGraph(track, 'gs', color, 'Speed', 'kts', v => v?.toFixed(0), position)}
-                    {renderMiniGraph(track, 'vr', color, 'V/S', 'fpm', v => (v > 0 ? '+' : '') + v, position)}
-                  </div>
-                </div>
-              );
-            })}
+        {/* Right column - Event details */}
+        <div className="sep-info-column">
+          {/* Event message card */}
+          <div className="sep-message-card" style={{ '--accent': severityColor }}>
+            <div className="sep-message-icon">
+              <AlertTriangle size={24} />
+            </div>
+            <p className="sep-message-text">{event.message}</p>
           </div>
 
-          {/* Replay controls */}
-          <div className="replay-controls large">
-            <div className="replay-buttons">
-              <button className="replay-btn" onClick={skipToStart} title="Skip to start">
-                <SkipBack size={20} />
-              </button>
-              <button className="replay-btn play-btn large" onClick={togglePlay} title={replayState.isPlaying ? 'Pause' : 'Play'}>
-                {replayState.isPlaying ? <Pause size={24} /> : <Play size={24} />}
-              </button>
-              <button className="replay-btn" onClick={skipToEnd} title="Skip to end">
-                <SkipForward size={20} />
-              </button>
-              <button className="replay-btn event-btn" onClick={jumpToEvent} title="Jump to event">
-                <AlertTriangle size={18} />
-              </button>
-              <select
-                className="speed-select large"
-                value={replayState.speed}
-                onChange={(e) => handleSpeedChange(parseFloat(e.target.value))}
-                title="Playback speed"
+          {/* Aircraft cards */}
+          <div className="sep-aircraft-section">
+            <div className="sep-section-header">
+              <Plane size={16} />
+              <span>Involved Aircraft</span>
+            </div>
+
+            <div className="sep-aircraft-grid">
+              {/* Aircraft 1 */}
+              <div
+                className="sep-aircraft-card"
+                onClick={() => onSelectAircraft?.(event.icao)}
+                style={{ '--ac-color': '#00ff88' }}
               >
-                <option value={0.25}>0.25x</option>
-                <option value={0.5}>0.5x</option>
-                <option value={1}>1x</option>
-                <option value={2}>2x</option>
-                <option value={4}>4x</option>
-              </select>
-            </div>
-            <div className="replay-slider-container large">
-              <input
-                type="range"
-                className="replay-slider"
-                min="0"
-                max="100"
-                value={replayState.position}
-                onChange={(e) => handleReplayChange(parseFloat(e.target.value))}
-              />
-              <div className="replay-time">{getReplayTimestamp || '--:--'}</div>
+                <div className="sep-ac-header">
+                  <Navigation size={16} style={{ transform: `rotate(${telem1?.track || 0}deg)` }} />
+                  <span className="sep-ac-callsign">{event.callsign || event.icao}</span>
+                </div>
+                <div className="sep-ac-icao">{event.icao}</div>
+                {telem1 && (
+                  <div className="sep-ac-telemetry">
+                    <div className="sep-telem-item">
+                      <span className="sep-telem-label">ALT</span>
+                      <span className="sep-telem-value">{telem1.altitude?.toLocaleString() || '--'}</span>
+                      <span className="sep-telem-unit">ft</span>
+                    </div>
+                    <div className="sep-telem-item">
+                      <span className="sep-telem-label">GS</span>
+                      <span className="sep-telem-value">{telem1.gs?.toFixed(0) || '--'}</span>
+                      <span className="sep-telem-unit">kts</span>
+                    </div>
+                    <div className="sep-telem-item">
+                      <span className="sep-telem-label">VS</span>
+                      <span className={`sep-telem-value ${telem1?.vr > 0 ? 'climbing' : telem1?.vr < 0 ? 'descending' : ''}`}>
+                        {telem1.vr > 0 ? '+' : ''}{telem1.vr || 0}
+                      </span>
+                      <span className="sep-telem-unit">fpm</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Separation indicator */}
+              {event.icao_2 && (
+                <div className="sep-separation-indicator">
+                  <div className="sep-separation-line" />
+                  <div className="sep-separation-data">
+                    {event.details?.horizontal_nm && (
+                      <div className="sep-sep-item">
+                        <span className="sep-sep-value">{event.details.horizontal_nm.toFixed(1)}</span>
+                        <span className="sep-sep-unit">nm</span>
+                      </div>
+                    )}
+                    {event.details?.vertical_ft && (
+                      <div className="sep-sep-item vertical">
+                        <span className="sep-sep-value">{event.details.vertical_ft}</span>
+                        <span className="sep-sep-unit">ft</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="sep-separation-line" />
+                </div>
+              )}
+
+              {/* Aircraft 2 */}
+              {event.icao_2 && (
+                <div
+                  className="sep-aircraft-card"
+                  onClick={() => onSelectAircraft?.(event.icao_2)}
+                  style={{ '--ac-color': '#00d4ff' }}
+                >
+                  <div className="sep-ac-header">
+                    <Navigation size={16} style={{ transform: `rotate(${telem2?.track || 0}deg)` }} />
+                    <span className="sep-ac-callsign">{event.callsign_2 || event.icao_2}</span>
+                  </div>
+                  <div className="sep-ac-icao">{event.icao_2}</div>
+                  {telem2 && (
+                    <div className="sep-ac-telemetry">
+                      <div className="sep-telem-item">
+                        <span className="sep-telem-label">ALT</span>
+                        <span className="sep-telem-value">{telem2.altitude?.toLocaleString() || '--'}</span>
+                        <span className="sep-telem-unit">ft</span>
+                      </div>
+                      <div className="sep-telem-item">
+                        <span className="sep-telem-label">GS</span>
+                        <span className="sep-telem-value">{telem2.gs?.toFixed(0) || '--'}</span>
+                        <span className="sep-telem-unit">kts</span>
+                      </div>
+                      <div className="sep-telem-item">
+                        <span className="sep-telem-label">VS</span>
+                        <span className={`sep-telem-value ${telem2?.vr > 0 ? 'climbing' : telem2?.vr < 0 ? 'descending' : ''}`}>
+                          {telem2.vr > 0 ? '+' : ''}{telem2.vr || 0}
+                        </span>
+                        <span className="sep-telem-unit">fpm</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="safety-map-legend large">
-            <div className="legend-item">
-              <span className="legend-marker event-marker"></span>
-              <span>Event Location</span>
+          {/* Telemetry graphs */}
+          <div className="sep-graphs-section" ref={flightGraphsRef}>
+            <div className="sep-section-header">
+              <Activity size={16} />
+              <span>Flight Data</span>
+              {graphZoomState.zoom > 1 && (
+                <button className="sep-reset-zoom" onClick={resetGraphZoom}>
+                  Reset Zoom ({graphZoomState.zoom.toFixed(1)}x)
+                </button>
+              )}
             </div>
-            {event.aircraft_snapshot?.lat && (
-              <div className="legend-item clickable" onClick={() => onSelectAircraft?.(event.icao)}>
-                <span className="legend-marker ac1-marker"></span>
-                <span className="legend-callsign">{event.callsign || event.icao}</span>
-              </div>
-            )}
-            {event.aircraft_snapshot_2?.lat && (
-              <div className="legend-item clickable" onClick={() => onSelectAircraft?.(event.icao_2)}>
-                <span className="legend-marker ac2-marker"></span>
-                <span className="legend-callsign">{event.callsign_2 || event.icao_2}</span>
-              </div>
-            )}
+
+            <div className="sep-graphs-container">
+              {[event.icao, event.icao_2].filter(Boolean).map((icao, idx) => {
+                const track = trackData[icao];
+                const color = idx === 0 ? '#00ff88' : '#00d4ff';
+                const position = replayState.position;
+                const callsign = event[idx === 0 ? 'callsign' : 'callsign_2'] || icao;
+
+                if (!track || track.length < 2) {
+                  return (
+                    <div key={icao} className="sep-graphs-aircraft">
+                      <div className="sep-graphs-label" style={{ color }}>{callsign}</div>
+                      <div className="sep-no-data">No telemetry data available</div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={icao} className="sep-graphs-aircraft">
+                    <div className="sep-graphs-label" style={{ color }}>
+                      <Plane size={14} />
+                      {callsign}
+                    </div>
+                    <div className="sep-graphs-row">
+                      {renderMiniGraph(track, 'altitude', color, 'Altitude', 'ft', null, position)}
+                      {renderMiniGraph(track, 'gs', color, 'Speed', 'kts', v => v?.toFixed(0), position)}
+                      {renderMiniGraph(track, 'vr', color, 'Vertical Rate', 'fpm', v => (v > 0 ? '+' : '') + v, position)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
+
+          {/* Raw telemetry toggle */}
+          {hasSnapshot && (
+            <div className="sep-telemetry-section">
+              <button
+                className={`sep-telemetry-toggle ${isExpanded ? 'expanded' : ''}`}
+                onClick={() => setExpandedSnapshots(prev => ({ ...prev, [eventId]: !prev[eventId] }))}
+              >
+                <Radar size={16} />
+                <span>Raw Telemetry Snapshot</span>
+                {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+
+              {isExpanded && (
+                <div className="sep-telemetry-content">
+                  {renderSnapshot(event.aircraft_snapshot, event.aircraft_snapshot_2 ? 'Aircraft 1' : null)}
+                  {renderSnapshot(event.aircraft_snapshot_2, 'Aircraft 2')}
+                </div>
+              )}
+            </div>
+          )}
         </div>
-
-        {/* Telemetry Section */}
-        {hasSnapshot && (
-          <div className="safety-event-telemetry-section">
-            <button
-              className="telemetry-toggle"
-              onClick={() => setExpandedSnapshots(prev => ({ ...prev, [eventId]: !prev[eventId] }))}
-            >
-              {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-              {isExpanded ? 'Hide' : 'Show'} Aircraft Telemetry at Event Time
-            </button>
-
-            {isExpanded && (
-              <div className="snapshot-container large">
-                {renderSnapshot(event.aircraft_snapshot, event.aircraft_snapshot_2 ? 'Aircraft 1' : null)}
-                {renderSnapshot(event.aircraft_snapshot_2, 'Aircraft 2')}
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

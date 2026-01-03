@@ -1015,6 +1015,7 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
                 "altitude": s.altitude_baro,
                 "gs": s.ground_speed,
                 "vr": s.vertical_rate,
+                "track": s.track,
                 "distance_nm": s.distance_nm,
                 "is_military": s.is_military,
                 "squawk": s.squawk,
