@@ -22,13 +22,17 @@ Message formats handled:
   - dumpvdl2: nested JSON with vdl2/avlc/acars structure
 """
 import asyncio
+import hashlib
 import json
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Optional
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 import threading
 
+import sentry_sdk
+from prometheus_client import Counter, Gauge
 from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,36 +41,154 @@ from app.models import AcarsMessage
 from app.services.acars_decoder import enrich_acars_message, parse_callsign, decode_label
 
 logger = logging.getLogger(__name__)
+
+# Prometheus metrics for ACARS
+ACARS_MESSAGES_RECEIVED = Counter(
+    "skyspy_api_acars_messages_received_total",
+    "Total ACARS/VDL2 messages received",
+    ["source"]
+)
+ACARS_ERRORS = Counter(
+    "skyspy_api_acars_errors_total",
+    "Total ACARS/VDL2 processing errors",
+    ["source", "error_type"]
+)
+ACARS_DECODE_SUCCESS = Counter(
+    "skyspy_api_acars_decode_success_total",
+    "Messages successfully decoded",
+    ["decoder", "message_type"]
+)
+ACARS_DECODE_FAILURE = Counter(
+    "skyspy_api_acars_decode_failure_total",
+    "Messages that failed to decode",
+    ["label"]
+)
+ACARS_DUPLICATES = Counter(
+    "skyspy_api_acars_duplicates_total",
+    "Duplicate messages filtered",
+    ["source"]
+)
+ACARS_FREQUENCY_MESSAGES = Counter(
+    "skyspy_api_acars_frequency_messages_total",
+    "Messages received by frequency",
+    ["frequency_mhz"]
+)
+ACARS_DEDUP_CACHE_SIZE = Gauge(
+    "skyspy_api_acars_dedup_cache_size",
+    "Current size of deduplication cache"
+)
 settings = get_settings()
+
+
+class LRUCache:
+    """Simple LRU cache with TTL for message deduplication."""
+
+    def __init__(self, maxsize: int = 10000, ttl_seconds: int = 30):
+        self.maxsize = maxsize
+        self.ttl = ttl_seconds
+        self._cache: OrderedDict[str, float] = OrderedDict()
+        self._lock = threading.Lock()
+
+    def contains(self, key: str) -> bool:
+        """Check if key exists and is not expired."""
+        with self._lock:
+            if key not in self._cache:
+                return False
+            timestamp = self._cache[key]
+            if time.time() - timestamp > self.ttl:
+                del self._cache[key]
+                return False
+            # Move to end (most recently used)
+            self._cache.move_to_end(key)
+            return True
+
+    def add(self, key: str) -> None:
+        """Add key to cache."""
+        with self._lock:
+            now = time.time()
+            # Evict expired entries
+            expired = [k for k, t in self._cache.items() if now - t > self.ttl]
+            for k in expired:
+                del self._cache[k]
+            # Add new entry
+            self._cache[key] = now
+            self._cache.move_to_end(key)
+            # Evict oldest if over capacity
+            while len(self._cache) > self.maxsize:
+                self._cache.popitem(last=False)
+            ACARS_DEDUP_CACHE_SIZE.set(len(self._cache))
+
+    def size(self) -> int:
+        with self._lock:
+            return len(self._cache)
 
 
 class AcarsService:
     """Service for receiving and processing ACARS/VDL2 messages."""
-    
+
     def __init__(self):
         self._running = False
         self._acars_task: Optional[asyncio.Task] = None
         self._vdlm2_task: Optional[asyncio.Task] = None
-        
+
         # Statistics
         self._stats_lock = threading.Lock()
         self._stats = {
-            "acars": {"total": 0, "last_hour": 0, "errors": 0},
-            "vdlm2": {"total": 0, "last_hour": 0, "errors": 0},
+            "acars": {"total": 0, "last_hour": 0, "errors": 0, "duplicates": 0},
+            "vdlm2": {"total": 0, "last_hour": 0, "errors": 0, "duplicates": 0},
         }
         self._hourly_counts: dict[str, list] = defaultdict(list)
-        
+
+        # Frequency statistics
+        self._frequency_counts: dict[str, int] = defaultdict(int)
+
+        # Message deduplication cache (30 second TTL)
+        self._dedup_cache = LRUCache(maxsize=10000, ttl_seconds=30)
+
         # Recent messages buffer for SSE
         self._recent_messages: list[dict] = []
         self._recent_lock = threading.Lock()
         self._max_recent = 100
-        
+
+        # Database session factory (set by caller)
+        self._db_session_factory = None
+
         # Callback for SSE publishing
         self._sse_callback = None
     
     def set_sse_callback(self, callback):
         """Set callback function for publishing to SSE."""
         self._sse_callback = callback
+
+    def set_db_session_factory(self, factory):
+        """Set database session factory for message persistence."""
+        self._db_session_factory = factory
+
+    def _compute_message_hash(self, msg: dict) -> str:
+        """Compute hash for message deduplication.
+
+        Uses timestamp (rounded to second), icao_hex, label, and first 50 chars of text.
+        """
+        ts = msg.get("timestamp", 0)
+        if isinstance(ts, float):
+            ts = int(ts)  # Round to second
+        icao = msg.get("icao_hex", "") or ""
+        label = msg.get("label", "") or ""
+        text = (msg.get("text", "") or "")[:50]
+
+        key = f"{ts}:{icao}:{label}:{text}"
+        return hashlib.md5(key.encode(), usedforsecurity=False).hexdigest()
+
+    def _is_duplicate(self, msg: dict, source: str) -> bool:
+        """Check if message is a duplicate."""
+        msg_hash = self._compute_message_hash(msg)
+        if self._dedup_cache.contains(msg_hash):
+            with self._stats_lock:
+                self._stats[source]["duplicates"] += 1
+            ACARS_DUPLICATES.labels(source=source).inc()
+            return True
+        self._dedup_cache.add(msg_hash)
+        return False
     
     async def start(self, acars_port: int = 5550, vdlm2_port: int = 5555):
         """Start listening for ACARS and VDL2 messages."""
@@ -180,14 +302,38 @@ class AcarsService:
             normalized = self._normalize_message(msg, source)
 
             if normalized:
+                # Check for duplicate messages
+                if self._is_duplicate(normalized, source):
+                    logger.debug(f"Duplicate {source} message filtered")
+                    return
+
+                # Track frequency statistics
+                freq = normalized.get('frequency')
+                if freq:
+                    freq_mhz = f"{freq:.3f}"
+                    with self._stats_lock:
+                        self._frequency_counts[freq_mhz] += 1
+                    ACARS_FREQUENCY_MESSAGES.labels(frequency_mhz=freq_mhz).inc()
+
                 # Enrich message with airline and label info
                 enriched = enrich_acars_message(normalized)
 
-                # Update statistics
+                # Track decode success/failure metrics
+                label = normalized.get('label') or 'unknown'
+                decoded_text = enriched.get('decoded_text', {})
+                if decoded_text and decoded_text.get('message_type'):
+                    msg_type = decoded_text.get('message_type', 'unknown')
+                    decoder = 'libacars' if decoded_text.get('libacars_decoded') else 'regex'
+                    ACARS_DECODE_SUCCESS.labels(decoder=decoder, message_type=msg_type).inc()
+                else:
+                    ACARS_DECODE_FAILURE.labels(label=label).inc()
+
+                # Update statistics and Prometheus metrics
                 with self._stats_lock:
                     self._stats[source]["total"] += 1
                     self._hourly_counts[source].append(datetime.utcnow())
                     total = self._stats[source]["total"]
+                ACARS_MESSAGES_RECEIVED.labels(source=source).inc()
 
                 # Add to recent buffer
                 with self._recent_lock:
@@ -195,14 +341,20 @@ class AcarsService:
                     if len(self._recent_messages) > self._max_recent:
                         self._recent_messages.pop(0)
 
+                # Persist to database if session factory is configured
+                if self._db_session_factory:
+                    try:
+                        async with self._db_session_factory() as db:
+                            await store_acars_message(db, enriched)
+                    except Exception as e:
+                        logger.warning(f"Failed to persist {source} message: {e}")
+
                 # Publish to SSE
                 if self._sse_callback:
                     await self._sse_callback(enriched)
 
                 # Log message details
                 flight = normalized.get('callsign') or normalized.get('registration') or 'unknown'
-                label = normalized.get('label') or '-'
-                freq = normalized.get('frequency')
                 freq_str = f"{freq:.3f}MHz" if freq else "unknown freq"
                 logger.debug(f"[{source.upper()}] #{total} {flight} label={label} @ {freq_str}")
 
@@ -211,23 +363,29 @@ class AcarsService:
                     logger.info(f"First {source.upper()} message received: {flight}")
                 elif total % 100 == 0:
                     errors = self._stats[source]["errors"]
-                    logger.info(f"{source.upper()} milestone: {total} messages processed ({errors} errors)")
+                    dupes = self._stats[source]["duplicates"]
+                    logger.info(f"{source.upper()} milestone: {total} messages ({errors} errors, {dupes} duplicates)")
             else:
                 logger.warning(f"Failed to normalize {source} message: {list(msg.keys())}")
+                ACARS_ERRORS.labels(source=source, error_type="normalize_failed").inc()
 
         except json.JSONDecodeError as e:
             with self._stats_lock:
                 self._stats[source]["errors"] += 1
+            ACARS_ERRORS.labels(source=source, error_type="json_decode").inc()
             # Log first 100 chars of bad data for debugging
             preview = data[:100].decode('utf-8', errors='replace')
             logger.warning(f"Invalid JSON from {source}: {e} | Data preview: {preview!r}")
         except UnicodeDecodeError as e:
             with self._stats_lock:
                 self._stats[source]["errors"] += 1
+            ACARS_ERRORS.labels(source=source, error_type="unicode_decode").inc()
             logger.warning(f"Unicode decode error from {source}: {e}")
         except Exception as e:
             with self._stats_lock:
                 self._stats[source]["errors"] += 1
+            ACARS_ERRORS.labels(source=source, error_type="unknown").inc()
+            sentry_sdk.capture_exception(e)
             logger.error(f"Error processing {source} message: {e}", exc_info=True)
     
     def _normalize_message(self, msg: dict, source: str) -> Optional[dict]:
@@ -392,7 +550,7 @@ class AcarsService:
         """Get ACARS service statistics."""
         now = datetime.utcnow()
         hour_ago = now - timedelta(hours=1)
-        
+
         with self._stats_lock:
             # Clean up old hourly counts
             for source in ["acars", "vdlm2"]:
@@ -400,12 +558,23 @@ class AcarsService:
                     t for t in self._hourly_counts[source] if t > hour_ago
                 ]
                 self._stats[source]["last_hour"] = len(self._hourly_counts[source])
-            
+
+            # Get top frequencies by message count
+            top_frequencies = sorted(
+                self._frequency_counts.items(),
+                key=lambda x: x[1],
+                reverse=True
+            )[:10]
+
             return {
                 "acars": dict(self._stats["acars"]),
                 "vdlm2": dict(self._stats["vdlm2"]),
                 "running": self._running,
                 "recent_buffer_size": len(self._recent_messages),
+                "dedup_cache_size": self._dedup_cache.size(),
+                "top_frequencies": [
+                    {"frequency_mhz": f, "count": c} for f, c in top_frequencies
+                ],
             }
 
 
@@ -644,6 +813,8 @@ async def get_acars_stats(
     )
 
     # Aggregate by airline
+    # Note: find_airline_by_icao returns (iata_code, name) tuple
+    #       find_airline_by_iata returns (icao_code, name) tuple
     airline_counts = {}
     for row in airline_query:
         callsign = row[0]
@@ -652,26 +823,35 @@ async def get_acars_stats(
             continue
 
         # Try to extract airline code from callsign
-        airline_info = None
-        if len(callsign) >= 3:
+        key = None
+        icao_code = None
+        iata_code = None
+        airline_name = None
+
+        if len(callsign) >= 3 and callsign[:3].isalpha():
             # Try ICAO (3-letter) first
             icao_code = callsign[:3].upper()
-            airline_info = find_airline_by_icao(icao_code)
-            if airline_info:
+            iata_result, name_result = find_airline_by_icao(icao_code)
+            if name_result != "Unknown Airline":
                 key = icao_code
-            elif len(callsign) >= 2:
-                # Try IATA (2-letter)
-                iata_code = callsign[:2].upper()
-                airline_info = find_airline_by_iata(iata_code)
-                if airline_info:
-                    key = airline_info.get("icao", iata_code)
+                iata_code = iata_result if iata_result != icao_code else None
+                airline_name = name_result
 
-        if airline_info:
+        if not key and len(callsign) >= 2:
+            # Try IATA (2-letter)
+            iata_code = callsign[:2].upper()
+            icao_result, name_result = find_airline_by_iata(iata_code)
+            if name_result != "Unknown Airline":
+                key = icao_result
+                icao_code = icao_result if icao_result != iata_code else None
+                airline_name = name_result
+
+        if key and airline_name:
             if key not in airline_counts:
                 airline_counts[key] = {
-                    "icao": airline_info.get("icao"),
-                    "iata": airline_info.get("iata"),
-                    "name": airline_info.get("name"),
+                    "icao": icao_code,
+                    "iata": iata_code,
+                    "name": airline_name,
                     "count": 0
                 }
             airline_counts[key]["count"] += count

@@ -49,6 +49,8 @@ dependencies = [
 
     # Development
     "python-multipart>=0.0.6",
+    "sentry-sdk>=1.29.0",
+    "prometheus_client>=0.22.0",
 ]
 
 [project.optional-dependencies]

@@ -15,9 +15,14 @@ class Settings(BaseSettings):
     dump978_host: str = "dump978"
     dump978_port: str = "80"
     
-    # Prometheus (optional)
-    prometheus_host: str = "prometheus"
-    prometheus_port: str = "9090"
+    # Sentry (optional)
+    sentry_dsn: Optional[str] = None
+    sentry_environment: str = "development"
+    sentry_traces_sample_rate: float = 0.1  # 10% of transactions
+    sentry_profiles_sample_rate: float = 0.1  # 10% of profiled transactions
+
+    # Prometheus
+    prometheus_enabled: bool = True
     
     # Database
     database_url: str = "postgresql://adsb:adsb@postgres:5432/adsb"
@@ -28,6 +33,7 @@ class Settings(BaseSettings):
     
     # Cache
     cache_ttl: int = 5
+    upstream_api_min_interval: int = 60  # Minimum seconds between upstream API calls
     
     # Notifications
     apprise_urls: str = ""
@@ -91,9 +97,11 @@ class Settings(BaseSettings):
     radio_retention_days: int = 7  # Days to keep audio files
     radio_s3_prefix: str = "radio-transmissions"  # S3 prefix for audio files
 
-    # Transcription
+    # Transcription (Speaches.ai / OpenAI-compatible)
     transcription_enabled: bool = False
     transcription_service_url: Optional[str] = None  # External transcription API endpoint
+    transcription_model: Optional[str] = None  # Model ID (e.g., "Systran/faster-whisper-small.en")
+    transcription_api_key: Optional[str] = None  # API key for external service
 
     # Whisper (local speech-to-text)
     whisper_enabled: bool = False

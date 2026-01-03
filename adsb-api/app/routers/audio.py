@@ -37,17 +37,19 @@ settings = get_settings()
 
 def _transmission_to_response(t) -> dict:
     """Convert AudioTransmission model to response dict."""
-    # If no S3 URL, provide a local file URL
-    audio_url = t.s3_url
-    if not audio_url and t.filename:
-        audio_url = f"/api/v1/audio/file/{t.filename}"
+    # Get accessible URL (signed S3 or local file endpoint)
+    audio_url = audio_service.get_audio_url(
+        t.filename,
+        s3_key=t.s3_key,
+        signed=True
+    )
 
     return {
         "id": t.id,
         "created_at": t.created_at.isoformat() if t.created_at else None,
         "filename": t.filename,
         "s3_key": t.s3_key,
-        "s3_url": audio_url,  # Use S3 URL or fallback to local file URL
+        "s3_url": audio_url,  # Use signed S3 URL or local file URL
         "file_size_bytes": t.file_size_bytes,
         "duration_seconds": t.duration_seconds,
         "format": t.format,
@@ -173,10 +175,12 @@ async def upload_audio(
         transmission.transcription_status == "queued"
     )
 
-    # Use S3 URL if available, otherwise fallback to local file URL
-    audio_url = transmission.s3_url
-    if not audio_url and transmission.filename:
-        audio_url = f"/api/v1/audio/file/{transmission.filename}"
+    # Get accessible URL (signed S3 or local file endpoint)
+    audio_url = audio_service.get_audio_url(
+        transmission.filename,
+        s3_key=transmission.s3_key,
+        signed=True
+    )
 
     # Broadcast to socket subscribers
     sio_mgr = get_socketio_manager()
@@ -188,7 +192,15 @@ async def upload_audio(
             "frequency_mhz": transmission.frequency_mhz,
             "channel_name": transmission.channel_name,
             "duration_seconds": transmission.duration_seconds,
+            "file_size_bytes": transmission.file_size_bytes,
+            "format": transmission.format,
+            "squelch_level": transmission.squelch_level,
             "transcription_status": transmission.transcription_status,
+            "transcript": transmission.transcript,
+            "transcript_confidence": transmission.transcript_confidence,
+            "transcript_language": transmission.transcript_language,
+            "transcription_error": transmission.transcription_error,
+            "created_at": transmission.created_at.isoformat() if transmission.created_at else None,
         })
 
     return {

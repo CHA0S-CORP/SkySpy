@@ -6039,6 +6039,20 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             >
               <Navigation size={18} />
             </button>
+            {showShortTracks && (
+              <div className="pro-track-length-slider">
+                <input
+                  type="range"
+                  min="5"
+                  max="60"
+                  step="5"
+                  value={config.shortTrackLength || 15}
+                  onChange={(e) => setConfig({ ...config, shortTrackLength: parseInt(e.target.value) })}
+                  title={`Trail length: ${config.shortTrackLength || 15} positions`}
+                />
+                <span className="track-length-value">{config.shortTrackLength || 15}</span>
+              </div>
+            )}
             <button
               className={`pro-header-btn ${showSelectedTrack ? 'active' : ''}`}
               onClick={() => setShowSelectedTrack(!showSelectedTrack)}
@@ -6173,6 +6187,15 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 </span>
               )}
               <span className="pro-badge category" title={liveAircraft.category || 'A3'}>{getCategoryName(liveAircraft.category)}</span>
+              {aircraftInfo[liveAircraft.hex]?.registration && (
+                <span className="pro-badge reg">{aircraftInfo[liveAircraft.hex].registration}</span>
+              )}
+              {aircraftInfo[liveAircraft.hex]?.year_built && (
+                <span className="pro-badge built">
+                  {aircraftInfo[liveAircraft.hex].year_built}
+                  {aircraftInfo[liveAircraft.hex].age_years && ` (${aircraftInfo[liveAircraft.hex].age_years}y)`}
+                </span>
+              )}
               {isEmergency && <span className="pro-badge emergency">EMG</span>}
             </div>
             {/* Quick Alert Actions */}
@@ -6235,36 +6258,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             )}
           </div>
 
-          {/* Operator & Airframe Info */}
-          {aircraftInfo[liveAircraft.hex] && (
-            <div className="pro-aircraft-info">
-              {(aircraftInfo[liveAircraft.hex].operator || aircraftInfo[liveAircraft.hex].owner) && (
-                <div className="pro-info-row">
-                  <span className="pro-info-label">Operator</span>
-                  <span className="pro-info-value">{aircraftInfo[liveAircraft.hex].operator || aircraftInfo[liveAircraft.hex].owner}</span>
-                </div>
-              )}
-              {aircraftInfo[liveAircraft.hex].type_name && (
-                <div className="pro-info-row">
-                  <span className="pro-info-label">Aircraft</span>
-                  <span className="pro-info-value">{aircraftInfo[liveAircraft.hex].type_name}</span>
-                </div>
-              )}
-              {aircraftInfo[liveAircraft.hex].registration && (
-                <div className="pro-info-row">
-                  <span className="pro-info-label">Reg</span>
-                  <span className="pro-info-value">{aircraftInfo[liveAircraft.hex].registration}</span>
-                </div>
-              )}
-              {aircraftInfo[liveAircraft.hex].year_built && (
-                <div className="pro-info-row">
-                  <span className="pro-info-label">Built</span>
-                  <span className="pro-info-value">
-                    {aircraftInfo[liveAircraft.hex].year_built}
-                    {aircraftInfo[liveAircraft.hex].age_years && ` (${aircraftInfo[liveAircraft.hex].age_years}y)`}
-                  </span>
-                </div>
-              )}
+          {/* Operator Label */}
+          {aircraftInfo[liveAircraft.hex] && (aircraftInfo[liveAircraft.hex].operator || aircraftInfo[liveAircraft.hex].owner) && (
+            <div className="pro-operator-label">
+              <Building2 size={14} />
+              <span>{aircraftInfo[liveAircraft.hex].operator || aircraftInfo[liveAircraft.hex].owner}</span>
             </div>
           )}
 
@@ -6375,68 +6373,70 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             })()}
           </div>
 
-          <div className="pro-profile-chart">
-            <div className="pro-section-header">
-              ALTITUDE PROFILE
-              <span className="profile-value cyan">{(liveAircraft.alt_baro || liveAircraft.alt_geom || liveAircraft.alt || 0).toLocaleString()}</span>
+          <div className="pro-graphs-container">
+            <div className="pro-profile-chart">
+              <div className="pro-section-header">
+                ALTITUDE PROFILE
+                <span className="profile-value cyan">{(liveAircraft.alt_baro || liveAircraft.alt_geom || liveAircraft.alt || 0).toLocaleString()}</span>
+              </div>
+              <canvas
+                className="profile-canvas"
+                width={280}
+                height={60}
+                ref={altProfileCanvasRef}
+              />
             </div>
-            <canvas
-              className="profile-canvas"
-              width={280}
-              height={60}
-              ref={altProfileCanvasRef}
-            />
-          </div>
 
-          <div className="pro-profile-chart">
-            <div className="pro-section-header">
-              SPEED PROFILE
-              <span className="profile-value green">{liveAircraft.gs || liveAircraft.tas || '--'}</span>
+            <div className="pro-profile-chart">
+              <div className="pro-section-header">
+                SPEED PROFILE
+                <span className="profile-value green">{liveAircraft.gs || liveAircraft.tas || '--'}</span>
+              </div>
+              <canvas
+                className="profile-canvas"
+                width={280}
+                height={60}
+                ref={speedProfileCanvasRef}
+              />
             </div>
-            <canvas
-              className="profile-canvas"
-              width={280}
-              height={60}
-              ref={speedProfileCanvasRef}
-            />
-          </div>
 
-          <div className="pro-profile-chart">
-            <div className="pro-section-header">
-              VERTICAL SPEED
-              <span className={`profile-value ${(liveAircraft.vr ?? liveAircraft.baro_rate ?? 0) > 0 ? 'cyan' : (liveAircraft.vr ?? liveAircraft.baro_rate ?? 0) < 0 ? 'red' : ''}`}>
-                {(liveAircraft.vr ?? liveAircraft.baro_rate ?? liveAircraft.geom_rate ?? 0) > 0 ? '+' : ''}{liveAircraft.vr ?? liveAircraft.baro_rate ?? liveAircraft.geom_rate ?? 0}
-              </span>
+            <div className="pro-profile-chart">
+              <div className="pro-section-header">
+                VERTICAL SPEED
+                <span className={`profile-value ${(liveAircraft.vr ?? liveAircraft.baro_rate ?? 0) > 0 ? 'cyan' : (liveAircraft.vr ?? liveAircraft.baro_rate ?? 0) < 0 ? 'red' : ''}`}>
+                  {(liveAircraft.vr ?? liveAircraft.baro_rate ?? liveAircraft.geom_rate ?? 0) > 0 ? '+' : ''}{liveAircraft.vr ?? liveAircraft.baro_rate ?? liveAircraft.geom_rate ?? 0}
+                </span>
+              </div>
+              <canvas
+                className="profile-canvas"
+                width={280}
+                height={60}
+                ref={vsProfileCanvasRef}
+              />
             </div>
-            <canvas
-              className="profile-canvas"
-              width={280}
-              height={60}
-              ref={vsProfileCanvasRef}
-            />
-          </div>
 
-          <div className="pro-profile-chart">
-            <div className="pro-section-header">
-              DISTANCE
-              <span className="profile-value purple">{(liveAircraft.distance_nm || getDistanceNm(liveAircraft.lat, liveAircraft.lon)).toFixed(1)}</span>
+            <div className="pro-profile-chart">
+              <div className="pro-section-header">
+                DISTANCE
+                <span className="profile-value purple">{(liveAircraft.distance_nm || getDistanceNm(liveAircraft.lat, liveAircraft.lon)).toFixed(1)}</span>
+              </div>
+              <canvas
+                className="profile-canvas"
+                width={280}
+                height={60}
+                ref={distProfileCanvasRef}
+              />
             </div>
-            <canvas
-              className="profile-canvas"
-              width={280}
-              height={60}
-              ref={distProfileCanvasRef}
-            />
-          </div>
 
-          <div className="pro-track-history">
-            <div className="pro-section-header">TRACK HISTORY</div>
-            <canvas
-              className="track-history-canvas"
-              width={280}
-              height={80}
-              ref={trackCanvasRef}
-            />
+            <div className="pro-track-history">
+              <div className="pro-section-header">TRACK HISTORY</div>
+              <canvas
+                className="track-history-canvas"
+                width={280}
+                height={80}
+                ref={trackCanvasRef}
+              />
+            </div>
           </div>
 
           <div className="pro-external-links">

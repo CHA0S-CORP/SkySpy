@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plane, MapPin, Clock, Settings, BellRing, BellOff, Users } from 'lucide-react';
 import { saveConfig } from '../../utils/config';
+import { AudioPlaybackControl } from './AudioPlaybackControl';
 
 export function Header({ stats, location, onlineUsers, config, setConfig, setShowSettings }) {
   const [time, setTime] = useState(new Date());
@@ -53,6 +54,9 @@ export function Header({ stats, location, onlineUsers, config, setConfig, setSho
           <span className="stat-label">Online</span>
         </div>
       </div>
+      
+      <AudioPlaybackControl />
+      
       <div className="header-actions">
         <button
           className={`header-btn ${notifPermission === 'granted' && config.browserNotifications ? 'notifications-granted' : ''}`}

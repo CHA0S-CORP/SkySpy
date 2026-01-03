@@ -15,6 +15,7 @@ import ctypes.util
 import json
 import logging
 import os
+import threading
 from typing import Optional
 from enum import IntEnum
 
@@ -28,8 +29,8 @@ if LIBACARS_DISABLED:
 # Message direction enum
 class MsgDir(IntEnum):
     UNKNOWN = 0
-    AIR2GND = 1  # Uplink (air to ground)
-    GND2AIR = 2  # Downlink (ground to air)
+    AIR2GND = 1  # Downlink (aircraft to ground station)
+    GND2AIR = 2  # Uplink (ground station to aircraft)
 
 
 # Try to load libacars
@@ -40,6 +41,7 @@ _libacars_available = False
 _consecutive_errors = 0
 _max_consecutive_errors = 5
 _libacars_disabled_due_to_errors = False
+_error_lock = threading.Lock()
 
 
 def _load_libacars():
@@ -214,7 +216,8 @@ def decode_acars_apps(label: str, text: str, direction: MsgDir = MsgDir.UNKNOWN)
 
         if not node:
             # Successful call (even if no decode) - reset error counter
-            _consecutive_errors = 0
+            with _error_lock:
+                _consecutive_errors = 0
             return None
 
         try:
@@ -231,7 +234,8 @@ def decode_acars_apps(label: str, text: str, direction: MsgDir = MsgDir.UNKNOWN)
                 if json_str:
                     decoded = json.loads(json_str.decode('utf-8'))
                     # Successful decode - reset error counter
-                    _consecutive_errors = 0
+                    with _error_lock:
+                        _consecutive_errors = 0
                     return decoded
                 return None
             finally:
@@ -240,12 +244,15 @@ def decode_acars_apps(label: str, text: str, direction: MsgDir = MsgDir.UNKNOWN)
             _libacars.la_proto_tree_destroy(node)
 
     except Exception as e:
-        _consecutive_errors += 1
-        logger.warning(f"libacars decode error ({_consecutive_errors}/{_max_consecutive_errors}): {e}")
+        with _error_lock:
+            _consecutive_errors += 1
+            current_errors = _consecutive_errors
+            if _consecutive_errors >= _max_consecutive_errors:
+                _libacars_disabled_due_to_errors = True
 
-        # Disable libacars if too many consecutive errors
-        if _consecutive_errors >= _max_consecutive_errors:
-            _libacars_disabled_due_to_errors = True
+        logger.warning(f"libacars decode error ({current_errors}/{_max_consecutive_errors}): {e}")
+
+        if current_errors >= _max_consecutive_errors:
             logger.error(
                 f"libacars disabled after {_max_consecutive_errors} consecutive errors. "
                 "Restart the service to re-enable."
@@ -297,7 +304,8 @@ def decode_acars_apps_text(label: str, text: str, direction: MsgDir = MsgDir.UNK
         node = _libacars.la_acars_decode_apps(label_bytes, text_bytes, int(direction))
 
         if not node:
-            _consecutive_errors = 0
+            with _error_lock:
+                _consecutive_errors = 0
             return None
 
         try:
@@ -311,7 +319,8 @@ def decode_acars_apps_text(label: str, text: str, direction: MsgDir = MsgDir.UNK
                 text_result = vstr.contents.str
 
                 if text_result:
-                    _consecutive_errors = 0
+                    with _error_lock:
+                        _consecutive_errors = 0
                     return text_result.decode('utf-8')
                 return None
             finally:
@@ -320,11 +329,15 @@ def decode_acars_apps_text(label: str, text: str, direction: MsgDir = MsgDir.UNK
             _libacars.la_proto_tree_destroy(node)
 
     except Exception as e:
-        _consecutive_errors += 1
-        logger.warning(f"libacars text decode error ({_consecutive_errors}/{_max_consecutive_errors}): {e}")
+        with _error_lock:
+            _consecutive_errors += 1
+            current_errors = _consecutive_errors
+            if _consecutive_errors >= _max_consecutive_errors:
+                _libacars_disabled_due_to_errors = True
 
-        if _consecutive_errors >= _max_consecutive_errors:
-            _libacars_disabled_due_to_errors = True
+        logger.warning(f"libacars text decode error ({current_errors}/{_max_consecutive_errors}): {e}")
+
+        if current_errors >= _max_consecutive_errors:
             logger.error(
                 f"libacars disabled after {_max_consecutive_errors} consecutive errors. "
                 "Restart the service to re-enable."
@@ -382,3 +395,19 @@ def extract_sublabel_mfi(label: str, text: str, direction: MsgDir = MsgDir.UNKNO
     except Exception as e:
         logger.debug(f"libacars extract error: {e}")
         return None, None, 0
+
+
+def reset_error_state() -> None:
+    """
+    Reset the error tracking state to re-enable libacars.
+
+    Call this function to re-enable libacars after it has been disabled
+    due to consecutive errors, without needing to restart the service.
+    """
+    global _consecutive_errors, _libacars_disabled_due_to_errors
+
+    with _error_lock:
+        _consecutive_errors = 0
+        _libacars_disabled_due_to_errors = False
+
+    logger.info("libacars error state reset - library re-enabled")

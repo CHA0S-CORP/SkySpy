@@ -1,0 +1,244 @@
+/* Responsive Styles - Breakpoints, Mobile Menu, Touch */
+
+/* ============================================================================
+   Mobile Menu Toggle and Overlay
+   ============================================================================ */
+
+.mobile-menu-toggle {
+  display: none;
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 2001;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand-navy), #0d1117);
+  border: 2px solid rgba(74, 222, 128, 0.5);
+  color: var(--brand-green);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 20px rgba(74, 222, 128, 0.2);
+  transition: all 0.2s ease;
+}
+
+.mobile-menu-toggle:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), 0 0 25px rgba(74, 222, 128, 0.3);
+  border-color: var(--brand-green);
+}
+
+.mobile-menu-toggle:active {
+  transform: scale(0.95);
+}
+
+.mobile-menu-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 1999;
+  backdrop-filter: blur(4px);
+}
+
+/* ============================================================================
+   Large Desktop (1200px)
+   ============================================================================ */
+
+@media (max-width: 1200px) {
+  .sidebar {
+    width: 60px;
+  }
+
+  .sidebar-header .logo-text,
+  .nav-item span,
+  .version {
+    display: none;
+  }
+
+  .logo {
+    justify-content: center;
+  }
+
+  .nav-item {
+    justify-content: center;
+    padding: 14px;
+  }
+
+  .connection-status span:not(.status-dot) {
+    display: none;
+  }
+
+  .system-card.wide {
+    grid-column: span 1;
+  }
+}
+
+/* ============================================================================
+   Tablet/Small Desktop (768px)
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  /* Mobile menu toggle visibility */
+  .mobile-menu-toggle {
+    display: flex;
+  }
+
+  .mobile-menu-overlay {
+    display: block;
+  }
+
+  /* Hide sidebar off-screen by default on mobile */
+  .sidebar {
+    position: fixed;
+    left: -220px;
+    top: 0;
+    height: 100vh;
+    z-index: 2000;
+    transition: left 0.3s ease;
+  }
+
+  .app.mobile-menu-open .sidebar {
+    left: 0;
+  }
+
+  /* Main content takes full width on mobile */
+  .main-content {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  /* Header adjustments */
+  .header-stats {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  /* Form responsiveness */
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .location-info {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .condition-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Stats view */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .stat-mini-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Graph cards */
+  .graph-card {
+    min-height: 180px;
+  }
+
+  /* History view */
+  .sessions-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* System view */
+  .system-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================================
+   Mobile Phone (480px)
+   ============================================================================ */
+
+@media (max-width: 480px) {
+  /* Hide header stats on very small screens */
+  .header-stats {
+    display: none;
+  }
+
+  .header-actions {
+    flex: 1;
+    justify-content: flex-end;
+  }
+
+  /* Stats grid for mobile */
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .stat-mini-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Content area padding */
+  .content-area {
+    padding: 16px;
+  }
+}
+
+/* ============================================================================
+   Touch Device Improvements
+   ============================================================================ */
+
+@media (pointer: coarse) {
+  .aircraft-list-item:active {
+    background: rgba(0, 180, 80, 0.3);
+  }
+
+  .map-control-btn:active {
+    transform: scale(0.95);
+  }
+
+  .conflict-banner:active {
+    transform: scale(0.98);
+  }
+
+  /* Prevent text selection on touch */
+  .radar-aircraft-list,
+  .legend-panel,
+  .map-controls {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Larger touch targets */
+  .nav-item {
+    min-height: 44px;
+  }
+
+  .btn-icon {
+    min-height: 32px;
+    min-width: 32px;
+  }
+}
+
+/* ============================================================================
+   Landscape Mobile
+   ============================================================================ */
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .radar-aircraft-list {
+    max-height: 60vh;
+  }
+
+  .legend-panel {
+    max-height: 70vh;
+  }
+
+  .aircraft-popup,
+  .weather-popup {
+    max-height: 80vh;
+  }
+}

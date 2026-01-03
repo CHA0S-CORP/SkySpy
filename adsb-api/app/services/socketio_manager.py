@@ -591,7 +591,15 @@ class SocketIOManager:
             'frequency_mhz': transmission.get('frequency_mhz'),
             'channel_name': transmission.get('channel_name'),
             'duration_seconds': transmission.get('duration_seconds'),
+            'file_size_bytes': transmission.get('file_size_bytes'),
+            'format': transmission.get('format'),
+            'squelch_level': transmission.get('squelch_level'),
             'transcription_status': transmission.get('transcription_status'),
+            'transcript': transmission.get('transcript'),
+            'transcript_confidence': transmission.get('transcript_confidence'),
+            'transcript_language': transmission.get('transcript_language'),
+            'transcription_error': transmission.get('transcription_error'),
+            'created_at': transmission.get('created_at') or datetime.utcnow().isoformat() + 'Z',
             'timestamp': datetime.utcnow().isoformat() + 'Z'
         })
 

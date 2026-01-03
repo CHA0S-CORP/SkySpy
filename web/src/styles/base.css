@@ -1,0 +1,114 @@
+/* Base Styles - Variables, Resets, Typography */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+:root {
+  --bg-dark: #0d1117;
+  --bg-card: #151b24;
+  --bg-hover: #1c2432;
+  --border: #252d3a;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-dim: #484f58;
+  --accent-cyan: #00d4ff;
+  --accent-green: #4ade80;
+  --accent-blue: #5a7a9a;
+  --accent-yellow: #d29922;
+  --accent-red: #f85149;
+  --accent-purple: #a371f7;
+  --brand-navy: #1a2035;
+  --brand-blue: #5a7a9a;
+  --brand-green: #4ade80;
+  --glow-cyan: rgba(0, 212, 255, 0.15);
+  --glow-green: rgba(74, 222, 128, 0.15);
+}
+
+body {
+  font-family: 'Outfit', sans-serif;
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.app {
+  display: flex;
+  height: 100vh;
+  background:
+    radial-gradient(ellipse at 0% 0%, rgba(90, 122, 154, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 100% 100%, rgba(74, 222, 128, 0.05) 0%, transparent 50%),
+    var(--bg-dark);
+}
+
+/* ============================================================================
+   Custom Dark Scrollbars
+   ============================================================================ */
+
+/* Firefox scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(90, 122, 154, 0.4) transparent;
+}
+
+/* Webkit (Chrome, Safari, Edge) scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(90, 122, 154, 0.4);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(90, 122, 154, 0.6);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: rgba(0, 212, 255, 0.5);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Thin scrollbars for compact areas */
+.thin-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  border: 0;
+}
+
+/* Hidden scrollbars (still scrollable) */
+.hidden-scrollbar {
+  scrollbar-width: none;
+}
+
+.hidden-scrollbar::-webkit-scrollbar {
+  display: none;
+}

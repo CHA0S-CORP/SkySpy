@@ -1,28 +1,209 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { Radio, Search, Play, Pause, Volume2, VolumeX, RefreshCw, ChevronDown, AlertCircle, CheckCircle, Clock, Loader2, FileAudio, Mic, PlayCircle } from 'lucide-react';
 import { useApi } from '../../hooks';
 import { io } from 'socket.io-client';
+
+// Global audio state to persist across page navigation
+const globalAudioState = {
+  audioRefs: {},
+  playingId: null,
+  audioProgress: {},
+  audioDurations: {},
+  progressIntervalRef: null,
+  autoplay: false,
+  subscribers: []
+};
+
+// Subscribe to audio state changes
+const subscribeToAudioState = (callback) => {
+  globalAudioState.subscribers.push(callback);
+  return () => {
+    globalAudioState.subscribers = globalAudioState.subscribers.filter(cb => cb !== callback);
+  };
+};
+
+// Notify all subscribers of state changes
+const notifySubscribers = (updates) => {
+  globalAudioState.subscribers.forEach(callback => callback(updates));
+};
+
+// Export for external access
+export const getGlobalAudioState = () => globalAudioState;
+export const subscribeToAudioStateChanges = subscribeToAudioState;
+
+// Memoized Audio Item Component
+const AudioItem = memo(function AudioItem({
+  transmission,
+  isPlaying,
+  progress,
+  duration,
+  isExpanded,
+  onPlay,
+  onSeek,
+  onToggleExpand,
+  formatDuration,
+  formatFileSize,
+  getStatusInfo
+}) {
+  const id = transmission.id;
+  const statusInfo = getStatusInfo(transmission.transcription_status);
+  const StatusIcon = statusInfo.icon;
+
+  return (
+    <div className={`audio-item ${isPlaying ? 'playing' : ''}`}>
+      <div className="audio-item-main">
+        {/* Play Button */}
+        <button
+          className={`audio-play-btn ${isPlaying ? 'playing' : ''}`}
+          onClick={() => onPlay(transmission)}
+          disabled={!transmission.s3_url}
+          title={transmission.s3_url ? (isPlaying ? 'Pause' : 'Play') : 'No audio URL'}
+        >
+          {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+        </button>
+
+        {/* Info */}
+        <div className="audio-item-info">
+          <div className="audio-item-header">
+            <span className="audio-channel">{transmission.channel_name || 'Unknown Channel'}</span>
+            {transmission.frequency_mhz && (
+              <span className="audio-frequency">{transmission.frequency_mhz.toFixed(3)} MHz</span>
+            )}
+            <span className="audio-time">
+              {new Date(transmission.created_at).toLocaleString()}
+            </span>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="audio-progress-container" onClick={(e) => onSeek(id, e)}>
+            <div className="audio-progress-bar">
+              <div
+                className="audio-progress-fill"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <div className="audio-duration">
+              <span>{formatDuration((progress / 100) * duration)}</span>
+              <span>{formatDuration(duration)}</span>
+            </div>
+          </div>
+
+          {/* Transcript Preview */}
+          {transmission.transcript && (
+            <div className="audio-transcript-preview">
+              <p className="transcript-preview-text">{transmission.transcript}</p>
+              {transmission.transcript_confidence && (
+                <span className="transcript-preview-confidence">
+                  {(transmission.transcript_confidence * 100).toFixed(0)}% confidence
+                </span>
+              )}
+            </div>
+          )}
+          {transmission.transcription_error && (
+            <div className="audio-transcript-error">
+              <AlertCircle size={12} />
+              <span>{transmission.transcription_error}</span>
+            </div>
+          )}
+          {!transmission.transcript && !transmission.transcription_error && transmission.transcription_status !== 'processing' && transmission.transcription_status !== 'queued' && (
+            <div className="audio-transcript-empty">
+              <Mic size={12} />
+              <span>No transcript available</span>
+            </div>
+          )}
+        </div>
+
+        {/* Status Badge */}
+        <div className="audio-item-status" style={{ color: statusInfo.color }}>
+          <StatusIcon
+            size={16}
+            className={transmission.transcription_status === 'processing' ? 'spinning' : ''}
+          />
+          <span>{statusInfo.label}</span>
+        </div>
+
+        {/* Metadata */}
+        <div className="audio-item-meta">
+          <span className="audio-format">{transmission.format?.toUpperCase() || 'MP3'}</span>
+          <span className="audio-size">{formatFileSize(transmission.file_size_bytes)}</span>
+        </div>
+
+        {/* Expand Button */}
+        {(transmission.transcript || transmission.transcription_error) && (
+          <button
+            className={`audio-expand-btn ${isExpanded ? 'expanded' : ''}`}
+            onClick={() => onToggleExpand(id)}
+          >
+            <ChevronDown size={18} />
+          </button>
+        )}
+      </div>
+
+      {/* Expandable Transcript Section */}
+      {(transmission.transcript || transmission.transcription_error) && (
+        <div className={`audio-transcript-section ${isExpanded ? 'expanded' : ''}`}>
+          {transmission.transcript && (
+            <div className="audio-transcript">
+              <div className="transcript-header">
+                <span className="transcript-label">Full Transcript</span>
+                {transmission.transcript_language && (
+                  <span className="transcript-language">{transmission.transcript_language.toUpperCase()}</span>
+                )}
+              </div>
+              <p className="transcript-text">{transmission.transcript}</p>
+            </div>
+          )}
+          {transmission.transcription_error && (
+            <div className="audio-error">
+              <AlertCircle size={14} />
+              <span>{transmission.transcription_error}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
 
 export function AudioView({ apiBase }) {
   const [timeRange, setTimeRange] = useState('24h');
   const [statusFilter, setStatusFilter] = useState('all');
   const [channelFilter, setChannelFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [playingId, setPlayingId] = useState(null);
-  const [audioProgress, setAudioProgress] = useState({});
-  const [audioDurations, setAudioDurations] = useState({});
+  const [playingId, setPlayingId] = useState(globalAudioState.playingId);
+  const [audioProgress, setAudioProgress] = useState(globalAudioState.audioProgress);
+  const [audioDurations, setAudioDurations] = useState(globalAudioState.audioDurations);
   const [audioVolume, setAudioVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [expandedTranscript, setExpandedTranscript] = useState({});
   const [availableChannels, setAvailableChannels] = useState([]);
-  const [autoplay, setAutoplay] = useState(false);
+  const [autoplay, setAutoplay] = useState(globalAudioState.autoplay);
   const [socketConnected, setSocketConnected] = useState(false);
   const [realtimeTransmissions, setRealtimeTransmissions] = useState([]);
 
-  const audioRefs = useRef({});
-  const progressIntervalRef = useRef(null);
+  const audioRefs = globalAudioState.audioRefs;
+  const progressIntervalRef = globalAudioState.progressIntervalRef;
   const socketRef = useRef(null);
   const autoplayQueueRef = useRef([]);
+  const processAutoplayQueueRef = useRef(null);
+
+  // Subscribe to global audio state changes
+  useEffect(() => {
+    const unsubscribe = subscribeToAudioState((updates) => {
+      if ('playingId' in updates) setPlayingId(updates.playingId);
+      if ('audioProgress' in updates) setAudioProgress(updates.audioProgress);
+      if ('audioDurations' in updates) setAudioDurations(updates.audioDurations);
+      if ('autoplay' in updates) {
+        setAutoplay(updates.autoplay);
+        // If autoplay was just enabled, process any queued items
+        if (updates.autoplay && autoplayQueueRef.current.length > 0 && processAutoplayQueueRef.current) {
+          // Schedule processing on next render
+          setTimeout(() => processAutoplayQueueRef.current?.(), 0);
+        }
+      }
+    });
+    return unsubscribe;
+  }, []);
 
   const hours = { '1h': 1, '6h': 6, '24h': 24, '48h': 48, '7d': 168 };
 
@@ -70,13 +251,111 @@ export function AudioView({ apiBase }) {
     );
   }, [mergedTransmissions, searchQuery]);
 
+  // Lazy loading: only render visible items
+  const [visibleCount, setVisibleCount] = useState(20);
+  const loadMoreRef = useRef(null);
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount(prev => Math.min(prev + 20, filteredTransmissions.length));
+        }
+      },
+      { rootMargin: '200px' }
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [filteredTransmissions.length]);
+
+  // Define processAutoplayQueue early so it can be used in effects
+  const processAutoplayQueue = useCallback(() => {
+    if (!autoplay || globalAudioState.playingId) return;
+
+    const next = autoplayQueueRef.current.shift();
+    if (next && next.s3_url) {
+      // Create and play audio
+      const audio = new Audio(next.s3_url);
+      audio.volume = isMuted ? 0 : audioVolume;
+      audioRefs[next.id] = audio;
+
+      let loadTimeout;
+      const cleanup = () => {
+        if (loadTimeout) clearTimeout(loadTimeout);
+      };
+
+      audio.addEventListener('loadedmetadata', () => {
+        cleanup();
+        globalAudioState.audioDurations[next.id] = audio.duration;
+        notifySubscribers({ audioDurations: { ...globalAudioState.audioDurations } });
+        setAudioDurations(prev => ({ ...prev, [next.id]: audio.duration }));
+      });
+
+      audio.addEventListener('ended', () => {
+        cleanup();
+        globalAudioState.playingId = null;
+        globalAudioState.audioProgress[next.id] = 0;
+        notifySubscribers({ playingId: null, audioProgress: { ...globalAudioState.audioProgress } });
+        setPlayingId(null);
+        setAudioProgress(prev => ({ ...prev, [next.id]: 0 }));
+        // Play next in queue
+        processAutoplayQueue();
+      });
+
+      audio.addEventListener('error', () => {
+        cleanup();
+        console.warn(`Failed to load audio ${next.id}, trying next file...`);
+        // Don't clear playingId here - let autoplay continue
+        // Try next file immediately
+        processAutoplayQueue();
+      });
+
+      // Set timeout to skip to next file if loading takes too long (10 seconds)
+      loadTimeout = setTimeout(() => {
+        console.warn(`Audio ${next.id} took too long to load, trying next file...`);
+        audio.pause();
+        audio.src = '';
+        // Don't clear playingId here - let autoplay continue
+        processAutoplayQueue();
+      }, 10000);
+
+      audio.play().then(() => {
+        globalAudioState.playingId = next.id;
+        notifySubscribers({ playingId: next.id });
+        setPlayingId(next.id);
+        globalAudioState.progressIntervalRef = setInterval(() => {
+          if (audio && !audio.paused) {
+            const progress = (audio.currentTime / audio.duration) * 100 || 0;
+            globalAudioState.audioProgress[next.id] = progress;
+            notifySubscribers({ audioProgress: { ...globalAudioState.audioProgress } });
+            setAudioProgress(prev => ({
+              ...prev,
+              [next.id]: progress
+            }));
+          }
+        }, 100);
+      }).catch(err => {
+        cleanup();
+        console.warn(`Autoplay failed for ${next.id}: ${err.message}, trying next file...`);
+        // Don't clear playingId here - let autoplay continue
+        // Try next file
+        processAutoplayQueue();
+      });
+    }
+  }, [autoplay, isMuted, audioVolume]);
+
   // Audio playback handlers
   const handlePlay = (transmission) => {
     const id = transmission.id;
 
     // Stop any currently playing audio
-    if (playingId && playingId !== id) {
-      const prevAudio = audioRefs.current[playingId];
+    if (globalAudioState.playingId && globalAudioState.playingId !== id) {
+      const prevAudio = audioRefs[globalAudioState.playingId];
       if (prevAudio) {
         prevAudio.pause();
         prevAudio.currentTime = 0;
@@ -84,48 +363,62 @@ export function AudioView({ apiBase }) {
     }
 
     // Get or create audio element
-    let audio = audioRefs.current[id];
+    let audio = audioRefs[id];
     if (!audio) {
       audio = new Audio(transmission.s3_url);
       audio.volume = isMuted ? 0 : audioVolume;
-      audioRefs.current[id] = audio;
+      audioRefs[id] = audio;
 
       // Event listeners
       audio.addEventListener('loadedmetadata', () => {
+        globalAudioState.audioDurations[id] = audio.duration;
+        notifySubscribers({ audioDurations: { ...globalAudioState.audioDurations } });
         setAudioDurations(prev => ({ ...prev, [id]: audio.duration }));
       });
 
       audio.addEventListener('ended', () => {
+        globalAudioState.playingId = null;
+        globalAudioState.audioProgress[id] = 0;
+        notifySubscribers({ playingId: null, audioProgress: { ...globalAudioState.audioProgress } });
         setPlayingId(null);
         setAudioProgress(prev => ({ ...prev, [id]: 0 }));
       });
 
       audio.addEventListener('error', (e) => {
         console.error('Audio playback error:', e);
+        globalAudioState.playingId = null;
+        notifySubscribers({ playingId: null });
         setPlayingId(null);
       });
     }
 
-    if (playingId === id) {
+    if (globalAudioState.playingId === id) {
       // Pause
       audio.pause();
+      globalAudioState.playingId = null;
+      notifySubscribers({ playingId: null });
       setPlayingId(null);
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
+      if (globalAudioState.progressIntervalRef) {
+        clearInterval(globalAudioState.progressIntervalRef);
       }
     } else {
       // Play
       audio.play().catch(err => {
         console.error('Failed to play audio:', err);
       });
+      globalAudioState.playingId = id;
+      notifySubscribers({ playingId: id });
       setPlayingId(id);
 
       // Update progress
-      progressIntervalRef.current = setInterval(() => {
+      globalAudioState.progressIntervalRef = setInterval(() => {
         if (audio && !audio.paused) {
+          const progress = (audio.currentTime / audio.duration) * 100 || 0;
+          globalAudioState.audioProgress[id] = progress;
+          notifySubscribers({ audioProgress: { ...globalAudioState.audioProgress } });
           setAudioProgress(prev => ({
             ...prev,
-            [id]: (audio.currentTime / audio.duration) * 100 || 0
+            [id]: progress
           }));
         }
       }, 100);
@@ -133,18 +426,20 @@ export function AudioView({ apiBase }) {
   };
 
   const handleSeek = (id, e) => {
-    const audio = audioRefs.current[id];
+    const audio = audioRefs[id];
     if (!audio) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
     const percent = (e.clientX - rect.left) / rect.width;
     audio.currentTime = percent * audio.duration;
+    globalAudioState.audioProgress[id] = percent * 100;
+    notifySubscribers({ audioProgress: { ...globalAudioState.audioProgress } });
     setAudioProgress(prev => ({ ...prev, [id]: percent * 100 }));
   };
 
   const toggleMute = () => {
     setIsMuted(!isMuted);
-    Object.values(audioRefs.current).forEach(audio => {
+    Object.values(audioRefs).forEach(audio => {
       if (audio) audio.volume = isMuted ? audioVolume : 0;
     });
   };
@@ -153,23 +448,19 @@ export function AudioView({ apiBase }) {
     const vol = parseFloat(e.target.value);
     setAudioVolume(vol);
     if (!isMuted) {
-      Object.values(audioRefs.current).forEach(audio => {
+      Object.values(audioRefs).forEach(audio => {
         if (audio) audio.volume = vol;
       });
     }
   };
 
-  // Cleanup on unmount
+  // Cleanup on unmount - preserve audio for navigation
   useEffect(() => {
     return () => {
-      Object.values(audioRefs.current).forEach(audio => {
-        if (audio) {
-          audio.pause();
-          audio.src = '';
-        }
-      });
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
+      // Don't clean up audio - keep playing when navigating
+      // Just clear the interval for this component instance
+      if (globalAudioState.progressIntervalRef) {
+        clearInterval(globalAudioState.progressIntervalRef);
       }
     };
   }, []);
@@ -212,16 +503,36 @@ export function AudioView({ apiBase }) {
     socket.on('audio:transmission', (transmission) => {
       console.log('New audio transmission:', transmission);
 
+      // Enrich transmission with defaults for missing metadata
+      const enrichedTransmission = {
+        channel_name: transmission.channel_name || 'Unknown Channel',
+        frequency_mhz: transmission.frequency_mhz || 0,
+        format: transmission.format || 'mp3',
+        file_size_bytes: transmission.file_size_bytes || 0,
+        transcription_status: transmission.transcription_status || 'pending',
+        transcript: transmission.transcript || null,
+        transcript_confidence: transmission.transcript_confidence || null,
+        transcript_language: transmission.transcript_language || null,
+        transcription_error: transmission.transcription_error || null,
+        created_at: transmission.created_at || new Date().toISOString(),
+        filename: transmission.filename || '',
+        s3_url: transmission.s3_url || '',
+        ...transmission // Spread to preserve all original fields
+      };
+
       // Add to realtime list (prepend)
       setRealtimeTransmissions(prev => {
         const exists = prev.some(t => t.id === transmission.id);
         if (exists) return prev;
-        return [transmission, ...prev].slice(0, 50);
+        return [enrichedTransmission, ...prev].slice(0, 50);
       });
 
       // Queue for autoplay if enabled
-      if (autoplay && transmission.s3_url) {
-        autoplayQueueRef.current.push(transmission);
+      if (autoplay && enrichedTransmission.s3_url) {
+        // Always add to front of queue (latest first)
+        autoplayQueueRef.current.unshift(enrichedTransmission);
+        // Keep queue size manageable
+        autoplayQueueRef.current = autoplayQueueRef.current.slice(0, 10);
         processAutoplayQueue();
       }
     });
@@ -230,51 +541,12 @@ export function AudioView({ apiBase }) {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [apiBase]);
+  }, [apiBase, autoplay, processAutoplayQueue]);
 
-  // Process autoplay queue
-  const processAutoplayQueue = useCallback(() => {
-    if (!autoplay || playingId) return;
-
-    const next = autoplayQueueRef.current.shift();
-    if (next && next.s3_url) {
-      // Create and play audio
-      const audio = new Audio(next.s3_url);
-      audio.volume = isMuted ? 0 : audioVolume;
-      audioRefs.current[next.id] = audio;
-
-      audio.addEventListener('loadedmetadata', () => {
-        setAudioDurations(prev => ({ ...prev, [next.id]: audio.duration }));
-      });
-
-      audio.addEventListener('ended', () => {
-        setPlayingId(null);
-        setAudioProgress(prev => ({ ...prev, [next.id]: 0 }));
-        // Play next in queue
-        processAutoplayQueue();
-      });
-
-      audio.addEventListener('error', () => {
-        setPlayingId(null);
-        processAutoplayQueue();
-      });
-
-      audio.play().then(() => {
-        setPlayingId(next.id);
-        progressIntervalRef.current = setInterval(() => {
-          if (audio && !audio.paused) {
-            setAudioProgress(prev => ({
-              ...prev,
-              [next.id]: (audio.currentTime / audio.duration) * 100 || 0
-            }));
-          }
-        }, 100);
-      }).catch(err => {
-        console.error('Autoplay failed:', err);
-        processAutoplayQueue();
-      });
-    }
-  }, [autoplay, playingId, isMuted, audioVolume]);
+  // Store processAutoplayQueue in ref for use in effects
+  useEffect(() => {
+    processAutoplayQueueRef.current = processAutoplayQueue;
+  }, [processAutoplayQueue]);
 
   // Format duration
   const formatDuration = (seconds) => {
@@ -409,7 +681,21 @@ export function AudioView({ apiBase }) {
 
           <button
             className={`autoplay-btn ${autoplay ? 'active' : ''}`}
-            onClick={() => setAutoplay(!autoplay)}
+            onClick={() => {
+              const newAutoplay = !autoplay;
+              setAutoplay(newAutoplay);
+              globalAudioState.autoplay = newAutoplay;
+              notifySubscribers({ autoplay: newAutoplay });
+              
+              // If enabling autoplay, start with the first realtime transmission or filtered transmission
+              if (newAutoplay && !globalAudioState.playingId) {
+                const next = realtimeTransmissions[0] || filteredTransmissions[0];
+                if (next && next.s3_url) {
+                  autoplayQueueRef.current = [next];
+                  handlePlay(next);
+                }
+              }
+            }}
             title={autoplay ? 'Disable autoplay' : 'Enable autoplay for new transmissions'}
           >
             <PlayCircle size={16} />
@@ -443,117 +729,39 @@ export function AudioView({ apiBase }) {
           </div>
         )}
 
-        {filteredTransmissions.map((transmission) => {
+        {filteredTransmissions.slice(0, visibleCount).map((transmission) => {
           const id = transmission.id;
-          const isPlaying = playingId === id;
-          const progress = audioProgress[id] || 0;
-          const duration = audioDurations[id] || transmission.duration_seconds;
-          const statusInfo = getStatusInfo(transmission.transcription_status);
-          const StatusIcon = statusInfo.icon;
-          const isExpanded = expandedTranscript[id];
-
           return (
-            <div key={id} className={`audio-item ${isPlaying ? 'playing' : ''}`}>
-              <div className="audio-item-main">
-                {/* Play Button */}
-                <button
-                  className={`audio-play-btn ${isPlaying ? 'playing' : ''}`}
-                  onClick={() => handlePlay(transmission)}
-                  disabled={!transmission.s3_url}
-                  title={transmission.s3_url ? (isPlaying ? 'Pause' : 'Play') : 'No audio URL'}
-                >
-                  {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-                </button>
-
-                {/* Info */}
-                <div className="audio-item-info">
-                  <div className="audio-item-header">
-                    <span className="audio-channel">{transmission.channel_name || 'Unknown Channel'}</span>
-                    {transmission.frequency_mhz && (
-                      <span className="audio-frequency">{transmission.frequency_mhz.toFixed(3)} MHz</span>
-                    )}
-                    <span className="audio-time">
-                      {new Date(transmission.created_at).toLocaleString()}
-                    </span>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="audio-progress-container" onClick={(e) => handleSeek(id, e)}>
-                    <div className="audio-progress-bar">
-                      <div
-                        className="audio-progress-fill"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                    <div className="audio-duration">
-                      <span>{formatDuration((progress / 100) * duration)}</span>
-                      <span>{formatDuration(duration)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Status Badge */}
-                <div className="audio-item-status" style={{ color: statusInfo.color }}>
-                  <StatusIcon
-                    size={16}
-                    className={transmission.transcription_status === 'processing' ? 'spinning' : ''}
-                  />
-                  <span>{statusInfo.label}</span>
-                </div>
-
-                {/* Metadata */}
-                <div className="audio-item-meta">
-                  <span className="audio-format">{transmission.format?.toUpperCase() || 'MP3'}</span>
-                  <span className="audio-size">{formatFileSize(transmission.file_size_bytes)}</span>
-                </div>
-
-                {/* Expand Button */}
-                {transmission.transcript && (
-                  <button
-                    className={`audio-expand-btn ${isExpanded ? 'expanded' : ''}`}
-                    onClick={() => setExpandedTranscript(prev => ({ ...prev, [id]: !prev[id] }))}
-                  >
-                    <ChevronDown size={18} />
-                  </button>
-                )}
-              </div>
-
-              {/* Transcript Section */}
-              {(transmission.transcript || transmission.transcription_error) && (
-                <div className={`audio-transcript-section ${isExpanded ? 'expanded' : ''}`}>
-                  {transmission.transcript && (
-                    <div className="audio-transcript">
-                      <div className="transcript-header">
-                        <span className="transcript-label">Transcript</span>
-                        {transmission.transcript_confidence && (
-                          <span className="transcript-confidence">
-                            {(transmission.transcript_confidence * 100).toFixed(0)}% confidence
-                          </span>
-                        )}
-                        {transmission.transcript_language && (
-                          <span className="transcript-language">{transmission.transcript_language.toUpperCase()}</span>
-                        )}
-                      </div>
-                      <p className="transcript-text">{transmission.transcript}</p>
-                    </div>
-                  )}
-                  {transmission.transcription_error && (
-                    <div className="audio-error">
-                      <AlertCircle size={14} />
-                      <span>{transmission.transcription_error}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+            <AudioItem
+              key={id}
+              transmission={transmission}
+              isPlaying={playingId === id}
+              progress={audioProgress[id] || 0}
+              duration={audioDurations[id] || transmission.duration_seconds}
+              isExpanded={expandedTranscript[id]}
+              onPlay={handlePlay}
+              onSeek={handleSeek}
+              onToggleExpand={(id) => setExpandedTranscript(prev => ({ ...prev, [id]: !prev[id] }))}
+              formatDuration={formatDuration}
+              formatFileSize={formatFileSize}
+              getStatusInfo={getStatusInfo}
+            />
           );
         })}
+
+        {/* Load more sentinel */}
+        {visibleCount < filteredTransmissions.length && (
+          <div ref={loadMoreRef} className="audio-load-more">
+            <Loader2 size={20} className="spinning" />
+            <span>Loading more...</span>
+          </div>
+        )}
       </div>
 
       {/* Count */}
       <div className="audio-footer">
         <span>
-          Showing {filteredTransmissions.length} of {data?.total || 0} transmissions
+          Showing {Math.min(visibleCount, filteredTransmissions.length)} of {filteredTransmissions.length} transmissions
         </span>
       </div>
     </div>

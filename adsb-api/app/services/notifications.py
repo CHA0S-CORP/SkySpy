@@ -6,6 +6,8 @@ import time
 from typing import Optional
 
 import apprise
+import sentry_sdk
+from prometheus_client import Counter
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -13,6 +15,13 @@ from app.core.config import get_settings
 from app.models import NotificationConfig, NotificationLog
 
 logger = logging.getLogger(__name__)
+
+# Prometheus metrics for notifications
+NOTIFICATIONS_SENT = Counter(
+    "skyspy_api_notifications_sent_total",
+    "Total notifications sent",
+    ["notify_type", "status"]
+)
 settings = get_settings()
 
 # Cooldown tracking
@@ -110,12 +119,13 @@ class NotificationManager:
                 apprise_type = apprise.NotifyType.WARNING
             elif notify_type == "emergency":
                 apprise_type = apprise.NotifyType.FAILURE
-            
+
             result = notifier.notify(title=title, body=body, notify_type=apprise_type)
-            
+
             if result:
                 _notification_cooldown[cooldown_key] = time.time()
-                
+                NOTIFICATIONS_SENT.labels(notify_type=notify_type, status="success").inc()
+
                 # Log notification
                 try:
                     log_entry = NotificationLog(
@@ -129,13 +139,18 @@ class NotificationManager:
                     await db.commit()
                 except Exception as e:
                     logger.warning(f"Failed to log notification: {e}")
+                    sentry_sdk.capture_exception(e)
                     await db.rollback()
-                
+
                 logger.info(f"Notification sent: {title}")
-            
+            else:
+                NOTIFICATIONS_SENT.labels(notify_type=notify_type, status="failed").inc()
+
             return result
         except Exception as e:
             logger.error(f"Notification error: {e}")
+            NOTIFICATIONS_SENT.labels(notify_type=notify_type, status="error").inc()
+            sentry_sdk.capture_exception(e)
             return False
     
     @property

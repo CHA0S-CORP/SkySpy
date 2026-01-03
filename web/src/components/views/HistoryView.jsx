@@ -6,7 +6,7 @@ import { useApi } from '../../hooks';
 
 const VALID_DATA_TYPES = ['sessions', 'sightings', 'acars', 'safety'];
 
-export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEventId, onEventViewed, hashParams = {}, setHashParams }) {
+export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEventId, onEventViewed, hashParams = {}, setHashParams, wsRequest, wsConnected }) {
   // Sync viewType with URL hash params
   const [viewType, setViewTypeState] = useState(() => {
     if (hashParams.data && VALID_DATA_TYPES.includes(hashParams.data)) {
@@ -217,11 +217,25 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
       for (const icao of icaos) {
         if (!trackData[icao]) {
           try {
-            const res = await fetch(`${apiBase}/api/v1/history/sightings/${icao}?hours=2&limit=500`);
-            if (res.ok) {
-              const data = await res.json();
-              setTrackData(prev => ({ ...prev, [icao]: data.sightings || [] }));
+            let data;
+            if (wsRequest && wsConnected) {
+              // Use WebSocket for fetching sightings
+              const result = await wsRequest('sightings', { icao_hex: icao, hours: 2, limit: 500 });
+              if (result && result.sightings) {
+                data = result;
+              } else {
+                throw new Error('Invalid sightings response');
+              }
+            } else {
+              // Fallback to HTTP if WebSocket unavailable
+              const res = await fetch(`${apiBase}/api/v1/history/sightings/${icao}?hours=2&limit=500`);
+              if (res.ok) {
+                data = await res.json();
+              } else {
+                throw new Error('HTTP request failed');
+              }
             }
+            setTrackData(prev => ({ ...prev, [icao]: data.sightings || [] }));
           } catch (err) {
             console.error('Failed to fetch track data:', err);
           }
@@ -234,7 +248,7 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
         [eventKey]: { position: 100, isPlaying: false, speed: 1 } // Start at most recent (100%)
       }));
     }
-  }, [expandedMaps, trackData, apiBase]);
+  }, [expandedMaps, trackData, apiBase, wsRequest, wsConnected]);
 
   // Get interpolated position along a track
   const getInterpolatedPosition = (track, percentage) => {
@@ -845,7 +859,8 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
     for (const msg of acarsMessages) {
       if (msg.callsign && !msg.icao_hex) {
         const cs = msg.callsign.trim().toUpperCase();
-        if (!callsignHexCache[cs]) {
+        // Skip if already looked up (cached as null or has value)
+        if (!(cs in callsignHexCache)) {
           callsignsToLookup.add(cs);
         }
       }
@@ -859,26 +874,42 @@ export function HistoryView({ apiBase, onSelectAircraft, onViewEvent, targetEven
 
       for (const callsign of lookups) {
         try {
-          const res = await fetch(`${apiBase}/api/v1/history/sightings?callsign=${encodeURIComponent(callsign)}&hours=24&limit=1`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.sightings?.length > 0 && data.sightings[0].icao_hex) {
-              setCallsignHexCache(prev => ({
-                ...prev,
-                [callsign]: data.sightings[0].icao_hex
-              }));
+          let data;
+          if (wsRequest && wsConnected) {
+            // Use WebSocket for fetching sightings by callsign
+            const result = await wsRequest('sightings', { callsign: callsign, hours: 24, limit: 1 });
+            if (result && result.sightings) {
+              data = result;
             } else {
-              setCallsignHexCache(prev => ({ ...prev, [callsign]: null }));
+              throw new Error('Invalid sightings response');
+            }
+          } else {
+            // Fallback to HTTP if WebSocket unavailable
+            const res = await fetch(`${apiBase}/api/v1/history/sightings?callsign=${encodeURIComponent(callsign)}&hours=24&limit=1`);
+            if (res.ok) {
+              data = await res.json();
+            } else {
+              throw new Error('HTTP request failed');
             }
           }
+          if (data.sightings?.length > 0 && data.sightings[0].icao_hex) {
+            setCallsignHexCache(prev => ({
+              ...prev,
+              [callsign]: data.sightings[0].icao_hex
+            }));
+          } else {
+            // Cache negative result to avoid repeated lookups
+            setCallsignHexCache(prev => ({ ...prev, [callsign]: null }));
+          }
         } catch (err) {
-          // Silently fail
+          // Cache as null to avoid repeated failed lookups
+          setCallsignHexCache(prev => ({ ...prev, [callsign]: null }));
         }
       }
     };
 
     lookupCallsigns();
-  }, [viewType, acarsMessages, callsignHexCache, apiBase]);
+  }, [viewType, acarsMessages.length, callsignHexCache, apiBase, wsRequest, wsConnected]);
 
   // Close label dropdown when clicking outside
   useEffect(() => {

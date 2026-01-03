@@ -3,7 +3,7 @@ import { AlertTriangle, ChevronDown, ChevronUp, Map as MapIcon, Play, Pause, Ski
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft }) {
+export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, wsRequest, wsConnected }) {
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -51,11 +51,25 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft })
         const icaos = [data.icao, data.icao_2].filter(Boolean);
         for (const icao of icaos) {
           try {
-            const trackRes = await fetch(`${apiBase}/api/v1/history/sightings/${icao}?hours=2&limit=500`);
-            if (trackRes.ok) {
-              const trackResult = await trackRes.json();
-              setTrackData(prev => ({ ...prev, [icao]: trackResult.sightings || [] }));
+            let trackResult;
+            if (wsRequest && wsConnected) {
+              // Use WebSocket for fetching sightings
+              const result = await wsRequest('sightings', { icao_hex: icao, hours: 2, limit: 500 });
+              if (result && result.sightings) {
+                trackResult = result;
+              } else {
+                throw new Error('Invalid sightings response');
+              }
+            } else {
+              // Fallback to HTTP if WebSocket unavailable
+              const trackRes = await fetch(`${apiBase}/api/v1/history/sightings/${icao}?hours=2&limit=500`);
+              if (trackRes.ok) {
+                trackResult = await trackRes.json();
+              } else {
+                throw new Error('HTTP request failed');
+              }
             }
+            setTrackData(prev => ({ ...prev, [icao]: trackResult.sightings || [] }));
           } catch (err) {
             console.error('Failed to fetch track data for', icao, err);
           }
@@ -69,7 +83,7 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft })
     };
 
     fetchEvent();
-  }, [eventId, apiBase]);
+  }, [eventId, apiBase, wsRequest, wsConnected]);
 
   // Copy link to clipboard
   const copyLink = useCallback(() => {

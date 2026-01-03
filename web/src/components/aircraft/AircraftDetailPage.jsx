@@ -8,7 +8,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { getTailInfo, getCardinalDirection, callsignsMatch } from '../../utils';
 
-export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onViewHistoryEvent, onViewEvent, aircraft, aircraftInfo, trackHistory, feederLocation }) {
+export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onViewHistoryEvent, onViewEvent, aircraft, aircraftInfo, trackHistory, feederLocation, wsRequest, wsConnected }) {
   const [info, setInfo] = useState(aircraftInfo || null);
 
   // Calculate distance from feeder if not provided
@@ -213,11 +213,25 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
         }
         setAcarsMessages(acarsFound);
         
-        const sightingsRes = await fetch(`${baseUrl}/api/v1/history/sightings/${hex}?hours=24&limit=100`);
-        if (sightingsRes.ok) {
-          const data = await sightingsRes.json();
-          setSightings(data.sightings || []);
+        let sightingsData;
+        if (wsRequest && wsConnected) {
+          // Use WebSocket for fetching sightings
+          const result = await wsRequest('sightings', { icao_hex: hex, hours: 24, limit: 100 });
+          if (result && result.sightings) {
+            sightingsData = result;
+          } else {
+            throw new Error('Invalid sightings response');
+          }
+        } else {
+          // Fallback to HTTP if WebSocket unavailable
+          const sightingsRes = await fetch(`${baseUrl}/api/v1/history/sightings/${hex}?hours=24&limit=100`);
+          if (sightingsRes.ok) {
+            sightingsData = await sightingsRes.json();
+          } else {
+            throw new Error('HTTP request failed');
+          }
         }
+        setSightings(sightingsData.sightings || []);
 
         const safetyRes = await fetch(`${baseUrl}/api/v1/safety/events?icao_hex=${hex}&hours=24&limit=100`);
         if (safetyRes.ok) {
@@ -232,7 +246,7 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
     };
     
     fetchData();
-  }, [hex, baseUrl, info]);
+  }, [hex, baseUrl, info, wsRequest, wsConnected]);
 
   // Refetch ACARS messages when hours filter changes
   useEffect(() => {
@@ -304,20 +318,34 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
 
     const refreshSightings = async () => {
       try {
-        const res = await fetch(`${baseUrl}/api/v1/history/sightings/${hex}?hours=24&limit=100`);
-        if (res.ok) {
-          const data = await res.json();
-          setSightings(data.sightings || []);
+        let data;
+        if (wsRequest && wsConnected) {
+          // Use WebSocket for fetching sightings
+          const result = await wsRequest('sightings', { icao_hex: hex, hours: 24, limit: 100 });
+          if (result && result.sightings) {
+            data = result;
+          } else {
+            throw new Error('Invalid sightings response');
+          }
+        } else {
+          // Fallback to HTTP if WebSocket unavailable
+          const res = await fetch(`${baseUrl}/api/v1/history/sightings/${hex}?hours=24&limit=100`);
+          if (res.ok) {
+            data = await res.json();
+          } else {
+            throw new Error('HTTP request failed');
+          }
         }
+        setSightings(data.sightings || []);
       } catch (err) {
         console.log('Sightings refresh error:', err.message);
       }
     };
 
-    // Refresh every 5 seconds when in live mode
-    const interval = setInterval(refreshSightings, 5000);
+    // Refresh every 30 seconds when in live mode (increased from 5s to reduce API load)
+    const interval = setInterval(refreshSightings, 30000);
     return () => clearInterval(interval);
-  }, [activeTab, trackLiveMode, hex, baseUrl]);
+  }, [activeTab, trackLiveMode, hex, baseUrl, wsRequest, wsConnected]);
 
   const tailInfo = getTailInfo(hex, aircraft?.flight);
 
@@ -1107,9 +1135,21 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
       try {
         const fetchTracks = async (icao) => {
           if (!icao) return [];
-          const res = await fetch(`${baseUrl}/api/v1/history/sightings/${icao}?hours=1&limit=500`);
-          if (!res.ok) return [];
-          const data = await res.json();
+          let data;
+          if (wsRequest && wsConnected) {
+            // Use WebSocket for fetching sightings
+            const result = await wsRequest('sightings', { icao_hex: icao, hours: 1, limit: 500 });
+            if (result && result.sightings) {
+              data = result;
+            } else {
+              return [];
+            }
+          } else {
+            // Fallback to HTTP if WebSocket unavailable
+            const res = await fetch(`${baseUrl}/api/v1/history/sightings/${icao}?hours=1&limit=500`);
+            if (!res.ok) return [];
+            data = await res.json();
+          }
           // Filter to time window around event
           return (data.sightings || []).filter(s => {
             const t = new Date(s.timestamp);
@@ -1136,7 +1176,7 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
         console.error('Error fetching safety track data:', err);
       }
     }
-  }, [expandedSafetyMaps, safetyTrackData, baseUrl]);
+  }, [expandedSafetyMaps, safetyTrackData, baseUrl, wsRequest, wsConnected]);
 
   // Get interpolated position for safety replay
   const getSafetyInterpolatedPosition = useCallback((positions, percentage) => {

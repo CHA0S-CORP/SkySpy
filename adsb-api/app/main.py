@@ -7,13 +7,21 @@ historical data, alert rules, safety monitoring, and Apprise notifications.
 import asyncio
 import logging
 import os
+import re
 import time
 import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import FastAPI, Request, WebSocket, Query
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+from sentry_sdk.integrations.asyncio import AsyncioIntegration
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+
+from fastapi import FastAPI, Request, WebSocket, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -43,11 +51,80 @@ from app.services.aircraft_info import (
 from app.services import opensky_db
 from app.services import airspace as airspace_service
 from app.services import audio as audio_service
+from app.services import geodata as geodata_service
 from app.routers import aircraft, map, history, alerts, safety, notifications, system, aviation, airframe, acars, audio
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# Initialize Sentry
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        environment=settings.sentry_environment,
+        traces_sample_rate=settings.sentry_traces_sample_rate,
+        profiles_sample_rate=settings.sentry_profiles_sample_rate,
+        integrations=[
+            FastApiIntegration(transaction_style="endpoint"),
+            StarletteIntegration(transaction_style="endpoint"),
+            SqlalchemyIntegration(),
+            AsyncioIntegration(),
+        ],
+        send_default_pii=False,
+    )
+    logger.info(f"Sentry initialized (environment: {settings.sentry_environment})")
+
+# Prometheus Metrics
+REQUEST_COUNT = Counter(
+    "skyspy_api_http_requests_total",
+    "Total HTTP requests",
+    ["method", "endpoint", "status"]
+)
+REQUEST_LATENCY = Histogram(
+    "skyspy_api_http_request_duration_seconds",
+    "HTTP request latency in seconds",
+    ["method", "endpoint"],
+    buckets=[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+)
+AIRCRAFT_COUNT = Gauge(
+    "skyspy_api_aircraft_count",
+    "Current number of aircraft being tracked",
+    ["source"]
+)
+AIRCRAFT_POLL_DURATION = Histogram(
+    "skyspy_api_aircraft_poll_duration_seconds",
+    "Time spent polling aircraft data",
+    buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]
+)
+DB_OPERATION_DURATION = Histogram(
+    "skyspy_api_db_operation_duration_seconds",
+    "Database operation duration in seconds",
+    ["operation"],
+    buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5]
+)
+SAFETY_EVENTS_TOTAL = Counter(
+    "skyspy_api_safety_events_total",
+    "Total safety events detected",
+    ["event_type", "severity"]
+)
+ALERTS_TRIGGERED_TOTAL = Counter(
+    "skyspy_api_alerts_triggered_total",
+    "Total alerts triggered",
+    ["priority"]
+)
+SSE_SUBSCRIBERS = Gauge(
+    "skyspy_api_sse_subscribers",
+    "Current number of SSE subscribers"
+)
+WEBSOCKET_CONNECTIONS = Gauge(
+    "skyspy_api_websocket_connections",
+    "Current number of WebSocket connections"
+)
+ACTIVE_SESSIONS = Gauge(
+    "skyspy_api_active_sessions",
+    "Number of active aircraft tracking sessions"
+)
 
 # Track DB store timing
 _last_db_store_time = 0
@@ -219,6 +296,9 @@ async def process_aircraft_data(db: AsyncSession, aircraft_list: list[dict], sou
                 # Check alerts for new aircraft
                 alerts_list = await check_alerts(db, ac, distance_nm)
                 for alert in alerts_list:
+                    # Track alerts in Prometheus
+                    ALERTS_TRIGGERED_TOTAL.labels(priority=alert["priority"]).inc()
+
                     aircraft_data = {
                         "hex": icao,
                         "flight": callsign,
@@ -283,48 +363,66 @@ async def process_aircraft_data(db: AsyncSession, aircraft_list: list[dict], sou
 async def fetch_and_process_aircraft():
     """Fetch and process aircraft data."""
     global _last_db_store_time
-    
+
+    poll_start = time.time()
     all_aircraft = []
-    
-    # Fetch from 1090MHz
+    aircraft_1090_count = 0
+    aircraft_978_count = 0
+
+    # Fetch from 1090MHz (local service, not upstream)
     try:
         url = f"{settings.ultrafeeder_url}/data/aircraft.json"
-        data = await safe_request(url)
+        data = await safe_request(url, is_upstream=False)
         if data:
             aircraft_1090 = data.get("aircraft", [])
+            aircraft_1090_count = len(aircraft_1090)
             all_aircraft.extend(aircraft_1090)
-            logger.debug(f"Fetched {len(aircraft_1090)} aircraft from 1090MHz")
+            logger.debug(f"Fetched {aircraft_1090_count} aircraft from 1090MHz")
     except Exception as e:
         logger.warning(f"Failed to fetch 1090 data: {e}")
-    
-    # Fetch from 978MHz (UAT)
+        sentry_sdk.capture_exception(e)
+
+    # Fetch from 978MHz UAT (local service, not upstream)
     try:
         url = f"{settings.dump978_url}/skyaware978/data/aircraft.json"
-        data = await safe_request(url)
+        data = await safe_request(url, is_upstream=False)
         if data:
             aircraft_978 = data.get("aircraft", [])
+            aircraft_978_count = len(aircraft_978)
             all_aircraft.extend(aircraft_978)
     except Exception as e:
         logger.debug(f"Failed to fetch 978 data: {e}")
-    
+
+    # Update Prometheus gauges for aircraft counts
+    AIRCRAFT_COUNT.labels(source="1090").set(aircraft_1090_count)
+    AIRCRAFT_COUNT.labels(source="978").set(aircraft_978_count)
+    AIRCRAFT_COUNT.labels(source="total").set(len(all_aircraft))
+    ACTIVE_SESSIONS.set(len(_active_sessions))
+
+    # Record poll duration
+    AIRCRAFT_POLL_DURATION.observe(time.time() - poll_start)
+
     # Store to database periodically
     now = time.time()
     should_store_db = False
-    
+
     with _db_store_lock:
         if (now - _last_db_store_time) >= settings.db_store_interval:
             _last_db_store_time = now
             should_store_db = True
-    
+
     if all_aircraft and should_store_db:
+        db_start = time.time()
         async with AsyncSessionLocal() as db:
             try:
                 await process_aircraft_data(db, all_aircraft, "1090")
+                DB_OPERATION_DURATION.labels(operation="store_aircraft").observe(time.time() - db_start)
                 logger.debug(f"Stored {len(all_aircraft)} aircraft to database")
             except Exception as e:
                 logger.error(f"Error in process_aircraft_data: {e}")
+                sentry_sdk.capture_exception(e)
                 await db.rollback()
-    
+
     # Safety monitoring
     sse_manager = get_sse_manager()
     sio_manager = get_socketio_manager()
@@ -335,6 +433,12 @@ async def fetch_and_process_aircraft():
             if safety_events:
                 async with AsyncSessionLocal() as db:
                     for event in safety_events:
+                        # Track safety events in Prometheus
+                        SAFETY_EVENTS_TOTAL.labels(
+                            event_type=event["event_type"],
+                            severity=event["severity"]
+                        ).inc()
+
                         db_id = await store_safety_event(db, event)
                         if db_id:
                             event["db_id"] = db_id  # Store as db_id, not id (id is the string event ID)
@@ -342,7 +446,7 @@ async def fetch_and_process_aircraft():
                         await sse_manager.publish_safety_event(event)
                         if sio_manager:
                             await sio_manager.publish_safety_event(event)
-                        
+
                         if event["severity"] == "critical":
                             emoji = "⚠️" if event["event_type"] == "proximity_conflict" else "🔴"
                             await notifier.send(
@@ -355,11 +459,12 @@ async def fetch_and_process_aircraft():
                                 callsign=event.get("callsign"),
                                 details=event.get("details", {})
                             )
-                        
+
                         logger.warning(f"Safety event: {event['event_type']} - {event['message']}")
         except Exception as e:
             logger.error(f"Error in safety monitoring: {e}")
-    
+            sentry_sdk.capture_exception(e)
+
     # Always publish SSE and Socket.IO updates
     await sse_manager.publish_aircraft_update(all_aircraft)
     if sio_manager:
@@ -494,6 +599,10 @@ async def lifespan(app: FastAPI):
     airspace_task = await airspace_service.start_refresh_task(AsyncSessionLocal, ws_manager, sio_manager)
     logger.info("Airspace refresh service started (advisories: 5min, boundaries: 24h)")
 
+    # Start geographic data refresh service (airports, navaids, geojson - daily refresh)
+    geodata_task = await geodata_service.start_refresh_task(AsyncSessionLocal)
+    logger.info("Geographic data refresh service started (daily refresh)")
+
     # Start audio transcription queue if enabled
     transcription_task = None
     if settings.transcription_enabled:
@@ -551,6 +660,9 @@ async def lifespan(app: FastAPI):
 
     # Stop airspace refresh service
     await airspace_service.stop_refresh_task()
+
+    # Stop geographic data refresh service
+    await geodata_service.stop_refresh_task()
 
     # Stop ACARS service
     await acars_service.stop()
@@ -661,6 +773,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Prometheus metrics middleware
+@app.middleware("http")
+async def prometheus_metrics_middleware(request: Request, call_next):
+    """Middleware to collect Prometheus metrics for HTTP requests."""
+    # Skip metrics endpoint to avoid recursion
+    if request.url.path == "/metrics":
+        return await call_next(request)
+
+    method = request.method
+    # Normalize path to avoid high cardinality (e.g., /api/v1/aircraft/ABC123 -> /api/v1/aircraft/{icao})
+    path = request.url.path
+    for pattern, replacement in [
+        (r"/aircraft/[A-Fa-f0-9]{6}", "/aircraft/{icao}"),
+        (r"/sessions/\d+", "/sessions/{id}"),
+        (r"/alerts/\d+", "/alerts/{id}"),
+        (r"/history/\d+", "/history/{id}"),
+    ]:
+        path = re.sub(pattern, replacement, path)
+
+    start_time = time.time()
+    response = await call_next(request)
+    duration = time.time() - start_time
+
+    REQUEST_COUNT.labels(method=method, endpoint=path, status=response.status_code).inc()
+    REQUEST_LATENCY.labels(method=method, endpoint=path).observe(duration)
+
+    return response
+
+
 # Include routers
 app.include_router(aircraft.router)
 app.include_router(map.router)
@@ -713,6 +855,13 @@ async def websocket_endpoint(
 async def root_health_check():
     """Simple health check endpoint at root level for load balancers."""
     return {"status": "ok"}
+
+
+# Prometheus metrics endpoint
+@app.get("/metrics", include_in_schema=False)
+async def prometheus_metrics():
+    """Expose Prometheus metrics."""
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 # Static files and frontend

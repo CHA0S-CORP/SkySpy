@@ -330,6 +330,147 @@ class AirspaceBoundary(Base):
     )
 
 
+class CachedAirport(Base):
+    """Cached airport data from Aviation Weather Center."""
+    __tablename__ = "cached_airports"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    # Airport identification
+    icao_id: Mapped[str] = mapped_column(String(4), unique=True, index=True, nullable=False)
+    name: Mapped[Optional[str]] = mapped_column(String(200))
+
+    # Location
+    latitude: Mapped[float] = mapped_column(Float, index=True)
+    longitude: Mapped[float] = mapped_column(Float, index=True)
+    elevation_ft: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # Type and classification
+    airport_type: Mapped[Optional[str]] = mapped_column(String(50))  # large_airport, medium_airport, etc.
+    country: Mapped[Optional[str]] = mapped_column(String(100))
+    region: Mapped[Optional[str]] = mapped_column(String(100))
+
+    # Additional data
+    source_data: Mapped[Optional[dict]] = mapped_column(JSON)
+
+    __table_args__ = (
+        Index("idx_cached_airport_location", "latitude", "longitude"),
+    )
+
+
+class CachedNavaid(Base):
+    """Cached navigation aid data from Aviation Weather Center."""
+    __tablename__ = "cached_navaids"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    # Navaid identification
+    ident: Mapped[str] = mapped_column(String(10), index=True, nullable=False)
+    name: Mapped[Optional[str]] = mapped_column(String(100))
+    navaid_type: Mapped[Optional[str]] = mapped_column(String(20), index=True)  # VOR, VORTAC, NDB, etc.
+
+    # Location
+    latitude: Mapped[float] = mapped_column(Float, index=True)
+    longitude: Mapped[float] = mapped_column(Float, index=True)
+
+    # Technical details
+    frequency: Mapped[Optional[float]] = mapped_column(Float)
+    channel: Mapped[Optional[str]] = mapped_column(String(10))
+
+    # Additional data
+    source_data: Mapped[Optional[dict]] = mapped_column(JSON)
+
+    __table_args__ = (
+        Index("idx_cached_navaid_location", "latitude", "longitude"),
+        Index("idx_cached_navaid_ident_type", "ident", "navaid_type"),
+    )
+
+
+class CachedGeoJSON(Base):
+    """Cached GeoJSON data for map overlays (states, countries, water bodies)."""
+    __tablename__ = "cached_geojson"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    # Data identification
+    data_type: Mapped[str] = mapped_column(String(50), index=True, nullable=False)  # states, countries, water
+    name: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
+    code: Mapped[Optional[str]] = mapped_column(String(10), index=True)  # State/country code
+
+    # Bounding box for spatial queries
+    bbox_min_lat: Mapped[Optional[float]] = mapped_column(Float)
+    bbox_max_lat: Mapped[Optional[float]] = mapped_column(Float)
+    bbox_min_lon: Mapped[Optional[float]] = mapped_column(Float)
+    bbox_max_lon: Mapped[Optional[float]] = mapped_column(Float)
+
+    # GeoJSON geometry
+    geometry: Mapped[dict] = mapped_column(JSON, nullable=False)  # GeoJSON geometry object
+    properties: Mapped[Optional[dict]] = mapped_column(JSON)  # Feature properties
+
+    __table_args__ = (
+        Index("idx_cached_geojson_type_name", "data_type", "name"),
+        Index("idx_cached_geojson_bbox", "bbox_min_lat", "bbox_max_lat", "bbox_min_lon", "bbox_max_lon"),
+    )
+
+
+class CachedPirep(Base):
+    """Cached Pilot Reports (PIREPs) from Aviation Weather Center."""
+    __tablename__ = "cached_pireps"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    # PIREP identification
+    pirep_id: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    report_type: Mapped[str] = mapped_column(String(10), default="UA", index=True)  # UA (routine), UUA (urgent)
+
+    # Location
+    latitude: Mapped[Optional[float]] = mapped_column(Float, index=True)
+    longitude: Mapped[Optional[float]] = mapped_column(Float, index=True)
+    location: Mapped[Optional[str]] = mapped_column(String(50))  # e.g., "KSEA", "OV SEA090025"
+
+    # Time
+    observation_time: Mapped[Optional[datetime]] = mapped_column(DateTime, index=True)
+
+    # Flight level/altitude
+    flight_level: Mapped[Optional[int]] = mapped_column(Integer)  # FL350 = 350
+    altitude_ft: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # Aircraft info
+    aircraft_type: Mapped[Optional[str]] = mapped_column(String(10))
+
+    # Weather conditions
+    turbulence_type: Mapped[Optional[str]] = mapped_column(String(20), index=True)  # NEG, LGT, MOD, SEV, EXTRM
+    turbulence_freq: Mapped[Optional[str]] = mapped_column(String(20))  # OCNL, CONT, etc.
+    turbulence_base_ft: Mapped[Optional[int]] = mapped_column(Integer)
+    turbulence_top_ft: Mapped[Optional[int]] = mapped_column(Integer)
+
+    icing_type: Mapped[Optional[str]] = mapped_column(String(20), index=True)  # NEG, TRC, LGT, MOD, SEV
+    icing_intensity: Mapped[Optional[str]] = mapped_column(String(20))
+    icing_base_ft: Mapped[Optional[int]] = mapped_column(Integer)
+    icing_top_ft: Mapped[Optional[int]] = mapped_column(Integer)
+
+    sky_cover: Mapped[Optional[str]] = mapped_column(String(100))  # Cloud layers
+    visibility_sm: Mapped[Optional[float]] = mapped_column(Float)
+    weather: Mapped[Optional[str]] = mapped_column(String(100))  # Present weather
+    temperature_c: Mapped[Optional[int]] = mapped_column(Integer)
+    wind_dir: Mapped[Optional[int]] = mapped_column(Integer)
+    wind_speed_kt: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # Raw data
+    raw_text: Mapped[Optional[str]] = mapped_column(Text)
+    source_data: Mapped[Optional[dict]] = mapped_column(JSON)
+
+    __table_args__ = (
+        Index("idx_cached_pirep_location", "latitude", "longitude"),
+        Index("idx_cached_pirep_time", "observation_time"),
+        Index("idx_cached_pirep_conditions", "turbulence_type", "icing_type"),
+    )
+
+
 class AudioTransmission(Base):
     """Audio transmissions captured from rtl-airband for transcription."""
     __tablename__ = "audio_transmissions"

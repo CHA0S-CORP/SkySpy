@@ -15,6 +15,8 @@ import httpx
 from app.core import get_settings, cached, get_db
 from app.schemas import AviationDataResponse, ErrorResponse
 from app.services import airspace as airspace_service
+from app.services import geodata as geodata_service
+from app.services import weather_cache
 
 router = APIRouter(prefix="/api/v1/aviation", tags=["Aviation"])
 settings = get_settings()
@@ -74,6 +76,9 @@ Returns current weather observations from airports sorted by distance.
 - Flight category (VFR/MVFR/IFR/LIFR)
 - Distance from center point
 
+**Data Source:** Uses Redis cache when available (5-minute TTL).
+Falls back to Aviation Weather Center API.
+
 **Parameters:**
 - `lat`, `lon` - Center point coordinates
 - `radius` - Search radius in nautical miles (default 100)
@@ -105,7 +110,6 @@ Returns current weather observations from airports sorted by distance.
         }
     }
 )
-@cached(ttl_seconds=300)
 async def get_metars_by_location(
     lat: float = Query(..., ge=-90, le=90, description="Center latitude"),
     lon: float = Query(..., ge=-180, le=180, description="Center longitude"),
@@ -117,14 +121,37 @@ async def get_metars_by_location(
     # Convert radius to bounding box
     deg_offset = radius / 60.0
     bbox = f"{lat - deg_offset},{lon - deg_offset},{lat + deg_offset},{lon + deg_offset}"
-    
+
+    # Try Redis cache first
+    cached_data = await weather_cache.get_cached_metars_bbox(bbox, hours)
+    if cached_data:
+        # Calculate distances for cached data
+        for m in cached_data:
+            m_lat = m.get("lat", 0)
+            m_lon = m.get("lon", 0)
+            m["distance_nm"] = round(haversine_nm(lat, lon, m_lat, m_lon), 1)
+
+        metars = [m for m in cached_data if m.get("distance_nm", 9999) <= radius]
+        metars.sort(key=lambda x: x.get("distance_nm", 9999))
+
+        return {
+            "data": metars[:limit],
+            "count": min(len(metars), limit),
+            "center": {"lat": lat, "lon": lon},
+            "radius_nm": radius,
+            "source": "redis",
+            "cached": True
+        }
+
+    # Fetch from API
     data = await fetch_awc_data("metar", {
         "bbox": bbox,
         "format": "json",
         "hours": hours
     })
-    
+
     if isinstance(data, dict) and "error" in data:
+        weather_cache.record_metar_api_request(success=False)
         return {
             "data": [],
             "count": 0,
@@ -133,19 +160,24 @@ async def get_metars_by_location(
             "source": "aviationweather.gov",
             "error": data["error"]
         }
-    
+
+    weather_cache.record_metar_api_request(success=True)
     metars = data if isinstance(data, list) else []
-    
+
+    # Cache the raw API response in Redis (before filtering)
+    if metars:
+        await weather_cache.cache_metars_bbox(bbox, metars, hours, ttl=300)
+
     # Calculate distances
     for m in metars:
         m_lat = m.get("lat", 0)
         m_lon = m.get("lon", 0)
         m["distance_nm"] = round(haversine_nm(lat, lon, m_lat, m_lon), 1)
-    
+
     # Filter by actual radius and sort by distance
     metars = [m for m in metars if m.get("distance_nm", 9999) <= radius]
     metars.sort(key=lambda x: x.get("distance_nm", 9999))
-    
+
     return {
         "data": metars[:limit],
         "count": min(len(metars), limit),
@@ -165,6 +197,9 @@ Find airports within a geographic area.
 Returns airports sorted by distance from the specified coordinates.
 Useful for finding alternates or nearby airfields.
 
+**Data Source:** Uses locally cached data (refreshed daily) for fast responses.
+Falls back to Aviation Weather Center API if cache is empty.
+
 **Parameters:**
 - `lat`, `lon` - Center point coordinates
 - `radius` - Search radius in nautical miles (default 50)
@@ -183,31 +218,47 @@ Useful for finding alternates or nearby airfields.
                         "count": 2,
                         "center": {"lat": 47.5, "lon": -122.3},
                         "radius_nm": 50,
-                        "source": "aviationweather.gov"
+                        "source": "database"
                     }
                 }
             }
         }
     }
 )
-@cached(ttl_seconds=3600)
 async def get_airports_by_location(
     lat: float = Query(..., ge=-90, le=90, description="Center latitude"),
     lon: float = Query(..., ge=-180, le=180, description="Center longitude"),
     radius: float = Query(50, ge=5, le=500, description="Search radius in nautical miles"),
-    limit: int = Query(20, ge=1, le=100, description="Maximum results")
+    limit: int = Query(20, ge=1, le=100, description="Maximum results"),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Find airports within a geographic area."""
+    """Find airports within a geographic area using cached data."""
+    # Try cached data first
+    airports = await geodata_service.get_cached_airports(
+        db, lat=lat, lon=lon, radius_nm=radius, limit=limit
+    )
+
+    if airports:
+        return {
+            "data": airports,
+            "count": len(airports),
+            "center": {"lat": lat, "lon": lon},
+            "radius_nm": radius,
+            "source": "database",
+            "cached": True
+        }
+
+    # Fallback to API if cache is empty
     deg_offset = radius / 60.0
     bbox = f"{lat - deg_offset},{lon - deg_offset},{lat + deg_offset},{lon + deg_offset}"
-    
+
     data = await fetch_awc_data("airport", {
         "bbox": bbox,
         "zoom": 8,
         "density": 3,
         "format": "json"
     })
-    
+
     if isinstance(data, dict) and "error" in data:
         return {
             "data": [],
@@ -217,19 +268,19 @@ async def get_airports_by_location(
             "source": "aviationweather.gov",
             "error": data["error"]
         }
-    
+
     airports = data if isinstance(data, list) else []
-    
+
     # Calculate distances
     for apt in airports:
         apt_lat = apt.get("lat", 0)
         apt_lon = apt.get("lon", 0)
         apt["distance_nm"] = round(haversine_nm(lat, lon, apt_lat, apt_lon), 1)
-    
+
     # Filter and sort
     airports = [a for a in airports if a.get("distance_nm", 9999) <= radius]
     airports.sort(key=lambda x: x.get("distance_nm", 9999))
-    
+
     return {
         "data": airports[:limit],
         "count": min(len(airports), limit),
@@ -248,6 +299,9 @@ Find navigation aids within a geographic area.
 
 Returns VORs, VORTACs, NDBs, and other navaids sorted by distance.
 Useful for flight planning and navigation.
+
+**Data Source:** Uses locally cached data (refreshed daily) for fast responses.
+Falls back to Aviation Weather Center API if cache is empty.
 
 **Navaid Types:**
 - VOR - VHF Omnidirectional Range
@@ -281,14 +335,13 @@ Useful for flight planning and navigation.
                         "count": 1,
                         "center": {"lat": 47.5, "lon": -122.3},
                         "radius_nm": 50,
-                        "source": "aviationweather.gov"
+                        "source": "database"
                     }
                 }
             }
         }
     }
 )
-@cached(ttl_seconds=3600)
 async def get_navaids_by_location(
     lat: float = Query(..., ge=-90, le=90, description="Center latitude"),
     lon: float = Query(..., ge=-180, le=180, description="Center longitude"),
@@ -299,17 +352,34 @@ async def get_navaids_by_location(
         alias="type",
         description="Filter by navaid type",
         enum=["VOR", "VORTAC", "VOR-DME", "NDB", "TACAN", "DME"]
-    )
+    ),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Find navaids within a geographic area."""
+    """Find navaids within a geographic area using cached data."""
+    # Try cached data first
+    navaids = await geodata_service.get_cached_navaids(
+        db, lat=lat, lon=lon, radius_nm=radius, navaid_type=navaid_type, limit=limit
+    )
+
+    if navaids:
+        return {
+            "data": navaids,
+            "count": len(navaids),
+            "center": {"lat": lat, "lon": lon},
+            "radius_nm": radius,
+            "source": "database",
+            "cached": True
+        }
+
+    # Fallback to API if cache is empty
     deg_offset = radius / 60.0
     bbox = f"{lat - deg_offset},{lon - deg_offset},{lat + deg_offset},{lon + deg_offset}"
-    
+
     data = await fetch_awc_data("navaid", {
         "bbox": bbox,
         "format": "json"
     })
-    
+
     if isinstance(data, dict) and "error" in data:
         return {
             "data": [],
@@ -319,23 +389,23 @@ async def get_navaids_by_location(
             "source": "aviationweather.gov",
             "error": data["error"]
         }
-    
+
     navaids = data if isinstance(data, list) else []
-    
+
     # Filter by type if specified
     if navaid_type:
         navaids = [n for n in navaids if n.get("type", "").upper() == navaid_type.upper()]
-    
+
     # Calculate distances
     for nav in navaids:
         nav_lat = nav.get("lat", 0)
         nav_lon = nav.get("lon", 0)
         nav["distance_nm"] = round(haversine_nm(lat, lon, nav_lat, nav_lon), 1)
-    
+
     # Filter and sort
     navaids = [n for n in navaids if n.get("distance_nm", 9999) <= radius]
     navaids.sort(key=lambda x: x.get("distance_nm", 9999))
-    
+
     return {
         "data": navaids[:limit],
         "count": min(len(navaids), limit),
@@ -360,6 +430,9 @@ PIREPs are reports from pilots about actual conditions:
 - Other significant weather
 
 Useful for understanding real conditions aloft.
+
+**Data Source:** Uses database cache for recent PIREPs.
+Fetches from Aviation Weather Center API and stores new reports.
 
 **Parameters:**
 - `lat`, `lon` - Center point coordinates
@@ -390,26 +463,42 @@ Useful for understanding real conditions aloft.
         }
     }
 )
-@cached(ttl_seconds=300)
 async def get_pireps_by_location(
     lat: float = Query(..., ge=-90, le=90, description="Center latitude"),
     lon: float = Query(..., ge=-180, le=180, description="Center longitude"),
     radius: float = Query(100, ge=10, le=500, description="Search radius in nautical miles"),
     limit: int = Query(50, ge=1, le=200, description="Maximum results"),
-    hours: int = Query(2, ge=1, le=12, description="Hours of reports")
+    hours: int = Query(2, ge=1, le=12, description="Hours of reports"),
+    db: AsyncSession = Depends(get_db)
 ):
     """Get pilot reports within a geographic area."""
-    # Convert radius to bounding box (AWC API now requires bbox or station+distance)
+    # Try database cache first
+    cached_pireps = await weather_cache.get_cached_pireps(
+        db, lat=lat, lon=lon, radius_nm=radius, hours=hours, limit=limit
+    )
+
+    # Fetch from API to get any new reports
     deg_offset = radius / 60.0
     bbox = f"{lat - deg_offset},{lon - deg_offset},{lat + deg_offset},{lon + deg_offset}"
-    
+
     data = await fetch_awc_data("pirep", {
         "format": "json",
         "age": hours,
         "bbox": bbox
     })
-    
+
     if isinstance(data, dict) and "error" in data:
+        # Return cached data if API fails
+        if cached_pireps:
+            return {
+                "data": cached_pireps[:limit],
+                "count": min(len(cached_pireps), limit),
+                "center": {"lat": lat, "lon": lon},
+                "radius_nm": radius,
+                "source": "database",
+                "cached": True,
+                "api_error": data["error"]
+            }
         return {
             "data": [],
             "count": 0,
@@ -418,10 +507,19 @@ async def get_pireps_by_location(
             "source": "aviationweather.gov",
             "error": data["error"]
         }
-    
+
     pireps = data if isinstance(data, list) else []
-    
-    # Calculate distances
+
+    # Store new PIREPs in the database
+    if pireps:
+        stored = await weather_cache.store_pireps(db, pireps)
+        if stored > 0:
+            # Re-fetch from database to get the updated set
+            cached_pireps = await weather_cache.get_cached_pireps(
+                db, lat=lat, lon=lon, radius_nm=radius, hours=hours, limit=limit
+            )
+
+    # Calculate distances for API data
     for p in pireps:
         p_lat = p.get("lat", 0)
         p_lon = p.get("lon", 0)
@@ -429,19 +527,128 @@ async def get_pireps_by_location(
             p["distance_nm"] = round(haversine_nm(lat, lon, p_lat, p_lon), 1)
         else:
             p["distance_nm"] = None
-    
+
     # Filter by actual radius (bbox is square approximation) and sort
     pireps = [p for p in pireps if p.get("distance_nm") is not None and p["distance_nm"] <= radius]
     pireps.sort(key=lambda x: x.get("distance_nm") or 9999)
-    
+
     return {
         "data": pireps[:limit],
         "count": min(len(pireps), limit),
         "center": {"lat": lat, "lon": lon},
         "radius_nm": radius,
         "source": "aviationweather.gov",
-        "cached": False
+        "cached": False,
+        "stored_new": len(pireps) > 0
     }
+
+
+@router.get(
+    "/pireps/history",
+    summary="Get Historical PIREPs",
+    description="""
+Get historical Pilot Reports (PIREPs) from the database.
+
+Query stored PIREPs by time range with optional location and condition filters.
+
+**Parameters:**
+- `start` - Start time (ISO 8601 format, default: 24 hours ago)
+- `end` - End time (ISO 8601 format, default: now)
+- `lat`, `lon` - Center point for location filter (optional)
+- `radius` - Search radius in nautical miles (default 100)
+- `turbulence` - Filter to only turbulence reports
+- `icing` - Filter to only icing reports
+- `limit` - Maximum results (default 200)
+
+**Data Source:** Database (PIREPs are stored from API calls)
+    """,
+    responses={
+        200: {
+            "description": "Historical pilot reports",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "data": [{
+                            "pirep_id": "abc123",
+                            "rawOb": "KSEA UA /OV SEA/TM 1230/FL350/TP B738/TB MOD",
+                            "acType": "B738",
+                            "fltlvl": 350,
+                            "turbType": "MOD",
+                            "obsTime": "2024-01-15T12:30:00"
+                        }],
+                        "count": 1,
+                        "time_range": {
+                            "start": "2024-01-14T12:00:00",
+                            "end": "2024-01-15T12:00:00"
+                        },
+                        "source": "database"
+                    }
+                }
+            }
+        }
+    }
+)
+async def get_pireps_history(
+    start: Optional[str] = Query(None, description="Start time (ISO 8601)"),
+    end: Optional[str] = Query(None, description="End time (ISO 8601)"),
+    lat: Optional[float] = Query(None, ge=-90, le=90, description="Center latitude (optional)"),
+    lon: Optional[float] = Query(None, ge=-180, le=180, description="Center longitude (optional)"),
+    radius: float = Query(100, ge=10, le=500, description="Search radius in nautical miles"),
+    turbulence: bool = Query(False, description="Filter to turbulence reports only"),
+    icing: bool = Query(False, description="Filter to icing reports only"),
+    limit: int = Query(200, ge=1, le=1000, description="Maximum results"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get historical PIREPs from the database."""
+    # Parse time range
+    now = datetime.utcnow()
+    start_time = now - timedelta(hours=24)
+    end_time = now
+
+    if start:
+        try:
+            start_time = datetime.fromisoformat(start.replace("Z", "+00:00")).replace(tzinfo=None)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid start time format")
+
+    if end:
+        try:
+            end_time = datetime.fromisoformat(end.replace("Z", "+00:00")).replace(tzinfo=None)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid end time format")
+
+    pireps = await weather_cache.get_historical_pireps(
+        db,
+        start_time=start_time,
+        end_time=end_time,
+        lat=lat,
+        lon=lon,
+        radius_nm=radius,
+        turbulence_only=turbulence,
+        icing_only=icing,
+        limit=limit
+    )
+
+    response = {
+        "data": pireps,
+        "count": len(pireps),
+        "time_range": {
+            "start": start_time.isoformat(),
+            "end": end_time.isoformat()
+        },
+        "source": "database"
+    }
+
+    if lat is not None and lon is not None:
+        response["center"] = {"lat": lat, "lon": lon}
+        response["radius_nm"] = radius
+
+    if turbulence:
+        response["filter"] = "turbulence"
+    elif icing:
+        response["filter"] = "icing"
+
+    return response
 
 
 @router.get(
@@ -546,6 +753,9 @@ METAR provides current weather conditions including:
 - Altimeter setting
 - Flight category (VFR/MVFR/IFR/LIFR)
 
+**Data Source:** Uses Redis cache when available (5-minute TTL).
+Falls back to Aviation Weather Center API.
+
 Station IDs are 4-letter ICAO codes (e.g., KSEA, KJFK, EGLL).
     """,
     responses={
@@ -574,7 +784,6 @@ Station IDs are 4-letter ICAO codes (e.g., KSEA, KJFK, EGLL).
         404: {"model": ErrorResponse, "description": "Station not found"}
     }
 )
-@cached(ttl_seconds=300)
 async def get_metar(
     station: str = Path(
         ...,
@@ -591,18 +800,39 @@ async def get_metar(
     )
 ):
     """Get METAR weather observation for an airport."""
+    station_upper = station.upper()
+
+    # Try Redis cache first
+    cached_data = await weather_cache.get_cached_metar(station_upper, hours)
+    if cached_data:
+        return {
+            "data": cached_data,
+            "count": len(cached_data) if isinstance(cached_data, list) else 1,
+            "source": "redis",
+            "cached": True
+        }
+
+    # Fetch from API
     data = await fetch_awc_data("metar", {
-        "ids": station.upper(),
+        "ids": station_upper,
         "format": "json",
         "hours": hours
     })
-    
+
     if isinstance(data, dict) and "error" in data:
+        weather_cache.record_metar_api_request(success=False)
         raise HTTPException(status_code=503, detail=f"Weather service error: {data['error']}")
-    
+
     if not data:
-        raise HTTPException(status_code=404, detail=f"No METAR found for {station.upper()}")
-    
+        weather_cache.record_metar_api_request(success=True)
+        raise HTTPException(status_code=404, detail=f"No METAR found for {station_upper}")
+
+    weather_cache.record_metar_api_request(success=True)
+
+    # Cache in Redis
+    if data:
+        await weather_cache.cache_metar(station_upper, data, hours, ttl=300)
+
     return {
         "data": data,
         "count": len(data) if isinstance(data, list) else 1,
@@ -1053,4 +1283,173 @@ async def get_airspace_history(
             "end": end_time.isoformat()
         },
         "source": "database"
+    }
+
+
+# =============================================================================
+# GeoJSON Map Overlay Endpoints
+# =============================================================================
+
+@router.get(
+    "/geojson/{data_type}",
+    summary="Get GeoJSON Map Overlays",
+    description="""
+Get cached GeoJSON boundary data for map overlays.
+
+**Data Types:**
+- `states` - US state and province boundaries
+- `countries` - Country boundaries
+- `water` - Major lakes and water bodies
+
+**Data Source:** Cached from Natural Earth (refreshed daily).
+
+**Parameters:**
+- `data_type` - Type of GeoJSON data to retrieve
+- `lat`, `lon` - Optional center point to filter nearby features
+- `radius` - Search radius in nautical miles (default 500)
+    """,
+    responses={
+        200: {
+            "description": "GeoJSON FeatureCollection",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "type": "FeatureCollection",
+                        "features": [
+                            {
+                                "type": "Feature",
+                                "id": "US-WA",
+                                "properties": {"name": "Washington", "code": "US-WA"},
+                                "geometry": {"type": "Polygon", "coordinates": []}
+                            }
+                        ],
+                        "count": 1,
+                        "source": "database"
+                    }
+                }
+            }
+        }
+    }
+)
+async def get_geojson_overlays(
+    data_type: str = Path(
+        ...,
+        description="Type of GeoJSON data",
+        enum=["states", "countries", "water"]
+    ),
+    lat: Optional[float] = Query(None, ge=-90, le=90, description="Center latitude for filtering"),
+    lon: Optional[float] = Query(None, ge=-180, le=180, description="Center longitude for filtering"),
+    radius: float = Query(500, ge=10, le=5000, description="Search radius in nautical miles"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get cached GeoJSON boundary data for map overlays."""
+    features = await geodata_service.get_cached_geojson(
+        db, data_type=data_type, lat=lat, lon=lon, radius_nm=radius
+    )
+
+    return {
+        "type": "FeatureCollection",
+        "features": features,
+        "count": len(features),
+        "data_type": data_type,
+        "source": "database",
+        "cached": True
+    }
+
+
+@router.get(
+    "/cache-stats",
+    summary="Get Geographic Data Cache Statistics",
+    description="""
+Get statistics about the cached geographic data.
+
+Returns counts and last refresh times for:
+- Airports
+- Navaids
+- GeoJSON boundaries (states, countries, water)
+    """
+)
+async def get_geodata_cache_stats(db: AsyncSession = Depends(get_db)):
+    """Get statistics about cached geographic data."""
+    stats = await geodata_service.get_cache_stats(db)
+    return {
+        "data": stats,
+        "source": "database"
+    }
+
+
+@router.get(
+    "/pirep-stats",
+    summary="Get PIREP Cache Statistics",
+    description="""
+Get statistics about cached Pilot Reports (PIREPs).
+
+Returns counts and breakdowns for:
+- Total PIREPs stored
+- PIREPs in the last 6 hours
+- Turbulence and icing reports
+- Last fetch time
+- Runtime statistics (stored, duplicates, queries)
+    """
+)
+async def get_pirep_cache_stats(db: AsyncSession = Depends(get_db)):
+    """Get statistics about cached PIREPs."""
+    stats = await weather_cache.get_pirep_stats(db)
+    return {
+        "data": stats,
+        "source": "database"
+    }
+
+
+@router.get(
+    "/metar-stats",
+    summary="Get METAR Cache Statistics",
+    description="""
+Get statistics about the METAR Redis cache.
+
+Returns:
+- Cache hits and misses
+- Hit rate percentage
+- API request counts and errors
+- Last API call timestamp
+    """
+)
+async def get_metar_cache_stats():
+    """Get statistics about METAR Redis cache."""
+    stats = weather_cache.get_metar_stats()
+    return {
+        "data": stats,
+        "source": "redis"
+    }
+
+
+@router.get(
+    "/weather-stats",
+    summary="Get Weather Cache Statistics",
+    description="""
+Get comprehensive statistics about all weather caching.
+
+Includes both METAR (Redis) and PIREP (database) cache statistics.
+
+Returns:
+- METAR cache hits, misses, hit rate
+- PIREP storage counts and query stats
+- API request metrics
+- Last fetch/store timestamps
+    """
+)
+async def get_weather_cache_stats(db: AsyncSession = Depends(get_db)):
+    """Get comprehensive weather cache statistics."""
+    metar_stats = weather_cache.get_metar_stats()
+    pirep_stats = await weather_cache.get_pirep_stats(db)
+
+    return {
+        "data": {
+            "metar": metar_stats,
+            "pirep": pirep_stats
+        },
+        "source": {
+            "metar": "redis",
+            "pirep": "database"
+        }
     }

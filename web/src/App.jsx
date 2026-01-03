@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Menu } from 'lucide-react';
-import './App.css';
+import './styles/index.css';
 
 // Layout components
 import { Sidebar, Header, SettingsModal } from './components/layout';
@@ -205,6 +205,8 @@ export default function App() {
               onEventViewed={() => setTargetSafetyEventId(null)}
               hashParams={hashParams}
               setHashParams={setHashParams}
+              wsRequest={wsRequest}
+              wsConnected={connected}
             />
           )}
           {activeTab === 'audio' && <AudioView apiBase={config.apiBaseUrl} />}
@@ -241,6 +243,8 @@ export default function App() {
                 onViewEvent={(eventId) => setActiveTab('event', { id: eventId })}
                 aircraft={foundAircraft}
                 feederLocation={status?.location}
+                wsRequest={wsRequest}
+                wsConnected={connected}
               />
             ) : (
               <div className="not-found-message" style={{ padding: '2rem', textAlign: 'center' }}>
@@ -257,6 +261,8 @@ export default function App() {
               apiBase={config.apiBaseUrl}
               onClose={() => setActiveTab('map')}
               onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
+              wsRequest={wsRequest}
+              wsConnected={connected}
             />
           )}
         </div>
@@ -292,6 +298,8 @@ export default function App() {
               }}
               aircraft={aircraft.find(a => a.hex === selectedAircraftHex)}
               feederLocation={status?.location}
+              wsRequest={wsRequest}
+              wsConnected={connected}
             />
           </div>
         </div>

@@ -14,6 +14,7 @@ https://github.com/sdr-enthusiasts/docker-acarshub/blob/main/rootfs/webapp/acars
 """
 import re
 import logging
+from functools import lru_cache
 from typing import Optional
 
 from app.data.airlines import find_airline_by_iata, find_airline_by_icao
@@ -37,6 +38,7 @@ else:
     logger.info("libacars library not available - using regex-based decoding only")
 
 
+@lru_cache(maxsize=1000)
 def parse_callsign(callsign: str) -> dict:
     """
     Parse a flight callsign to extract airline information.
@@ -146,6 +148,88 @@ def decode_label(label: str) -> dict:
     }
 
 
+def validate_coordinates(lat: float, lon: float) -> bool:
+    """Validate that coordinates are within valid ranges."""
+    return -90 <= lat <= 90 and -180 <= lon <= 180
+
+
+def parse_coordinates(text: str) -> Optional[dict]:
+    """
+    Parse coordinates from various ACARS message formats.
+
+    Supports formats:
+    - N12345W123456 (degrees and decimal minutes: DDMMm/DDDMMm)
+    - N 49.128,W122.374 (decimal degrees with direction prefix)
+    - DDMM[NS]DDDMM[EW] (degrees minutes with direction suffix)
+
+    Returns dict with lat/lon or None if parsing failed or coordinates invalid.
+    """
+    if not text:
+        return None
+
+    text_clean = text.replace(' ', '').replace('\n', '').replace('\r', '')
+
+    # Format 1: N12345W123456 (DDMMm for lat, DDDMMm for lon - tenths of minutes)
+    match = re.search(r'([NS])(\d{2})(\d{3})([EW])(\d{3})(\d{3})', text_clean)
+    if match:
+        lat_deg = int(match.group(2))
+        lat_min = int(match.group(3)) / 10
+        lat = lat_deg + lat_min / 60
+        if match.group(1) == 'S':
+            lat = -lat
+
+        lon_deg = int(match.group(5))
+        lon_min = int(match.group(6)) / 10
+        lon = lon_deg + lon_min / 60
+        if match.group(4) == 'W':
+            lon = -lon
+
+        if validate_coordinates(lat, lon):
+            return {"lat": round(lat, 4), "lon": round(lon, 4)}
+        logger.warning(f"Invalid coordinates parsed: {lat}, {lon}")
+        return None
+
+    # Format 2: N 49.128,W122.374 (decimal degrees)
+    match = re.search(r'([NS])\s*(\d+\.?\d*)\s*,\s*([EW])\s*(\d+\.?\d*)', text_clean)
+    if match:
+        try:
+            lat = float(match.group(2))
+            if match.group(1) == 'S':
+                lat = -lat
+            lon = float(match.group(4))
+            if match.group(3) == 'W':
+                lon = -lon
+
+            if validate_coordinates(lat, lon):
+                return {"lat": round(lat, 4), "lon": round(lon, 4)}
+            logger.warning(f"Invalid coordinates parsed: {lat}, {lon}")
+        except ValueError:
+            pass
+        return None
+
+    # Format 3: DDMM[NS]DDDMM[EW] (degrees minutes with direction suffix)
+    match = re.search(r'(\d{4})([NS])(\d{5})([EW])', text_clean)
+    if match:
+        lat_deg = int(match.group(1)[:2])
+        lat_min = int(match.group(1)[2:])
+        lat = lat_deg + lat_min / 60
+        if match.group(2) == 'S':
+            lat = -lat
+
+        lon_deg = int(match.group(3)[:3])
+        lon_min = int(match.group(3)[3:])
+        lon = lon_deg + lon_min / 60
+        if match.group(4) == 'W':
+            lon = -lon
+
+        if validate_coordinates(lat, lon):
+            return {"lat": round(lat, 4), "lon": round(lon, 4)}
+        logger.warning(f"Invalid coordinates parsed: {lat}, {lon}")
+        return None
+
+    return None
+
+
 def decode_h1_message(text: str) -> dict | None:
     """
     Decode H1 (Datalink) message sub-types.
@@ -226,6 +310,7 @@ def decode_h1_message(text: str) -> dict | None:
 
         # Extract position - format varies
         # Try N12345W123456 format (degrees and decimal minutes)
+        # Pattern: N/S + 2 deg + 3 min, E/W + 3 deg + 3 min
         pos_match = re.search(r'([NS])(\d{2})(\d{3})([EW])(\d{3})(\d{3})', text_clean)
         if pos_match:
             lat_deg = int(pos_match.group(2))
@@ -234,7 +319,7 @@ def decode_h1_message(text: str) -> dict | None:
             if pos_match.group(1) == 'S':
                 lat = -lat
 
-            lon_deg = int(pos_match.group(4))
+            lon_deg = int(pos_match.group(5))  # Fixed: was group(4) which is E/W direction
             lon_min = int(pos_match.group(6)) / 10
             lon = lon_deg + lon_min / 60
             if pos_match.group(4) == 'W':
@@ -298,6 +383,118 @@ def decode_h1_message(text: str) -> dict | None:
         wrn_match = re.search(r'WRN/([A-Z0-9]+)', text_clean)
         if wrn_match:
             decoded["warning_code"] = wrn_match.group(1)
+
+        return decoded
+
+    # ========== FLR - Fault Log Report ==========
+    # Format: FLR/[system]/[fault code]/[description]
+    if 'FLR/' in text_clean or '/FLR' in text_clean:
+        decoded["message_type"] = "Fault Log Report"
+        decoded["description"] = "Aircraft system fault report"
+
+        # Extract fault details
+        flr_match = re.search(r'FLR/([A-Z0-9]+)', text_clean)
+        if flr_match:
+            decoded["fault_code"] = flr_match.group(1)
+
+        # Extract system identifier (often ATA chapter)
+        ata_match = re.search(r'ATA:?(\d{2,4})', text_clean)
+        if ata_match:
+            decoded["ata_chapter"] = ata_match.group(1)
+
+        # Extract fault text/description
+        fault_text_match = re.search(r'FLR/[^/]+/(.+?)(?:/|$)', text_clean)
+        if fault_text_match:
+            decoded["fault_text"] = fault_text_match.group(1).strip()
+
+        # Extract LRU (Line Replaceable Unit) if present
+        lru_match = re.search(r'LRU:?([A-Z0-9-]+)', text_clean)
+        if lru_match:
+            decoded["lru"] = lru_match.group(1)
+
+        return decoded
+
+    # ========== INI - Initialization ==========
+    # Format: INI/[flight info]/[route]
+    if 'INI/' in text_clean or '/INI' in text_clean:
+        decoded["message_type"] = "Initialization"
+        decoded["description"] = "Flight initialization message"
+
+        # Extract flight number
+        flt_match = re.search(r'FI:?([A-Z0-9]+)', text_clean)
+        if flt_match:
+            decoded["flight_id"] = flt_match.group(1)
+
+        # Extract origin/destination
+        da_match = re.search(r'DA:([A-Z]{4})', text_clean)
+        aa_match = re.search(r'AA:([A-Z]{4})', text_clean)
+        if da_match:
+            decoded["origin"] = da_match.group(1)
+        if aa_match:
+            decoded["destination"] = aa_match.group(1)
+
+        # Extract date
+        dt_match = re.search(r'DT:?(\d{6})', text_clean)
+        if dt_match:
+            dt = dt_match.group(1)
+            decoded["date"] = f"{dt[:2]}/{dt[2:4]}/{dt[4:]}"
+
+        return decoded
+
+    # ========== ETA - Estimated Time of Arrival ==========
+    # Format: ETA/[airport]/[time]
+    if 'ETA/' in text_clean or re.search(r'\bETA\s*[:=]?\s*\d{4}', text_clean):
+        decoded["message_type"] = "ETA Update"
+        decoded["description"] = "Estimated time of arrival update"
+
+        # Extract ETA time
+        eta_match = re.search(r'ETA\s*[:=/]?\s*(\d{4})', text_clean)
+        if eta_match:
+            eta = eta_match.group(1)
+            decoded["eta"] = f"{eta[:2]}:{eta[2:]}"
+
+        # Extract destination airport
+        dest_match = re.search(r'ETA/([A-Z]{4})', text_clean)
+        if not dest_match:
+            dest_match = re.search(r'([A-Z]{4})\s*ETA', text_clean)
+        if dest_match:
+            decoded["destination"] = dest_match.group(1)
+
+        # Extract fuel remaining if present
+        fuel_match = re.search(r'FUEL:?\s*(\d+)', text_clean)
+        if fuel_match:
+            decoded["fuel_remaining"] = int(fuel_match.group(1))
+
+        return decoded
+
+    # ========== CMD - Command Message ==========
+    # Format: CMD/[command type]/[parameters]
+    if 'CMD/' in text_clean or '/CMD' in text_clean:
+        decoded["message_type"] = "Command"
+        decoded["description"] = "System command message"
+
+        # Extract command type
+        cmd_match = re.search(r'CMD/([A-Z0-9]+)', text_clean)
+        if cmd_match:
+            decoded["command_type"] = cmd_match.group(1)
+
+        # Extract parameters
+        param_match = re.search(r'CMD/[^/]+/(.+?)(?:/|$)', text_clean)
+        if param_match:
+            decoded["parameters"] = param_match.group(1).strip()
+
+        return decoded
+
+    # ========== RTE - Route Request/Update ==========
+    if 'RTE/' in text_clean or '/RTE' in text_clean:
+        decoded["message_type"] = "Route Update"
+        decoded["description"] = "Route information request or update"
+
+        # Extract waypoints
+        waypoints = re.findall(r'\b([A-Z]{5})\b', text_clean)
+        if waypoints:
+            decoded["waypoints"] = list(dict.fromkeys(waypoints))[:15]
+            decoded["route"] = ' → '.join(decoded["waypoints"][:10])
 
         return decoded
 
@@ -457,19 +654,20 @@ def decode_message_text(text: str, label: str = None, libacars_data: dict = None
         iata_code = gs_match.group(3)
         icao_code = gs_match.group(4)
         gs_num = gs_match.group(5)
+        # Format: DDMM for lat (4 digits), DDDMM for lon (5 digits)
         lat_deg = int(gs_match.group(6)[:2])
-        lat_min = int(gs_match.group(6)[2:]) / 100
+        lat_min = int(gs_match.group(6)[2:])  # Raw minutes (0-59)
         lat_dir = gs_match.group(7)
         lon_deg = int(gs_match.group(8)[:3])
-        lon_min = int(gs_match.group(8)[3:]) / 100
+        lon_min = int(gs_match.group(8)[3:])  # Raw minutes (0-59)
         lon_dir = gs_match.group(9)
         freq = int(gs_match.group(10)) / 1000  # Convert to MHz
         extra = gs_match.group(11)
 
-        lat = lat_deg + lat_min / 60
+        lat = lat_deg + lat_min / 60  # Convert minutes to decimal degrees
         if lat_dir == 'S':
             lat = -lat
-        lon = lon_deg + lon_min / 60
+        lon = lon_deg + lon_min / 60  # Convert minutes to decimal degrees
         if lon_dir == 'W':
             lon = -lon
 

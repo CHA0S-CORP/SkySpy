@@ -1,0 +1,160 @@
+groups:
+  - name: skyspy_api_api_alerts
+    rules:
+      # API Health Alerts
+      - alert: ADSBAPIDown
+        expr: up{job="skyspy-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ADS-B API is down"
+          description: "The ADS-B API has been unreachable for more than 1 minute."
+
+      - alert: ADSBAPIHighErrorRate
+        expr: |
+          sum(rate(skyspy_api_http_requests_total{status=~"5.."}[5m])) /
+          sum(rate(skyspy_api_http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP error rate on ADS-B API"
+          description: "More than 5% of requests are returning 5xx errors over the last 5 minutes."
+
+      - alert: ADSBAPIHighLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(skyspy_api_http_request_duration_seconds_bucket[5m])) by (le)) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API latency detected"
+          description: "95th percentile latency is above 2 seconds for the last 5 minutes."
+
+      # Aircraft Data Alerts
+      - alert: NoAircraftData
+        expr: skyspy_api_aircraft_count{source="total"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No aircraft data being received"
+          description: "No aircraft have been tracked for the last 5 minutes. Check receiver connectivity."
+
+      - alert: AircraftPollingSlow
+        expr: |
+          histogram_quantile(0.95, sum(rate(skyspy_api_aircraft_poll_duration_seconds_bucket[5m])) by (le)) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Aircraft polling is slow"
+          description: "Aircraft data polling is taking longer than 5 seconds (95th percentile)."
+
+      - alert: Receiver1090Down
+        expr: skyspy_api_aircraft_count{source="1090"} == 0 and skyspy_api_aircraft_count{source="total"} > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "1090MHz receiver not providing data"
+          description: "The 1090MHz (Mode S) receiver has not reported any aircraft for 10 minutes."
+
+      # Database Alerts
+      - alert: DatabaseOperationsSlow
+        expr: |
+          histogram_quantile(0.95, sum(rate(skyspy_api_db_operation_duration_seconds_bucket[5m])) by (le, operation)) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database operations are slow"
+          description: "Database operations are taking longer than 1 second (95th percentile)."
+
+      # Safety Event Alerts
+      - alert: HighSafetyEventRate
+        expr: |
+          sum(rate(skyspy_api_safety_events_total{severity="critical"}[15m])) * 60 > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate of critical safety events"
+          description: "More than 5 critical safety events per minute detected over the last 15 minutes."
+
+      - alert: TCASEventDetected
+        expr: increase(skyspy_api_safety_events_total{event_type="tcas_ra"}[5m]) > 0
+        labels:
+          severity: info
+        annotations:
+          summary: "TCAS Resolution Advisory detected"
+          description: "A TCAS RA event has been detected in the last 5 minutes."
+
+      # ACARS Alerts
+      - alert: ACARSHighErrorRate
+        expr: |
+          sum(rate(skyspy_api_acars_errors_total[5m])) /
+          (sum(rate(skyspy_api_acars_messages_received_total[5m])) + 0.001) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High ACARS message error rate"
+          description: "More than 10% of ACARS messages are failing to process."
+
+      - alert: ACARSNoMessages
+        expr: |
+          sum(rate(skyspy_api_acars_messages_received_total[30m])) == 0
+          and sum(skyspy_api_acars_messages_received_total) > 0
+        for: 30m
+        labels:
+          severity: info
+        annotations:
+          summary: "No ACARS messages received"
+          description: "No ACARS/VDL2 messages have been received for 30 minutes (previously active)."
+
+      # Notification Alerts
+      - alert: NotificationFailures
+        expr: |
+          sum(rate(skyspy_api_notifications_sent_total{status=~"failed|error"}[15m])) /
+          (sum(rate(skyspy_api_notifications_sent_total[15m])) + 0.001) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High notification failure rate"
+          description: "More than 50% of notifications are failing to send."
+
+  - name: skyspy_api_api_recording_rules
+    rules:
+      # Pre-computed metrics for dashboard efficiency
+      - record: skyspy_api:http_requests:rate5m
+        expr: sum(rate(skyspy_api_http_requests_total[5m])) by (method, endpoint)
+
+      - record: skyspy_api:http_errors:rate5m
+        expr: sum(rate(skyspy_api_http_requests_total{status=~"5.."}[5m]))
+
+      - record: skyspy_api:http_latency:p95_5m
+        expr: histogram_quantile(0.95, sum(rate(skyspy_api_http_request_duration_seconds_bucket[5m])) by (le))
+
+      - record: skyspy_api:http_latency:p99_5m
+        expr: histogram_quantile(0.99, sum(rate(skyspy_api_http_request_duration_seconds_bucket[5m])) by (le))
+
+      - record: skyspy_api:aircraft_poll:p95_5m
+        expr: histogram_quantile(0.95, sum(rate(skyspy_api_aircraft_poll_duration_seconds_bucket[5m])) by (le))
+
+      - record: skyspy_api:db_operation:p95_5m
+        expr: histogram_quantile(0.95, sum(rate(skyspy_api_db_operation_duration_seconds_bucket[5m])) by (le, operation))
+
+      - record: skyspy_api:safety_events:rate1h
+        expr: sum(rate(skyspy_api_safety_events_total[1h])) by (event_type, severity)
+
+      - record: skyspy_api:alerts:rate1h
+        expr: sum(rate(skyspy_api_alerts_triggered_total[1h])) by (priority)
+
+      - record: skyspy_api:acars:rate5m
+        expr: sum(rate(skyspy_api_acars_messages_received_total[5m])) by (source)
+
+      - record: skyspy_api:notifications:rate1h
+        expr: sum(rate(skyspy_api_notifications_sent_total[1h])) by (notify_type, status)

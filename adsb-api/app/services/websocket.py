@@ -957,6 +957,78 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
         info = await get_aircraft_info(db, icao.upper())
         return info or {"icao": icao.upper(), "found": False}
 
+    elif request_type == "sightings":
+        # Historical aircraft sightings with filters
+        from sqlalchemy import select, func, and_
+        from app.models import AircraftSighting
+        from datetime import timedelta
+
+        icao_hex = params.get("icao") or params.get("icao_hex") or params.get("hex")
+        callsign = params.get("callsign")
+        hours = params.get("hours", 24)
+        limit = params.get("limit", 100)
+        offset = params.get("offset", 0)
+        min_altitude = params.get("min_altitude")
+        max_altitude = params.get("max_altitude")
+        military_only = params.get("military_only", False)
+
+        if not icao_hex and not callsign:
+            return {"error": "icao_hex or callsign parameter required", "sightings": []}
+
+        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        conditions = [AircraftSighting.timestamp > cutoff]
+
+        if icao_hex:
+            conditions.append(AircraftSighting.icao_hex == icao_hex.upper())
+        if callsign:
+            conditions.append(AircraftSighting.callsign.ilike(f"%{callsign}%"))
+        if military_only:
+            conditions.append(AircraftSighting.is_military == True)
+        if min_altitude is not None:
+            conditions.append(AircraftSighting.altitude_baro >= min_altitude)
+        if max_altitude is not None:
+            conditions.append(AircraftSighting.altitude_baro <= max_altitude)
+
+        # Get total count
+        count_query = select(func.count(AircraftSighting.id)).where(and_(*conditions))
+        total = (await db.execute(count_query)).scalar() or 0
+
+        # Get sightings
+        query = (
+            select(AircraftSighting)
+            .where(and_(*conditions))
+            .order_by(AircraftSighting.timestamp.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+
+        result = await db.execute(query)
+        sightings = []
+
+        for s in result.scalars():
+            sightings.append({
+                "timestamp": s.timestamp.isoformat() + "Z",
+                "icao_hex": s.icao_hex,
+                "callsign": s.callsign,
+                "lat": s.latitude,
+                "lon": s.longitude,
+                "altitude": s.altitude_baro,
+                "gs": s.ground_speed,
+                "vr": s.vertical_rate,
+                "distance_nm": s.distance_nm,
+                "is_military": s.is_military,
+                "squawk": s.squawk,
+                "rssi": round(s.rssi, 1) if s.rssi else None,
+            })
+
+        return {
+            "sightings": sightings,
+            "count": len(sightings),
+            "total": total,
+            "icao_hex": icao_hex,
+            "hours": hours
+        }
+
     elif request_type == "metar":
         # Single station METAR
         from app.routers.aviation import fetch_awc_data
