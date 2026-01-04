@@ -782,6 +782,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             } else if (data?.photo_url) {
               setProPhotoUrl(data.photo_url);
             } else if (data?.error) {
+              console.debug('Photo cache WS error:', data.error);
+              setProPhotoError(true);
+            } else {
+              // No photo URL returned
+              console.debug('Photo cache WS: no URL in response', data);
               setProPhotoError(true);
             }
           } else {
@@ -795,12 +800,15 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 setProPhotoUrl(data.thumbnail_url);
               } else if (data?.photo_url) {
                 setProPhotoUrl(data.photo_url);
+              } else {
+                setProPhotoError(true);
               }
             } else {
               setProPhotoError(true);
             }
           }
-        } catch {
+        } catch (err) {
+          console.debug('Photo cache error:', err);
           setProPhotoError(true);
         }
       };

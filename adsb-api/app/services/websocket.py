@@ -1352,6 +1352,9 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
 
     elif request_type == "photo-cache":
         # Prioritize caching - immediately fetch and cache photo to S3
+        import logging
+        photo_logger = logging.getLogger(__name__)
+
         from app.core.config import get_settings
         from app.services.aircraft_info import get_aircraft_info, refresh_aircraft_info
         from app.services.photo_cache import (
@@ -1364,31 +1367,38 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
 
         icao = icao.upper()
         settings = get_settings()
+        photo_logger.debug(f"photo-cache request for {icao}, s3_enabled={settings.s3_enabled}")
 
         # Check if already cached in S3
         if settings.s3_enabled:
             photo_exists = await _check_s3_exists(icao, is_thumbnail=False)
             thumb_exists = await _check_s3_exists(icao, is_thumbnail=True)
+            photo_logger.debug(f"S3 check for {icao}: photo={photo_exists}, thumb={thumb_exists}")
             if photo_exists or thumb_exists:
-                return {
+                result = {
                     "icao_hex": icao,
                     "photo_url": get_signed_s3_url(icao, False) if photo_exists else None,
                     "thumbnail_url": get_signed_s3_url(icao, True) if thumb_exists else None,
                     "cached": True,
                     "source": "s3"
                 }
+                photo_logger.debug(f"Returning S3 cached result for {icao}: {result}")
+                return result
 
         # Get aircraft info to find photo URLs
         info = await get_aircraft_info(db, icao)
         if not info:
+            photo_logger.debug(f"No info in DB for {icao}, refreshing...")
             info = await refresh_aircraft_info(db, icao)
 
         if not info:
+            photo_logger.debug(f"No info found for {icao}")
             return {"error": f"No info found for {icao}"}
 
         photo_url = info.get("photo_url")
         thumbnail_url = info.get("photo_thumbnail_url")
         photo_page_link = info.get("photo_page_link")
+        photo_logger.debug(f"Info for {icao}: photo_url={photo_url}, thumb_url={thumbnail_url}")
 
         if not photo_url and not thumbnail_url:
             return {"error": f"No photo available for {icao}"}
@@ -1397,24 +1407,29 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
         cached_photo, cached_thumb = await cache_aircraft_photos(
             db, icao, photo_url, thumbnail_url, photo_page_link, force=True
         )
+        photo_logger.debug(f"Cache result for {icao}: cached_photo={cached_photo}, cached_thumb={cached_thumb}")
 
         # Return signed URLs if cached to S3, otherwise return source URLs
         if settings.s3_enabled and (cached_photo or cached_thumb):
-            return {
+            result = {
                 "icao_hex": icao,
                 "photo_url": get_signed_s3_url(icao, False) if cached_photo else photo_url,
                 "thumbnail_url": get_signed_s3_url(icao, True) if cached_thumb else thumbnail_url,
                 "cached": True,
                 "source": "s3"
             }
+            photo_logger.debug(f"Returning newly cached result for {icao}: {result}")
+            return result
 
-        return {
+        result = {
             "icao_hex": icao,
             "photo_url": cached_photo or photo_url,
             "thumbnail_url": cached_thumb or thumbnail_url,
             "cached": bool(cached_photo or cached_thumb),
             "source": info.get("photo_source")
         }
+        photo_logger.debug(f"Returning source URL result for {icao}: {result}")
+        return result
 
     else:
         return {"error": f"Unknown request type: {request_type}"}

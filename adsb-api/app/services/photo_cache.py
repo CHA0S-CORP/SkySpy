@@ -29,57 +29,102 @@ _pending_downloads: set[str] = set()
 # Download queue for background processing
 _download_queue: asyncio.Queue = None
 
-# S3 client (lazy initialized)
+# S3 client (lazy initialized) with lock for thread-safe initialization
 _s3_client = None
+_s3_client_lock = asyncio.Lock()
+_s3_client_init_failed = False
 
 # Regex to extract Planespotters Photo ID
 # Matches: https://t.plnspttrs.net/16653/1531024_35907ab605_t.jpg -> 1531024
 PLANESPOTTERS_ID_REGEX = re.compile(r"plnspttrs\.net/\d+/(\d+)_")
 
-def _get_s3_client():
-    """Get or create S3 client (lazy initialization)."""
-    global _s3_client
-    
+# S3 operation retry settings
+S3_MAX_RETRIES = 3
+S3_RETRY_DELAY = 0.5  # seconds
+
+
+async def reset_s3_client():
+    """
+    Reset the S3 client state. Useful for recovery after configuration
+    changes or transient failures.
+    """
+    global _s3_client, _s3_client_init_failed
+
+    async with _s3_client_lock:
+        _s3_client = None
+        _s3_client_init_failed = False
+        logger.info("S3 client state reset")
+
+def _get_s3_client_sync():
+    """
+    Synchronous S3 client initialization (called within lock).
+    Returns the client or None if initialization fails.
+    """
+    global _s3_client, _s3_client_init_failed
+
     if _s3_client is not None:
         return _s3_client
-    
+
+    if _s3_client_init_failed:
+        return None
+
     if not settings.s3_enabled:
         return None
-    
+
     try:
         import boto3
         from botocore.config import Config
-        
+
         config = Config(
             signature_version='s3v4',
-            retries={'max_attempts': 3, 'mode': 'standard'}
+            retries={'max_attempts': 3, 'mode': 'standard'},
+            connect_timeout=10,
+            read_timeout=30,
         )
-        
+
         client_kwargs = {
             'service_name': 's3',
             'region_name': settings.s3_region,
             'config': config,
         }
-        
+
         # Use explicit credentials if provided
         if settings.s3_access_key and settings.s3_secret_key:
             client_kwargs['aws_access_key_id'] = settings.s3_access_key
             client_kwargs['aws_secret_access_key'] = settings.s3_secret_key
-        
+
         # Custom endpoint for MinIO, Wasabi, etc.
         if settings.s3_endpoint_url:
             client_kwargs['endpoint_url'] = settings.s3_endpoint_url
-        
+
         _s3_client = boto3.client(**client_kwargs)
         logger.info(f"S3 client initialized: bucket={settings.s3_bucket}, prefix={settings.s3_prefix}")
         return _s3_client
-    
+
     except ImportError:
         logger.error("boto3 not installed - S3 storage unavailable. Install with: pip install boto3")
+        _s3_client_init_failed = True
         return None
     except Exception as e:
         logger.error(f"Failed to initialize S3 client: {e}")
+        _s3_client_init_failed = True
         return None
+
+
+async def _get_s3_client():
+    """Get or create S3 client with thread-safe lazy initialization."""
+    global _s3_client
+
+    # Fast path: client already initialized
+    if _s3_client is not None:
+        return _s3_client
+
+    # Slow path: acquire lock and initialize
+    async with _s3_client_lock:
+        # Double-check after acquiring lock
+        if _s3_client is not None:
+            return _s3_client
+        return _get_s3_client_sync()
 
 
 def _get_s3_key(icao_hex: str, is_thumbnail: bool = False) -> str:
@@ -112,7 +157,7 @@ def _get_s3_url(icao_hex: str, is_thumbnail: bool = False) -> str:
         return f"https://{settings.s3_bucket}.s3.{settings.s3_region}.amazonaws.com/{key}"
 
 
-def get_signed_s3_url(icao_hex: str, is_thumbnail: bool = False, expires_in: int = 3600) -> Optional[str]:
+async def get_signed_s3_url(icao_hex: str, is_thumbnail: bool = False, expires_in: int = 3600) -> Optional[str]:
     """
     Generate a signed URL for S3 photo access.
 
@@ -124,20 +169,24 @@ def get_signed_s3_url(icao_hex: str, is_thumbnail: bool = False, expires_in: int
     Returns:
         Signed URL or None if S3 is not available
     """
-    client = _get_s3_client()
+    client = await _get_s3_client()
     if not client:
         return None
 
     key = _get_s3_key(icao_hex, is_thumbnail)
 
     try:
-        url = client.generate_presigned_url(
-            'get_object',
-            Params={
-                'Bucket': settings.s3_bucket,
-                'Key': key,
-            },
-            ExpiresIn=expires_in,
+        loop = asyncio.get_running_loop()
+        url = await loop.run_in_executor(
+            None,
+            lambda: client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': settings.s3_bucket,
+                    'Key': key,
+                },
+                ExpiresIn=expires_in,
+            )
         )
         return url
     except Exception as e:
@@ -145,7 +194,12 @@ def get_signed_s3_url(icao_hex: str, is_thumbnail: bool = False, expires_in: int
         return None
 
 
-def get_photo_url(icao_hex: str, is_thumbnail: bool = False, signed: bool = True) -> Optional[str]:
+async def get_photo_url(
+    icao_hex: str,
+    is_thumbnail: bool = False,
+    signed: bool = True,
+    verify_exists: bool = False
+) -> Optional[str]:
     """
     Get accessible URL for a cached photo (S3 signed URL or local path).
 
@@ -153,6 +207,7 @@ def get_photo_url(icao_hex: str, is_thumbnail: bool = False, signed: bool = True
         icao_hex: Aircraft ICAO hex code
         is_thumbnail: Whether to get thumbnail URL
         signed: Whether to generate a signed URL for S3 (default True)
+        verify_exists: Whether to verify the S3 object exists before returning URL
 
     Returns:
         Accessible URL for the photo, or None if not cached
@@ -160,8 +215,14 @@ def get_photo_url(icao_hex: str, is_thumbnail: bool = False, signed: bool = True
     icao_hex = icao_hex.upper()
 
     if settings.s3_enabled:
+        # Optionally verify the object exists in S3
+        if verify_exists:
+            exists = await _check_s3_exists(icao_hex, is_thumbnail)
+            if not exists:
+                return None
+
         if signed:
-            return get_signed_s3_url(icao_hex, is_thumbnail)
+            return await get_signed_s3_url(icao_hex, is_thumbnail)
         else:
             return _get_s3_url(icao_hex, is_thumbnail)
     else:
@@ -173,53 +234,98 @@ def get_photo_url(icao_hex: str, is_thumbnail: bool = False, signed: bool = True
 
 
 async def _upload_to_s3(data: bytes, icao_hex: str, is_thumbnail: bool = False) -> Optional[str]:
-    """Upload photo to S3. Returns URL or None on failure."""
-    client = _get_s3_client()
+    """Upload photo to S3 with retry logic. Returns URL or None on failure."""
+    client = await _get_s3_client()
     if not client:
         return None
-    
+
     key = _get_s3_key(icao_hex, is_thumbnail)
-    
-    try:
-        # Run in thread pool since boto3 is synchronous
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
-            None,
-            lambda: client.put_object(
-                Bucket=settings.s3_bucket,
-                Key=key,
-                Body=data,
-                ContentType='image/jpeg',
-                CacheControl='max-age=31536000',  # 1 year cache
+    loop = asyncio.get_running_loop()
+
+    last_error = None
+    for attempt in range(S3_MAX_RETRIES):
+        try:
+            await loop.run_in_executor(
+                None,
+                lambda: client.put_object(
+                    Bucket=settings.s3_bucket,
+                    Key=key,
+                    Body=data,
+                    ContentType='image/jpeg',
+                    CacheControl='max-age=31536000',  # 1 year cache
+                )
             )
-        )
-        
-        url = _get_s3_url(icao_hex, is_thumbnail)
-        logger.info(f"Uploaded to S3: {key}")
-        return url
-    
-    except Exception as e:
-        logger.error(f"S3 upload failed for {icao_hex}: {e}")
-        return None
+
+            url = _get_s3_url(icao_hex, is_thumbnail)
+            logger.info(f"Uploaded to S3: {key}")
+            return url
+
+        except Exception as e:
+            last_error = e
+            if attempt < S3_MAX_RETRIES - 1:
+                logger.warning(f"S3 upload attempt {attempt + 1} failed for {icao_hex}: {e}, retrying...")
+                await asyncio.sleep(S3_RETRY_DELAY * (attempt + 1))  # Exponential backoff
+            else:
+                logger.error(f"S3 upload failed for {icao_hex} after {S3_MAX_RETRIES} attempts: {last_error}")
+
+    return None
 
 
-async def _check_s3_exists(icao_hex: str, is_thumbnail: bool = False) -> bool:
-    """Check if photo exists in S3."""
-    client = _get_s3_client()
+class S3CheckResult:
+    """Result of an S3 existence check."""
+    EXISTS = "exists"
+    NOT_FOUND = "not_found"
+    ERROR = "error"
+
+
+async def _check_s3_exists(
+    icao_hex: str,
+    is_thumbnail: bool = False,
+    return_detailed: bool = False
+) -> bool | S3CheckResult:
+    """
+    Check if photo exists in S3.
+
+    Args:
+        icao_hex: Aircraft ICAO hex code
+        is_thumbnail: Whether this is a thumbnail
+        return_detailed: If True, returns S3CheckResult instead of bool
+
+    Returns:
+        bool (default) or S3CheckResult if return_detailed=True
+    """
+    client = await _get_s3_client()
     if not client:
-        return False
-    
+        return S3CheckResult.ERROR if return_detailed else False
+
     key = _get_s3_key(icao_hex, is_thumbnail)
-    
+
     try:
-        loop = asyncio.get_event_loop()
+        from botocore.exceptions import ClientError
+
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             None,
             lambda: client.head_object(Bucket=settings.s3_bucket, Key=key)
         )
-        return True
-    except Exception:
-        return False
+        return S3CheckResult.EXISTS if return_detailed else True
+
+    except ClientError as e:
+        error_code = e.response.get('Error', {}).get('Code', '')
+        if error_code == '404' or error_code == 'NoSuchKey':
+            return S3CheckResult.NOT_FOUND if return_detailed else False
+        # Other errors (permissions, network, etc.) - log and treat as error
+        logger.warning(f"S3 head_object error for {icao_hex}: {error_code} - {e}")
+        return S3CheckResult.ERROR if return_detailed else False
+
+    except ImportError:
+        logger.error("botocore not available for error handling")
+        return S3CheckResult.ERROR if return_detailed else False
+
+    except Exception as e:
+        # Network errors, timeouts, etc.
+        logger.warning(f"S3 existence check failed for {icao_hex}: {e}")
+        return S3CheckResult.ERROR if return_detailed else False
 
 
 async def _scrape_planespotters_full_size(page_url: str, client: httpx.AsyncClient) -> Optional[str]:
@@ -369,8 +475,12 @@ async def download_photo(
         # Check if already cached (skip if force=True for upgrades)
         if not force:
             if settings.s3_enabled:
-                if await _check_s3_exists(icao_hex, is_thumbnail):
+                # Use detailed result to distinguish "not found" from "error"
+                check_result = await _check_s3_exists(icao_hex, is_thumbnail, return_detailed=True)
+                if check_result == S3CheckResult.EXISTS:
                     return _get_s3_url(icao_hex, is_thumbnail)
+                # If ERROR, proceed to download (don't trust the result)
+                # If NOT_FOUND, proceed to download
             else:
                 path = get_photo_path(icao_hex, is_thumbnail)
                 if path.exists() and path.stat().st_size > 0:
