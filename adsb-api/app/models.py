@@ -182,7 +182,14 @@ class AircraftInfo(Base):
     operator_icao: Mapped[Optional[str]] = mapped_column(String(4))
     operator_callsign: Mapped[Optional[str]] = mapped_column(String(20))
     owner: Mapped[Optional[str]] = mapped_column(String(200))
+    city: Mapped[Optional[str]] = mapped_column(String(100), index=True)
+    state: Mapped[Optional[str]] = mapped_column(String(10), index=True)
     
+    # Privacy & Flags (from tar1090/FAA)
+    is_interesting: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_pia: Mapped[bool] = mapped_column(Boolean, default=False)  # Privacy ICAO Address
+    is_ladd: Mapped[bool] = mapped_column(Boolean, default=False) # Limiting Aircraft Data Displayed
+
     # Country and registration
     country: Mapped[Optional[str]] = mapped_column(String(100))
     country_code: Mapped[Optional[str]] = mapped_column(String(3))

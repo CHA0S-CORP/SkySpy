@@ -1,10 +1,10 @@
 """
 Database configuration and session management.
 
-Optimized for Raspberry Pi with limited resources:
-- Smaller connection pool to reduce memory usage
-- Shorter timeouts to fail fast under load
-- Connection recycling to prevent stale connections
+Optimized for Raspberry Pi 5 with PgBouncer:
+- Increased connection limits (RPi5 has sufficient RAM/CPU)
+- Disables prepared statements (Required for PgBouncer Transaction Mode)
+- Relies on PgBouncer for backend pooling while maintaining a robust local pool
 """
 import asyncio
 import logging
@@ -41,24 +41,29 @@ if async_url.startswith("sqlite"):
         echo=False,
     )
 else:
-    # Optimized for Raspberry Pi:
-    # - pool_size=3: Small base pool to reduce memory footprint
-    # - max_overflow=7: Allow up to 10 total connections under burst load
-    # - pool_timeout=10: Fail fast if pool exhausted (avoid request pile-up)
-    # - pool_recycle=180: Recycle connections every 3 min (prevent stale connections)
-    # - pool_pre_ping=True: Verify connections before use
-    # - connect_args timeout: 5s connection timeout (fail fast on DB issues)
+    # Optimized for RPi 5 + PgBouncer:
+    # - pool_size=20: RPi5 can easily handle this concurrency. 
+    #                 We need enough local slots to feed PgBouncer.
+    # - max_overflow=20: Allow bursts up to 40 total connections locally.
+    # - statement_cache_size=0: CRITICAL for PgBouncer transaction pooling. 
+    #                           Prevents "prepared statement X does not exist" errors.
+    # - pool_pre_ping=True: Vital to detect if PgBouncer closed a connection.
     engine = create_async_engine(
         async_url,
         echo=False,
         pool_pre_ping=True,
-        pool_recycle=180,
-        pool_size=3,
-        max_overflow=7,
-        pool_timeout=10,
+        pool_recycle=300,  # Recycle every 5 min
+        pool_size=20,      # Increased from 3 for RPi5
+        max_overflow=20,   # Increased from 7
+        pool_timeout=30,   # Give PgBouncer time to allocate slots
         connect_args={
-            "timeout": 5,
-            "command_timeout": 30,
+            "timeout": 10,
+            "command_timeout": 60,
+            # "server_settings": {
+            #     "jit": "off",  # Optimization: Disable JIT for short OLTP queries
+            # },
+            # key fix for pgbouncer compatibility with asyncpg
+            "statement_cache_size": 0,
         },
     )
 
@@ -95,11 +100,11 @@ async def db_execute_safe(db: AsyncSession, query, default=None):
     Execute a database query with graceful error handling.
 
     Returns the default value on timeout or connection errors instead of
-    raising exceptions. This prevents 503 errors from cascading during
-    high load on resource-constrained systems like Raspberry Pi.
+    raising exceptions.
     """
     try:
-        return await asyncio.wait_for(db.execute(query), timeout=10.0)
+        # Increased timeout for complex queries on RPi
+        return await asyncio.wait_for(db.execute(query), timeout=15.0)
     except asyncio.TimeoutError:
         logger.warning("Database query timed out")
         return default

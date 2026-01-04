@@ -567,6 +567,11 @@ async def lifespan(app: FastAPI):
     logger.info(f"External databases: ADSBX={ext_stats['adsbx']['count']:,}, "
                 f"tar1090={ext_stats['tar1090']['count']:,}, FAA={ext_stats['faa']['count']:,}")
 
+    # --- Preemptively Sync External DBs to Postgres ---
+    # This runs in background to avoid blocking startup
+    asyncio.create_task(external_db.sync_databases_to_postgres())
+    # --------------------------------------------------
+
     # Clear caches
     _active_sessions.clear()
     clear_cache()
