@@ -441,26 +441,34 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
   }, []);
 
   const handleGraphDragStart = useCallback((e) => {
-    if (graphZoomState.zoom <= 1) return;
+    e.preventDefault();
+    const clientX = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
     graphDragRef.current = {
       isDragging: true,
-      startX: e.clientX || e.touches?.[0]?.clientX || 0,
-      startOffset: graphZoomState.offset
+      startX: clientX,
+      startPosition: replayState.position
     };
-  }, [graphZoomState]);
+    // Stop any playing animation
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    setReplayState(prev => ({ ...prev, isPlaying: false }));
+  }, [replayState.position]);
 
   const handleGraphDragMove = useCallback((e) => {
     const drag = graphDragRef.current;
     if (!drag?.isDragging) return;
-    const currentX = e.clientX || e.touches?.[0]?.clientX || 0;
-    const deltaX = drag.startX - currentX;
-    const graphWidth = 300;
-    const visiblePercent = 100 / graphZoomState.zoom;
-    const maxOffset = 100 - visiblePercent;
-    const percentDelta = (deltaX / graphWidth) * visiblePercent;
-    const newOffset = Math.max(0, Math.min(maxOffset, drag.startOffset + percentDelta));
-    setGraphZoomState(prev => ({ ...prev, offset: newOffset }));
-  }, [graphZoomState]);
+    e.preventDefault();
+    const currentX = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+    const deltaX = currentX - drag.startX;
+    // Get the graph width from the event target or use default
+    const graphWidth = e.currentTarget?.getBoundingClientRect?.()?.width || 300;
+    // Calculate how much to move the timeline (dragging right = forward in time)
+    const percentDelta = (deltaX / graphWidth) * 100;
+    const newPosition = Math.max(0, Math.min(100, drag.startPosition + percentDelta));
+    setReplayState(prev => ({ ...prev, position: newPosition }));
+    updateReplayMarkers(newPosition);
+  }, [updateReplayMarkers]);
 
   const handleGraphDragEnd = useCallback(() => {
     graphDragRef.current.isDragging = false;
@@ -555,6 +563,7 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
         onTouchStart={handleGraphDragStart}
         onTouchMove={handleGraphDragMove}
         onTouchEnd={handleGraphDragEnd}
+        style={{ touchAction: 'none', cursor: 'grab' }}
       >
         <div className="mini-graph-header">
           <span className="mini-graph-label">{label}</span>
@@ -569,7 +578,12 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
             </span>
           )}
         </div>
-        <svg width={width} height={height} className="mini-graph-svg">
+        <svg
+          width={width}
+          height={height}
+          className="mini-graph-svg"
+          style={{ pointerEvents: 'none' }}
+        >
           <polyline
             points={points}
             fill="none"

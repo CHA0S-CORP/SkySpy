@@ -180,9 +180,9 @@ async def get_aircraft_photo(
     # Check S3 first if enabled - photos might be cached even without DB record
     if settings.s3_enabled:
         if await _check_s3_exists(icao_hex, is_thumbnail=False):
-            photo_url = get_signed_s3_url(icao_hex, is_thumbnail=False)
+            photo_url = await get_signed_s3_url(icao_hex, is_thumbnail=False)
         if await _check_s3_exists(icao_hex, is_thumbnail=True):
-            thumbnail_url = get_signed_s3_url(icao_hex, is_thumbnail=True)
+            thumbnail_url = await get_signed_s3_url(icao_hex, is_thumbnail=True)
 
     # Get info from database for metadata and fallback URLs
     info = await get_aircraft_info(db, icao_hex)
@@ -262,8 +262,8 @@ async def prioritize_photo_cache(
         if photo_exists or thumb_exists:
             return {
                 "icao_hex": icao_hex,
-                "photo_url": get_signed_s3_url(icao_hex, False) if photo_exists else None,
-                "thumbnail_url": get_signed_s3_url(icao_hex, True) if thumb_exists else None,
+                "photo_url": await get_signed_s3_url(icao_hex, False) if photo_exists else None,
+                "thumbnail_url": await get_signed_s3_url(icao_hex, True) if thumb_exists else None,
                 "cached": True,
                 "source": "s3"
             }
@@ -293,8 +293,8 @@ async def prioritize_photo_cache(
     if settings.s3_enabled and (cached_photo or cached_thumb):
         return {
             "icao_hex": icao_hex,
-            "photo_url": get_signed_s3_url(icao_hex, False) if cached_photo else photo_url,
-            "thumbnail_url": get_signed_s3_url(icao_hex, True) if cached_thumb else thumbnail_url,
+            "photo_url": await get_signed_s3_url(icao_hex, False) if cached_photo else photo_url,
+            "thumbnail_url": await get_signed_s3_url(icao_hex, True) if cached_thumb else thumbnail_url,
             "cached": True,
             "source": "s3"
         }
@@ -384,7 +384,7 @@ async def download_aircraft_photo(
         if settings.s3_enabled:
             if await _check_s3_exists(icao_hex, thumbnail):
                 # Fetch from S3 using signed URL
-                signed_url = get_signed_s3_url(icao_hex, thumbnail)
+                signed_url = await get_signed_s3_url(icao_hex, thumbnail)
                 if signed_url:
                     try:
                         async with httpx.AsyncClient(timeout=15.0) as client:

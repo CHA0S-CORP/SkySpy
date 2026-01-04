@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, Clock, Plane, Check } from 'lucide-react';
+import { AlertTriangle, Clock, Plane, Check, Radar } from 'lucide-react';
 import { useApi } from '../../hooks';
 
 export function AlertHistory({ apiBase }) {
@@ -17,7 +17,15 @@ export function AlertHistory({ apiBase }) {
   };
 
   if (loading) {
-    return <div className="alert-history-loading">Loading alert history...</div>;
+    return (
+      <div className="alert-history-loading">
+        <div className="alert-loading-radar">
+          <Radar size={32} className="alert-radar-icon" />
+          <div className="alert-radar-sweep" />
+        </div>
+        <span>Loading alert history...</span>
+      </div>
+    );
   }
 
   if (error) {

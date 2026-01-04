@@ -120,12 +120,14 @@ async def safe_request(
     """
     from app.core.cache import check_upstream_rate_limit, mark_upstream_request
 
-    # Extract domain for rate limiting
+    # Extract domain for rate limiting (strip port if present)
     parsed = urlparse(url)
-    domain = parsed.netloc.lower()
+    domain = parsed.hostname.lower() if parsed.hostname else parsed.netloc.lower()
 
     # Check if this is a local request (skip upstream rate limiting for local services)
-    is_local = domain in ("localhost", "127.0.0.1") or domain.startswith("192.168.") or domain.startswith("10.")
+    # Include Docker service names (ultrafeeder, dump978) as local services
+    local_services = {"localhost", "127.0.0.1", "ultrafeeder", "dump978"}
+    is_local = domain in local_services or domain.startswith("192.168.") or domain.startswith("10.")
 
     # Apply global upstream rate limiting for external APIs
     if is_upstream and not is_local:

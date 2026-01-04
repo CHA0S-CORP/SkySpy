@@ -115,9 +115,13 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     }
   });
   const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [showMobileControls, setShowMobileControls] = useState(false); // Mobile controls dropdown
   const [proPhotoError, setProPhotoError] = useState(false); // Track photo loading errors for Pro panel
   const [proPhotoRetry, setProPhotoRetry] = useState(0); // Retry counter for pro panel photo
   const [proPhotoUrl, setProPhotoUrl] = useState(null); // S3 URL for pro panel photo
+  const [proPhotoLoading, setProPhotoLoading] = useState(true); // Track photo loading state for Pro panel
+  const [proPhotoStatus, setProPhotoStatus] = useState(null); // Status message for photo retry
+  const proPhotoRetryRef = useRef(null); // Ref for retry interval
   
   // Aviation overlay states - load from localStorage
   const [overlays, setOverlays] = useState(getOverlays);
@@ -192,6 +196,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const animationRef = useRef(null);
   const sweepAngleRef = useRef(0);
   const historyRef = useRef({}); // Store position history for trails
+  const pinchStateRef = useRef({ lastDistance: 0, startRange: 0, lastCenterX: 0, lastCenterY: 0, startPanX: 0, startPanY: 0 }); // For smooth pinch-to-zoom and two-finger pan
   const conflictsRef = useRef([]); // Track conflicts for banner
   const shortTrackFetchedRef = useRef(new Set()); // Track which aircraft have had history fetched
 
@@ -767,9 +772,17 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   
   // Reset photo state and fetch/cache S3 URL when selected aircraft changes
   useEffect(() => {
+    // Clear any existing retry loop when aircraft changes
+    if (proPhotoRetryRef.current) {
+      clearInterval(proPhotoRetryRef.current);
+      proPhotoRetryRef.current = null;
+    }
+
     setProPhotoError(false);
     setProPhotoRetry(0);
     setProPhotoUrl(null);
+    setProPhotoLoading(true);
+    setProPhotoStatus(null);
 
     if (selectedAircraft?.hex) {
       const fetchPhoto = async () => {
@@ -777,17 +790,19 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           // Use WebSocket if available, otherwise fall back to HTTP
           if (wsRequest && wsConnected) {
             const data = await wsRequest('photo-cache', { icao: selectedAircraft.hex });
-            if (data?.thumbnail_url) {
-              setProPhotoUrl(data.thumbnail_url);
-            } else if (data?.photo_url) {
+            if (data?.photo_url) {
               setProPhotoUrl(data.photo_url);
+            } else if (data?.thumbnail_url) {
+              setProPhotoUrl(data.thumbnail_url);
             } else if (data?.error) {
               console.debug('Photo cache WS error:', data.error);
               setProPhotoError(true);
+              setProPhotoLoading(false);
             } else {
               // No photo URL returned
               console.debug('Photo cache WS: no URL in response', data);
               setProPhotoError(true);
+              setProPhotoLoading(false);
             }
           } else {
             // Fallback to HTTP POST
@@ -796,20 +811,23 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             });
             if (res.ok) {
               const data = await res.json();
-              if (data?.thumbnail_url) {
-                setProPhotoUrl(data.thumbnail_url);
-              } else if (data?.photo_url) {
+              if (data?.photo_url) {
                 setProPhotoUrl(data.photo_url);
+              } else if (data?.thumbnail_url) {
+                setProPhotoUrl(data.thumbnail_url);
               } else {
                 setProPhotoError(true);
+                setProPhotoLoading(false);
               }
             } else {
               setProPhotoError(true);
+              setProPhotoLoading(false);
             }
           }
         } catch (err) {
           console.debug('Photo cache error:', err);
           setProPhotoError(true);
+          setProPhotoLoading(false);
         }
       };
       fetchPhoto();
@@ -2449,6 +2467,83 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     };
     canvas.addEventListener('wheel', handleWheel, { passive: false });
 
+    // Pinch-to-zoom and two-finger pan for touch devices
+    const getTouchDistance = (touches) => {
+      if (touches.length < 2) return 0;
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    const getTouchCenter = (touches) => {
+      if (touches.length < 2) return { x: 0, y: 0 };
+      return {
+        x: (touches[0].clientX + touches[1].clientX) / 2,
+        y: (touches[0].clientY + touches[1].clientY) / 2
+      };
+    };
+
+    const handleTouchStart = (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const center = getTouchCenter(e.touches);
+        pinchStateRef.current = {
+          lastDistance: getTouchDistance(e.touches),
+          startRange: radarRange,
+          lastCenterX: center.x,
+          lastCenterY: center.y,
+          startPanX: proPanOffset.x,
+          startPanY: proPanOffset.y
+        };
+      }
+    };
+
+    const handleTouchMove = (e) => {
+      const { lastDistance, startRange, lastCenterX, lastCenterY, startPanX, startPanY } = pinchStateRef.current;
+      if (e.touches.length === 2 && lastDistance > 0) {
+        e.preventDefault();
+        const currentDistance = getTouchDistance(e.touches);
+        const currentCenter = getTouchCenter(e.touches);
+
+        // Calculate pinch-to-zoom
+        // Pinch out (fingers apart) = zoom in (smaller range)
+        // Pinch in (fingers together) = zoom out (larger range)
+        const scale = lastDistance / currentDistance;
+        const newRange = Math.round(startRange * scale);
+        const clampedRange = Math.max(5, Math.min(500, newRange));
+
+        // Calculate two-finger pan (delta from start position)
+        const panDeltaX = currentCenter.x - lastCenterX;
+        const panDeltaY = currentCenter.y - lastCenterY;
+
+        // Apply zoom if changed
+        if (clampedRange !== radarRange) {
+          const scaleFactor = radarRange / clampedRange;
+          setProPanOffset(prev => ({
+            x: prev.x * scaleFactor,
+            y: prev.y * scaleFactor
+          }));
+          updateRadarRange(clampedRange);
+        }
+
+        // Apply pan offset (add delta to starting position)
+        setProPanOffset({
+          x: startPanX + panDeltaX,
+          y: startPanY + panDeltaY
+        });
+      }
+    };
+
+    const handleTouchEnd = (e) => {
+      if (e.touches.length < 2) {
+        pinchStateRef.current = { lastDistance: 0, startRange: radarRange, lastCenterX: 0, lastCenterY: 0, startPanX: 0, startPanY: 0 };
+      }
+    };
+
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd);
+
     // Use fetched aviation data or fallback to static
     const navAids = aviationData.navaids.length > 0 ? aviationData.navaids : [
       { id: 'SEA', name: 'Seattle VORTAC', lat: 47.435, lon: -122.309, type: 'VORTAC' },
@@ -3812,6 +3907,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     return () => {
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('wheel', handleWheel);
+      canvas.removeEventListener('touchstart', handleTouchStart);
+      canvas.removeEventListener('touchmove', handleTouchMove);
+      canvas.removeEventListener('touchend', handleTouchEnd);
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
@@ -4283,8 +4381,128 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     );
   };
 
+  // Close mobile menus on map click
+  const handleMapClick = useCallback(() => {
+    initAudioContext();
+    setShowMobileControls(false);
+    setShowFilterMenu(false);
+    setShowOverlayMenu(false);
+  }, [initAudioContext]);
+
   return (
-    <div className="map-container" onClick={initAudioContext}>
+    <div className="map-container" onClick={handleMapClick}>
+      {/* Mobile Map Header - map controls for mobile devices */}
+      <div className="mobile-map-header">
+        <input
+          type="text"
+          className="mobile-search-input"
+          placeholder="Search callsign, squawk, ICAO..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        {searchQuery && (
+          <button
+            className="mobile-search-clear"
+            onClick={(e) => { e.stopPropagation(); setSearchQuery(''); }}
+          >
+            <X size={16} />
+          </button>
+        )}
+        <div className="mobile-header-actions">
+          <button
+            className={`mobile-header-btn ${showShortTracks ? 'active' : ''}`}
+            onClick={(e) => { e.stopPropagation(); setShowShortTracks(!showShortTracks); }}
+            title="Trails"
+          >
+            <Navigation size={18} />
+          </button>
+          <button
+            className="mobile-header-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (config.mapMode === 'map' && leafletMapRef.current) {
+                leafletMapRef.current.flyTo([feederLat, feederLon], 10, { duration: 1 });
+              } else if (config.mapMode === 'pro' || config.mapMode === 'crt') {
+                setProPanOffset({ x: 0, y: 0 });
+              }
+            }}
+            title="Center"
+          >
+            <LocateFixed size={18} />
+          </button>
+          <button
+            className={`mobile-header-btn ${soundMuted ? 'muted' : ''}`}
+            onClick={(e) => { e.stopPropagation(); setSoundMuted(!soundMuted); }}
+            title={soundMuted ? 'Unmute' : 'Mute'}
+          >
+            {soundMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+          </button>
+        </div>
+        <button
+          className={`mobile-menu-btn ${showMobileControls ? 'active' : ''}`}
+          onClick={(e) => { e.stopPropagation(); setShowMobileControls(!showMobileControls); }}
+        >
+          {showMobileControls ? <X size={20} /> : <Menu size={20} />}
+        </button>
+      </div>
+
+      {/* Mobile Controls Dropdown */}
+      {showMobileControls && (
+        <div className="mobile-controls-dropdown" onClick={(e) => e.stopPropagation()}>
+          <div className="mobile-controls-grid">
+            <button
+              className={`mobile-control-item ${showAircraftList ? 'active' : ''}`}
+              onClick={() => { setShowAircraftList(!showAircraftList); setShowMobileControls(false); }}
+            >
+              <Plane size={18} />
+              <span>Aircraft ({aircraft.length})</span>
+            </button>
+            <button
+              className={`mobile-control-item ${showFilterMenu ? 'active' : ''}`}
+              onClick={() => { setShowFilterMenu(!showFilterMenu); setShowOverlayMenu(false); }}
+            >
+              <Filter size={18} />
+              <span>Filters</span>
+            </button>
+            <button
+              className={`mobile-control-item ${showOverlayMenu ? 'active' : ''}`}
+              onClick={() => { setShowOverlayMenu(!showOverlayMenu); setShowFilterMenu(false); }}
+            >
+              <Layers size={18} />
+              <span>Layers</span>
+            </button>
+            <button
+              className={`mobile-control-item ${showShortTracks ? 'active' : ''}`}
+              onClick={() => setShowShortTracks(!showShortTracks)}
+            >
+              <Navigation size={18} />
+              <span>Trails</span>
+            </button>
+            <button
+              className="mobile-control-item"
+              onClick={() => {
+                if (config.mapMode === 'map' && leafletMapRef.current) {
+                  leafletMapRef.current.flyTo([feederLat, feederLon], 10, { duration: 1 });
+                } else if (config.mapMode === 'pro' || config.mapMode === 'crt') {
+                  setProPanOffset({ x: 0, y: 0 });
+                }
+                setShowMobileControls(false);
+              }}
+            >
+              <LocateFixed size={18} />
+              <span>Center</span>
+            </button>
+            <button
+              className={`mobile-control-item ${soundMuted ? 'active muted' : ''}`}
+              onClick={() => setSoundMuted(!soundMuted)}
+            >
+              {soundMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+              <span>{soundMuted ? 'Unmute' : 'Mute'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Safety Event Banner - Shows highest priority event (only in map/radar mode) */}
       {activeConflicts.length > 0 && config.mapMode !== 'pro' && config.mapMode !== 'crt' && (
         <div className="conflict-banners-container">
@@ -4753,9 +4971,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         </button>
       </div>
 
-      {/* Overlay Menu */}
-      {showOverlayMenu && (config.mapMode === 'crt' || config.mapMode === 'pro') && (
-        <div className="overlay-menu">
+      {/* Overlay Menu - available on all map modes */}
+      {showOverlayMenu && (
+        <div className="overlay-menu" onClick={(e) => e.stopPropagation()}>
           <div className="overlay-menu-header">
             <span>Map Layers</span>
             <button onClick={() => setShowOverlayMenu(false)}><X size={14} /></button>
@@ -4861,9 +5079,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         </div>
       )}
 
-      {/* Traffic Filter Menu */}
-      {showFilterMenu && (config.mapMode === 'crt' || config.mapMode === 'pro') && (
-        <div className="overlay-menu filter-menu">
+      {/* Traffic Filter Menu - available on all map modes */}
+      {showFilterMenu && (
+        <div className="overlay-menu filter-menu" onClick={(e) => e.stopPropagation()}>
           <div className="overlay-menu-header">
             <span>Traffic Filters</span>
             <button onClick={() => setShowFilterMenu(false)}><X size={14} /></button>
@@ -6324,52 +6542,100 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
           {/* Aircraft Thumbnail - Using S3 URL directly */}
           <div className="pro-aircraft-photo">
-            {!proPhotoError && proPhotoUrl ? (
+            {proPhotoLoading && !proPhotoError && (
+              <div className="pro-photo-loading">
+                <div className="pro-photo-loading-radar">
+                  <Radar size={32} className="pro-photo-radar-icon" />
+                  <div className="pro-photo-radar-sweep" />
+                </div>
+                <span>{proPhotoStatus?.message || 'Loading photo...'}</span>
+              </div>
+            )}
+            {!proPhotoError && proPhotoUrl && (
               <img
                 key={`${liveAircraft.hex}-${proPhotoRetry}-${proPhotoUrl}`}
                 src={proPhotoUrl}
                 alt={liveAircraft.flight?.trim() || liveAircraft.hex}
-                onError={() => setProPhotoError(true)}
+                onLoad={() => { setProPhotoLoading(false); setProPhotoStatus(null); }}
+                onError={() => { setProPhotoError(true); setProPhotoLoading(false); setProPhotoStatus(null); }}
+                style={{ opacity: proPhotoLoading ? 0 : 1 }}
                 loading="lazy"
               />
-            ) : (
+            )}
+            {proPhotoError && !proPhotoLoading && (
               <div className="pro-photo-placeholder">
                 <Plane size={48} />
-                <span>No Photo Available</span>
+                <span>{proPhotoStatus?.message || 'No Photo Available'}</span>
                 <button
                   className="pro-photo-retry"
-                  onClick={async () => {
-                    setProPhotoError(false);
-                    setProPhotoRetry(c => c + 1);
-                    // Re-fetch the photo URL using WebSocket or HTTP
-                    try {
-                      if (wsRequest && wsConnected) {
-                        const data = await wsRequest('photo-cache', { icao: liveAircraft.hex });
-                        if (data?.thumbnail_url) {
-                          setProPhotoUrl(data.thumbnail_url);
-                        } else if (data?.photo_url) {
-                          setProPhotoUrl(data.photo_url);
-                        } else {
-                          setProPhotoError(true);
-                        }
-                      } else {
-                        const res = await fetch(`${config.apiBaseUrl || ''}/api/v1/aircraft/${liveAircraft.hex}/photo/cache`, {
-                          method: 'POST'
-                        });
-                        if (res.ok) {
-                          const data = await res.json();
-                          if (data?.thumbnail_url) {
-                            setProPhotoUrl(data.thumbnail_url);
-                          } else if (data?.photo_url) {
-                            setProPhotoUrl(data.photo_url);
-                          }
-                        } else {
-                          setProPhotoError(true);
-                        }
-                      }
-                    } catch {
-                      setProPhotoError(true);
+                  onClick={() => {
+                    // Clear any existing retry loop
+                    if (proPhotoRetryRef.current) {
+                      clearInterval(proPhotoRetryRef.current);
+                      proPhotoRetryRef.current = null;
                     }
+
+                    setProPhotoError(false);
+                    setProPhotoLoading(true);
+                    setProPhotoRetry(c => c + 1);
+
+                    const startTime = Date.now();
+                    const retryDuration = 30000; // 30 seconds
+                    const retryInterval = 3000; // Try every 3 seconds
+                    const aircraftHex = liveAircraft.hex;
+
+                    const attemptFetch = async () => {
+                      const elapsed = Date.now() - startTime;
+                      const remaining = Math.ceil((retryDuration - elapsed) / 1000);
+                      setProPhotoStatus({ message: `Fetching photo... (${remaining}s)` });
+
+                      try {
+                        let data = null;
+                        if (wsRequest && wsConnected) {
+                          data = await wsRequest('photo-cache', { icao: aircraftHex });
+                          if (data?.error) data = null;
+                        } else {
+                          const res = await fetch(`${config.apiBaseUrl || ''}/api/v1/aircraft/${aircraftHex}/photo/cache`, {
+                            method: 'POST'
+                          });
+                          if (res.ok) {
+                            data = await res.json();
+                          }
+                        }
+
+                        if (data?.photo_url || data?.thumbnail_url) {
+                          setProPhotoUrl(data.photo_url || data.thumbnail_url);
+                          if (proPhotoRetryRef.current) {
+                            clearInterval(proPhotoRetryRef.current);
+                            proPhotoRetryRef.current = null;
+                          }
+                          return true;
+                        }
+                      } catch {
+                        // Continue retrying
+                      }
+                      return false;
+                    };
+
+                    // First attempt immediately
+                    attemptFetch().then(success => {
+                      if (success) return;
+
+                      // Set up retry loop
+                      proPhotoRetryRef.current = setInterval(async () => {
+                        const elapsed = Date.now() - startTime;
+                        if (elapsed >= retryDuration) {
+                          // Time's up
+                          clearInterval(proPhotoRetryRef.current);
+                          proPhotoRetryRef.current = null;
+                          setProPhotoError(true);
+                          setProPhotoLoading(false);
+                          setProPhotoStatus({ message: 'Photo fetch timed out' });
+                          return;
+                        }
+                        await attemptFetch();
+                      }, retryInterval);
+                    });
                   }}
                 >
                   <RefreshCw size={14} /> Retry

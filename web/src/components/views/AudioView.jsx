@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
-import { Radio, Search, Play, Pause, Volume2, VolumeX, RefreshCw, ChevronDown, AlertCircle, CheckCircle, Clock, Loader2, FileAudio, Mic, PlayCircle } from 'lucide-react';
+import { Radio, Search, Play, Pause, Volume2, VolumeX, RefreshCw, ChevronDown, AlertCircle, CheckCircle, Clock, Loader2, FileAudio, Mic, PlayCircle, Radar } from 'lucide-react';
 import { useApi } from '../../hooks';
 import { io } from 'socket.io-client';
 
@@ -186,6 +186,7 @@ export function AudioView({ apiBase }) {
   const socketRef = useRef(null);
   const autoplayQueueRef = useRef([]);
   const processAutoplayQueueRef = useRef(null);
+  const filteredTransmissionsRef = useRef([]);
 
   // Subscribe to global audio state changes
   useEffect(() => {
@@ -250,6 +251,11 @@ export function AudioView({ apiBase }) {
       t.frequency_mhz?.toString().includes(query)
     );
   }, [mergedTransmissions, searchQuery]);
+
+  // Keep ref updated for use in event listeners
+  useEffect(() => {
+    filteredTransmissionsRef.current = filteredTransmissions;
+  }, [filteredTransmissions]);
 
   // Lazy loading: only render visible items
   const [visibleCount, setVisibleCount] = useState(20);
@@ -382,6 +388,19 @@ export function AudioView({ apiBase }) {
         notifySubscribers({ playingId: null, audioProgress: { ...globalAudioState.audioProgress } });
         setPlayingId(null);
         setAudioProgress(prev => ({ ...prev, [id]: 0 }));
+
+        // Autoplay next transmission in the list
+        if (globalAudioState.autoplay) {
+          const transmissions = filteredTransmissionsRef.current;
+          const currentIndex = transmissions.findIndex(t => t.id === id);
+          if (currentIndex !== -1 && currentIndex < transmissions.length - 1) {
+            const nextTransmission = transmissions[currentIndex + 1];
+            if (nextTransmission && nextTransmission.s3_url) {
+              // Use setTimeout to avoid state update conflicts
+              setTimeout(() => handlePlay(nextTransmission), 100);
+            }
+          }
+        }
       });
 
       audio.addEventListener('error', (e) => {
@@ -402,7 +421,13 @@ export function AudioView({ apiBase }) {
         clearInterval(globalAudioState.progressIntervalRef);
       }
     } else {
-      // Play
+      // Play - also enable autoplay so next transmission plays automatically
+      if (!globalAudioState.autoplay) {
+        globalAudioState.autoplay = true;
+        notifySubscribers({ autoplay: true });
+        setAutoplay(true);
+      }
+
       audio.play().catch(err => {
         console.error('Failed to play audio:', err);
       });
@@ -716,7 +741,10 @@ export function AudioView({ apiBase }) {
       <div className="audio-list">
         {loading && !data?.transmissions?.length && (
           <div className="audio-loading">
-            <Loader2 size={24} className="spinning" />
+            <div className="audio-loading-radar">
+              <Radar size={32} className="audio-radar-icon" />
+              <div className="audio-radar-sweep" />
+            </div>
             <span>Loading transmissions...</span>
           </div>
         )}
@@ -752,7 +780,10 @@ export function AudioView({ apiBase }) {
         {/* Load more sentinel */}
         {visibleCount < filteredTransmissions.length && (
           <div ref={loadMoreRef} className="audio-load-more">
-            <Loader2 size={20} className="spinning" />
+            <div className="audio-loading-radar small">
+              <Radar size={20} className="audio-radar-icon" />
+              <div className="audio-radar-sweep" />
+            </div>
             <span>Loading more...</span>
           </div>
         )}

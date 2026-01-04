@@ -157,8 +157,11 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
 
   const baseUrl = apiUrl || '';
   // Use S3 URLs directly from photoInfo when available
+  // Always prefer high-quality (photo_url) first, only use thumbnail as fallback
   const photoUrl = photoInfo
-    ? (useThumbnail ? photoInfo.thumbnail_url : photoInfo.photo_url) || photoInfo.photo_url || photoInfo.thumbnail_url
+    ? (useThumbnail
+        ? (photoInfo.thumbnail_url || photoInfo.photo_url)  // Fallback to full if no thumbnail
+        : (photoInfo.photo_url || photoInfo.thumbnail_url)) // Prefer full, fallback to thumbnail
     : null;
 
   useEffect(() => {
@@ -191,37 +194,90 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
     setTimeout(() => setPhotoStatus(null), 3000);
   };
 
+  const retryPhotoRef = useRef(null);
+
   const retryPhoto = async () => {
+    // Clear any existing retry loop
+    if (retryPhotoRef.current) {
+      clearInterval(retryPhotoRef.current);
+      retryPhotoRef.current = null;
+    }
+
     setPhotoState('loading');
     setUseThumbnail(false);
     setPhotoRetryCount(c => c + 1);
-    setPhotoStatus({ message: 'Fetching high quality photo...', type: 'info' });
 
-    // Re-fetch photo data using WebSocket or HTTP
-    try {
-      if (wsRequest && wsConnected) {
-        const data = await wsRequest('photo-cache', { icao: hex });
-        if (data && !data.error) {
-          setPhotoInfo(data);
+    const startTime = Date.now();
+    const retryDuration = 30000; // 30 seconds
+    const retryInterval = 3000; // Try every 3 seconds
+
+    const attemptFetch = async () => {
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.ceil((retryDuration - elapsed) / 1000);
+      setPhotoStatus({ message: `Fetching photo... (${remaining}s remaining)`, type: 'info' });
+
+      try {
+        let data = null;
+        if (wsRequest && wsConnected) {
+          data = await wsRequest('photo-cache', { icao: hex });
+          if (data?.error) data = null;
+        } else {
+          const res = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/photo/cache`, {
+            method: 'POST'
+          });
+          if (res.ok) {
+            data = await res.json();
+          }
         }
-      } else {
-        const res = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/photo/cache`, {
-          method: 'POST'
-        });
-        if (res.ok) {
-          const data = await res.json();
+
+        if (data) {
           setPhotoInfo(data);
+          // Photo info updated, image onLoad/onError will handle the rest
+          if (retryPhotoRef.current) {
+            clearInterval(retryPhotoRef.current);
+            retryPhotoRef.current = null;
+          }
+          return true;
         }
+      } catch {
+        // Continue retrying
       }
-    } catch {
-      // Keep existing photo info, just retry loading the image
-    }
+      return false;
+    };
+
+    // First attempt immediately
+    const success = await attemptFetch();
+    if (success) return;
+
+    // Set up retry loop
+    retryPhotoRef.current = setInterval(async () => {
+      const elapsed = Date.now() - startTime;
+      if (elapsed >= retryDuration) {
+        // Time's up
+        clearInterval(retryPhotoRef.current);
+        retryPhotoRef.current = null;
+        setPhotoState('error');
+        setPhotoStatus({ message: 'Photo fetch timed out', type: 'error' });
+        return;
+      }
+      await attemptFetch();
+    }, retryInterval);
   };
+
+  // Cleanup retry interval on unmount or hex change
+  useEffect(() => {
+    return () => {
+      if (retryPhotoRef.current) {
+        clearInterval(retryPhotoRef.current);
+        retryPhotoRef.current = null;
+      }
+    };
+  }, [hex]);
   
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      
+
       try {
         if (!info) {
           const infoRes = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/info`);
@@ -230,40 +286,38 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
             setInfo(data);
           }
         }
-        
-        // Use WebSocket if available for prioritized photo caching, otherwise fall back to HTTP
-        if (wsRequest && wsConnected) {
+
+        // Fetch photo data in background (don't await - photo loading shouldn't block info display)
+        const fetchPhoto = async () => {
           try {
-            const data = await wsRequest('photo-cache', { icao: hex });
-            if (data && !data.error) {
-              setPhotoInfo(data);
+            if (wsRequest && wsConnected) {
+              const data = await wsRequest('photo-cache', { icao: hex });
+              if (data && !data.error) {
+                setPhotoInfo(data);
+              }
+            } else {
+              // HTTP fallback - POST to prioritize caching
+              const photoMetaRes = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/photo/cache`, {
+                method: 'POST'
+              });
+              if (photoMetaRes.ok) {
+                const data = await photoMetaRes.json();
+                setPhotoInfo(data);
+              } else {
+                // Fallback to GET if POST fails
+                const photoFallbackRes = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/photo`);
+                if (photoFallbackRes.ok) {
+                  const data = await photoFallbackRes.json();
+                  setPhotoInfo(data);
+                }
+              }
             }
           } catch {
-            // WebSocket failed, try HTTP fallback
-            const photoFallbackRes = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/photo`);
-            if (photoFallbackRes.ok) {
-              const data = await photoFallbackRes.json();
-              setPhotoInfo(data);
-            }
+            // Photo fetch failed silently - photo section will show error state
           }
-        } else {
-          // HTTP fallback - POST to prioritize caching
-          const photoMetaRes = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/photo/cache`, {
-            method: 'POST'
-          });
-          if (photoMetaRes.ok) {
-            const data = await photoMetaRes.json();
-            setPhotoInfo(data);
-          } else {
-            // Fallback to GET if POST fails
-            const photoFallbackRes = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/photo`);
-            if (photoFallbackRes.ok) {
-              const data = await photoFallbackRes.json();
-              setPhotoInfo(data);
-            }
-          }
-        }
-        
+        };
+        fetchPhoto(); // Fire and forget - don't block main data loading
+
         // Try database query first by ICAO hex, then by callsign, then fall back to recent buffer
         let acarsFound = [];
         const callsign = aircraft?.flight?.trim();
@@ -1664,7 +1718,10 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
       <div className="detail-photo">
         {photoState === 'loading' && (
           <div className="photo-loading">
-            <RefreshCw size={32} className="spin" />
+            <div className="photo-loading-radar">
+              <Radar size={32} className="photo-radar-icon" />
+              <div className="photo-radar-sweep" />
+            </div>
             <span>Loading photo...</span>
           </div>
         )}
@@ -1730,7 +1787,10 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
       <div className="detail-content">
         {loading ? (
           <div className="detail-loading">
-            <RefreshCw size={32} className="spin" />
+            <div className="detail-loading-radar">
+              <Radar size={32} className="detail-radar-icon" />
+              <div className="detail-radar-sweep" />
+            </div>
             <span>Loading aircraft data...</span>
           </div>
         ) : (

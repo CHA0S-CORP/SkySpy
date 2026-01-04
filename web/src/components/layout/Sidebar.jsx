@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Plane, Radio, Bell, Activity, BarChart3, History,
   Map as MapIcon, Radar, ChevronLeft, ChevronRight, ChevronDown,
   Layers, ExternalLink, Ship, LineChart, MessageSquare,
-  LayoutDashboard, Database
+  LayoutDashboard, Database, Clock, Settings
 } from 'lucide-react';
 
 const tabs = [
@@ -27,11 +27,32 @@ const externalServices = [
   { id: 'prometheus', icon: Database, label: 'Prometheus', path: '/prometheus/', desc: 'Metrics' },
 ];
 
-export function Sidebar({ activeTab, setActiveTab, connected, collapsed, setCollapsed }) {
+export function Sidebar({ activeTab, setActiveTab, connected, collapsed, setCollapsed, stats, onOpenSettings }) {
   const [servicesExpanded, setServicesExpanded] = useState(false);
+  const [time, setTime] = useState(new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   return (
     <div className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+      {/* Mobile Stats Bar - shown only on mobile */}
+      <div className="mobile-sidebar-stats">
+        <div className="mobile-stat">
+          <Plane size={14} />
+          <span>{stats?.count || 0}</span>
+        </div>
+        <div className="mobile-stat">
+          <Clock size={14} />
+          <span>{time.toISOString().slice(11, 19)}Z</span>
+        </div>
+        <button className="mobile-settings-btn" onClick={onOpenSettings} title="Settings">
+          <Settings size={16} />
+        </button>
+      </div>
+
       <div className="sidebar-header">
         <div className="logo">
           <img src="/static/logo.png" alt="SkySpy" className="logo-image" />

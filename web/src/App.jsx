@@ -207,13 +207,15 @@ export default function App() {
   }, [activeTab, hashParams.tail, aircraft, config.apiBaseUrl, tailHexLookup, wsRequest, connected]);
 
   return (
-    <div className={`app ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileMenuOpen ? 'mobile-menu-open' : ''}`}>
+    <div className={`app ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileMenuOpen ? 'mobile-menu-open' : ''} view-${activeTab}`}>
       <Sidebar
         activeTab={activeTab}
         setActiveTab={(tab) => { setActiveTab(tab); setMobileMenuOpen(false); }}
         connected={connected}
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
+        stats={stats}
+        onOpenSettings={() => setShowSettings(true)}
       />
 
       {/* Mobile menu overlay */}

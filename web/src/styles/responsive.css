@@ -1,6 +1,14 @@
 /* Responsive Styles - Breakpoints, Mobile Menu, Touch */
 
 /* ============================================================================
+   Mobile Map Header - Map-specific controls, hidden by default
+   ============================================================================ */
+
+.mobile-map-header {
+  display: none;
+}
+
+/* ============================================================================
    Mobile Menu Toggle and Overlay
    ============================================================================ */
 
@@ -79,6 +87,14 @@
 }
 
 /* ============================================================================
+   Mobile Sidebar Stats - Hidden by default, shown only on mobile
+   ============================================================================ */
+
+.mobile-sidebar-stats {
+  display: none;
+}
+
+/* ============================================================================
    Tablet/Small Desktop (768px)
    ============================================================================ */
 
@@ -92,14 +108,303 @@
     display: block;
   }
 
+  /* Mobile Sidebar Stats Bar */
+  .mobile-sidebar-stats {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: rgba(10, 15, 20, 0.95);
+    border-bottom: 1px solid rgba(74, 222, 128, 0.2);
+    gap: 12px;
+  }
+
+  .mobile-stat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .mobile-stat svg {
+    color: var(--accent-cyan);
+  }
+
+  .mobile-settings-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: rgba(17, 24, 32, 0.8);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-left: auto;
+  }
+
+  .mobile-settings-btn:active {
+    transform: scale(0.95);
+    background: rgba(74, 222, 128, 0.15);
+    border-color: var(--accent-green);
+    color: var(--accent-green);
+  }
+
+  /* Hide main header on mobile - controls are in sidebar */
+  .header {
+    display: none;
+  }
+
+  /* Full height for content area when header is hidden */
+  .app.view-map .content-area {
+    padding: 0;
+    height: 100%;
+  }
+
+  /* Adjust main content to account for no header */
+  .main-content {
+    padding-top: 0;
+  }
+
+  /* Make map container use full viewport on mobile */
+  .app.view-map .map-container {
+    border-radius: 0;
+    height: 100%;
+  }
+
+  /* ============================================================================
+     Mobile Map Header - Search + Menu Button
+     ============================================================================ */
+
+  /* Hide Pro mode's desktop search bar on mobile */
+  .pro-search-bar {
+    display: none !important;
+  }
+
+  .mobile-map-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    padding: 8px 12px;
+    background: linear-gradient(180deg, rgba(10, 15, 20, 0.95) 0%, rgba(10, 15, 20, 0.85) 100%);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(74, 222, 128, 0.2);
+  }
+
+  /* Adjust CRT/Pro radar container for mobile header */
+  .crt-radar-container {
+    top: 56px !important;
+    height: calc(100% - 56px) !important;
+  }
+
+  .mobile-search-input {
+    flex: 1;
+    min-width: 0;
+    background: rgba(17, 24, 32, 0.8);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    outline: none;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    padding: 10px 12px;
+    height: 40px;
+    box-sizing: border-box;
+  }
+
+  .mobile-search-input:focus {
+    border-color: rgba(74, 222, 128, 0.4);
+  }
+
+  .mobile-search-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .mobile-search-clear {
+    position: absolute;
+    right: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .mobile-search-clear:active {
+    background: rgba(74, 222, 128, 0.2);
+    color: var(--accent-green);
+  }
+
+  .mobile-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .mobile-header-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: rgba(17, 24, 32, 0.6);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .mobile-header-btn:active {
+    transform: scale(0.95);
+  }
+
+  .mobile-header-btn.active {
+    background: rgba(74, 222, 128, 0.15);
+    border-color: rgba(74, 222, 128, 0.4);
+    color: var(--accent-green);
+  }
+
+  .mobile-header-btn.muted {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: var(--accent-red);
+  }
+
+  .mobile-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: rgba(17, 24, 32, 0.8);
+    color: var(--text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.2s;
+  }
+
+  .mobile-menu-btn:active {
+    transform: scale(0.95);
+  }
+
+  .mobile-menu-btn.active {
+    background: rgba(74, 222, 128, 0.15);
+    border-color: var(--accent-green);
+    color: var(--accent-green);
+  }
+
+  /* Mobile Controls Dropdown */
+  .mobile-controls-dropdown {
+    position: absolute;
+    top: 56px;
+    left: 12px;
+    right: 12px;
+    background: rgba(10, 15, 20, 0.98);
+    border: 1px solid rgba(74, 222, 128, 0.2);
+    border-radius: 12px;
+    padding: 12px;
+    z-index: 1001;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  .mobile-controls-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .mobile-control-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 14px 8px;
+    background: rgba(17, 24, 32, 0.6);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .mobile-control-item:active {
+    transform: scale(0.95);
+  }
+
+  .mobile-control-item.active {
+    background: rgba(74, 222, 128, 0.15);
+    border-color: rgba(74, 222, 128, 0.4);
+    color: var(--accent-green);
+  }
+
+  .mobile-control-item.muted {
+    color: var(--accent-red);
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+
+  .mobile-control-item span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-align: center;
+    line-height: 1.2;
+  }
+
   /* Hide sidebar off-screen by default on mobile */
   .sidebar {
     position: fixed;
     left: -220px;
     top: 0;
+    width: 220px;
     height: 100vh;
     z-index: 2000;
     transition: left 0.3s ease;
+  }
+
+  /* Restore full sidebar appearance on mobile when open */
+  .sidebar .sidebar-header .logo-text,
+  .sidebar .nav-item span,
+  .sidebar .version {
+    display: flex;
+  }
+
+  .sidebar .logo {
+    justify-content: flex-start;
+  }
+
+  .sidebar .nav-item {
+    justify-content: flex-start;
+    padding: 12px 14px;
+  }
+
+  .sidebar .connection-status span:not(.status-dot) {
+    display: inline;
+  }
+
+  /* Hide the collapse toggle on mobile - not needed */
+  .sidebar .sidebar-toggle {
+    display: none;
   }
 
   .app.mobile-menu-open .sidebar {
@@ -155,6 +460,204 @@
   .system-grid {
     grid-template-columns: 1fr;
   }
+
+  /* ============================================================================
+     Map View Mobile Styles (768px)
+     ============================================================================ */
+
+  /* Map container - remove border radius for full-width feel */
+  .map-container {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  /* Map controls - stack vertically and move to bottom */
+  .map-controls {
+    top: auto;
+    bottom: 16px;
+    right: 8px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-width: calc(100% - 16px);
+    justify-content: flex-end;
+  }
+
+  .map-control-btn {
+    padding: 8px 10px;
+    font-size: 11px;
+    min-height: 40px;
+    min-width: 40px;
+  }
+
+  /* Hide text labels on control buttons - keep icons only */
+  .map-control-btn span:not(.status-dot) {
+    display: none;
+  }
+
+  /* Hide scope info on mobile - too cluttered */
+  .crt-scope-info {
+    display: none;
+  }
+
+  /* Range control - make touch-friendly */
+  .crt-range-control {
+    bottom: 130px;
+    padding: 10px 14px;
+  }
+
+  .crt-range-btn {
+    padding: 10px 14px;
+    min-height: 40px;
+    font-size: 13px;
+  }
+
+  /* Legend panel - full width at bottom when open */
+  .legend-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    width: 100%;
+    max-width: 100%;
+    max-height: 50vh;
+    border-radius: 16px 16px 0 0;
+    z-index: 1100;
+  }
+
+  .legend-panel.collapsed {
+    max-height: 48px;
+  }
+
+  /* Aircraft list panel - full width sliding panel from right */
+  .radar-aircraft-list {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 280px;
+    max-width: 85vw;
+    max-height: 100vh;
+    border-radius: 16px 0 0 16px;
+    z-index: 1100;
+  }
+
+  .radar-aircraft-list.hidden {
+    transform: translateX(100%);
+  }
+
+  .aircraft-list-show-btn {
+    top: auto;
+    bottom: 70px;
+    right: 8px;
+    padding: 10px 14px;
+    min-height: 44px;
+    z-index: 1000;
+  }
+
+  /* Aircraft popup - centered and wider on mobile */
+  .aircraft-popup,
+  .weather-popup {
+    position: fixed !important;
+    left: 8px !important;
+    right: 8px !important;
+    top: auto !important;
+    bottom: 70px !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: 60vh;
+    border-radius: 12px;
+    z-index: 1050;
+  }
+
+  /* Pro details panel - full screen overlay on mobile */
+  .pro-details-panel {
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    border-radius: 0 !important;
+    overflow-y: auto;
+    z-index: 2500 !important;
+    padding-top: 0 !important;
+    background: rgba(10, 15, 20, 0.98) !important;
+  }
+
+  /* Hide pin button on mobile - not needed */
+  .pro-details-panel .pro-panel-btn[title*="Pin"],
+  .pro-details-panel .pro-panel-btn[title*="Unpin"] {
+    display: none !important;
+  }
+
+  /* Remove sub-scroll on graphs - let whole panel scroll */
+  .pro-graphs-container {
+    max-height: none !important;
+    overflow-y: visible !important;
+    overflow-x: visible !important;
+  }
+
+  /* Ensure aircraft photo is visible on mobile */
+  .pro-aircraft-photo {
+    min-height: 180px;
+    height: 180px;
+    flex-shrink: 0;
+  }
+
+  /* Conflict side panel - adjust for mobile */
+  .conflict-side-panel {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    top: auto;
+    bottom: 70px;
+    width: auto;
+    max-height: 50vh;
+    border-radius: 12px;
+  }
+
+  /* Map legend at bottom - simplified */
+  .map-legend {
+    bottom: 70px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    gap: 12px;
+  }
+
+  /* ACARS panel - full width sliding panel */
+  .acars-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 0;
+    z-index: 1100;
+  }
+
+  /* Filter/overlay menus - positioned for mobile */
+  .overlay-menu,
+  .filter-menu {
+    position: fixed;
+    bottom: 70px;
+    right: 8px;
+    left: 8px;
+    top: auto;
+    width: auto;
+    max-height: 60vh;
+    overflow-y: auto;
+    border-radius: 12px;
+  }
 }
 
 /* ============================================================================
@@ -185,6 +688,187 @@
   /* Content area padding */
   .content-area {
     padding: 16px;
+  }
+
+  /* ============================================================================
+     Mobile Map Header - Compact for small phones
+     ============================================================================ */
+
+  .mobile-map-header {
+    padding: 8px 10px;
+  }
+
+  .mobile-header-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .mobile-header-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .mobile-aircraft-count {
+    font-size: 13px;
+  }
+
+  /* Mobile Map Header - compact for small phones */
+  .mobile-map-header {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  .mobile-search-input {
+    font-size: 12px;
+    height: 36px;
+    padding: 8px 10px;
+  }
+
+  .mobile-header-actions {
+    gap: 3px;
+  }
+
+  .mobile-header-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .mobile-header-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .mobile-menu-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .mobile-controls-dropdown {
+    top: 48px;
+    left: 8px;
+    right: 8px;
+    padding: 10px;
+  }
+
+  .mobile-controls-grid {
+    gap: 6px;
+  }
+
+  .mobile-control-item {
+    padding: 12px 6px;
+    gap: 4px;
+  }
+
+  .mobile-control-item span {
+    font-size: 9px;
+  }
+
+  /* ============================================================================
+     Map View Mobile Phone Styles (480px)
+     ============================================================================ */
+
+  /* Map controls - compact layout */
+  .map-controls {
+    bottom: 12px;
+    right: 6px;
+    gap: 4px;
+  }
+
+  .map-control-btn {
+    padding: 6px 8px;
+    min-height: 36px;
+    min-width: 36px;
+    border-radius: 6px;
+  }
+
+  /* Range control - compact */
+  .crt-range-control {
+    bottom: 110px;
+    padding: 8px 10px;
+    gap: 4px;
+  }
+
+  .crt-range-label {
+    font-size: 11px;
+    margin-right: 4px;
+  }
+
+  .crt-range-btn {
+    padding: 8px 10px;
+    min-height: 36px;
+    font-size: 11px;
+  }
+
+  /* Aircraft list - narrower */
+  .radar-aircraft-list {
+    width: 260px;
+    max-width: 90vw;
+  }
+
+  .aircraft-list-show-btn {
+    bottom: 60px;
+    right: 6px;
+    padding: 8px 12px;
+    min-height: 40px;
+  }
+
+  /* Popups - full width */
+  .aircraft-popup,
+  .weather-popup {
+    left: 4px !important;
+    right: 4px !important;
+    bottom: 60px !important;
+    max-height: 55vh;
+    font-size: 12px;
+  }
+
+  /* Pro details panel - keep full screen on small phones too */
+
+  /* Legend panel - compact */
+  .legend-panel {
+    max-height: 45vh;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .legend-header {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  .legend-section {
+    padding: 8px 12px;
+  }
+
+  .legend-item {
+    font-size: 10px;
+    padding: 3px 0;
+  }
+
+  /* Map legend - horizontal */
+  .map-legend {
+    bottom: 60px;
+    left: 4px;
+    right: 4px;
+    padding: 6px 10px;
+    gap: 8px;
+    font-size: 10px;
+  }
+
+  /* Conflict side panel */
+  .conflict-side-panel {
+    left: 4px;
+    right: 4px;
+    bottom: 60px;
+    max-height: 45vh;
+  }
+
+  /* Filter/overlay menus */
+  .overlay-menu,
+  .filter-menu {
+    left: 4px;
+    right: 4px;
+    bottom: 60px;
+    max-height: 55vh;
   }
 }
 
@@ -222,6 +906,42 @@
     min-height: 32px;
     min-width: 32px;
   }
+
+  /* Map touch improvements */
+  .crt-range-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .legend-header button {
+    min-height: 36px;
+    min-width: 36px;
+  }
+
+  .aircraft-list-toggle,
+  .aircraft-list-close {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .popup-close {
+    min-height: 36px;
+    min-width: 36px;
+  }
+
+  /* Enable pinch-to-zoom, prevent double-tap zoom */
+  .map-container,
+  .crt-radar-container {
+    touch-action: pan-x pan-y pinch-zoom;
+  }
+
+  /* Smooth scrolling for panels */
+  .aircraft-list-content,
+  .legend-panel,
+  .popup-details {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
 }
 
 /* ============================================================================
@@ -230,7 +950,9 @@
 
 @media (max-height: 500px) and (orientation: landscape) {
   .radar-aircraft-list {
-    max-height: 60vh;
+    max-height: 80vh;
+    top: 10px;
+    bottom: 10px;
   }
 
   .legend-panel {
@@ -239,6 +961,694 @@
 
   .aircraft-popup,
   .weather-popup {
-    max-height: 80vh;
+    max-height: 70vh;
+    bottom: 50px !important;
+  }
+
+  /* Map controls - vertical stack on right */
+  .map-controls {
+    flex-direction: column;
+    top: 10px;
+    bottom: auto;
+    right: 10px;
+  }
+
+  /* Pro details panel - side panel in landscape */
+  .pro-details-panel {
+    max-height: 100vh;
+    width: 320px;
+    max-width: 40vw;
+    top: 0;
+    bottom: 0;
+    left: auto;
+    right: 0;
+    border-radius: 16px 0 0 16px;
+  }
+}
+
+/* ============================================================================
+   Safety Event Page - Mobile Responsive Styles
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  /* Full-screen takeover on mobile */
+  .safety-event-page-v2 {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Hide mobile menu toggle when safety page is shown */
+  .safety-event-page-v2 ~ .mobile-menu-toggle,
+  .app:has(.safety-event-page-v2) .mobile-menu-toggle {
+    display: none !important;
+  }
+
+  /* Top bar - compact mobile layout */
+  .sep-topbar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .sep-back-btn {
+    padding: 8px 12px;
+    font-size: 0;
+    min-width: 40px;
+    min-height: 40px;
+    justify-content: center;
+  }
+
+  .sep-back-btn svg {
+    margin: 0;
+  }
+
+  .sep-event-badge {
+    padding: 6px 10px;
+    flex: 1;
+    justify-content: center;
+  }
+
+  .sep-event-type {
+    font-size: 11px;
+  }
+
+  .sep-severity-indicator {
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+
+  .sep-timestamp {
+    margin-left: 0;
+    order: 10;
+    width: 100%;
+    justify-content: center;
+    font-size: 12px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .sep-copy-btn {
+    padding: 8px 10px;
+    font-size: 0;
+    min-width: 40px;
+    min-height: 40px;
+    justify-content: center;
+  }
+
+  .sep-copy-btn span {
+    display: none;
+  }
+
+  /* Main grid - single column on mobile */
+  .sep-main-grid {
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    gap: 12px;
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Reorder columns - map first for visual impact */
+  .sep-map-column {
+    order: 1;
+    position: relative;
+    top: 0;
+    width: 100%;
+  }
+
+  .sep-info-column {
+    order: 2;
+    width: 100%;
+  }
+
+  /* Map container adjustments */
+  .sep-map-container {
+    min-height: 280px;
+    border-radius: 12px;
+    width: 100%;
+  }
+
+  .sep-map {
+    min-height: 280px;
+    width: 100%;
+  }
+
+  /* Hide Leaflet zoom controls on mobile - use pinch to zoom instead */
+  .sep-map .leaflet-control-zoom {
+    display: none !important;
+  }
+
+  .sep-map-header {
+    padding: 10px 12px;
+    font-size: 11px;
+  }
+
+  .sep-map-live-indicator {
+    font-size: 9px;
+    padding: 3px 8px;
+  }
+
+  /* Replay panel - touch-friendly */
+  .sep-replay-panel {
+    padding: 14px;
+    border-radius: 12px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .sep-replay-header {
+    font-size: 11px;
+    margin-bottom: 12px;
+  }
+
+  .sep-replay-time {
+    font-size: 13px;
+  }
+
+  .sep-timeline-container {
+    margin-bottom: 24px;
+  }
+
+  .sep-timeline-track {
+    height: 10px;
+  }
+
+  .sep-timeline-slider {
+    height: 36px;
+  }
+
+  .sep-timeline-event-marker {
+    width: 18px;
+    height: 18px;
+  }
+
+  .sep-tick-label {
+    font-size: 8px;
+  }
+
+  .sep-replay-controls {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .sep-control-group {
+    width: 100%;
+    justify-content: center;
+    padding: 6px;
+  }
+
+  .sep-control-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .sep-play-btn {
+    width: 52px;
+    height: 52px;
+  }
+
+  .sep-jump-to-event {
+    width: 100%;
+    justify-content: center;
+    padding: 12px;
+    font-size: 13px;
+  }
+
+  .sep-speed-control {
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .sep-speed-buttons {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .sep-speed-btn {
+    flex: 1;
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+
+  /* Message card - more compact */
+  .sep-message-card {
+    padding: 14px;
+    gap: 12px;
+    flex-direction: column;
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .sep-message-icon {
+    width: 40px;
+    height: 40px;
+    margin: 0 auto;
+  }
+
+  .sep-message-text {
+    font-size: 14px;
+  }
+
+  /* Aircraft section */
+  .sep-aircraft-section {
+    padding: 12px;
+    border-radius: 12px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .sep-aircraft-grid {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .sep-aircraft-card {
+    padding: 14px;
+    border-radius: 10px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .sep-ac-callsign {
+    font-size: 16px;
+  }
+
+  .sep-ac-icao {
+    font-size: 11px;
+    margin-bottom: 10px;
+  }
+
+  .sep-ac-telemetry {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px;
+    width: 100%;
+  }
+
+  .sep-telem-item {
+    padding: 6px;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .sep-telem-label {
+    font-size: 8px;
+  }
+
+  .sep-telem-value {
+    font-size: 13px;
+    word-break: break-all;
+  }
+
+  .sep-telem-unit {
+    font-size: 9px;
+  }
+
+  /* Separation indicator - horizontal on mobile */
+  .sep-separation-indicator {
+    flex-direction: row;
+    padding: 10px 0;
+    min-width: unset;
+  }
+
+  .sep-separation-line {
+    width: 30px;
+    height: 2px;
+    min-height: unset;
+  }
+
+  .sep-separation-data {
+    flex-direction: row;
+    padding: 0 12px;
+    gap: 10px;
+  }
+
+  .sep-sep-item {
+    padding: 6px 10px;
+  }
+
+  .sep-sep-value {
+    font-size: 14px;
+  }
+
+  /* Graphs section */
+  .sep-graphs-section {
+    padding: 12px;
+    border-radius: 12px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .sep-graphs-container {
+    width: 100%;
+  }
+
+  .sep-section-header {
+    font-size: 11px;
+    margin-bottom: 10px;
+  }
+
+  .sep-reset-zoom {
+    font-size: 9px;
+    padding: 3px 8px;
+  }
+
+  .sep-graphs-aircraft {
+    padding: 10px;
+    border-radius: 8px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .sep-graphs-label {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .sep-graphs-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .mini-graph.large {
+    padding: 8px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .mini-graph-header {
+    margin-bottom: 4px;
+  }
+
+  .mini-graph-label {
+    font-size: 9px;
+  }
+
+  .mini-graph-current {
+    font-size: 11px;
+  }
+
+  .mini-graph-svg {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .mini-graph-range {
+    font-size: 8px;
+    margin-top: 3px;
+  }
+
+  /* Telemetry section */
+  .sep-telemetry-section {
+    border-radius: 12px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .sep-telemetry-toggle {
+    padding: 12px 14px;
+    font-size: 11px;
+  }
+
+  .sep-telemetry-content {
+    padding: 0 12px 12px;
+    gap: 10px;
+  }
+
+  .snapshot-section.large {
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  .snapshot-label {
+    font-size: 10px;
+    margin-bottom: 8px;
+  }
+
+  .snapshot-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .snapshot-item {
+    padding: 6px 8px;
+    font-size: 10px;
+    border-radius: 5px;
+  }
+
+  /* Loading and error states */
+  .sep-loading {
+    gap: 20px;
+  }
+
+  .sep-loading-radar {
+    width: 100px;
+    height: 100px;
+  }
+
+  .sep-loading-text {
+    font-size: 12px;
+  }
+
+  .sep-error {
+    padding: 20px;
+    gap: 14px;
+  }
+
+  .sep-error h2 {
+    font-size: 1.25rem;
+  }
+
+  .sep-error p {
+    font-size: 13px;
+  }
+
+  .sep-error .sep-back-btn {
+    font-size: 13px;
+    padding: 10px 16px;
+  }
+
+  /* Reduce ambient effects for performance */
+  .sep-ambient-glow {
+    animation: none;
+    opacity: 0.4;
+  }
+
+  .sep-grid-overlay {
+    background-size: 30px 30px;
+  }
+}
+
+/* Small phone styles (480px) */
+@media (max-width: 480px) {
+  .sep-topbar {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .sep-back-btn {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 6px;
+  }
+
+  .sep-event-badge {
+    padding: 5px 8px;
+  }
+
+  .sep-event-badge svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .sep-event-type {
+    font-size: 10px;
+  }
+
+  .sep-severity-indicator {
+    padding: 4px 6px;
+    font-size: 9px;
+  }
+
+  .sep-copy-btn {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 6px;
+  }
+
+  .sep-timestamp {
+    font-size: 11px;
+    padding-top: 4px;
+  }
+
+  .sep-main-grid {
+    padding: 8px;
+    gap: 10px;
+  }
+
+  .sep-map-container {
+    min-height: 240px;
+    border-radius: 10px;
+  }
+
+  .sep-map {
+    min-height: 240px;
+  }
+
+  .sep-map-header {
+    padding: 8px 10px;
+    font-size: 10px;
+  }
+
+  .sep-replay-panel {
+    padding: 12px;
+    border-radius: 10px;
+  }
+
+  .sep-control-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .sep-play-btn {
+    width: 48px;
+    height: 48px;
+  }
+
+  .sep-jump-to-event {
+    padding: 10px;
+    font-size: 12px;
+  }
+
+  .sep-speed-btn {
+    padding: 8px 6px;
+    font-size: 11px;
+  }
+
+  .sep-message-card {
+    padding: 12px;
+  }
+
+  .sep-message-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .sep-message-text {
+    font-size: 13px;
+  }
+
+  .sep-aircraft-section,
+  .sep-graphs-section,
+  .sep-telemetry-section {
+    padding: 10px;
+    border-radius: 10px;
+  }
+
+  .sep-aircraft-card {
+    padding: 12px;
+  }
+
+  .sep-ac-callsign {
+    font-size: 15px;
+  }
+
+  .sep-telem-value {
+    font-size: 12px;
+  }
+
+  .snapshot-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .snapshot-item {
+    font-size: 9px;
+    padding: 5px 6px;
+  }
+
+  /* Disable ambient effects for performance */
+  .sep-ambient {
+    display: none;
+  }
+}
+
+/* Touch device improvements for Safety Event Page */
+@media (pointer: coarse) {
+  .sep-control-btn:active,
+  .sep-speed-btn:active,
+  .sep-jump-to-event:active,
+  .sep-back-btn:active,
+  .sep-copy-btn:active {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+
+  .sep-aircraft-card:active {
+    transform: scale(0.98);
+  }
+
+  .sep-telemetry-toggle:active {
+    background: rgba(0, 212, 255, 0.1);
+  }
+
+  /* Larger touch targets */
+  .sep-timeline-slider {
+    height: 44px;
+  }
+
+  /* Smooth scrolling */
+  .safety-event-page-v2 {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+}
+
+/* Landscape mobile for Safety Event Page */
+@media (max-height: 500px) and (orientation: landscape) {
+  .safety-event-page-v2 .sep-main-grid {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .safety-event-page-v2 .sep-map-column {
+    order: 2;
+    flex: 1;
+    position: sticky;
+    top: 60px;
+  }
+
+  .safety-event-page-v2 .sep-info-column {
+    order: 1;
+    flex: 1;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+  }
+
+  .safety-event-page-v2 .sep-map-container {
+    min-height: 200px;
+  }
+
+  .safety-event-page-v2 .sep-map {
+    min-height: 200px;
+  }
+
+  .safety-event-page-v2 .sep-topbar {
+    padding: 6px 12px;
+  }
+
+  .safety-event-page-v2 .sep-timestamp {
+    width: auto;
+    order: unset;
+    margin-left: auto;
+    border-top: none;
+    padding-top: 0;
   }
 }

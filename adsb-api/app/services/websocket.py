@@ -1325,9 +1325,9 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
         # Check S3 first if enabled
         if settings.s3_enabled:
             if await _check_s3_exists(icao, is_thumbnail=False):
-                photo_url = get_signed_s3_url(icao, is_thumbnail=False)
+                photo_url = await get_signed_s3_url(icao, is_thumbnail=False)
             if await _check_s3_exists(icao, is_thumbnail=True):
-                thumbnail_url = get_signed_s3_url(icao, is_thumbnail=True)
+                thumbnail_url = await get_signed_s3_url(icao, is_thumbnail=True)
 
         # Get info from database for metadata and fallback URLs
         info = await get_aircraft_info(db, icao)
@@ -1377,8 +1377,8 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
             if photo_exists or thumb_exists:
                 result = {
                     "icao_hex": icao,
-                    "photo_url": get_signed_s3_url(icao, False) if photo_exists else None,
-                    "thumbnail_url": get_signed_s3_url(icao, True) if thumb_exists else None,
+                    "photo_url": await get_signed_s3_url(icao, False) if photo_exists else None,
+                    "thumbnail_url": await get_signed_s3_url(icao, True) if thumb_exists else None,
                     "cached": True,
                     "source": "s3"
                 }
@@ -1413,8 +1413,8 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
         if settings.s3_enabled and (cached_photo or cached_thumb):
             result = {
                 "icao_hex": icao,
-                "photo_url": get_signed_s3_url(icao, False) if cached_photo else photo_url,
-                "thumbnail_url": get_signed_s3_url(icao, True) if cached_thumb else thumbnail_url,
+                "photo_url": await get_signed_s3_url(icao, False) if cached_photo else photo_url,
+                "thumbnail_url": await get_signed_s3_url(icao, True) if cached_thumb else thumbnail_url,
                 "cached": True,
                 "source": "s3"
             }
