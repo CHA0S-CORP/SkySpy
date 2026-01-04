@@ -25,7 +25,7 @@ import {
 import { AircraftDetailPage } from '../aircraft/AircraftDetailPage';
 import { useAircraftInfo } from '../../hooks/useAircraftInfo';
 
-function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: wsSafetyEvents, wsRequest, wsConnected, getAirframeError, clearAirframeError, onViewHistoryEvent, hashParams = {}, setHashParams }) {
+function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: wsSafetyEvents, wsRequest, wsConnected, getAirframeError, clearAirframeError, onViewHistoryEvent, hashParams = {}, setHashParams, positionsRef = null, positionSocketConnected = false }) {
   const [selectedAircraft, setSelectedAircraft] = useState(null);
   const [selectedMetar, setSelectedMetar] = useState(null);
   const [selectedPirep, setSelectedPirep] = useState(null);
@@ -239,6 +239,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   // Notification tracking refs
   const notifiedConflictsRef = useRef(new Set()); // Track notified conflict pairs
   const notifiedEmergenciesRef = useRef(new Set()); // Track notified emergency aircraft
+  const autoAckScheduledRef = useRef(new Set()); // Track events with scheduled auto-acknowledge
   const alarmAudioRef = useRef(null); // Audio element for conflict alarm
   const alarmPlayingRef = useRef(false); // Track if alarm is currently playing
   const alarmIntervalRef = useRef(null); // Interval for looping alarm
@@ -958,10 +959,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   useEffect(() => {
     // Get unacknowledged events
     const unacknowledged = activeConflicts.filter(event => !acknowledgedEvents.has(event.id));
-    
+
     if (unacknowledged.length > 0) {
       const severity = getHighestSeverity(unacknowledged);
-      
+
       // For low severity, play alarm twice then auto-acknowledge
       if (severity === 'low') {
         // Play alarm, then auto-acknowledge after 4 seconds
@@ -970,13 +971,16 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         setTimeout(() => {
           playConflictAlarm('low');
         }, 1500);
-        
-        // Auto-acknowledge low severity events after 5 seconds
-        setTimeout(() => {
-          unacknowledged.forEach(e => {
-            if (e.severity === 'low') acknowledgeEvent(e.id);
-          });
-        }, 5000);
+
+        // Auto-acknowledge low severity events after 5 seconds (only if not already scheduled)
+        unacknowledged.forEach(e => {
+          if (e.severity === 'low' && !autoAckScheduledRef.current.has(e.id)) {
+            autoAckScheduledRef.current.add(e.id);
+            setTimeout(() => {
+              acknowledgeEvent(e.id);
+            }, 5000);
+          }
+        });
       } else {
         // For warning/critical, loop until acknowledged
         startAlarmLoop(severity);
@@ -984,7 +988,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     } else {
       stopAlarmLoop();
     }
-    
+
     // Send browser notifications for NEW events and auto-focus on critical/warning
     activeConflicts.forEach(event => {
       const eventKey = `safety-${event.id}`;
@@ -1004,7 +1008,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         );
       }
     });
-    
+
     // Cleanup on unmount
     return () => {
       stopAlarmLoop();
@@ -1609,19 +1613,25 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     }
   }, [aircraft, feederLat, feederLon, showShortTracks]);
 
+  // Ref for aircraft list to avoid stale closures in interval
+  const aircraftForShortTracksRef = useRef(aircraft);
+  useEffect(() => {
+    aircraftForShortTracksRef.current = aircraft;
+  }, [aircraft]);
+
   // Fetch historical positions for short tracks when enabled
   // Merges historical API data with real-time positions for complete trails
-  // Periodically refreshes to fill gaps when aircraft were out of range
+  // Uses an interval instead of re-running on aircraft changes to prevent API spam
   useEffect(() => {
     if (!showShortTracks) return;
 
     const baseUrl = config.apiBaseUrl || '';
-    const now = Date.now();
     const REFRESH_INTERVAL = 60000; // Refresh historical data every 60 seconds to fill gaps
+    const FETCH_INTERVAL = 5000; // Check for new aircraft to fetch every 5 seconds
 
-    // Debounce the fetch
-    const timeoutId = setTimeout(() => {
-      const visibleAircraft = aircraft.filter(ac => ac.hex && ac.lat && ac.lon);
+    const fetchShortTracks = () => {
+      const now = Date.now();
+      const visibleAircraft = aircraftForShortTracksRef.current.filter(ac => ac.hex && ac.lat && ac.lon);
 
       // Prioritize aircraft: selected first, then near map center, then military
       let prioritized = visibleAircraft;
@@ -1659,7 +1669,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           if (!lastFetch) return true; // Never fetched
           return (now - lastFetch) > REFRESH_INTERVAL; // Needs refresh
         })
-        .slice(0, 8); // Fetch up to 8 at a time
+        .slice(0, 4); // Fetch up to 4 at a time to reduce load
 
       if (toFetch.length > 0) {
         toFetch.forEach(async (ac) => {
@@ -1694,24 +1704,12 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 }))
                 .sort((a, b) => a.time - b.time); // Sort oldest to newest
 
-              // Merge with existing real-time positions from trackHistory
+              // Merge with existing positions
               setShortTrackHistory(prev => {
                 const existing = prev[ac.hex] || [];
-                const realtimePositions = trackHistory[ac.hex] || [];
 
                 // Combine all positions
                 const allPositions = [...historicalPositions];
-
-                // Add real-time positions that are newer than the latest historical
-                const latestHistorical = historicalPositions.length > 0
-                  ? historicalPositions[historicalPositions.length - 1].time
-                  : 0;
-
-                realtimePositions.forEach(p => {
-                  if (p.time > latestHistorical) {
-                    allPositions.push({ lat: p.lat, lon: p.lon, time: p.time });
-                  }
-                });
 
                 // Also preserve any existing positions not in the new data
                 // (in case real-time captured something the API missed)
@@ -1745,7 +1743,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       }
 
       // Cleanup old entries when aircraft disappear
-      const activeHexes = new Set(aircraft.map(a => a.hex));
+      const activeHexes = new Set(aircraftForShortTracksRef.current.map(a => a.hex));
       setShortTrackHistory(prev => {
         const hexesToRemove = Object.keys(prev).filter(hex => !activeHexes.has(hex));
         if (hexesToRemove.length === 0) return prev;
@@ -1756,10 +1754,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         });
         return updated;
       });
-    }, 2000); // 2 second debounce
+    };
 
-    return () => clearTimeout(timeoutId);
-  }, [showShortTracks, aircraft, config.apiBaseUrl, wsRequest, wsConnected, selectedAircraft?.hex, trackHistory]);
+    // Run once immediately, then on interval
+    fetchShortTracks();
+    const intervalId = setInterval(fetchShortTracks, FETCH_INTERVAL);
+
+    return () => clearInterval(intervalId);
+  }, [showShortTracks, config.apiBaseUrl, wsRequest, wsConnected, selectedAircraft?.hex]);
 
   // Draw track history canvas when selected aircraft or history changes
   useEffect(() => {
@@ -2549,6 +2551,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
     loadAviationData();
   }, [config.mapMode, config.apiBaseUrl, overlays.usArtcc, overlays.usRefueling, overlays.ukMilZones, overlays.euMilAwacs, overlays.trainingAreas, feederLat, feederLon, radarRange, aviationOverlayData.usArtcc, aviationOverlayData.usRefueling, aviationOverlayData.ukMilZones, aviationOverlayData.euMilAwacs, aviationOverlayData.trainingAreas]);
+
+  // NOTE: Interpolated positions are now read directly from positionsRef in the
+  // Leaflet marker update loop, NOT merged into React state. This prevents
+  // 60Hz re-renders that were causing performance issues.
 
   const sortedAircraft = useMemo(() => {
     let filtered = [...aircraft].filter(a => a.lat && a.lon);
@@ -4411,14 +4417,15 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     };
   }, [config.mapMode, config.mapDarkMode, feederLat, feederLon]);
 
-  // Leaflet marker updates
+  // Leaflet marker creation/removal (runs when aircraft list changes)
   useEffect(() => {
     if (config.mapMode !== 'map' || !leafletMapRef.current) return;
-    
+
     console.log('Updating markers:', sortedAircraft.length, 'aircraft with position');
 
     const currentHexes = new Set(sortedAircraft.map(a => a.hex));
 
+    // Remove markers for aircraft no longer present
     Object.keys(markersRef.current).forEach(hex => {
       if (!currentHexes.has(hex)) {
         markersRef.current[hex].remove();
@@ -4433,6 +4440,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       if (event.icao_2) safetyAircraftHexes.add(event.icao_2.toUpperCase());
     });
 
+    // Create markers for new aircraft (positions updated by animation loop below)
     sortedAircraft.slice(0, 150).forEach(ac => {
       if (!ac.lat || !ac.lon) return;
 
@@ -4454,7 +4462,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       const zOffset = hasSafetyEvent ? 2000 : ac.emergency ? 1000 : 0;
 
       if (markersRef.current[ac.hex]) {
-        markersRef.current[ac.hex].setLatLng([ac.lat, ac.lon]);
+        // Update icon and z-index (position updated by animation loop)
         markersRef.current[ac.hex].setIcon(icon);
         markersRef.current[ac.hex].setZIndexOffset(zOffset);
       } else {
@@ -4470,6 +4478,66 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       }
     });
   }, [sortedAircraft, config.mapMode, safetyEvents]);
+
+  // High-frequency Leaflet marker position updates using positionsRef
+  // This runs in a requestAnimationFrame loop for smooth interpolated movement
+  useEffect(() => {
+    if (config.mapMode !== 'map' || !leafletMapRef.current || !positionsRef) return;
+
+    let animFrameId = null;
+
+    const updateMarkerPositions = () => {
+      const positions = positionsRef.current;
+      if (!positions) {
+        animFrameId = requestAnimationFrame(updateMarkerPositions);
+        return;
+      }
+
+      // Update marker positions from interpolated data
+      for (const hex in markersRef.current) {
+        const interpolated = positions[hex] || positions[hex.toUpperCase()];
+        if (interpolated && interpolated.lat != null && interpolated.lon != null) {
+          const marker = markersRef.current[hex];
+          marker.setLatLng([interpolated.lat, interpolated.lon]);
+
+          // Update icon rotation if track changed significantly
+          if (interpolated.track != null) {
+            const currentIcon = marker.getIcon();
+            if (currentIcon && currentIcon.options && currentIcon.options.html) {
+              // Extract current rotation from icon HTML
+              const match = currentIcon.options.html.match(/rotate\(([0-9.]+)deg\)/);
+              const currentRotation = match ? parseFloat(match[1]) : 0;
+              const newRotation = interpolated.track;
+
+              // Only update icon if rotation changed by more than 2 degrees
+              let diff = Math.abs(newRotation - currentRotation);
+              if (diff > 180) diff = 360 - diff;
+              if (diff > 2) {
+                const newHtml = currentIcon.options.html.replace(
+                  /rotate\([0-9.]+deg\)/,
+                  `rotate(${newRotation}deg)`
+                );
+                marker.setIcon(L.divIcon({
+                  ...currentIcon.options,
+                  html: newHtml
+                }));
+              }
+            }
+          }
+        }
+      }
+
+      animFrameId = requestAnimationFrame(updateMarkerPositions);
+    };
+
+    animFrameId = requestAnimationFrame(updateMarkerPositions);
+
+    return () => {
+      if (animFrameId) {
+        cancelAnimationFrame(animFrameId);
+      }
+    };
+  }, [config.mapMode, positionsRef]);
 
   // Leaflet polyline updates for short tracks in map mode
   useEffect(() => {

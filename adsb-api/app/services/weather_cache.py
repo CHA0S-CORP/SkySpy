@@ -646,3 +646,78 @@ def record_metar_api_request(success: bool = True):
     else:
         METAR_API_REQUESTS.labels(status="error").inc()
         _metar_stats["api_errors"] += 1
+
+
+# =============================================================================
+# Generic Aviation Data Cache (airports, navaids, etc.)
+# =============================================================================
+
+def _make_aviation_cache_key(data_type: str, bbox: str) -> str:
+    """Create a cache key for aviation data by type and bounding box."""
+    bbox_hash = hashlib.md5(bbox.encode()).hexdigest()[:12]
+    return f"aviation:{data_type}:{bbox_hash}"
+
+
+async def get_cached_aviation_data(data_type: str, bbox: str) -> Optional[list]:
+    """
+    Get cached aviation data (airports, navaids, etc.) from Redis.
+
+    Args:
+        data_type: Type of data (airports, navaids, pireps, metars)
+        bbox: Bounding box string "lat1,lon1,lat2,lon2"
+
+    Returns:
+        Cached data list or None if not in cache
+    """
+    redis = await get_redis()
+    if not redis:
+        return None
+
+    start_time = time.time()
+    try:
+        key = _make_aviation_cache_key(data_type, bbox)
+        data = await redis.get(key)
+        latency = time.time() - start_time
+        REDIS_LATENCY.labels(operation="get").observe(latency)
+        REDIS_OPERATIONS.labels(operation="get", status="success").inc()
+
+        if data:
+            logger.debug(f"Redis cache hit for {data_type} bbox query")
+            return json.loads(data)
+    except Exception as e:
+        REDIS_OPERATIONS.labels(operation="get", status="error").inc()
+        logger.warning(f"Redis get error for {data_type}: {e}")
+
+    return None
+
+
+async def cache_aviation_data(data_type: str, bbox: str, data: list, ttl: int = 300) -> bool:
+    """
+    Cache aviation data in Redis.
+
+    Args:
+        data_type: Type of data (airports, navaids, pireps, metars)
+        bbox: Bounding box string "lat1,lon1,lat2,lon2"
+        data: Data to cache
+        ttl: Time to live in seconds (default 5 minutes)
+
+    Returns:
+        True if cached successfully
+    """
+    redis = await get_redis()
+    if not redis:
+        return False
+
+    start_time = time.time()
+    try:
+        key = _make_aviation_cache_key(data_type, bbox)
+        await redis.setex(key, ttl, json.dumps(data))
+        latency = time.time() - start_time
+        REDIS_LATENCY.labels(operation="set").observe(latency)
+        REDIS_OPERATIONS.labels(operation="set", status="success").inc()
+        logger.debug(f"Cached {data_type} data in Redis (TTL: {ttl}s, {len(data)} items)")
+        return True
+    except Exception as e:
+        REDIS_OPERATIONS.labels(operation="set", status="error").inc()
+        logger.warning(f"Redis set error for {data_type}: {e}")
+        return False

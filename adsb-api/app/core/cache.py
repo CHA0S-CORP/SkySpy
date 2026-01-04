@@ -1,5 +1,7 @@
 """
-Caching utilities with thread-safe in-memory cache.
+Caching utilities with async-safe in-memory cache.
+
+Uses asyncio.Lock for async functions to avoid blocking the event loop.
 """
 import asyncio
 import hashlib
@@ -15,9 +17,12 @@ settings = get_settings()
 logger = logging.getLogger(__name__)
 
 _cache: Dict[str, Tuple[Any, float]] = {}
-_cache_lock = threading.Lock()
+# Use asyncio.Lock for async code to avoid blocking event loop
+_async_cache_lock = asyncio.Lock()
+# Keep threading.Lock for sync code only
+_sync_cache_lock = threading.Lock()
 
-# Global upstream API rate limiter
+# Global upstream API rate limiter (uses threading lock since it's quick operations)
 _upstream_last_request: float = 0
 _upstream_lock = threading.Lock()
 
@@ -100,55 +105,61 @@ def make_cache_key(func_name: str, args: tuple, kwargs: dict) -> str:
 
 
 def cached(ttl_seconds: Optional[int] = None):
-    """Decorator for caching function results."""
+    """Decorator for caching function results.
+
+    Uses asyncio.Lock for async functions to avoid blocking the event loop.
+    Uses threading.Lock for sync functions.
+    """
     if ttl_seconds is None:
         ttl_seconds = settings.cache_ttl
-    
+
     def decorator(func):
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
             cache_key = make_cache_key(func.__name__, args, kwargs)
             now = time.time()
-            
-            with _cache_lock:
+
+            # Use async lock to avoid blocking event loop
+            async with _async_cache_lock:
                 if cache_key in _cache:
                     data, timestamp = _cache[cache_key]
                     if now - timestamp < ttl_seconds:
                         return data
-            
+
             result = await func(*args, **kwargs)
-            
-            with _cache_lock:
+
+            async with _async_cache_lock:
                 _cache[cache_key] = (result, now)
-            
+
             return result
-        
+
         @wraps(func)
         def sync_wrapper(*args, **kwargs):
             cache_key = make_cache_key(func.__name__, args, kwargs)
             now = time.time()
-            
-            with _cache_lock:
+
+            # Use threading lock for sync code
+            with _sync_cache_lock:
                 if cache_key in _cache:
                     data, timestamp = _cache[cache_key]
                     if now - timestamp < ttl_seconds:
                         return data
-            
+
             result = func(*args, **kwargs)
-            
-            with _cache_lock:
+
+            with _sync_cache_lock:
                 _cache[cache_key] = (result, now)
-            
+
             return result
-        
+
         if asyncio.iscoroutinefunction(func):
             return async_wrapper
         return sync_wrapper
-    
+
     return decorator
 
 
 def clear_cache():
     """Clear all cached data."""
-    with _cache_lock:
+    with _sync_cache_lock:
         _cache.clear()

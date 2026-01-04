@@ -33,7 +33,7 @@ from app.core import (
     safe_request, calculate_distance_nm, is_valid_position,
     safe_int_altitude, clear_cache
 )
-from app.core.database import AsyncSessionLocal
+from app.core.database import AsyncSessionLocal, db_execute_safe
 from app.models import (
     AircraftSighting, AircraftSession, NotificationConfig, SafetyEvent
 )
@@ -163,27 +163,41 @@ async def store_safety_event(db: AsyncSession, event: dict) -> Optional[int]:
 
 
 async def process_aircraft_data(db: AsyncSession, aircraft_list: list[dict], source: str = "1090"):
-    """Process aircraft data and store to database."""
+    """Process aircraft data and store to database.
+
+    Uses batch inserts for sightings and batched session updates to avoid deadlocks
+    from concurrent transactions updating the same rows.
+    """
     if not aircraft_list:
         return
-    
+
     now = datetime.utcnow()
     sse_manager = get_sse_manager()
-    
+
+    # Collect all sightings for batch insert
+    sightings_to_add = []
+    # Track session updates: session_id -> update_data
+    session_updates: dict[int, dict] = {}
+    # Track new sessions to create
+    new_sessions: list[tuple[str, dict, dict]] = []  # (session_key, session_data, ac)
+    # Track ICAOs that need lookup
+    icaos_to_lookup = []
+
+    # First pass: prepare all data without any DB writes
     for ac in aircraft_list:
         icao = ac.get("hex", "").upper()
         if not icao:
             continue
-        
+
         # Determine source (use embedded tag if available, else default)
         current_source = ac.get("_source", source)
 
-        # Queue new aircraft for info/photo lookup
-        await check_and_queue_new_aircraft(icao)
-        
+        # Queue for lookup later
+        icaos_to_lookup.append((icao, db))
+
         callsign = (ac.get("flight") or "").strip() or None
         lat, lon = ac.get("lat"), ac.get("lon")
-        
+
         distance_nm = None
         if is_valid_position(lat, lon):
             distance_nm = calculate_distance_nm(
@@ -191,16 +205,17 @@ async def process_aircraft_data(db: AsyncSession, aircraft_list: list[dict], sou
             )
         else:
             lat, lon = None, None
-        
+
         is_military = bool(ac.get("dbFlags", 0) & 1)
         squawk = ac.get("squawk", "")
         is_emergency = squawk in ["7500", "7600", "7700"]
         vr = ac.get("baro_rate", ac.get("geom_rate"))
         alt_baro = safe_int_altitude(ac.get("alt_baro"))
         alt_geom = safe_int_altitude(ac.get("alt_geom"))
-        
-        # Create sighting
-        sighting = AircraftSighting(
+        rssi = ac.get("rssi")
+
+        # Prepare sighting for batch insert
+        sightings_to_add.append(AircraftSighting(
             timestamp=now,
             icao_hex=icao,
             callsign=callsign,
@@ -213,69 +228,129 @@ async def process_aircraft_data(db: AsyncSession, aircraft_list: list[dict], sou
             track=ac.get("track"),
             vertical_rate=vr,
             distance_nm=distance_nm,
-            rssi=ac.get("rssi"),
+            rssi=rssi,
             category=ac.get("category"),
             aircraft_type=ac.get("t"),
             is_military=is_military,
             is_emergency=is_emergency,
             source=current_source
-        )
-        db.add(sighting)
-        
-        # Update or create session
+        ))
+
+        # Prepare session update data
         session_key = f"{icao}:{current_source}"
         cached_session_id = _active_sessions.get(session_key)
-        
+
+        update_data = {
+            "callsign": callsign,
+            "alt_baro": alt_baro,
+            "vr": vr,
+            "distance_nm": distance_nm,
+            "rssi": rssi,
+            "now": now,
+            "ac": ac,
+            "is_military": is_military,
+            "session_key": session_key,
+            "icao": icao,
+        }
+
         if cached_session_id:
-            # Update existing session
-            result = await db.execute(
-                select(AircraftSession).where(AircraftSession.id == cached_session_id)
-            )
-            existing = result.scalar_one_or_none()
+            # Aggregate updates for the same session
+            if cached_session_id not in session_updates:
+                session_updates[cached_session_id] = update_data
+            # If same session seen multiple times, just keep the latest update
+        else:
+            new_sessions.append((session_key, update_data, ac))
+
+    # Queue all aircraft for info lookup (non-blocking)
+    for icao, _ in icaos_to_lookup:
+        await check_and_queue_new_aircraft(icao, db)
+
+    # Batch add all sightings
+    db.add_all(sightings_to_add)
+
+    # Batch fetch all sessions that need updates (single query)
+    if session_updates:
+        session_ids = list(session_updates.keys())
+        result = await db_execute_safe(
+            db,
+            select(AircraftSession).where(AircraftSession.id.in_(session_ids))
+        )
+        existing_sessions = {s.id: s for s in (result.scalars().all() if result else [])}
+
+        # Apply updates to existing sessions
+        for session_id, update_data in session_updates.items():
+            existing = existing_sessions.get(session_id)
             if existing:
-                existing.last_seen = now
+                existing.last_seen = update_data["now"]
                 existing.total_positions += 1
-                if callsign:
-                    existing.callsign = callsign
+                if update_data["callsign"]:
+                    existing.callsign = update_data["callsign"]
+                alt_baro = update_data["alt_baro"]
                 if alt_baro is not None:
                     if existing.min_altitude is None or alt_baro < existing.min_altitude:
                         existing.min_altitude = alt_baro
                     if existing.max_altitude is None or alt_baro > existing.max_altitude:
                         existing.max_altitude = alt_baro
+                vr = update_data["vr"]
                 if vr is not None and (existing.max_vertical_rate is None or abs(vr) > existing.max_vertical_rate):
                     existing.max_vertical_rate = abs(vr)
+                distance_nm = update_data["distance_nm"]
                 if distance_nm is not None:
                     if existing.min_distance_nm is None or distance_nm < existing.min_distance_nm:
                         existing.min_distance_nm = distance_nm
                     if existing.max_distance_nm is None or distance_nm > existing.max_distance_nm:
                         existing.max_distance_nm = distance_nm
-                rssi = ac.get("rssi")
+                rssi = update_data["rssi"]
                 if rssi is not None:
                     if existing.min_rssi is None or rssi < existing.min_rssi:
                         existing.min_rssi = rssi
                     if existing.max_rssi is None or rssi > existing.max_rssi:
                         existing.max_rssi = rssi
             else:
-                _active_sessions.pop(session_key, None)
-        
-        if session_key not in _active_sessions:
-            # Look for recent session or create new
-            # Order by last_seen desc and limit 1 to get most recent session
-            result = await db.execute(
-                select(AircraftSession).where(
-                    AircraftSession.icao_hex == icao,
-                    AircraftSession.last_seen > now - timedelta(minutes=5)
-                ).order_by(AircraftSession.last_seen.desc()).limit(1)
-            )
-            recent = result.scalar_one_or_none()
-            
+                # Session was deleted, remove from cache
+                _active_sessions.pop(update_data["session_key"], None)
+
+    # Process new sessions - batch fetch recent sessions first
+    if new_sessions:
+        # Get unique ICAOs that need session lookup
+        icaos_needing_sessions = list(set(data["icao"] for _, data, _ in new_sessions))
+
+        # Single query to find all recent sessions for these ICAOs
+        result = await db.execute(
+            select(AircraftSession).where(
+                AircraftSession.icao_hex.in_(icaos_needing_sessions),
+                AircraftSession.last_seen > now - timedelta(minutes=5)
+            ).order_by(AircraftSession.last_seen.desc())
+        )
+        recent_sessions_by_icao: dict[str, AircraftSession] = {}
+        for session in result.scalars().all():
+            # Keep only the most recent session per ICAO
+            if session.icao_hex not in recent_sessions_by_icao:
+                recent_sessions_by_icao[session.icao_hex] = session
+
+        # Process each new session entry
+        for session_key, update_data, ac in new_sessions:
+            icao = update_data["icao"]
+
+            # Skip if we already cached this session in a previous iteration
+            if session_key in _active_sessions:
+                continue
+
+            recent = recent_sessions_by_icao.get(icao)
+
             if recent:
                 _active_sessions[session_key] = recent.id
-                recent.last_seen = now
+                recent.last_seen = update_data["now"]
                 recent.total_positions += 1
             else:
-                # New session
-                rssi = ac.get("rssi")
+                # Create new session
+                rssi = update_data["rssi"]
+                alt_baro = update_data["alt_baro"]
+                vr = update_data["vr"]
+                distance_nm = update_data["distance_nm"]
+                callsign = update_data["callsign"]
+                is_military = update_data["is_military"]
+
                 session = AircraftSession(
                     icao_hex=icao,
                     callsign=callsign,
@@ -296,7 +371,9 @@ async def process_aircraft_data(db: AsyncSession, aircraft_list: list[dict], sou
                 db.add(session)
                 await db.flush()
                 _active_sessions[session_key] = session.id
-                
+                # Add to recent_sessions_by_icao to prevent duplicate creation
+                recent_sessions_by_icao[icao] = session
+
                 # Check alerts for new aircraft
                 alerts_list = await check_alerts(db, ac, distance_nm)
                 for alert in alerts_list:
@@ -314,7 +391,7 @@ async def process_aircraft_data(db: AsyncSession, aircraft_list: list[dict], sou
                         "military": is_military,
                         "distance_nm": round(distance_nm, 2) if distance_nm else None
                     }
-                    
+
                     await store_alert_history(
                         db=db,
                         rule_id=alert.get("rule_id"),
@@ -325,7 +402,7 @@ async def process_aircraft_data(db: AsyncSession, aircraft_list: list[dict], sou
                         priority=alert["priority"],
                         aircraft_data=aircraft_data
                     )
-                    
+
                     await sse_manager.publish_alert_triggered(
                         rule_id=alert.get("rule_id") or 0,
                         rule_name=alert["rule_name"],
@@ -360,22 +437,37 @@ async def process_aircraft_data(db: AsyncSession, aircraft_list: list[dict], sou
                         details={"distance_nm": distance_nm, "rule": alert.get("rule_name")},
                         api_url=alert.get("api_url")
                     )
-    
+
     await db.commit()
 
 
 async def _store_aircraft_to_db(aircraft_list: list[dict]):
-    """Store aircraft data to database."""
-    db_start = time.time()
-    async with AsyncSessionLocal() as db:
-        try:
-            await process_aircraft_data(db, aircraft_list, "1090")
-            DB_OPERATION_DURATION.labels(operation="store_aircraft").observe(time.time() - db_start)
-            logger.debug(f"Stored {len(aircraft_list)} aircraft to database")
-        except Exception as e:
-            logger.error(f"Error in process_aircraft_data: {e}")
-            sentry_sdk.capture_exception(e)
-            await db.rollback()
+    """Store aircraft data to database with timeout protection.
+
+    Uses a lock to prevent concurrent executions which can cause deadlocks
+    when multiple transactions try to update the same aircraft_sessions rows.
+    """
+    # Use lock to serialize DB writes and prevent deadlocks
+    async with _processing_lock:
+        db_start = time.time()
+        # Timeout based on aircraft count: base 30s + 0.1s per aircraft, max 120s
+        timeout_seconds = min(30 + len(aircraft_list) * 0.1, 120)
+
+        async with AsyncSessionLocal() as db:
+            try:
+                await asyncio.wait_for(
+                    process_aircraft_data(db, aircraft_list, "1090"),
+                    timeout=timeout_seconds
+                )
+                DB_OPERATION_DURATION.labels(operation="store_aircraft").observe(time.time() - db_start)
+                logger.debug(f"Stored {len(aircraft_list)} aircraft to database")
+            except asyncio.TimeoutError:
+                logger.warning(f"process_aircraft_data timed out after {timeout_seconds:.1f}s for {len(aircraft_list)} aircraft")
+                await db.rollback()
+            except Exception as e:
+                logger.error(f"Error in process_aircraft_data: {e}")
+                sentry_sdk.capture_exception(e)
+                await db.rollback()
 
 
 async def _run_safety_monitoring(aircraft_list: list[dict]):
@@ -456,6 +548,8 @@ def _create_background_task(coro, name: str = None):
 
 # Track pending background processing task
 _pending_processing_task: Optional[asyncio.Task] = None
+# Lock to prevent concurrent DB processing (prevents deadlocks)
+_processing_lock = asyncio.Lock()
 
 
 async def fetch_and_process_aircraft():

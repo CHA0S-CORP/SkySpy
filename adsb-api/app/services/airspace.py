@@ -310,6 +310,18 @@ async def get_advisories(
     return []
 
 
+def _extract_polygon(polygon_data) -> list | None:
+    """Safely extract polygon coordinates from GeoJSON or raw format."""
+    if not polygon_data:
+        return None
+    if isinstance(polygon_data, dict):
+        coords = polygon_data.get("coordinates", [[]])
+        return coords[0] if coords else None
+    if isinstance(polygon_data, list):
+        return polygon_data
+    return None
+
+
 async def get_boundaries(
     db: AsyncSession,
     lat: Optional[float] = None,
@@ -318,44 +330,47 @@ async def get_boundaries(
     airspace_class: Optional[str] = None,
 ) -> list[dict]:
     """Get airspace boundaries from database, falling back to cache."""
-    query = select(AirspaceBoundary)
+    try:
+        query = select(AirspaceBoundary)
 
-    if airspace_class:
-        query = query.where(AirspaceBoundary.airspace_class == airspace_class)
+        if airspace_class:
+            query = query.where(AirspaceBoundary.airspace_class == airspace_class)
 
-    # Filter by location if provided
-    if lat is not None and lon is not None:
-        # Approximate degrees per NM at given latitude
-        nm_per_deg_lat = 60
-        nm_per_deg_lon = 60 * abs(cos(radians(lat))) if lat else 60
+        # Filter by location if provided
+        if lat is not None and lon is not None:
+            # Approximate degrees per NM at given latitude
+            nm_per_deg_lat = 60
+            nm_per_deg_lon = 60 * abs(cos(radians(lat))) if lat else 60
 
-        lat_range = radius_nm / nm_per_deg_lat
-        lon_range = radius_nm / nm_per_deg_lon
+            lat_range = radius_nm / nm_per_deg_lat
+            lon_range = radius_nm / nm_per_deg_lon
 
-        query = query.where(
-            AirspaceBoundary.center_lat.between(lat - lat_range, lat + lat_range),
-            AirspaceBoundary.center_lon.between(lon - lon_range, lon + lon_range),
-        )
+            query = query.where(
+                AirspaceBoundary.center_lat.between(lat - lat_range, lat + lat_range),
+                AirspaceBoundary.center_lon.between(lon - lon_range, lon + lon_range),
+            )
 
-    result = await db.execute(query.order_by(AirspaceBoundary.airspace_class, AirspaceBoundary.name))
-    boundaries = result.scalars().all()
+        result = await db.execute(query.order_by(AirspaceBoundary.airspace_class, AirspaceBoundary.name))
+        boundaries = result.scalars().all()
 
-    if boundaries:
-        return [
-            {
-                "name": b.name,
-                "icao": b.icao,
-                "class": b.airspace_class,
-                "floor_ft": b.floor_ft,
-                "ceiling_ft": b.ceiling_ft,
-                "center": {"lat": b.center_lat, "lon": b.center_lon},
-                "radius_nm": b.radius_nm,
-                "polygon": b.polygon.get("coordinates", [[]])[0] if b.polygon else None,
-                "controlling_agency": b.controlling_agency,
-                "schedule": b.schedule,
-            }
-            for b in boundaries
-        ]
+        if boundaries:
+            return [
+                {
+                    "name": b.name,
+                    "icao": b.icao,
+                    "class": b.airspace_class,
+                    "floor_ft": b.floor_ft,
+                    "ceiling_ft": b.ceiling_ft,
+                    "center": {"lat": b.center_lat, "lon": b.center_lon},
+                    "radius_nm": b.radius_nm,
+                    "polygon": _extract_polygon(b.polygon),
+                    "controlling_agency": b.controlling_agency,
+                    "schedule": b.schedule,
+                }
+                for b in boundaries
+            ]
+    except Exception as e:
+        logger.warning(f"Database error fetching boundaries: {type(e).__name__}: {e}")
 
     # Fallback to in-memory cache
     if _boundary_cache:

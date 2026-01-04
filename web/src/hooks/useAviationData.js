@@ -68,30 +68,32 @@ export function useAviationData(wsRequest, wsConnected, feederLat, feederLon, ra
 
     try {
       // Fetch all data in parallel using WebSocket requests
+      // Use longer timeout (20s) for external API calls to aviationweather.gov
+      const AVIATION_TIMEOUT = 20000;
       const promises = [];
 
       // NAVAIDs
       promises.push(
-        wsRequest('navaids', { ...baseParams, radius: Math.round(radarRange * 1.5) })
+        wsRequest('navaids', { ...baseParams, radius: Math.round(radarRange * 1.5) }, AVIATION_TIMEOUT)
           .then(data => ({ type: 'navaids', data: extractData(data) }))
           .catch(err => ({ type: 'navaids', error: err.message }))
       );
 
       // Airports
       promises.push(
-        wsRequest('airports', { ...baseParams, radius: Math.round(radarRange * 1.2), limit: 50 })
+        wsRequest('airports', { ...baseParams, radius: Math.round(radarRange * 1.2), limit: 50 }, AVIATION_TIMEOUT)
           .then(data => ({ type: 'airports', data: extractData(data).map(normalizeAirport) }))
           .catch(err => ({ type: 'airports', error: err.message }))
       );
 
-      // Airspace boundaries (static)
+      // Airspace boundaries (static) - from database, shorter timeout OK
       promises.push(
         wsRequest('airspace-boundaries', { ...baseParams, radius: Math.round(radarRange * 1.5) })
           .then(data => ({ type: 'airspace', data: extractData(data) }))
           .catch(err => ({ type: 'airspace', error: err.message }))
       );
 
-      // Airspace advisories (G-AIRMETs)
+      // Airspace advisories (G-AIRMETs) - from database, shorter timeout OK
       promises.push(
         wsRequest('airspaces', baseParams)
           .then(data => ({ type: 'airspaceAdvisories', data: data?.advisories || extractData(data) }))
@@ -101,7 +103,7 @@ export function useAviationData(wsRequest, wsConnected, feederLat, feederLon, ra
       // METARs (only if overlay enabled)
       if (overlays?.metars) {
         promises.push(
-          wsRequest('metars', { ...baseParams, radius: Math.round(radarRange) })
+          wsRequest('metars', { ...baseParams, radius: Math.round(radarRange) }, AVIATION_TIMEOUT)
             .then(data => ({ type: 'metars', data: extractData(data) }))
             .catch(err => ({ type: 'metars', error: err.message }))
         );
@@ -110,7 +112,7 @@ export function useAviationData(wsRequest, wsConnected, feederLat, feederLon, ra
       // PIREPs (only if overlay enabled)
       if (overlays?.pireps) {
         promises.push(
-          wsRequest('pireps', { ...baseParams, radius: Math.round(radarRange * 1.5), hours: 3 })
+          wsRequest('pireps', { ...baseParams, radius: Math.round(radarRange * 1.5), hours: 3 }, AVIATION_TIMEOUT)
             .then(data => ({ type: 'pireps', data: extractData(data) }))
             .catch(err => ({ type: 'pireps', error: err.message }))
         );

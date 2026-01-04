@@ -140,6 +140,8 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
   const safetyTracksRef = useRef({});
   const safetyAnimationRef = useRef({});
   const [loading, setLoading] = useState(true);
+  // Track which tabs have been loaded to enable lazy loading
+  const [loadedTabs, setLoadedTabs] = useState({});
   const [activeTab, setActiveTabState] = useState(() => {
     return VALID_DETAIL_TABS.includes(initialTab) ? initialTab : 'info';
   });
@@ -336,8 +338,14 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
     };
   }, [hex]);
   
+  // Reset loaded tabs when aircraft changes
   useEffect(() => {
-    const fetchData = async () => {
+    setLoadedTabs({});
+  }, [hex]);
+
+  // Main effect: Load only info and photo (needed for header and default tab)
+  useEffect(() => {
+    const fetchInfoAndPhoto = async () => {
       setLoading(true);
 
       try {
@@ -385,21 +393,34 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
           }
         };
         fetchPhoto(); // Fire and forget - don't block main data loading
+      } catch (err) {
+        console.log('Aircraft detail fetch error:', err.message);
+      }
 
-        // Fetch ACARS messages - prefer socket.io
+      setLoading(false);
+      setLoadedTabs(prev => ({ ...prev, info: true }));
+    };
+
+    fetchInfoAndPhoto();
+  }, [hex, baseUrl, info, wsRequest, wsConnected]);
+
+  // Lazy load ACARS data when acars tab is active
+  useEffect(() => {
+    if (activeTab !== 'acars' || loadedTabs.acars) return;
+
+    const fetchAcarsData = async () => {
+      try {
         let acarsFound = [];
         const callsign = aircraft?.flight?.trim();
 
         if (wsRequest && wsConnected) {
           try {
-            // Query by ICAO hex first
-            let result = await wsRequest('acars-messages', { icao_hex: hex, hours: 24, limit: 50 });
+            let result = await wsRequest('acars-messages', { icao_hex: hex, hours: acarsHours, limit: 50 });
             if (result && !result.error) {
               acarsFound = result.messages || [];
             }
-            // If no results by hex, try by callsign
             if (acarsFound.length === 0 && callsign) {
-              result = await wsRequest('acars-messages', { callsign, hours: 24, limit: 50 });
+              result = await wsRequest('acars-messages', { callsign, hours: acarsHours, limit: 50 });
               if (result && !result.error) {
                 acarsFound = result.messages || [];
               }
@@ -409,16 +430,15 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
           }
         }
 
-        // HTTP fallback only if socket didn't return results
         if (acarsFound.length === 0) {
-          const acarsRes = await fetch(`${baseUrl}/api/v1/acars/messages?icao_hex=${hex}&hours=24&limit=50`);
+          const acarsRes = await fetch(`${baseUrl}/api/v1/acars/messages?icao_hex=${hex}&hours=${acarsHours}&limit=50`);
           if (acarsRes.ok) {
             const data = await acarsRes.json();
             acarsFound = data.messages || [];
           }
 
           if (acarsFound.length === 0 && callsign) {
-            const callsignRes = await fetch(`${baseUrl}/api/v1/acars/messages?callsign=${encodeURIComponent(callsign)}&hours=24&limit=50`);
+            const callsignRes = await fetch(`${baseUrl}/api/v1/acars/messages?callsign=${encodeURIComponent(callsign)}&hours=${acarsHours}&limit=50`);
             if (callsignRes.ok) {
               const data = await callsignRes.json();
               acarsFound = data.messages || [];
@@ -438,8 +458,21 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
           }
         }
         setAcarsMessages(acarsFound);
+        setLoadedTabs(prev => ({ ...prev, acars: true }));
+      } catch (err) {
+        console.log('ACARS fetch error:', err.message);
+      }
+    };
 
-        // Fetch sightings - prefer socket.io
+    fetchAcarsData();
+  }, [activeTab, loadedTabs.acars, hex, baseUrl, acarsHours, aircraft?.flight, wsRequest, wsConnected]);
+
+  // Lazy load sightings data when track or history tab is active
+  useEffect(() => {
+    if ((activeTab !== 'track' && activeTab !== 'history') || loadedTabs.sightings) return;
+
+    const fetchSightingsData = async () => {
+      try {
         let sightingsData;
         if (wsRequest && wsConnected) {
           try {
@@ -451,7 +484,6 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
             console.debug('Sightings WS request failed:', err.message);
           }
         }
-        // HTTP fallback only if socket didn't work
         if (!sightingsData) {
           const sightingsRes = await fetch(`${baseUrl}/api/v1/history/sightings/${hex}?hours=24&limit=100`);
           if (sightingsRes.ok) {
@@ -461,20 +493,32 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
         if (sightingsData) {
           setSightings(sightingsData.sightings || []);
         }
+        setLoadedTabs(prev => ({ ...prev, sightings: true }));
+      } catch (err) {
+        console.log('Sightings fetch error:', err.message);
+      }
+    };
 
-        // Fetch safety events - prefer socket.io
+    fetchSightingsData();
+  }, [activeTab, loadedTabs.sightings, hex, baseUrl, wsRequest, wsConnected]);
+
+  // Lazy load safety events when safety tab is active
+  useEffect(() => {
+    if (activeTab !== 'safety' || loadedTabs.safety) return;
+
+    const fetchSafetyData = async () => {
+      try {
         let safetyData = null;
         if (wsRequest && wsConnected) {
           try {
-            safetyData = await wsRequest('safety-events', { icao_hex: hex, hours: 24, limit: 100 });
+            safetyData = await wsRequest('safety-events', { icao_hex: hex, hours: safetyHours, limit: 100 });
             if (safetyData?.error) safetyData = null;
           } catch (err) {
             console.debug('Safety events WS request failed:', err.message);
           }
         }
-        // HTTP fallback only if socket didn't work
         if (!safetyData) {
-          const safetyRes = await fetch(`${baseUrl}/api/v1/safety/events?icao_hex=${hex}&hours=24&limit=100`);
+          const safetyRes = await fetch(`${baseUrl}/api/v1/safety/events?icao_hex=${hex}&hours=${safetyHours}&limit=100`);
           if (safetyRes.ok) {
             safetyData = await safetyRes.json();
           }
@@ -482,24 +526,30 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
         if (safetyData) {
           setSafetyEvents(safetyData.events || []);
         }
+        setLoadedTabs(prev => ({ ...prev, safety: true }));
       } catch (err) {
-        console.log('Aircraft detail fetch error:', err.message);
+        console.log('Safety events fetch error:', err.message);
       }
-
-      setLoading(false);
     };
 
-    fetchData();
-  }, [hex, baseUrl, info, wsRequest, wsConnected]);
+    fetchSafetyData();
+  }, [activeTab, loadedTabs.safety, hex, baseUrl, safetyHours, wsRequest, wsConnected]);
 
-  // Refetch ACARS messages when hours filter changes
+  // Refetch ACARS messages when hours filter changes (only if tab already loaded)
+  const prevAcarsHoursRef = useRef(acarsHours);
   useEffect(() => {
+    // Skip if hours haven't changed or tab not loaded yet
+    if (prevAcarsHoursRef.current === acarsHours || !loadedTabs.acars) {
+      prevAcarsHoursRef.current = acarsHours;
+      return;
+    }
+    prevAcarsHoursRef.current = acarsHours;
+
     const fetchAcarsMessages = async () => {
       try {
         let acarsFound = [];
         const callsign = aircraft?.flight?.trim();
 
-        // Prefer socket.io for ACARS messages
         if (wsRequest && wsConnected) {
           try {
             let result = await wsRequest('acars-messages', { icao_hex: hex, hours: acarsHours, limit: 100 });
@@ -517,7 +567,6 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
           }
         }
 
-        // HTTP fallback only if socket didn't return results
         if (acarsFound.length === 0) {
           const acarsRes = await fetch(`${baseUrl}/api/v1/acars/messages?icao_hex=${hex}&hours=${acarsHours}&limit=100`);
           if (acarsRes.ok) {
@@ -556,15 +605,22 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
       }
     };
     fetchAcarsMessages();
-  }, [hex, baseUrl, acarsHours, aircraft, wsRequest, wsConnected]);
+  }, [acarsHours, loadedTabs.acars, hex, baseUrl, aircraft?.flight, wsRequest, wsConnected]);
 
-  // Refetch safety events when hours filter changes
+  // Refetch safety events when hours filter changes (only if tab already loaded)
+  const prevSafetyHoursRef = useRef(safetyHours);
   useEffect(() => {
+    // Skip if hours haven't changed or tab not loaded yet
+    if (prevSafetyHoursRef.current === safetyHours || !loadedTabs.safety) {
+      prevSafetyHoursRef.current = safetyHours;
+      return;
+    }
+    prevSafetyHoursRef.current = safetyHours;
+
     const fetchSafetyEvents = async () => {
       try {
         let safetyData = null;
 
-        // Prefer socket.io
         if (wsRequest && wsConnected) {
           try {
             safetyData = await wsRequest('safety-events', { icao_hex: hex, hours: safetyHours, limit: 100 });
@@ -574,7 +630,6 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
           }
         }
 
-        // HTTP fallback only if socket didn't work
         if (!safetyData) {
           const safetyRes = await fetch(`${baseUrl}/api/v1/safety/events?icao_hex=${hex}&hours=${safetyHours}&limit=100`);
           if (safetyRes.ok) {
@@ -590,17 +645,18 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
       }
     };
     fetchSafetyEvents();
-  }, [hex, baseUrl, safetyHours, wsRequest, wsConnected]);
+  }, [safetyHours, loadedTabs.safety, hex, baseUrl, wsRequest, wsConnected]);
 
-  // Fetch radio transmissions for this aircraft
+  // Lazy load radio transmissions when radio tab is active
   useEffect(() => {
+    if (activeTab !== 'radio' || loadedTabs.radio) return;
+
     const fetchRadioTransmissions = async () => {
       setRadioLoading(true);
       try {
         const callsign = aircraft?.flight?.trim();
         let radioData = null;
 
-        // Prefer socket.io
         if (wsRequest && wsConnected) {
           try {
             const params = {
@@ -618,7 +674,66 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
           }
         }
 
-        // HTTP fallback only if socket didn't work
+        if (!radioData) {
+          const params = new URLSearchParams({
+            include_radio_calls: 'true',
+            radio_hours: radioHours.toString(),
+            radio_limit: '50',
+          });
+          if (callsign) {
+            params.append('callsign', callsign);
+          }
+
+          const res = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/info?${params}`);
+          if (res.ok) {
+            radioData = await res.json();
+          }
+        }
+
+        if (radioData) {
+          setRadioTransmissions(radioData.matched_radio_calls || []);
+        }
+        setLoadedTabs(prev => ({ ...prev, radio: true }));
+      } catch (err) {
+        console.log('Radio transmissions fetch error:', err.message);
+      }
+      setRadioLoading(false);
+    };
+    fetchRadioTransmissions();
+  }, [activeTab, loadedTabs.radio, hex, baseUrl, radioHours, aircraft?.flight, wsRequest, wsConnected]);
+
+  // Refetch radio transmissions when hours filter changes (only if tab already loaded)
+  const prevRadioHoursRef = useRef(radioHours);
+  useEffect(() => {
+    if (prevRadioHoursRef.current === radioHours || !loadedTabs.radio) {
+      prevRadioHoursRef.current = radioHours;
+      return;
+    }
+    prevRadioHoursRef.current = radioHours;
+
+    const fetchRadioTransmissions = async () => {
+      setRadioLoading(true);
+      try {
+        const callsign = aircraft?.flight?.trim();
+        let radioData = null;
+
+        if (wsRequest && wsConnected) {
+          try {
+            const params = {
+              icao: hex,
+              include_radio_calls: true,
+              radio_hours: radioHours,
+              radio_limit: 50,
+            };
+            if (callsign) params.callsign = callsign;
+
+            radioData = await wsRequest('aircraft-info', params);
+            if (radioData?.error) radioData = null;
+          } catch (err) {
+            console.debug('Radio transmissions WS request failed:', err.message);
+          }
+        }
+
         if (!radioData) {
           const params = new URLSearchParams({
             include_radio_calls: 'true',
@@ -644,7 +759,7 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
       setRadioLoading(false);
     };
     fetchRadioTransmissions();
-  }, [hex, baseUrl, radioHours, aircraft?.flight, wsRequest, wsConnected]);
+  }, [radioHours, loadedTabs.radio, hex, baseUrl, aircraft?.flight, wsRequest, wsConnected]);
 
   // Subscribe to global audio state for radio tab
   useEffect(() => {

@@ -735,6 +735,7 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
 
     elif request_type == "pireps":
         from app.routers.aviation import fetch_awc_data, haversine_nm
+        from app.services import weather_cache
         lat = params.get("lat")
         lon = params.get("lon")
         radius = params.get("radius", 100)
@@ -746,12 +747,23 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
         deg_offset = radius / 60.0
         bbox = f"{lat - deg_offset},{lon - deg_offset},{lat + deg_offset},{lon + deg_offset}"
 
-        data = await fetch_awc_data("pirep", {"format": "json", "age": hours, "bbox": bbox})
+        # Try cache first
+        cached = await weather_cache.get_cached_aviation_data("pireps", bbox)
+        if cached is not None:
+            pireps = cached
+            source = "cache"
+        else:
+            data = await fetch_awc_data("pirep", {"format": "json", "age": hours, "bbox": bbox})
 
-        if isinstance(data, dict) and "error" in data:
-            return {"data": [], "count": 0, "error": data["error"]}
+            if isinstance(data, dict) and "error" in data:
+                return {"data": [], "count": 0, "error": data["error"]}
 
-        pireps = data if isinstance(data, list) else []
+            pireps = data if isinstance(data, list) else []
+            source = "aviationweather.gov"
+
+            # Cache result for 3 minutes
+            if pireps:
+                await weather_cache.cache_aviation_data("pireps", bbox, pireps, ttl=180)
 
         # Calculate distances
         for p in pireps:
@@ -767,11 +779,12 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
             "count": min(len(pireps), 50),
             "center": {"lat": lat, "lon": lon},
             "radius_nm": radius,
-            "source": "aviationweather.gov"
+            "source": source
         }
 
     elif request_type == "metars":
         from app.routers.aviation import fetch_awc_data, haversine_nm
+        from app.services import weather_cache
         lat = params.get("lat")
         lon = params.get("lon")
         radius = params.get("radius", 100)
@@ -784,12 +797,23 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
         deg_offset = radius / 60.0
         bbox = f"{lat - deg_offset},{lon - deg_offset},{lat + deg_offset},{lon + deg_offset}"
 
-        data = await fetch_awc_data("metar", {"bbox": bbox, "format": "json", "hours": hours})
+        # Try cache first
+        cached = await weather_cache.get_cached_aviation_data("metars", bbox)
+        if cached is not None:
+            metars = cached
+            source = "cache"
+        else:
+            data = await fetch_awc_data("metar", {"bbox": bbox, "format": "json", "hours": hours})
 
-        if isinstance(data, dict) and "error" in data:
-            return {"data": [], "count": 0, "error": data["error"]}
+            if isinstance(data, dict) and "error" in data:
+                return {"data": [], "count": 0, "error": data["error"]}
 
-        metars = data if isinstance(data, list) else []
+            metars = data if isinstance(data, list) else []
+            source = "aviationweather.gov"
+
+            # Cache result for 5 minutes
+            if metars:
+                await weather_cache.cache_aviation_data("metars", bbox, metars, ttl=300)
 
         for m in metars:
             m_lat, m_lon = m.get("lat", 0), m.get("lon", 0)
@@ -803,7 +827,7 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
             "count": min(len(metars), limit),
             "center": {"lat": lat, "lon": lon},
             "radius_nm": radius,
-            "source": "aviationweather.gov"
+            "source": source
         }
 
     elif request_type == "sigmets":
@@ -841,6 +865,7 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
 
     elif request_type == "airports":
         from app.routers.aviation import fetch_awc_data, haversine_nm
+        from app.services import weather_cache
         lat = params.get("lat")
         lon = params.get("lon")
         radius = params.get("radius", 50)
@@ -852,12 +877,23 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
         deg_offset = radius / 60.0
         bbox = f"{lat - deg_offset},{lon - deg_offset},{lat + deg_offset},{lon + deg_offset}"
 
-        data = await fetch_awc_data("airport", {"bbox": bbox, "zoom": 8, "density": 3, "format": "json"})
+        # Try cache first
+        cached = await weather_cache.get_cached_aviation_data("airports", bbox)
+        if cached is not None:
+            airports = cached
+            source = "cache"
+        else:
+            data = await fetch_awc_data("airport", {"bbox": bbox, "zoom": 8, "density": 3, "format": "json"})
 
-        if isinstance(data, dict) and "error" in data:
-            return {"data": [], "count": 0, "error": data["error"]}
+            if isinstance(data, dict) and "error" in data:
+                return {"data": [], "count": 0, "error": data["error"]}
 
-        airports = data if isinstance(data, list) else []
+            airports = data if isinstance(data, list) else []
+            source = "aviationweather.gov"
+
+            # Cache airports for 30 minutes (they don't change often)
+            if airports:
+                await weather_cache.cache_aviation_data("airports", bbox, airports, ttl=1800)
 
         for apt in airports:
             apt_lat, apt_lon = apt.get("lat", 0), apt.get("lon", 0)
@@ -871,11 +907,12 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
             "count": min(len(airports), limit),
             "center": {"lat": lat, "lon": lon},
             "radius_nm": radius,
-            "source": "aviationweather.gov"
+            "source": source
         }
 
     elif request_type == "navaids":
         from app.routers.aviation import fetch_awc_data, haversine_nm
+        from app.services import weather_cache
         lat = params.get("lat")
         lon = params.get("lon")
         radius = params.get("radius", 50)
@@ -888,12 +925,23 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
         deg_offset = radius / 60.0
         bbox = f"{lat - deg_offset},{lon - deg_offset},{lat + deg_offset},{lon + deg_offset}"
 
-        data = await fetch_awc_data("navaid", {"bbox": bbox, "format": "json"})
+        # Try cache first
+        cached = await weather_cache.get_cached_aviation_data("navaids", bbox)
+        if cached is not None:
+            navaids = cached
+            source = "cache"
+        else:
+            data = await fetch_awc_data("navaid", {"bbox": bbox, "format": "json"})
 
-        if isinstance(data, dict) and "error" in data:
-            return {"data": [], "count": 0, "error": data["error"]}
+            if isinstance(data, dict) and "error" in data:
+                return {"data": [], "count": 0, "error": data["error"]}
 
-        navaids = data if isinstance(data, list) else []
+            navaids = data if isinstance(data, list) else []
+            source = "aviationweather.gov"
+
+            # Cache navaids for 30 minutes (they don't change often)
+            if navaids:
+                await weather_cache.cache_aviation_data("navaids", bbox, navaids, ttl=1800)
 
         if navaid_type:
             navaids = [n for n in navaids if n.get("type", "").upper() == navaid_type.upper()]
@@ -910,7 +958,7 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
             "count": min(len(navaids), limit),
             "center": {"lat": lat, "lon": lon},
             "radius_nm": radius,
-            "source": "aviationweather.gov"
+            "source": source
         }
 
     elif request_type == "safety-events":

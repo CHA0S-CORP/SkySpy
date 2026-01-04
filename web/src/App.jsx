@@ -16,6 +16,7 @@ import { AircraftDetailPage } from './components/aircraft/AircraftDetailPage';
 
 // Hooks
 import { useWebSocket } from './hooks';
+import { usePositionSocket } from './hooks/usePositionSocket';
 
 // Utils
 import { getConfig } from './utils';
@@ -107,6 +108,13 @@ export default function App() {
     getAirframeError,
     clearAirframeError,
   } = useWebSocket(true, config.apiBaseUrl, 'all');
+
+  // High-frequency position updates for smooth map rendering
+  // Uses refs instead of state to avoid 60Hz re-renders
+  const {
+    positionsRef,
+    connected: positionSocketConnected,
+  } = usePositionSocket(activeTab === 'map', config.apiBaseUrl, true, 1000);
 
   // Fetch status via Socket.IO or fallback to HTTP
   useEffect(() => {
@@ -267,6 +275,8 @@ export default function App() {
               }}
               hashParams={hashParams}
               setHashParams={setHashParams}
+              positionsRef={positionsRef}
+              positionSocketConnected={positionSocketConnected}
             />
           )}
           {activeTab === 'aircraft' && <AircraftList aircraft={aircraft} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} />}

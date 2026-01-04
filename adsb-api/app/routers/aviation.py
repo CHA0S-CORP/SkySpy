@@ -37,7 +37,7 @@ def haversine_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 async def fetch_awc_data(endpoint: str, params: dict) -> dict:
     """Fetch data from Aviation Weather Center API."""
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx.AsyncClient(timeout=15) as client:
         try:
             response = await client.get(
                 f"{AWC_BASE}/{endpoint}",

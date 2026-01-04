@@ -91,12 +91,18 @@ AIRFRAME_LOOKUP_ERRORS = Counter(
 CACHE_DURATION_HOURS = 168  # 7 days
 FAILED_CACHE_HOURS = 24  # Retry failed lookups after 24 hours
 API_LOOKUP_COOLDOWN_SECONDS = 3600  # Only call external APIs once per hour per aircraft
+SEEN_AIRCRAFT_MAX_AGE_HOURS = 6  # Clear seen aircraft older than this
+PENDING_LOOKUP_TIMEOUT_SECONDS = 300  # Clear stuck pending lookups after 5 minutes
 
 # In-memory pending lookups to prevent duplicate requests
-_pending_lookups: set[str] = set()
+# Now stores (icao, timestamp) to detect stuck lookups
+_pending_lookups: dict[str, float] = {}
 
 # Track last API lookup time per aircraft (rate limiting)
 _last_api_lookup: dict[str, float] = {}
+
+# Track when aircraft were first seen (for TTL cleanup)
+_seen_aircraft_times: dict[str, float] = {}
 
 
 def _can_lookup_api(icao_hex: str) -> bool:
@@ -124,6 +130,57 @@ def _cleanup_old_rate_limits():
         _last_api_lookup.pop(k, None)
 
 
+def _add_pending_lookup(icao_hex: str):
+    """Add aircraft to pending lookups with timestamp."""
+    import time
+    _pending_lookups[icao_hex.upper()] = time.time()
+
+
+def _remove_pending_lookup(icao_hex: str):
+    """Remove aircraft from pending lookups."""
+    _pending_lookups.pop(icao_hex.upper(), None)
+
+
+def _is_pending_lookup(icao_hex: str) -> bool:
+    """Check if aircraft is in pending lookups (not stuck)."""
+    import time
+    icao_hex = icao_hex.upper()
+    if icao_hex not in _pending_lookups:
+        return False
+    # Check if it's been stuck too long
+    added_time = _pending_lookups[icao_hex]
+    if time.time() - added_time > PENDING_LOOKUP_TIMEOUT_SECONDS:
+        # Stuck lookup - remove it and allow retry
+        _pending_lookups.pop(icao_hex, None)
+        logger.warning(f"Cleared stuck pending lookup for {icao_hex}")
+        return False
+    return True
+
+
+def _cleanup_stuck_pending_lookups():
+    """Clean up stuck pending lookups that never completed."""
+    import time
+    now = time.time()
+    cutoff = now - PENDING_LOOKUP_TIMEOUT_SECONDS
+    stuck_keys = [k for k, v in _pending_lookups.items() if v < cutoff]
+    for k in stuck_keys:
+        _pending_lookups.pop(k, None)
+    if stuck_keys:
+        logger.info(f"Cleaned up {len(stuck_keys)} stuck pending lookups")
+
+
+def _cleanup_old_seen_aircraft():
+    """Clean up old seen aircraft entries to prevent unbounded memory growth."""
+    import time
+    now = time.time()
+    cutoff = now - (SEEN_AIRCRAFT_MAX_AGE_HOURS * 3600)
+    old_keys = [k for k, v in _seen_aircraft_times.items() if v < cutoff]
+    for k in old_keys:
+        _seen_aircraft_times.pop(k, None)
+    if old_keys:
+        logger.info(f"Cleaned up {len(old_keys)} old seen aircraft entries")
+
+
 async def _emit_airframe_error(
     icao_hex: str,
     error_type: str,
@@ -148,9 +205,6 @@ async def _emit_airframe_error(
             )
     except Exception as e:
         logger.debug(f"Failed to emit airframe error for {icao_hex}: {e}")
-
-# Set of aircraft we've already seen (to trigger lookups only once)
-_seen_aircraft: set[str] = set()
 
 # Queue for background aircraft lookups
 _lookup_queue: asyncio.Queue = None
@@ -218,11 +272,11 @@ async def get_aircraft_info(db: AsyncSession, icao_hex: str, force_refresh: bool
         logger.debug(f"Rate limited API lookup for {icao_hex}, skipping")
         return None
 
-    # Prevent duplicate lookups
-    if icao_hex in _pending_lookups:
+    # Prevent duplicate lookups (with stuck lookup detection)
+    if _is_pending_lookup(icao_hex):
         return None
 
-    _pending_lookups.add(icao_hex)
+    _add_pending_lookup(icao_hex)
     _mark_api_lookup(icao_hex)  # Mark that we're doing an API lookup
 
     try:
@@ -261,7 +315,7 @@ async def get_aircraft_info(db: AsyncSession, icao_hex: str, force_refresh: bool
         return None
 
     finally:
-        _pending_lookups.discard(icao_hex)
+        _remove_pending_lookup(icao_hex)
 
 
 async def _background_cache_photos(
@@ -333,8 +387,8 @@ async def _background_refresh_info(icao_hex: str):
 
     icao_hex = icao_hex.upper()
 
-    # Prevent duplicate lookups
-    if icao_hex in _pending_lookups:
+    # Prevent duplicate lookups (with stuck lookup detection)
+    if _is_pending_lookup(icao_hex):
         return
 
     # Check rate limit (once per hour)
@@ -342,7 +396,7 @@ async def _background_refresh_info(icao_hex: str):
         logger.debug(f"Background refresh rate limited for {icao_hex}")
         return
 
-    _pending_lookups.add(icao_hex)
+    _add_pending_lookup(icao_hex)
     _mark_api_lookup(icao_hex)
 
     try:
@@ -386,7 +440,7 @@ async def _background_refresh_info(icao_hex: str):
     except Exception as e:
         logger.error(f"Background refresh failed for {icao_hex}: {e}")
     finally:
-        _pending_lookups.discard(icao_hex)
+        _remove_pending_lookup(icao_hex)
 
 
 # Set of aircraft currently being upgraded (prevent duplicate upgrades)
@@ -972,22 +1026,53 @@ async def init_lookup_queue():
 
 
 def is_new_aircraft(icao_hex: str) -> bool:
-    """Check if this aircraft has been seen before in this session."""
+    """Check if this aircraft has been seen before in this session (in-memory only).
+
+    Uses TTL-based tracking to prevent unbounded memory growth.
+    """
+    import time
     icao_hex = icao_hex.upper()
-    if icao_hex in _seen_aircraft:
+    if icao_hex in _seen_aircraft_times:
         return False
-    _seen_aircraft.add(icao_hex)
+    _seen_aircraft_times[icao_hex] = time.time()
     return True
+
+
+async def was_looked_up_recently(db: AsyncSession, icao_hex: str, hours: int = 1) -> bool:
+    """Check if aircraft was looked up in the database within the specified hours."""
+    icao_hex = icao_hex.upper()
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    result = await db.execute(
+        select(AircraftInfo.updated_at)
+        .where(AircraftInfo.icao_hex == icao_hex)
+        .where(AircraftInfo.updated_at >= cutoff)
+    )
+    return result.scalar_one_or_none() is not None
 
 
 def get_seen_aircraft_count() -> int:
     """Get count of unique aircraft seen this session."""
-    return len(_seen_aircraft)
+    return len(_seen_aircraft_times)
 
 
 def clear_seen_aircraft():
     """Clear the seen aircraft set (for testing or reset)."""
-    _seen_aircraft.clear()
+    _seen_aircraft_times.clear()
+
+
+def cleanup_memory_caches():
+    """Clean up all memory caches to prevent unbounded growth.
+
+    Should be called periodically (e.g., every 5 minutes) from a background task.
+    """
+    _cleanup_old_rate_limits()
+    _cleanup_stuck_pending_lookups()
+    _cleanup_old_seen_aircraft()
+    logger.debug(
+        f"Memory cache cleanup: {len(_last_api_lookup)} rate limits, "
+        f"{len(_pending_lookups)} pending lookups, "
+        f"{len(_seen_aircraft_times)} seen aircraft"
+    )
 
 
 async def queue_aircraft_lookup(icao_hex: str):
@@ -1073,11 +1158,22 @@ async def process_lookup_queue(db_session_factory):
             await asyncio.sleep(2)
 
 
-async def check_and_queue_new_aircraft(icao_hex: str):
+async def check_and_queue_new_aircraft(icao_hex: str, db: Optional[AsyncSession] = None):
     """
     Check if aircraft is new and queue for lookup if so.
     Call this from the main aircraft processing loop.
+
+    If db is provided, also checks if aircraft was looked up in the last hour
+    to avoid redundant lookups after restarts.
     """
-    if is_new_aircraft(icao_hex):
-        await queue_aircraft_lookup(icao_hex)
+    if not is_new_aircraft(icao_hex):
+        return
+
+    # If we have a db session, check if already looked up recently
+    if db is not None:
+        if await was_looked_up_recently(db, icao_hex, hours=1):
+            logger.debug(f"Skipping lookup for {icao_hex} - looked up within last hour")
+            return
+
+    await queue_aircraft_lookup(icao_hex)
 

@@ -93,6 +93,10 @@ class SocketIOManager:
         self._last_publish_time: Optional[float] = None
         self._connection_count = 0
 
+        # Position-only state for high-frequency updates
+        # Stores minimal position data: {icao: {lat, lon, alt, track, gs, vr}}
+        self._last_position_state: dict = {}
+
         # Filter tracking for stats subscriptions
         # Maps sid -> filter dict
         self._client_filters: dict[str, dict] = {}
@@ -116,9 +120,8 @@ class SocketIOManager:
             if not topics:
                 topics = ['all']
 
-            # Join topic rooms
-            for topic in topics:
-                await self.sio.enter_room(sid, topic)
+            # Join topic rooms - if 'all', join all individual topic rooms
+            await self._join_topics(sid, topics)
 
             # Send initial state
             await self._send_initial_state(sid, topics)
@@ -139,10 +142,8 @@ class SocketIOManager:
             if isinstance(topics, str):
                 topics = [topics]
 
-            for topic in topics:
-                if topic in ['aircraft', 'airspace', 'safety', 'alerts', 'acars', 'audio', 'stats', 'all']:
-                    await self.sio.enter_room(sid, topic)
-                    logger.debug(f"Client {sid} subscribed to {topic}")
+            # Join topic rooms - if 'all', join all individual topic rooms
+            await self._join_topics(sid, topics)
 
             # Send initial state for new topics
             await self._send_initial_state(sid, topics)
@@ -225,6 +226,20 @@ class SocketIOManager:
                 break
         return topics
 
+    async def _join_topics(self, sid: str, topics: list[str]):
+        """Join client to topic rooms. If 'all', joins all individual topic rooms."""
+        all_topics = ['aircraft', 'airspace', 'safety', 'alerts', 'acars', 'audio', 'stats', 'positions']
+
+        for topic in topics:
+            if topic == 'all':
+                # Join all individual topic rooms so client receives all events
+                for t in all_topics:
+                    await self.sio.enter_room(sid, t)
+                logger.debug(f"Client {sid} subscribed to all topics")
+            elif topic in all_topics:
+                await self.sio.enter_room(sid, topic)
+                logger.debug(f"Client {sid} subscribed to {topic}")
+
     async def _send_initial_state(self, sid: str, topics: list[str]):
         """Send current state to newly connected/subscribed client."""
         try:
@@ -234,6 +249,15 @@ class SocketIOManager:
                     await self.sio.emit('aircraft:snapshot', {
                         'aircraft': list(self._last_aircraft_state.values()),
                         'count': len(self._last_aircraft_state),
+                        'timestamp': datetime.utcnow().isoformat() + 'Z'
+                    }, room=sid)
+
+            # Send position-only snapshot for position subscribers
+            if 'positions' in topics:
+                if self._last_position_state:
+                    await self.sio.emit('positions:snapshot', {
+                        'positions': self._last_position_state,
+                        'count': len(self._last_position_state),
                         'timestamp': datetime.utcnow().isoformat() + 'Z'
                     }, room=sid)
 
@@ -350,11 +374,11 @@ class SocketIOManager:
             }, room=sid)
 
         except Exception as e:
-            logger.error(f"Socket.IO request error ({request_type}): {e}")
+            logger.error(f"Socket.IO request error ({request_type}): {type(e).__name__}: {e}", exc_info=True)
             await self.sio.emit('error', {
                 'request_id': request_id,
                 'request_type': request_type,
-                'error': str(e),
+                'error': f"{type(e).__name__}: {e}" if str(e) else type(e).__name__,
                 'timestamp': timestamp
             }, room=sid)
 
@@ -363,15 +387,13 @@ class SocketIOManager:
     # =========================================================================
 
     async def broadcast_to_room(self, room: str, event: str, data: dict):
-        """Broadcast event to a room and 'all' room."""
+        """Broadcast event to a room only (not duplicating to 'all').
+
+        Clients that want all events should subscribe to 'all' room,
+        which adds them to all individual topic rooms via _register_handlers.
+        """
         self._last_publish_time = time.time()
-
-        # Emit to specific room
         await self.sio.emit(event, data, room=room)
-
-        # Also emit to 'all' room if not already the target
-        if room != 'all':
-            await self.sio.emit(event, data, room='all')
 
     async def broadcast_filtered_stats(self):
         """Broadcast filtered stats to all clients with stats subscriptions."""
@@ -382,7 +404,10 @@ class SocketIOManager:
                 logger.warning(f"Failed to broadcast stats to {sid}: {e}")
 
     async def publish_aircraft_update(self, aircraft_list: list[dict]):
-        """Publish aircraft updates, detecting changes."""
+        """Publish aircraft updates, detecting changes.
+
+        Uses asyncio.gather to broadcast all updates in parallel for lower latency.
+        """
         current_state = {}
         new_aircraft = []
         updated_aircraft = []
@@ -408,32 +433,128 @@ class SocketIOManager:
         self._last_aircraft_state = current_state
         timestamp = datetime.utcnow().isoformat() + 'Z'
 
+        # Build list of broadcast coroutines to run in parallel
+        broadcasts = []
+
         if new_aircraft:
-            await self.broadcast_to_room('aircraft', 'aircraft:new', {
+            broadcasts.append(self.broadcast_to_room('aircraft', 'aircraft:new', {
                 'aircraft': [self._simplify_aircraft(ac) for ac in new_aircraft],
                 'timestamp': timestamp
-            })
+            }))
 
         if updated_aircraft:
-            await self.broadcast_to_room('aircraft', 'aircraft:update', {
+            broadcasts.append(self.broadcast_to_room('aircraft', 'aircraft:update', {
                 'aircraft': [self._simplify_aircraft(ac) for ac in updated_aircraft],
                 'timestamp': timestamp
-            })
+            }))
 
         if removed_icaos:
-            await self.broadcast_to_room('aircraft', 'aircraft:remove', {
+            broadcasts.append(self.broadcast_to_room('aircraft', 'aircraft:remove', {
                 'icaos': removed_icaos,
+                'timestamp': timestamp
+            }))
+
+        # Always send heartbeat
+        broadcasts.append(self.broadcast_to_room('aircraft', 'aircraft:heartbeat', {
+            'count': len(current_state),
+            'timestamp': timestamp
+        }))
+
+        # Position updates go in parallel too (most important for low latency)
+        broadcasts.append(self.publish_position_update(aircraft_list))
+
+        # Run all broadcasts in parallel
+        await asyncio.gather(*broadcasts, return_exceptions=True)
+
+        # Stats can run after (less time-critical)
+        await self.broadcast_filtered_stats()
+
+    async def publish_position_update(self, aircraft_list: list[dict]):
+        """
+        Publish lightweight position-only updates for map rendering.
+        Uses lower thresholds for more frequent updates and minimal payload.
+        """
+        current_positions = {}
+        updated_positions = {}
+        removed_icaos = []
+
+        for ac in aircraft_list:
+            icao = ac.get('hex', '').upper()
+            if not icao:
+                continue
+
+            lat, lon = ac.get('lat'), ac.get('lon')
+            if not is_valid_position(lat, lon):
+                continue
+
+            # Minimal position data for map rendering
+            pos = {
+                'lat': lat,
+                'lon': lon,
+                'alt': ac.get('alt_baro'),
+                'track': ac.get('track'),
+                'gs': ac.get('gs'),
+                'vr': ac.get('baro_rate'),
+            }
+            current_positions[icao] = pos
+
+            # Check for position change with lower thresholds
+            if icao in self._last_position_state:
+                old_pos = self._last_position_state[icao]
+                if self._has_position_change(old_pos, pos):
+                    updated_positions[icao] = pos
+            else:
+                # New aircraft with position
+                updated_positions[icao] = pos
+
+        # Find removed aircraft
+        for icao in self._last_position_state:
+            if icao not in current_positions:
+                removed_icaos.append(icao)
+
+        self._last_position_state = current_positions
+
+        # Only emit if there are changes
+        if updated_positions or removed_icaos:
+            timestamp = datetime.utcnow().isoformat() + 'Z'
+            await self.broadcast_to_room('positions', 'positions:update', {
+                'positions': updated_positions,
+                'removed': removed_icaos,
                 'timestamp': timestamp
             })
 
-        # Heartbeat
-        await self.broadcast_to_room('aircraft', 'aircraft:heartbeat', {
-            'count': len(current_state),
-            'timestamp': timestamp
-        })
+    def _has_position_change(self, old: dict, new: dict) -> bool:
+        """
+        Check if position has changed significantly.
+        Uses lower thresholds than _has_significant_change for smoother map updates.
+        ~0.0001 degrees ≈ 11 meters at the equator
+        """
+        # Position change threshold: ~11 meters
+        if abs(old.get('lat', 0) - new.get('lat', 0)) > 0.0001:
+            return True
+        if abs(old.get('lon', 0) - new.get('lon', 0)) > 0.0001:
+            return True
 
-        # Send filtered stats to all stats subscribers
-        await self.broadcast_filtered_stats()
+        # Altitude change threshold: 25 feet
+        old_alt = old.get('alt') if isinstance(old.get('alt'), (int, float)) else 0
+        new_alt = new.get('alt') if isinstance(new.get('alt'), (int, float)) else 0
+        if abs(old_alt - new_alt) > 25:
+            return True
+
+        # Track change threshold: 1 degree
+        if old.get('track') is not None and new.get('track') is not None:
+            track_diff = abs(old.get('track', 0) - new.get('track', 0))
+            track_diff = min(track_diff, 360 - track_diff)
+            if track_diff > 1:
+                return True
+
+        # Ground speed change threshold: 5 knots
+        old_gs = old.get('gs') if isinstance(old.get('gs'), (int, float)) else 0
+        new_gs = new.get('gs') if isinstance(new.get('gs'), (int, float)) else 0
+        if abs(old_gs - new_gs) > 5:
+            return True
+
+        return False
 
     def _has_significant_change(self, old: dict, new: dict) -> bool:
         """Check if aircraft has changed significantly."""

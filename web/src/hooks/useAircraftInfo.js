@@ -32,6 +32,10 @@ export function useAircraftInfo({
   // Cache: { [icao]: { data, fetchedAt, error?, retryCount? } }
   const [cache, setCache] = useState({});
 
+  // Ref to hold latest cache for use in async callbacks (avoids stale closures)
+  const cacheRef = useRef(cache);
+  cacheRef.current = cache;
+
   // Errors received from Socket.IO: { [icao]: { error_type, error_message, source, timestamp } }
   const [errors, setErrors] = useState({});
 
@@ -305,6 +309,16 @@ export function useAircraftInfo({
   }, [getCached]);
 
   /**
+   * Check if icao is in cache using ref (for use in async callbacks to avoid stale closures)
+   */
+  const isInCacheRef = (icao) => {
+    const entry = cacheRef.current[icao?.toUpperCase()];
+    if (!entry || !entry.fetchedAt) return false;
+    if (entry.error) return false;
+    return Date.now() - entry.fetchedAt < cacheTTL;
+  };
+
+  /**
    * Process the bulk queue
    */
   const processBulkQueue = useCallback(async () => {
@@ -317,20 +331,21 @@ export function useAircraftInfo({
     await fetchBulkInfo(icaos);
 
     // Then trigger individual fetches for remaining (will populate backend cache)
-    // This is rate-limited naturally by the backend queue
-    const stillMissing = icaos.filter(icao => !getCached(icao) && !pendingFetches.current.has(icao));
+    // Use isInCacheRef to check latest cache state (avoids stale closure issue)
+    const stillMissing = icaos.filter(icao => !isInCacheRef(icao) && !pendingFetches.current.has(icao));
 
     // Fetch individually with small delays to avoid overwhelming the backend
     for (let i = 0; i < stillMissing.length; i++) {
       const icao = stillMissing[i];
       // Use setTimeout to spread out requests
       setTimeout(() => {
-        if (!getCached(icao) && !pendingFetches.current.has(icao)) {
+        // Use isInCacheRef for latest cache state inside timeout callback
+        if (!isInCacheRef(icao) && !pendingFetches.current.has(icao)) {
           fetchSingleInfo(icao);
         }
       }, i * 50); // 50ms between requests
     }
-  }, [fetchBulkInfo, fetchSingleInfo, getCached]);
+  }, [fetchBulkInfo, fetchSingleInfo, cacheTTL]);
 
   /**
    * Schedule retry processing

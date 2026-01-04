@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     
     # Polling
     polling_interval: int = 1
-    db_store_interval: int = 1
+    db_store_interval: int = 5
     
     # Redis (optional)
     redis_url: str = ""
