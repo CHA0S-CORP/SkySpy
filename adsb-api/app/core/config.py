@@ -40,8 +40,8 @@ class Settings(BaseSettings):
     notification_cooldown: int = 300
     
     # Polling
-    polling_interval: int = 2
-    db_store_interval: int = 10
+    polling_interval: int = 1
+    db_store_interval: int = 1
     
     # Redis (optional)
     redis_url: str = ""
