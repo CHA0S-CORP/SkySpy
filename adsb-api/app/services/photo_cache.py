@@ -90,17 +90,18 @@ def _get_s3_key(icao_hex: str, is_thumbnail: bool = False) -> str:
 
 
 def _get_s3_url(icao_hex: str, is_thumbnail: bool = False) -> str:
-    """Get public URL for S3 photo."""
+    """Get public URL for S3 photo (unsigned - for public buckets only)."""
     key = _get_s3_key(icao_hex, is_thumbnail)
-    
+
     # Use custom public URL if configured (e.g., CDN)
     if settings.s3_public_url:
         base = settings.s3_public_url.rstrip("/")
         # Remove prefix from key if public URL already includes it
-        if settings.s3_prefix and key.startswith(settings.s3_prefix):
-            key = key[len(settings.s3_prefix):].lstrip("/")
+        prefix_with_slash = settings.s3_prefix.strip("/") + "/"
+        if settings.s3_prefix and key.startswith(prefix_with_slash):
+            key = key[len(prefix_with_slash):]
         return f"{base}/{key}"
-    
+
     # Default S3 URL format
     if settings.s3_endpoint_url:
         # Custom endpoint (MinIO, etc.)
@@ -109,6 +110,66 @@ def _get_s3_url(icao_hex: str, is_thumbnail: bool = False) -> str:
     else:
         # Standard AWS S3
         return f"https://{settings.s3_bucket}.s3.{settings.s3_region}.amazonaws.com/{key}"
+
+
+def get_signed_s3_url(icao_hex: str, is_thumbnail: bool = False, expires_in: int = 3600) -> Optional[str]:
+    """
+    Generate a signed URL for S3 photo access.
+
+    Args:
+        icao_hex: Aircraft ICAO hex code
+        is_thumbnail: Whether this is a thumbnail
+        expires_in: URL expiration time in seconds (default 1 hour)
+
+    Returns:
+        Signed URL or None if S3 is not available
+    """
+    client = _get_s3_client()
+    if not client:
+        return None
+
+    key = _get_s3_key(icao_hex, is_thumbnail)
+
+    try:
+        url = client.generate_presigned_url(
+            'get_object',
+            Params={
+                'Bucket': settings.s3_bucket,
+                'Key': key,
+            },
+            ExpiresIn=expires_in,
+        )
+        return url
+    except Exception as e:
+        logger.error(f"Failed to generate signed URL for {icao_hex}: {e}")
+        return None
+
+
+def get_photo_url(icao_hex: str, is_thumbnail: bool = False, signed: bool = True) -> Optional[str]:
+    """
+    Get accessible URL for a cached photo (S3 signed URL or local path).
+
+    Args:
+        icao_hex: Aircraft ICAO hex code
+        is_thumbnail: Whether to get thumbnail URL
+        signed: Whether to generate a signed URL for S3 (default True)
+
+    Returns:
+        Accessible URL for the photo, or None if not cached
+    """
+    icao_hex = icao_hex.upper()
+
+    if settings.s3_enabled:
+        if signed:
+            return get_signed_s3_url(icao_hex, is_thumbnail)
+        else:
+            return _get_s3_url(icao_hex, is_thumbnail)
+    else:
+        # Local storage - return the file path
+        path = get_photo_path(icao_hex, is_thumbnail)
+        if path.exists() and path.stat().st_size > 0:
+            return str(path)
+        return None
 
 
 async def _upload_to_s3(data: bytes, icao_hex: str, is_thumbnail: bool = False) -> Optional[str]:

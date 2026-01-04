@@ -125,9 +125,23 @@ export default function App() {
     return () => clearInterval(interval);
   }, [wsRequest, connected, config.apiBaseUrl]);
 
-  // Fetch online users count more frequently
+  // Fetch online users count via Socket.IO (with HTTP fallback)
   useEffect(() => {
     const fetchOnlineUsers = async () => {
+      // Try Socket.IO first if connected
+      if (wsRequest && connected) {
+        try {
+          const data = await wsRequest('ws-status', {});
+          if (data && !data.error) {
+            setOnlineUsers(data.subscribers || data.socketio_connections || 0);
+            return;
+          }
+        } catch (err) {
+          // Fall through to HTTP
+        }
+      }
+
+      // HTTP fallback
       try {
         const res = await fetch(`${config.apiBaseUrl}/api/v1/ws/status`);
         if (res.ok) {
@@ -140,9 +154,9 @@ export default function App() {
     };
 
     fetchOnlineUsers();
-    const interval = setInterval(fetchOnlineUsers, 5000);
+    const interval = setInterval(fetchOnlineUsers, 30000); // Reduced from 5s - online count doesn't need frequent updates
     return () => clearInterval(interval);
-  }, [config.apiBaseUrl]);
+  }, [config.apiBaseUrl, wsRequest, connected]);
 
   // Lookup ICAO hex from tail/registration when on airframe page with tail param
   useEffect(() => {
@@ -160,17 +174,27 @@ export default function App() {
       return;
     }
 
-    // Look up from sightings API
+    // Look up from sightings API (prefer WebSocket)
     const lookupTail = async () => {
       try {
-        const res = await fetch(`${config.apiBaseUrl}/api/v1/history/sightings?registration=${encodeURIComponent(tail)}&hours=168&limit=1`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.sightings?.length > 0 && data.sightings[0].icao_hex) {
-            setTailHexLookup(prev => ({ ...prev, [tail]: data.sightings[0].icao_hex }));
+        let data;
+        if (wsRequest && connected) {
+          const result = await wsRequest('sightings', { registration: tail, hours: 168, limit: 1 });
+          if (result && result.sightings) {
+            data = result;
           } else {
-            setTailHexLookup(prev => ({ ...prev, [tail]: null }));
+            throw new Error('Invalid sightings response');
           }
+        } else {
+          const res = await fetch(`${config.apiBaseUrl}/api/v1/history/sightings?registration=${encodeURIComponent(tail)}&hours=168&limit=1`);
+          if (res.ok) {
+            data = await res.json();
+          } else {
+            throw new Error('HTTP request failed');
+          }
+        }
+        if (data.sightings?.length > 0 && data.sightings[0].icao_hex) {
+          setTailHexLookup(prev => ({ ...prev, [tail]: data.sightings[0].icao_hex }));
         } else {
           setTailHexLookup(prev => ({ ...prev, [tail]: null }));
         }
@@ -180,7 +204,7 @@ export default function App() {
     };
 
     lookupTail();
-  }, [activeTab, hashParams.tail, aircraft, config.apiBaseUrl, tailHexLookup]);
+  }, [activeTab, hashParams.tail, aircraft, config.apiBaseUrl, tailHexLookup, wsRequest, connected]);
 
   return (
     <div className={`app ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileMenuOpen ? 'mobile-menu-open' : ''}`}>

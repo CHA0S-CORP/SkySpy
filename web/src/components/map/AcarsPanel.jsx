@@ -7,7 +7,9 @@ import { MessageCircle, X, Filter, Plane } from 'lucide-react';
 export function AcarsPanel({
   apiUrl,
   onClose,
-  onSelectAircraft
+  onSelectAircraft,
+  wsRequest,
+  wsConnected
 }) {
   const [messages, setMessages] = useState([]);
   const [status, setStatus] = useState(null);
@@ -28,20 +30,40 @@ export function AcarsPanel({
   useEffect(() => {
     const fetchAcars = async () => {
       const baseUrl = apiUrl || '';
+
+      // Fetch messages via HTTP (no Socket.IO endpoint for messages yet)
       try {
         const msgRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=50`);
         if (msgRes.ok) {
           const data = await msgRes.json();
           setMessages(data.messages || []);
         }
+      } catch (err) {
+        console.log('ACARS messages fetch error:', err.message);
+      }
 
+      // Fetch status via Socket.IO (with HTTP fallback)
+      if (wsRequest && wsConnected) {
+        try {
+          const data = await wsRequest('acars-status', {});
+          if (data && !data.error) {
+            setStatus(data);
+            return;
+          }
+        } catch (err) {
+          // Fall through to HTTP
+        }
+      }
+
+      // HTTP fallback for status
+      try {
         const statusRes = await fetch(`${baseUrl}/api/v1/acars/status`);
         if (statusRes.ok) {
           const data = await statusRes.json();
           setStatus(data);
         }
       } catch (err) {
-        console.log('ACARS fetch error:', err.message);
+        console.log('ACARS status fetch error:', err.message);
       }
     };
 
@@ -63,7 +85,7 @@ export function AcarsPanel({
     fetchLabels();
     const interval = setInterval(fetchAcars, 5000);
     return () => clearInterval(interval);
-  }, [apiUrl]);
+  }, [apiUrl, wsRequest, wsConnected]);
 
   // Save filters to localStorage
   useEffect(() => {

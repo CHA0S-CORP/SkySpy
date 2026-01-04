@@ -864,14 +864,15 @@ async def get_acars_stats(
     )[:10]
 
     # Hourly distribution
+    hour_trunc = func.date_trunc('hour', AcarsMessage.timestamp)
     hourly_query = await db.execute(
         select(
-            func.date_trunc('hour', AcarsMessage.timestamp).label('hour'),
+            hour_trunc.label('hour'),
             func.count(AcarsMessage.id).label('count')
         )
         .where(and_(*base_conditions))
-        .group_by(func.date_trunc('hour', AcarsMessage.timestamp))
-        .order_by(func.date_trunc('hour', AcarsMessage.timestamp))
+        .group_by(hour_trunc)
+        .order_by(hour_trunc)
     )
     hourly_distribution = [
         {"hour": r[0].isoformat() + "Z" if r[0] else None, "count": r[1]}

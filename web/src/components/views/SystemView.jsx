@@ -77,8 +77,8 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
     // Initial fetch
     fetchViaSocket();
 
-    // Refresh every 5 seconds via WebSocket
-    const interval = setInterval(fetchViaSocket, 5000);
+    // Refresh every 15 seconds via WebSocket (reduced from 5s)
+    const interval = setInterval(fetchViaSocket, 15000);
     return () => clearInterval(interval);
   }, [wsConnected, wsRequest, fetchViaSocket]);
 

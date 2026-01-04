@@ -163,20 +163,148 @@ async def get_aircraft_photo(
     db: AsyncSession = Depends(get_db)
 ):
     """Get aircraft photo URLs."""
+    from app.core.config import get_settings
+    from app.services.photo_cache import get_signed_s3_url, _check_s3_exists
+
     if not validate_icao_hex(icao_hex):
         raise HTTPException(status_code=400, detail="Invalid ICAO hex code")
-    
+
+    settings = get_settings()
+    icao_hex = icao_hex.upper()
+
+    photo_url = None
+    thumbnail_url = None
+    photographer = None
+    source = None
+
+    # Check S3 first if enabled - photos might be cached even without DB record
+    if settings.s3_enabled:
+        if await _check_s3_exists(icao_hex, is_thumbnail=False):
+            photo_url = get_signed_s3_url(icao_hex, is_thumbnail=False)
+        if await _check_s3_exists(icao_hex, is_thumbnail=True):
+            thumbnail_url = get_signed_s3_url(icao_hex, is_thumbnail=True)
+
+    # Get info from database for metadata and fallback URLs
     info = await get_aircraft_info(db, icao_hex)
-    
-    if not info or not info.get("photo_url"):
-        raise HTTPException(status_code=404, detail=f"No photo found for {icao_hex.upper()}")
-    
+    if info:
+        photographer = info.get("photo_photographer")
+        source = info.get("photo_source")
+        # Use DB URLs as fallback if not in S3
+        if not photo_url:
+            photo_url = info.get("photo_url")
+        if not thumbnail_url:
+            thumbnail_url = info.get("photo_thumbnail_url")
+
+    if not photo_url and not thumbnail_url:
+        raise HTTPException(status_code=404, detail=f"No photo found for {icao_hex}")
+
     return {
-        "icao_hex": icao_hex.upper(),
-        "photo_url": info.get("photo_url"),
-        "thumbnail_url": info.get("photo_thumbnail_url"),
-        "photographer": info.get("photo_photographer"),
-        "source": info.get("photo_source"),
+        "icao_hex": icao_hex,
+        "photo_url": photo_url,
+        "thumbnail_url": thumbnail_url or photo_url,
+        "photographer": photographer,
+        "source": source or "s3" if settings.s3_enabled else None,
+    }
+
+
+@router.post(
+    "/{icao_hex}/photo/cache",
+    summary="Prioritize Photo Caching",
+    description="""
+Immediately fetch and cache an aircraft photo to S3.
+
+Use this when a user clicks on an aircraft to ensure the photo is
+cached quickly rather than waiting for background processing.
+
+Returns the signed S3 URLs once cached, or falls back to source URLs.
+    """,
+    responses={
+        200: {
+            "description": "Photo cached successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "icao_hex": "A12345",
+                        "photo_url": "https://s3.../photo.jpg?signature=...",
+                        "thumbnail_url": "https://s3.../thumb.jpg?signature=...",
+                        "cached": True
+                    }
+                }
+            }
+        },
+        404: {"model": ErrorResponse, "description": "No photo available"}
+    }
+)
+async def prioritize_photo_cache(
+    icao_hex: str = Path(
+        ...,
+        description="ICAO 24-bit hex address",
+        example="A12345"
+    ),
+    db: AsyncSession = Depends(get_db)
+):
+    """Immediately fetch and cache photo to S3 for quick access."""
+    from app.core.config import get_settings
+    from app.services.photo_cache import (
+        cache_aircraft_photos, get_signed_s3_url, _check_s3_exists
+    )
+
+    if not validate_icao_hex(icao_hex):
+        raise HTTPException(status_code=400, detail="Invalid ICAO hex code")
+
+    settings = get_settings()
+    icao_hex = icao_hex.upper()
+
+    # Check if already cached in S3
+    if settings.s3_enabled:
+        photo_exists = await _check_s3_exists(icao_hex, is_thumbnail=False)
+        thumb_exists = await _check_s3_exists(icao_hex, is_thumbnail=True)
+        if photo_exists or thumb_exists:
+            return {
+                "icao_hex": icao_hex,
+                "photo_url": get_signed_s3_url(icao_hex, False) if photo_exists else None,
+                "thumbnail_url": get_signed_s3_url(icao_hex, True) if thumb_exists else None,
+                "cached": True,
+                "source": "s3"
+            }
+
+    # Get aircraft info to find photo URLs
+    info = await get_aircraft_info(db, icao_hex)
+    if not info:
+        # Try to fetch fresh info
+        info = await refresh_aircraft_info(db, icao_hex)
+
+    if not info:
+        raise HTTPException(status_code=404, detail=f"No info found for {icao_hex}")
+
+    photo_url = info.get("photo_url")
+    thumbnail_url = info.get("photo_thumbnail_url")
+    photo_page_link = info.get("photo_page_link")
+
+    if not photo_url and not thumbnail_url:
+        raise HTTPException(status_code=404, detail=f"No photo available for {icao_hex}")
+
+    # Immediately cache to S3 (don't use background queue)
+    cached_photo, cached_thumb = await cache_aircraft_photos(
+        db, icao_hex, photo_url, thumbnail_url, photo_page_link, force=True
+    )
+
+    # Return signed URLs if cached to S3, otherwise return source URLs
+    if settings.s3_enabled and (cached_photo or cached_thumb):
+        return {
+            "icao_hex": icao_hex,
+            "photo_url": get_signed_s3_url(icao_hex, False) if cached_photo else photo_url,
+            "thumbnail_url": get_signed_s3_url(icao_hex, True) if cached_thumb else thumbnail_url,
+            "cached": True,
+            "source": "s3"
+        }
+
+    return {
+        "icao_hex": icao_hex,
+        "photo_url": cached_photo or photo_url,
+        "thumbnail_url": cached_thumb or thumbnail_url,
+        "cached": bool(cached_photo or cached_thumb),
+        "source": info.get("photo_source")
     }
 
 
@@ -230,42 +358,70 @@ async def download_aircraft_photo(
 ):
     """Download/proxy aircraft photo from local cache or source."""
     import logging
+    import httpx
     from fastapi.responses import Response
-    from app.services.photo_cache import get_cached_photo
-    
+    from app.core.config import get_settings
+    from app.services.photo_cache import get_cached_photo, _check_s3_exists, get_signed_s3_url
+
     logger = logging.getLogger(__name__)
-    
+    settings = get_settings()
+
     if not validate_icao_hex(icao_hex):
         raise HTTPException(status_code=400, detail="Invalid ICAO hex code")
-    
+
     icao_hex = icao_hex.upper().lstrip("~")
-    
+
     # Helper to sanitize header values (ASCII only)
     def safe_header(value: str) -> str:
         if not value:
             return ""
         # Replace non-ASCII with ?
         return value.encode("ascii", errors="replace").decode("ascii")
-    
-    # Check local cache first (skip if refresh requested)
+
+    # Check cache first (skip if refresh requested)
     if not refresh:
-        cached_path = get_cached_photo(icao_hex, thumbnail)
-        if cached_path and cached_path.exists():
-            try:
-                content = cached_path.read_bytes()
-                headers = {
-                    "X-Photo-Source": "local",
-                    "X-Photo-Cached": "true",
-                    "Cache-Control": "public, max-age=604800",  # 7 days
-                }
-                return Response(
-                    content=content,
-                    media_type="image/jpeg",
-                    headers=headers
-                )
-            except Exception as e:
-                logger.warning(f"Failed to read cached photo for {icao_hex}: {e}")
-                pass
+        # Check S3 cache
+        if settings.s3_enabled:
+            if await _check_s3_exists(icao_hex, thumbnail):
+                # Fetch from S3 using signed URL
+                signed_url = get_signed_s3_url(icao_hex, thumbnail)
+                if signed_url:
+                    try:
+                        async with httpx.AsyncClient(timeout=15.0) as client:
+                            response = await client.get(signed_url, follow_redirects=True)
+                            response.raise_for_status()
+                            content = response.content
+                            headers = {
+                                "X-Photo-Source": "s3",
+                                "X-Photo-Cached": "true",
+                                "Cache-Control": "public, max-age=604800",  # 7 days
+                            }
+                            return Response(
+                                content=content,
+                                media_type="image/jpeg",
+                                headers=headers
+                            )
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch S3 cached photo for {icao_hex}: {e}")
+        else:
+            # Check local cache
+            cached_path = get_cached_photo(icao_hex, thumbnail)
+            if cached_path and cached_path.exists():
+                try:
+                    content = cached_path.read_bytes()
+                    headers = {
+                        "X-Photo-Source": "local",
+                        "X-Photo-Cached": "true",
+                        "Cache-Control": "public, max-age=604800",  # 7 days
+                    }
+                    return Response(
+                        content=content,
+                        media_type="image/jpeg",
+                        headers=headers
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to read cached photo for {icao_hex}: {e}")
+                    pass
     
     # Get info from database (force refresh if requested)
     if refresh:
@@ -303,7 +459,6 @@ async def download_aircraft_photo(
     logger.info(f"Fetching photo for {icao_hex} (thumbnail={thumbnail}): {photo_url}")
 
     # Fetch from remote
-    import httpx
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(

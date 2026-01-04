@@ -156,9 +156,10 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
   const graphDragRef = useRef({ isDragging: false, startX: 0, startOffset: 0 });
 
   const baseUrl = apiUrl || '';
-  const photoUrl = useThumbnail
-    ? `${baseUrl}/api/v1/aircraft/${hex}/photo/download?thumbnail=true${photoRetryCount > 0 ? `&t=${photoRetryCount}` : ''}`
-    : `${baseUrl}/api/v1/aircraft/${hex}/photo/download${photoRetryCount > 0 ? `?t=${photoRetryCount}` : ''}`;
+  // Use S3 URLs directly from photoInfo when available
+  const photoUrl = photoInfo
+    ? (useThumbnail ? photoInfo.thumbnail_url : photoInfo.photo_url) || photoInfo.photo_url || photoInfo.thumbnail_url
+    : null;
 
   useEffect(() => {
     setPhotoState('loading');
@@ -190,11 +191,31 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
     setTimeout(() => setPhotoStatus(null), 3000);
   };
 
-  const retryPhoto = () => {
+  const retryPhoto = async () => {
     setPhotoState('loading');
     setUseThumbnail(false);
     setPhotoRetryCount(c => c + 1);
     setPhotoStatus({ message: 'Fetching high quality photo...', type: 'info' });
+
+    // Re-fetch photo data using WebSocket or HTTP
+    try {
+      if (wsRequest && wsConnected) {
+        const data = await wsRequest('photo-cache', { icao: hex });
+        if (data && !data.error) {
+          setPhotoInfo(data);
+        }
+      } else {
+        const res = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/photo/cache`, {
+          method: 'POST'
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setPhotoInfo(data);
+        }
+      }
+    } catch {
+      // Keep existing photo info, just retry loading the image
+    }
   };
   
   useEffect(() => {
@@ -210,10 +231,37 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
           }
         }
         
-        const photoMetaRes = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/photo`);
-        if (photoMetaRes.ok) {
-          const data = await photoMetaRes.json();
-          setPhotoInfo(data);
+        // Use WebSocket if available for prioritized photo caching, otherwise fall back to HTTP
+        if (wsRequest && wsConnected) {
+          try {
+            const data = await wsRequest('photo-cache', { icao: hex });
+            if (data && !data.error) {
+              setPhotoInfo(data);
+            }
+          } catch {
+            // WebSocket failed, try HTTP fallback
+            const photoFallbackRes = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/photo`);
+            if (photoFallbackRes.ok) {
+              const data = await photoFallbackRes.json();
+              setPhotoInfo(data);
+            }
+          }
+        } else {
+          // HTTP fallback - POST to prioritize caching
+          const photoMetaRes = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/photo/cache`, {
+            method: 'POST'
+          });
+          if (photoMetaRes.ok) {
+            const data = await photoMetaRes.json();
+            setPhotoInfo(data);
+          } else {
+            // Fallback to GET if POST fails
+            const photoFallbackRes = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/photo`);
+            if (photoFallbackRes.ok) {
+              const data = await photoFallbackRes.json();
+              setPhotoInfo(data);
+            }
+          }
         }
         
         // Try database query first by ICAO hex, then by callsign, then fall back to recent buffer
@@ -1629,18 +1677,20 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
             </button>
           </div>
         )}
-        <img
-          key={`${photoRetryCount}-${useThumbnail}`}
-          src={photoUrl}
-          alt={info?.registration || hex}
-          onLoad={handlePhotoLoad}
-          onError={handlePhotoError}
-          style={{
-            opacity: photoState === 'loaded' ? 1 : 0,
-            position: photoState !== 'loaded' ? 'absolute' : 'relative',
-            pointerEvents: photoState !== 'loaded' ? 'none' : 'auto'
-          }}
-        />
+        {photoUrl && (
+          <img
+            key={`${photoRetryCount}-${useThumbnail}-${photoUrl}`}
+            src={photoUrl}
+            alt={info?.registration || hex}
+            onLoad={handlePhotoLoad}
+            onError={handlePhotoError}
+            style={{
+              opacity: photoState === 'loaded' ? 1 : 0,
+              position: photoState !== 'loaded' ? 'absolute' : 'relative',
+              pointerEvents: photoState !== 'loaded' ? 'none' : 'auto'
+            }}
+          />
+        )}
         {photoState === 'loaded' && photoInfo?.photographer && (
           <span className="photo-credit">📷 {photoInfo.photographer} via {photoInfo.source || 'planespotters.net'}</span>
         )}

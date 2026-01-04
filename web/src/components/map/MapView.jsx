@@ -117,6 +117,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [proPhotoError, setProPhotoError] = useState(false); // Track photo loading errors for Pro panel
   const [proPhotoRetry, setProPhotoRetry] = useState(0); // Retry counter for pro panel photo
+  const [proPhotoUrl, setProPhotoUrl] = useState(null); // S3 URL for pro panel photo
   
   // Aviation overlay states - load from localStorage
   const [overlays, setOverlays] = useState(getOverlays);
@@ -764,11 +765,48 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     }
   }, [panelPinned, showAcarsPanel, config.mapMode]);
   
-  // Reset photo error state when selected aircraft changes
+  // Reset photo state and fetch/cache S3 URL when selected aircraft changes
   useEffect(() => {
     setProPhotoError(false);
     setProPhotoRetry(0);
-  }, [selectedAircraft?.hex]);
+    setProPhotoUrl(null);
+
+    if (selectedAircraft?.hex) {
+      const fetchPhoto = async () => {
+        try {
+          // Use WebSocket if available, otherwise fall back to HTTP
+          if (wsRequest && wsConnected) {
+            const data = await wsRequest('photo-cache', { icao: selectedAircraft.hex });
+            if (data?.thumbnail_url) {
+              setProPhotoUrl(data.thumbnail_url);
+            } else if (data?.photo_url) {
+              setProPhotoUrl(data.photo_url);
+            } else if (data?.error) {
+              setProPhotoError(true);
+            }
+          } else {
+            // Fallback to HTTP POST
+            const res = await fetch(`${config.apiBaseUrl || ''}/api/v1/aircraft/${selectedAircraft.hex}/photo/cache`, {
+              method: 'POST'
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data?.thumbnail_url) {
+                setProPhotoUrl(data.thumbnail_url);
+              } else if (data?.photo_url) {
+                setProPhotoUrl(data.photo_url);
+              }
+            } else {
+              setProPhotoError(true);
+            }
+          }
+        } catch {
+          setProPhotoError(true);
+        }
+      };
+      fetchPhoto();
+    }
+  }, [selectedAircraft?.hex, config.apiBaseUrl, wsRequest, wsConnected]);
   
   // Merge WebSocket safety events with local state
   useEffect(() => {
@@ -996,9 +1034,23 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  // Fetch ACARS status (always, for badge display)
+  // Fetch ACARS status via Socket.IO (with HTTP fallback)
   useEffect(() => {
     const fetchAcarsStatus = async () => {
+      // Try Socket.IO first if connected
+      if (wsRequest && wsConnected) {
+        try {
+          const data = await wsRequest('acars-status', {});
+          if (data && !data.error) {
+            setAcarsStatus(data);
+            return;
+          }
+        } catch (err) {
+          // Fall through to HTTP
+        }
+      }
+
+      // HTTP fallback
       const baseUrl = config.apiBaseUrl || '';
       try {
         const statusRes = await fetch(`${baseUrl}/api/v1/acars/status`);
@@ -1014,7 +1066,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     fetchAcarsStatus();
     const interval = setInterval(fetchAcarsStatus, 10000); // Check status every 10s
     return () => clearInterval(interval);
-  }, [config.apiBaseUrl]);
+  }, [config.apiBaseUrl, wsRequest, wsConnected]);
 
   // Fetch ACARS messages (only when panel is open)
   useEffect(() => {
@@ -1034,7 +1086,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     };
 
     fetchAcarsMessages();
-    const interval = setInterval(fetchAcarsMessages, 5000);
+    const interval = setInterval(fetchAcarsMessages, 10000); // Reduced from 5s to 10s
     return () => clearInterval(interval);
   }, [showAcarsPanel, config.apiBaseUrl]);
 
@@ -1059,25 +1111,37 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
     if (callsignsToLookup.size === 0) return;
 
-    // Lookup each callsign from history API (limit concurrent requests)
+    // Lookup each callsign from history API (prefer WebSocket, limit concurrent requests)
     const lookupCallsigns = async () => {
       const baseUrl = config.apiBaseUrl || '';
       const lookups = Array.from(callsignsToLookup).slice(0, 10); // Limit to 10 at a time
 
       for (const callsign of lookups) {
         try {
-          const res = await fetch(`${baseUrl}/api/v1/history/sightings?callsign=${encodeURIComponent(callsign)}&hours=24&limit=1`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.sightings && data.sightings.length > 0 && data.sightings[0].icao_hex) {
-              setCallsignHexCache(prev => ({
-                ...prev,
-                [callsign]: data.sightings[0].icao_hex
-              }));
+          let data;
+          if (wsRequest && wsConnected) {
+            const result = await wsRequest('sightings', { callsign: callsign, hours: 24, limit: 1 });
+            if (result && result.sightings) {
+              data = result;
             } else {
-              // Mark as not found to avoid re-querying
-              setCallsignHexCache(prev => ({ ...prev, [callsign]: null }));
+              throw new Error('Invalid sightings response');
             }
+          } else {
+            const res = await fetch(`${baseUrl}/api/v1/history/sightings?callsign=${encodeURIComponent(callsign)}&hours=24&limit=1`);
+            if (res.ok) {
+              data = await res.json();
+            } else {
+              throw new Error('HTTP request failed');
+            }
+          }
+          if (data.sightings && data.sightings.length > 0 && data.sightings[0].icao_hex) {
+            setCallsignHexCache(prev => ({
+              ...prev,
+              [callsign]: data.sightings[0].icao_hex
+            }));
+          } else {
+            // Mark as not found to avoid re-querying
+            setCallsignHexCache(prev => ({ ...prev, [callsign]: null }));
           }
         } catch (err) {
           // Silently fail - link just won't work for this callsign
@@ -1086,7 +1150,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     };
 
     lookupCallsigns();
-  }, [showAcarsPanel, acarsMessages, aircraft, callsignHexCache, config.apiBaseUrl]);
+  }, [showAcarsPanel, acarsMessages, aircraft, callsignHexCache, config.apiBaseUrl, wsRequest, wsConnected]);
 
   // Fetch aircraft info when selecting aircraft
   useEffect(() => {
@@ -1415,23 +1479,41 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     });
   }, [aircraft, feederLat, feederLon]);
 
-  // Fetch historical positions for short tracks when enabled
+  // Fetch historical positions for short tracks when enabled (debounced, prefer WebSocket)
   useEffect(() => {
     if (!showShortTracks) return;
 
     const baseUrl = config.apiBaseUrl || '';
-    const visibleAircraft = aircraft.filter(ac => ac.hex && ac.lat && ac.lon);
 
-    // Fetch history for aircraft we haven't fetched yet
-    const fetchPromises = visibleAircraft
-      .filter(ac => !shortTrackFetchedRef.current.has(ac.hex))
-      .slice(0, 10) // Limit concurrent fetches
-      .map(async (ac) => {
-        shortTrackFetchedRef.current.add(ac.hex);
-        try {
-          const res = await fetch(`${baseUrl}/api/v1/history/sightings/${ac.hex}?hours=1&limit=50`);
-          if (res.ok) {
-            const data = await res.json();
+    // Debounce the fetch to avoid slamming the API on every aircraft update
+    const timeoutId = setTimeout(() => {
+      const visibleAircraft = aircraft.filter(ac => ac.hex && ac.lat && ac.lon);
+
+      // Fetch history for aircraft we haven't fetched yet
+      const toFetch = visibleAircraft
+        .filter(ac => !shortTrackFetchedRef.current.has(ac.hex))
+        .slice(0, 10); // Limit concurrent fetches
+
+      if (toFetch.length > 0) {
+        toFetch.forEach(async (ac) => {
+          shortTrackFetchedRef.current.add(ac.hex);
+          try {
+            let data;
+            if (wsRequest && wsConnected) {
+              const result = await wsRequest('sightings', { icao_hex: ac.hex, hours: 1, limit: 50 });
+              if (result && result.sightings) {
+                data = result;
+              } else {
+                throw new Error('Invalid sightings response');
+              }
+            } else {
+              const res = await fetch(`${baseUrl}/api/v1/history/sightings/${ac.hex}?hours=1&limit=50`);
+              if (res.ok) {
+                data = await res.json();
+              } else {
+                throw new Error('HTTP request failed');
+              }
+            }
             if (data.sightings && data.sightings.length > 0) {
               // Convert to our format and filter to ~5nm trail (about 30 positions at typical speeds)
               const positions = data.sightings
@@ -1448,27 +1530,28 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 [ac.hex]: positions
               }));
             }
+          } catch (e) {
+            // Silently fail - real-time data will still work
           }
-        } catch (e) {
-          // Silently fail - real-time data will still work
-        }
-      });
+        });
+      }
 
-    Promise.all(fetchPromises);
-
-    // Cleanup old entries when aircraft disappear
-    const activeHexes = new Set(aircraft.map(a => a.hex));
-    setShortTrackHistory(prev => {
-      const updated = { ...prev };
-      Object.keys(updated).forEach(hex => {
-        if (!activeHexes.has(hex)) {
+      // Cleanup old entries when aircraft disappear (only if needed)
+      const activeHexes = new Set(aircraft.map(a => a.hex));
+      setShortTrackHistory(prev => {
+        const hexesToRemove = Object.keys(prev).filter(hex => !activeHexes.has(hex));
+        if (hexesToRemove.length === 0) return prev; // No change needed
+        const updated = { ...prev };
+        hexesToRemove.forEach(hex => {
           delete updated[hex];
           shortTrackFetchedRef.current.delete(hex);
-        }
+        });
+        return updated;
       });
-      return updated;
-    });
-  }, [showShortTracks, aircraft, config.apiBaseUrl]);
+    }, 2000); // 2 second debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [showShortTracks, aircraft, config.apiBaseUrl, wsRequest, wsConnected]);
 
   // Draw track history canvas when selected aircraft or history changes
   useEffect(() => {
@@ -6231,12 +6314,12 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             </div>
           </div>
 
-          {/* Aircraft Thumbnail - Using cached photo API */}
+          {/* Aircraft Thumbnail - Using S3 URL directly */}
           <div className="pro-aircraft-photo">
-            {!proPhotoError ? (
+            {!proPhotoError && proPhotoUrl ? (
               <img
-                key={`${liveAircraft.hex}-${proPhotoRetry}`}
-                src={`${config.apiBaseUrl || ''}/api/v1/aircraft/${liveAircraft.hex}/photo/download?thumbnail=true${proPhotoRetry > 0 ? `&t=${proPhotoRetry}` : ''}`}
+                key={`${liveAircraft.hex}-${proPhotoRetry}-${proPhotoUrl}`}
+                src={proPhotoUrl}
                 alt={liveAircraft.flight?.trim() || liveAircraft.hex}
                 onError={() => setProPhotoError(true)}
                 loading="lazy"
@@ -6247,9 +6330,38 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 <span>No Photo Available</span>
                 <button
                   className="pro-photo-retry"
-                  onClick={() => {
+                  onClick={async () => {
                     setProPhotoError(false);
                     setProPhotoRetry(c => c + 1);
+                    // Re-fetch the photo URL using WebSocket or HTTP
+                    try {
+                      if (wsRequest && wsConnected) {
+                        const data = await wsRequest('photo-cache', { icao: liveAircraft.hex });
+                        if (data?.thumbnail_url) {
+                          setProPhotoUrl(data.thumbnail_url);
+                        } else if (data?.photo_url) {
+                          setProPhotoUrl(data.photo_url);
+                        } else {
+                          setProPhotoError(true);
+                        }
+                      } else {
+                        const res = await fetch(`${config.apiBaseUrl || ''}/api/v1/aircraft/${liveAircraft.hex}/photo/cache`, {
+                          method: 'POST'
+                        });
+                        if (res.ok) {
+                          const data = await res.json();
+                          if (data?.thumbnail_url) {
+                            setProPhotoUrl(data.thumbnail_url);
+                          } else if (data?.photo_url) {
+                            setProPhotoUrl(data.photo_url);
+                          }
+                        } else {
+                          setProPhotoError(true);
+                        }
+                      }
+                    } catch {
+                      setProPhotoError(true);
+                    }
                   }}
                 >
                   <RefreshCw size={14} /> Retry

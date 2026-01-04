@@ -916,7 +916,6 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
     elif request_type == "safety-events":
         # Return active events from safety monitor (real-time, with proper IDs for acknowledgment)
         from app.services.safety import safety_monitor
-        from datetime import datetime
 
         include_acknowledged = params.get("include_acknowledged", True)
         active_events = safety_monitor.get_active_events(include_acknowledged=include_acknowledged)
@@ -1282,6 +1281,139 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
             "tracked_aircraft": len(safety_monitor._aircraft_state),
             "thresholds": safety_monitor.get_thresholds(),
             "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+
+    elif request_type == "acars-status":
+        # ACARS service status
+        from app.services.acars import acars_service
+
+        stats = acars_service.get_stats()
+        return {
+            "running": stats["running"],
+            "acars": {
+                "total_received": stats["acars"]["total"],
+                "last_hour": stats["acars"]["last_hour"],
+                "errors": stats["acars"]["errors"],
+            },
+            "vdlm2": {
+                "total_received": stats["vdlm2"]["total"],
+                "last_hour": stats["vdlm2"]["last_hour"],
+                "errors": stats["vdlm2"]["errors"],
+            },
+            "buffer_size": stats["recent_buffer_size"],
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+
+    elif request_type == "photo":
+        # Get aircraft photo URLs (existing cached or from DB)
+        from app.core.config import get_settings
+        from app.services.aircraft_info import get_aircraft_info
+        from app.services.photo_cache import get_signed_s3_url, _check_s3_exists
+
+        icao = params.get("icao") or params.get("icao_hex") or params.get("hex")
+        if not icao:
+            return {"error": "icao parameter required"}
+
+        icao = icao.upper()
+        settings = get_settings()
+
+        photo_url = None
+        thumbnail_url = None
+        photographer = None
+        source = None
+
+        # Check S3 first if enabled
+        if settings.s3_enabled:
+            if await _check_s3_exists(icao, is_thumbnail=False):
+                photo_url = get_signed_s3_url(icao, is_thumbnail=False)
+            if await _check_s3_exists(icao, is_thumbnail=True):
+                thumbnail_url = get_signed_s3_url(icao, is_thumbnail=True)
+
+        # Get info from database for metadata and fallback URLs
+        info = await get_aircraft_info(db, icao)
+        if info:
+            photographer = info.get("photo_photographer")
+            source = info.get("photo_source")
+            if not photo_url:
+                photo_url = info.get("photo_url")
+            if not thumbnail_url:
+                thumbnail_url = info.get("photo_thumbnail_url")
+
+        if not photo_url and not thumbnail_url:
+            return {"error": f"No photo found for {icao}"}
+
+        return {
+            "icao_hex": icao,
+            "photo_url": photo_url,
+            "thumbnail_url": thumbnail_url or photo_url,
+            "photographer": photographer,
+            "source": source or ("s3" if settings.s3_enabled else None),
+        }
+
+    elif request_type == "photo-cache":
+        # Prioritize caching - immediately fetch and cache photo to S3
+        from app.core.config import get_settings
+        from app.services.aircraft_info import get_aircraft_info, refresh_aircraft_info
+        from app.services.photo_cache import (
+            cache_aircraft_photos, get_signed_s3_url, _check_s3_exists
+        )
+
+        icao = params.get("icao") or params.get("icao_hex") or params.get("hex")
+        if not icao:
+            return {"error": "icao parameter required"}
+
+        icao = icao.upper()
+        settings = get_settings()
+
+        # Check if already cached in S3
+        if settings.s3_enabled:
+            photo_exists = await _check_s3_exists(icao, is_thumbnail=False)
+            thumb_exists = await _check_s3_exists(icao, is_thumbnail=True)
+            if photo_exists or thumb_exists:
+                return {
+                    "icao_hex": icao,
+                    "photo_url": get_signed_s3_url(icao, False) if photo_exists else None,
+                    "thumbnail_url": get_signed_s3_url(icao, True) if thumb_exists else None,
+                    "cached": True,
+                    "source": "s3"
+                }
+
+        # Get aircraft info to find photo URLs
+        info = await get_aircraft_info(db, icao)
+        if not info:
+            info = await refresh_aircraft_info(db, icao)
+
+        if not info:
+            return {"error": f"No info found for {icao}"}
+
+        photo_url = info.get("photo_url")
+        thumbnail_url = info.get("photo_thumbnail_url")
+        photo_page_link = info.get("photo_page_link")
+
+        if not photo_url and not thumbnail_url:
+            return {"error": f"No photo available for {icao}"}
+
+        # Immediately cache to S3 (don't use background queue)
+        cached_photo, cached_thumb = await cache_aircraft_photos(
+            db, icao, photo_url, thumbnail_url, photo_page_link, force=True
+        )
+
+        # Return signed URLs if cached to S3, otherwise return source URLs
+        if settings.s3_enabled and (cached_photo or cached_thumb):
+            return {
+                "icao_hex": icao,
+                "photo_url": get_signed_s3_url(icao, False) if cached_photo else photo_url,
+                "thumbnail_url": get_signed_s3_url(icao, True) if cached_thumb else thumbnail_url,
+                "cached": True,
+                "source": "s3"
+            }
+
+        return {
+            "icao_hex": icao,
+            "photo_url": cached_photo or photo_url,
+            "thumbnail_url": cached_thumb or thumbnail_url,
+            "cached": bool(cached_photo or cached_thumb),
+            "source": info.get("photo_source")
         }
 
     else:

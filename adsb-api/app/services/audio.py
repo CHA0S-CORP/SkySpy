@@ -195,6 +195,10 @@ def _get_s3_url(filename: str) -> str:
 
     if settings.s3_public_url:
         base = settings.s3_public_url.rstrip("/")
+        # Remove prefix from key if public URL already includes it
+        prefix_with_slash = settings.radio_s3_prefix.strip("/") + "/"
+        if settings.radio_s3_prefix and key.startswith(prefix_with_slash):
+            key = key[len(prefix_with_slash):]
         return f"{base}/{key}"
 
     if settings.s3_endpoint_url:
