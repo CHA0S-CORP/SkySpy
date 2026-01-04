@@ -137,6 +137,10 @@ jobs:
             dockerfile: Dockerfile
             image-suffix: ""
             context: .
+          - name: rtl-airband-uploader
+            dockerfile: rtl-airband-uploader/Dockerfile
+            image-suffix: -rtl-airband-uploader
+            context: rtl-airband-uploader
           - name: 1090 Mock
             dockerfile: test/mock-1090/Dockerfile
             image-suffix: -1090-mock
