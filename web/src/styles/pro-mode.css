@@ -1862,6 +1862,51 @@
   white-space: nowrap;
 }
 
+/* Airframe Error Display */
+.pro-airframe-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.08));
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  font-size: 11px;
+  color: rgba(239, 68, 68, 0.9);
+  width: 100%;
+  margin-top: 4px;
+}
+
+.pro-airframe-error svg {
+  color: rgba(239, 68, 68, 0.8);
+  flex-shrink: 0;
+}
+
+.pro-airframe-error span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pro-error-dismiss {
+  background: transparent;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: rgba(239, 68, 68, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  transition: all 0.15s ease;
+}
+
+.pro-error-dismiss:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: rgba(239, 68, 68, 1);
+}
+
 /* Stats Grid */
 .pro-stats-grid {
   display: grid;
@@ -1907,34 +1952,11 @@
   margin-left: 2px;
 }
 
-/* Graphs Container - Fixed height with scroll */
+/* Graphs Container - flows within panel scroll */
 .pro-graphs-container {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: 400px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 4px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(90, 122, 154, 0.3) transparent;
-}
-
-.pro-graphs-container::-webkit-scrollbar {
-  width: 5px;
-}
-
-.pro-graphs-container::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.pro-graphs-container::-webkit-scrollbar-thumb {
-  background: rgba(90, 122, 154, 0.3);
-  border-radius: 3px;
-}
-
-.pro-graphs-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(90, 122, 154, 0.5);
 }
 
 /* Profile Charts */

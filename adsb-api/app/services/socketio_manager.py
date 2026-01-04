@@ -25,6 +25,7 @@ Supports Redis for multi-worker deployments.
 - safety:event - Safety event (TCAS, conflicts)
 - alert:triggered - Custom alert matched
 - acars:message - ACARS/VDL2 message
+- airframe:error - Airframe lookup error
 
 ### Response Events (on-demand requests)
 - response - Response to a request
@@ -600,6 +601,33 @@ class SocketIOManager:
             'transcript_language': transmission.get('transcript_language'),
             'transcription_error': transmission.get('transcription_error'),
             'created_at': transmission.get('created_at') or datetime.utcnow().isoformat() + 'Z',
+            'timestamp': datetime.utcnow().isoformat() + 'Z'
+        })
+
+    async def publish_airframe_error(
+        self,
+        icao_hex: str,
+        error_type: str,
+        error_message: str,
+        source: str,
+        details: Optional[dict] = None
+    ):
+        """
+        Publish airframe lookup error event.
+
+        Args:
+            icao_hex: Aircraft ICAO hex code
+            error_type: Type of error (e.g., "timeout", "api_error", "not_found")
+            error_message: Human-readable error message
+            source: Data source that failed (e.g., "hexdb", "opensky", "planespotters")
+            details: Additional error details
+        """
+        await self.broadcast_to_room('aircraft', 'airframe:error', {
+            'icao_hex': icao_hex,
+            'error_type': error_type,
+            'error_message': error_message,
+            'source': source,
+            'details': details or {},
             'timestamp': datetime.utcnow().isoformat() + 'Z'
         })
 

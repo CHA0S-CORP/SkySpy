@@ -230,7 +230,23 @@ def _load_adsbx_json(path: Path) -> int:
     _adsbx_db.clear()
 
     with gzip.open(path, "rt", encoding="utf-8") as f:
-        data = json.load(f)
+        # Try to detect format: single JSON array vs NDJSON (newline-delimited JSON)
+        first_char = f.read(1)
+        f.seek(0)
+
+        if first_char == '[':
+            # Standard JSON array format
+            data = json.load(f)
+        else:
+            # NDJSON format - one JSON object per line
+            data = []
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        data.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
 
     for entry in data:
         icao = (entry.get("icao") or "").upper()
@@ -279,22 +295,32 @@ async def download_tar1090_database() -> Optional[Path]:
         try:
             logger.info("Downloading tar1090-db...")
 
+            # Ensure the URL points to the .gz version (e.g., https://.../aircraft.csv.gz)
             async with httpx.AsyncClient(timeout=300.0, follow_redirects=True) as client:
                 response = await client.get(TAR1090_DB_URL)
                 response.raise_for_status()
 
                 target_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                # If the upstream URL is .csv.gz, write raw bytes. 
+                # If upstream is plain .csv, you would need to compress it here using gzip.open().
+                # Assuming standard tar1090 repo which serves .gz:
                 target_path.write_bytes(response.content)
 
             file_size = target_path.stat().st_size
             duration = time.time() - start_time
-            EXTERNAL_DB_DOWNLOAD_DURATION.labels(source="tar1090").observe(duration)
-            EXTERNAL_DB_DOWNLOAD_TOTAL.labels(source="tar1090", status="success").inc()
+            
+            # Metrics
+            if "EXTERNAL_DB_DOWNLOAD_DURATION" in globals():
+                EXTERNAL_DB_DOWNLOAD_DURATION.labels(source="tar1090").observe(duration)
+                EXTERNAL_DB_DOWNLOAD_TOTAL.labels(source="tar1090", status="success").inc()
+                
             logger.info(f"Downloaded tar1090-db: {file_size / 1024 / 1024:.1f}MB in {duration:.1f}s")
             return target_path
 
         except Exception as e:
-            EXTERNAL_DB_DOWNLOAD_TOTAL.labels(source="tar1090", status="error").inc()
+            if "EXTERNAL_DB_DOWNLOAD_TOTAL" in globals():
+                EXTERNAL_DB_DOWNLOAD_TOTAL.labels(source="tar1090", status="error").inc()
             sentry_sdk.capture_exception(e)
             logger.error(f"Failed to download tar1090-db: {e}")
             return None
@@ -320,11 +346,15 @@ async def load_tar1090_database(auto_download: bool = True) -> bool:
             logger.info("Loading tar1090-db...")
 
             loop = asyncio.get_event_loop()
+            # Run the CPU-bound CSV parsing in an executor to avoid blocking the async loop
             count = await loop.run_in_executor(None, _load_tar1090_csv, path)
 
             duration = time.time() - start_time
-            EXTERNAL_DB_LOAD_DURATION.labels(source="tar1090").observe(duration)
-            EXTERNAL_DB_AIRCRAFT_COUNT.labels(source="tar1090").set(count)
+            
+            # Update Metrics/Metadata
+            if "EXTERNAL_DB_LOAD_DURATION" in globals():
+                EXTERNAL_DB_LOAD_DURATION.labels(source="tar1090").observe(duration)
+                EXTERNAL_DB_AIRCRAFT_COUNT.labels(source="tar1090").set(count)
 
             _db_metadata["tar1090"]["loaded"] = True
             _db_metadata["tar1090"]["count"] = count
@@ -341,24 +371,42 @@ async def load_tar1090_database(auto_download: bool = True) -> bool:
 
 
 def _load_tar1090_csv(path: Path) -> int:
+    """Worker function to read gzip CSV."""
     global _tar1090_db
     _tar1090_db.clear()
 
+    # Use gzip.open with text mode ('rt')
     with gzip.open(path, "rt", encoding="utf-8", errors="replace") as f:
-        reader = csv.DictReader(f)
-
+        # Use csv.reader for robust parsing
+        reader = csv.reader(f)
+        
         for row in reader:
-            icao = (row.get("icao24") or "").upper()
-            if not icao or len(icao) != 6:
+            # Basic validation: ensure we have at least ICAO and Registration columns
+            if len(row) < 2:
                 continue
 
+            icao = row[0].strip().upper()
+            if len(icao) != 6:
+                continue
+
+            # Parse columns safely
+            # Format: icao, registration, type_code, flags, ...
+            registration = row[1].strip() if row[1] else None
+            type_code = row[2].strip() if len(row) > 2 and row[2] else None
+            
+            # Parse flags bitfield
+            try:
+                db_flags = int(row[3]) if len(row) > 3 and row[3] else 0
+            except ValueError:
+                db_flags = 0
+
             _tar1090_db[icao] = {
-                "registration": row.get("reg") or None,
-                "model": row.get("mdl") or None,
-                "type_code": row.get("type") or None,
-                "operator": row.get("operator") or None,
-                "description": row.get("desc") or None,
-                "is_interesting": row.get("interested") == "1",
+                "registration": registration,
+                "type_code": type_code,
+                "is_military": bool(db_flags & 1),
+                "is_interesting": bool(db_flags & 2),
+                "is_pia": bool(db_flags & 4),
+                "is_ladd": bool(db_flags & 8),
                 "source": "tar1090",
             }
 
@@ -368,10 +416,15 @@ def _load_tar1090_csv(path: Path) -> int:
 def lookup_tar1090(icao_hex: str) -> Optional[dict]:
     """Look up aircraft in tar1090-db."""
     if not _db_metadata["tar1090"]["loaded"]:
-        EXTERNAL_DB_LOOKUP_TOTAL.labels(source="tar1090", hit="miss").inc()
+        if "EXTERNAL_DB_LOOKUP_TOTAL" in globals():
+            EXTERNAL_DB_LOOKUP_TOTAL.labels(source="tar1090", hit="miss").inc()
         return None
+        
     result = _tar1090_db.get(icao_hex.upper().strip().lstrip("~"))
-    EXTERNAL_DB_LOOKUP_TOTAL.labels(source="tar1090", hit="hit" if result else "miss").inc()
+    
+    if "EXTERNAL_DB_LOOKUP_TOTAL" in globals():
+        EXTERNAL_DB_LOOKUP_TOTAL.labels(source="tar1090", hit="hit" if result else "miss").inc()
+        
     return result
 
 

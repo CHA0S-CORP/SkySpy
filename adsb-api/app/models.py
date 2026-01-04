@@ -162,6 +162,7 @@ class AircraftInfo(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     icao_hex: Mapped[str] = mapped_column(String(10), unique=True, index=True, nullable=False)
     registration: Mapped[Optional[str]] = mapped_column(String(20), index=True)
+    source: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     
     # Airframe info
     type_code: Mapped[Optional[str]] = mapped_column(String(10))

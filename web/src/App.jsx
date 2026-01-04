@@ -98,7 +98,15 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  const { aircraft, connected, stats, safetyEvents, request: wsRequest } = useWebSocket(true, config.apiBaseUrl, 'all');
+  const {
+    aircraft,
+    connected,
+    stats,
+    safetyEvents,
+    request: wsRequest,
+    getAirframeError,
+    clearAirframeError,
+  } = useWebSocket(true, config.apiBaseUrl, 'all');
 
   // Fetch status via Socket.IO or fallback to HTTP
   useEffect(() => {
@@ -251,6 +259,8 @@ export default function App() {
               safetyEvents={safetyEvents}
               wsRequest={wsRequest}
               wsConnected={connected}
+              getAirframeError={getAirframeError}
+              clearAirframeError={clearAirframeError}
               onViewHistoryEvent={(eventId) => {
                 setTargetSafetyEventId(eventId);
                 setActiveTab('history');

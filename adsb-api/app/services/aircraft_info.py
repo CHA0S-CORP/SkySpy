@@ -94,6 +94,32 @@ FAILED_CACHE_HOURS = 24  # Retry failed lookups after 24 hours
 # In-memory pending lookups to prevent duplicate requests
 _pending_lookups: set[str] = set()
 
+
+async def _emit_airframe_error(
+    icao_hex: str,
+    error_type: str,
+    error_message: str,
+    source: str,
+    details: Optional[dict] = None
+):
+    """
+    Emit airframe lookup error via Socket.IO.
+    Silently fails if Socket.IO manager is not available.
+    """
+    try:
+        from app.services.socketio_manager import get_socketio_manager
+        sio_manager = get_socketio_manager()
+        if sio_manager:
+            await sio_manager.publish_airframe_error(
+                icao_hex=icao_hex,
+                error_type=error_type,
+                error_message=error_message,
+                source=source,
+                details=details
+            )
+    except Exception as e:
+        logger.debug(f"Failed to emit airframe error for {icao_hex}: {e}")
+
 # Set of aircraft we've already seen (to trigger lookups only once)
 _seen_aircraft: set[str] = set()
 
@@ -214,9 +240,15 @@ async def get_aircraft_info(db: AsyncSession, icao_hex: str, force_refresh: bool
     
     except Exception as e:
         logger.error(f"Error fetching aircraft info for {icao_hex}: {e}")
+        AIRFRAME_LOOKUP_ERRORS.labels(source="database", error_type=type(e).__name__).inc()
+        sentry_sdk.capture_exception(e)
+
+        # Emit error via Socket.IO
+        await _emit_airframe_error(icao_hex, type(e).__name__, str(e), "database")
+
         await db.rollback()
         return _model_to_dict(cached) if cached else None
-    
+
     finally:
         _pending_lookups.discard(icao_hex)
 
@@ -239,18 +271,18 @@ async def _background_cache_photos(
         photo_page_link: Planespotters page URL to scrape for full-size image
     """
     from app.core.database import AsyncSessionLocal
-    from app.services.photo_cache import cache_aircraft_photos
+    from app.services.photo_cache import download_photo, update_photo_paths
 
     try:
-        async with AsyncSessionLocal() as db:
-            # If no photo URL provided, try to fetch from hexdb.io
-            if not photo_url:
-                hexdb_photo = await _fetch_photo_from_hexdb(icao_hex)
-                if hexdb_photo:
-                    photo_url = hexdb_photo.get("photo_url")
-                    thumbnail_url = hexdb_photo.get("photo_thumbnail_url")
+        # If no photo URL provided, try to fetch from hexdb.io
+        if not photo_url:
+            hexdb_photo = await _fetch_photo_from_hexdb(icao_hex)
+            if hexdb_photo:
+                photo_url = hexdb_photo.get("photo_url")
+                thumbnail_url = hexdb_photo.get("photo_thumbnail_url")
 
-                    # Update database with the URLs
+                # Quick DB update for URLs (short-lived session)
+                async with AsyncSessionLocal() as db:
                     result = await db.execute(
                         select(AircraftInfo).where(AircraftInfo.icao_hex == icao_hex.upper())
                     )
@@ -261,10 +293,19 @@ async def _background_cache_photos(
                         cached.photo_source = "hexdb.io"
                         await db.commit()
 
-            if photo_url:
-                photo_path, thumb_path = await cache_aircraft_photos(
-                    db, icao_hex, photo_url, thumbnail_url, photo_page_link
-                )
+        if photo_url:
+            # Download photos (no DB session held open)
+            photo_path = await download_photo(
+                photo_url, icao_hex, is_thumbnail=False,
+                photo_page_link=photo_page_link
+            )
+            thumb_path = None
+            if thumbnail_url:
+                thumb_path = await download_photo(thumbnail_url, icao_hex, is_thumbnail=True)
+
+            # Quick DB update for paths (short-lived session)
+            if photo_path or thumb_path:
+                await update_photo_paths(icao_hex, photo_path, thumb_path)
                 if photo_path:
                     logger.info(f"Cached photo for {icao_hex}: {photo_path}")
     except Exception as e:
@@ -342,7 +383,7 @@ async def _background_upgrade_photo(icao_hex: str):
     to get the link and then scrapes for the full-size image.
     """
     from app.core.database import AsyncSessionLocal
-    from app.services.photo_cache import cache_aircraft_photos
+    from app.services.photo_cache import download_photo, update_photo_paths
 
     icao_hex = icao_hex.upper()
 
@@ -352,8 +393,13 @@ async def _background_upgrade_photo(icao_hex: str):
     _pending_upgrades.add(icao_hex)
 
     try:
+        # Get current cached info (short-lived session)
+        old_photo_url = None
+        old_thumb_url = None
+        photo_page_link = None
+        photo_source = None
+
         async with AsyncSessionLocal() as db:
-            # Get current cached info
             result = await db.execute(
                 select(AircraftInfo).where(AircraftInfo.icao_hex == icao_hex)
             )
@@ -362,54 +408,92 @@ async def _background_upgrade_photo(icao_hex: str):
                 return
 
             old_photo_url = cached.photo_url
-            new_photo_url = None
-            new_thumb_url = None
+            old_thumb_url = cached.photo_thumbnail_url
             photo_page_link = cached.photo_page_link
+            photo_source = cached.photo_source
 
-            # First try hexdb.io for full-size images
-            hexdb_photo = await _fetch_photo_from_hexdb(icao_hex)
-            if hexdb_photo and hexdb_photo.get("photo_url"):
-                new_photo_url = hexdb_photo["photo_url"]
-                new_thumb_url = hexdb_photo.get("photo_thumbnail_url")
-                photo_page_link = None  # hexdb provides direct URLs
-                logger.info(f"Found hexdb.io photo for {icao_hex}, upgrading from planespotters")
+        new_photo_url = None
+        new_thumb_url = None
 
-            # If no hexdb photo and no page link but we have a planespotters URL,
-            # fetch the API to get the page link for scraping
-            if not new_photo_url and not photo_page_link and old_photo_url:
-                if "plnspttrs.net" in old_photo_url or cached.photo_source == "planespotters.net":
-                    logger.info(f"Fetching Planespotters API to get page link for {icao_hex}")
-                    ps_photo = await _fetch_photo_from_planespotters(icao_hex)
-                    if ps_photo and ps_photo.get("photo_page_link"):
-                        photo_page_link = ps_photo["photo_page_link"]
-                        # Store the page link for future use
-                        cached.photo_page_link = photo_page_link
-                        logger.info(f"Got page link for {icao_hex}: {photo_page_link}")
+        # First try hexdb.io for full-size images
+        hexdb_photo = await _fetch_photo_from_hexdb(icao_hex)
+        if hexdb_photo and hexdb_photo.get("photo_url"):
+            new_photo_url = hexdb_photo["photo_url"]
+            new_thumb_url = hexdb_photo.get("photo_thumbnail_url")
+            photo_page_link = None  # hexdb provides direct URLs
+            logger.info(f"Found hexdb.io photo for {icao_hex}, upgrading from planespotters")
 
-            # Update database and re-cache if we found a better URL or have a page link to scrape
-            if new_photo_url and new_photo_url != old_photo_url:
-                cached.photo_url = new_photo_url
-                if new_thumb_url:
-                    cached.photo_thumbnail_url = new_thumb_url
-                cached.photo_local_path = None  # Clear old cached path
-                cached.photo_thumbnail_local_path = None
-                await db.commit()
+        # If no hexdb photo and no page link but we have a planespotters URL,
+        # fetch the API to get the page link for scraping
+        if not new_photo_url and not photo_page_link and old_photo_url:
+            if "plnspttrs.net" in old_photo_url or photo_source == "planespotters.net":
+                logger.info(f"Fetching Planespotters API to get page link for {icao_hex}")
+                ps_photo = await _fetch_photo_from_planespotters(icao_hex)
+                if ps_photo and ps_photo.get("photo_page_link"):
+                    photo_page_link = ps_photo["photo_page_link"]
+                    # Store the page link for future use (short-lived session)
+                    async with AsyncSessionLocal() as db:
+                        result = await db.execute(
+                            select(AircraftInfo).where(AircraftInfo.icao_hex == icao_hex)
+                        )
+                        cached = result.scalar_one_or_none()
+                        if cached:
+                            cached.photo_page_link = photo_page_link
+                            await db.commit()
+                    logger.info(f"Got page link for {icao_hex}: {photo_page_link}")
 
-                # Re-cache the higher res photo (force=True to skip cache check)
-                photo_path, thumb_path = await cache_aircraft_photos(
-                    db, icao_hex, new_photo_url, new_thumb_url, photo_page_link, force=True
+        # Update database and re-cache if we found a better URL or have a page link to scrape
+        if new_photo_url and new_photo_url != old_photo_url:
+            # Update URLs in DB (short-lived session)
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(AircraftInfo).where(AircraftInfo.icao_hex == icao_hex)
                 )
+                cached = result.scalar_one_or_none()
+                if cached:
+                    cached.photo_url = new_photo_url
+                    if new_thumb_url:
+                        cached.photo_thumbnail_url = new_thumb_url
+                    cached.photo_local_path = None
+                    cached.photo_thumbnail_local_path = None
+                    await db.commit()
+
+            # Download photos (no DB session held open)
+            photo_path = await download_photo(
+                new_photo_url, icao_hex, is_thumbnail=False,
+                photo_page_link=photo_page_link, force=True
+            )
+            thumb_path = None
+            if new_thumb_url:
+                thumb_path = await download_photo(new_thumb_url, icao_hex, is_thumbnail=True, force=True)
+
+            if photo_path or thumb_path:
+                await update_photo_paths(icao_hex, photo_path, thumb_path)
                 if photo_path:
                     logger.info(f"Upgraded and cached photo for {icao_hex}: {photo_path}")
-            elif photo_page_link and old_photo_url:
-                # We have a page link - try to re-cache using scraping
-                cached.photo_local_path = None
-                await db.commit()
 
-                # Force re-download to trigger scraping for full-size image
-                photo_path, thumb_path = await cache_aircraft_photos(
-                    db, icao_hex, old_photo_url, cached.photo_thumbnail_url, photo_page_link, force=True
+        elif photo_page_link and old_photo_url:
+            # Clear old cached path (short-lived session)
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(AircraftInfo).where(AircraftInfo.icao_hex == icao_hex)
                 )
+                cached = result.scalar_one_or_none()
+                if cached:
+                    cached.photo_local_path = None
+                    await db.commit()
+
+            # Force re-download to trigger scraping for full-size image
+            photo_path = await download_photo(
+                old_photo_url, icao_hex, is_thumbnail=False,
+                photo_page_link=photo_page_link, force=True
+            )
+            thumb_path = None
+            if old_thumb_url:
+                thumb_path = await download_photo(old_thumb_url, icao_hex, is_thumbnail=True)
+
+            if photo_path or thumb_path:
+                await update_photo_paths(icao_hex, photo_path, thumb_path)
                 if photo_path:
                     logger.info(f"Upgraded photo via scraping for {icao_hex}: {photo_path}")
 
@@ -588,6 +672,8 @@ async def _fetch_from_hexdb(icao_hex: str) -> Optional[dict]:
             logger.debug(f"hexdb.io lookup failed for {icao_hex}: {e}")
             span.set_data("result", "error")
             span.set_data("error", str(e))
+            # Emit error via Socket.IO
+            await _emit_airframe_error(icao_hex, type(e).__name__, str(e), "hexdb")
             return None
 
 
@@ -640,108 +726,128 @@ async def _fetch_photo_from_hexdb(icao_hex: str) -> Optional[dict]:
 
 async def _fetch_photo_from_airport_data(icao_hex: str) -> Optional[dict]:
     """Fetch photo from airport-data.com API."""
-    try:
-        url = f"https://airport-data.com/api/ac_thumb.json?m={icao_hex.upper()}&n=1"
-        data = await safe_request(url)
-        
-        if not data or data.get("status") != 200 or not data.get("data"):
+    with sentry_sdk.start_span(op="http.client", description=f"airport-data.com {icao_hex}") as span:
+        span.set_data("icao_hex", icao_hex)
+        try:
+            url = f"https://airport-data.com/api/ac_thumb.json?m={icao_hex.upper()}&n=1"
+            data = await safe_request(url)
+
+            if not data or data.get("status") != 200 or not data.get("data"):
+                span.set_data("result", "not_found")
+                return None
+
+            photo_data = data["data"][0]
+            thumbnail_url = photo_data.get("image")  # 200px thumbnail
+
+            if not thumbnail_url:
+                span.set_data("result", "no_image")
+                return None
+
+            # airport-data.com only provides thumbnails via API
+            # The 'link' field is an HTML page, not a direct image
+            span.set_data("result", "success")
+            return {
+                "photo_url": thumbnail_url,  # Only thumbnail available
+                "photo_thumbnail_url": thumbnail_url,
+                "photo_photographer": photo_data.get("photographer"),
+                "photo_source": "airport-data.com",
+            }
+        except Exception as e:
+            AIRFRAME_LOOKUP_ERRORS.labels(source="airport_data", error_type=type(e).__name__).inc()
+            logger.debug(f"airport-data.com lookup failed for {icao_hex}: {e}")
+            span.set_data("result", "error")
             return None
-        
-        photo_data = data["data"][0]
-        thumbnail_url = photo_data.get("image")  # 200px thumbnail
-        
-        if not thumbnail_url:
-            return None
-        
-        # airport-data.com only provides thumbnails via API
-        # The 'link' field is an HTML page, not a direct image
-        return {
-            "photo_url": thumbnail_url,  # Only thumbnail available
-            "photo_thumbnail_url": thumbnail_url,
-            "photo_photographer": photo_data.get("photographer"),
-            "photo_source": "airport-data.com",
-        }
-    except Exception as e:
-        logger.debug(f"airport-data.com lookup failed for {icao_hex}: {e}")
-        return None
 
 
 async def _fetch_from_opensky(icao_hex: str) -> Optional[dict]:
     """Fetch from OpenSky Network aircraft database."""
-    try:
-        url = f"https://opensky-network.org/api/metadata/aircraft/icao/{icao_hex}"
-        data = await safe_request(url)
-        
-        if not data:
+    with sentry_sdk.start_span(op="http.client", description=f"OpenSky API {icao_hex}") as span:
+        span.set_data("icao_hex", icao_hex)
+        try:
+            url = f"https://opensky-network.org/api/metadata/aircraft/icao/{icao_hex}"
+            data = await safe_request(url)
+
+            if not data:
+                span.set_data("result", "not_found")
+                return None
+
+            span.set_data("result", "success")
+            return {
+                "registration": data.get("registration"),
+                "type_code": data.get("typecode"),
+                "manufacturer": data.get("manufacturerName"),
+                "model": data.get("model"),
+                "serial_number": data.get("serialNumber"),
+                "operator": data.get("owner"),
+                "operator_icao": data.get("operatorIcao"),
+                "country": data.get("country"),
+                "is_military": "military" in (data.get("categoryDescription") or "").lower(),
+            }
+        except Exception as e:
+            AIRFRAME_LOOKUP_ERRORS.labels(source="opensky_api", error_type=type(e).__name__).inc()
+            sentry_sdk.capture_exception(e)
+            logger.debug(f"OpenSky lookup failed for {icao_hex}: {e}")
+            span.set_data("result", "error")
             return None
-        
-        return {
-            "registration": data.get("registration"),
-            "type_code": data.get("typecode"),
-            "manufacturer": data.get("manufacturerName"),
-            "model": data.get("model"),
-            "serial_number": data.get("serialNumber"),
-            "operator": data.get("owner"),
-            "operator_icao": data.get("operatorIcao"),
-            "country": data.get("country"),
-            "is_military": "military" in data.get("categoryDescription", "").lower(),
-        }
-    except Exception as e:
-        logger.debug(f"OpenSky lookup failed for {icao_hex}: {e}")
-        return None
 
 
 async def _fetch_photo_from_planespotters(icao_hex: str) -> Optional[dict]:
     """Fetch photo from planespotters.net API."""
-    try:
-        url = f"https://api.planespotters.net/pub/photos/hex/{icao_hex}"
-        data = await safe_request(url)
+    with sentry_sdk.start_span(op="http.client", description=f"planespotters.net {icao_hex}") as span:
+        span.set_data("icao_hex", icao_hex)
+        try:
+            url = f"https://api.planespotters.net/pub/photos/hex/{icao_hex}"
+            data = await safe_request(url)
 
-        if not data or "photos" not in data or not data["photos"]:
+            if not data or "photos" not in data or not data["photos"]:
+                span.set_data("result", "not_found")
+                return None
+
+            photo = data["photos"][0]
+
+            # Debug: log what keys are available
+            logger.debug(f"Planespotters response keys for {icao_hex}: {list(photo.keys())}")
+
+            # Planespotters API provides:
+            # - thumbnail_large: larger thumbnail (usually ~280px wide, suffix _280.jpg)
+            # - thumbnail: smaller thumbnail (~232px wide, suffix _t.jpg)
+            # - link: webpage URL (NOT a direct image)
+            # The public API does NOT provide direct URLs to full-resolution images
+            # BUT we can modify the URL suffix to get larger versions:
+            # _t.jpg = tiny, _280.jpg = 280px, _1000.jpg = 1000px, _o.jpg = original
+
+            # Get the photo page link - this is used by photo_cache to scrape full-size URL
+            photo_page_link = photo.get("link")
+
+            # Get the larger thumbnail URL (use as-is, don't try to upgrade suffix)
+            large_thumb = photo.get("thumbnail_large", {})
+            photo_url = large_thumb.get("src") if isinstance(large_thumb, dict) else None
+
+            # Get the smaller thumbnail for thumbnail_url
+            small_thumb = photo.get("thumbnail", {})
+            thumbnail_url = small_thumb.get("src") if isinstance(small_thumb, dict) else None
+
+            # Fallback: if no large, use small for both
+            if not photo_url:
+                photo_url = thumbnail_url
+            if not thumbnail_url:
+                thumbnail_url = photo_url
+
+            logger.debug(f"Planespotters for {icao_hex}: photo_url={photo_url}, thumbnail={thumbnail_url}, link={photo_page_link}")
+
+            span.set_data("result", "success")
+            return {
+                "photo_url": photo_url,
+                "photo_thumbnail_url": thumbnail_url,
+                "photo_photographer": photo.get("photographer"),
+                "photo_source": "planespotters.net",
+                "photo_page_link": photo_page_link,
+            }
+        except Exception as e:
+            AIRFRAME_LOOKUP_ERRORS.labels(source="planespotters", error_type=type(e).__name__).inc()
+            logger.debug(f"Planespotters lookup failed for {icao_hex}: {e}")
+            span.set_data("result", "error")
             return None
-
-        photo = data["photos"][0]
-
-        # Debug: log what keys are available
-        logger.debug(f"Planespotters response keys for {icao_hex}: {list(photo.keys())}")
-
-        # Planespotters API provides:
-        # - thumbnail_large: larger thumbnail (usually ~280px wide, suffix _280.jpg)
-        # - thumbnail: smaller thumbnail (~232px wide, suffix _t.jpg)
-        # - link: webpage URL (NOT a direct image)
-        # The public API does NOT provide direct URLs to full-resolution images
-        # BUT we can modify the URL suffix to get larger versions:
-        # _t.jpg = tiny, _280.jpg = 280px, _1000.jpg = 1000px, _o.jpg = original
-
-        # Get the photo page link - this is used by photo_cache to scrape full-size URL
-        photo_page_link = photo.get("link")
-
-        # Get the larger thumbnail URL (use as-is, don't try to upgrade suffix)
-        large_thumb = photo.get("thumbnail_large", {})
-        photo_url = large_thumb.get("src") if isinstance(large_thumb, dict) else None
-
-        # Get the smaller thumbnail for thumbnail_url
-        small_thumb = photo.get("thumbnail", {})
-        thumbnail_url = small_thumb.get("src") if isinstance(small_thumb, dict) else None
-
-        # Fallback: if no large, use small for both
-        if not photo_url:
-            photo_url = thumbnail_url
-        if not thumbnail_url:
-            thumbnail_url = photo_url
-
-        logger.debug(f"Planespotters for {icao_hex}: photo_url={photo_url}, thumbnail={thumbnail_url}, link={photo_page_link}")
-
-        return {
-            "photo_url": photo_url,
-            "photo_thumbnail_url": thumbnail_url,
-            "photo_photographer": photo.get("photographer"),
-            "photo_source": "planespotters.net",
-            "photo_page_link": photo_page_link,
-        }
-    except Exception as e:
-        logger.debug(f"Planespotters lookup failed for {icao_hex}: {e}")
-        return None
 
 
 def _model_to_dict(model: AircraftInfo) -> dict:

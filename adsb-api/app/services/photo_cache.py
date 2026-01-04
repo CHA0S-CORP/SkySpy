@@ -605,10 +605,27 @@ async def cache_aircraft_photos(
         result = await download_photo(thumbnail_url, icao_hex, is_thumbnail=True)
         if result:
             thumb_path = result
-    
+
     # Update database with local paths / S3 URLs
     if photo_path or thumb_path:
-        try:
+        await update_photo_paths(icao_hex, photo_path, thumb_path)
+
+    return photo_path, thumb_path
+
+
+async def update_photo_paths(
+    icao_hex: str,
+    photo_path: Optional[str] = None,
+    thumb_path: Optional[str] = None
+):
+    """
+    Update database with cached photo paths.
+    Uses a fresh short-lived session to avoid connection pool exhaustion.
+    """
+    from app.core.database import AsyncSessionLocal
+
+    try:
+        async with AsyncSessionLocal() as db:
             await db.execute(
                 update(AircraftInfo)
                 .where(AircraftInfo.icao_hex == icao_hex)
@@ -618,11 +635,8 @@ async def cache_aircraft_photos(
                 )
             )
             await db.commit()
-        except Exception as e:
-            logger.error(f"Error updating photo cache paths for {icao_hex}: {e}")
-            await db.rollback()
-    
-    return photo_path, thumb_path
+    except Exception as e:
+        logger.error(f"Error updating photo cache paths for {icao_hex}: {e}")
 
 
 async def get_or_download_photo(

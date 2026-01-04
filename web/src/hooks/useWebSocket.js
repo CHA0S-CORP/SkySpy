@@ -78,6 +78,9 @@ export function useWebSocket(enabled, apiBase, topics = 'all') {
   const mountedRef = useRef(true);
   const pendingRequests = useRef(new Map());
 
+  // Airframe lookup errors map: icao_hex -> { error_type, error_message, source, details, timestamp }
+  const airframeErrorsRef = useRef(new Map());
+
   useEffect(() => {
     if (!enabled) return;
 
@@ -213,6 +216,25 @@ export function useWebSocket(enabled, apiBase, topics = 'all') {
       if (data) {
         console.log('Socket.IO safety event:', data);
         setSafetyEvents(prev => [data, ...prev].slice(0, 100));
+      }
+    });
+
+    // Airframe lookup errors
+    socket.on('airframe:error', (data) => {
+      if (data?.icao_hex) {
+        // Store in ref for useAircraftInfo to consume
+        airframeErrorsRef.current.set(data.icao_hex.toUpperCase(), {
+          error_type: data.error_type,
+          error_message: data.error_message,
+          source: data.source,
+          details: data.details,
+          timestamp: data.timestamp || new Date().toISOString(),
+        });
+        // Keep only last 100 errors to prevent memory leaks
+        if (airframeErrorsRef.current.size > 100) {
+          const oldest = airframeErrorsRef.current.keys().next().value;
+          airframeErrorsRef.current.delete(oldest);
+        }
       }
     });
 
@@ -357,6 +379,34 @@ export function useWebSocket(enabled, apiBase, topics = 'all') {
     }
   }, []);
 
+  /**
+   * Get airframe error for an ICAO hex (if any).
+   * @param {string} icao - ICAO hex code
+   * @returns {object|null} Error info or null
+   */
+  const getAirframeError = useCallback((icao) => {
+    if (!icao) return null;
+    return airframeErrorsRef.current.get(icao.toUpperCase()) || null;
+  }, []);
+
+  /**
+   * Clear airframe error for an ICAO hex.
+   * @param {string} icao - ICAO hex code
+   */
+  const clearAirframeError = useCallback((icao) => {
+    if (icao) {
+      airframeErrorsRef.current.delete(icao.toUpperCase());
+    }
+  }, []);
+
+  /**
+   * Get all current airframe errors.
+   * @returns {Map} Map of icao -> error info
+   */
+  const getAirframeErrors = useCallback(() => {
+    return new Map(airframeErrorsRef.current);
+  }, []);
+
   return {
     // Real-time data
     aircraft: Object.values(aircraft),
@@ -368,6 +418,11 @@ export function useWebSocket(enabled, apiBase, topics = 'all') {
 
     // Request/response methods
     request,
+
+    // Airframe error handling
+    getAirframeError,
+    clearAirframeError,
+    getAirframeErrors,
 
     // Subscription management
     subscribe,

@@ -23,8 +23,9 @@ import {
 
 // Import AircraftDetailPage
 import { AircraftDetailPage } from '../aircraft/AircraftDetailPage';
+import { useAircraftInfo } from '../../hooks/useAircraftInfo';
 
-function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: wsSafetyEvents, wsRequest, wsConnected, onViewHistoryEvent, hashParams = {}, setHashParams }) {
+function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: wsSafetyEvents, wsRequest, wsConnected, getAirframeError, clearAirframeError, onViewHistoryEvent, hashParams = {}, setHashParams }) {
   const [selectedAircraft, setSelectedAircraft] = useState(null);
   const [selectedMetar, setSelectedMetar] = useState(null);
   const [selectedPirep, setSelectedPirep] = useState(null);
@@ -78,8 +79,22 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     }
   });
   const [aircraftDetailHex, setAircraftDetailHex] = useState(null); // Aircraft for detail page
-  const [aircraftInfo, setAircraftInfo] = useState({}); // Cached aircraft info
   const [callsignHexCache, setCallsignHexCache] = useState({}); // Callsign → ICAO hex cache for ACARS linking
+
+  // Use robust aircraft info hook with bulk lookups and retry logic
+  const {
+    getInfo: getAircraftInfo,
+    cache: aircraftInfo,
+    prefetchForAircraft,
+    getError: getAircraftError,
+    clearError: clearAircraftError,
+  } = useAircraftInfo({
+    wsRequest,
+    wsConnected,
+    apiBaseUrl: config.apiBaseUrl,
+    getAirframeError,
+    clearAirframeError,
+  });
   
   // Traffic filters state
   const [trafficFilters, setTrafficFilters] = useState(() => {
@@ -1187,39 +1202,19 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     lookupCallsigns();
   }, [showAcarsPanel, acarsMessages, aircraft, callsignHexCache, config.apiBaseUrl, wsRequest, wsConnected]);
 
-  // Fetch aircraft info when selecting aircraft
+  // Fetch aircraft info when selecting aircraft (using robust hook)
   useEffect(() => {
-    if (!selectedAircraft?.hex) return;
-    if (aircraftInfo[selectedAircraft.hex]) return; // Already cached
+    if (selectedAircraft?.hex) {
+      getAircraftInfo(selectedAircraft.hex);
+    }
+  }, [selectedAircraft?.hex, getAircraftInfo]);
 
-    const fetchInfo = async () => {
-      // Prefer Socket.IO request if available
-      if (wsRequest && wsConnected) {
-        try {
-          const data = await wsRequest('aircraft-info', { icao: selectedAircraft.hex });
-          if (data && !data.error) {
-            setAircraftInfo(prev => ({ ...prev, [selectedAircraft.hex]: data }));
-          }
-        } catch (err) {
-          console.log('Aircraft info WS request error:', err.message);
-        }
-      } else {
-        // Fallback to HTTP
-        const baseUrl = config.apiBaseUrl || '';
-        try {
-          const res = await fetch(`${baseUrl}/api/v1/aircraft/${selectedAircraft.hex}/info`);
-          if (res.ok) {
-            const data = await res.json();
-            setAircraftInfo(prev => ({ ...prev, [selectedAircraft.hex]: data }));
-          }
-        } catch (err) {
-          console.log('Aircraft info fetch error:', err.message);
-        }
-      }
-    };
-
-    fetchInfo();
-  }, [selectedAircraft?.hex, config.apiBaseUrl, aircraftInfo, wsRequest, wsConnected]);
+  // Prefetch aircraft info for all visible aircraft (uses bulk endpoint)
+  useEffect(() => {
+    if (aircraft && aircraft.length > 0) {
+      prefetchForAircraft(aircraft);
+    }
+  }, [aircraft, prefetchForAircraft]);
 
   // Popup drag handlers
   const handlePopupMouseDown = (e) => {
@@ -6911,6 +6906,23 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             <div className="pro-operator-label">
               <Building2 size={14} />
               <span>{aircraftInfo[liveAircraft.hex].operator || aircraftInfo[liveAircraft.hex].owner}</span>
+            </div>
+          )}
+
+          {/* Airframe Lookup Error */}
+          {getAircraftError(liveAircraft.hex) && (
+            <div className="pro-airframe-error" title={getAircraftError(liveAircraft.hex).error_message}>
+              <AlertTriangle size={14} />
+              <span>
+                Info lookup failed ({getAircraftError(liveAircraft.hex).source})
+              </span>
+              <button
+                className="pro-error-dismiss"
+                onClick={() => clearAircraftError(liveAircraft.hex)}
+                title="Dismiss"
+              >
+                <X size={12} />
+              </button>
             </div>
           )}
 

@@ -2,6 +2,7 @@
 export { useApi } from './useApi';
 export { useAviationData } from './useAviationData';
 export { useWebSocket } from './useWebSocket';
+export { useAircraftInfo } from './useAircraftInfo';
 
 // Map hooks
 export { useDraggable } from './useDraggable';
