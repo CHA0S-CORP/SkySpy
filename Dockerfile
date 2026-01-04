@@ -12,13 +12,10 @@ COPY ./web/src/ ./src/
 
 RUN npm run build
 
-FROM python:3.12-slim
+# Build libacars in a separate stage
+FROM debian:bookworm-slim AS libacars-builder
 
-WORKDIR /app
-
-# Install dependencies including libacars for ACARS message decoding
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
     build-essential \
     cmake \
     git \
@@ -26,20 +23,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Build and install libacars from source
 RUN git clone --depth 1 --branch v2.2.0 https://github.com/szpajder/libacars.git /tmp/libacars \
     && cd /tmp/libacars \
     && mkdir build && cd build \
-    && cmake .. \
+    && cmake -DCMAKE_BUILD_TYPE=Release .. \
     && make -j$(nproc) \
-    && make install \
-    && ldconfig \
-    && rm -rf /tmp/libacars
+    && make install
 
-# Clean up build dependencies
-RUN apt-get purge -y build-essential cmake git \
-    && apt-get autoremove -y \
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install only runtime dependencies for libacars
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    zlib1g \
+    libxml2 \
     && rm -rf /var/lib/apt/lists/*
+
+# Copy libacars from builder stage
+COPY --from=libacars-builder /usr/local/lib/libacars-2* /usr/local/lib/
+COPY --from=libacars-builder /usr/local/include/libacars-2/ /usr/local/include/libacars-2/
+RUN ldconfig
 
 COPY adsb-api/pyproject.toml .
 RUN pip install --no-cache-dir -e .
