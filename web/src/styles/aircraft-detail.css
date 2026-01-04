@@ -1161,33 +1161,39 @@
 }
 
 .safety-event-item {
-  background: rgba(30, 40, 50, 0.5);
+  background: linear-gradient(135deg, rgba(25, 35, 50, 0.7) 0%, rgba(20, 30, 45, 0.8) 100%);
   border: 1px solid rgba(90, 122, 154, 0.2);
-  border-radius: 8px;
-  padding: 12px 16px;
+  border-radius: 12px;
+  padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+  transition: all 0.2s ease;
+}
+
+.safety-event-item:hover {
+  border-color: rgba(90, 122, 154, 0.4);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
 .safety-event-item.severity-critical {
-  border-left: 3px solid #ff4444;
-  background: rgba(255, 68, 68, 0.1);
+  border-left: 4px solid #ff4757;
+  background: linear-gradient(135deg, rgba(255, 71, 87, 0.12) 0%, rgba(20, 30, 45, 0.8) 100%);
 }
 
 .safety-event-item.severity-warning {
-  border-left: 3px solid #ffaa00;
-  background: rgba(255, 170, 0, 0.1);
+  border-left: 4px solid #ff9f43;
+  background: linear-gradient(135deg, rgba(255, 159, 67, 0.12) 0%, rgba(20, 30, 45, 0.8) 100%);
 }
 
 .safety-event-item.severity-low {
-  border-left: 3px solid #ffdd44;
-  background: rgba(255, 221, 68, 0.1);
+  border-left: 4px solid #ffdd44;
+  background: linear-gradient(135deg, rgba(255, 221, 68, 0.08) 0%, rgba(20, 30, 45, 0.8) 100%);
 }
 
 .safety-event-item.severity-info {
-  border-left: 3px solid #44aaff;
-  background: rgba(68, 170, 255, 0.1);
+  border-left: 4px solid #44aaff;
+  background: linear-gradient(135deg, rgba(68, 170, 255, 0.08) 0%, rgba(20, 30, 45, 0.8) 100%);
 }
 
 .safety-event-item.highlight-event {
@@ -1212,37 +1218,41 @@
 }
 
 .safety-severity-badge {
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .safety-severity-badge.severity-critical {
-  background: #ff4444;
+  background: linear-gradient(135deg, #ff4757 0%, #ff2e43 100%);
   color: white;
+  box-shadow: 0 2px 8px rgba(255, 71, 87, 0.4);
 }
 
 .safety-severity-badge.severity-warning {
-  background: #ffaa00;
+  background: linear-gradient(135deg, #ff9f43 0%, #ffa726 100%);
   color: #1a1a1a;
+  box-shadow: 0 2px 8px rgba(255, 159, 67, 0.3);
 }
 
 .safety-severity-badge.severity-low {
-  background: #ffdd44;
+  background: linear-gradient(135deg, #ffdd44 0%, #ffc107 100%);
   color: #1a1a1a;
 }
 
 .safety-severity-badge.severity-info {
-  background: #44aaff;
+  background: linear-gradient(135deg, #44aaff 0%, #2196f3 100%);
   color: white;
 }
 
 .safety-event-type {
   font-weight: 600;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
+  letter-spacing: 0.3px;
 }
 
 .safety-event-time {
@@ -1250,40 +1260,70 @@
   color: var(--text-dim);
   font-family: 'JetBrains Mono', monospace;
   margin-left: auto;
+  white-space: nowrap;
 }
 
 .safety-event-message {
   font-size: 13px;
   color: var(--text-secondary);
-  line-height: 1.4;
+  line-height: 1.5;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  border-left: 2px solid rgba(90, 122, 154, 0.3);
 }
 
 .safety-event-details {
   display: flex;
-  gap: 16px;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
   font-size: 12px;
-  color: var(--text-dim);
+  color: var(--text-secondary);
   font-family: 'JetBrains Mono', monospace;
+  padding: 10px 14px;
+  background: rgba(15, 25, 40, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(90, 122, 154, 0.15);
 }
 
 .safety-event-details span {
-  background: rgba(20, 30, 40, 0.5);
-  padding: 2px 8px;
+  background: rgba(0, 200, 255, 0.1);
+  padding: 4px 10px;
   border-radius: 4px;
+  color: var(--text-primary);
+  border: 1px solid rgba(0, 200, 255, 0.2);
 }
 
-.safety-events-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  overflow-y: auto;
+.safety-event-details .safety-aircraft-link {
+  background: rgba(0, 255, 136, 0.12);
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 255, 136, 0.25);
+  color: #00ff88;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.safety-event-details .safety-aircraft-link:hover {
+  background: rgba(0, 255, 136, 0.2);
+  border-color: rgba(0, 255, 136, 0.4);
 }
 
 .safety-event-separator {
   color: var(--text-dim);
   background: none !important;
+  border: none !important;
+  padding: 0 4px !important;
+  font-size: 14px;
+}
+
+.safety-events-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  overflow-y: auto;
 }
 
 .no-events-message {
@@ -1304,9 +1344,11 @@
 /* Safety event actions row */
 .safety-event-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 10px;
+  margin-top: 4px;
   flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid rgba(90, 122, 154, 0.15);
 }
 
 /* Safety aircraft link */
@@ -1319,68 +1361,89 @@
   font-size: inherit;
   cursor: pointer;
   padding: 0;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration: none;
 }
 
 .safety-aircraft-link:hover,
 .icao-link:hover {
   color: var(--accent-bright, #00e5ff);
-  text-decoration-thickness: 2px;
 }
 
 /* Snapshot toggle button */
 .snapshot-toggle {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(90, 122, 154, 0.2);
-  border: 1px solid rgba(90, 122, 154, 0.3);
+  background: rgba(90, 122, 154, 0.15);
+  border: 1px solid rgba(90, 122, 154, 0.25);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
-  padding: 6px 10px;
-  border-radius: 4px;
+  padding: 8px 14px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
-  margin-top: 4px;
+  transition: all 0.2s ease;
 }
 
 .snapshot-toggle:hover {
-  background: rgba(90, 122, 154, 0.3);
-  border-color: var(--accent-cyan);
+  background: rgba(90, 122, 154, 0.25);
+  border-color: rgba(90, 122, 154, 0.5);
   color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.snapshot-toggle svg {
+  opacity: 0.8;
+}
+
+.snapshot-toggle:hover svg {
+  opacity: 1;
 }
 
 .snapshot-toggle.map-toggle {
-  background: rgba(68, 170, 255, 0.15);
-  border-color: rgba(68, 170, 255, 0.3);
+  background: rgba(68, 170, 255, 0.12);
+  border-color: rgba(68, 170, 255, 0.25);
+  color: #7ec8ff;
 }
 
 .snapshot-toggle.map-toggle:hover {
-  background: rgba(68, 170, 255, 0.25);
-  border-color: #44aaff;
+  background: rgba(68, 170, 255, 0.2);
+  border-color: rgba(68, 170, 255, 0.45);
+  color: #a8dcff;
+}
+
+.snapshot-toggle.view-details-btn {
+  background: rgba(0, 255, 136, 0.1);
+  border-color: rgba(0, 255, 136, 0.2);
+  color: #6bffb8;
+}
+
+.snapshot-toggle.view-details-btn:hover {
+  background: rgba(0, 255, 136, 0.18);
+  border-color: rgba(0, 255, 136, 0.4);
+  color: #98ffd0;
 }
 
 /* Safety event map */
 .safety-event-map-container {
-  margin-top: 12px;
-  border-radius: 8px;
+  margin-top: 16px;
+  border-radius: 10px;
   overflow: hidden;
-  border: 1px solid rgba(90, 122, 154, 0.3);
+  border: 1px solid rgba(90, 122, 154, 0.25);
+  background: rgba(15, 20, 30, 0.5);
 }
 
 .safety-event-map {
   width: 100%;
-  height: 250px;
+  height: 300px;
   background: #1a1a2e;
 }
 
 .safety-map-legend {
   display: flex;
-  gap: 16px;
-  padding: 8px 12px;
-  background: rgba(15, 20, 30, 0.8);
+  gap: 20px;
+  padding: 10px 16px;
+  background: linear-gradient(180deg, rgba(20, 25, 35, 0.95) 0%, rgba(15, 20, 30, 0.98) 100%);
   border-top: 1px solid rgba(90, 122, 154, 0.2);
   flex-wrap: wrap;
 }
@@ -1388,46 +1451,48 @@
 .safety-map-legend .legend-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11px;
+  gap: 8px;
+  font-size: 12px;
   color: var(--text-secondary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
 }
 
 .safety-map-legend .legend-marker {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
 }
 
 .safety-map-legend .legend-marker.ac1-marker {
   background: #00ff88;
+  box-shadow: 0 0 6px rgba(0, 255, 136, 0.4);
 }
 
 .safety-map-legend .legend-marker.ac2-marker {
-  background: #ff4444;
+  background: #44aaff;
+  box-shadow: 0 0 6px rgba(68, 170, 255, 0.4);
 }
 
 .safety-map-legend .legend-marker.event-marker {
   background: #ffaa00;
-  box-shadow: 0 0 6px rgba(255, 170, 0, 0.5);
+  box-shadow: 0 0 8px rgba(255, 170, 0, 0.5);
 }
 
 .safety-map-legend .legend-item.clickable {
   cursor: pointer;
-  transition: all 0.15s ease;
 }
 
 .safety-map-legend .legend-item.clickable:hover {
   color: var(--text-primary);
-}
-
-.safety-map-legend .legend-item.clickable:hover .legend-callsign {
-  text-decoration: underline;
+  background: rgba(90, 122, 154, 0.15);
 }
 
 .safety-map-legend .legend-callsign {
   font-family: 'JetBrains Mono', monospace;
   color: var(--text-primary);
+  font-weight: 500;
 }
 
 /* Safety map container for AircraftDetailPage */
@@ -2839,13 +2904,16 @@
   gap: 20px;
   padding: 20px;
   min-height: calc(100% - 60px);
+  align-items: start;
 }
 
-/* Map column */
+/* Map column - sticky on right */
 .sep-map-column {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  position: sticky;
+  top: 80px;
 }
 
 .sep-map-container {
@@ -2958,7 +3026,7 @@
 }
 
 .sep-timeline-container {
-  margin-bottom: 16px;
+  margin-bottom: 32px;
 }
 
 .sep-timeline-track {
@@ -2992,6 +3060,42 @@
   box-shadow: 0 0 15px rgba(255, 71, 87, 0.6);
   z-index: 10;
   cursor: pointer;
+}
+
+/* Timeline ticks */
+.sep-timeline-ticks {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 20px;
+  margin-top: 4px;
+}
+
+.sep-timeline-tick {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translateX(-50%);
+}
+
+.sep-tick-line {
+  width: 1px;
+  height: 6px;
+  background: rgba(90, 122, 154, 0.4);
+}
+
+.sep-timeline-tick.major .sep-tick-line {
+  height: 10px;
+  background: rgba(0, 212, 255, 0.5);
+}
+
+.sep-tick-label {
+  font-size: 9px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-dim);
+  margin-top: 2px;
 }
 
 .sep-timeline-slider {

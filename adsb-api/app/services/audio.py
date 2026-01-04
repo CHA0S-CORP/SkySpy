@@ -477,22 +477,38 @@ async def queue_transcription_job(db: AsyncSession, transmission_id: int) -> boo
 
 async def _transcribe_with_whisper(
     client: httpx.AsyncClient,
-    audio_url: str
+    audio_data: bytes,
+    filename: str,
 ) -> dict:
     """
     Transcribe audio using local Whisper service.
 
-    The onerahmet/openai-whisper-asr-webservice API accepts audio_url as query param.
+    The onerahmet/openai-whisper-asr-webservice API requires file upload via multipart form.
     """
     whisper_url = f"{settings.whisper_url}/asr"
+
+    # Determine content type from filename
+    ext = Path(filename).suffix.lower().lstrip(".")
+    content_type = {
+        "mp3": "audio/mpeg",
+        "wav": "audio/wav",
+        "ogg": "audio/ogg",
+        "flac": "audio/flac",
+        "m4a": "audio/mp4",
+        "webm": "audio/webm",
+    }.get(ext, "audio/mpeg")
+
+    # Whisper ASR webservice requires multipart file upload
+    files = {
+        "audio_file": (filename, audio_data, content_type),
+    }
     params = {
         "task": "transcribe",
         "language": "en",
         "output": "json",
-        "audio_url": audio_url,
     }
 
-    response = await client.post(whisper_url, params=params)
+    response = await client.post(whisper_url, params=params, files=files)
     response.raise_for_status()
     return response.json()
 
@@ -623,23 +639,20 @@ async def process_transcription(
         try:
             # Call transcription service
             async with httpx.AsyncClient(timeout=120.0) as client:
+                # Both whisper and external service need audio file data
+                audio_data = await _fetch_audio_data(
+                    client, transmission.filename, transmission.s3_key
+                )
+                if not audio_data:
+                    raise ValueError("Failed to fetch audio data")
+
                 if settings.whisper_enabled:
-                    # Whisper service uses URL-based API
-                    audio_url = get_audio_url(
-                        transmission.filename,
-                        s3_key=transmission.s3_key,
-                        signed=True
+                    # Whisper service uses multipart file upload
+                    result_data = await _transcribe_with_whisper(
+                        client, audio_data, transmission.filename
                     )
-                    if not audio_url:
-                        raise ValueError("No accessible audio URL available")
-                    result_data = await _transcribe_with_whisper(client, audio_url)
                 else:
-                    # External service (Speaches.ai compatible) needs audio file data
-                    audio_data = await _fetch_audio_data(
-                        client, transmission.filename, transmission.s3_key
-                    )
-                    if not audio_data:
-                        raise ValueError("Failed to fetch audio data")
+                    # External service (Speaches.ai compatible)
                     result_data = await _transcribe_with_external_service(
                         client, audio_data, transmission.filename
                     )

@@ -746,97 +746,7 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
 
       {/* Main content grid */}
       <div className="sep-main-grid">
-        {/* Left column - Map and replay */}
-        <div className="sep-map-column">
-          <div className="sep-map-container">
-            <div className="sep-map-header">
-              <Target size={16} />
-              <span>Event Visualization</span>
-              <div className="sep-map-live-indicator">
-                <span className="sep-pulse-dot" />
-                REPLAY
-              </div>
-            </div>
-            <div
-              className="sep-map"
-              ref={(el) => {
-                if (el && !mapRef.current) {
-                  mapContainerRef.current = el;
-                  setTimeout(() => initializeMap(el), 100);
-                }
-              }}
-            />
-            <div className="sep-map-overlay-gradient" />
-          </div>
-
-          {/* Timeline/Replay controls */}
-          <div className="sep-replay-panel" ref={replayControlsRef}>
-            <div className="sep-replay-header">
-              <Activity size={14} />
-              <span>Flight Timeline</span>
-              <span className="sep-replay-time">{getReplayTimestamp || '--:--:--'}</span>
-            </div>
-
-            <div className="sep-timeline-container">
-              <div className="sep-timeline-track">
-                <div
-                  className="sep-timeline-progress"
-                  style={{ width: `${replayState.position}%` }}
-                />
-                <div
-                  className="sep-timeline-event-marker"
-                  style={{ left: '50%' }}
-                  title="Event occurred here"
-                />
-                <input
-                  type="range"
-                  className="sep-timeline-slider safety-page-slider"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  value={replayState.position}
-                  onChange={(e) => handleReplayChange(parseFloat(e.target.value))}
-                />
-              </div>
-            </div>
-
-            <div className="sep-replay-controls">
-              <div className="sep-control-group">
-                <button className="sep-control-btn" onClick={skipToStart} title="Jump to start">
-                  <SkipBack size={16} />
-                </button>
-                <button className={`sep-control-btn sep-play-btn ${replayState.isPlaying ? 'playing' : ''}`} onClick={togglePlay}>
-                  {replayState.isPlaying ? <Pause size={20} /> : <Play size={20} />}
-                </button>
-                <button className="sep-control-btn" onClick={skipToEnd} title="Jump to end">
-                  <SkipForward size={16} />
-                </button>
-              </div>
-
-              <button className="sep-jump-to-event" onClick={jumpToEvent}>
-                <AlertTriangle size={14} />
-                Jump to Event
-              </button>
-
-              <div className="sep-speed-control">
-                <span>Speed</span>
-                <div className="sep-speed-buttons">
-                  {[0.5, 1, 2, 4].map(speed => (
-                    <button
-                      key={speed}
-                      className={`sep-speed-btn ${replayState.speed === speed ? 'active' : ''}`}
-                      onClick={() => handleSpeedChange(speed)}
-                    >
-                      {speed}x
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right column - Event details */}
+        {/* Left column - Event details */}
         <div className="sep-info-column">
           {/* Event message card */}
           <div className="sep-message-card" style={{ '--accent': severityColor }}>
@@ -1013,6 +923,105 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
               )}
             </div>
           )}
+        </div>
+
+        {/* Right column - Map and replay */}
+        <div className="sep-map-column">
+          <div className="sep-map-container">
+            <div className="sep-map-header">
+              <Target size={16} />
+              <span>Event Visualization</span>
+              <div className="sep-map-live-indicator">
+                <span className="sep-pulse-dot" />
+                REPLAY
+              </div>
+            </div>
+            <div
+              className="sep-map"
+              ref={(el) => {
+                if (el && !mapRef.current) {
+                  mapContainerRef.current = el;
+                  setTimeout(() => initializeMap(el), 100);
+                }
+              }}
+            />
+            <div className="sep-map-overlay-gradient" />
+          </div>
+
+          {/* Timeline/Replay controls */}
+          <div className="sep-replay-panel" ref={replayControlsRef}>
+            <div className="sep-replay-header">
+              <Activity size={14} />
+              <span>Flight Timeline</span>
+              <span className="sep-replay-time">{getReplayTimestamp || '--:--:--'}</span>
+            </div>
+
+            <div className="sep-timeline-container">
+              <div className="sep-timeline-track">
+                <div
+                  className="sep-timeline-progress"
+                  style={{ width: `${replayState.position}%` }}
+                />
+                {/* Timeline ticks */}
+                <div className="sep-timeline-ticks">
+                  {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map(tick => (
+                    <div key={tick} className={`sep-timeline-tick ${tick === 50 ? 'major' : ''}`} style={{ left: `${tick}%` }}>
+                      <div className="sep-tick-line" />
+                      {tick % 25 === 0 && <span className="sep-tick-label">{tick}%</span>}
+                    </div>
+                  ))}
+                </div>
+                <div
+                  className="sep-timeline-event-marker"
+                  style={{ left: '50%' }}
+                  title="Event occurred here"
+                />
+                <input
+                  type="range"
+                  className="sep-timeline-slider safety-page-slider"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={replayState.position}
+                  onChange={(e) => handleReplayChange(parseFloat(e.target.value))}
+                />
+              </div>
+            </div>
+
+            <div className="sep-replay-controls">
+              <div className="sep-control-group">
+                <button className="sep-control-btn" onClick={skipToStart} title="Jump to start">
+                  <SkipBack size={16} />
+                </button>
+                <button className={`sep-control-btn sep-play-btn ${replayState.isPlaying ? 'playing' : ''}`} onClick={togglePlay}>
+                  {replayState.isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                </button>
+                <button className="sep-control-btn" onClick={skipToEnd} title="Jump to end">
+                  <SkipForward size={16} />
+                </button>
+              </div>
+
+              <button className="sep-jump-to-event" onClick={jumpToEvent}>
+                <AlertTriangle size={14} />
+                Jump to Event
+              </button>
+
+              <div className="sep-speed-control">
+                <span>Speed</span>
+                <div className="sep-speed-buttons">
+                  {[0.5, 1, 2, 4].map(speed => (
+                    <button
+                      key={speed}
+                      className={`sep-speed-btn ${replayState.speed === speed ? 'active' : ''}`}
+                      onClick={() => handleSpeedChange(speed)}
+                    >
+                      {speed}x
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
