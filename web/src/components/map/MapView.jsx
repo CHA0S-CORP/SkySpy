@@ -6574,43 +6574,43 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 <span>{acarsStatus.buffer_size || 0}</span>
               </div>
             )}
-            <button 
+            <button
               className={`pro-header-btn ${soundMuted ? 'muted' : ''}`}
-              onClick={() => setSoundMuted(!soundMuted)}
+              onClick={(e) => { e.stopPropagation(); setSoundMuted(!soundMuted); }}
               title={soundMuted ? 'Unmute' : 'Mute'}
             >
               {soundMuted ? <VolumeX size={18} /> : <Bell size={18} />}
             </button>
-            <button 
+            <button
               className={`pro-header-btn ${showAcarsPanel ? 'active' : ''}`}
-              onClick={() => setShowAcarsPanel(!showAcarsPanel)}
+              onClick={(e) => { e.stopPropagation(); setShowAcarsPanel(!showAcarsPanel); }}
               title="ACARS Messages"
             >
               <MessageCircle size={18} />
             </button>
-            <button 
-              className={`pro-header-btn ${showFilterMenu ? 'active' : ''}`} 
-              onClick={() => { setShowFilterMenu(!showFilterMenu); setShowOverlayMenu(false); }}
+            <button
+              className={`pro-header-btn ${showFilterMenu ? 'active' : ''}`}
+              onClick={(e) => { e.stopPropagation(); setShowFilterMenu(!showFilterMenu); setShowOverlayMenu(false); }}
               title="Traffic Filters"
             >
               <Filter size={18} />
             </button>
             <button
               className={`pro-header-btn ${showOverlayMenu ? 'active' : ''}`}
-              onClick={() => { setShowOverlayMenu(!showOverlayMenu); setShowFilterMenu(false); }}
+              onClick={(e) => { e.stopPropagation(); setShowOverlayMenu(!showOverlayMenu); setShowFilterMenu(false); }}
               title="Map Layers"
             >
               <Layers size={18} />
             </button>
             <button
               className={`pro-header-btn ${showShortTracks ? 'active' : ''}`}
-              onClick={() => setShowShortTracks(!showShortTracks)}
+              onClick={(e) => { e.stopPropagation(); setShowShortTracks(!showShortTracks); }}
               title={showShortTracks ? 'Hide short tracks (ATC trails)' : 'Show short tracks (ATC trails)'}
             >
               <Navigation size={18} />
             </button>
             {showShortTracks && (
-              <div className="pro-track-length-slider">
+              <div className="pro-track-length-slider" onClick={(e) => e.stopPropagation()}>
                 <input
                   type="range"
                   min="5"
@@ -6625,7 +6625,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             )}
             <button
               className={`pro-header-btn ${showSelectedTrack ? 'active' : ''}`}
-              onClick={() => setShowSelectedTrack(!showSelectedTrack)}
+              onClick={(e) => { e.stopPropagation(); setShowSelectedTrack(!showSelectedTrack); }}
               title={showSelectedTrack ? 'Hide flight track' : 'Show flight track'}
               disabled={!selectedAircraft}
             >
@@ -6633,7 +6633,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             </button>
             <button
               className={`pro-header-btn ${proPanOffset.x !== 0 || proPanOffset.y !== 0 || followingAircraft ? 'active' : ''}`}
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 setProPanOffset({ x: 0, y: 0 });
                 setFollowingAircraft(null);
                 if (setHashParams) {
@@ -6646,7 +6647,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             </button>
             <button
               className="pro-header-btn"
-              onClick={toggleFullscreen}
+              onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
               title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
             >
               {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}

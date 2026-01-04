@@ -22,11 +22,60 @@ from typing import Dict, Optional
 import time
 
 import httpx
+import sentry_sdk
+from prometheus_client import Counter, Gauge, Histogram
 
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# =============================================================================
+# Prometheus Metrics
+# =============================================================================
+
+EXTERNAL_DB_AIRCRAFT_COUNT = Gauge(
+    "skyspy_external_db_aircraft_count",
+    "Number of aircraft loaded in external database",
+    ["source"]
+)
+
+EXTERNAL_DB_LOOKUP_TOTAL = Counter(
+    "skyspy_external_db_lookup_total",
+    "Total lookups against external databases",
+    ["source", "hit"]
+)
+
+EXTERNAL_DB_DOWNLOAD_TOTAL = Counter(
+    "skyspy_external_db_download_total",
+    "Total database downloads",
+    ["source", "status"]
+)
+
+EXTERNAL_DB_DOWNLOAD_DURATION = Histogram(
+    "skyspy_external_db_download_duration_seconds",
+    "Database download duration in seconds",
+    ["source"],
+    buckets=[1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0]
+)
+
+EXTERNAL_DB_LOAD_DURATION = Histogram(
+    "skyspy_external_db_load_duration_seconds",
+    "Database load duration in seconds",
+    ["source"],
+    buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0]
+)
+
+ROUTE_CACHE_SIZE = Gauge(
+    "skyspy_route_cache_size",
+    "Number of routes in cache"
+)
+
+ROUTE_LOOKUP_TOTAL = Counter(
+    "skyspy_route_lookup_total",
+    "Total route lookups",
+    ["status"]
+)
 
 # Database storage paths
 DATA_DIR = Path(os.environ.get("EXTERNAL_DB_DIR", "/data/external_db"))
@@ -109,24 +158,31 @@ def _get_adsbx_path() -> Path:
 async def download_adsbx_database() -> Optional[Path]:
     """Download ADS-B Exchange basic aircraft database."""
     target_path = _get_adsbx_path()
+    start_time = time.time()
 
-    try:
-        logger.info(f"Downloading ADS-B Exchange database...")
+    with sentry_sdk.start_span(op="db.download", description="Download ADSBX database"):
+        try:
+            logger.info("Downloading ADS-B Exchange database...")
 
-        async with httpx.AsyncClient(timeout=300.0, follow_redirects=True) as client:
-            response = await client.get(ADSBX_DB_URL)
-            response.raise_for_status()
+            async with httpx.AsyncClient(timeout=300.0, follow_redirects=True) as client:
+                response = await client.get(ADSBX_DB_URL)
+                response.raise_for_status()
 
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-            target_path.write_bytes(response.content)
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                target_path.write_bytes(response.content)
 
-        file_size = target_path.stat().st_size
-        logger.info(f"Downloaded ADS-B Exchange database: {file_size / 1024 / 1024:.1f}MB")
-        return target_path
+            file_size = target_path.stat().st_size
+            duration = time.time() - start_time
+            EXTERNAL_DB_DOWNLOAD_DURATION.labels(source="adsbx").observe(duration)
+            EXTERNAL_DB_DOWNLOAD_TOTAL.labels(source="adsbx", status="success").inc()
+            logger.info(f"Downloaded ADS-B Exchange database: {file_size / 1024 / 1024:.1f}MB in {duration:.1f}s")
+            return target_path
 
-    except Exception as e:
-        logger.error(f"Failed to download ADS-B Exchange database: {e}")
-        return None
+        except Exception as e:
+            EXTERNAL_DB_DOWNLOAD_TOTAL.labels(source="adsbx", status="error").inc()
+            sentry_sdk.capture_exception(e)
+            logger.error(f"Failed to download ADS-B Exchange database: {e}")
+            return None
 
 
 async def load_adsbx_database(auto_download: bool = True) -> bool:
@@ -143,23 +199,30 @@ async def load_adsbx_database(auto_download: bool = True) -> bool:
         else:
             return False
 
-    try:
-        logger.info(f"Loading ADS-B Exchange database...")
+    start_time = time.time()
+    with sentry_sdk.start_span(op="db.load", description="Load ADSBX database"):
+        try:
+            logger.info("Loading ADS-B Exchange database...")
 
-        loop = asyncio.get_event_loop()
-        count = await loop.run_in_executor(None, _load_adsbx_json, path)
+            loop = asyncio.get_event_loop()
+            count = await loop.run_in_executor(None, _load_adsbx_json, path)
 
-        _db_metadata["adsbx"]["loaded"] = True
-        _db_metadata["adsbx"]["count"] = count
-        _db_metadata["adsbx"]["updated"] = datetime.utcnow()
-        _db_metadata["adsbx"]["path"] = str(path)
+            duration = time.time() - start_time
+            EXTERNAL_DB_LOAD_DURATION.labels(source="adsbx").observe(duration)
+            EXTERNAL_DB_AIRCRAFT_COUNT.labels(source="adsbx").set(count)
 
-        logger.info(f"Loaded {count:,} aircraft from ADS-B Exchange")
-        return True
+            _db_metadata["adsbx"]["loaded"] = True
+            _db_metadata["adsbx"]["count"] = count
+            _db_metadata["adsbx"]["updated"] = datetime.utcnow()
+            _db_metadata["adsbx"]["path"] = str(path)
 
-    except Exception as e:
-        logger.error(f"Failed to load ADS-B Exchange database: {e}")
-        return False
+            logger.info(f"Loaded {count:,} aircraft from ADS-B Exchange in {duration:.1f}s")
+            return True
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.error(f"Failed to load ADS-B Exchange database: {e}")
+            return False
 
 
 def _load_adsbx_json(path: Path) -> int:
@@ -192,8 +255,11 @@ def _load_adsbx_json(path: Path) -> int:
 def lookup_adsbx(icao_hex: str) -> Optional[dict]:
     """Look up aircraft in ADS-B Exchange database."""
     if not _db_metadata["adsbx"]["loaded"]:
+        EXTERNAL_DB_LOOKUP_TOTAL.labels(source="adsbx", hit="miss").inc()
         return None
-    return _adsbx_db.get(icao_hex.upper().strip().lstrip("~"))
+    result = _adsbx_db.get(icao_hex.upper().strip().lstrip("~"))
+    EXTERNAL_DB_LOOKUP_TOTAL.labels(source="adsbx", hit="hit" if result else "miss").inc()
+    return result
 
 
 # =============================================================================
@@ -207,24 +273,31 @@ def _get_tar1090_path() -> Path:
 async def download_tar1090_database() -> Optional[Path]:
     """Download tar1090/Mictronics aircraft database."""
     target_path = _get_tar1090_path()
+    start_time = time.time()
 
-    try:
-        logger.info(f"Downloading tar1090-db...")
+    with sentry_sdk.start_span(op="db.download", description="Download tar1090 database"):
+        try:
+            logger.info("Downloading tar1090-db...")
 
-        async with httpx.AsyncClient(timeout=300.0, follow_redirects=True) as client:
-            response = await client.get(TAR1090_DB_URL)
-            response.raise_for_status()
+            async with httpx.AsyncClient(timeout=300.0, follow_redirects=True) as client:
+                response = await client.get(TAR1090_DB_URL)
+                response.raise_for_status()
 
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-            target_path.write_bytes(response.content)
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                target_path.write_bytes(response.content)
 
-        file_size = target_path.stat().st_size
-        logger.info(f"Downloaded tar1090-db: {file_size / 1024 / 1024:.1f}MB")
-        return target_path
+            file_size = target_path.stat().st_size
+            duration = time.time() - start_time
+            EXTERNAL_DB_DOWNLOAD_DURATION.labels(source="tar1090").observe(duration)
+            EXTERNAL_DB_DOWNLOAD_TOTAL.labels(source="tar1090", status="success").inc()
+            logger.info(f"Downloaded tar1090-db: {file_size / 1024 / 1024:.1f}MB in {duration:.1f}s")
+            return target_path
 
-    except Exception as e:
-        logger.error(f"Failed to download tar1090-db: {e}")
-        return None
+        except Exception as e:
+            EXTERNAL_DB_DOWNLOAD_TOTAL.labels(source="tar1090", status="error").inc()
+            sentry_sdk.capture_exception(e)
+            logger.error(f"Failed to download tar1090-db: {e}")
+            return None
 
 
 async def load_tar1090_database(auto_download: bool = True) -> bool:
@@ -241,23 +314,30 @@ async def load_tar1090_database(auto_download: bool = True) -> bool:
         else:
             return False
 
-    try:
-        logger.info(f"Loading tar1090-db...")
+    start_time = time.time()
+    with sentry_sdk.start_span(op="db.load", description="Load tar1090 database"):
+        try:
+            logger.info("Loading tar1090-db...")
 
-        loop = asyncio.get_event_loop()
-        count = await loop.run_in_executor(None, _load_tar1090_csv, path)
+            loop = asyncio.get_event_loop()
+            count = await loop.run_in_executor(None, _load_tar1090_csv, path)
 
-        _db_metadata["tar1090"]["loaded"] = True
-        _db_metadata["tar1090"]["count"] = count
-        _db_metadata["tar1090"]["updated"] = datetime.utcnow()
-        _db_metadata["tar1090"]["path"] = str(path)
+            duration = time.time() - start_time
+            EXTERNAL_DB_LOAD_DURATION.labels(source="tar1090").observe(duration)
+            EXTERNAL_DB_AIRCRAFT_COUNT.labels(source="tar1090").set(count)
 
-        logger.info(f"Loaded {count:,} aircraft from tar1090-db")
-        return True
+            _db_metadata["tar1090"]["loaded"] = True
+            _db_metadata["tar1090"]["count"] = count
+            _db_metadata["tar1090"]["updated"] = datetime.utcnow()
+            _db_metadata["tar1090"]["path"] = str(path)
 
-    except Exception as e:
-        logger.error(f"Failed to load tar1090-db: {e}")
-        return False
+            logger.info(f"Loaded {count:,} aircraft from tar1090-db in {duration:.1f}s")
+            return True
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.error(f"Failed to load tar1090-db: {e}")
+            return False
 
 
 def _load_tar1090_csv(path: Path) -> int:
@@ -288,8 +368,11 @@ def _load_tar1090_csv(path: Path) -> int:
 def lookup_tar1090(icao_hex: str) -> Optional[dict]:
     """Look up aircraft in tar1090-db."""
     if not _db_metadata["tar1090"]["loaded"]:
+        EXTERNAL_DB_LOOKUP_TOTAL.labels(source="tar1090", hit="miss").inc()
         return None
-    return _tar1090_db.get(icao_hex.upper().strip().lstrip("~"))
+    result = _tar1090_db.get(icao_hex.upper().strip().lstrip("~"))
+    EXTERNAL_DB_LOOKUP_TOTAL.labels(source="tar1090", hit="hit" if result else "miss").inc()
+    return result
 
 
 # =============================================================================
@@ -304,38 +387,46 @@ async def download_faa_database() -> Optional[Path]:
     """Download FAA aircraft registry."""
     target_path = _get_faa_path()
     zip_path = DATA_DIR / "faa-releasable.zip"
+    start_time = time.time()
 
-    try:
-        logger.info(f"Downloading FAA Registry...")
+    with sentry_sdk.start_span(op="db.download", description="Download FAA database"):
+        try:
+            logger.info("Downloading FAA Registry...")
 
-        async with httpx.AsyncClient(timeout=600.0, follow_redirects=True) as client:
-            response = await client.get(FAA_MASTER_URL)
-            response.raise_for_status()
+            async with httpx.AsyncClient(timeout=600.0, follow_redirects=True) as client:
+                response = await client.get(FAA_MASTER_URL)
+                response.raise_for_status()
 
-            zip_path.parent.mkdir(parents=True, exist_ok=True)
-            zip_path.write_bytes(response.content)
+                zip_path.parent.mkdir(parents=True, exist_ok=True)
+                zip_path.write_bytes(response.content)
 
-        with zipfile.ZipFile(zip_path, "r") as zf:
-            master_file = None
-            for name in zf.namelist():
-                if name.upper().endswith("MASTER.TXT"):
-                    master_file = name
-                    break
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                master_file = None
+                for name in zf.namelist():
+                    if name.upper().endswith("MASTER.TXT"):
+                        master_file = name
+                        break
 
-            if master_file:
-                with zf.open(master_file) as src:
-                    target_path.write_bytes(src.read())
-                logger.info(f"Extracted FAA MASTER: {target_path.stat().st_size / 1024 / 1024:.1f}MB")
-            else:
-                logger.error("MASTER.txt not found in FAA zip")
-                return None
+                if master_file:
+                    with zf.open(master_file) as src:
+                        target_path.write_bytes(src.read())
+                    duration = time.time() - start_time
+                    EXTERNAL_DB_DOWNLOAD_DURATION.labels(source="faa").observe(duration)
+                    EXTERNAL_DB_DOWNLOAD_TOTAL.labels(source="faa", status="success").inc()
+                    logger.info(f"Extracted FAA MASTER: {target_path.stat().st_size / 1024 / 1024:.1f}MB in {duration:.1f}s")
+                else:
+                    EXTERNAL_DB_DOWNLOAD_TOTAL.labels(source="faa", status="error").inc()
+                    logger.error("MASTER.txt not found in FAA zip")
+                    return None
 
-        zip_path.unlink()
-        return target_path
+            zip_path.unlink()
+            return target_path
 
-    except Exception as e:
-        logger.error(f"Failed to download FAA Registry: {e}")
-        return None
+        except Exception as e:
+            EXTERNAL_DB_DOWNLOAD_TOTAL.labels(source="faa", status="error").inc()
+            sentry_sdk.capture_exception(e)
+            logger.error(f"Failed to download FAA Registry: {e}")
+            return None
 
 
 async def load_faa_database(auto_download: bool = True) -> bool:
@@ -352,23 +443,30 @@ async def load_faa_database(auto_download: bool = True) -> bool:
         else:
             return False
 
-    try:
-        logger.info(f"Loading FAA Registry...")
+    start_time = time.time()
+    with sentry_sdk.start_span(op="db.load", description="Load FAA database"):
+        try:
+            logger.info("Loading FAA Registry...")
 
-        loop = asyncio.get_event_loop()
-        count = await loop.run_in_executor(None, _load_faa_master, path)
+            loop = asyncio.get_event_loop()
+            count = await loop.run_in_executor(None, _load_faa_master, path)
 
-        _db_metadata["faa"]["loaded"] = True
-        _db_metadata["faa"]["count"] = count
-        _db_metadata["faa"]["updated"] = datetime.utcnow()
-        _db_metadata["faa"]["path"] = str(path)
+            duration = time.time() - start_time
+            EXTERNAL_DB_LOAD_DURATION.labels(source="faa").observe(duration)
+            EXTERNAL_DB_AIRCRAFT_COUNT.labels(source="faa").set(count)
 
-        logger.info(f"Loaded {count:,} aircraft from FAA Registry")
-        return True
+            _db_metadata["faa"]["loaded"] = True
+            _db_metadata["faa"]["count"] = count
+            _db_metadata["faa"]["updated"] = datetime.utcnow()
+            _db_metadata["faa"]["path"] = str(path)
 
-    except Exception as e:
-        logger.error(f"Failed to load FAA Registry: {e}")
-        return False
+            logger.info(f"Loaded {count:,} aircraft from FAA Registry in {duration:.1f}s")
+            return True
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.error(f"Failed to load FAA Registry: {e}")
+            return False
 
 
 def _load_faa_master(path: Path) -> int:
@@ -409,8 +507,11 @@ def _load_faa_master(path: Path) -> int:
 def lookup_faa(icao_hex: str) -> Optional[dict]:
     """Look up aircraft in FAA Registry."""
     if not _db_metadata["faa"]["loaded"]:
+        EXTERNAL_DB_LOOKUP_TOTAL.labels(source="faa", hit="miss").inc()
         return None
-    return _faa_db.get(icao_hex.upper().strip().lstrip("~"))
+    result = _faa_db.get(icao_hex.upper().strip().lstrip("~"))
+    EXTERNAL_DB_LOOKUP_TOTAL.labels(source="faa", hit="hit" if result else "miss").inc()
+    return result
 
 
 # =============================================================================
@@ -426,27 +527,34 @@ async def fetch_route(callsign: str) -> Optional[dict]:
     now = time.time()
     if callsign in _route_cache:
         if _route_cache_ttl.get(callsign, 0) > now:
+            ROUTE_LOOKUP_TOTAL.labels(status="cache_hit").inc()
             return _route_cache[callsign]
 
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                ADSB_IM_ROUTE_API,
-                json={"callsigns": [callsign]},
-                headers={"User-Agent": "SkySpyAPI/1.0"}
-            )
+    with sentry_sdk.start_span(op="http.client", description=f"Route lookup: {callsign}"):
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    ADSB_IM_ROUTE_API,
+                    json={"callsigns": [callsign]},
+                    headers={"User-Agent": "SkySpyAPI/1.0"}
+                )
 
-            if response.status_code == 200:
-                data = response.json()
-                route_data = data.get(callsign)
+                if response.status_code == 200:
+                    data = response.json()
+                    route_data = data.get(callsign)
 
-                if route_data:
-                    _route_cache[callsign] = route_data
-                    _route_cache_ttl[callsign] = now + 3600
-                    return route_data
+                    if route_data:
+                        _route_cache[callsign] = route_data
+                        _route_cache_ttl[callsign] = now + 3600
+                        ROUTE_CACHE_SIZE.set(len(_route_cache))
+                        ROUTE_LOOKUP_TOTAL.labels(status="success").inc()
+                        return route_data
 
-    except Exception as e:
-        logger.debug(f"Route lookup failed for {callsign}: {e}")
+            ROUTE_LOOKUP_TOTAL.labels(status="not_found").inc()
+
+        except Exception as e:
+            ROUTE_LOOKUP_TOTAL.labels(status="error").inc()
+            logger.debug(f"Route lookup failed for {callsign}: {e}")
 
     return None
 

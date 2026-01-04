@@ -10,12 +10,12 @@ Data Sources (in priority order):
    - API: https://hexdb.io/api/v1/aircraft/{hex}
    - Photos: https://hexdb.io/hex-image?hex={hex}
    - Thumbnails: https://hexdb.io/hex-image-thumb?hex={hex}
-   
+
 2. Local OpenSky Database (SUPPLEMENTARY)
    - ~600k aircraft from OpenSky Network CSV
    - Fast offline lookup, no network required
    - Downloaded via scripts/download-opensky-db.sh
-   
+
 3. OpenSky Network API (FALLBACK)
    - Online API for aircraft not in local DB
    - API: https://opensky-network.org/api/metadata/aircraft/icao/{hex}
@@ -29,7 +29,7 @@ Data Sources (in priority order):
    - API: https://airport-data.com/api/ac_thumb.json?m={hex}
 
 Network Requirements:
-   If using egress filtering, allow: hexdb.io, api.planespotters.net, 
+   If using egress filtering, allow: hexdb.io, api.planespotters.net,
    airport-data.com, opensky-network.org
 """
 import asyncio
@@ -38,6 +38,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import httpx
+import sentry_sdk
+from prometheus_client import Counter, Histogram, Gauge
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,6 +48,44 @@ from app.models import AircraftInfo
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# =============================================================================
+# Prometheus Metrics
+# =============================================================================
+
+AIRFRAME_LOOKUP_TOTAL = Counter(
+    "skyspy_airframe_lookup_total",
+    "Total airframe lookups",
+    ["source", "status"]
+)
+
+AIRFRAME_LOOKUP_DURATION = Histogram(
+    "skyspy_airframe_lookup_duration_seconds",
+    "Airframe lookup duration in seconds",
+    ["source"],
+    buckets=[0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0]
+)
+
+AIRFRAME_CACHE_HITS = Counter(
+    "skyspy_airframe_cache_hits_total",
+    "Total airframe cache hits"
+)
+
+AIRFRAME_CACHE_MISSES = Counter(
+    "skyspy_airframe_cache_misses_total",
+    "Total airframe cache misses"
+)
+
+AIRFRAME_QUEUE_SIZE = Gauge(
+    "skyspy_airframe_queue_size",
+    "Current size of airframe lookup queue"
+)
+
+AIRFRAME_LOOKUP_ERRORS = Counter(
+    "skyspy_airframe_lookup_errors_total",
+    "Total airframe lookup errors",
+    ["source", "error_type"]
+)
 
 # Cache settings
 CACHE_DURATION_HOURS = 168  # 7 days
@@ -64,34 +104,36 @@ _lookup_queue: asyncio.Queue = None
 async def get_aircraft_info(db: AsyncSession, icao_hex: str, force_refresh: bool = False) -> Optional[dict]:
     """
     Get aircraft information, from cache or fetch from external sources.
-    
+
     Args:
         db: Database session
         icao_hex: ICAO hex code (e.g., "A12345")
         force_refresh: Force refresh from external sources
-    
+
     Returns:
         Aircraft info dict or None if not found
     """
     from app.services.photo_cache import cache_aircraft_photos
-    
+
     icao_hex = icao_hex.upper().strip()
-    
+
     if not icao_hex or len(icao_hex) < 6 or len(icao_hex) > 10:
         return None
-    
+
     # Check database cache
     result = await db.execute(
         select(AircraftInfo).where(AircraftInfo.icao_hex == icao_hex)
     )
     cached = result.scalar_one_or_none()
-    
+
     if cached and not force_refresh:
         # Check if cache is still valid
         cache_age = datetime.utcnow() - cached.updated_at
         max_age = timedelta(hours=FAILED_CACHE_HOURS if cached.fetch_failed else CACHE_DURATION_HOURS)
 
         if cache_age < max_age:
+            AIRFRAME_CACHE_HITS.inc()
+
             # Check if we have incomplete data that should be fetched
             needs_data_update = (
                 not cached.registration or
@@ -121,6 +163,8 @@ async def get_aircraft_info(db: AsyncSession, icao_hex: str, force_refresh: bool
                 asyncio.create_task(_background_upgrade_photo(icao_hex))
 
             return _model_to_dict(cached)
+
+    AIRFRAME_CACHE_MISSES.inc()
     
     # Prevent duplicate lookups
     if icao_hex in _pending_lookups:
@@ -378,50 +422,82 @@ async def _background_upgrade_photo(icao_hex: str):
 async def _fetch_aircraft_info(icao_hex: str) -> Optional[dict]:
     """
     Fetch aircraft info from multiple sources.
-    
+
     Priority order:
-    1. hexdb.io - Primary source (data + full-size photos)
-    2. Local OpenSky database - Fast offline lookup (data only)
+    1. Local databases (fast, no network): external_db (ADSBX, tar1090, FAA), OpenSky CSV
+    2. hexdb.io API - Primary online source (data + full-size photos)
     3. OpenSky Network API - Additional metadata
-    4. Other photo sources as fallback
+    4. Photo sources as fallback
     """
     from app.services import opensky_db
-    
-    info = {}
-    has_photo = False
-    
-    # Try hexdb.io first - it provides both data AND full-size photos
-    hexdb_info = await _fetch_from_hexdb(icao_hex)
-    if hexdb_info:
-        info.update(hexdb_info)
-        has_photo = info.get("photo_url") is not None
-        logger.debug(f"Got data from hexdb.io for {icao_hex} (has_photo={has_photo})")
-    
-    # Supplement with local OpenSky database (fast, no network)
-    if settings.opensky_db_enabled and opensky_db.is_loaded():
-        local_info = opensky_db.lookup(icao_hex)
-        if local_info:
-            # Only update fields that aren't already set
-            for key, value in local_info.items():
-                if key not in info or info[key] is None:
-                    info[key] = value
-            logger.debug(f"Supplemented with local OpenSky database for {icao_hex}")
-    
-    # If we still don't have a photo, try other sources
-    if not has_photo:
-        photo_info = await _fetch_best_photo(icao_hex)
-        if photo_info:
-            info.update(photo_info)
-    
-    # Try OpenSky Network API for any missing data
-    if not info.get("registration"):
-        opensky_info = await _fetch_from_opensky(icao_hex)
-        if opensky_info:
-            for key, value in opensky_info.items():
-                if key not in info or info[key] is None:
-                    info[key] = value
-    
-    return info if info else None
+    from app.services import external_db
+
+    with sentry_sdk.start_span(op="airframe.fetch", description=f"Fetch aircraft info for {icao_hex}") as span:
+        span.set_data("icao_hex", icao_hex)
+        info = {}
+        has_photo = False
+        sources_tried = []
+
+        # 1. Check local external databases first (fastest - no network)
+        if external_db.is_any_loaded():
+            with sentry_sdk.start_span(op="airframe.local_db", description="Local DB lookup"):
+                local_info = external_db.lookup_all(icao_hex)
+                if local_info:
+                    info.update({k: v for k, v in local_info.items() if v is not None and k != "sources"})
+                    sources_tried.extend(local_info.get("sources", []))
+                    AIRFRAME_LOOKUP_TOTAL.labels(source="local_db", status="success").inc()
+                    logger.debug(f"Got data from local DBs for {icao_hex}: {local_info.get('sources', [])}")
+
+        # 2. Supplement with local OpenSky CSV database
+        if settings.opensky_db_enabled and opensky_db.is_loaded():
+            with sentry_sdk.start_span(op="airframe.opensky_csv", description="OpenSky CSV lookup"):
+                local_info = opensky_db.lookup(icao_hex)
+                if local_info:
+                    for key, value in local_info.items():
+                        if key not in info or info[key] is None:
+                            info[key] = value
+                    sources_tried.append("opensky_csv")
+                    AIRFRAME_LOOKUP_TOTAL.labels(source="opensky_csv", status="success").inc()
+                    logger.debug(f"Supplemented with local OpenSky database for {icao_hex}")
+
+        # 3. Try hexdb.io API - provides both data AND full-size photos
+        if not info.get("registration") or not info.get("type_code"):
+            with AIRFRAME_LOOKUP_DURATION.labels(source="hexdb").time():
+                hexdb_info = await _fetch_from_hexdb(icao_hex)
+            if hexdb_info:
+                for key, value in hexdb_info.items():
+                    if value is not None and (key not in info or info[key] is None):
+                        info[key] = value
+                has_photo = info.get("photo_url") is not None
+                sources_tried.append("hexdb.io")
+                AIRFRAME_LOOKUP_TOTAL.labels(source="hexdb", status="success").inc()
+                logger.debug(f"Got data from hexdb.io for {icao_hex} (has_photo={has_photo})")
+            else:
+                AIRFRAME_LOOKUP_TOTAL.labels(source="hexdb", status="not_found").inc()
+
+        # 4. If we still don't have a photo, try other sources
+        if not has_photo and not info.get("photo_url"):
+            photo_info = await _fetch_best_photo(icao_hex)
+            if photo_info:
+                info.update(photo_info)
+                sources_tried.append(photo_info.get("photo_source", "photo_fallback"))
+
+        # 5. Try OpenSky Network API for any remaining missing data
+        if not info.get("registration"):
+            with AIRFRAME_LOOKUP_DURATION.labels(source="opensky_api").time():
+                opensky_info = await _fetch_from_opensky(icao_hex)
+            if opensky_info:
+                for key, value in opensky_info.items():
+                    if key not in info or info[key] is None:
+                        info[key] = value
+                sources_tried.append("opensky_api")
+                AIRFRAME_LOOKUP_TOTAL.labels(source="opensky_api", status="success").inc()
+            else:
+                AIRFRAME_LOOKUP_TOTAL.labels(source="opensky_api", status="not_found").inc()
+
+        span.set_data("sources", sources_tried)
+        span.set_data("found_data", bool(info))
+        return info if info else None
 
 
 async def _fetch_best_photo(icao_hex: str) -> Optional[dict]:
@@ -461,90 +537,105 @@ async def _fetch_from_hexdb(icao_hex: str) -> Optional[dict]:
     """
     Fetch from hexdb.io - free aircraft database.
     This is the primary source for aircraft data and photos.
-    
+
     hexdb.io provides:
     - Aircraft info: registration, type, manufacturer, operator
     - Direct image URLs (full-size and thumbnail)
     - Route information (via callsign)
     - Airport information
     """
-    try:
-        # Fetch aircraft data
-        url = f"https://hexdb.io/api/v1/aircraft/{icao_hex.lower()}"
-        data = await safe_request(url)
-        
-        if not data:
-            return None
-        
-        result = {
-            "registration": data.get("Registration"),
-            "type_code": data.get("ICAOTypeCode"),
-            "type_name": data.get("Type"),
-            "manufacturer": data.get("Manufacturer"),
-            "model": data.get("Type"),
-            "serial_number": data.get("SerialNumber"),
-            "year_built": _parse_int(data.get("YearBuilt")),
-            "operator": data.get("RegisteredOwners"),
-            "operator_icao": data.get("OperatorFlagCode"),
-            "country": data.get("Country"),
-            "is_military": data.get("IsMilitary", False),
-            "category": data.get("Category"),
-            # Store ModeS for reference
-            "extra_data": {
-                "modes": data.get("ModeS"),
-                "source": "hexdb.io"
+    with sentry_sdk.start_span(op="http.client", description=f"hexdb.io API {icao_hex}") as span:
+        span.set_data("icao_hex", icao_hex)
+        try:
+            # Fetch aircraft data
+            url = f"https://hexdb.io/api/v1/aircraft/{icao_hex.lower()}"
+            data = await safe_request(url)
+
+            if not data:
+                span.set_data("result", "not_found")
+                return None
+
+            result = {
+                "registration": data.get("Registration"),
+                "type_code": data.get("ICAOTypeCode"),
+                "type_name": data.get("Type"),
+                "manufacturer": data.get("Manufacturer"),
+                "model": data.get("Type"),
+                "serial_number": data.get("SerialNumber"),
+                "year_built": _parse_int(data.get("YearBuilt")),
+                "operator": data.get("RegisteredOwners"),
+                "operator_icao": data.get("OperatorFlagCode"),
+                "country": data.get("Country"),
+                "is_military": data.get("IsMilitary", False),
+                "category": data.get("Category"),
+                # Store ModeS for reference
+                "extra_data": {
+                    "modes": data.get("ModeS"),
+                    "source": "hexdb.io"
+                }
             }
-        }
-        
-        # Also fetch photo from hexdb.io (integrated)
-        photo_info = await _fetch_photo_from_hexdb(icao_hex)
-        if photo_info:
-            result.update(photo_info)
-        
-        return result
-    except Exception as e:
-        logger.debug(f"hexdb.io lookup failed for {icao_hex}: {e}")
-        return None
+
+            # Also fetch photo from hexdb.io (integrated)
+            photo_info = await _fetch_photo_from_hexdb(icao_hex)
+            if photo_info:
+                result.update(photo_info)
+
+            span.set_data("result", "success")
+            return result
+        except Exception as e:
+            AIRFRAME_LOOKUP_ERRORS.labels(source="hexdb", error_type=type(e).__name__).inc()
+            sentry_sdk.capture_exception(e)
+            logger.debug(f"hexdb.io lookup failed for {icao_hex}: {e}")
+            span.set_data("result", "error")
+            span.set_data("error", str(e))
+            return None
 
 
 async def _fetch_photo_from_hexdb(icao_hex: str) -> Optional[dict]:
     """
     Fetch photo from hexdb.io - provides direct image URLs.
-    
+
     Full image: https://hexdb.io/hex-image?hex=<HEX>
     Thumbnail: https://hexdb.io/hex-image-thumb?hex=<HEX>
-    
+
     These are direct image URLs that can be downloaded/cached.
     """
-    try:
-        photo_url = f"https://hexdb.io/hex-image?hex={icao_hex.lower()}"
-        thumbnail_url = f"https://hexdb.io/hex-image-thumb?hex={icao_hex.lower()}"
-        
-        # Verify the image exists with a HEAD request
-        async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.head(
-                photo_url, 
-                follow_redirects=True,
-                headers={"User-Agent": "ADS-B-API/2.6 (aircraft-tracker)"}
-            )
-            if response.status_code != 200:
-                logger.debug(f"hexdb.io photo not found for {icao_hex}: {response.status_code}")
-                return None
-            
-            content_type = response.headers.get("content-type", "")
-            if not content_type.startswith("image/"):
-                logger.debug(f"hexdb.io non-image response for {icao_hex}: {content_type}")
-                return None
-        
-        return {
-            "photo_url": photo_url,
-            "photo_thumbnail_url": thumbnail_url,
-            "photo_photographer": None,  # hexdb.io doesn't provide photographer info
-            "photo_source": "hexdb.io",
-        }
-    except Exception as e:
-        logger.debug(f"hexdb.io photo lookup failed for {icao_hex}: {e}")
-        return None
+    with sentry_sdk.start_span(op="http.client", description=f"hexdb.io photo {icao_hex}") as span:
+        span.set_data("icao_hex", icao_hex)
+        try:
+            photo_url = f"https://hexdb.io/hex-image?hex={icao_hex.lower()}"
+            thumbnail_url = f"https://hexdb.io/hex-image-thumb?hex={icao_hex.lower()}"
+
+            # Verify the image exists with a HEAD request
+            async with httpx.AsyncClient(timeout=10) as client:
+                response = await client.head(
+                    photo_url,
+                    follow_redirects=True,
+                    headers={"User-Agent": "ADS-B-API/2.6 (aircraft-tracker)"}
+                )
+                if response.status_code != 200:
+                    logger.debug(f"hexdb.io photo not found for {icao_hex}: {response.status_code}")
+                    span.set_data("result", "not_found")
+                    return None
+
+                content_type = response.headers.get("content-type", "")
+                if not content_type.startswith("image/"):
+                    logger.debug(f"hexdb.io non-image response for {icao_hex}: {content_type}")
+                    span.set_data("result", "invalid_content_type")
+                    return None
+
+            span.set_data("result", "success")
+            return {
+                "photo_url": photo_url,
+                "photo_thumbnail_url": thumbnail_url,
+                "photo_photographer": None,  # hexdb.io doesn't provide photographer info
+                "photo_source": "hexdb.io",
+            }
+        except Exception as e:
+            AIRFRAME_LOOKUP_ERRORS.labels(source="hexdb_photo", error_type=type(e).__name__).inc()
+            logger.debug(f"hexdb.io photo lookup failed for {icao_hex}: {e}")
+            span.set_data("result", "error")
+            return None
 
 
 async def _fetch_photo_from_airport_data(icao_hex: str) -> Optional[dict]:

@@ -49,6 +49,7 @@ from app.services.aircraft_info import (
     get_seen_aircraft_count
 )
 from app.services import opensky_db
+from app.services import external_db
 from app.services import airspace as airspace_service
 from app.services import audio as audio_service
 from app.services import geodata as geodata_service
@@ -559,7 +560,13 @@ async def lifespan(app: FastAPI):
             logger.info(f"OpenSky database loaded: {stats['total_aircraft']:,} aircraft")
         else:
             logger.warning("OpenSky database not found - will use external APIs only")
-    
+
+    # Load external aircraft databases (ADSBX, tar1090, FAA)
+    await external_db.init_databases(auto_download=True)
+    ext_stats = external_db.get_database_stats()
+    logger.info(f"External databases: ADSBX={ext_stats['adsbx']['count']:,}, "
+                f"tar1090={ext_stats['tar1090']['count']:,}, FAA={ext_stats['faa']['count']:,}")
+
     # Clear caches
     _active_sessions.clear()
     clear_cache()
@@ -567,7 +574,10 @@ async def lifespan(app: FastAPI):
     # Start background tasks
     _background_task = asyncio.create_task(background_polling_task())
     cleanup_task = asyncio.create_task(session_cleanup_task())
-    
+
+    # Start periodic database updater (refreshes ADSBX, tar1090, FAA daily)
+    db_updater_task = asyncio.create_task(external_db.periodic_database_updater())
+
     # Start aircraft info lookup queue
     await init_lookup_queue()
     lookup_task = asyncio.create_task(process_lookup_queue(AsyncSessionLocal))

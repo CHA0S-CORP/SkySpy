@@ -87,8 +87,8 @@ services:
       - S3_PREFIX=${S3_PREFIX:-airfame-cache}
       - S3_PUBLIC_URL=${S3_PUBLIC_URL}
       # Sentry
-      - SENTRY_DSN=${SENTRY_DSN}
-      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-local}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-local-dev}
     volumes:
       - ./test/api-cache:/data
     ports:

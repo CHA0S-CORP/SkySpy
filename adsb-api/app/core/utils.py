@@ -24,6 +24,12 @@ _domain_rate_limits: dict[str, float] = {
     "api.planespotters.net": 1.0,
     "hexdb.io": 0.5,              # 2 requests per second
     "opensky-network.org": 1.0,   # 1 request per second
+    "api.adsb.lol": 0.2,          # 5 requests per second (no official limit)
+    "adsb.im": 0.5,               # 2 requests per second
+    "downloads.adsbexchange.com": 5.0,  # Bulk downloads, be conservative
+    "registry.faa.gov": 5.0,      # Government site, be conservative
+    "github.com": 1.0,            # 1 request per second
+    "raw.githubusercontent.com": 1.0,
 }
 _domain_backoff_until: dict[str, float] = {}  # Backoff after 429
 
