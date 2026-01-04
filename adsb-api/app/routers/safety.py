@@ -312,17 +312,18 @@ async def get_stats(
 
     # Hourly distribution
     # Use date_trunc to bucket by hour
+    hour_bucket = func.date_trunc('hour', SafetyEvent.timestamp).label('hour')
     hour_query = (
         select(
-            func.date_trunc('hour', SafetyEvent.timestamp).label('hour'),
+            hour_bucket,
             func.count(SafetyEvent.id).label('count'),
             func.sum(case((SafetyEvent.severity == 'critical', 1), else_=0)).label('critical'),
             func.sum(case((SafetyEvent.severity == 'warning', 1), else_=0)).label('warning'),
             func.sum(case((SafetyEvent.severity == 'low', 1), else_=0)).label('low')
         )
         .where(and_(*conditions))
-        .group_by(func.date_trunc('hour', SafetyEvent.timestamp))
-        .order_by(func.date_trunc('hour', SafetyEvent.timestamp))
+        .group_by(hour_bucket)
+        .order_by(hour_bucket)
     )
     hour_result = await db_execute_safe(db, hour_query)
     events_by_hour = []
