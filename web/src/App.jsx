@@ -275,7 +275,7 @@ export default function App() {
               wsConnected={connected}
             />
           )}
-          {activeTab === 'audio' && <AudioView apiBase={config.apiBaseUrl} />}
+          {activeTab === 'audio' && <AudioView apiBase={config.apiBaseUrl} onSelectAircraft={(hex, callsign) => setActiveTab('airframe', { icao: hex, call: callsign })} />}
           {activeTab === 'alerts' && <AlertsView apiBase={config.apiBaseUrl} />}
           {activeTab === 'system' && <SystemView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={connected} />}
           {activeTab === 'airframe' && (hashParams.icao || hashParams.call || hashParams.tail) && (() => {
@@ -323,6 +323,8 @@ export default function App() {
                 feederLocation={status?.location}
                 wsRequest={wsRequest}
                 wsConnected={connected}
+                initialTab={hashParams.tab}
+                onTabChange={(tab) => setHashParams({ tab })}
               />
             ) : (
               <div className="not-found-message" style={{ padding: '2rem', textAlign: 'center' }}>

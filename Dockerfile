@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     zlib1g-dev \
     libxml2-dev \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 RUN git clone --depth 1 --branch v2.2.0 https://github.com/szpajder/libacars.git /tmp/libacars \

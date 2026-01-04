@@ -1,15 +1,20 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   X, RefreshCw, Camera, Info, Radar, MessageCircle, History,
   Plane, Building2, Hash, ExternalLink, WifiOff, AlertTriangle, ChevronDown, ChevronUp,
-  Map as MapIcon, Play, Pause, SkipBack, SkipForward, CircleDot, Radio, List, LayoutGrid
+  Map as MapIcon, Play, Pause, SkipBack, SkipForward, CircleDot, Radio, List, LayoutGrid,
+  Search, PlayCircle, Mic, Share2, Check
 } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { getTailInfo, getCardinalDirection, callsignsMatch } from '../../utils';
+import { getGlobalAudioState, subscribeToAudioStateChanges, setAutoplay, setAutoplayFilter, clearAutoplayFilter } from '../views/AudioView';
 
-export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onViewHistoryEvent, onViewEvent, aircraft, aircraftInfo, trackHistory, feederLocation, wsRequest, wsConnected }) {
+const VALID_DETAIL_TABS = ['info', 'live', 'radio', 'acars', 'safety', 'history', 'track'];
+
+export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onViewHistoryEvent, onViewEvent, aircraft, aircraftInfo, trackHistory, feederLocation, wsRequest, wsConnected, initialTab, onTabChange }) {
   const [info, setInfo] = useState(aircraftInfo || null);
+  const [shareSuccess, setShareSuccess] = useState(false);
 
   // Calculate distance from feeder if not provided
   const calculateDistance = (ac) => {
@@ -114,6 +119,18 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
   const [sightings, setSightings] = useState([]);
   const [safetyEvents, setSafetyEvents] = useState([]);
   const [safetyHours, setSafetyHours] = useState(24);
+
+  // Radio transmissions state
+  const [radioTransmissions, setRadioTransmissions] = useState([]);
+  const [radioHours, setRadioHours] = useState(24);
+  const [radioLoading, setRadioLoading] = useState(false);
+  const [radioSearchQuery, setRadioSearchQuery] = useState('');
+  const [radioStatusFilter, setRadioStatusFilter] = useState('all');
+  const [radioPlayingId, setRadioPlayingId] = useState(null);
+  const [radioAudioProgress, setRadioAudioProgress] = useState({});
+  const [radioAudioDurations, setRadioAudioDurations] = useState({});
+  const [radioExpandedTranscript, setRadioExpandedTranscript] = useState({});
+  const [radioAutoplay, setRadioAutoplay] = useState(false);
   const [expandedSnapshots, setExpandedSnapshots] = useState({});
   const [expandedSafetyMaps, setExpandedSafetyMaps] = useState({});
   const [safetyTrackData, setSafetyTrackData] = useState({});
@@ -123,7 +140,52 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
   const safetyTracksRef = useRef({});
   const safetyAnimationRef = useRef({});
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('info');
+  const [activeTab, setActiveTabState] = useState(() => {
+    return VALID_DETAIL_TABS.includes(initialTab) ? initialTab : 'info';
+  });
+
+  // Wrapper to also notify parent of tab changes
+  const setActiveTab = useCallback((tab) => {
+    setActiveTabState(tab);
+    if (onTabChange) {
+      onTabChange(tab);
+    }
+  }, [onTabChange]);
+
+  // Sync with initialTab prop changes (e.g., back/forward navigation)
+  useEffect(() => {
+    if (initialTab && VALID_DETAIL_TABS.includes(initialTab) && initialTab !== activeTab) {
+      setActiveTabState(initialTab);
+    }
+  }, [initialTab]);
+
+  // Share URL functionality
+  const handleShare = useCallback(async () => {
+    const url = `${window.location.origin}${window.location.pathname}#airframe?icao=${hex}${activeTab !== 'info' ? `&tab=${activeTab}` : ''}`;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `Aircraft ${aircraft?.flight?.trim() || hex}`,
+          text: `View aircraft ${aircraft?.flight?.trim() || hex} details`,
+          url: url,
+        });
+      } else {
+        await navigator.clipboard.writeText(url);
+        setShareSuccess(true);
+        setTimeout(() => setShareSuccess(false), 2000);
+      }
+    } catch (err) {
+      // Fallback to clipboard
+      try {
+        await navigator.clipboard.writeText(url);
+        setShareSuccess(true);
+        setTimeout(() => setShareSuccess(false), 2000);
+      } catch (clipErr) {
+        console.error('Failed to share:', clipErr);
+      }
+    }
+  }, [hex, activeTab, aircraft?.flight]);
   const [photoState, setPhotoState] = useState('loading');
   const [photoRetryCount, setPhotoRetryCount] = useState(0);
   const [useThumbnail, setUseThumbnail] = useState(false);
@@ -452,6 +514,54 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
     fetchSafetyEvents();
   }, [hex, baseUrl, safetyHours]);
 
+  // Fetch radio transmissions for this aircraft
+  useEffect(() => {
+    const fetchRadioTransmissions = async () => {
+      setRadioLoading(true);
+      try {
+        const callsign = aircraft?.flight?.trim();
+        // Use the aircraft info endpoint which includes matched_radio_calls
+        const params = new URLSearchParams({
+          include_radio_calls: 'true',
+          radio_hours: radioHours.toString(),
+          radio_limit: '50',
+        });
+        if (callsign) {
+          params.append('callsign', callsign);
+        }
+
+        const res = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/info?${params}`);
+        if (res.ok) {
+          const data = await res.json();
+          setRadioTransmissions(data.matched_radio_calls || []);
+        }
+      } catch (err) {
+        console.log('Radio transmissions fetch error:', err.message);
+      }
+      setRadioLoading(false);
+    };
+    fetchRadioTransmissions();
+  }, [hex, baseUrl, radioHours, aircraft?.flight]);
+
+  // Subscribe to global audio state for radio tab
+  useEffect(() => {
+    const unsubscribe = subscribeToAudioStateChanges((updates) => {
+      if ('playingId' in updates) setRadioPlayingId(updates.playingId);
+      if ('audioProgress' in updates) setRadioAudioProgress(updates.audioProgress);
+      if ('audioDurations' in updates) setRadioAudioDurations(updates.audioDurations);
+      if ('autoplay' in updates) setRadioAutoplay(updates.autoplay);
+    });
+
+    // Initialize with current state
+    const audioState = getGlobalAudioState();
+    setRadioPlayingId(audioState.playingId);
+    setRadioAudioProgress(audioState.audioProgress);
+    setRadioAudioDurations(audioState.audioDurations);
+    setRadioAutoplay(audioState.autoplay);
+
+    return unsubscribe;
+  }, []);
+
   // Periodically refresh sightings when in live mode on Track tab
   useEffect(() => {
     if (activeTab !== 'track' || !trackLiveMode) return;
@@ -488,6 +598,153 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
   }, [activeTab, trackLiveMode, hex, baseUrl, wsRequest, wsConnected]);
 
   const tailInfo = getTailInfo(hex, aircraft?.flight);
+
+  // Radio audio helper functions
+  const radioFormatDuration = (seconds) => {
+    if (!seconds) return '--:--';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Handle radio audio playback (uses global audio state)
+  const handleRadioPlay = useCallback((transmission) => {
+    const globalState = getGlobalAudioState();
+    const id = transmission.id;
+
+    // Stop any currently playing audio
+    if (globalState.playingId && globalState.playingId !== id) {
+      const prevAudio = globalState.audioRefs[globalState.playingId];
+      if (prevAudio) {
+        prevAudio.pause();
+        prevAudio.currentTime = 0;
+      }
+    }
+
+    // Get or create audio element
+    let audio = globalState.audioRefs[id];
+    if (!audio) {
+      audio = new Audio(transmission.audio_url);
+      globalState.audioRefs[id] = audio;
+
+      audio.addEventListener('loadedmetadata', () => {
+        globalState.audioDurations[id] = audio.duration;
+        setRadioAudioDurations(prev => ({ ...prev, [id]: audio.duration }));
+      });
+
+      audio.addEventListener('ended', () => {
+        globalState.playingId = null;
+        globalState.audioProgress[id] = 0;
+        setRadioPlayingId(null);
+        setRadioAudioProgress(prev => ({ ...prev, [id]: 0 }));
+
+        // Autoplay next transmission if enabled and filter matches this aircraft
+        if (globalState.autoplay && globalState.autoplayFilter?.hex === hex) {
+          const filteredList = filteredRadioTransmissions;
+          const currentIndex = filteredList.findIndex(t => t.id === id);
+          if (currentIndex !== -1 && currentIndex < filteredList.length - 1) {
+            const nextTransmission = filteredList[currentIndex + 1];
+            if (nextTransmission?.audio_url) {
+              setTimeout(() => handleRadioPlay(nextTransmission), 100);
+            }
+          }
+        }
+      });
+
+      audio.addEventListener('error', (e) => {
+        console.error('Radio audio playback error:', e);
+        globalState.playingId = null;
+        setRadioPlayingId(null);
+      });
+    }
+
+    if (globalState.playingId === id) {
+      // Pause
+      audio.pause();
+      globalState.playingId = null;
+      setRadioPlayingId(null);
+      if (globalState.progressIntervalRef) {
+        clearInterval(globalState.progressIntervalRef);
+      }
+    } else {
+      // Play
+      audio.play().catch(err => {
+        console.error('Failed to play radio audio:', err);
+      });
+      globalState.playingId = id;
+      setRadioPlayingId(id);
+
+      // Update progress
+      globalState.progressIntervalRef = setInterval(() => {
+        if (audio && !audio.paused) {
+          const progress = (audio.currentTime / audio.duration) * 100 || 0;
+          globalState.audioProgress[id] = progress;
+          setRadioAudioProgress(prev => ({ ...prev, [id]: progress }));
+        }
+      }, 100);
+    }
+  }, [hex]);
+
+  const handleRadioSeek = useCallback((id, e) => {
+    const globalState = getGlobalAudioState();
+    const audio = globalState.audioRefs[id];
+    if (!audio) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const percent = (e.clientX - rect.left) / rect.width;
+    audio.currentTime = percent * audio.duration;
+    globalState.audioProgress[id] = percent * 100;
+    setRadioAudioProgress(prev => ({ ...prev, [id]: percent * 100 }));
+  }, []);
+
+  // Toggle autoplay for this aircraft's transmissions
+  const toggleRadioAutoplay = useCallback(() => {
+    const globalState = getGlobalAudioState();
+    const callsign = aircraft?.flight?.trim();
+
+    if (radioAutoplay && globalState.autoplayFilter?.hex === hex) {
+      // Disable autoplay for this aircraft
+      setAutoplay(false);
+      clearAutoplayFilter();
+      setRadioAutoplay(false);
+    } else {
+      // Enable autoplay filtered to this aircraft
+      setAutoplay(true);
+      setAutoplayFilter({ type: 'airframe', callsign, hex });
+      setRadioAutoplay(true);
+
+      // Start playing if nothing is playing
+      if (!globalState.playingId && filteredRadioTransmissions.length > 0) {
+        const first = filteredRadioTransmissions[0];
+        if (first?.audio_url) {
+          handleRadioPlay(first);
+        }
+      }
+    }
+  }, [hex, aircraft?.flight, radioAutoplay, handleRadioPlay]);
+
+  // Filter radio transmissions by search and status
+  const filteredRadioTransmissions = useMemo(() => {
+    if (!radioTransmissions.length) return [];
+
+    return radioTransmissions.filter(t => {
+      // Text search filter
+      if (radioSearchQuery) {
+        const query = radioSearchQuery.toLowerCase();
+        const matchesSearch =
+          t.channel_name?.toLowerCase().includes(query) ||
+          t.transcript?.toLowerCase().includes(query) ||
+          t.matched_callsign?.toLowerCase().includes(query);
+        if (!matchesSearch) return false;
+      }
+
+      // Status filter (based on whether transcript exists)
+      if (radioStatusFilter === 'transcribed' && !t.transcript) return false;
+      if (radioStatusFilter === 'no_transcript' && t.transcript) return false;
+
+      return true;
+    });
+  }, [radioTransmissions, radioSearchQuery, radioStatusFilter]);
 
   // Helper to get severity class
   const getSeverityClass = (severity) => {
@@ -1707,14 +1964,26 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
               {tailInfo.tailNumber && <span className="detail-tail">{tailInfo.tailNumber}</span>}
               {info?.registration && <span className="detail-reg">{info.registration}</span>}
               {(info?.type_name || info?.model) && <span className={`detail-model-tag ${info?.is_military ? 'military' : ''}`}>{info.type_name || info.model}</span>}
+              {info?.is_military && <span className="detail-military-badge">MILITARY</span>}
+              {!info?.is_military && info?.operator && <span className="detail-airline-badge" title={info.operator}>{info.operator}</span>}
+              {info && !info.is_military && !info.operator && <span className="detail-civil-badge">CIVIL</span>}
             </div>
           </div>
         </div>
-        <button className="detail-close" onClick={onClose}>
-          <X size={24} />
-        </button>
+        <div className="detail-header-actions">
+          <button
+            className={`detail-share ${shareSuccess ? 'success' : ''}`}
+            onClick={handleShare}
+            title="Share link to this aircraft"
+          >
+            {shareSuccess ? <Check size={18} /> : <Share2 size={18} />}
+          </button>
+          <button className="detail-close" onClick={onClose}>
+            <X size={24} />
+          </button>
+        </div>
       </div>
-      
+
       <div className="detail-photo">
         {photoState === 'loading' && (
           <div className="photo-loading">
@@ -1769,6 +2038,9 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
         </button>
         <button className={`detail-tab ${activeTab === 'live' ? 'active' : ''}`} onClick={() => setActiveTab('live')}>
           <Radar size={16} /> Live Status
+        </button>
+        <button className={`detail-tab ${activeTab === 'radio' ? 'active' : ''}`} onClick={() => setActiveTab('radio')}>
+          <Radio size={16} /> Radio ({radioTransmissions.length})
         </button>
         <button className={`detail-tab ${activeTab === 'acars' ? 'active' : ''}`} onClick={() => setActiveTab('acars')}>
           <MessageCircle size={16} /> ACARS ({acarsMessages.length})
@@ -1885,7 +2157,7 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
                   <div className="live-stat">
                     <span className="live-label">Track</span>
                     <span className="live-value">
-                      {(aircraft.track ?? aircraft.true_heading ?? aircraft.mag_heading) !== undefined
+                      {(aircraft.track ?? aircraft.true_heading ?? aircraft.mag_heading) != null
                         ? `${(aircraft.track ?? aircraft.true_heading ?? aircraft.mag_heading).toFixed(0)}°`
                         : '--'}
                     </span>
@@ -2598,6 +2870,182 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
                         />
                       </div>
                     </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'radio' && (
+              <div className="detail-radio">
+                {/* Radio Toolbar */}
+                <div className="radio-toolbar">
+                  <div className="radio-filters">
+                    <div className="search-box">
+                      <Search size={14} />
+                      <input
+                        type="text"
+                        placeholder="Search transcripts..."
+                        value={radioSearchQuery}
+                        onChange={(e) => setRadioSearchQuery(e.target.value)}
+                      />
+                    </div>
+
+                    <select
+                      className="radio-select"
+                      value={radioStatusFilter}
+                      onChange={(e) => setRadioStatusFilter(e.target.value)}
+                    >
+                      <option value="all">All</option>
+                      <option value="transcribed">With Transcript</option>
+                      <option value="no_transcript">No Transcript</option>
+                    </select>
+
+                    <select
+                      className="radio-select"
+                      value={radioHours}
+                      onChange={(e) => setRadioHours(Number(e.target.value))}
+                    >
+                      <option value={1}>Last 1h</option>
+                      <option value={6}>Last 6h</option>
+                      <option value={12}>Last 12h</option>
+                      <option value={24}>Last 24h</option>
+                      <option value={48}>Last 48h</option>
+                      <option value={168}>Last 7d</option>
+                    </select>
+                  </div>
+
+                  <div className="radio-controls-right">
+                    <button
+                      className={`radio-autoplay-btn ${radioAutoplay && getGlobalAudioState().autoplayFilter?.hex === hex ? 'active' : ''}`}
+                      onClick={toggleRadioAutoplay}
+                      title={radioAutoplay ? 'Disable autoplay for this aircraft' : 'Enable autoplay for this aircraft'}
+                    >
+                      <PlayCircle size={14} />
+                      <span>Auto</span>
+                    </button>
+                    <span className="radio-count">
+                      {filteredRadioTransmissions.length} transmission{filteredRadioTransmissions.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Transmissions List */}
+                {radioLoading ? (
+                  <div className="detail-loading">
+                    <div className="detail-loading-radar">
+                      <Radar size={32} className="detail-radar-icon" />
+                      <div className="detail-radar-sweep" />
+                    </div>
+                    <span>Loading radio transmissions...</span>
+                  </div>
+                ) : filteredRadioTransmissions.length === 0 ? (
+                  <div className="detail-empty">
+                    <Radio size={48} />
+                    <p>No radio transmissions</p>
+                    <span>No transmissions mentioning this aircraft in the selected time range</span>
+                  </div>
+                ) : (
+                  <div className="radio-list">
+                    {filteredRadioTransmissions.map((transmission) => {
+                      const id = transmission.id;
+                      const isPlaying = radioPlayingId === id;
+                      const progress = radioAudioProgress[id] || 0;
+                      const duration = radioAudioDurations[id] || transmission.duration_seconds || 0;
+                      const isExpanded = radioExpandedTranscript[id];
+
+                      return (
+                        <div key={id} className={`radio-item ${isPlaying ? 'playing' : ''}`}>
+                          <div className="radio-item-main">
+                            {/* Play Button */}
+                            <button
+                              className={`radio-play-btn ${isPlaying ? 'playing' : ''}`}
+                              onClick={() => handleRadioPlay(transmission)}
+                              disabled={!transmission.audio_url}
+                              title={transmission.audio_url ? (isPlaying ? 'Pause' : 'Play') : 'No audio URL'}
+                            >
+                              {isPlaying ? <Pause size={18} /> : <Play size={18} />}
+                            </button>
+
+                            {/* Info */}
+                            <div className="radio-item-info">
+                              <div className="radio-item-header">
+                                <span className="radio-callsign">{transmission.matched_callsign}</span>
+                                {transmission.channel_name && (
+                                  <span className="radio-channel">{transmission.channel_name}</span>
+                                )}
+                                {transmission.frequency_mhz && (
+                                  <span className="radio-frequency">{transmission.frequency_mhz.toFixed(3)} MHz</span>
+                                )}
+                                <span className="radio-time">
+                                  {new Date(transmission.created_at).toLocaleString()}
+                                </span>
+                                <span className="radio-confidence" title="Match confidence">
+                                  {((transmission.confidence || 0) * 100).toFixed(0)}%
+                                </span>
+                              </div>
+
+                              {/* Progress Bar */}
+                              <div
+                                className="radio-progress-container"
+                                onClick={(e) => handleRadioSeek(id, e)}
+                              >
+                                <div className="radio-progress-bar">
+                                  <div
+                                    className="radio-progress-fill"
+                                    style={{ width: `${progress}%` }}
+                                  />
+                                </div>
+                                <div className="radio-duration">
+                                  <span>{radioFormatDuration((progress / 100) * duration)}</span>
+                                  <span>{radioFormatDuration(duration)}</span>
+                                </div>
+                              </div>
+
+                              {/* Transcript Preview */}
+                              {transmission.transcript && (
+                                <div className="radio-transcript-preview">
+                                  <p className="transcript-preview-text">
+                                    {transmission.raw_text && (
+                                      <span className="transcript-highlight">{transmission.raw_text}</span>
+                                    )}
+                                    {' '}{transmission.transcript}
+                                  </p>
+                                </div>
+                              )}
+
+                              {!transmission.transcript && (
+                                <div className="radio-transcript-empty">
+                                  <Mic size={12} />
+                                  <span>No transcript available</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Expand Button */}
+                            {transmission.transcript && transmission.transcript.length > 100 && (
+                              <button
+                                className={`radio-expand-btn ${isExpanded ? 'expanded' : ''}`}
+                                onClick={() => setRadioExpandedTranscript(prev => ({ ...prev, [id]: !prev[id] }))}
+                              >
+                                <ChevronDown size={16} />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Expandable Transcript Section */}
+                          {transmission.transcript && isExpanded && (
+                            <div className="radio-transcript-section expanded">
+                              <div className="radio-transcript">
+                                <div className="transcript-header">
+                                  <span className="transcript-label">Full Transcript</span>
+                                </div>
+                                <p className="transcript-text">{transmission.transcript}</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

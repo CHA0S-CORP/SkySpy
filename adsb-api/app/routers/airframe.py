@@ -49,6 +49,7 @@ Returns comprehensive airframe data including:
 - **Owner**: Registered owner
 - **Country**: Country of registration
 - **Photo**: Aircraft photo URL if available
+- **Radio Calls**: Recent radio transmissions mentioning this aircraft
 
 Data sources:
 - hexdb.io for registration data
@@ -82,7 +83,8 @@ Use `refresh=true` to force a fresh lookup from external sources.
                         "photo_photographer": "John Doe",
                         "photo_source": "planespotters.net",
                         "cached_at": "2024-12-21T12:00:00Z",
-                        "fetch_failed": False
+                        "fetch_failed": False,
+                        "matched_radio_calls": []
                     }
                 }
             }
@@ -101,20 +103,59 @@ async def get_airframe_info(
         False,
         description="Force refresh from external sources (ignores cache)"
     ),
+    callsign: Optional[str] = Query(
+        None,
+        description="Flight callsign to match radio calls (e.g., UAL123)"
+    ),
+    include_radio_calls: bool = Query(
+        True,
+        description="Include matched radio transmissions"
+    ),
+    radio_hours: int = Query(
+        24,
+        description="How many hours back to search for radio calls",
+        ge=1,
+        le=168
+    ),
+    radio_limit: int = Query(
+        10,
+        description="Maximum number of radio calls to return",
+        ge=1,
+        le=50
+    ),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get detailed aircraft information including airframe data and photos."""
+    """Get detailed aircraft information including airframe data, photos, and radio calls."""
+    from app.services.audio import get_matched_radio_calls
+
     if not validate_icao_hex(icao_hex):
         raise HTTPException(status_code=400, detail="Invalid ICAO hex code")
-    
+
     if refresh:
         info = await refresh_aircraft_info(db, icao_hex)
     else:
         info = await get_aircraft_info(db, icao_hex)
-    
+
     if not info:
         raise HTTPException(status_code=404, detail=f"No information found for {icao_hex.upper()}")
-    
+
+    # Include matched radio calls if requested
+    if include_radio_calls:
+        search_callsign = callsign.strip().upper() if callsign else None
+        operator_icao = info.get("operator_icao")
+        registration = info.get("registration")
+
+        matched_calls = await get_matched_radio_calls(
+            db,
+            callsign=search_callsign,
+            operator_icao=operator_icao if not search_callsign else None,
+            registration=registration,
+            hours=radio_hours,
+            limit=radio_limit,
+        )
+
+        info["matched_radio_calls"] = matched_calls
+
     return info
 
 

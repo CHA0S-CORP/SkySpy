@@ -506,6 +506,9 @@ class AudioTransmission(Base):
     transcript_language: Mapped[Optional[str]] = mapped_column(String(10))
     transcript_segments: Mapped[Optional[dict]] = mapped_column(JSON)  # Word-level timestamps
 
+    # Identified airframes from transcript
+    identified_airframes: Mapped[Optional[list]] = mapped_column(JSON)  # List of identified callsigns/aircraft
+
     # Extra metadata
     extra_metadata: Mapped[Optional[dict]] = mapped_column(JSON)
 

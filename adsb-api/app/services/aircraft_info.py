@@ -92,6 +92,13 @@ async def get_aircraft_info(db: AsyncSession, icao_hex: str, force_refresh: bool
         max_age = timedelta(hours=FAILED_CACHE_HOURS if cached.fetch_failed else CACHE_DURATION_HOURS)
 
         if cache_age < max_age:
+            # Check if we have incomplete data that should be fetched
+            needs_data_update = (
+                not cached.registration or
+                not cached.type_code or
+                (not cached.photo_url and not cached.fetch_failed)
+            )
+
             # Check if we have a low-res photo that should be upgraded
             needs_photo_upgrade = False
             if cached.photo_url:
@@ -100,8 +107,11 @@ async def get_aircraft_info(db: AsyncSession, icao_hex: str, force_refresh: bool
                     needs_photo_upgrade = True
                     logger.debug(f"Low-res photo detected for {icao_hex}, will upgrade")
 
+            # If data is incomplete, trigger background refresh
+            if needs_data_update and icao_hex not in _pending_lookups:
+                asyncio.create_task(_background_refresh_info(icao_hex))
             # If we have photo URLs but no local paths, trigger background caching
-            if cached.photo_url and not cached.photo_local_path:
+            elif cached.photo_url and not cached.photo_local_path:
                 asyncio.create_task(_background_cache_photos(
                     icao_hex, cached.photo_url, cached.photo_thumbnail_url,
                     cached.photo_page_link
@@ -215,6 +225,64 @@ async def _background_cache_photos(
                     logger.info(f"Cached photo for {icao_hex}: {photo_path}")
     except Exception as e:
         logger.error(f"Background photo caching failed for {icao_hex}: {e}")
+
+
+async def _background_refresh_info(icao_hex: str):
+    """
+    Background task to refresh incomplete aircraft info.
+    Fetches from external sources and updates the cache.
+    """
+    from app.core.database import AsyncSessionLocal
+
+    icao_hex = icao_hex.upper()
+
+    # Prevent duplicate lookups
+    if icao_hex in _pending_lookups:
+        return
+    _pending_lookups.add(icao_hex)
+
+    try:
+        async with AsyncSessionLocal() as db:
+            # Fetch fresh info from external sources
+            info = await _fetch_aircraft_info(icao_hex)
+
+            if info:
+                # Update existing cache entry
+                result = await db.execute(
+                    select(AircraftInfo).where(AircraftInfo.icao_hex == icao_hex)
+                )
+                cached = result.scalar_one_or_none()
+
+                if cached:
+                    # Only update fields that were missing or are now available
+                    for key, value in info.items():
+                        if hasattr(cached, key) and value is not None:
+                            current_value = getattr(cached, key)
+                            if current_value is None:
+                                setattr(cached, key, value)
+                    cached.updated_at = datetime.utcnow()
+                    if cached.fetch_failed:
+                        cached.fetch_failed = False
+                else:
+                    cached = AircraftInfo(icao_hex=icao_hex, **info)
+                    db.add(cached)
+
+                await db.commit()
+                logger.info(f"Background refresh completed for {icao_hex}")
+
+                # Trigger photo caching if we now have photo URLs
+                photo_url = info.get("photo_url")
+                if photo_url:
+                    asyncio.create_task(_background_cache_photos(
+                        icao_hex, photo_url,
+                        info.get("photo_thumbnail_url"),
+                        info.get("photo_page_link")
+                    ))
+
+    except Exception as e:
+        logger.error(f"Background refresh failed for {icao_hex}: {e}")
+    finally:
+        _pending_lookups.discard(icao_hex)
 
 
 # Set of aircraft currently being upgraded (prevent duplicate upgrades)

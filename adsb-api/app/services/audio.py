@@ -5,10 +5,12 @@ Handles:
 - Receiving audio uploads from rtl-airband
 - Uploading to S3
 - Queueing transcription jobs
+- Identifying airframes from transcripts
 """
 import asyncio
 import io
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -37,6 +39,843 @@ _stats = {
     "transcriptions_completed": 0,
     "transcriptions_failed": 0,
 }
+
+# Common airline callsign prefixes (ICAO 3-letter codes mapped to airline names)
+AIRLINE_CALLSIGNS = {
+    "AAL": "American Airlines",
+    "UAL": "United Airlines",
+    "DAL": "Delta Air Lines",
+    "SWA": "Southwest Airlines",
+    "JBU": "JetBlue Airways",
+    "ASA": "Alaska Airlines",
+    "FFT": "Frontier Airlines",
+    "NKS": "Spirit Airlines",
+    "SKW": "SkyWest Airlines",
+    "ENY": "Envoy Air",
+    "RPA": "Republic Airways",
+    "PDT": "Piedmont Airlines",
+    "JIA": "PSA Airlines",
+    "AWI": "Air Wisconsin",
+    "FDX": "FedEx Express",
+    "UPS": "UPS Airlines",
+    "GTI": "Atlas Air",
+    "BAW": "British Airways",
+    "AFR": "Air France",
+    "DLH": "Lufthansa",
+    "KLM": "KLM Royal Dutch",
+    "ACA": "Air Canada",
+    "QFA": "Qantas",
+    "UAE": "Emirates",
+    "SIA": "Singapore Airlines",
+    "CPA": "Cathay Pacific",
+    "ANA": "All Nippon Airways",
+    "JAL": "Japan Airlines",
+    "THY": "Turkish Airlines",
+    "QTR": "Qatar Airways",
+    "ETD": "Etihad Airways",
+    "EIN": "Aer Lingus",
+    "RYR": "Ryanair",
+    "EZY": "easyJet",
+    "VIR": "Virgin Atlantic",
+    "WJA": "WestJet",
+    "AZA": "Alitalia",
+    "IBE": "Iberia",
+    "TAP": "TAP Portugal",
+    "SAS": "Scandinavian Airlines",
+    "FIN": "Finnair",
+    "LOT": "LOT Polish",
+    "CSN": "China Southern",
+    "CES": "China Eastern",
+    "CCA": "Air China",
+    "EVA": "EVA Air",
+    "KAL": "Korean Air",
+    "AAR": "Asiana Airlines",
+}
+
+# Phonetic alphabet for number parsing (includes common misheard variants)
+PHONETIC_NUMBERS = {
+    # Standard
+    "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4",
+    "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9",
+    # Aviation variants (ICAO standard pronunciation)
+    "niner": "9", "fife": "5", "tree": "3", "fower": "4",
+    # Common transcription errors / homophones
+    "won": "1", "to": "2", "too": "2", "for": "4", "fore": "4",
+    "ate": "8", "won't": "1", "free": "3", "wan": "1",
+    # Spelled out / shorthand
+    "oh": "0", "o": "0", "nil": "0", "naught": "0",
+    # ATC shortspeak - combined numbers often spoken as words
+    "ten": "10", "eleven": "11", "twelve": "12", "thirteen": "13",
+    "fourteen": "14", "fifteen": "15", "sixteen": "16", "seventeen": "17",
+    "eighteen": "18", "nineteen": "19", "twenty": "20", "thirty": "30",
+    "forty": "40", "fifty": "50", "sixty": "60", "seventy": "70",
+    "eighty": "80", "ninety": "90", "hundred": "00",
+    # Slurred/fast speech transcription errors
+    "wun": "1", "too-er": "2", "fo": "4", "fower": "4", "fi": "5",
+    "sicks": "6", "ait": "8", "nein": "9",
+}
+
+# Phonetic alphabet letters (for N-numbers like "November Alpha Bravo 123")
+PHONETIC_LETTERS = {
+    # Standard ICAO
+    "alpha": "A", "alfa": "A", "bravo": "B", "charlie": "C", "delta": "D",
+    "echo": "E", "foxtrot": "F", "golf": "G", "hotel": "H", "india": "I",
+    "juliet": "J", "juliett": "J", "kilo": "K", "lima": "L", "mike": "M",
+    "november": "N", "oscar": "O", "papa": "P", "quebec": "Q", "romeo": "R",
+    "sierra": "S", "tango": "T", "uniform": "U", "victor": "V", "whiskey": "W",
+    "xray": "X", "x-ray": "X", "yankee": "Y", "zulu": "Z",
+    # Common mishearings / transcription errors
+    "alfa": "A", "al": "A", "brah": "B", "char": "C", "del": "D",
+    "eck": "E", "fox": "F", "gulf": "G", "hoe": "H", "ind": "I",
+    "jewel": "J", "key": "K", "lee": "L", "my": "M", "nov": "N",
+    "oss": "O", "pop": "P", "beck": "Q", "row": "R", "see": "S",
+    "tang": "T", "uni": "U", "vic": "V", "whis": "W", "ex": "X",
+    "yank": "Y", "zoo": "Z",
+}
+
+# ATC phrases that might precede or contain callsigns
+ATC_CONTEXT_PHRASES = [
+    "CLEARED", "CONTACT", "RUNWAY", "TAXI", "HOLD", "TURN", "CLIMB", "DESCEND",
+    "MAINTAIN", "TRAFFIC", "ROGER", "WILCO", "AFFIRMATIVE", "NEGATIVE",
+    "DEPARTURE", "APPROACH", "TOWER", "GROUND", "CENTER", "RADAR",
+    "SQUAWK", "IDENT", "ALTIMETER", "FLIGHT LEVEL", "HEADING", "DIRECT",
+    "EXPECT", "REPORT", "POSITION", "INBOUND", "OUTBOUND", "FINAL",
+    "BASE", "DOWNWIND", "CROSSWIND", "PATTERN", "CIRCUIT", "GO AROUND",
+    "MISSED APPROACH", "HOLDING", "VECTORS", "ILS", "VOR", "GPS",
+    "VISUAL", "CLEARED TO LAND", "LINE UP AND WAIT", "POSITION AND HOLD",
+    "BEHIND", "FOLLOW", "CAUTION", "WAKE TURBULENCE", "TRAFFIC IN SIGHT",
+]
+
+# Airline name variants and common misspellings/mishearings
+AIRLINE_VARIANTS = {
+    # US Majors - full names, radio callsigns, and shortspeak
+    "UNITED": "UAL", "UNITE": "UAL", "YOU KNIGHTED": "UAL", "UNIDED": "UAL",
+    "AMERICAN": "AAL", "AMERIKIN": "AAL", "AMERCAN": "AAL",
+    "DELTA": "DAL", "DELDA": "DAL",
+    "SOUTHWEST": "SWA", "SOUTH WEST": "SWA", "SOUTHWEST AIRLINES": "SWA",
+    "JETBLUE": "JBU", "JET BLUE": "JBU", "JETBLEW": "JBU", "BLUE": "JBU",
+    "ALASKA": "ASA", "ALASKAN": "ASA",
+    "FRONTIER": "FFT", "FRONTEER": "FFT",
+    "SPIRIT": "NKS", "SPIRITS": "NKS",
+    "HAWAIIAN": "HAL", "HAWAI'IAN": "HAL",
+    "SUN COUNTRY": "SCX", "SUNCOUNTRY": "SCX",
+    # Regionals
+    "SKYWEST": "SKW", "SKY WEST": "SKW",
+    "ENVOY": "ENY",
+    "REPUBLIC": "RPA",
+    "PIEDMONT": "PDT",
+    "PSA": "JIA",
+    "COMPASS": "CPZ",
+    "ENDEAVOR": "EDV", "ENDEAVOUR": "EDV",
+    "MESA": "ASH", "AIR SHUTTLE": "ASH",
+    "HORIZON": "QXE",
+    "EXPRESSJET": "ASQ", "EXPRESS JET": "ASQ",
+    "COMMUTAIR": "UCA",
+    "GOJET": "GJS", "GO JET": "GJS",
+    # Cargo - radio callsigns are key here
+    "FEDEX": "FDX", "FED EX": "FDX", "FEDERAL EXPRESS": "FDX", "FEDERAL": "FDX",
+    "UPS": "UPS", "U P S": "UPS",
+    "ATLAS": "GTI", "GIANT": "GTI",  # Atlas Air radio callsign is "Giant"
+    "KALITTA": "CKS", "CONNIE": "CKS",  # Kalitta radio callsign
+    "POLAR": "PAC", "POLAR AIR": "PAC",
+    "CARGOLUX": "CLX",
+    "SOUTHERN AIR": "SOO",
+    "ABX": "ABX", "ABX AIR": "ABX",
+    "WORLD": "WOA", "WORLD AIRWAYS": "WOA",
+    # International - Radio callsigns (these are critical for ATC)
+    "SPEEDBIRD": "BAW", "SPEED BIRD": "BAW",  # British Airways
+    "SHAMROCK": "EIN", "SHAM ROCK": "EIN",    # Aer Lingus
+    "SPRINGBOK": "SAA", "SPRING BOK": "SAA",  # South African
+    "CLIPPER": "PAA",                          # Pan Am (historic)
+    "CACTUS": "AWE",                           # America West / US Airways
+    "CITRUS": "JBU",                           # JetBlue alternate
+    "BRICKYARD": "AAL",                        # American alternate
+    "DYNASTY": "CAL",                          # China Airlines
+    "MAPLE": "ACA",                            # Air Canada alternate
+    # International carriers - names and callsigns
+    "BRITISH": "BAW", "BRITISH AIRWAYS": "BAW",
+    "AIR FRANCE": "AFR", "AIRFRANCE": "AFR", "AIRFRANS": "AFR",
+    "LUFTHANSA": "DLH", "LUFTANSA": "DLH", "LUFT": "DLH",
+    "KLM": "KLM", "K L M": "KLM", "ROYAL DUTCH": "KLM",
+    "AIR CANADA": "ACA", "AIRCANADA": "ACA", "CANAIR": "ACA",
+    "QANTAS": "QFA", "QUANTAS": "QFA",
+    "EMIRATES": "UAE", "EMIRATE": "UAE",
+    "SINGAPORE": "SIA", "SINGAPORE AIRLINES": "SIA",
+    "CATHAY": "CPA", "CATHAY PACIFIC": "CPA",
+    "VIRGIN": "VIR", "VIRGIN ATLANTIC": "VIR",
+    "RYANAIR": "RYR", "RYAN AIR": "RYR", "RYAN": "RYR",
+    "EASYJET": "EZY", "EASY JET": "EZY", "EASY": "EZY",
+    "TURKISH": "THY", "TURKISH AIRLINES": "THY",
+    "QATAR": "QTR", "CUTTER": "QTR", "QATARI": "QTR",
+    "ETIHAD": "ETD",
+    "JAPAN": "JAL", "JAPAN AIR": "JAL", "JAPAN AIRLINES": "JAL",
+    "KOREAN": "KAL", "KOREAN AIR": "KAL",
+    "AIR CHINA": "CCA", "AIRCHINA": "CCA",
+    "CHINA SOUTHERN": "CSN",
+    "CHINA EASTERN": "CES",
+    "EVA": "EVA", "EVA AIR": "EVA",
+    "ANA": "ANA", "ALL NIPPON": "ANA",
+    # European carriers
+    "IBERIA": "IBE",
+    "AEROMEXICO": "AMX", "AERO MEXICO": "AMX",
+    "SWISS": "SWR", "SWISSAIR": "SWR",
+    "AUSTRIAN": "AUA", "AUSTRIAN AIRLINES": "AUA",
+    "BRUSSELS": "BEL", "BRUSSELS AIRLINES": "BEL",
+    "SCANDINAVIAN": "SAS", "SAS": "SAS",
+    "FINNAIR": "FIN", "FINN": "FIN",
+    "LOT": "LOT", "LOT POLISH": "LOT",
+    "ALITALIA": "AZA",
+    "TAP": "TAP", "TAP PORTUGAL": "TAP",
+    "ICELANDAIR": "ICE", "ICELAND": "ICE",
+    "NORWEGIAN": "NAX", "NORSHUTTLE": "NAX",
+    "WIZZ": "WZZ", "WIZZAIR": "WZZ", "WIZZ AIR": "WZZ",
+    "VUELING": "VLG",
+    # Middle East / Africa
+    "SAUDIA": "SVA", "SAUDI": "SVA", "SAUDI ARABIAN": "SVA",
+    "ROYAL AIR MAROC": "RAM", "MOROCCO": "RAM",
+    "EGYPTAIR": "MSR", "EGYPT AIR": "MSR", "EGYPT": "MSR",
+    "ETHIOPIAN": "ETH", "ETHIOPIAN AIRLINES": "ETH",
+    "KENYA": "KQA", "KENYA AIRWAYS": "KQA",
+    # Asia Pacific
+    "ASIANA": "AAR",
+    "GARUDA": "GIA", "GARUDA INDONESIA": "GIA",
+    "THAI": "THA", "THAI AIRWAYS": "THA",
+    "VIETNAM": "HVN", "VIETNAM AIRLINES": "HVN",
+    "PHILIPPINE": "PAL", "PHILIPPINE AIRLINES": "PAL",
+    "CEBU": "CEB", "CEBU PACIFIC": "CEB",
+    "AIR INDIA": "AIC", "AIRINDIA": "AIC",
+    "INDIGO": "IGO",
+    "SCOOT": "TGW",
+    "JETSTAR": "JST",
+    "AIRASIA": "AXM", "AIR ASIA": "AXM",
+    # Latin America
+    "AVIANCA": "AVA",
+    "LATAM": "LAN", "LAN CHILE": "LAN",
+    "GOL": "GLO",
+    "AZUL": "AZU",
+    "COPA": "CMP", "COPA AIRLINES": "CMP",
+    "VOLARIS": "VOI",
+    "INTERJET": "AIJ",
+}
+
+# Common ATC shorthand / abbreviations that may appear in transcripts
+ATC_ABBREVIATIONS = {
+    # Speed
+    "KNOTS": None,  # Marker only, no conversion
+    "MACH": None,
+    # Altitude references
+    "FLIGHT LEVEL": "FL",
+    "ANGELS": "ALT",  # Military - altitude in thousands
+    "CHERUBS": "ALT",  # Military - altitude in hundreds
+    # Directions
+    "LEFT": "L", "RIGHT": "R",
+    # Common instructions (not callsigns but context)
+    "EXPEDITE": None, "IMMEDIATE": None, "EMERGENCY": None,
+    "MAYDAY": None, "PAN PAN": None, "PANPAN": None,
+}
+
+
+def _convert_phonetic_to_digits(text: str) -> str:
+    """
+    Convert phonetic numbers in text to digits.
+    Handles ATC shortspeak like:
+    - "one two three" -> "123"
+    - "niner five" -> "95"
+    - "twenty three" -> "23"
+    - "fifteen thirty four" -> "1534" (flight number style)
+    - "one hundred twenty three" -> "123"
+    """
+    words = text.lower().split()
+    result = []
+
+    i = 0
+    while i < len(words):
+        # Strip punctuation
+        clean_word = re.sub(r'[^\w\-]', '', words[i])
+
+        # Handle hyphenated words like "too-er"
+        clean_word = clean_word.replace('-', '')
+
+        if clean_word in PHONETIC_NUMBERS:
+            val = PHONETIC_NUMBERS[clean_word]
+            # Handle "hundred" specially - "one hundred" = 100, not 100
+            if clean_word == "hundred" and result:
+                # Multiply previous digit by 100
+                if len(result) == 1 and result[0] in "123456789":
+                    result[-1] = result[-1] + "00"
+                else:
+                    result.append(val)
+            else:
+                result.append(val)
+            i += 1
+        elif clean_word.isdigit():
+            result.append(clean_word)
+            i += 1
+        else:
+            # Check for two-word numbers like "twenty one"
+            if i + 1 < len(words):
+                two_word = clean_word + " " + re.sub(r'[^\w]', '', words[i + 1].lower())
+                # Skip two-word combinations that don't make sense
+            # If we hit a non-number word after collecting digits, stop
+            if result:
+                break
+            i += 1
+
+    return ''.join(result)
+
+
+def _normalize_flight_number(text: str) -> Optional[str]:
+    """
+    Extract and normalize a flight number from text.
+    Handles ATC shortspeak:
+    - "123" -> "123"
+    - "one two three" -> "123"
+    - "1 2 3" -> "123"
+    - "twenty three" -> "23"
+    - "fifteen thirty four" -> "1534"
+    - "one thousand two hundred thirty four" -> "1234"
+    """
+    # First try direct digits (most common case)
+    digit_match = re.search(r'\d{1,4}', text)
+    if digit_match:
+        return digit_match.group()
+
+    # Try phonetic conversion for spoken numbers
+    converted = _convert_phonetic_to_digits(text)
+    if converted and len(converted) <= 4:
+        return converted
+
+    # Handle spaced digits like "1 2 3"
+    spaced_digits = re.findall(r'\b(\d)\b', text)
+    if spaced_digits and len(spaced_digits) <= 4:
+        return ''.join(spaced_digits)
+
+    return None
+
+
+def _preprocess_transcript(text: str) -> str:
+    """
+    Preprocess transcript to normalize common ATC speech patterns.
+    This helps with matching by standardizing variations.
+    """
+    # Normalize whitespace
+    text = ' '.join(text.split())
+
+    # Common contractions and speech patterns
+    replacements = [
+        # Readback confirmations often have these
+        (r'\bROGER\s+THAT\b', 'ROGER'),
+        (r'\bCOPY\s+THAT\b', 'ROGER'),
+        (r'\bWILCO\b', ''),  # "Will comply" - not a callsign
+
+        # Strip filler words that Whisper might transcribe
+        (r'\bUH+\b', ''),
+        (r'\bUM+\b', ''),
+        (r'\bAH+\b', ''),
+
+        # Normalize "flight" which sometimes precedes flight numbers
+        (r'\bFLIGHT\s+', ''),
+
+        # "Heavy" and "Super" standardization
+        (r'\bHEAVY\s+HEAVY\b', 'HEAVY'),
+        (r'\bSUPER\s+HEAVY\b', 'SUPER'),
+
+        # Common phrase cleanup
+        (r'\bGOOD\s+DAY\b', ''),
+        (r'\bGOOD\s+MORNING\b', ''),
+        (r'\bGOOD\s+AFTERNOON\b', ''),
+        (r'\bGOOD\s+EVENING\b', ''),
+    ]
+
+    for pattern, replacement in replacements:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+
+    return text.strip()
+
+
+def _fuzzy_match_airline(word: str) -> Optional[tuple[str, str]]:
+    """
+    Fuzzy match an airline name, returning (matched_name, icao_code) or None.
+    Uses edit distance for approximate matching.
+    """
+    word_upper = word.upper().strip()
+
+    # Exact match first
+    if word_upper in AIRLINE_VARIANTS:
+        return (word_upper, AIRLINE_VARIANTS[word_upper])
+
+    # Try with common transcription artifacts removed
+    cleaned = re.sub(r"['\-]", "", word_upper)
+    if cleaned in AIRLINE_VARIANTS:
+        return (cleaned, AIRLINE_VARIANTS[cleaned])
+
+    # Simple fuzzy matching - check if word is close to any known airline
+    # Allow 1-2 character differences for longer words
+    for airline, icao in AIRLINE_VARIANTS.items():
+        if len(airline) < 4:
+            continue  # Skip short codes for fuzzy matching
+
+        # Calculate simple edit distance (Levenshtein-like)
+        if len(word_upper) >= len(airline) - 2 and len(word_upper) <= len(airline) + 2:
+            distance = _levenshtein_distance(word_upper, airline)
+            max_distance = 1 if len(airline) <= 6 else 2
+
+            if distance <= max_distance:
+                return (airline, icao)
+
+    return None
+
+
+def _levenshtein_distance(s1: str, s2: str) -> int:
+    """Calculate the Levenshtein edit distance between two strings."""
+    if len(s1) < len(s2):
+        return _levenshtein_distance(s2, s1)
+
+    if len(s2) == 0:
+        return len(s1)
+
+    previous_row = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+
+    return previous_row[-1]
+
+
+def extract_callsigns_from_transcript(transcript: str) -> list[dict]:
+    """
+    Extract aviation callsigns from a transcript with fuzzy matching.
+
+    Handles imperfect transcriptions including:
+    - Phonetic numbers: "United one two three" -> UAL123
+    - ATC shortspeak: "Delta twenty three" -> DAL23
+    - Misspellings: "Delda 456" -> DAL456
+    - Radio callsigns: "Speedbird 123", "Giant 456" -> BAW123, GTI456
+    - N-numbers with phonetics: "November one two three alpha bravo"
+    - Heavy/super suffixes for wake turbulence category
+    - Last 3 of tail: "Cessna three alpha bravo" -> N*3AB (partial)
+
+    Returns:
+        List of dicts with callsign info and confidence scores
+    """
+    if not transcript:
+        return []
+
+    callsigns = []
+    seen = set()  # Avoid duplicates
+
+    # Preprocess to normalize common ATC patterns
+    text = _preprocess_transcript(transcript).upper()
+
+    # === Pattern 1: Airline name + flight number (numeric or phonetic) ===
+    # Build regex for all known airline names
+    airline_names = '|'.join(re.escape(name) for name in AIRLINE_VARIANTS.keys())
+
+    # Match airline followed by numbers or phonetic numbers
+    # E.g., "UNITED 123", "DELTA ONE TWO THREE", "SPEEDBIRD NINER FIVE"
+    phonetic_num_words = '|'.join(PHONETIC_NUMBERS.keys())
+    airline_pattern = rf'\b({airline_names})\s+((?:\d+|(?:{phonetic_num_words})\s*)+)\s*(HEAVY|SUPER)?'
+
+    for match in re.finditer(airline_pattern, text, re.IGNORECASE):
+        airline_raw = match.group(1).upper()
+        number_part = match.group(2)
+        suffix = match.group(3) or ""
+
+        icao = AIRLINE_VARIANTS.get(airline_raw)
+        if not icao:
+            continue
+
+        # Convert phonetic numbers if present
+        flight_num = _normalize_flight_number(number_part)
+        if not flight_num or len(flight_num) > 4:
+            continue
+
+        callsign = f"{icao}{flight_num}"
+        if callsign not in seen:
+            seen.add(callsign)
+            callsigns.append({
+                "callsign": callsign,
+                "raw": match.group(0).strip(),
+                "type": "airline",
+                "airline_icao": icao,
+                "airline_name": AIRLINE_CALLSIGNS.get(icao),
+                "flight_number": flight_num,
+                "suffix": suffix.lower() if suffix else None,
+                "confidence": 0.9 if number_part.strip().isdigit() else 0.7,
+            })
+
+    # === Pattern 2: Fuzzy airline matching for words not caught above ===
+    # Split into potential airline + number sequences
+    words = re.split(r'\s+', text)
+    i = 0
+    while i < len(words):
+        word = words[i]
+        match_result = _fuzzy_match_airline(word)
+
+        if match_result:
+            matched_name, icao = match_result
+
+            # Look ahead for flight number
+            number_parts = []
+            j = i + 1
+            while j < len(words) and j < i + 6:  # Look up to 5 words ahead
+                next_word = words[j].lower()
+                clean_word = re.sub(r'[^\w]', '', next_word)
+
+                if clean_word.isdigit():
+                    number_parts.append(clean_word)
+                    j += 1
+                elif clean_word in PHONETIC_NUMBERS:
+                    number_parts.append(PHONETIC_NUMBERS[clean_word])
+                    j += 1
+                elif clean_word in ('heavy', 'super'):
+                    break  # Stop at suffix
+                else:
+                    break
+
+            if number_parts:
+                flight_num = ''.join(number_parts)[:4]  # Max 4 digits
+                callsign = f"{icao}{flight_num}"
+
+                if callsign not in seen:
+                    seen.add(callsign)
+                    raw_text = ' '.join(words[i:j])
+
+                    # Check for suffix
+                    suffix = None
+                    if j < len(words) and words[j].upper() in ('HEAVY', 'SUPER'):
+                        suffix = words[j].lower()
+                        raw_text += ' ' + words[j]
+
+                    callsigns.append({
+                        "callsign": callsign,
+                        "raw": raw_text,
+                        "type": "airline",
+                        "airline_icao": icao,
+                        "airline_name": AIRLINE_CALLSIGNS.get(icao),
+                        "flight_number": flight_num,
+                        "suffix": suffix,
+                        "confidence": 0.6,  # Lower confidence for fuzzy match
+                    })
+                    i = j
+                    continue
+        i += 1
+
+    # === Pattern 3: N-numbers (general aviation) ===
+    # Handle: "N12345", "November 12345", "November one two three alpha bravo"
+    # N-numbers format: N + 1-5 digits + 0-2 letters
+
+    # Direct N-number pattern
+    n_direct_pattern = r'\bN(\d{1,5})([A-Z]{0,2})\b'
+    for match in re.finditer(n_direct_pattern, text):
+        n_num = f"N{match.group(1)}{match.group(2)}"
+        if len(n_num) >= 4 and n_num not in seen:
+            seen.add(n_num)
+            callsigns.append({
+                "callsign": n_num,
+                "raw": match.group(0).strip(),
+                "type": "general_aviation",
+                "confidence": 0.95,
+            })
+
+    # November + phonetic/numbers pattern
+    november_pattern = r'\bNOVEMBER\s+(.+?)(?=\s+(?:CLEARED|CONTACT|RUNWAY|TAXI|HOLD|TURN|CLIMB|DESCEND|MAINTAIN|TRAFFIC|ROGER|WILCO|AFFIRMATIVE)|[,.]|$)'
+    for match in re.finditer(november_pattern, text, re.IGNORECASE):
+        tail_part = match.group(1).strip()
+
+        # Parse the tail number
+        digits = []
+        letters = []
+        parsing_letters = False
+
+        for word in tail_part.split():
+            word_lower = word.lower()
+            word_clean = re.sub(r'[^\w]', '', word_lower)
+
+            if word_clean.isdigit():
+                if not parsing_letters:
+                    digits.append(word_clean)
+            elif word_clean in PHONETIC_NUMBERS:
+                if not parsing_letters:
+                    digits.append(PHONETIC_NUMBERS[word_clean])
+            elif word_clean in PHONETIC_LETTERS:
+                parsing_letters = True
+                letters.append(PHONETIC_LETTERS[word_clean])
+            elif len(word_clean) == 1 and word_clean.isalpha():
+                parsing_letters = True
+                letters.append(word_clean.upper())
+            else:
+                break  # Unknown word, stop parsing
+
+        if digits:
+            n_num = "N" + ''.join(digits)[:5] + ''.join(letters)[:2]
+            if len(n_num) >= 4 and n_num not in seen:
+                seen.add(n_num)
+                callsigns.append({
+                    "callsign": n_num,
+                    "raw": match.group(0).strip(),
+                    "type": "general_aviation",
+                    "confidence": 0.75,
+                })
+
+    # === Pattern 4: Military and government callsigns ===
+    # These use specific radio callsigns that are well-known
+    military_patterns = [
+        # Presidential / VIP
+        (r'\bAIR\s*FORCE\s*(ONE|TWO|(?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'AIRFORCE'),
+        (r'\bEXECUTIVE\s*(ONE|(?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'EXEC'),
+        (r'\bSAM\s*(\d+|(?:' + phonetic_num_words + r')\s*)+', 'SAM'),  # Special Air Mission
+        # Military branches
+        (r'\bNAVY\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'NAVY'),
+        (r'\bARMY\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'ARMY'),
+        (r'\bMARINE\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'MARINE'),
+        # Military transport/tanker callsigns
+        (r'\bREACH\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'REACH'),  # AMC airlift
+        (r'\bEVAC\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'EVAC'),   # Aeromedical
+        (r'\bKING\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'KING'),   # HC-130 rescue
+        (r'\bPEDRO\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'PEDRO'), # HH-60 rescue
+        (r'\bJOLLY\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'JOLLY'), # HH-60 rescue
+        (r'\bSHELL\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'SHELL'), # KC-135 tanker
+        (r'\bTEXAS\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'TEXAS'), # KC-10 tanker
+        (r'\bTEAL\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'TEAL'),   # Reconnaissance
+        (r'\bDRAGON\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'DRAGON'),
+        (r'\bVIPER\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'VIPER'),
+        (r'\bCOBRA\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'COBRA'),
+        (r'\bHAWK\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'HAWK'),
+        (r'\bEAGLE\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'EAGLE'),
+        # Civil Air Patrol / Coast Guard
+        (r'\bCAP\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'CAP'),
+        (r'\bCAM\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'CAM'),
+        (r'\bCOAST\s*GUARD\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'COASTGUARD'),
+        (r'\bRESCUE\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'RESCUE'),
+        # Law enforcement
+        (r'\bCOPTER\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'COPTER'),  # Police helicopters
+        (r'\bTROOPER\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'TROOPER'),
+        (r'\bLIFE\s*GUARD\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'LIFEGUARD'),  # Medical emergency
+        (r'\bLIFEGUARD\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'LIFEGUARD'),
+        # Test / experimental
+        (r'\bNASA\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'NASA'),
+        (r'\bTEST\s*((?:\d+|(?:' + phonetic_num_words + r')\s*)+)', 'TEST'),
+    ]
+
+    for pattern, prefix in military_patterns:
+        for match in re.finditer(pattern, text, re.IGNORECASE):
+            num_part = match.group(1)
+            if num_part.upper() in ('ONE', 'TWO'):
+                flight_num = num_part.upper()
+            else:
+                flight_num = _normalize_flight_number(num_part) or num_part
+            callsign = f"{prefix}{flight_num}".replace(" ", "")
+
+            if callsign not in seen:
+                seen.add(callsign)
+                callsigns.append({
+                    "callsign": callsign,
+                    "raw": match.group(0).strip(),
+                    "type": "military",
+                    "confidence": 0.85,
+                })
+
+    # === Pattern 5: Direct ICAO code + numbers (e.g., "AAL123") ===
+    icao_pattern = r'\b([A-Z]{3})(\d{1,4})\b'
+    for match in re.finditer(icao_pattern, text):
+        icao = match.group(1)
+        flight_num = match.group(2)
+        callsign = f"{icao}{flight_num}"
+
+        if icao in AIRLINE_CALLSIGNS and callsign not in seen:
+            seen.add(callsign)
+            callsigns.append({
+                "callsign": callsign,
+                "raw": match.group(0).strip(),
+                "type": "airline",
+                "airline_icao": icao,
+                "airline_name": AIRLINE_CALLSIGNS.get(icao),
+                "flight_number": flight_num,
+                "confidence": 0.95,
+            })
+
+    # === Pattern 6: GA aircraft type + tail (common shorthand) ===
+    # Controllers often use aircraft type + last 3 of tail: "Cessna 3AB", "Cherokee 45X"
+    ga_types = [
+        "CESSNA", "PIPER", "CHEROKEE", "BONANZA", "BEECH", "BEECHCRAFT",
+        "CIRRUS", "MOONEY", "CITATION", "LEARJET", "LEAR", "GULFSTREAM",
+        "FALCON", "HAWKER", "CHALLENGER", "GLOBAL", "PHENOM", "PREMIER",
+        "KING AIR", "KINGAIR", "CARAVAN", "PILATUS", "TBM", "SOCATA",
+        "DIAMOND", "TECNAM", "SKYHAWK", "SKYLANE", "CENTURION",
+        "ARCHER", "WARRIOR", "SARATOGA", "SENECA", "SEMINOLE", "AZTEC",
+        "BARON", "DUCHESS", "TWIN STAR", "TWINSTAR",
+        "HELICOPTER", "HELO", "COPTER", "ROTOR",
+    ]
+    ga_type_pattern = r'\b(' + '|'.join(ga_types) + r')\s+(\d{1,3})\s*([A-Z]{1,2})?\b'
+
+    for match in re.finditer(ga_type_pattern, text, re.IGNORECASE):
+        ac_type = match.group(1).upper()
+        digits = match.group(2)
+        letters = match.group(3) or ""
+
+        # This is a partial tail number (last 3 of N-number)
+        partial_tail = f"{digits}{letters}".upper()
+        callsign = f"{ac_type[:3]}{partial_tail}"  # Use first 3 chars of type + tail
+
+        if callsign not in seen and len(partial_tail) >= 2:
+            seen.add(callsign)
+            callsigns.append({
+                "callsign": callsign,
+                "raw": match.group(0).strip(),
+                "type": "general_aviation",
+                "aircraft_type": ac_type,
+                "partial_tail": partial_tail,
+                "confidence": 0.65,  # Lower confidence since it's partial
+            })
+
+    # Sort by confidence (highest first)
+    callsigns.sort(key=lambda x: x.get("confidence", 0.5), reverse=True)
+
+    logger.debug(f"Extracted {len(callsigns)} callsigns from transcript")
+    return callsigns
+
+
+def _find_text_position(text: str, search_text: str) -> Optional[int]:
+    """Find the character position of search_text in text (case-insensitive)."""
+    text_upper = text.upper()
+    search_upper = search_text.upper()
+    pos = text_upper.find(search_upper)
+    return pos if pos >= 0 else None
+
+
+def _estimate_time_from_position(
+    position: int,
+    total_length: int,
+    duration_seconds: Optional[float],
+    segments: Optional[list] = None,
+) -> Optional[float]:
+    """
+    Estimate the time offset for a character position in the transcript.
+
+    Uses word-level segments if available (from Whisper), otherwise
+    estimates based on character position and total duration.
+
+    Args:
+        position: Character position in transcript
+        total_length: Total transcript length
+        duration_seconds: Total audio duration
+        segments: Optional word-level segments from Whisper
+
+    Returns:
+        Estimated time in seconds, or None if cannot estimate
+    """
+    if duration_seconds is None or duration_seconds <= 0:
+        return None
+
+    if total_length <= 0:
+        return 0.0
+
+    # If we have word-level segments, use them for more accurate timing
+    if segments:
+        # Segments format varies by transcription service
+        # Whisper typically provides: [{"start": 0.0, "end": 1.5, "text": "word"}, ...]
+        char_count = 0
+        for seg in segments:
+            seg_text = seg.get("text", "")
+            seg_start = seg.get("start")
+            seg_end = seg.get("end")
+
+            if seg_start is not None and position >= char_count and position < char_count + len(seg_text) + 1:
+                return float(seg_start)
+
+            char_count += len(seg_text) + 1  # +1 for space between segments
+
+    # Fallback: linear interpolation based on character position
+    ratio = position / total_length
+    return round(ratio * duration_seconds, 2)
+
+
+async def identify_airframes_from_transcript(
+    db: AsyncSession,
+    transcript: str,
+    segments: Optional[list] = None,
+    duration_seconds: Optional[float] = None,
+) -> list[dict]:
+    """
+    Identify airframes mentioned in a transcript by extracting callsigns.
+    Supports multiple callsigns per transmission (e.g., controller talking to 2+ aircraft).
+
+    Args:
+        db: Database session
+        transcript: The transcribed text
+        segments: Optional word-level timestamp segments from transcription
+        duration_seconds: Total audio duration for time estimation
+
+    Returns:
+        List of identified airframes with timing info, sorted by appearance order
+    """
+    callsigns = extract_callsigns_from_transcript(transcript)
+
+    if not callsigns:
+        return []
+
+    total_length = len(transcript) if transcript else 0
+
+    # For each callsign, build the airframe info with timing
+    # Track order of appearance in transcript
+    identified = []
+    for idx, cs in enumerate(callsigns):
+        raw_text = cs["raw"]
+
+        # Find position in original transcript for timing
+        position = _find_text_position(transcript, raw_text)
+        start_time = None
+
+        if position is not None:
+            start_time = _estimate_time_from_position(
+                position, total_length, duration_seconds, segments
+            )
+
+        airframe = {
+            "callsign": cs["callsign"],
+            "raw_text": raw_text,
+            "type": cs["type"],
+            "confidence": cs.get("confidence", 0.5),
+            "position": position,  # Character position in transcript
+            "start_time": start_time,  # Estimated time in seconds
+            "mention_order": idx,  # Order found (0 = first mention)
+        }
+
+        # Add airline info if available
+        if cs.get("airline_icao"):
+            airframe["airline_icao"] = cs["airline_icao"]
+            airframe["airline_name"] = cs.get("airline_name") or AIRLINE_CALLSIGNS.get(cs["airline_icao"])
+        if cs.get("flight_number"):
+            airframe["flight_number"] = cs["flight_number"]
+        if cs.get("suffix"):
+            airframe["suffix"] = cs["suffix"]
+        if cs.get("aircraft_type"):
+            airframe["aircraft_type"] = cs["aircraft_type"]
+        if cs.get("partial_tail"):
+            airframe["partial_tail"] = cs["partial_tail"]
+
+        identified.append(airframe)
+
+    # Sort by position/time (order of appearance) rather than confidence
+    identified.sort(key=lambda x: (x.get("position") or 0, x.get("mention_order", 0)))
+
+    # Re-assign mention_order after sorting by position
+    for idx, airframe in enumerate(identified):
+        airframe["mention_order"] = idx
+
+    # Log multi-callsign transmissions for debugging
+    if len(identified) > 1:
+        callsign_list = [a["callsign"] for a in identified]
+        logger.info(f"Multi-callsign transmission: {callsign_list}")
+
+    logger.info(f"Identified {len(identified)} airframes from transcript")
+    return identified
 
 
 def _get_s3_client():
@@ -662,12 +1501,25 @@ async def process_transcription(
                     )
 
                 # Update with transcription result
+                transcript_text = result_data.get("text", "")
                 transmission.transcription_status = "completed"
                 transmission.transcription_completed_at = datetime.utcnow()
-                transmission.transcript = result_data.get("text", "")
+                transmission.transcript = transcript_text
                 transmission.transcript_confidence = result_data.get("confidence")
                 transmission.transcript_language = result_data.get("language", "en")
                 transmission.transcript_segments = result_data.get("segments")
+
+                # Identify airframes mentioned in the transcript
+                if transcript_text:
+                    identified = await identify_airframes_from_transcript(
+                        db,
+                        transcript_text,
+                        segments=result_data.get("segments"),
+                        duration_seconds=transmission.duration_seconds,
+                    )
+                    if identified:
+                        transmission.identified_airframes = identified
+                        logger.info(f"Identified {len(identified)} airframes in transmission {transmission_id}")
 
                 await db.commit()
                 _stats["transcriptions_completed"] += 1
@@ -796,6 +1648,117 @@ async def get_transmissions(
     transmissions = list(result.scalars().all())
 
     return transmissions, total
+
+
+async def get_matched_radio_calls(
+    db: AsyncSession,
+    callsign: Optional[str] = None,
+    icao_hex: Optional[str] = None,
+    operator_icao: Optional[str] = None,
+    registration: Optional[str] = None,
+    hours: int = 24,
+    limit: int = 10,
+) -> list[dict]:
+    """
+    Get audio transmissions that mention a specific aircraft.
+
+    Matches are found by searching the identified_airframes JSON field
+    for callsigns that match the provided criteria.
+
+    Args:
+        db: Database session
+        callsign: Flight callsign to match (e.g., "UAL123")
+        icao_hex: ICAO hex code - used to look up callsign from current aircraft
+        operator_icao: Operator ICAO code (e.g., "UAL") - matches any flight by this operator
+        registration: Aircraft registration (e.g., "N12345") - for GA aircraft
+        hours: How many hours back to search
+        limit: Maximum number of results
+
+    Returns:
+        List of matched radio call dicts with transmission info and match details
+    """
+    from datetime import timedelta
+
+    if not callsign and not icao_hex and not operator_icao and not registration:
+        return []
+
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+
+    # Build query for transmissions with completed transcripts
+    query = (
+        select(AudioTransmission)
+        .where(AudioTransmission.transcription_status == "completed")
+        .where(AudioTransmission.identified_airframes.isnot(None))
+        .where(AudioTransmission.created_at >= cutoff)
+        .order_by(AudioTransmission.created_at.desc())
+    )
+
+    result = await db.execute(query)
+    transmissions = result.scalars().all()
+
+    matched_calls = []
+
+    for tx in transmissions:
+        if not tx.identified_airframes:
+            continue
+
+        # Search through identified airframes for matches
+        for airframe in tx.identified_airframes:
+            af_callsign = airframe.get("callsign", "")
+            af_airline_icao = airframe.get("airline_icao", "")
+            af_type = airframe.get("type", "")
+
+            matched = False
+            match_confidence = airframe.get("confidence", 0.5)
+            match_raw_text = airframe.get("raw_text", "")
+
+            # Match by exact callsign
+            if callsign and af_callsign.upper() == callsign.upper():
+                matched = True
+
+            # Match by operator ICAO (any flight by this airline)
+            elif operator_icao and af_airline_icao.upper() == operator_icao.upper():
+                matched = True
+
+            # Match by registration (for GA aircraft like N-numbers)
+            elif registration and af_type == "general_aviation":
+                # Check if callsign is the registration
+                if af_callsign.upper() == registration.upper():
+                    matched = True
+                # Also check partial tail matches
+                elif airframe.get("partial_tail"):
+                    partial = airframe.get("partial_tail", "").upper()
+                    if partial and registration.upper().endswith(partial):
+                        matched = True
+
+            if matched:
+                # Get audio URL
+                audio_url = None
+                if tx.s3_key:
+                    audio_url = get_signed_s3_url(tx.filename)
+                else:
+                    audio_url = get_local_audio_url(tx.filename)
+
+                matched_calls.append({
+                    "id": tx.id,
+                    "created_at": tx.created_at.isoformat() + "Z",
+                    "transcript": tx.transcript,
+                    "frequency_mhz": tx.frequency_mhz,
+                    "channel_name": tx.channel_name,
+                    "duration_seconds": tx.duration_seconds,
+                    "confidence": match_confidence,
+                    "raw_text": match_raw_text,
+                    "audio_url": audio_url,
+                    "matched_callsign": af_callsign,
+                })
+
+                # Only count each transmission once per aircraft
+                break
+
+        if len(matched_calls) >= limit:
+            break
+
+    return matched_calls
 
 
 async def get_audio_stats(db: AsyncSession) -> dict:

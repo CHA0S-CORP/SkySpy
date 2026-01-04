@@ -948,13 +948,42 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
 
     elif request_type == "aircraft-info":
         from app.services.aircraft_info import get_aircraft_info
+        from app.services.audio import get_matched_radio_calls
+
         icao = params.get("icao") or params.get("hex")
+        callsign = params.get("callsign") or params.get("flight")
+        include_radio_calls = params.get("include_radio_calls", True)
+        radio_hours = params.get("radio_hours", 24)
+        radio_limit = params.get("radio_limit", 10)
 
         if not icao:
             return {"error": "icao or hex parameter required"}
 
-        info = await get_aircraft_info(db, icao.upper())
-        return info or {"icao": icao.upper(), "found": False}
+        icao = icao.upper()
+        info = await get_aircraft_info(db, icao)
+
+        if not info:
+            return {"icao_hex": icao, "found": False}
+
+        # Include matched radio calls if requested
+        if include_radio_calls:
+            # Use callsign from params, or from aircraft info (operator_icao + typical format)
+            search_callsign = callsign.strip().upper() if callsign else None
+            operator_icao = info.get("operator_icao")
+            registration = info.get("registration")
+
+            matched_calls = await get_matched_radio_calls(
+                db,
+                callsign=search_callsign,
+                operator_icao=operator_icao if not search_callsign else None,
+                registration=registration,
+                hours=radio_hours,
+                limit=radio_limit,
+            )
+
+            info["matched_radio_calls"] = matched_calls
+
+        return info
 
     elif request_type == "sightings":
         # Historical aircraft sightings with filters

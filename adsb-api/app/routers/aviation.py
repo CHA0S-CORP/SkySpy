@@ -9,6 +9,7 @@ from math import radians, sin, cos, sqrt, atan2
 from typing import Optional
 
 from fastapi import APIRouter, Query, Path, HTTPException, Depends
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 import httpx
 
@@ -1290,18 +1291,45 @@ async def get_airspace_history(
 # GeoJSON Map Overlay Endpoints
 # =============================================================================
 
+# All valid GeoJSON data types (Natural Earth + tar1090)
+GEOJSON_DATA_TYPES = [
+    # Natural Earth
+    "states", "countries", "water",
+    # tar1090 Military AWACS
+    "de_mil_awacs", "nl_mil_awacs", "pl_mil_awacs", "uk_mil_awacs",
+    # tar1090 UK Military
+    "uk_mil_aar", "uk_mil_rc",
+    # tar1090 US
+    "us_a2a_refueling", "us_artcc",
+    # tar1090 Training
+    "ift_nav_routes", "ift_training_areas", "usafa_training_areas",
+    # tar1090 UK Advisory
+    "uk_airports", "uk_runways", "uk_shoreham",
+]
+
 @router.get(
     "/geojson/{data_type}",
     summary="Get GeoJSON Map Overlays",
     description="""
 Get cached GeoJSON boundary data for map overlays.
 
-**Data Types:**
+**Data Types - Natural Earth:**
 - `states` - US state and province boundaries
 - `countries` - Country boundaries
 - `water` - Major lakes and water bodies
 
-**Data Source:** Cached from Natural Earth (refreshed daily).
+**Data Types - Aviation (tar1090):**
+- `us_artcc` - US ARTCC (Air Route Traffic Control Center) boundaries
+- `us_a2a_refueling` - US air-to-air refueling tracks
+- `uk_mil_awacs` - UK military AWACS orbits
+- `uk_mil_aar` - UK air-to-air refueling zones
+- `uk_mil_rc` - UK military restricted/controlled areas
+- `de_mil_awacs`, `nl_mil_awacs`, `pl_mil_awacs` - EU AWACS orbits
+- `ift_nav_routes`, `ift_training_areas`, `usafa_training_areas` - Training areas
+
+**Data Source:** Cached from Natural Earth and tar1090 (refreshed daily).
+
+**Caching:** Response includes Cache-Control headers for browser caching (1 hour).
 
 **Parameters:**
 - `data_type` - Type of GeoJSON data to retrieve
@@ -1335,7 +1363,6 @@ async def get_geojson_overlays(
     data_type: str = Path(
         ...,
         description="Type of GeoJSON data",
-        enum=["states", "countries", "water"]
     ),
     lat: Optional[float] = Query(None, ge=-90, le=90, description="Center latitude for filtering"),
     lon: Optional[float] = Query(None, ge=-180, le=180, description="Center longitude for filtering"),
@@ -1343,11 +1370,18 @@ async def get_geojson_overlays(
     db: AsyncSession = Depends(get_db)
 ):
     """Get cached GeoJSON boundary data for map overlays."""
+    # Validate data_type
+    if data_type not in GEOJSON_DATA_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid data_type. Must be one of: {', '.join(GEOJSON_DATA_TYPES)}"
+        )
+
     features = await geodata_service.get_cached_geojson(
         db, data_type=data_type, lat=lat, lon=lon, radius_nm=radius
     )
 
-    return {
+    response_data = {
         "type": "FeatureCollection",
         "features": features,
         "count": len(features),
@@ -1355,6 +1389,15 @@ async def get_geojson_overlays(
         "source": "database",
         "cached": True
     }
+
+    # Return with cache headers - static data can be cached for 1 hour
+    return JSONResponse(
+        content=response_data,
+        headers={
+            "Cache-Control": "public, max-age=3600",  # 1 hour browser cache
+            "Vary": "Accept-Encoding",
+        }
+    )
 
 
 @router.get(

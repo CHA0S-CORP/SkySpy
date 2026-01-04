@@ -22,6 +22,12 @@ export const DEFAULT_OVERLAYS = {
   counties: false,
   states: false,
   countries: false,
+  // Aviation overlays (pro mode only) - tar1090 GeoJSON
+  usArtcc: false,        // US ARTCC boundaries
+  usRefueling: false,    // US A2A refueling tracks
+  ukMilZones: false,     // UK military zones (AWACS, AAR, RC)
+  euMilAwacs: false,     // EU military AWACS orbits (DE, NL, PL)
+  trainingAreas: false,  // IFT/USAFA training areas
 };
 
 export const getConfig = () => {

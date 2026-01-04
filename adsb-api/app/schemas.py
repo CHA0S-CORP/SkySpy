@@ -99,6 +99,19 @@ class AircraftStatsResponse(BaseModel):
 # Aircraft Info Schemas
 # ============================================================================
 
+class MatchedRadioCall(BaseModel):
+    """Radio call matched to an aircraft."""
+    id: int = Field(..., description="Transmission ID")
+    created_at: str = Field(..., description="Transmission timestamp")
+    transcript: Optional[str] = Field(None, description="Transcribed text")
+    frequency_mhz: Optional[float] = Field(None, description="Radio frequency")
+    channel_name: Optional[str] = Field(None, description="Channel name")
+    duration_seconds: Optional[float] = Field(None, description="Audio duration")
+    confidence: Optional[float] = Field(None, description="Callsign extraction confidence")
+    raw_text: Optional[str] = Field(None, description="Raw callsign text from transcript")
+    audio_url: Optional[str] = Field(None, description="URL to audio file")
+
+
 class AircraftInfoResponse(BaseModel):
     """Detailed aircraft registration and airframe information."""
     model_config = ConfigDict(
@@ -121,11 +134,23 @@ class AircraftInfoResponse(BaseModel):
                 "photo_thumbnail_url": "https://example.com/thumb.jpg",
                 "photo_photographer": "John Doe",
                 "photo_source": "planespotters.net",
-                "cached_at": "2024-12-21T12:00:00Z"
+                "cached_at": "2024-12-21T12:00:00Z",
+                "matched_radio_calls": [
+                    {
+                        "id": 1,
+                        "created_at": "2024-12-28T12:00:00Z",
+                        "transcript": "United 123 cleared for takeoff",
+                        "frequency_mhz": 118.7,
+                        "channel_name": "Tower",
+                        "duration_seconds": 3.5,
+                        "confidence": 0.9,
+                        "raw_text": "United 123"
+                    }
+                ]
             }
         }
     )
-    
+
     icao_hex: str = Field(..., description="ICAO 24-bit hex identifier")
     registration: Optional[str] = Field(None, description="Aircraft registration number")
     type_code: Optional[str] = Field(None, description="ICAO type designator")
@@ -153,6 +178,7 @@ class AircraftInfoResponse(BaseModel):
     extra_data: Optional[dict] = Field(None, description="Additional metadata")
     cached_at: Optional[str] = Field(None, description="When data was cached")
     fetch_failed: bool = Field(False, description="True if lookup failed")
+    matched_radio_calls: Optional[list[MatchedRadioCall]] = Field(None, description="Radio calls mentioning this aircraft")
 
 
 class AircraftPhotoResponse(BaseModel):
@@ -898,7 +924,10 @@ class AudioTransmissionResponse(BaseModel):
                 "frequency_mhz": 121.5,
                 "channel_name": "Guard",
                 "transcription_status": "completed",
-                "transcript": "United 123, cleared for takeoff runway 28L"
+                "transcript": "United 123, cleared for takeoff runway 28L",
+                "identified_airframes": [
+                    {"callsign": "UAL123", "raw_text": "United 123", "type": "airline", "airline_icao": "UAL", "airline_name": "United Airlines", "flight_number": "123"}
+                ]
             }
         }
     )
@@ -920,6 +949,7 @@ class AudioTransmissionResponse(BaseModel):
     transcript: Optional[str] = Field(None, description="Transcription text")
     transcript_confidence: Optional[float] = Field(None, description="Confidence score 0-1")
     transcript_language: Optional[str] = Field(None, description="Detected language")
+    identified_airframes: Optional[list] = Field(None, description="Identified aircraft callsigns from transcript")
     metadata: Optional[dict] = Field(None, description="Additional metadata")
 
 

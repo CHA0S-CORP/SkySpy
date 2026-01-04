@@ -2710,3 +2710,282 @@
   padding: 2px 6px;
   border-radius: 4px;
 }
+
+/* ============================================================================
+   Audio View - Identified Flights Tags
+   ============================================================================ */
+
+.audio-identified-flights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(90, 122, 154, 0.15);
+}
+
+.flight-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.25);
+  border-radius: 16px;
+  font-size: 12px;
+  color: var(--accent-cyan);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.flight-tag:hover {
+  background: rgba(0, 212, 255, 0.2);
+  border-color: rgba(0, 212, 255, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 212, 255, 0.15);
+}
+
+.flight-tag svg {
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.flight-tag .flight-callsign {
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.flight-tag .flight-airline {
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-family: system-ui, -apple-system, sans-serif;
+  font-weight: 400;
+  padding-left: 6px;
+  border-left: 1px solid rgba(90, 122, 154, 0.3);
+  margin-left: 2px;
+}
+
+/* Flight tag type variations */
+.flight-tag.airline {
+  background: rgba(0, 212, 255, 0.1);
+  border-color: rgba(0, 212, 255, 0.25);
+  color: var(--accent-cyan);
+}
+
+.flight-tag.airline:hover {
+  background: rgba(0, 212, 255, 0.2);
+  border-color: rgba(0, 212, 255, 0.5);
+}
+
+.flight-tag.general_aviation {
+  background: rgba(74, 222, 128, 0.1);
+  border-color: rgba(74, 222, 128, 0.25);
+  color: var(--accent-green);
+}
+
+.flight-tag.general_aviation:hover {
+  background: rgba(74, 222, 128, 0.2);
+  border-color: rgba(74, 222, 128, 0.5);
+}
+
+.flight-tag.military {
+  background: rgba(251, 146, 60, 0.1);
+  border-color: rgba(251, 146, 60, 0.25);
+  color: #fb923c;
+}
+
+.flight-tag.military:hover {
+  background: rgba(251, 146, 60, 0.2);
+  border-color: rgba(251, 146, 60, 0.5);
+}
+
+.flight-tag.unknown {
+  background: rgba(90, 122, 154, 0.1);
+  border-color: rgba(90, 122, 154, 0.25);
+  color: var(--text-secondary);
+}
+
+.flight-tag.unknown:hover {
+  background: rgba(90, 122, 154, 0.2);
+  border-color: rgba(90, 122, 154, 0.5);
+}
+
+/* ============================================================================
+   Audio View - Flight Filters
+   ============================================================================ */
+
+.callsign-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  min-width: 120px;
+}
+
+.callsign-filter:focus-within {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.callsign-filter input {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  width: 80px;
+  outline: none;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.callsign-filter input::placeholder {
+  color: var(--text-dim);
+  font-family: inherit;
+}
+
+.clear-callsign-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.15s ease;
+}
+
+.clear-callsign-btn:hover {
+  background: rgba(248, 81, 73, 0.2);
+  color: var(--accent-red);
+}
+
+.clear-filters-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 8px;
+  background: rgba(248, 81, 73, 0.1);
+  border: 1px solid rgba(248, 81, 73, 0.3);
+  border-radius: 6px;
+  color: var(--accent-red);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.clear-filters-btn:hover {
+  background: rgba(248, 81, 73, 0.2);
+  border-color: rgba(248, 81, 73, 0.5);
+}
+
+.clear-filters-btn .clear-icon {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: var(--accent-red);
+  color: var(--bg-dark);
+  border-radius: 50%;
+  padding: 1px;
+}
+
+/* Responsive adjustments for flight filters */
+@media (max-width: 1200px) {
+  .audio-filters {
+    flex-wrap: wrap;
+  }
+
+  .callsign-filter {
+    min-width: 100px;
+  }
+
+  .callsign-filter input {
+    width: 60px;
+  }
+}
+
+@media (max-width: 768px) {
+  .audio-filters .audio-select {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .callsign-filter {
+    flex: 1;
+    min-width: 100%;
+  }
+
+  .callsign-filter input {
+    flex: 1;
+    width: auto;
+  }
+}
+
+/* Emergency Filter Button */
+.emergency-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.emergency-filter-btn:hover {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+.emergency-filter-btn.active {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+.emergency-filter-btn.active svg {
+  animation: emergency-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes emergency-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Emergency indicator on audio items */
+.audio-item.emergency {
+  border-left: 3px solid var(--accent-red);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.audio-item.emergency .audio-channel {
+  color: var(--accent-red);
+}
+
+.emergency-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid var(--accent-red);
+  border-radius: 3px;
+  color: var(--accent-red);
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.emergency-badge svg {
+  animation: emergency-pulse 1.5s ease-in-out infinite;
+}

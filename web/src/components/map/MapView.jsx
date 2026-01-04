@@ -171,6 +171,15 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     countries: null,
   });
 
+  // Aviation overlay data (pro mode only) - tar1090 GeoJSON from API
+  const [aviationOverlayData, setAviationOverlayData] = useState({
+    usArtcc: null,
+    usRefueling: null,
+    ukMilZones: null,  // Combined: uk_mil_awacs, uk_mil_aar, uk_mil_rc
+    euMilAwacs: null,  // Combined: de_mil_awacs, nl_mil_awacs, pl_mil_awacs
+    trainingAreas: null,  // Combined: ift_nav_routes, ift_training_areas, usafa_training_areas
+  });
+
   // Map viewport center for dynamic data loading (updated on pan/zoom)
   const [viewportCenter, setViewportCenter] = useState({ lat: null, lon: null });
   const viewportUpdateTimeoutRef = useRef(null);
@@ -2236,6 +2245,138 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     loadTerrainData();
   }, [config.mapMode, overlays.water, overlays.counties, overlays.states, overlays.countries, feederLat, feederLon, radarRange, terrainData.countries, terrainData.states, terrainData.water, terrainData.counties]);
 
+  // Fetch aviation overlay data (pro mode only) - tar1090 GeoJSON from API with browser caching
+  useEffect(() => {
+    if (config.mapMode !== 'pro') return;
+
+    const needsAny = overlays.usArtcc || overlays.usRefueling || overlays.ukMilZones || overlays.euMilAwacs || overlays.trainingAreas;
+    if (!needsAny) return;
+
+    const apiBase = config.apiBaseUrl || '';
+
+    // Helper to fetch GeoJSON from API (browser will cache via Cache-Control header)
+    const fetchAviationGeoJSON = async (dataTypes) => {
+      const allFeatures = [];
+      for (const dataType of dataTypes) {
+        try {
+          const resp = await fetch(`${apiBase}/api/v1/aviation/geojson/${dataType}`);
+          if (!resp.ok) {
+            console.warn(`Failed to fetch ${dataType}: ${resp.status}`);
+            continue;
+          }
+          const data = await resp.json();
+          if (data.features) {
+            // Tag features with their source type for styling
+            data.features.forEach(f => {
+              f.properties = f.properties || {};
+              f.properties._sourceType = dataType;
+            });
+            allFeatures.push(...data.features);
+          }
+        } catch (err) {
+          console.warn(`Failed to fetch ${dataType}:`, err.message);
+        }
+      }
+      return allFeatures;
+    };
+
+    // Helper to convert GeoJSON features to simplified format for canvas rendering
+    const processFeatures = (features, filterBounds) => {
+      const result = [];
+      const { minLat, maxLat, minLon, maxLon } = filterBounds;
+
+      features.forEach(feature => {
+        const geomType = feature.geometry?.type;
+        const coords = feature.geometry?.coordinates;
+        if (!coords) return;
+
+        const processCoords = (coordArray, type) => {
+          // Check if any point is near viewport
+          const isNearViewport = coordArray.some(([lon, lat]) =>
+            lat >= minLat - 5 && lat <= maxLat + 5 &&
+            lon >= minLon - 5 && lon <= maxLon + 5
+          );
+          if (isNearViewport) {
+            result.push({
+              type,
+              coords: coordArray,
+              name: feature.properties?.name || feature.properties?.NAME || feature.id,
+              sourceType: feature.properties?._sourceType,
+            });
+          }
+        };
+
+        if (geomType === 'Polygon') {
+          coords.forEach(ring => processCoords(ring, 'polygon'));
+        } else if (geomType === 'MultiPolygon') {
+          coords.forEach(poly => poly.forEach(ring => processCoords(ring, 'polygon')));
+        } else if (geomType === 'LineString') {
+          processCoords(coords, 'line');
+        } else if (geomType === 'MultiLineString') {
+          coords.forEach(line => processCoords(line, 'line'));
+        } else if (geomType === 'Point') {
+          result.push({
+            type: 'point',
+            coords: coords,
+            name: feature.properties?.name || feature.properties?.NAME || feature.id,
+            sourceType: feature.properties?._sourceType,
+          });
+        }
+      });
+      return result;
+    };
+
+    const degPerNm = 1/60;
+    const lonScale = Math.cos(feederLat * Math.PI / 180);
+    const filterBounds = {
+      minLat: feederLat - radarRange * degPerNm * 2,
+      maxLat: feederLat + radarRange * degPerNm * 2,
+      minLon: feederLon - (radarRange * degPerNm * 2) / lonScale,
+      maxLon: feederLon + (radarRange * degPerNm * 2) / lonScale,
+    };
+
+    const loadAviationData = async () => {
+      const updates = {};
+
+      if (overlays.usArtcc && !aviationOverlayData.usArtcc) {
+        const features = await fetchAviationGeoJSON(['us_artcc']);
+        updates.usArtcc = processFeatures(features, filterBounds);
+        console.log(`Loaded US ARTCC: ${updates.usArtcc.length} features`);
+      }
+
+      if (overlays.usRefueling && !aviationOverlayData.usRefueling) {
+        const features = await fetchAviationGeoJSON(['us_a2a_refueling']);
+        updates.usRefueling = processFeatures(features, filterBounds);
+        console.log(`Loaded US Refueling: ${updates.usRefueling.length} features`);
+      }
+
+      if (overlays.ukMilZones && !aviationOverlayData.ukMilZones) {
+        const features = await fetchAviationGeoJSON(['uk_mil_awacs', 'uk_mil_aar', 'uk_mil_rc']);
+        updates.ukMilZones = processFeatures(features, filterBounds);
+        console.log(`Loaded UK Mil Zones: ${updates.ukMilZones.length} features`);
+      }
+
+      if (overlays.euMilAwacs && !aviationOverlayData.euMilAwacs) {
+        const features = await fetchAviationGeoJSON(['de_mil_awacs', 'nl_mil_awacs', 'pl_mil_awacs']);
+        updates.euMilAwacs = processFeatures(features, filterBounds);
+        console.log(`Loaded EU AWACS: ${updates.euMilAwacs.length} features`);
+      }
+
+      if (overlays.trainingAreas && !aviationOverlayData.trainingAreas) {
+        const features = await fetchAviationGeoJSON(['ift_nav_routes', 'ift_training_areas', 'usafa_training_areas']);
+        updates.trainingAreas = processFeatures(features, filterBounds);
+        console.log(`Loaded Training Areas: ${updates.trainingAreas.length} features`);
+      }
+
+      if (Object.keys(updates).length > 0) {
+        console.log('Updating aviation overlay data:', Object.keys(updates));
+        setAviationOverlayData(prev => ({ ...prev, ...updates }));
+      }
+    };
+
+    loadAviationData();
+  }, [config.mapMode, config.apiBaseUrl, overlays.usArtcc, overlays.usRefueling, overlays.ukMilZones, overlays.euMilAwacs, overlays.trainingAreas, feederLat, feederLon, radarRange, aviationOverlayData.usArtcc, aviationOverlayData.usRefueling, aviationOverlayData.ukMilZones, aviationOverlayData.euMilAwacs, aviationOverlayData.trainingAreas]);
+
   const sortedAircraft = useMemo(() => {
     let filtered = [...aircraft].filter(a => a.lat && a.lon);
 
@@ -2875,6 +3016,84 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           terrainData.counties.forEach(feature => {
             drawBoundaryPath(feature.coords, 'rgba(100, 130, 160, 0.25)', null, 0.5);
           });
+        }
+
+        // Aviation overlays - tar1090 GeoJSON data
+        // US ARTCC boundaries - cyan dashed lines
+        if (overlays.usArtcc && aviationOverlayData.usArtcc?.length > 0) {
+          ctx.save();
+          ctx.setLineDash([8, 4]);
+          aviationOverlayData.usArtcc.forEach(feature => {
+            drawBoundaryPath(feature.coords, 'rgba(0, 200, 255, 0.6)', null, 1.5);
+          });
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+
+        // US A2A Refueling tracks - yellow/orange lines
+        if (overlays.usRefueling && aviationOverlayData.usRefueling?.length > 0) {
+          ctx.save();
+          ctx.setLineDash([6, 3]);
+          aviationOverlayData.usRefueling.forEach(feature => {
+            if (feature.type === 'polygon') {
+              drawBoundaryPath(feature.coords, 'rgba(255, 180, 0, 0.7)', 'rgba(255, 180, 0, 0.15)', 2);
+            } else {
+              drawBoundaryPath(feature.coords, 'rgba(255, 180, 0, 0.8)', null, 2);
+            }
+          });
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+
+        // UK Military zones - magenta/purple
+        if (overlays.ukMilZones && aviationOverlayData.ukMilZones?.length > 0) {
+          ctx.save();
+          ctx.setLineDash([5, 3]);
+          aviationOverlayData.ukMilZones.forEach(feature => {
+            const isAwacs = feature.sourceType?.includes('awacs');
+            const isAar = feature.sourceType?.includes('aar');
+            if (isAwacs) {
+              // AWACS orbits - purple dashed circles/polygons
+              drawBoundaryPath(feature.coords, 'rgba(180, 100, 255, 0.7)', 'rgba(180, 100, 255, 0.1)', 2);
+            } else if (isAar) {
+              // AAR zones - magenta
+              drawBoundaryPath(feature.coords, 'rgba(255, 50, 150, 0.7)', 'rgba(255, 50, 150, 0.1)', 2);
+            } else {
+              // RC (restricted/controlled) - red
+              drawBoundaryPath(feature.coords, 'rgba(255, 80, 80, 0.6)', 'rgba(255, 80, 80, 0.1)', 1.5);
+            }
+          });
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+
+        // EU AWACS orbits - purple circles
+        if (overlays.euMilAwacs && aviationOverlayData.euMilAwacs?.length > 0) {
+          ctx.save();
+          ctx.setLineDash([5, 3]);
+          aviationOverlayData.euMilAwacs.forEach(feature => {
+            drawBoundaryPath(feature.coords, 'rgba(160, 80, 220, 0.7)', 'rgba(160, 80, 220, 0.1)', 2);
+          });
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+
+        // Training areas - green
+        if (overlays.trainingAreas && aviationOverlayData.trainingAreas?.length > 0) {
+          ctx.save();
+          ctx.setLineDash([4, 4]);
+          aviationOverlayData.trainingAreas.forEach(feature => {
+            const isRoute = feature.sourceType?.includes('route');
+            if (isRoute) {
+              // Nav routes - green lines
+              drawBoundaryPath(feature.coords, 'rgba(50, 200, 100, 0.8)', null, 2);
+            } else {
+              // Training areas - green polygons
+              drawBoundaryPath(feature.coords, 'rgba(50, 200, 100, 0.6)', 'rgba(50, 200, 100, 0.1)', 1.5);
+            }
+          });
+          ctx.setLineDash([]);
+          ctx.restore();
         }
       }
 
@@ -3914,7 +4133,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [config.mapMode, sortedAircraft, radarRange, feederLat, feederLon, selectedAircraft, selectedMetar, selectedPirep, selectedNavaid, selectedAirport, overlays, aviationData, proPanOffset, followingAircraft, trackHistory, showSelectedTrack, safetyEvents, showShortTracks, shortTrackHistory]);
+  }, [config.mapMode, sortedAircraft, radarRange, feederLat, feederLon, selectedAircraft, selectedMetar, selectedPirep, selectedNavaid, selectedAirport, overlays, aviationData, aviationOverlayData, proPanOffset, followingAircraft, trackHistory, showSelectedTrack, safetyEvents, showShortTracks, shortTrackHistory]);
 
   // Leaflet map setup
   useEffect(() => {
@@ -5062,6 +5281,48 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   onChange={() => updateOverlays({ ...overlays, water: !overlays.water })}
                 />
                 <span className="toggle-label">Water Bodies</span>
+              </label>
+              <div className="overlay-divider" />
+              <div className="overlay-section-title">Aviation Overlays</div>
+              <label className="overlay-toggle">
+                <input
+                  type="checkbox"
+                  checked={overlays.usArtcc}
+                  onChange={() => updateOverlays({ ...overlays, usArtcc: !overlays.usArtcc })}
+                />
+                <span className="toggle-label">US ARTCC Boundaries</span>
+              </label>
+              <label className="overlay-toggle">
+                <input
+                  type="checkbox"
+                  checked={overlays.usRefueling}
+                  onChange={() => updateOverlays({ ...overlays, usRefueling: !overlays.usRefueling })}
+                />
+                <span className="toggle-label">US Refueling Tracks</span>
+              </label>
+              <label className="overlay-toggle">
+                <input
+                  type="checkbox"
+                  checked={overlays.ukMilZones}
+                  onChange={() => updateOverlays({ ...overlays, ukMilZones: !overlays.ukMilZones })}
+                />
+                <span className="toggle-label">UK Military Zones</span>
+              </label>
+              <label className="overlay-toggle">
+                <input
+                  type="checkbox"
+                  checked={overlays.euMilAwacs}
+                  onChange={() => updateOverlays({ ...overlays, euMilAwacs: !overlays.euMilAwacs })}
+                />
+                <span className="toggle-label">EU AWACS Orbits</span>
+              </label>
+              <label className="overlay-toggle">
+                <input
+                  type="checkbox"
+                  checked={overlays.trainingAreas}
+                  onChange={() => updateOverlays({ ...overlays, trainingAreas: !overlays.trainingAreas })}
+                />
+                <span className="toggle-label">Training Areas</span>
               </label>
             </>
           )}

@@ -35,6 +35,30 @@ GEOJSON_SOURCES = {
     "water": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_lakes.geojson",
 }
 
+# tar1090 aviation GeoJSON sources (military/aviation overlays)
+TAR1090_BASE = "https://raw.githubusercontent.com/wiedehopf/tar1090/master/html/geojson"
+TAR1090_GEOJSON_SOURCES = {
+    # Military AWACS orbits
+    "de_mil_awacs": f"{TAR1090_BASE}/DE_Mil_AWACS_Orbits.geojson",
+    "nl_mil_awacs": f"{TAR1090_BASE}/NL_Mil_AWACS_Orbits.geojson",
+    "pl_mil_awacs": f"{TAR1090_BASE}/PL_Mil_AWACS_Orbits.geojson",
+    "uk_mil_awacs": f"{TAR1090_BASE}/UK_Mil_AWACS_Orbits.geojson",
+    # UK Military zones
+    "uk_mil_aar": f"{TAR1090_BASE}/UK_Mil_AAR_Zones.geojson",
+    "uk_mil_rc": f"{TAR1090_BASE}/UK_Mil_RC.geojson",
+    # US zones
+    "us_a2a_refueling": f"{TAR1090_BASE}/US_A2A_refueling.geojson",
+    "us_artcc": f"{TAR1090_BASE}/US_ARTCC_boundaries.geojson",
+    # IFT training areas
+    "ift_nav_routes": f"{TAR1090_BASE}/IFT/IFT_NAV_Routes.geojson",
+    "ift_training_areas": f"{TAR1090_BASE}/IFT/IFT_Training_Areas.geojson",
+    "usafa_training_areas": f"{TAR1090_BASE}/IFT/USAFA_Training_Areas.geojson",
+    # UK advisory
+    "uk_airports": f"{TAR1090_BASE}/uk_advisory/airports.geojson",
+    "uk_runways": f"{TAR1090_BASE}/uk_advisory/runways.geojson",
+    "uk_shoreham": f"{TAR1090_BASE}/uk_advisory/shoreham.geojson",
+}
+
 # Refresh interval (24 hours)
 REFRESH_INTERVAL = 86400
 
@@ -266,11 +290,14 @@ async def refresh_geojson(db: AsyncSession) -> int:
     now = datetime.utcnow()
     total = 0
 
-    for data_type, url in GEOJSON_SOURCES.items():
+    # Combine all GeoJSON sources
+    all_sources = {**GEOJSON_SOURCES, **TAR1090_GEOJSON_SOURCES}
+
+    for data_type, url in all_sources.items():
         logger.debug(f"Fetching {data_type} GeoJSON...")
         geojson = await fetch_geojson(url)
 
-        if not geojson or "features" not in geojson:
+        if not geojson:
             logger.warning(f"Failed to fetch {data_type} GeoJSON")
             continue
 
@@ -279,12 +306,24 @@ async def refresh_geojson(db: AsyncSession) -> int:
             delete(CachedGeoJSON).where(CachedGeoJSON.data_type == data_type)
         )
 
+        # Handle both FeatureCollection and direct feature arrays
+        if "features" in geojson:
+            raw_features = geojson["features"]
+        elif geojson.get("type") == "Feature":
+            # Single feature wrapped
+            raw_features = [geojson]
+        elif geojson.get("type") in ("Polygon", "MultiPolygon", "LineString", "MultiLineString", "Point"):
+            # Raw geometry - wrap it as a feature
+            raw_features = [{"type": "Feature", "geometry": geojson, "properties": {}}]
+        else:
+            logger.warning(f"Unknown GeoJSON format for {data_type}")
+            continue
+
         features = []
         # Track unique items to prevent batch duplicate errors
-        # using a tuple of (data_type, identifier)
         seen_items = set()
 
-        for feature in geojson["features"]:
+        for idx, feature in enumerate(raw_features):
             geometry = feature.get("geometry")
             properties = feature.get("properties", {})
 
@@ -299,22 +338,39 @@ async def refresh_geojson(db: AsyncSession) -> int:
             if data_type == "countries":
                 name = properties.get("NAME", properties.get("ADMIN", "Unknown"))
                 code = properties.get("ISO_A2") or properties.get("ISO_A3")
-                # Use code for uniqueness if available, else name
                 unique_key = code if code else name
             elif data_type == "states":
                 name = properties.get("name", properties.get("NAME", "Unknown"))
                 code = properties.get("iso_3166_2") or properties.get("postal")
                 unique_key = code if code else name
-            else:  # water / lakes
+            elif data_type == "water":
                 name = properties.get("name", properties.get("NAME", "Unknown"))
                 code = None
                 unique_key = name
+            else:
+                # tar1090 aviation GeoJSON - use name/id from properties or generate one
+                name = (
+                    properties.get("name") or
+                    properties.get("NAME") or
+                    properties.get("id") or
+                    properties.get("ID") or
+                    properties.get("title") or
+                    properties.get("designator") or
+                    feature.get("id") or
+                    f"{data_type}_{idx}"
+                )
+                code = (
+                    properties.get("id") or
+                    properties.get("ID") or
+                    properties.get("icao") or
+                    properties.get("designator")
+                )
+                unique_key = f"{name}_{idx}"  # Use index to allow multiple features with same name
 
             # DEDUPLICATION: Skip if we've already processed this entity in this batch
-            # (e.g. if the source GeoJSON lists a country twice)
             if unique_key in seen_items:
                 continue
-            if unique_key:  # Only add to seen if we have a valid key
+            if unique_key:
                 seen_items.add(unique_key)
 
             # Calculate bounding box
@@ -323,8 +379,8 @@ async def refresh_geojson(db: AsyncSession) -> int:
             cached = CachedGeoJSON(
                 fetched_at=now,
                 data_type=data_type,
-                name=name,
-                code=code,
+                name=str(name)[:100],  # Truncate to fit column
+                code=str(code)[:10] if code else None,  # Truncate to fit column
                 bbox_min_lat=bbox[0],
                 bbox_max_lat=bbox[1],
                 bbox_min_lon=bbox[2],

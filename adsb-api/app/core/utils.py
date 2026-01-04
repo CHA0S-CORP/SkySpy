@@ -107,8 +107,7 @@ async def safe_request(
     Make a safe HTTP request with timeout, rate limiting, and 429 handling.
 
     Features:
-    - Global upstream rate limiting (1 request per configured interval, default 60s)
-    - Per-domain rate limiting to avoid hitting rate limits
+    - Per-domain rate limiting to avoid hitting external API rate limits
     - Automatic retry with exponential backoff on 429 responses
     - Respects Retry-After header when provided
 
@@ -116,26 +115,13 @@ async def safe_request(
         url: The URL to request
         timeout: Request timeout in seconds
         max_retries: Maximum retry attempts on 429
-        is_upstream: If True, apply global upstream rate limiting (for external APIs)
+        is_upstream: Legacy parameter, no longer used
     """
-    from app.core.cache import check_upstream_rate_limit, mark_upstream_request
-
     # Extract domain for rate limiting (strip port if present)
     parsed = urlparse(url)
     domain = parsed.hostname.lower() if parsed.hostname else parsed.netloc.lower()
 
-    # Check if this is a local request (skip upstream rate limiting for local services)
-    # Include Docker service names (ultrafeeder, dump978) as local services
-    local_services = {"localhost", "127.0.0.1", "ultrafeeder", "dump978"}
-    is_local = domain in local_services or domain.startswith("192.168.") or domain.startswith("10.")
-
-    # Apply global upstream rate limiting for external APIs
-    if is_upstream and not is_local:
-        if not await check_upstream_rate_limit():
-            logger.debug(f"Upstream rate limited, skipping request to {domain}")
-            return None
-
-    # Check if we're in backoff period for this domain
+    # Check if we're in backoff period for this domain (from 429 responses)
     now = time.time()
     backoff_until = _domain_backoff_until.get(domain, 0)
     if now < backoff_until:
@@ -143,7 +129,7 @@ async def safe_request(
         logger.debug(f"Rate limited: {domain} in backoff for {wait_time:.1f}s more")
         return None
 
-    # Apply per-domain rate limiting
+    # Apply per-domain rate limiting to avoid hitting external API limits
     min_interval = _domain_rate_limits.get(domain, 0.2)  # Default 5 req/sec
     last_request = _domain_last_request.get(domain, 0)
     elapsed = now - last_request
@@ -153,10 +139,6 @@ async def safe_request(
         await asyncio.sleep(wait_time)
 
     _domain_last_request[domain] = time.time()
-
-    # Mark that we're making an upstream request
-    if is_upstream and not is_local:
-        await mark_upstream_request()
 
     # Make request with retry logic
     for attempt in range(max_retries + 1):

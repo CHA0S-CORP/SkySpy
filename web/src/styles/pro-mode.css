@@ -920,7 +920,7 @@
   border-radius: 8px;
   padding: 12px;
   min-width: 180px;
-  z-index: 1001;
+  z-index: 1500;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 

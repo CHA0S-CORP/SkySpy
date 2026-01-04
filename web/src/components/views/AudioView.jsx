@@ -1,17 +1,48 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
-import { Radio, Search, Play, Pause, Volume2, VolumeX, RefreshCw, ChevronDown, AlertCircle, CheckCircle, Clock, Loader2, FileAudio, Mic, PlayCircle, Radar } from 'lucide-react';
+import { Radio, Search, Play, Pause, Volume2, VolumeX, RefreshCw, ChevronDown, AlertCircle, CheckCircle, Clock, Loader2, FileAudio, Mic, PlayCircle, Radar, Plane, Filter, X } from 'lucide-react';
 import { useApi } from '../../hooks';
 import { io } from 'socket.io-client';
+
+// Emergency keywords for filtering distress calls
+const EMERGENCY_KEYWORDS = [
+  'mayday',
+  'pan pan',
+  'pan-pan',
+  'emergency',
+  'declaring emergency',
+  'fuel emergency',
+  'medical emergency',
+  'emergency descent',
+  'squawk 7700',
+  '7700',
+  'souls on board',
+  'distress',
+  'urgent'
+];
+
+// Helper to check if transcript contains emergency keywords
+const hasEmergencyKeyword = (transcript) => {
+  if (!transcript) return false;
+  const lowerTranscript = transcript.toLowerCase();
+  return EMERGENCY_KEYWORDS.some(keyword => lowerTranscript.includes(keyword));
+};
 
 // Global audio state to persist across page navigation
 const globalAudioState = {
   audioRefs: {},
   playingId: null,
+  currentTransmission: null, // { id, channel_name, frequency_mhz, ... }
   audioProgress: {},
   audioDurations: {},
   progressIntervalRef: null,
   autoplay: false,
-  subscribers: []
+  autoplayFilter: null, // { type: 'airframe', callsign: 'UAL123', hex: 'A12345' } or null for all
+  subscribers: [],
+  // Socket.IO connection for real-time audio (shared across components)
+  socket: null,
+  socketConnected: false,
+  autoplayQueue: [],
+  recentTransmissions: [], // Last 50 transmissions received via socket
 };
 
 // Subscribe to audio state changes
@@ -27,9 +58,254 @@ const notifySubscribers = (updates) => {
   globalAudioState.subscribers.forEach(callback => callback(updates));
 };
 
+// Set autoplay state
+export const setAutoplay = (enabled) => {
+  globalAudioState.autoplay = enabled;
+  notifySubscribers({ autoplay: enabled });
+};
+
+// Set autoplay filter for airframe-specific playback
+export const setAutoplayFilter = (filter) => {
+  globalAudioState.autoplayFilter = filter;
+  notifySubscribers({ autoplayFilter: filter });
+};
+
+// Clear autoplay filter (return to all transmissions)
+export const clearAutoplayFilter = () => {
+  globalAudioState.autoplayFilter = null;
+  notifySubscribers({ autoplayFilter: null });
+};
+
 // Export for external access
 export const getGlobalAudioState = () => globalAudioState;
 export const subscribeToAudioStateChanges = subscribeToAudioState;
+
+// Initialize socket.io connection for real-time audio
+export const initAudioSocket = (apiBase = '') => {
+  // Don't create duplicate connections
+  if (globalAudioState.socket && globalAudioState.socket.connected) {
+    return globalAudioState.socket;
+  }
+
+  let socketUrl;
+  if (apiBase) {
+    try {
+      const url = new URL(apiBase, window.location.origin);
+      socketUrl = `${url.protocol}//${url.host}`;
+    } catch (e) {
+      socketUrl = window.location.origin;
+    }
+  } else {
+    socketUrl = window.location.origin;
+  }
+
+  console.log('Initializing global audio socket:', socketUrl);
+
+  const socket = io(socketUrl, {
+    path: '/socket.io/socket.io',
+    query: { topics: 'audio' },
+    transports: ['websocket', 'polling'],
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000,
+  });
+
+  globalAudioState.socket = socket;
+
+  socket.on('connect', () => {
+    console.log('Global audio socket connected');
+    globalAudioState.socketConnected = true;
+    notifySubscribers({ socketConnected: true });
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Global audio socket disconnected');
+    globalAudioState.socketConnected = false;
+    notifySubscribers({ socketConnected: false });
+  });
+
+  socket.on('audio:transmission', (transmission) => {
+    console.log('New audio transmission via global socket:', transmission);
+    handleNewTransmission(transmission);
+  });
+
+  return socket;
+};
+
+// Handle new transmission from socket
+const handleNewTransmission = (transmission) => {
+  // Enrich transmission with defaults
+  const enrichedTransmission = {
+    channel_name: transmission.channel_name || 'Unknown Channel',
+    frequency_mhz: transmission.frequency_mhz || 0,
+    format: transmission.format || 'mp3',
+    file_size_bytes: transmission.file_size_bytes || 0,
+    transcription_status: transmission.transcription_status || 'pending',
+    transcript: transmission.transcript || null,
+    transcript_confidence: transmission.transcript_confidence || null,
+    transcript_language: transmission.transcript_language || null,
+    transcription_error: transmission.transcription_error || null,
+    created_at: transmission.created_at || new Date().toISOString(),
+    filename: transmission.filename || '',
+    s3_url: transmission.s3_url || transmission.audio_url || '',
+    ...transmission
+  };
+
+  // Add to recent transmissions (avoid duplicates)
+  const exists = globalAudioState.recentTransmissions.some(t => t.id === transmission.id);
+  if (!exists) {
+    globalAudioState.recentTransmissions = [enrichedTransmission, ...globalAudioState.recentTransmissions].slice(0, 50);
+    notifySubscribers({ newTransmission: enrichedTransmission });
+  }
+
+  // Queue for autoplay if enabled and matches filter
+  if (globalAudioState.autoplay && enrichedTransmission.s3_url) {
+    const filter = globalAudioState.autoplayFilter;
+
+    // Check if transmission matches filter (if set)
+    let matchesFilter = true;
+    if (filter) {
+      // Check if any identified airframe matches the filter
+      const airframes = enrichedTransmission.identified_airframes || [];
+      matchesFilter = airframes.some(af => {
+        if (filter.hex && af.icao_hex?.toUpperCase() === filter.hex.toUpperCase()) return true;
+        if (filter.callsign && af.callsign?.toUpperCase() === filter.callsign.toUpperCase()) return true;
+        return false;
+      });
+    }
+
+    if (matchesFilter) {
+      // Add to front of queue (latest first)
+      globalAudioState.autoplayQueue.unshift(enrichedTransmission);
+      globalAudioState.autoplayQueue = globalAudioState.autoplayQueue.slice(0, 10);
+
+      // Process queue if nothing is currently playing
+      if (!globalAudioState.playingId) {
+        processGlobalAutoplayQueue();
+      }
+    }
+  }
+};
+
+// Process the global autoplay queue
+const processGlobalAutoplayQueue = () => {
+  if (!globalAudioState.autoplay || globalAudioState.autoplayQueue.length === 0) {
+    return;
+  }
+
+  // If already playing, don't start another
+  if (globalAudioState.playingId) {
+    return;
+  }
+
+  const next = globalAudioState.autoplayQueue.shift();
+  if (!next || !next.s3_url) {
+    // Try next item
+    if (globalAudioState.autoplayQueue.length > 0) {
+      processGlobalAutoplayQueue();
+    }
+    return;
+  }
+
+  // Play the audio
+  playAudioFromGlobal(next);
+};
+
+// Play audio from global state (used by autoplay)
+const playAudioFromGlobal = (transmission) => {
+  const id = transmission.id;
+  const audioUrl = transmission.s3_url || transmission.audio_url;
+
+  if (!audioUrl) {
+    console.warn('No audio URL for transmission:', id);
+    processGlobalAutoplayQueue();
+    return;
+  }
+
+  // Stop any currently playing audio
+  if (globalAudioState.playingId && globalAudioState.playingId !== id) {
+    const prevAudio = globalAudioState.audioRefs[globalAudioState.playingId];
+    if (prevAudio) {
+      prevAudio.pause();
+      prevAudio.currentTime = 0;
+    }
+  }
+
+  // Get or create audio element
+  let audio = globalAudioState.audioRefs[id];
+  if (!audio) {
+    audio = new Audio(audioUrl);
+    audio.volume = 1;
+    globalAudioState.audioRefs[id] = audio;
+
+    audio.addEventListener('loadedmetadata', () => {
+      globalAudioState.audioDurations[id] = audio.duration;
+      notifySubscribers({ audioDurations: { ...globalAudioState.audioDurations } });
+    });
+
+    audio.addEventListener('ended', () => {
+      globalAudioState.playingId = null;
+      globalAudioState.currentTransmission = null;
+      globalAudioState.audioProgress[id] = 0;
+      notifySubscribers({
+        playingId: null,
+        currentTransmission: null,
+        audioProgress: { ...globalAudioState.audioProgress }
+      });
+
+      // Clear progress interval
+      if (globalAudioState.progressIntervalRef) {
+        clearInterval(globalAudioState.progressIntervalRef);
+        globalAudioState.progressIntervalRef = null;
+      }
+
+      // Play next in queue
+      setTimeout(() => processGlobalAutoplayQueue(), 100);
+    });
+
+    audio.addEventListener('error', (e) => {
+      console.error('Global audio playback error:', e);
+      globalAudioState.playingId = null;
+      globalAudioState.currentTransmission = null;
+      notifySubscribers({ playingId: null, currentTransmission: null });
+
+      // Try next in queue
+      setTimeout(() => processGlobalAutoplayQueue(), 100);
+    });
+  }
+
+  // Play
+  audio.play().then(() => {
+    globalAudioState.playingId = id;
+    globalAudioState.currentTransmission = transmission;
+    notifySubscribers({ playingId: id, currentTransmission: transmission });
+
+    // Update progress
+    if (globalAudioState.progressIntervalRef) {
+      clearInterval(globalAudioState.progressIntervalRef);
+    }
+    globalAudioState.progressIntervalRef = setInterval(() => {
+      if (audio && !audio.paused) {
+        const progress = (audio.currentTime / audio.duration) * 100 || 0;
+        globalAudioState.audioProgress[id] = progress;
+        notifySubscribers({ audioProgress: { ...globalAudioState.audioProgress } });
+      }
+    }, 100);
+  }).catch(err => {
+    console.error('Failed to play audio:', err);
+    // Try next in queue
+    setTimeout(() => processGlobalAutoplayQueue(), 100);
+  });
+};
+
+// Disconnect the global audio socket
+export const disconnectAudioSocket = () => {
+  if (globalAudioState.socket) {
+    globalAudioState.socket.disconnect();
+    globalAudioState.socket = null;
+    globalAudioState.socketConnected = false;
+  }
+};
 
 // Memoized Audio Item Component
 const AudioItem = memo(function AudioItem({
@@ -41,6 +317,7 @@ const AudioItem = memo(function AudioItem({
   onPlay,
   onSeek,
   onToggleExpand,
+  onSelectAircraft,
   formatDuration,
   formatFileSize,
   getStatusInfo
@@ -48,9 +325,10 @@ const AudioItem = memo(function AudioItem({
   const id = transmission.id;
   const statusInfo = getStatusInfo(transmission.transcription_status);
   const StatusIcon = statusInfo.icon;
+  const isEmergency = hasEmergencyKeyword(transmission.transcript);
 
   return (
-    <div className={`audio-item ${isPlaying ? 'playing' : ''}`}>
+    <div className={`audio-item ${isPlaying ? 'playing' : ''} ${isEmergency ? 'emergency' : ''}`}>
       <div className="audio-item-main">
         {/* Play Button */}
         <button
@@ -66,6 +344,12 @@ const AudioItem = memo(function AudioItem({
         <div className="audio-item-info">
           <div className="audio-item-header">
             <span className="audio-channel">{transmission.channel_name || 'Unknown Channel'}</span>
+            {isEmergency && (
+              <span className="emergency-badge">
+                <AlertCircle size={10} />
+                Emergency
+              </span>
+            )}
             {transmission.frequency_mhz && (
               <span className="audio-frequency">{transmission.frequency_mhz.toFixed(3)} MHz</span>
             )}
@@ -99,6 +383,32 @@ const AudioItem = memo(function AudioItem({
               )}
             </div>
           )}
+
+          {/* Identified Flights */}
+          {transmission.identified_airframes && transmission.identified_airframes.length > 0 && (
+            <div className="audio-identified-flights">
+              {transmission.identified_airframes.map((airframe, idx) => (
+                <button
+                  key={`${airframe.callsign}-${idx}`}
+                  className={`flight-tag ${airframe.type || 'unknown'}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onSelectAircraft) {
+                      onSelectAircraft(null, airframe.callsign);
+                    }
+                  }}
+                  title={`${airframe.raw_text || airframe.callsign}${airframe.airline_name ? ` (${airframe.airline_name})` : ''}${airframe.confidence ? ` - ${(airframe.confidence * 100).toFixed(0)}% confidence` : ''}`}
+                >
+                  <Plane size={12} />
+                  <span className="flight-callsign">{airframe.callsign}</span>
+                  {airframe.airline_name && (
+                    <span className="flight-airline">{airframe.airline_name}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
           {transmission.transcription_error && (
             <div className="audio-transcript-error">
               <AlertCircle size={12} />
@@ -165,7 +475,7 @@ const AudioItem = memo(function AudioItem({
   );
 });
 
-export function AudioView({ apiBase }) {
+export function AudioView({ apiBase, onSelectAircraft }) {
   const [timeRange, setTimeRange] = useState('24h');
   const [statusFilter, setStatusFilter] = useState('all');
   const [channelFilter, setChannelFilter] = useState('all');
@@ -180,6 +490,13 @@ export function AudioView({ apiBase }) {
   const [autoplay, setAutoplay] = useState(globalAudioState.autoplay);
   const [socketConnected, setSocketConnected] = useState(false);
   const [realtimeTransmissions, setRealtimeTransmissions] = useState([]);
+
+  // Flight-related filters
+  const [flightMatchFilter, setFlightMatchFilter] = useState('all'); // 'all', 'matched', 'unmatched'
+  const [callsignFilter, setCallsignFilter] = useState('');
+  const [airlineFilter, setAirlineFilter] = useState('all');
+  const [flightTypeFilter, setFlightTypeFilter] = useState('all'); // 'all', 'airline', 'general_aviation', 'military'
+  const [emergencyFilter, setEmergencyFilter] = useState(false); // true to show only emergency transmissions
 
   const audioRefs = globalAudioState.audioRefs;
   const progressIntervalRef = globalAudioState.progressIntervalRef;
@@ -237,20 +554,81 @@ export function AudioView({ apiBase }) {
     return [...newFromSocket, ...apiTransmissions];
   }, [data?.transmissions, realtimeTransmissions]);
 
-  // Filter transmissions by search (uses mergedTransmissions for realtime updates)
+  // Extract unique airlines from all transmissions
+  const availableAirlines = useMemo(() => {
+    const airlines = new Map();
+    mergedTransmissions.forEach(t => {
+      if (t.identified_airframes) {
+        t.identified_airframes.forEach(af => {
+          if (af.airline_icao && af.airline_name) {
+            airlines.set(af.airline_icao, af.airline_name);
+          }
+        });
+      }
+    });
+    return Array.from(airlines.entries())
+      .map(([icao, name]) => ({ icao, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [mergedTransmissions]);
+
+  // Filter transmissions by search and flight filters
   const filteredTransmissions = useMemo(() => {
     if (!mergedTransmissions.length) return [];
 
-    if (!searchQuery) return mergedTransmissions;
+    return mergedTransmissions.filter(t => {
+      // Text search filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesSearch =
+          t.channel_name?.toLowerCase().includes(query) ||
+          t.transcript?.toLowerCase().includes(query) ||
+          t.filename?.toLowerCase().includes(query) ||
+          t.frequency_mhz?.toString().includes(query) ||
+          t.identified_airframes?.some(af =>
+            af.callsign?.toLowerCase().includes(query) ||
+            af.airline_name?.toLowerCase().includes(query)
+          );
+        if (!matchesSearch) return false;
+      }
 
-    const query = searchQuery.toLowerCase();
-    return mergedTransmissions.filter(t =>
-      t.channel_name?.toLowerCase().includes(query) ||
-      t.transcript?.toLowerCase().includes(query) ||
-      t.filename?.toLowerCase().includes(query) ||
-      t.frequency_mhz?.toString().includes(query)
-    );
-  }, [mergedTransmissions, searchQuery]);
+      // Flight match filter
+      const hasMatches = t.identified_airframes && t.identified_airframes.length > 0;
+      if (flightMatchFilter === 'matched' && !hasMatches) return false;
+      if (flightMatchFilter === 'unmatched' && hasMatches) return false;
+
+      // Callsign filter
+      if (callsignFilter) {
+        const callsignQuery = callsignFilter.toUpperCase();
+        const matchesCallsign = t.identified_airframes?.some(af =>
+          af.callsign?.toUpperCase().includes(callsignQuery)
+        );
+        if (!matchesCallsign) return false;
+      }
+
+      // Airline filter
+      if (airlineFilter !== 'all') {
+        const matchesAirline = t.identified_airframes?.some(af =>
+          af.airline_icao === airlineFilter
+        );
+        if (!matchesAirline) return false;
+      }
+
+      // Flight type filter
+      if (flightTypeFilter !== 'all') {
+        const matchesType = t.identified_airframes?.some(af =>
+          af.type === flightTypeFilter
+        );
+        if (!matchesType) return false;
+      }
+
+      // Emergency keyword filter
+      if (emergencyFilter && !hasEmergencyKeyword(t.transcript)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [mergedTransmissions, searchQuery, flightMatchFilter, callsignFilter, airlineFilter, flightTypeFilter, emergencyFilter]);
 
   // Keep ref updated for use in event listeners
   useEffect(() => {
@@ -305,8 +683,9 @@ export function AudioView({ apiBase }) {
       audio.addEventListener('ended', () => {
         cleanup();
         globalAudioState.playingId = null;
+        globalAudioState.currentTransmission = null;
         globalAudioState.audioProgress[next.id] = 0;
-        notifySubscribers({ playingId: null, audioProgress: { ...globalAudioState.audioProgress } });
+        notifySubscribers({ playingId: null, currentTransmission: null, audioProgress: { ...globalAudioState.audioProgress } });
         setPlayingId(null);
         setAudioProgress(prev => ({ ...prev, [next.id]: 0 }));
         // Play next in queue
@@ -332,7 +711,8 @@ export function AudioView({ apiBase }) {
 
       audio.play().then(() => {
         globalAudioState.playingId = next.id;
-        notifySubscribers({ playingId: next.id });
+        globalAudioState.currentTransmission = next;
+        notifySubscribers({ playingId: next.id, currentTransmission: next });
         setPlayingId(next.id);
         globalAudioState.progressIntervalRef = setInterval(() => {
           if (audio && !audio.paused) {
@@ -384,8 +764,9 @@ export function AudioView({ apiBase }) {
 
       audio.addEventListener('ended', () => {
         globalAudioState.playingId = null;
+        globalAudioState.currentTransmission = null;
         globalAudioState.audioProgress[id] = 0;
-        notifySubscribers({ playingId: null, audioProgress: { ...globalAudioState.audioProgress } });
+        notifySubscribers({ playingId: null, currentTransmission: null, audioProgress: { ...globalAudioState.audioProgress } });
         setPlayingId(null);
         setAudioProgress(prev => ({ ...prev, [id]: 0 }));
 
@@ -406,7 +787,8 @@ export function AudioView({ apiBase }) {
       audio.addEventListener('error', (e) => {
         console.error('Audio playback error:', e);
         globalAudioState.playingId = null;
-        notifySubscribers({ playingId: null });
+        globalAudioState.currentTransmission = null;
+        notifySubscribers({ playingId: null, currentTransmission: null });
         setPlayingId(null);
       });
     }
@@ -415,7 +797,8 @@ export function AudioView({ apiBase }) {
       // Pause
       audio.pause();
       globalAudioState.playingId = null;
-      notifySubscribers({ playingId: null });
+      globalAudioState.currentTransmission = null;
+      notifySubscribers({ playingId: null, currentTransmission: null });
       setPlayingId(null);
       if (globalAudioState.progressIntervalRef) {
         clearInterval(globalAudioState.progressIntervalRef);
@@ -432,7 +815,8 @@ export function AudioView({ apiBase }) {
         console.error('Failed to play audio:', err);
       });
       globalAudioState.playingId = id;
-      notifySubscribers({ playingId: id });
+      globalAudioState.currentTransmission = transmission;
+      notifySubscribers({ playingId: id, currentTransmission: transmission });
       setPlayingId(id);
 
       // Update progress
@@ -490,83 +874,35 @@ export function AudioView({ apiBase }) {
     };
   }, []);
 
-  // Socket.IO connection for real-time audio updates
+  // Use the shared global socket for real-time audio updates
   useEffect(() => {
-    let socketUrl;
-    if (apiBase) {
-      try {
-        const url = new URL(apiBase, window.location.origin);
-        socketUrl = `${url.protocol}//${url.host}`;
-      } catch (e) {
-        socketUrl = window.location.origin;
-      }
-    } else {
-      socketUrl = window.location.origin;
-    }
-
-    const socket = io(socketUrl, {
-      path: '/socket.io/socket.io',
-      query: { topics: 'audio' },
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-    });
-
+    // Initialize the shared socket (will be no-op if already connected)
+    const socket = initAudioSocket(apiBase);
     socketRef.current = socket;
 
-    socket.on('connect', () => {
-      console.log('Audio socket connected');
-      setSocketConnected(true);
-    });
-
-    socket.on('disconnect', () => {
-      console.log('Audio socket disconnected');
-      setSocketConnected(false);
-    });
-
-    socket.on('audio:transmission', (transmission) => {
-      console.log('New audio transmission:', transmission);
-
-      // Enrich transmission with defaults for missing metadata
-      const enrichedTransmission = {
-        channel_name: transmission.channel_name || 'Unknown Channel',
-        frequency_mhz: transmission.frequency_mhz || 0,
-        format: transmission.format || 'mp3',
-        file_size_bytes: transmission.file_size_bytes || 0,
-        transcription_status: transmission.transcription_status || 'pending',
-        transcript: transmission.transcript || null,
-        transcript_confidence: transmission.transcript_confidence || null,
-        transcript_language: transmission.transcript_language || null,
-        transcription_error: transmission.transcription_error || null,
-        created_at: transmission.created_at || new Date().toISOString(),
-        filename: transmission.filename || '',
-        s3_url: transmission.s3_url || '',
-        ...transmission // Spread to preserve all original fields
-      };
-
-      // Add to realtime list (prepend)
-      setRealtimeTransmissions(prev => {
-        const exists = prev.some(t => t.id === transmission.id);
-        if (exists) return prev;
-        return [enrichedTransmission, ...prev].slice(0, 50);
-      });
-
-      // Queue for autoplay if enabled
-      if (autoplay && enrichedTransmission.s3_url) {
-        // Always add to front of queue (latest first)
-        autoplayQueueRef.current.unshift(enrichedTransmission);
-        // Keep queue size manageable
-        autoplayQueueRef.current = autoplayQueueRef.current.slice(0, 10);
-        processAutoplayQueue();
+    // Subscribe to new transmissions from global state
+    const unsubscribeTransmissions = subscribeToAudioState((updates) => {
+      if ('socketConnected' in updates) {
+        setSocketConnected(updates.socketConnected);
+      }
+      if ('newTransmission' in updates && updates.newTransmission) {
+        // Add to local realtime list for this view
+        setRealtimeTransmissions(prev => {
+          const exists = prev.some(t => t.id === updates.newTransmission.id);
+          if (exists) return prev;
+          return [updates.newTransmission, ...prev].slice(0, 50);
+        });
       }
     });
 
+    // Initialize socket connected state
+    setSocketConnected(globalAudioState.socketConnected);
+
     return () => {
-      socket.disconnect();
-      socketRef.current = null;
+      unsubscribeTransmissions();
+      // Don't disconnect the shared socket - it persists across components
     };
-  }, [apiBase, autoplay, processAutoplayQueue]);
+  }, [apiBase]);
 
   // Store processAutoplayQueue in ref for use in effects
   useEffect(() => {
@@ -674,6 +1010,92 @@ export function AudioView({ apiBase }) {
               <option key={channel} value={channel}>{channel}</option>
             ))}
           </select>
+
+          {/* Flight Match Filter */}
+          <select
+            className="audio-select"
+            value={flightMatchFilter}
+            onChange={(e) => setFlightMatchFilter(e.target.value)}
+          >
+            <option value="all">All Transmissions</option>
+            <option value="matched">With Flights</option>
+            <option value="unmatched">No Flights</option>
+          </select>
+
+          {/* Airline Filter */}
+          <select
+            className="audio-select"
+            value={airlineFilter}
+            onChange={(e) => setAirlineFilter(e.target.value)}
+            disabled={availableAirlines.length === 0}
+          >
+            <option value="all">All Airlines</option>
+            {availableAirlines.map(airline => (
+              <option key={airline.icao} value={airline.icao}>
+                {airline.name} ({airline.icao})
+              </option>
+            ))}
+          </select>
+
+          {/* Flight Type Filter */}
+          <select
+            className="audio-select"
+            value={flightTypeFilter}
+            onChange={(e) => setFlightTypeFilter(e.target.value)}
+          >
+            <option value="all">All Types</option>
+            <option value="airline">Commercial</option>
+            <option value="general_aviation">General Aviation</option>
+            <option value="military">Military</option>
+          </select>
+
+          {/* Callsign Filter */}
+          <div className="callsign-filter">
+            <Plane size={14} />
+            <input
+              type="text"
+              placeholder="Callsign..."
+              value={callsignFilter}
+              onChange={(e) => setCallsignFilter(e.target.value)}
+            />
+            {callsignFilter && (
+              <button
+                className="clear-callsign-btn"
+                onClick={() => setCallsignFilter('')}
+                title="Clear callsign filter"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          {/* Emergency Filter Toggle */}
+          <button
+            className={`emergency-filter-btn ${emergencyFilter ? 'active' : ''}`}
+            onClick={() => setEmergencyFilter(!emergencyFilter)}
+            title={emergencyFilter ? 'Show all transmissions' : 'Show only emergency transmissions (mayday, pan pan, etc.)'}
+          >
+            <AlertCircle size={14} />
+            <span>Emergency</span>
+          </button>
+
+          {/* Active Filters Indicator */}
+          {(flightMatchFilter !== 'all' || airlineFilter !== 'all' || flightTypeFilter !== 'all' || callsignFilter || emergencyFilter) && (
+            <button
+              className="clear-filters-btn"
+              onClick={() => {
+                setFlightMatchFilter('all');
+                setAirlineFilter('all');
+                setFlightTypeFilter('all');
+                setCallsignFilter('');
+                setEmergencyFilter(false);
+              }}
+              title="Clear all flight filters"
+            >
+              <Filter size={14} />
+              <X size={10} className="clear-icon" />
+            </button>
+          )}
         </div>
 
         <div className="audio-controls-right">
@@ -770,6 +1192,7 @@ export function AudioView({ apiBase }) {
               onPlay={handlePlay}
               onSeek={handleSeek}
               onToggleExpand={(id) => setExpandedTranscript(prev => ({ ...prev, [id]: !prev[id] }))}
+              onSelectAircraft={onSelectAircraft}
               formatDuration={formatDuration}
               formatFileSize={formatFileSize}
               getStatusInfo={getStatusInfo}

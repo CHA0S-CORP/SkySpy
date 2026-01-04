@@ -729,6 +729,14 @@
   max-width: 600px;
 }
 
+.audio-playback-control.idle {
+  min-width: unset;
+  max-width: unset;
+  gap: 12px;
+  background: linear-gradient(135deg, rgba(100, 150, 255, 0.08) 0%, rgba(50, 100, 150, 0.05) 100%);
+  border-color: rgba(100, 150, 255, 0.25);
+}
+
 .playback-info {
   display: flex;
   flex-direction: column;
@@ -738,6 +746,9 @@
 }
 
 .playback-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   font-weight: 600;
   color: var(--text-dim);
@@ -745,10 +756,39 @@
   letter-spacing: 0.5px;
 }
 
+.audio-playback-control.idle .playback-label {
+  color: var(--accent-cyan);
+}
+
+.playback-label .scanning-icon {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 .playback-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
+}
+
+.audio-playback-control.idle .playback-time {
+  color: var(--text-dim);
+}
+
+.playback-time .socket-connected {
+  color: var(--accent-green);
+}
+
+.playback-time .socket-disconnected {
+  color: var(--accent-red);
+  animation: pulse 1.5s ease-in-out infinite;
 }
 
 .playback-progress {
@@ -826,6 +866,45 @@
   border-color: var(--accent-green);
   color: var(--accent-green);
   box-shadow: 0 0 8px rgba(74, 222, 128, 0.15);
+}
+
+.playback-btn.filter-clear-btn {
+  background: rgba(147, 51, 234, 0.15);
+  border-color: rgba(147, 51, 234, 0.3);
+  color: rgba(192, 132, 252, 0.95);
+  position: relative;
+  width: auto;
+  padding: 0 8px;
+  gap: 2px;
+}
+
+.playback-btn.filter-clear-btn:hover {
+  background: rgba(147, 51, 234, 0.25);
+  border-color: rgba(147, 51, 234, 0.5);
+}
+
+.playback-btn.filter-clear-btn .filter-clear-x {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  background: var(--bg-card);
+  border-radius: 50%;
+}
+
+.playback-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.playback-label svg {
+  color: rgba(192, 132, 252, 0.95);
+}
+
+.playback-filter-label {
+  font-family: 'JetBrains Mono', monospace;
+  color: rgba(192, 132, 252, 0.95);
+  font-weight: 500;
 }
 
 .playback-volume-control {
