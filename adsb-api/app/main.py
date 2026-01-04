@@ -46,9 +46,8 @@ from app.services.alerts import check_alerts, store_alert_history
 from app.services.acars import acars_service, store_acars_message
 from app.services.aircraft_info import (
     init_lookup_queue, process_lookup_queue, check_and_queue_new_aircraft,
-    get_seen_aircraft_count
+    get_seen_aircraft_count, _cleanup_old_rate_limits
 )
-from app.services import opensky_db
 from app.services import external_db
 from app.services import airspace as airspace_service
 from app.services import audio as audio_service
@@ -176,6 +175,9 @@ async def process_aircraft_data(db: AsyncSession, aircraft_list: list[dict], sou
         if not icao:
             continue
         
+        # Determine source (use embedded tag if available, else default)
+        current_source = ac.get("_source", source)
+
         # Queue new aircraft for info/photo lookup
         await check_and_queue_new_aircraft(icao)
         
@@ -216,12 +218,12 @@ async def process_aircraft_data(db: AsyncSession, aircraft_list: list[dict], sou
             aircraft_type=ac.get("t"),
             is_military=is_military,
             is_emergency=is_emergency,
-            source=source
+            source=current_source
         )
         db.add(sighting)
         
         # Update or create session
-        session_key = f"{icao}:{source}"
+        session_key = f"{icao}:{current_source}"
         cached_session_id = _active_sessions.get(session_key)
         
         if cached_session_id:
@@ -258,11 +260,12 @@ async def process_aircraft_data(db: AsyncSession, aircraft_list: list[dict], sou
         
         if session_key not in _active_sessions:
             # Look for recent session or create new
+            # Order by last_seen desc and limit 1 to get most recent session
             result = await db.execute(
                 select(AircraftSession).where(
                     AircraftSession.icao_hex == icao,
                     AircraftSession.last_seen > now - timedelta(minutes=5)
-                )
+                ).order_by(AircraftSession.last_seen.desc()).limit(1)
             )
             recent = result.scalar_one_or_none()
             
@@ -361,38 +364,147 @@ async def process_aircraft_data(db: AsyncSession, aircraft_list: list[dict], sou
     await db.commit()
 
 
+async def _store_aircraft_to_db(aircraft_list: list[dict]):
+    """Store aircraft data to database."""
+    db_start = time.time()
+    async with AsyncSessionLocal() as db:
+        try:
+            await process_aircraft_data(db, aircraft_list, "1090")
+            DB_OPERATION_DURATION.labels(operation="store_aircraft").observe(time.time() - db_start)
+            logger.debug(f"Stored {len(aircraft_list)} aircraft to database")
+        except Exception as e:
+            logger.error(f"Error in process_aircraft_data: {e}")
+            sentry_sdk.capture_exception(e)
+            await db.rollback()
+
+
+async def _run_safety_monitoring(aircraft_list: list[dict]):
+    """Run safety monitoring and handle events."""
+    if not safety_monitor.enabled:
+        return
+
+    sse_manager = get_sse_manager()
+    sio_manager = get_socketio_manager()
+
+    try:
+        safety_events = safety_monitor.update_aircraft(aircraft_list)
+
+        if safety_events:
+            async with AsyncSessionLocal() as db:
+                for event in safety_events:
+                    SAFETY_EVENTS_TOTAL.labels(
+                        event_type=event["event_type"],
+                        severity=event["severity"]
+                    ).inc()
+
+                    db_id = await store_safety_event(db, event)
+                    if db_id:
+                        event["db_id"] = db_id
+
+                    await sse_manager.publish_safety_event(event)
+                    if sio_manager:
+                        await sio_manager.publish_safety_event(event)
+
+                    if event["severity"] == "critical":
+                        emoji = "⚠️" if event["event_type"] == "proximity_conflict" else "🔴"
+                        await notifier.send(
+                            db=db,
+                            title=f"{emoji} {event['event_type'].replace('_', ' ').title()}",
+                            body=event["message"],
+                            notify_type="emergency",
+                            key=f"safety:{event['event_type']}:{event['icao']}",
+                            icao=event["icao"],
+                            callsign=event.get("callsign"),
+                            details=event.get("details", {})
+                        )
+
+                    logger.warning(f"Safety event: {event['event_type']} - {event['message']}")
+    except Exception as e:
+        logger.error(f"Error in safety monitoring: {e}")
+        sentry_sdk.capture_exception(e)
+
+
+async def _process_aircraft_background(aircraft_list: list[dict]):
+    """Background task to store aircraft data and run safety monitoring in parallel."""
+    if not aircraft_list:
+        return
+
+    # Run DB storage and safety monitoring concurrently
+    await asyncio.gather(
+        _store_aircraft_to_db(aircraft_list),
+        _run_safety_monitoring(aircraft_list),
+        return_exceptions=True  # Don't let one failure stop the other
+    )
+
+
+def _create_background_task(coro, name: str = None):
+    """Create a background task with proper exception logging."""
+    async def wrapped():
+        try:
+            await coro
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error(f"Background task{f' {name}' if name else ''} failed: {e}")
+            sentry_sdk.capture_exception(e)
+
+    task = asyncio.create_task(wrapped())
+    if name:
+        task.set_name(name)
+    return task
+
+
+# Track pending background processing task
+_pending_processing_task: Optional[asyncio.Task] = None
+
+
 async def fetch_and_process_aircraft():
-    """Fetch and process aircraft data."""
-    global _last_db_store_time
+    """Fetch aircraft data and broadcast immediately, then process in background."""
+    global _last_db_store_time, _pending_processing_task
 
     poll_start = time.time()
     all_aircraft = []
     aircraft_1090_count = 0
     aircraft_978_count = 0
 
-    # Fetch from 1090MHz (local service, not upstream)
-    try:
-        url = f"{settings.ultrafeeder_url}/data/aircraft.json"
-        data = await safe_request(url, is_upstream=False)
-        if data:
-            aircraft_1090 = data.get("aircraft", [])
-            aircraft_1090_count = len(aircraft_1090)
-            all_aircraft.extend(aircraft_1090)
-            logger.debug(f"Fetched {aircraft_1090_count} aircraft from 1090MHz")
-    except Exception as e:
-        logger.warning(f"Failed to fetch 1090 data: {e}")
-        sentry_sdk.capture_exception(e)
+    # Fetch from 1090MHz and 978MHz in parallel for faster data collection
+    async def fetch_1090():
+        nonlocal aircraft_1090_count
+        try:
+            url = f"{settings.ultrafeeder_url}/data/aircraft.json"
+            data = await safe_request(url, is_upstream=False)
+            if data:
+                aircraft_1090 = data.get("aircraft", [])
+                for a in aircraft_1090:
+                    a["_source"] = "1090"
+                aircraft_1090_count = len(aircraft_1090)
+                return aircraft_1090
+        except Exception as e:
+            logger.warning(f"Failed to fetch 1090 data: {e}")
+            sentry_sdk.capture_exception(e)
+        return []
 
-    # Fetch from 978MHz UAT (local service, not upstream)
-    try:
-        url = f"{settings.dump978_url}/skyaware978/data/aircraft.json"
-        data = await safe_request(url, is_upstream=False)
-        if data:
-            aircraft_978 = data.get("aircraft", [])
-            aircraft_978_count = len(aircraft_978)
-            all_aircraft.extend(aircraft_978)
-    except Exception as e:
-        logger.debug(f"Failed to fetch 978 data: {e}")
+    async def fetch_978():
+        nonlocal aircraft_978_count
+        try:
+            url = f"{settings.dump978_url}/skyaware978/data/aircraft.json"
+            data = await safe_request(url, is_upstream=False)
+            if data:
+                aircraft_978 = data.get("aircraft", [])
+                for a in aircraft_978:
+                    a["_source"] = "978"
+                aircraft_978_count = len(aircraft_978)
+                return aircraft_978
+        except Exception as e:
+            logger.debug(f"Failed to fetch 978 data: {e}")
+        return []
+
+    # Fetch both sources in parallel
+    results = await asyncio.gather(fetch_1090(), fetch_978())
+    for result in results:
+        all_aircraft.extend(result)
+
+    logger.debug(f"Fetched {aircraft_1090_count} aircraft from 1090MHz")
 
     # Update Prometheus gauges for aircraft counts
     AIRCRAFT_COUNT.labels(source="1090").set(aircraft_1090_count)
@@ -400,76 +512,26 @@ async def fetch_and_process_aircraft():
     AIRCRAFT_COUNT.labels(source="total").set(len(all_aircraft))
     ACTIVE_SESSIONS.set(len(_active_sessions))
 
-    # Record poll duration
+    # Record poll duration (just the fetch, not processing)
     AIRCRAFT_POLL_DURATION.observe(time.time() - poll_start)
 
-    # Store to database periodically
-    now = time.time()
-    should_store_db = False
-
-    with _db_store_lock:
-        if (now - _last_db_store_time) >= settings.db_store_interval:
-            _last_db_store_time = now
-            should_store_db = True
-
-    if all_aircraft and should_store_db:
-        db_start = time.time()
-        async with AsyncSessionLocal() as db:
-            try:
-                await process_aircraft_data(db, all_aircraft, "1090")
-                DB_OPERATION_DURATION.labels(operation="store_aircraft").observe(time.time() - db_start)
-                logger.debug(f"Stored {len(all_aircraft)} aircraft to database")
-            except Exception as e:
-                logger.error(f"Error in process_aircraft_data: {e}")
-                sentry_sdk.capture_exception(e)
-                await db.rollback()
-
-    # Safety monitoring
+    # PRIORITY: Broadcast immediately to clients before any DB/safety processing
     sse_manager = get_sse_manager()
     sio_manager = get_socketio_manager()
-    if all_aircraft and safety_monitor.enabled:
-        try:
-            safety_events = safety_monitor.update_aircraft(all_aircraft)
 
-            if safety_events:
-                async with AsyncSessionLocal() as db:
-                    for event in safety_events:
-                        # Track safety events in Prometheus
-                        SAFETY_EVENTS_TOTAL.labels(
-                            event_type=event["event_type"],
-                            severity=event["severity"]
-                        ).inc()
-
-                        db_id = await store_safety_event(db, event)
-                        if db_id:
-                            event["db_id"] = db_id  # Store as db_id, not id (id is the string event ID)
-
-                        await sse_manager.publish_safety_event(event)
-                        if sio_manager:
-                            await sio_manager.publish_safety_event(event)
-
-                        if event["severity"] == "critical":
-                            emoji = "⚠️" if event["event_type"] == "proximity_conflict" else "🔴"
-                            await notifier.send(
-                                db=db,
-                                title=f"{emoji} {event['event_type'].replace('_', ' ').title()}",
-                                body=event["message"],
-                                notify_type="emergency",
-                                key=f"safety:{event['event_type']}:{event['icao']}",
-                                icao=event["icao"],
-                                callsign=event.get("callsign"),
-                                details=event.get("details", {})
-                            )
-
-                        logger.warning(f"Safety event: {event['event_type']} - {event['message']}")
-        except Exception as e:
-            logger.error(f"Error in safety monitoring: {e}")
-            sentry_sdk.capture_exception(e)
-
-    # Always publish SSE and Socket.IO updates
     await sse_manager.publish_aircraft_update(all_aircraft)
     if sio_manager:
         await sio_manager.publish_aircraft_update(all_aircraft)
+
+    # Schedule background processing (DB storage + safety monitoring)
+    # Don't wait for previous task - if it's still running, let it finish
+    if all_aircraft:
+        # Make a copy of the data for background processing
+        aircraft_copy = [dict(ac) for ac in all_aircraft]
+        _pending_processing_task = _create_background_task(
+            _process_aircraft_background(aircraft_copy),
+            name="aircraft_processing"
+        )
 
 
 async def background_polling_task():
@@ -509,11 +571,13 @@ async def cleanup_old_sessions():
 
 
 async def session_cleanup_task():
-    """Background task for cleaning up sessions."""
+    """Background task for cleaning up sessions and rate limit entries."""
     while True:
         await asyncio.sleep(300)  # Every 5 minutes
         try:
             await cleanup_old_sessions()
+            # Clean up old rate limit entries to prevent memory growth
+            _cleanup_old_rate_limits()
         except Exception as e:
             logger.error(f"Error cleaning sessions: {e}")
 
@@ -552,25 +616,26 @@ async def lifespan(app: FastAPI):
     sio_manager = create_socketio_manager()
     logger.info(f"Socket.IO manager initialized (Redis: {sio_manager.is_using_redis()})")
     
-    # Load OpenSky aircraft database
-    if settings.opensky_db_enabled:
-        db_loaded = await opensky_db.load_database()
-        if db_loaded:
-            stats = opensky_db.get_stats()
-            logger.info(f"OpenSky database loaded: {stats['total_aircraft']:,} aircraft")
-        else:
-            logger.warning("OpenSky database not found - will use external APIs only")
-
-    # Load external aircraft databases (ADSBX, tar1090, FAA)
+    # Initialize all external aircraft databases (ADSBX, tar1090, FAA, OpenSky)
+    # Downloads and loads into memory - sync to PostgreSQL happens in background
+    logger.info("Initializing external aircraft databases...")
     await external_db.init_databases(auto_download=True)
-    ext_stats = external_db.get_database_stats()
-    logger.info(f"External databases: ADSBX={ext_stats['adsbx']['count']:,}, "
-                f"tar1090={ext_stats['tar1090']['count']:,}, FAA={ext_stats['faa']['count']:,}")
 
-    # --- Preemptively Sync External DBs to Postgres ---
-    # This runs in background to avoid blocking startup
-    asyncio.create_task(external_db.sync_databases_to_postgres())
-    # --------------------------------------------------
+    # Start background sync to PostgreSQL (don't block startup)
+    # This can take several minutes for 600k+ aircraft
+    async def background_db_sync():
+        try:
+            await external_db.sync_databases_to_postgres()
+            logger.info("Background database sync completed")
+        except Exception as e:
+            logger.error(f"Background database sync failed: {e}")
+
+    db_sync_task = asyncio.create_task(background_db_sync())
+    logger.info("Database sync started in background")
+
+    # Start periodic database updater (daily refresh)
+    external_db_task = asyncio.create_task(external_db.periodic_database_updater())
+    logger.info("External database updater started (24h refresh)")
 
     # Clear caches
     _active_sessions.clear()
@@ -579,10 +644,7 @@ async def lifespan(app: FastAPI):
     # Start background tasks
     _background_task = asyncio.create_task(background_polling_task())
     cleanup_task = asyncio.create_task(session_cleanup_task())
-
-    # Start periodic database updater (refreshes ADSBX, tar1090, FAA daily)
-    db_updater_task = asyncio.create_task(external_db.periodic_database_updater())
-
+    
     # Start aircraft info lookup queue
     await init_lookup_queue()
     lookup_task = asyncio.create_task(process_lookup_queue(AsyncSessionLocal))
@@ -662,6 +724,13 @@ async def lifespan(app: FastAPI):
     lookup_task.cancel()
     try:
         await lookup_task
+    except asyncio.CancelledError:
+        pass
+
+    # Stop external database updater
+    external_db_task.cancel()
+    try:
+        await external_db_task
     except asyncio.CancelledError:
         pass
 

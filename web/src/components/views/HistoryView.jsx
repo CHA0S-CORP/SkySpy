@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { AlertTriangle, ChevronDown, ChevronUp, Map as MapIcon, Play, Pause, SkipBack, SkipForward, Shield, Search, MessageCircle, ExternalLink, Plane, List, LayoutGrid, X } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useApi } from '../../hooks';
+import { useSocketApi } from '../../hooks';
 
 const VALID_DATA_TYPES = ['sessions', 'sightings', 'acars', 'safety'];
 
@@ -846,17 +846,35 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
     ? `/api/v1/acars/messages?hours=${hours[timeRange]}&limit=200`
     : `/api/v1/safety/events?hours=${hours[timeRange]}&limit=100`;
 
-  const { data, refetch } = useApi(endpoint, null, apiBase);
+  const { data, refetch } = useSocketApi(endpoint, null, apiBase, { wsRequest, wsConnected });
 
   useEffect(() => { refetch(); }, [timeRange, viewType, refetch]);
 
-  // Fetch label reference once
+  // Fetch label reference once - prefer socket.io
   useEffect(() => {
     const fetchLabels = async () => {
       try {
-        const res = await fetch(`${apiBase}/api/v1/acars/labels`);
-        if (res.ok) {
-          const data = await res.json();
+        let data = null;
+
+        // Prefer socket.io
+        if (wsRequest && wsConnected) {
+          try {
+            data = await wsRequest('acars-labels', {});
+            if (data?.error) data = null;
+          } catch (err) {
+            console.debug('Labels WS request failed:', err.message);
+          }
+        }
+
+        // HTTP fallback only if socket didn't work
+        if (!data) {
+          const res = await fetch(`${apiBase}/api/v1/acars/labels`);
+          if (res.ok) {
+            data = await res.json();
+          }
+        }
+
+        if (data) {
           setLabelReference(data.labels || {});
         }
       } catch (err) {
@@ -864,24 +882,50 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
       }
     };
     fetchLabels();
-  }, [apiBase]);
+  }, [apiBase, wsRequest, wsConnected]);
 
-  // Fetch ACARS messages when viewing ACARS tab
+  // Fetch ACARS messages when viewing ACARS tab - prefer socket.io
   useEffect(() => {
     if (viewType !== 'acars') return;
 
     const fetchAcars = async () => {
       try {
-        const params = new URLSearchParams();
-        params.set('hours', hours[timeRange]);
-        params.set('limit', '200');
-        if (acarsSource !== 'all') params.set('source', acarsSource);
-        if (acarsAirlineFilter) params.set('airline', acarsAirlineFilter);
-        if (acarsSelectedLabels.length > 0) params.set('label', acarsSelectedLabels.join(','));
+        const queryParams = {
+          hours: hours[timeRange],
+          limit: 200,
+        };
+        if (acarsSource !== 'all') queryParams.source = acarsSource;
+        if (acarsAirlineFilter) queryParams.airline = acarsAirlineFilter;
+        if (acarsSelectedLabels.length > 0) queryParams.label = acarsSelectedLabels.join(',');
 
-        const res = await fetch(`${apiBase}/api/v1/acars/messages?${params.toString()}`);
-        if (res.ok) {
-          const result = await res.json();
+        let result = null;
+
+        // Prefer socket.io
+        if (wsRequest && wsConnected) {
+          try {
+            result = await wsRequest('acars-messages', queryParams);
+            if (result?.error) result = null;
+          } catch (err) {
+            console.debug('ACARS WS request failed:', err.message);
+          }
+        }
+
+        // HTTP fallback only if socket didn't work
+        if (!result) {
+          const params = new URLSearchParams();
+          params.set('hours', hours[timeRange]);
+          params.set('limit', '200');
+          if (acarsSource !== 'all') params.set('source', acarsSource);
+          if (acarsAirlineFilter) params.set('airline', acarsAirlineFilter);
+          if (acarsSelectedLabels.length > 0) params.set('label', acarsSelectedLabels.join(','));
+
+          const res = await fetch(`${apiBase}/api/v1/acars/messages?${params.toString()}`);
+          if (res.ok) {
+            result = await res.json();
+          }
+        }
+
+        if (result) {
           setAcarsMessages(result.messages || []);
         }
       } catch (err) {
@@ -889,7 +933,7 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
       }
     };
     fetchAcars();
-  }, [viewType, timeRange, acarsSource, acarsAirlineFilter, acarsSelectedLabels, apiBase]);
+  }, [viewType, timeRange, acarsSource, acarsAirlineFilter, acarsSelectedLabels, apiBase, wsRequest, wsConnected]);
 
   // Lookup hex values from sightings for ACARS messages with callsign but no icao_hex
   useEffect(() => {

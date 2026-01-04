@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Eye, EyeOff, Settings, Trash2 } from 'lucide-react';
-import { useApi } from '../../hooks';
+import { useSocketApi } from '../../hooks';
 import { AlertHistory } from './AlertHistory';
 import { RuleForm } from './RuleForm';
 
-export function AlertsView({ apiBase }) {
+export function AlertsView({ apiBase, wsRequest, wsConnected }) {
   const [activeTab, setActiveTab] = useState('rules');
-  const { data, refetch } = useApi('/api/v1/alerts/rules', null, apiBase);
+  const { data, refetch } = useSocketApi('/api/v1/alerts/rules', null, apiBase, { wsRequest, wsConnected });
   const [showForm, setShowForm] = useState(false);
   const [editRule, setEditRule] = useState(null);
   const [prefillAircraft, setPrefillAircraft] = useState(null);
@@ -115,7 +115,7 @@ export function AlertsView({ apiBase }) {
           ))}
         </div>
       ) : (
-        <AlertHistory />
+        <AlertHistory apiBase={apiBase} wsRequest={wsRequest} wsConnected={wsConnected} />
       )}
 
       {showForm && (

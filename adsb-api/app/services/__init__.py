@@ -14,7 +14,7 @@ from app.services.acars import acars_service, store_acars_message, get_acars_mes
 from app.services.photo_cache import (
     get_cached_photo, download_photo, get_cache_stats as get_photo_cache_stats
 )
-from app.services import opensky_db
+from app.services import external_db
 from app.services import airspace as airspace_service
 
 __all__ = [
@@ -48,6 +48,6 @@ __all__ = [
     "get_cached_photo",
     "download_photo",
     "get_photo_cache_stats",
-    "opensky_db",
+    "external_db",
     "airspace_service",
 ]

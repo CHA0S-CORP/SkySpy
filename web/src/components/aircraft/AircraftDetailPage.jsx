@@ -341,12 +341,25 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
       setLoading(true);
 
       try {
+        // Fetch aircraft info - prefer socket.io
         if (!info) {
-          const infoRes = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/info`);
-          if (infoRes.ok) {
-            const data = await infoRes.json();
-            setInfo(data);
+          let infoData = null;
+          if (wsRequest && wsConnected) {
+            try {
+              infoData = await wsRequest('aircraft-info', { icao: hex });
+              if (infoData?.error) infoData = null;
+            } catch (err) {
+              console.debug('Aircraft info WS request failed:', err.message);
+            }
           }
+          // HTTP fallback only if socket didn't work
+          if (!infoData) {
+            const infoRes = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/info`);
+            if (infoRes.ok) {
+              infoData = await infoRes.json();
+            }
+          }
+          if (infoData) setInfo(infoData);
         }
 
         // Fetch photo data in background (don't await - photo loading shouldn't block info display)
@@ -356,23 +369,16 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
               const data = await wsRequest('photo-cache', { icao: hex });
               if (data && !data.error) {
                 setPhotoInfo(data);
+                return;
               }
-            } else {
-              // HTTP fallback - POST to prioritize caching
-              const photoMetaRes = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/photo/cache`, {
-                method: 'POST'
-              });
-              if (photoMetaRes.ok) {
-                const data = await photoMetaRes.json();
-                setPhotoInfo(data);
-              } else {
-                // Fallback to GET if POST fails
-                const photoFallbackRes = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/photo`);
-                if (photoFallbackRes.ok) {
-                  const data = await photoFallbackRes.json();
-                  setPhotoInfo(data);
-                }
-              }
+            }
+            // HTTP fallback only if socket didn't work
+            const photoMetaRes = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/photo/cache`, {
+              method: 'POST'
+            });
+            if (photoMetaRes.ok) {
+              const data = await photoMetaRes.json();
+              setPhotoInfo(data);
             }
           } catch {
             // Photo fetch failed silently - photo section will show error state
@@ -380,73 +386,109 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
         };
         fetchPhoto(); // Fire and forget - don't block main data loading
 
-        // Try database query first by ICAO hex, then by callsign, then fall back to recent buffer
+        // Fetch ACARS messages - prefer socket.io
         let acarsFound = [];
         const callsign = aircraft?.flight?.trim();
 
-        // Query by ICAO hex
-        const acarsRes = await fetch(`${baseUrl}/api/v1/acars/messages?icao_hex=${hex}&hours=24&limit=50`);
-        if (acarsRes.ok) {
-          const data = await acarsRes.json();
-          acarsFound = data.messages || [];
-        }
-
-        // If no results by hex, try by callsign (ACARS often has callsign but not hex)
-        if (acarsFound.length === 0 && callsign) {
-          const callsignRes = await fetch(`${baseUrl}/api/v1/acars/messages?callsign=${encodeURIComponent(callsign)}&hours=24&limit=50`);
-          if (callsignRes.ok) {
-            const data = await callsignRes.json();
-            acarsFound = data.messages || [];
+        if (wsRequest && wsConnected) {
+          try {
+            // Query by ICAO hex first
+            let result = await wsRequest('acars-messages', { icao_hex: hex, hours: 24, limit: 50 });
+            if (result && !result.error) {
+              acarsFound = result.messages || [];
+            }
+            // If no results by hex, try by callsign
+            if (acarsFound.length === 0 && callsign) {
+              result = await wsRequest('acars-messages', { callsign, hours: 24, limit: 50 });
+              if (result && !result.error) {
+                acarsFound = result.messages || [];
+              }
+            }
+          } catch (err) {
+            console.debug('ACARS WS request failed:', err.message);
           }
         }
 
-        // If still no messages found, try recent messages buffer and filter client-side
+        // HTTP fallback only if socket didn't return results
         if (acarsFound.length === 0) {
-          const recentRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=100`);
-          if (recentRes.ok) {
-            const data = await recentRes.json();
-            const allRecent = data.messages || [];
-            // Filter by icao_hex or callsign (handles IATA/ICAO conversion)
-            acarsFound = allRecent.filter(msg =>
-              (msg.icao_hex && msg.icao_hex.toUpperCase() === hex.toUpperCase()) ||
-              callsignsMatch(msg.callsign, callsign)
-            );
+          const acarsRes = await fetch(`${baseUrl}/api/v1/acars/messages?icao_hex=${hex}&hours=24&limit=50`);
+          if (acarsRes.ok) {
+            const data = await acarsRes.json();
+            acarsFound = data.messages || [];
+          }
+
+          if (acarsFound.length === 0 && callsign) {
+            const callsignRes = await fetch(`${baseUrl}/api/v1/acars/messages?callsign=${encodeURIComponent(callsign)}&hours=24&limit=50`);
+            if (callsignRes.ok) {
+              const data = await callsignRes.json();
+              acarsFound = data.messages || [];
+            }
+          }
+
+          if (acarsFound.length === 0) {
+            const recentRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=100`);
+            if (recentRes.ok) {
+              const data = await recentRes.json();
+              const allRecent = data.messages || [];
+              acarsFound = allRecent.filter(msg =>
+                (msg.icao_hex && msg.icao_hex.toUpperCase() === hex.toUpperCase()) ||
+                callsignsMatch(msg.callsign, callsign)
+              );
+            }
           }
         }
         setAcarsMessages(acarsFound);
-        
+
+        // Fetch sightings - prefer socket.io
         let sightingsData;
         if (wsRequest && wsConnected) {
-          // Use WebSocket for fetching sightings
-          const result = await wsRequest('sightings', { icao_hex: hex, hours: 24, limit: 100 });
-          if (result && result.sightings) {
-            sightingsData = result;
-          } else {
-            throw new Error('Invalid sightings response');
+          try {
+            const result = await wsRequest('sightings', { icao_hex: hex, hours: 24, limit: 100 });
+            if (result && result.sightings) {
+              sightingsData = result;
+            }
+          } catch (err) {
+            console.debug('Sightings WS request failed:', err.message);
           }
-        } else {
-          // Fallback to HTTP if WebSocket unavailable
+        }
+        // HTTP fallback only if socket didn't work
+        if (!sightingsData) {
           const sightingsRes = await fetch(`${baseUrl}/api/v1/history/sightings/${hex}?hours=24&limit=100`);
           if (sightingsRes.ok) {
             sightingsData = await sightingsRes.json();
-          } else {
-            throw new Error('HTTP request failed');
           }
         }
-        setSightings(sightingsData.sightings || []);
+        if (sightingsData) {
+          setSightings(sightingsData.sightings || []);
+        }
 
-        const safetyRes = await fetch(`${baseUrl}/api/v1/safety/events?icao_hex=${hex}&hours=24&limit=100`);
-        if (safetyRes.ok) {
-          const data = await safetyRes.json();
-          setSafetyEvents(data.events || []);
+        // Fetch safety events - prefer socket.io
+        let safetyData = null;
+        if (wsRequest && wsConnected) {
+          try {
+            safetyData = await wsRequest('safety-events', { icao_hex: hex, hours: 24, limit: 100 });
+            if (safetyData?.error) safetyData = null;
+          } catch (err) {
+            console.debug('Safety events WS request failed:', err.message);
+          }
+        }
+        // HTTP fallback only if socket didn't work
+        if (!safetyData) {
+          const safetyRes = await fetch(`${baseUrl}/api/v1/safety/events?icao_hex=${hex}&hours=24&limit=100`);
+          if (safetyRes.ok) {
+            safetyData = await safetyRes.json();
+          }
+        }
+        if (safetyData) {
+          setSafetyEvents(safetyData.events || []);
         }
       } catch (err) {
         console.log('Aircraft detail fetch error:', err.message);
       }
-      
+
       setLoading(false);
     };
-    
+
     fetchData();
   }, [hex, baseUrl, info, wsRequest, wsConnected]);
 
@@ -457,37 +499,55 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
         let acarsFound = [];
         const callsign = aircraft?.flight?.trim();
 
-        // Query by ICAO hex
-        const acarsRes = await fetch(`${baseUrl}/api/v1/acars/messages?icao_hex=${hex}&hours=${acarsHours}&limit=100`);
-        if (acarsRes.ok) {
-          const data = await acarsRes.json();
-          acarsFound = data.messages || [];
-        }
-
-        // If no results by hex, try by callsign
-        if (acarsFound.length === 0 && callsign) {
-          const callsignRes = await fetch(`${baseUrl}/api/v1/acars/messages?callsign=${encodeURIComponent(callsign)}&hours=${acarsHours}&limit=100`);
-          if (callsignRes.ok) {
-            const data = await callsignRes.json();
-            acarsFound = data.messages || [];
+        // Prefer socket.io for ACARS messages
+        if (wsRequest && wsConnected) {
+          try {
+            let result = await wsRequest('acars-messages', { icao_hex: hex, hours: acarsHours, limit: 100 });
+            if (result && !result.error) {
+              acarsFound = result.messages || [];
+            }
+            if (acarsFound.length === 0 && callsign) {
+              result = await wsRequest('acars-messages', { callsign, hours: acarsHours, limit: 100 });
+              if (result && !result.error) {
+                acarsFound = result.messages || [];
+              }
+            }
+          } catch (err) {
+            console.debug('ACARS WS request failed:', err.message);
           }
         }
 
-        // If still no messages found, try recent messages buffer and filter client-side
+        // HTTP fallback only if socket didn't return results
         if (acarsFound.length === 0) {
-          const recentRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=100`);
-          if (recentRes.ok) {
-            const data = await recentRes.json();
-            const allRecent = data.messages || [];
-            const cutoffTime = Date.now() - (acarsHours * 60 * 60 * 1000);
-            acarsFound = allRecent.filter(msg => {
-              const msgTime = typeof msg.timestamp === 'number'
-                ? msg.timestamp * 1000
-                : new Date(msg.timestamp).getTime();
-              const matchesAircraft = (msg.icao_hex && msg.icao_hex.toUpperCase() === hex.toUpperCase()) ||
-                callsignsMatch(msg.callsign, callsign);
-              return matchesAircraft && msgTime >= cutoffTime;
-            });
+          const acarsRes = await fetch(`${baseUrl}/api/v1/acars/messages?icao_hex=${hex}&hours=${acarsHours}&limit=100`);
+          if (acarsRes.ok) {
+            const data = await acarsRes.json();
+            acarsFound = data.messages || [];
+          }
+
+          if (acarsFound.length === 0 && callsign) {
+            const callsignRes = await fetch(`${baseUrl}/api/v1/acars/messages?callsign=${encodeURIComponent(callsign)}&hours=${acarsHours}&limit=100`);
+            if (callsignRes.ok) {
+              const data = await callsignRes.json();
+              acarsFound = data.messages || [];
+            }
+          }
+
+          if (acarsFound.length === 0) {
+            const recentRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=100`);
+            if (recentRes.ok) {
+              const data = await recentRes.json();
+              const allRecent = data.messages || [];
+              const cutoffTime = Date.now() - (acarsHours * 60 * 60 * 1000);
+              acarsFound = allRecent.filter(msg => {
+                const msgTime = typeof msg.timestamp === 'number'
+                  ? msg.timestamp * 1000
+                  : new Date(msg.timestamp).getTime();
+                const matchesAircraft = (msg.icao_hex && msg.icao_hex.toUpperCase() === hex.toUpperCase()) ||
+                  callsignsMatch(msg.callsign, callsign);
+                return matchesAircraft && msgTime >= cutoffTime;
+              });
+            }
           }
         }
         setAcarsMessages(acarsFound);
@@ -496,23 +556,41 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
       }
     };
     fetchAcarsMessages();
-  }, [hex, baseUrl, acarsHours, aircraft]);
+  }, [hex, baseUrl, acarsHours, aircraft, wsRequest, wsConnected]);
 
   // Refetch safety events when hours filter changes
   useEffect(() => {
     const fetchSafetyEvents = async () => {
       try {
-        const safetyRes = await fetch(`${baseUrl}/api/v1/safety/events?icao_hex=${hex}&hours=${safetyHours}&limit=100`);
-        if (safetyRes.ok) {
-          const data = await safetyRes.json();
-          setSafetyEvents(data.events || []);
+        let safetyData = null;
+
+        // Prefer socket.io
+        if (wsRequest && wsConnected) {
+          try {
+            safetyData = await wsRequest('safety-events', { icao_hex: hex, hours: safetyHours, limit: 100 });
+            if (safetyData?.error) safetyData = null;
+          } catch (err) {
+            console.debug('Safety events WS request failed:', err.message);
+          }
+        }
+
+        // HTTP fallback only if socket didn't work
+        if (!safetyData) {
+          const safetyRes = await fetch(`${baseUrl}/api/v1/safety/events?icao_hex=${hex}&hours=${safetyHours}&limit=100`);
+          if (safetyRes.ok) {
+            safetyData = await safetyRes.json();
+          }
+        }
+
+        if (safetyData) {
+          setSafetyEvents(safetyData.events || []);
         }
       } catch (err) {
         console.log('Safety events fetch error:', err.message);
       }
     };
     fetchSafetyEvents();
-  }, [hex, baseUrl, safetyHours]);
+  }, [hex, baseUrl, safetyHours, wsRequest, wsConnected]);
 
   // Fetch radio transmissions for this aircraft
   useEffect(() => {
@@ -520,20 +598,45 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
       setRadioLoading(true);
       try {
         const callsign = aircraft?.flight?.trim();
-        // Use the aircraft info endpoint which includes matched_radio_calls
-        const params = new URLSearchParams({
-          include_radio_calls: 'true',
-          radio_hours: radioHours.toString(),
-          radio_limit: '50',
-        });
-        if (callsign) {
-          params.append('callsign', callsign);
+        let radioData = null;
+
+        // Prefer socket.io
+        if (wsRequest && wsConnected) {
+          try {
+            const params = {
+              icao: hex,
+              include_radio_calls: true,
+              radio_hours: radioHours,
+              radio_limit: 50,
+            };
+            if (callsign) params.callsign = callsign;
+
+            radioData = await wsRequest('aircraft-info', params);
+            if (radioData?.error) radioData = null;
+          } catch (err) {
+            console.debug('Radio transmissions WS request failed:', err.message);
+          }
         }
 
-        const res = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/info?${params}`);
-        if (res.ok) {
-          const data = await res.json();
-          setRadioTransmissions(data.matched_radio_calls || []);
+        // HTTP fallback only if socket didn't work
+        if (!radioData) {
+          const params = new URLSearchParams({
+            include_radio_calls: 'true',
+            radio_hours: radioHours.toString(),
+            radio_limit: '50',
+          });
+          if (callsign) {
+            params.append('callsign', callsign);
+          }
+
+          const res = await fetch(`${baseUrl}/api/v1/aircraft/${hex}/info?${params}`);
+          if (res.ok) {
+            radioData = await res.json();
+          }
+        }
+
+        if (radioData) {
+          setRadioTransmissions(radioData.matched_radio_calls || []);
         }
       } catch (err) {
         console.log('Radio transmissions fetch error:', err.message);
@@ -541,7 +644,7 @@ export function AircraftDetailPage({ hex, apiUrl, onClose, onSelectAircraft, onV
       setRadioLoading(false);
     };
     fetchRadioTransmissions();
-  }, [hex, baseUrl, radioHours, aircraft?.flight]);
+  }, [hex, baseUrl, radioHours, aircraft?.flight, wsRequest, wsConnected]);
 
   // Subscribe to global audio state for radio tab
   useEffect(() => {

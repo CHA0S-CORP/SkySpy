@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { Radio, Search, Play, Pause, Volume2, VolumeX, RefreshCw, ChevronDown, AlertCircle, CheckCircle, Clock, Loader2, FileAudio, Mic, PlayCircle, Radar, Plane, Filter, X } from 'lucide-react';
-import { useApi } from '../../hooks';
+import { useSocketApi } from '../../hooks';
 import { io } from 'socket.io-client';
 
 // Emergency keywords for filtering distress calls
@@ -530,9 +530,11 @@ export function AudioView({ apiBase, onSelectAircraft }) {
   const channelParam = channelFilter !== 'all' ? `&channel=${encodeURIComponent(channelFilter)}` : '';
   const endpoint = `/api/v1/audio/transmissions?hours=${hours[timeRange]}&limit=100${statusParam}${channelParam}`;
 
-  const { data, loading, refetch } = useApi(endpoint, null, apiBase);
-  const { data: statsData } = useApi('/api/v1/audio/stats', null, apiBase);
-  const { data: statusData } = useApi('/api/v1/audio/status', null, apiBase);
+  // Note: AudioView has its own socket.io connection for real-time audio,
+  // so we just use HTTP for initial data and let the socket handle updates
+  const { data, loading, refetch } = useSocketApi(endpoint, null, apiBase, {});
+  const { data: statsData } = useSocketApi('/api/v1/audio/stats', null, apiBase, {});
+  const { data: statusData } = useSocketApi('/api/v1/audio/status', null, apiBase, {});
 
   // Extract unique channels from stats
   useEffect(() => {

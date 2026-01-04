@@ -1,16 +1,19 @@
 """
 Aircraft API endpoints for real-time ADS-B tracking.
 """
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timedelta
+from typing import Optional, List
 
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, HTTPException, Path, Query, Depends
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import (
-    get_settings, cached, safe_request, calculate_distance_nm,
+    get_settings, get_db, calculate_distance_nm,
     is_valid_position, simplify_aircraft
 )
+from app.models import AircraftSighting, AircraftInfo
 from app.schemas import (
     AircraftListResponse, TopAircraftResponse, AircraftStatsResponse,
     AircraftBase, ErrorResponse
@@ -20,85 +23,117 @@ router = APIRouter(prefix="/api/v1", tags=["Aircraft"])
 settings = get_settings()
 
 
+def _convert_to_dict(sighting: AircraftSighting, info: Optional[AircraftInfo] = None) -> dict:
+    """
+    Convert AircraftSighting model to dictionary format expected by frontend.
+    Enrich with AircraftInfo (cached external data) if available.
+    """
+    ac_data = {
+        "hex": sighting.icao_hex,
+        "flight": sighting.callsign,
+        "lat": sighting.latitude,
+        "lon": sighting.longitude,
+        "alt_baro": sighting.altitude_baro,
+        "alt_geom": sighting.altitude_geom,
+        "gs": sighting.ground_speed,
+        "track": sighting.track,
+        "baro_rate": sighting.vertical_rate,
+        "squawk": sighting.squawk,
+        "category": sighting.category,
+        "distance_nm": sighting.distance_nm,
+        "rssi": sighting.rssi,
+        "t": sighting.aircraft_type,
+        "dbFlags": 1 if sighting.is_military else 0,
+        "seen": (datetime.utcnow() - sighting.timestamp).total_seconds(),
+        "messages": 0, # Legacy field
+        "source": sighting.source
+    }
+
+    # Enrich with external DB info if available
+    if info:
+        # Standard keys often used by readsb/tar1090 frontends
+        ac_data.update({
+            "r": info.registration,
+            "t": info.type_code or sighting.aircraft_type,
+            "desc": info.type_name or f"{info.manufacturer or ''} {info.model or ''}".strip(),
+            "ownOp": info.operator,
+            "year": info.year_built,
+        })
+        
+        # Verbose keys for our UI
+        ac_data.update({
+            "registration": info.registration,
+            "type_code": info.type_code,
+            "type_description": info.type_name,
+            "manufacturer": info.manufacturer,
+            "model": info.model,
+            "operator": info.operator,
+            "photo_url": info.photo_url,
+            "photo_thumbnail_url": info.photo_thumbnail_url,
+            "has_photo": bool(info.photo_url)
+        })
+
+    return ac_data
+
+
+async def _get_current_aircraft(db: AsyncSession, source: Optional[str] = None) -> List[dict]:
+    """
+    Helper to fetch currently active aircraft from DB.
+    Joins AircraftSighting (live) with AircraftInfo (cached metadata).
+    """
+    # Fetch distinct aircraft seen in the last 2 minutes
+    cutoff = datetime.utcnow() - timedelta(minutes=2)
+    
+    # Query: Select latest Sighting joined with Info
+    # DISTINCT ON (icao_hex) ensures we get the single latest sighting per aircraft
+    query = (
+        select(AircraftSighting, AircraftInfo)
+        .outerjoin(AircraftInfo, AircraftSighting.icao_hex == AircraftInfo.icao_hex)
+        .distinct(AircraftSighting.icao_hex)
+        .order_by(AircraftSighting.icao_hex, AircraftSighting.timestamp.desc())
+        .where(AircraftSighting.timestamp > cutoff)
+    )
+    
+    if source:
+        query = query.where(AircraftSighting.source == source)
+        
+    result = await db.execute(query)
+    rows = result.all()
+    
+    # Convert tuples (Sighting, Info) to dicts
+    return [_convert_to_dict(sighting, info) for sighting, info in rows]
+
+
 @router.get(
     "/aircraft",
     response_model=AircraftListResponse,
     summary="Get All Tracked Aircraft",
     description="""
 Retrieve all aircraft currently being tracked by the ADS-B receiver.
-
-Each aircraft includes:
-- **hex**: ICAO 24-bit address (unique identifier)
-- **flight**: Callsign/flight number
-- **lat/lon**: Position coordinates
-- **alt_baro**: Barometric altitude in feet
-- **gs**: Ground speed in knots
-- **track**: Ground track in degrees
-- **baro_rate**: Vertical rate in feet/minute
-- **squawk**: Transponder code
-- **category**: Aircraft wake category
-- **distance_nm**: Calculated distance from feeder
-
-Data is refreshed every 2 seconds.
+Data is retrieved from the database, populated by the background ingestion task.
+Includes cached external data (photos, registration) if available.
     """,
     responses={
         200: {
             "description": "List of tracked aircraft",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "aircraft": [
-                            {
-                                "hex": "A12345",
-                                "flight": "UAL123",
-                                "lat": 47.6062,
-                                "lon": -122.3321,
-                                "alt_baro": 35000,
-                                "gs": 450,
-                                "track": 270,
-                                "distance_nm": 15.2
-                            }
-                        ],
-                        "count": 1,
-                        "now": 1703123456.789,
-                        "messages": 152340,
-                        "timestamp": "2024-12-21T12:00:00Z"
-                    }
-                }
-            }
         },
-        503: {"model": ErrorResponse, "description": "ADS-B data source unavailable"}
+        503: {"model": ErrorResponse, "description": "Database unavailable"}
     }
 )
-@cached(ttl_seconds=2)
-async def get_aircraft():
-    """Get all currently tracked aircraft with calculated distance from feeder."""
-    url = f"{settings.ultrafeeder_url}/data/aircraft.json"
-    data = await safe_request(url)
-    
-    if not data:
+async def get_aircraft(db: AsyncSession = Depends(get_db)):
+    """Get all currently tracked aircraft from database."""
+    try:
+        aircraft_list = await _get_current_aircraft(db)
+        
         return AircraftListResponse(
-            aircraft=[],
-            count=0,
+            aircraft=aircraft_list,
+            count=len(aircraft_list),
+            now=datetime.utcnow().timestamp(),
+            messages=0,
             timestamp=datetime.utcnow().isoformat() + "Z"
         )
-    
-    aircraft = data.get("aircraft", [])
-    
-    for ac in aircraft:
-        lat, lon = ac.get("lat"), ac.get("lon")
-        if is_valid_position(lat, lon):
-            ac["distance_nm"] = round(
-                calculate_distance_nm(settings.feeder_lat, settings.feeder_lon, lat, lon), 1
-            )
-    
-    return AircraftListResponse(
-        aircraft=aircraft,
-        count=len(aircraft),
-        now=data.get("now"),
-        messages=data.get("messages", 0),
-        timestamp=datetime.utcnow().isoformat() + "Z"
-    )
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Error fetching aircraft data: {str(e)}")
 
 
 @router.get(
@@ -106,409 +141,251 @@ async def get_aircraft():
     response_model=TopAircraftResponse,
     summary="Get Top Aircraft by Category",
     description="""
-Get the top 5 aircraft in various categories:
-
-- **closest**: Aircraft nearest to the feeder location
-- **highest**: Aircraft at highest altitude
-- **fastest**: Aircraft with highest ground speed
-- **climbing**: Aircraft with highest vertical rate (climb or descent)
-- **military**: Military aircraft currently tracked
-
-Each category returns simplified aircraft data for quick overview.
+Get the top 5 aircraft in various categories.
     """,
     responses={
         200: {
             "description": "Top aircraft by category",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "closest": [{"hex": "A12345", "flight": "UAL123", "distance_nm": 2.5}],
-                        "highest": [{"hex": "B67890", "flight": "DAL456", "alt": 45000}],
-                        "fastest": [{"hex": "C11111", "flight": "AAL789", "gs": 550}],
-                        "climbing": [{"hex": "D22222", "flight": "SWA321", "vr": 4500}],
-                        "military": [{"hex": "AE1234", "flight": "EVAC01", "military": True}],
-                        "total": 45,
-                        "timestamp": "2024-12-21T12:00:00Z"
-                    }
-                }
-            }
         },
-        503: {"model": ErrorResponse, "description": "ADS-B data source unavailable"}
+        503: {"model": ErrorResponse, "description": "Database unavailable"}
     }
 )
-@cached(ttl_seconds=5)
-async def get_top_aircraft():
+async def get_top_aircraft(db: AsyncSession = Depends(get_db)):
     """Get top aircraft by various criteria (closest, highest, fastest, climbing, military)."""
-    url = f"{settings.ultrafeeder_url}/data/aircraft.json"
-    data = await safe_request(url)
-    
-    if not data:
-        raise HTTPException(status_code=503, detail="Unable to fetch aircraft data")
-    
-    aircraft = data.get("aircraft", [])
-    
-    # Add distance to all
-    for ac in aircraft:
-        lat, lon = ac.get("lat"), ac.get("lon")
-        if is_valid_position(lat, lon):
-            ac["distance_nm"] = calculate_distance_nm(
-                settings.feeder_lat, settings.feeder_lon, lat, lon
-            )
-        else:
-            ac["distance_nm"] = 99999
-    
-    # Top 5 by closest
-    closest = sorted(
-        [a for a in aircraft if is_valid_position(a.get("lat"), a.get("lon"))],
-        key=lambda x: x["distance_nm"]
-    )[:5]
-    
-    # Top 5 by altitude
-    highest = sorted(
-        [a for a in aircraft if isinstance(a.get("alt_baro"), int)],
-        key=lambda x: x["alt_baro"],
-        reverse=True
-    )[:5]
-    
-    # Top 5 by speed
-    fastest = sorted(
-        [a for a in aircraft if a.get("gs")],
-        key=lambda x: x["gs"],
-        reverse=True
-    )[:5]
-    
-    # Top 5 by vertical rate
-    climbing = sorted(
-        [a for a in aircraft if a.get("baro_rate")],
-        key=lambda x: abs(x.get("baro_rate", 0)),
-        reverse=True
-    )[:5]
-    
-    # Military
-    military = [a for a in aircraft if a.get("dbFlags", 0) & 1][:5]
-    
-    return {
-        "closest": [simplify_aircraft(a, a.get("distance_nm")) for a in closest],
-        "highest": [simplify_aircraft(a, a.get("distance_nm")) for a in highest],
-        "fastest": [simplify_aircraft(a, a.get("distance_nm")) for a in fastest],
-        "climbing": [simplify_aircraft(a, a.get("distance_nm")) for a in climbing],
-        "military": [simplify_aircraft(a, a.get("distance_nm")) for a in military],
-        "total": len(aircraft),
-        "timestamp": datetime.utcnow().isoformat() + "Z"
-    }
+    try:
+        aircraft = await _get_current_aircraft(db)
+        
+        # We process in memory because N is small (<1000) and it's cleaner than 5 complex DB queries
+        
+        # Top 5 by closest
+        closest = sorted(
+            [a for a in aircraft if is_valid_position(a.get("lat"), a.get("lon"))],
+            key=lambda x: x.get("distance_nm") if x.get("distance_nm") is not None else 99999
+        )[:5]
+        
+        # Top 5 by altitude
+        highest = sorted(
+            [a for a in aircraft if isinstance(a.get("alt_baro"), (int, float))],
+            key=lambda x: x["alt_baro"],
+            reverse=True
+        )[:5]
+        
+        # Top 5 by speed
+        fastest = sorted(
+            [a for a in aircraft if a.get("gs")],
+            key=lambda x: x["gs"],
+            reverse=True
+        )[:5]
+        
+        # Top 5 by vertical rate
+        climbing = sorted(
+            [a for a in aircraft if a.get("baro_rate")],
+            key=lambda x: abs(x.get("baro_rate", 0)),
+            reverse=True
+        )[:5]
+        
+        # Military
+        military = [a for a in aircraft if a.get("dbFlags", 0) & 1][:5]
+        
+        return {
+            "closest": [simplify_aircraft(a, a.get("distance_nm")) for a in closest],
+            "highest": [simplify_aircraft(a, a.get("distance_nm")) for a in highest],
+            "fastest": [simplify_aircraft(a, a.get("distance_nm")) for a in fastest],
+            "climbing": [simplify_aircraft(a, a.get("distance_nm")) for a in climbing],
+            "military": [simplify_aircraft(a, a.get("distance_nm")) for a in military],
+            "total": len(aircraft),
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Error fetching aircraft data: {str(e)}")
 
 
 @router.get(
     "/aircraft/stats",
     response_model=AircraftStatsResponse,
     summary="Get Aircraft Statistics",
-    description="""
-Get aggregate statistics about currently tracked aircraft with optional filters.
-
-**Filters:**
-- **category**: Filter by aircraft category (A0-D7, comma-separated)
-- **military_only**: Only include military aircraft
-- **min_altitude/max_altitude**: Filter by altitude range in feet
-- **min_distance/max_distance**: Filter by distance range in nautical miles
-
-Returns:
-- **total**: Total aircraft count (after filters)
-- **with_position**: Aircraft with valid GPS position
-- **military**: Military aircraft count
-- **emergency**: Aircraft squawking emergency codes (7500/7600/7700)
-- **categories**: Count by aircraft category (A0-D7)
-- **altitude**: Count by altitude band (ground, low, medium, high)
-- **messages**: Total messages received by feeder
-
-Altitude bands:
-- Ground: On ground or ≤0 ft
-- Low: 1-9,999 ft
-- Medium: 10,000-29,999 ft
-- High: ≥30,000 ft
-    """,
+    description="Get aggregate statistics about currently tracked aircraft.",
     responses={
-        200: {
-            "description": "Aircraft statistics",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "total": 45,
-                        "with_position": 42,
-                        "military": 2,
-                        "emergency": [],
-                        "categories": {"A3": 25, "A5": 10, "A1": 5, "unknown": 5},
-                        "altitude": {"ground": 3, "low": 5, "medium": 12, "high": 25},
-                        "messages": 152340,
-                        "timestamp": "2024-12-21T12:00:00Z",
-                        "filters_applied": {"military_only": False}
-                    }
-                }
-            }
-        },
-        503: {"model": ErrorResponse, "description": "ADS-B data source unavailable"}
+        200: {"description": "Aircraft statistics"},
+        503: {"model": ErrorResponse, "description": "Database unavailable"}
     }
 )
 async def get_aircraft_stats(
-    category: Optional[str] = Query(
-        None,
-        description="Filter by aircraft category (A0-D7), comma-separated for multiple",
-        example="A3,A5"
-    ),
-    military_only: bool = Query(
-        False,
-        description="Only include military aircraft"
-    ),
-    min_altitude: Optional[int] = Query(
-        None,
-        description="Minimum altitude in feet",
-        example=10000
-    ),
-    max_altitude: Optional[int] = Query(
-        None,
-        description="Maximum altitude in feet",
-        example=40000
-    ),
-    min_distance: Optional[float] = Query(
-        None,
-        description="Minimum distance from feeder in nautical miles",
-        example=0
-    ),
-    max_distance: Optional[float] = Query(
-        None,
-        description="Maximum distance from feeder in nautical miles",
-        example=100
-    )
+    category: Optional[str] = Query(None, description="Filter by aircraft category"),
+    military_only: bool = Query(False, description="Only include military aircraft"),
+    min_altitude: Optional[int] = Query(None, description="Minimum altitude in feet"),
+    max_altitude: Optional[int] = Query(None, description="Maximum altitude in feet"),
+    min_distance: Optional[float] = Query(None, description="Minimum distance from feeder"),
+    max_distance: Optional[float] = Query(None, description="Maximum distance from feeder"),
+    db: AsyncSession = Depends(get_db)
 ):
     """Get aggregate statistics about currently tracked aircraft with optional filters."""
-    url = f"{settings.ultrafeeder_url}/data/aircraft.json"
-    data = await safe_request(url)
+    try:
+        aircraft = await _get_current_aircraft(db)
+        
+        # Build filters applied tracking
+        filters_applied = {}
 
-    if not data:
-        raise HTTPException(status_code=503, detail="Unable to fetch aircraft data")
+        # Apply filters
+        if category:
+            categories_list = [c.strip().upper() for c in category.split(",")]
+            aircraft = [a for a in aircraft if a.get("category", "").upper() in categories_list]
+            filters_applied["category"] = categories_list
 
-    aircraft = data.get("aircraft", [])
+        if military_only:
+            aircraft = [a for a in aircraft if a.get("dbFlags", 0) & 1]
+            filters_applied["military_only"] = True
 
-    # Add distance to all aircraft for filtering
-    for ac in aircraft:
-        lat, lon = ac.get("lat"), ac.get("lon")
-        if is_valid_position(lat, lon):
-            ac["distance_nm"] = calculate_distance_nm(
-                settings.feeder_lat, settings.feeder_lon, lat, lon
-            )
-        else:
-            ac["distance_nm"] = None
+        if min_altitude is not None:
+            aircraft = [
+                a for a in aircraft
+                if isinstance(a.get("alt_baro"), (int, float)) and a["alt_baro"] >= min_altitude
+            ]
+            filters_applied["min_altitude"] = min_altitude
 
-    # Build filters applied tracking
-    filters_applied = {}
+        if max_altitude is not None:
+            aircraft = [
+                a for a in aircraft
+                if isinstance(a.get("alt_baro"), (int, float)) and a["alt_baro"] <= max_altitude
+            ]
+            filters_applied["max_altitude"] = max_altitude
 
-    # Apply filters
-    if category:
-        categories_list = [c.strip().upper() for c in category.split(",")]
-        aircraft = [a for a in aircraft if a.get("category", "").upper() in categories_list]
-        filters_applied["category"] = categories_list
+        if min_distance is not None:
+            aircraft = [
+                a for a in aircraft
+                if a.get("distance_nm") is not None and a["distance_nm"] >= min_distance
+            ]
+            filters_applied["min_distance"] = min_distance
 
-    if military_only:
-        aircraft = [a for a in aircraft if a.get("dbFlags", 0) & 1]
-        filters_applied["military_only"] = True
+        if max_distance is not None:
+            aircraft = [
+                a for a in aircraft
+                if a.get("distance_nm") is not None and a["distance_nm"] <= max_distance
+            ]
+            filters_applied["max_distance"] = max_distance
 
-    if min_altitude is not None:
-        aircraft = [
-            a for a in aircraft
-            if isinstance(a.get("alt_baro"), int) and a["alt_baro"] >= min_altitude
+        with_pos = sum(1 for a in aircraft if is_valid_position(a.get("lat"), a.get("lon")))
+        military_count = sum(1 for a in aircraft if a.get("dbFlags", 0) & 1)
+        emergency = [
+            {"hex": a.get("hex"), "flight": a.get("flight"), "squawk": a.get("squawk")}
+            for a in aircraft if a.get("squawk") in ["7500", "7600", "7700"]
         ]
-        filters_applied["min_altitude"] = min_altitude
 
-    if max_altitude is not None:
-        aircraft = [
-            a for a in aircraft
-            if isinstance(a.get("alt_baro"), int) and a["alt_baro"] <= max_altitude
-        ]
-        filters_applied["max_altitude"] = max_altitude
+        # Category breakdown
+        categories_count = {}
+        for a in aircraft:
+            cat = a.get("category", "unknown")
+            categories_count[cat] = categories_count.get(cat, 0) + 1
 
-    if min_distance is not None:
-        aircraft = [
-            a for a in aircraft
-            if a.get("distance_nm") is not None and a["distance_nm"] >= min_distance
-        ]
-        filters_applied["min_distance"] = min_distance
+        # Altitude breakdown
+        alt_ground = sum(
+            1 for a in aircraft
+            if a.get("alt_baro") == "ground" or
+            (isinstance(a.get("alt_baro"), (int, float)) and a.get("alt_baro", 99999) <= 0)
+        )
+        alt_low = sum(
+            1 for a in aircraft
+            if isinstance(a.get("alt_baro"), (int, float)) and 0 < a["alt_baro"] < 10000
+        )
+        alt_med = sum(
+            1 for a in aircraft
+            if isinstance(a.get("alt_baro"), (int, float)) and 10000 <= a["alt_baro"] < 30000
+        )
+        alt_high = sum(
+            1 for a in aircraft
+            if isinstance(a.get("alt_baro"), (int, float)) and a["alt_baro"] >= 30000
+        )
 
-    if max_distance is not None:
-        aircraft = [
-            a for a in aircraft
-            if a.get("distance_nm") is not None and a["distance_nm"] <= max_distance
-        ]
-        filters_applied["max_distance"] = max_distance
+        # Distance breakdown
+        dist_close = sum(1 for a in aircraft if a.get("distance_nm") is not None and a["distance_nm"] < 25)
+        dist_near = sum(1 for a in aircraft if a.get("distance_nm") is not None and 25 <= a["distance_nm"] < 50)
+        dist_mid = sum(1 for a in aircraft if a.get("distance_nm") is not None and 50 <= a["distance_nm"] < 100)
+        dist_far = sum(1 for a in aircraft if a.get("distance_nm") is not None and a["distance_nm"] >= 100)
 
-    with_pos = sum(1 for a in aircraft if is_valid_position(a.get("lat"), a.get("lon")))
-    military_count = sum(1 for a in aircraft if a.get("dbFlags", 0) & 1)
-    emergency = [
-        {"hex": a.get("hex"), "flight": a.get("flight"), "squawk": a.get("squawk")}
-        for a in aircraft if a.get("squawk") in ["7500", "7600", "7700"]
-    ]
+        # Speed breakdown
+        speed_slow = sum(1 for a in aircraft if a.get("gs") and a["gs"] < 200)
+        speed_med = sum(1 for a in aircraft if a.get("gs") and 200 <= a["gs"] < 400)
+        speed_fast = sum(1 for a in aircraft if a.get("gs") and a["gs"] >= 400)
 
-    # Category breakdown
-    categories_count = {}
-    for a in aircraft:
-        cat = a.get("category", "unknown")
-        categories_count[cat] = categories_count.get(cat, 0) + 1
-
-    # Altitude breakdown
-    alt_ground = sum(
-        1 for a in aircraft
-        if a.get("alt_baro") == "ground" or
-        (isinstance(a.get("alt_baro"), int) and a.get("alt_baro", 99999) <= 0)
-    )
-    alt_low = sum(
-        1 for a in aircraft
-        if isinstance(a.get("alt_baro"), int) and 0 < a["alt_baro"] < 10000
-    )
-    alt_med = sum(
-        1 for a in aircraft
-        if isinstance(a.get("alt_baro"), int) and 10000 <= a["alt_baro"] < 30000
-    )
-    alt_high = sum(
-        1 for a in aircraft
-        if isinstance(a.get("alt_baro"), int) and a["alt_baro"] >= 30000
-    )
-
-    # Distance breakdown
-    dist_close = sum(1 for a in aircraft if a.get("distance_nm") is not None and a["distance_nm"] < 25)
-    dist_near = sum(1 for a in aircraft if a.get("distance_nm") is not None and 25 <= a["distance_nm"] < 50)
-    dist_mid = sum(1 for a in aircraft if a.get("distance_nm") is not None and 50 <= a["distance_nm"] < 100)
-    dist_far = sum(1 for a in aircraft if a.get("distance_nm") is not None and a["distance_nm"] >= 100)
-
-    # Speed breakdown
-    speed_slow = sum(1 for a in aircraft if a.get("gs") and a["gs"] < 200)
-    speed_med = sum(1 for a in aircraft if a.get("gs") and 200 <= a["gs"] < 400)
-    speed_fast = sum(1 for a in aircraft if a.get("gs") and a["gs"] >= 400)
-
-    return {
-        "total": len(aircraft),
-        "with_position": with_pos,
-        "military": military_count,
-        "emergency": emergency,
-        "categories": categories_count,
-        "altitude": {"ground": alt_ground, "low": alt_low, "medium": alt_med, "high": alt_high},
-        "distance": {"close": dist_close, "near": dist_near, "mid": dist_mid, "far": dist_far},
-        "speed": {"slow": speed_slow, "medium": speed_med, "fast": speed_fast},
-        "messages": data.get("messages", 0),
-        "filters_applied": filters_applied if filters_applied else None,
-        "timestamp": datetime.utcnow().isoformat() + "Z"
-    }
+        return {
+            "total": len(aircraft),
+            "with_position": with_pos,
+            "military": military_count,
+            "emergency": emergency,
+            "categories": categories_count,
+            "altitude": {"ground": alt_ground, "low": alt_low, "medium": alt_med, "high": alt_high},
+            "distance": {"close": dist_close, "near": dist_near, "mid": dist_mid, "far": dist_far},
+            "speed": {"slow": speed_slow, "medium": speed_med, "fast": speed_fast},
+            "messages": 0,
+            "filters_applied": filters_applied if filters_applied else None,
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Error fetching stats: {str(e)}")
 
 
 @router.get(
     "/aircraft/{hex_code}",
     summary="Get Aircraft by ICAO Hex",
-    description="""
-Get detailed information about a specific aircraft by its ICAO 24-bit hex address.
-
-The ICAO hex is a unique identifier assigned to each aircraft transponder.
-Examples: A12345, 4B1234, 80ABCD
-
-Returns full aircraft data including all available fields from the transponder.
-    """,
+    description="Get detailed information about a specific aircraft from the database.",
     responses={
-        200: {
-            "description": "Aircraft found",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "aircraft": {
-                            "hex": "A12345",
-                            "flight": "UAL123",
-                            "lat": 47.6062,
-                            "lon": -122.3321,
-                            "alt_baro": 35000,
-                            "alt_geom": 35100,
-                            "gs": 450,
-                            "track": 270,
-                            "baro_rate": 0,
-                            "squawk": "1200",
-                            "category": "A3",
-                            "distance_nm": 15.2,
-                            "messages": 1523,
-                            "seen": 0.1,
-                            "rssi": -8.5
-                        },
-                        "found": True
-                    }
-                }
-            }
-        },
+        200: {"description": "Aircraft found"},
         404: {"model": ErrorResponse, "description": "Aircraft not found"},
-        503: {"model": ErrorResponse, "description": "ADS-B data source unavailable"}
+        503: {"model": ErrorResponse, "description": "Database unavailable"}
     }
 )
 async def get_aircraft_by_hex(
-    hex_code: str = Path(
-        ...,
-        description="ICAO 24-bit hex address",
-        example="A12345",
-        min_length=6,
-        max_length=10
-    )
+    hex_code: str = Path(..., min_length=6, max_length=10),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Get specific aircraft by ICAO hex code."""
-    url = f"{settings.ultrafeeder_url}/data/aircraft.json"
-    data = await safe_request(url)
-    
-    if not data:
-        raise HTTPException(status_code=503, detail="Unable to fetch aircraft data")
-    
-    for ac in data.get("aircraft", []):
-        if ac.get("hex", "").upper() == hex_code.upper():
-            lat, lon = ac.get("lat"), ac.get("lon")
-            if is_valid_position(lat, lon):
-                ac["distance_nm"] = round(
-                    calculate_distance_nm(settings.feeder_lat, settings.feeder_lon, lat, lon), 1
-                )
-            return {"aircraft": ac, "found": True}
-    
-    raise HTTPException(status_code=404, detail="Aircraft not found")
+    """Get specific aircraft by ICAO hex code from database."""
+    try:
+        cutoff = datetime.utcnow() - timedelta(minutes=10)
+        
+        # Get latest sighting and info
+        query = (
+            select(AircraftSighting, AircraftInfo)
+            .outerjoin(AircraftInfo, AircraftSighting.icao_hex == AircraftInfo.icao_hex)
+            .where(AircraftSighting.icao_hex == hex_code.upper())
+            .where(AircraftSighting.timestamp > cutoff)
+            .order_by(AircraftSighting.timestamp.desc())
+            .limit(1)
+        )
+        
+        result = await db.execute(query)
+        row = result.first()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="Aircraft not found")
+        
+        sighting, info = row
+        ac = _convert_to_dict(sighting, info)
+        return {"aircraft": ac, "found": True}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Error fetching aircraft: {str(e)}")
 
 
 @router.get(
     "/uat/aircraft",
     response_model=AircraftListResponse,
     summary="Get UAT Aircraft (978 MHz)",
-    description="""
-Get aircraft from the 978 MHz UAT (Universal Access Transceiver) receiver.
-
-UAT is used primarily in the United States for:
-- General aviation below 18,000 feet
-- Aircraft without Mode S transponders
-- ADS-B Out compliance at lower cost
-
-Requires a separate 978 MHz SDR receiver (dump978).
-    """,
+    description="Get aircraft from the 978 MHz UAT receiver via database.",
     responses={
-        200: {
-            "description": "UAT aircraft list",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "aircraft": [
-                            {"hex": "A12345", "flight": "N12345", "alt_baro": 5500}
-                        ],
-                        "count": 1
-                    }
-                }
-            }
-        }
+        200: {"description": "UAT aircraft list"}
     }
 )
-@cached(ttl_seconds=2)
-async def get_uat_aircraft():
+async def get_uat_aircraft(db: AsyncSession = Depends(get_db)):
     """Get aircraft from 978MHz UAT receiver (US general aviation)."""
-    url = f"{settings.dump978_url}/skyaware978/data/aircraft.json"
-    data = await safe_request(url)
-    
-    if not data:
-        return {"aircraft": [], "count": 0, "timestamp": datetime.utcnow().isoformat() + "Z"}
-    
-    return {
-        "aircraft": data.get("aircraft", []),
-        "count": len(data.get("aircraft", [])),
-        "timestamp": datetime.utcnow().isoformat() + "Z"
-    }
+    try:
+        aircraft_list = await _get_current_aircraft(db, source="978")
+        
+        return {
+            "aircraft": aircraft_list,
+            "count": len(aircraft_list),
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Error fetching UAT data: {str(e)}")

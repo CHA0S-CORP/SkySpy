@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Activity, Database, Zap, Bell, MapPin, RefreshCw, TestTube2, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
-import { useApi } from '../../hooks';
+import { useSocketApi } from '../../hooks';
 
 export function SystemView({ apiBase, wsRequest, wsConnected }) {
   // Local state for data - will be populated by WebSocket or HTTP fallback
@@ -15,12 +15,18 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
   const [testResult, setTestResult] = useState(null);
   const [safetyTestResult, setSafetyTestResult] = useState(null);
 
-  // HTTP fetchers - always fetch these as fallback/supplement
-  const { data: httpStatus, refetch: refetchHttpStatus } = useApi('/api/v1/status', 10000, apiBase);
-  const { data: httpHealth } = useApi('/api/v1/health', 10000, apiBase);
-  const { data: httpWsStatus } = useApi('/api/v1/ws/status', 5000, apiBase);
-  const { data: httpNotifConfig } = useApi('/api/v1/notifications/config', null, apiBase);
-  const { data: httpSafetyStatus } = useApi('/api/v1/safety/monitor/status', 10000, apiBase);
+  // Socket options for useSocketApi
+  const socketOpts = { wsRequest, wsConnected };
+  // When socket is connected, use longer polling intervals since we fetch via socket primarily
+  const pollInterval = wsConnected ? 30000 : 10000;
+  const fastPollInterval = wsConnected ? 15000 : 5000;
+
+  // HTTP fetchers with socket.io preference - used as fallback/supplement
+  const { data: httpStatus, refetch: refetchHttpStatus } = useSocketApi('/api/v1/status', pollInterval, apiBase, socketOpts);
+  const { data: httpHealth } = useSocketApi('/api/v1/health', pollInterval, apiBase, socketOpts);
+  const { data: httpWsStatus } = useSocketApi('/api/v1/ws/status', fastPollInterval, apiBase, socketOpts);
+  const { data: httpNotifConfig } = useSocketApi('/api/v1/notifications/config', null, apiBase, socketOpts);
+  const { data: httpSafetyStatus } = useSocketApi('/api/v1/safety/monitor/status', pollInterval, apiBase, socketOpts);
 
   // Fetch all status data via WebSocket
   const fetchViaSocket = useCallback(async () => {

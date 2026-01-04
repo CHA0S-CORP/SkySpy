@@ -17,7 +17,7 @@ from app.models import AircraftSighting, AircraftSession, SafetyEvent
 from app.schemas import (
     SightingsListResponse, SessionsListResponse, HistoryStatsResponse
 )
-from app.services.opensky_db import lookup as opensky_lookup
+from app.services.external_db import lookup_opensky as opensky_lookup
 
 router = APIRouter(prefix="/api/v1/history", tags=["History"])
 

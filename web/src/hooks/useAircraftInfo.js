@@ -126,6 +126,7 @@ export function useAircraftInfo({
 
   /**
    * Fetch single aircraft info via WebSocket or HTTP
+   * When socket is connected, we only use socket.io to reduce API calls
    */
   const fetchSingleInfo = useCallback(async (icao) => {
     icao = icao.toUpperCase();
@@ -141,20 +142,25 @@ export function useAircraftInfo({
     try {
       let data = null;
 
-      // Prefer WebSocket request
+      // Use WebSocket exclusively when connected to reduce HTTP calls
       if (wsRequest && wsConnected) {
         try {
           data = await wsRequest('aircraft-info', { icao });
           if (data?.error) {
-            data = null;
+            // Cache error state to avoid repeated lookups
+            if (data.error === 'not_found' || data.error_type === 'not_found') {
+              data = { icao_hex: icao, found: false };
+            } else {
+              data = null;
+            }
           }
         } catch (err) {
           console.debug('Aircraft info WS request failed:', icao, err.message);
+          // Don't fall back to HTTP when socket is connected - schedule retry instead
+          throw err;
         }
-      }
-
-      // Fallback to HTTP
-      if (!data) {
+      } else {
+        // HTTP fallback only when socket is not connected
         try {
           const res = await fetch(`${apiBaseUrl}/api/v1/aircraft/${icao}/info`);
           if (res.ok) {
@@ -198,6 +204,7 @@ export function useAircraftInfo({
 
   /**
    * Fetch bulk aircraft info (cached data only from backend)
+   * Uses socket.io when available to reduce HTTP calls
    */
   const fetchBulkInfo = useCallback(async (icaos) => {
     if (!icaos || icaos.length === 0) return {};
@@ -213,30 +220,50 @@ export function useAircraftInfo({
     toFetch.forEach(icao => pendingFetches.current.add(icao));
 
     try {
-      // Split into batches
-      const batches = [];
-      for (let i = 0; i < toFetch.length; i += bulkBatchSize) {
-        batches.push(toFetch.slice(i, i + bulkBatchSize));
-      }
-
       const results = {};
 
-      for (const batch of batches) {
-        try {
-          const res = await fetch(`${apiBaseUrl}/api/v1/aircraft/info/bulk`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(batch)
-          });
+      // Prefer socket.io for bulk lookups when connected
+      if (wsRequest && wsConnected) {
+        // Split into batches
+        const batches = [];
+        for (let i = 0; i < toFetch.length; i += bulkBatchSize) {
+          batches.push(toFetch.slice(i, i + bulkBatchSize));
+        }
 
-          if (res.ok) {
-            const data = await res.json();
-            if (data.aircraft) {
+        for (const batch of batches) {
+          try {
+            const data = await wsRequest('aircraft-info-bulk', { icaos: batch });
+            if (data && !data.error && data.aircraft) {
               Object.assign(results, data.aircraft);
             }
+          } catch (err) {
+            console.debug('Bulk aircraft info WS request failed:', err.message);
           }
-        } catch (err) {
-          console.debug('Bulk aircraft info fetch failed:', err.message);
+        }
+      } else {
+        // HTTP fallback only when socket is not connected
+        const batches = [];
+        for (let i = 0; i < toFetch.length; i += bulkBatchSize) {
+          batches.push(toFetch.slice(i, i + bulkBatchSize));
+        }
+
+        for (const batch of batches) {
+          try {
+            const res = await fetch(`${apiBaseUrl}/api/v1/aircraft/info/bulk`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(batch)
+            });
+
+            if (res.ok) {
+              const data = await res.json();
+              if (data.aircraft) {
+                Object.assign(results, data.aircraft);
+              }
+            }
+          } catch (err) {
+            console.debug('Bulk aircraft info HTTP fetch failed:', err.message);
+          }
         }
       }
 
@@ -258,7 +285,7 @@ export function useAircraftInfo({
     } finally {
       toFetch.forEach(icao => pendingFetches.current.delete(icao));
     }
-  }, [apiBaseUrl, bulkBatchSize, getCached]);
+  }, [apiBaseUrl, bulkBatchSize, getCached, wsRequest, wsConnected]);
 
   /**
    * Queue an aircraft for deferred bulk lookup

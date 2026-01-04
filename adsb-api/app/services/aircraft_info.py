@@ -90,9 +90,38 @@ AIRFRAME_LOOKUP_ERRORS = Counter(
 # Cache settings
 CACHE_DURATION_HOURS = 168  # 7 days
 FAILED_CACHE_HOURS = 24  # Retry failed lookups after 24 hours
+API_LOOKUP_COOLDOWN_SECONDS = 3600  # Only call external APIs once per hour per aircraft
 
 # In-memory pending lookups to prevent duplicate requests
 _pending_lookups: set[str] = set()
+
+# Track last API lookup time per aircraft (rate limiting)
+_last_api_lookup: dict[str, float] = {}
+
+
+def _can_lookup_api(icao_hex: str) -> bool:
+    """Check if we can call external APIs for this aircraft (rate limited to once per hour)."""
+    import time
+    icao_hex = icao_hex.upper()
+    now = time.time()
+    last_lookup = _last_api_lookup.get(icao_hex, 0)
+    return (now - last_lookup) >= API_LOOKUP_COOLDOWN_SECONDS
+
+
+def _mark_api_lookup(icao_hex: str):
+    """Mark that we just performed an API lookup for this aircraft."""
+    import time
+    _last_api_lookup[icao_hex.upper()] = time.time()
+
+
+def _cleanup_old_rate_limits():
+    """Clean up old rate limit entries to prevent memory growth."""
+    import time
+    now = time.time()
+    cutoff = now - (API_LOOKUP_COOLDOWN_SECONDS * 2)  # Keep for 2x cooldown period
+    stale_keys = [k for k, v in _last_api_lookup.items() if v < cutoff]
+    for k in stale_keys:
+        _last_api_lookup.pop(k, None)
 
 
 async def _emit_airframe_error(
@@ -129,93 +158,83 @@ _lookup_queue: asyncio.Queue = None
 
 async def get_aircraft_info(db: AsyncSession, icao_hex: str, force_refresh: bool = False) -> Optional[dict]:
     """
-    Get aircraft information, from cache or fetch from external sources.
+    Get aircraft information from database cache, with rate-limited external API fallback.
+
+    The database is populated daily by the external_db sync (ADSBX, tar1090, FAA).
+    External APIs (hexdb.io, adsb.lol) are only called:
+    - When data is missing from the database
+    - At most once per hour per aircraft (rate limited)
 
     Args:
         db: Database session
         icao_hex: ICAO hex code (e.g., "A12345")
-        force_refresh: Force refresh from external sources
+        force_refresh: Force refresh from external sources (bypasses rate limit)
 
     Returns:
         Aircraft info dict or None if not found
     """
-    from app.services.photo_cache import cache_aircraft_photos
-
     icao_hex = icao_hex.upper().strip()
 
     if not icao_hex or len(icao_hex) < 6 or len(icao_hex) > 10:
         return None
 
-    # Check database cache
+    # Check database cache first (populated by daily external_db sync)
     result = await db.execute(
         select(AircraftInfo).where(AircraftInfo.icao_hex == icao_hex)
     )
     cached = result.scalar_one_or_none()
 
-    if cached and not force_refresh:
-        # Check if cache is still valid
-        cache_age = datetime.utcnow() - cached.updated_at
-        max_age = timedelta(hours=FAILED_CACHE_HOURS if cached.fetch_failed else CACHE_DURATION_HOURS)
+    # If we have cached data, return it immediately
+    if cached:
+        AIRFRAME_CACHE_HITS.inc()
 
-        if cache_age < max_age:
-            AIRFRAME_CACHE_HITS.inc()
+        # Check if we should trigger a background API lookup for missing data
+        # Only if rate limit allows (once per hour) and data is incomplete
+        needs_api_lookup = (
+            (not cached.registration or not cached.type_code or not cached.photo_url)
+            and not cached.fetch_failed
+            and _can_lookup_api(icao_hex)
+            and icao_hex not in _pending_lookups
+        )
 
-            # Check if we have incomplete data that should be fetched
-            needs_data_update = (
-                not cached.registration or
-                not cached.type_code or
-                (not cached.photo_url and not cached.fetch_failed)
-            )
+        if needs_api_lookup or force_refresh:
+            # Trigger background refresh (non-blocking)
+            asyncio.create_task(_background_refresh_info(icao_hex))
 
-            # Check if we have a low-res photo that should be upgraded
-            needs_photo_upgrade = False
-            if cached.photo_url:
-                # Detect low-res planespotters URLs (_280.jpg or _t.jpg)
-                if "_280.jpg" in cached.photo_url or "_t.jpg" in cached.photo_url:
-                    needs_photo_upgrade = True
-                    logger.debug(f"Low-res photo detected for {icao_hex}, will upgrade")
+        # If we have photo URLs but no local paths, trigger background caching
+        elif cached.photo_url and not cached.photo_local_path:
+            asyncio.create_task(_background_cache_photos(
+                icao_hex, cached.photo_url, cached.photo_thumbnail_url,
+                cached.photo_page_link
+            ))
 
-            # If data is incomplete, trigger background refresh
-            if needs_data_update and icao_hex not in _pending_lookups:
-                asyncio.create_task(_background_refresh_info(icao_hex))
-            # If we have photo URLs but no local paths, trigger background caching
-            elif cached.photo_url and not cached.photo_local_path:
-                asyncio.create_task(_background_cache_photos(
-                    icao_hex, cached.photo_url, cached.photo_thumbnail_url,
-                    cached.photo_page_link
-                ))
-            # If photo needs upgrade, trigger background refresh for higher res
-            elif needs_photo_upgrade:
-                asyncio.create_task(_background_upgrade_photo(icao_hex))
+        return _model_to_dict(cached)
 
-            return _model_to_dict(cached)
-
+    # No cached data - check rate limit before calling external APIs
     AIRFRAME_CACHE_MISSES.inc()
-    
+
+    if not _can_lookup_api(icao_hex) and not force_refresh:
+        # Rate limited - don't call external APIs yet
+        logger.debug(f"Rate limited API lookup for {icao_hex}, skipping")
+        return None
+
     # Prevent duplicate lookups
     if icao_hex in _pending_lookups:
-        return _model_to_dict(cached) if cached else None
-    
+        return None
+
     _pending_lookups.add(icao_hex)
-    
+    _mark_api_lookup(icao_hex)  # Mark that we're doing an API lookup
+
     try:
-        # Fetch from external sources
+        # Fetch from external APIs (hexdb.io, opensky, etc.)
         info = await _fetch_aircraft_info(icao_hex)
-        
+
         if info:
-            # Update or create cache entry
-            if cached:
-                for key, value in info.items():
-                    if hasattr(cached, key) and value is not None:
-                        setattr(cached, key, value)
-                cached.updated_at = datetime.utcnow()
-                cached.fetch_failed = False
-            else:
-                cached = AircraftInfo(icao_hex=icao_hex, **info)
-                db.add(cached)
-            
+            # Create new cache entry
+            cached = AircraftInfo(icao_hex=icao_hex, **info)
+            db.add(cached)
             await db.commit()
-            
+
             # Trigger background photo caching
             photo_url = info.get("photo_url")
             thumb_url = info.get("photo_thumbnail_url")
@@ -224,30 +243,22 @@ async def get_aircraft_info(db: AsyncSession, icao_hex: str, force_refresh: bool
                 asyncio.create_task(_background_cache_photos(
                     icao_hex, photo_url, thumb_url, photo_page_link
                 ))
-            
+
             return _model_to_dict(cached)
         else:
-            # Mark as failed lookup
-            if cached:
-                cached.fetch_failed = True
-                cached.updated_at = datetime.utcnow()
-            else:
-                cached = AircraftInfo(icao_hex=icao_hex, fetch_failed=True)
-                db.add(cached)
-            
+            # Mark as failed lookup (won't retry for FAILED_CACHE_HOURS)
+            cached = AircraftInfo(icao_hex=icao_hex, fetch_failed=True)
+            db.add(cached)
             await db.commit()
             return None
-    
+
     except Exception as e:
         logger.error(f"Error fetching aircraft info for {icao_hex}: {e}")
         AIRFRAME_LOOKUP_ERRORS.labels(source="database", error_type=type(e).__name__).inc()
         sentry_sdk.capture_exception(e)
-
-        # Emit error via Socket.IO
         await _emit_airframe_error(icao_hex, type(e).__name__, str(e), "database")
-
         await db.rollback()
-        return _model_to_dict(cached) if cached else None
+        return None
 
     finally:
         _pending_lookups.discard(icao_hex)
@@ -315,7 +326,8 @@ async def _background_cache_photos(
 async def _background_refresh_info(icao_hex: str):
     """
     Background task to refresh incomplete aircraft info.
-    Fetches from external sources and updates the cache.
+    Fetches from external APIs and updates the cache.
+    Rate limited to once per hour per aircraft.
     """
     from app.core.database import AsyncSessionLocal
 
@@ -324,11 +336,18 @@ async def _background_refresh_info(icao_hex: str):
     # Prevent duplicate lookups
     if icao_hex in _pending_lookups:
         return
+
+    # Check rate limit (once per hour)
+    if not _can_lookup_api(icao_hex):
+        logger.debug(f"Background refresh rate limited for {icao_hex}")
+        return
+
     _pending_lookups.add(icao_hex)
+    _mark_api_lookup(icao_hex)
 
     try:
         async with AsyncSessionLocal() as db:
-            # Fetch fresh info from external sources
+            # Fetch fresh info from external APIs
             info = await _fetch_aircraft_info(icao_hex)
 
             if info:
@@ -508,12 +527,11 @@ async def _fetch_aircraft_info(icao_hex: str) -> Optional[dict]:
     Fetch aircraft info from multiple sources.
 
     Priority order:
-    1. Local databases (fast, no network): external_db (ADSBX, tar1090, FAA), OpenSky CSV
+    1. Local databases (fast, no network): external_db (FAA, ADSBX, tar1090, OpenSky)
     2. hexdb.io API - Primary online source (data + full-size photos)
-    3. OpenSky Network API - Additional metadata
+    3. OpenSky Network API - Additional online metadata
     4. Photo sources as fallback
     """
-    from app.services import opensky_db
     from app.services import external_db
 
     with sentry_sdk.start_span(op="airframe.fetch", description=f"Fetch aircraft info for {icao_hex}") as span:
@@ -522,7 +540,8 @@ async def _fetch_aircraft_info(icao_hex: str) -> Optional[dict]:
         has_photo = False
         sources_tried = []
 
-        # 1. Check local external databases first (fastest - no network)
+        # 1. Check all local databases first (fastest - no network)
+        # lookup_all merges FAA, ADSBX, tar1090, and OpenSky into a single record
         if external_db.is_any_loaded():
             with sentry_sdk.start_span(op="airframe.local_db", description="Local DB lookup"):
                 local_info = external_db.lookup_all(icao_hex)
@@ -532,19 +551,7 @@ async def _fetch_aircraft_info(icao_hex: str) -> Optional[dict]:
                     AIRFRAME_LOOKUP_TOTAL.labels(source="local_db", status="success").inc()
                     logger.debug(f"Got data from local DBs for {icao_hex}: {local_info.get('sources', [])}")
 
-        # 2. Supplement with local OpenSky CSV database
-        if settings.opensky_db_enabled and opensky_db.is_loaded():
-            with sentry_sdk.start_span(op="airframe.opensky_csv", description="OpenSky CSV lookup"):
-                local_info = opensky_db.lookup(icao_hex)
-                if local_info:
-                    for key, value in local_info.items():
-                        if key not in info or info[key] is None:
-                            info[key] = value
-                    sources_tried.append("opensky_csv")
-                    AIRFRAME_LOOKUP_TOTAL.labels(source="opensky_csv", status="success").inc()
-                    logger.debug(f"Supplemented with local OpenSky database for {icao_hex}")
-
-        # 3. Try hexdb.io API - provides both data AND full-size photos
+        # 2. Try hexdb.io API - provides both data AND full-size photos
         if not info.get("registration") or not info.get("type_code"):
             with AIRFRAME_LOOKUP_DURATION.labels(source="hexdb").time():
                 hexdb_info = await _fetch_from_hexdb(icao_hex)
@@ -559,14 +566,14 @@ async def _fetch_aircraft_info(icao_hex: str) -> Optional[dict]:
             else:
                 AIRFRAME_LOOKUP_TOTAL.labels(source="hexdb", status="not_found").inc()
 
-        # 4. If we still don't have a photo, try other sources
+        # 3. If we still don't have a photo, try other sources
         if not has_photo and not info.get("photo_url"):
             photo_info = await _fetch_best_photo(icao_hex)
             if photo_info:
                 info.update(photo_info)
                 sources_tried.append(photo_info.get("photo_source", "photo_fallback"))
 
-        # 5. Try OpenSky Network API for any remaining missing data
+        # 4. Try OpenSky Network API for any remaining missing data
         if not info.get("registration"):
             with AIRFRAME_LOOKUP_DURATION.labels(source="opensky_api").time():
                 opensky_info = await _fetch_from_opensky(icao_hex)

@@ -20,7 +20,7 @@ from app.services.notifications import notifier
 from app.services.acars import acars_service
 from app.services.photo_cache import get_cache_stats as get_photo_cache_stats
 from app.services.aircraft_info import get_seen_aircraft_count
-from app.services import opensky_db
+from app.services import external_db
 from app.schemas import HealthResponse, StatusResponse, ApiInfoResponse
 
 router = APIRouter(prefix="/api/v1", tags=["System"])
@@ -537,7 +537,8 @@ Returns:
 )
 async def get_opensky_db_status():
     """Get OpenSky database statistics."""
-    return opensky_db.get_stats()
+    stats = external_db.get_database_stats()
+    return stats.get("opensky", {"loaded": False, "count": 0, "path": None})
 
 
 @router.get(
@@ -561,14 +562,15 @@ Returns None if the aircraft is not in the local database.
 async def opensky_lookup(icao_hex: str):
     """Look up aircraft in local OpenSky database."""
     from fastapi import HTTPException
-    
-    if not opensky_db.is_loaded():
+
+    stats = external_db.get_database_stats()
+    if not stats.get("opensky", {}).get("loaded"):
         raise HTTPException(status_code=503, detail="OpenSky database not loaded")
-    
-    info = opensky_db.lookup(icao_hex)
+
+    info = external_db.lookup_opensky(icao_hex)
     if not info:
         raise HTTPException(status_code=404, detail=f"Aircraft {icao_hex.upper()} not found in local database")
-    
+
     return {
         "icao_hex": icao_hex.upper(),
         "source": "opensky_local",

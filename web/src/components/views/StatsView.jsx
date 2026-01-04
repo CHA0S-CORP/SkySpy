@@ -1,8 +1,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { AlertTriangle, TrendingUp, Radio, Plane, Activity, Hash, Building2, Factory, Filter, Clock, Shield, ChevronDown, Award, BarChart3, Zap, Target, MapPin } from 'lucide-react';
-import { useApi } from '../../hooks';
+import { useSocketApi } from '../../hooks';
 
-export function StatsView({ apiBase, onSelectAircraft }) {
+export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected }) {
   // Filter state
   const [timeRange, setTimeRange] = useState('24h');
   const [showMilitaryOnly, setShowMilitaryOnly] = useState(false);
@@ -36,21 +36,28 @@ export function StatsView({ apiBase, onSelectAircraft }) {
 
   const filterParams = buildFilterParams();
 
-  // Core stats with filters
-  const { data: stats } = useApi(`/api/v1/aircraft/stats?${filterParams}`, 5000, apiBase);
-  const { data: top } = useApi('/api/v1/aircraft/top', 5000, apiBase);
-  const { data: histStats } = useApi(`/api/v1/history/stats?${filterParams}`, 60000, apiBase);
-  const { data: acarsStats } = useApi(`/api/v1/acars/stats?hours=${selectedHours}`, 30000, apiBase);
-  const { data: safetyStats } = useApi(`/api/v1/safety/stats?hours=${selectedHours}`, 30000, apiBase);
-  const { data: aircraftData } = useApi('/api/v1/aircraft', 5000, apiBase);
-  const { data: sessionsData } = useApi(`/api/v1/history/sessions?hours=${selectedHours}&limit=500${showMilitaryOnly ? '&military_only=true' : ''}`, 60000, apiBase);
+  // Socket options for all API calls - prefer socket.io when connected
+  const socketOpts = { wsRequest, wsConnected };
 
-  // New analytics endpoints
-  const { data: trendsData } = useApi(`/api/v1/history/trends?${filterParams}&interval=hour`, 60000, apiBase);
-  const { data: topPerformersData } = useApi(`/api/v1/history/top?${filterParams}&limit=10`, 60000, apiBase);
-  const { data: distanceAnalytics } = useApi(`/api/v1/history/analytics/distance?${filterParams}`, 60000, apiBase);
-  const { data: speedAnalytics } = useApi(`/api/v1/history/analytics/speed?${filterParams}`, 60000, apiBase);
-  const { data: correlationData } = useApi(`/api/v1/history/analytics/correlation?${filterParams}`, 60000, apiBase);
+  // Core stats with filters - use socket.io when available
+  // When socket is connected, increase polling intervals since we get real-time updates
+  const statsInterval = wsConnected ? 30000 : 5000;
+  const historyInterval = wsConnected ? 120000 : 60000;
+
+  const { data: stats } = useSocketApi(`/api/v1/aircraft/stats?${filterParams}`, statsInterval, apiBase, socketOpts);
+  const { data: top } = useSocketApi('/api/v1/aircraft/top', statsInterval, apiBase, socketOpts);
+  const { data: histStats } = useSocketApi(`/api/v1/history/stats?${filterParams}`, historyInterval, apiBase, socketOpts);
+  const { data: acarsStats } = useSocketApi(`/api/v1/acars/stats?hours=${selectedHours}`, historyInterval, apiBase, socketOpts);
+  const { data: safetyStats } = useSocketApi(`/api/v1/safety/stats?hours=${selectedHours}`, historyInterval, apiBase, socketOpts);
+  const { data: aircraftData } = useSocketApi('/api/v1/aircraft', statsInterval, apiBase, socketOpts);
+  const { data: sessionsData } = useSocketApi(`/api/v1/history/sessions?hours=${selectedHours}&limit=500${showMilitaryOnly ? '&military_only=true' : ''}`, historyInterval, apiBase, socketOpts);
+
+  // New analytics endpoints - these change less frequently
+  const { data: trendsData } = useSocketApi(`/api/v1/history/trends?${filterParams}&interval=hour`, historyInterval, apiBase, socketOpts);
+  const { data: topPerformersData } = useSocketApi(`/api/v1/history/top?${filterParams}&limit=10`, historyInterval, apiBase, socketOpts);
+  const { data: distanceAnalytics } = useSocketApi(`/api/v1/history/analytics/distance?${filterParams}`, historyInterval, apiBase, socketOpts);
+  const { data: speedAnalytics } = useSocketApi(`/api/v1/history/analytics/speed?${filterParams}`, historyInterval, apiBase, socketOpts);
+  const { data: correlationData } = useSocketApi(`/api/v1/history/analytics/correlation?${filterParams}`, historyInterval, apiBase, socketOpts);
 
   // Throughput history for graphs
   const [throughputHistory, setThroughputHistory] = useState([]);

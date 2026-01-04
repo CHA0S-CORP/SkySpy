@@ -86,6 +86,12 @@ DATA_DIR = Path(os.environ.get("EXTERNAL_DB_DIR", "/data/external_db"))
 _adsbx_db: Dict[str, dict] = {}
 _tar1090_db: Dict[str, dict] = {}
 _faa_db: Dict[str, dict] = {}
+_opensky_db: Dict[str, dict] = {}
+
+# OpenSky database state
+_opensky_loaded = False
+_opensky_loading = False
+_opensky_downloading = False
 
 # Route cache (callsign -> route info)
 _route_cache: Dict[str, dict] = {}
@@ -96,19 +102,97 @@ _db_metadata: Dict[str, dict] = {
     "adsbx": {"loaded": False, "count": 0, "updated": None, "path": None},
     "tar1090": {"loaded": False, "count": 0, "updated": None, "path": None},
     "faa": {"loaded": False, "count": 0, "updated": None, "path": None},
+    "opensky": {"loaded": False, "count": 0, "updated": None, "path": None},
 }
 
 # Download URLs
-# NOTE: Using raw.githubusercontent for reliable direct download
 ADSBX_DB_URL = "https://downloads.adsbexchange.com/downloads/basic-ac-db.json.gz"
 TAR1090_DB_URL = "https://raw.githubusercontent.com/wiedehopf/tar1090-db/csv/aircraft.csv.gz"
 FAA_MASTER_URL = "https://registry.faa.gov/database/ReleasableAircraft.zip"
+OPENSKY_DB_URL = "https://opensky-network.org/datasets/metadata/aircraftDatabase.csv"
+
+# OpenSky default paths
+OPENSKY_DEFAULT_PATHS = [
+    "/data/opensky/aircraft-database.csv",
+    "/data/opensky/aircraft-database.csv.gz",
+    "/data/aircraft-database.csv",
+    "/data/aircraft-database.csv.gz",
+]
+OPENSKY_DOWNLOAD_PATH = Path("/data/opensky/aircraft-database.csv")
 
 # adsb.lol/adsb.im APIs
 ADSB_LOL_API_BASE = "https://api.adsb.lol"
 ADSB_IM_ROUTE_API = "https://adsb.im/api/0/routeset"
 
 UPDATE_INTERVAL_HOURS = 24
+
+# Registration prefix to country mapping
+REGISTRATION_PREFIXES = {
+    "N": "United States",
+    "C-": "Canada",
+    "G-": "United Kingdom",
+    "D-": "Germany",
+    "F-": "France",
+    "I-": "Italy",
+    "EC-": "Spain",
+    "JA": "Japan",
+    "VH-": "Australia",
+    "ZK-": "New Zealand",
+    "B-": "China/Taiwan",
+    "HL": "South Korea",
+    "9V-": "Singapore",
+    "VT-": "India",
+    "A6-": "UAE",
+    "A7-": "Qatar",
+    "9M-": "Malaysia",
+    "HS-": "Thailand",
+    "PH-": "Netherlands",
+    "OO-": "Belgium",
+    "HB-": "Switzerland",
+    "OE-": "Austria",
+    "SE-": "Sweden",
+    "LN-": "Norway",
+    "OH-": "Finland",
+    "OY-": "Denmark",
+    "EI-": "Ireland",
+    "CS-": "Portugal",
+    "SX-": "Greece",
+    "TC-": "Turkey",
+    "4X-": "Israel",
+    "RA-": "Russia",
+    "SP-": "Poland",
+    "OK-": "Czech Republic",
+    "OM-": "Slovakia",
+    "HA-": "Hungary",
+    "YR-": "Romania",
+    "LZ-": "Bulgaria",
+    "UR-": "Ukraine",
+    "EW-": "Belarus",
+    "ES-": "Estonia",
+    "YL-": "Latvia",
+    "LY-": "Lithuania",
+    "9H-": "Malta",
+    "ZS-": "South Africa",
+    "5N-": "Nigeria",
+    "SU-": "Egypt",
+    "CN-": "Morocco",
+    "ET-": "Ethiopia",
+    "5Y-": "Kenya",
+    "XA-": "Mexico",
+    "XB-": "Mexico",
+    "XC-": "Mexico",
+    "PP-": "Brazil",
+    "PR-": "Brazil",
+    "PT-": "Brazil",
+    "LV-": "Argentina",
+    "CC-": "Chile",
+    "HC-": "Ecuador",
+    "OB-": "Peru",
+    "HK-": "Colombia",
+    "YV-": "Venezuela",
+    "TI-": "Costa Rica",
+    "HP-": "Panama",
+}
 
 
 def _safe_int(value) -> Optional[int]:
@@ -125,20 +209,23 @@ def _safe_int(value) -> Optional[int]:
 
 
 async def init_databases(auto_download: bool = True):
-    """Initialize all external databases."""
+    """Initialize all external databases including OpenSky."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Load all databases in parallel
     await asyncio.gather(
         load_adsbx_database(auto_download=auto_download),
         load_tar1090_database(auto_download=auto_download),
         load_faa_database(auto_download=auto_download),
+        load_opensky_database(auto_download=auto_download),
         return_exceptions=True
     )
 
     logger.info(f"External databases initialized: "
-                f"ADSBX={_db_metadata['adsbx']['count']}, "
-                f"tar1090={_db_metadata['tar1090']['count']}, "
-                f"FAA={_db_metadata['faa']['count']}")
+                f"ADSBX={_db_metadata['adsbx']['count']:,}, "
+                f"tar1090={_db_metadata['tar1090']['count']:,}, "
+                f"FAA={_db_metadata['faa']['count']:,}, "
+                f"OpenSky={_db_metadata['opensky']['count']:,}")
 
 
 async def update_databases_if_stale():
@@ -586,6 +673,223 @@ def lookup_faa(icao_hex: str) -> Optional[dict]:
 
 
 # =============================================================================
+# OpenSky Network Database
+# =============================================================================
+
+def _get_opensky_path() -> Optional[Path]:
+    """Find the OpenSky database file."""
+    env_path = os.environ.get("OPENSKY_DB_PATH")
+    if env_path:
+        p = Path(env_path)
+        if p.exists():
+            return p
+
+    for path_str in OPENSKY_DEFAULT_PATHS:
+        p = Path(path_str)
+        if p.exists():
+            return p
+
+    return None
+
+
+async def download_opensky_database() -> Optional[Path]:
+    """Download the OpenSky aircraft database."""
+    global _opensky_downloading
+
+    if _opensky_downloading:
+        logger.info("OpenSky download already in progress...")
+        while _opensky_downloading:
+            await asyncio.sleep(1)
+        return _get_opensky_path()
+
+    _opensky_downloading = True
+    target_path = OPENSKY_DOWNLOAD_PATH
+    start_time = time.time()
+
+    try:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Downloading OpenSky database (~150MB)...")
+
+        async with httpx.AsyncClient(timeout=600.0, follow_redirects=True) as client:
+            async with client.stream("GET", OPENSKY_DB_URL) as response:
+                response.raise_for_status()
+                total_size = int(response.headers.get("content-length", 0))
+                downloaded = 0
+                last_log_percent = 0
+
+                with open(target_path, "wb") as f:
+                    async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0:
+                            percent = int(downloaded / total_size * 100)
+                            if percent >= last_log_percent + 10:
+                                logger.info(f"OpenSky download: {percent}%")
+                                last_log_percent = percent
+
+        duration = time.time() - start_time
+        file_size = target_path.stat().st_size
+        EXTERNAL_DB_DOWNLOAD_DURATION.labels(source="opensky").observe(duration)
+        EXTERNAL_DB_DOWNLOAD_TOTAL.labels(source="opensky", status="success").inc()
+        logger.info(f"Downloaded OpenSky database: {file_size / 1024 / 1024:.1f}MB in {duration:.1f}s")
+        return target_path
+
+    except Exception as e:
+        EXTERNAL_DB_DOWNLOAD_TOTAL.labels(source="opensky", status="error").inc()
+        logger.error(f"Failed to download OpenSky database: {e}")
+        if target_path.exists():
+            try:
+                target_path.unlink()
+            except Exception:
+                pass
+        return None
+    finally:
+        _opensky_downloading = False
+
+
+async def load_opensky_database(auto_download: bool = True) -> bool:
+    """Load the OpenSky aircraft database into memory."""
+    global _opensky_db, _opensky_loaded, _opensky_loading
+
+    if _opensky_loaded:
+        return True
+
+    if _opensky_loading:
+        while _opensky_loading:
+            await asyncio.sleep(0.1)
+        return _opensky_loaded
+
+    if not settings.opensky_db_enabled:
+        logger.info("OpenSky database disabled in settings")
+        return False
+
+    _opensky_loading = True
+    start_time = time.time()
+
+    try:
+        path = _get_opensky_path()
+
+        if path is None:
+            if auto_download:
+                logger.info("OpenSky database not found, downloading...")
+                path = await download_opensky_database()
+                if path is None:
+                    return False
+            else:
+                logger.warning("OpenSky database not found")
+                return False
+
+        logger.info(f"Loading OpenSky database from {path}...")
+        loop = asyncio.get_event_loop()
+        count = await loop.run_in_executor(None, _load_opensky_csv, path)
+
+        duration = time.time() - start_time
+        EXTERNAL_DB_LOAD_DURATION.labels(source="opensky").observe(duration)
+        EXTERNAL_DB_AIRCRAFT_COUNT.labels(source="opensky").set(count)
+
+        _opensky_loaded = True
+        _db_metadata["opensky"]["loaded"] = True
+        _db_metadata["opensky"]["count"] = count
+        _db_metadata["opensky"]["updated"] = datetime.utcnow()
+        _db_metadata["opensky"]["path"] = str(path)
+
+        logger.info(f"Loaded {count:,} aircraft from OpenSky in {duration:.1f}s")
+        return True
+
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
+        logger.error(f"Failed to load OpenSky database: {e}")
+        return False
+    finally:
+        _opensky_loading = False
+
+
+def _load_opensky_csv(path: Path) -> int:
+    """Synchronous CSV loading for OpenSky (runs in executor)."""
+    global _opensky_db
+    _opensky_db.clear()
+    count = 0
+
+    if path.suffix == ".gz":
+        opener = gzip.open
+        mode = "rt"
+    else:
+        opener = open
+        mode = "r"
+
+    with opener(path, mode, encoding="utf-8", errors="replace") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            icao_hex = (row.get("icao24") or "").upper().strip()
+            if not icao_hex or len(icao_hex) != 6:
+                continue
+
+            _opensky_db[icao_hex] = _parse_opensky_row(row)
+            count += 1
+
+    return count
+
+
+def _parse_opensky_row(row: dict) -> dict:
+    """Parse an OpenSky CSV row into our format."""
+    return {
+        "registration": row.get("registration") or None,
+        "type_code": row.get("typecode") or None,
+        "type_name": row.get("model") or None,
+        "manufacturer": row.get("manufacturername") or None,
+        "model": row.get("model") or None,
+        "serial_number": row.get("serialnumber") or None,
+        "year_built": _safe_int(row.get("built")),
+        "first_flight_date": row.get("firstflightdate") or None,
+        "operator": row.get("operator") or None,
+        "operator_icao": row.get("operatoricao") or None,
+        "operator_callsign": row.get("operatorcallsign") or None,
+        "owner": row.get("owner") or None,
+        "country": _extract_country_from_registration(row.get("registration")),
+        "category": row.get("icaoaircrafttype") or None,
+        "is_military": _is_opensky_military(row),
+        "source": "opensky",
+    }
+
+
+def _is_opensky_military(row: dict) -> bool:
+    """Check if aircraft is military based on OpenSky fields."""
+    operator = (row.get("operator") or "").lower()
+    owner = (row.get("owner") or "").lower()
+    notes = (row.get("notes") or "").lower()
+    combined = f"{operator} {owner} {notes}"
+
+    military_keywords = [
+        "air force", "airforce", "navy", "army", "military",
+        "usaf", "raf", "luftwaffe", "marines", "coast guard",
+        "national guard", "defense", "defence"
+    ]
+    return any(kw in combined for kw in military_keywords)
+
+
+def _extract_country_from_registration(registration: str) -> Optional[str]:
+    """Extract country from registration prefix."""
+    if not registration:
+        return None
+    reg_upper = registration.upper()
+    for prefix in sorted(REGISTRATION_PREFIXES.keys(), key=len, reverse=True):
+        if reg_upper.startswith(prefix):
+            return REGISTRATION_PREFIXES[prefix]
+    return None
+
+
+def lookup_opensky(icao_hex: str) -> Optional[dict]:
+    """Look up aircraft by ICAO hex code in OpenSky database."""
+    if not _opensky_loaded:
+        EXTERNAL_DB_LOOKUP_TOTAL.labels(source="opensky", hit="miss").inc()
+        return None
+    icao_hex = icao_hex.upper().strip().lstrip("~")
+    result = _opensky_db.get(icao_hex)
+    EXTERNAL_DB_LOOKUP_TOTAL.labels(source="opensky", hit="hit" if result else "miss").inc()
+    return result
+
+
+# =============================================================================
 # adsb.lol / adsb.im API (Routes)
 # =============================================================================
 
@@ -657,7 +961,15 @@ async def fetch_aircraft_from_adsb_lol(icao_hex: str) -> Optional[dict]:
 # =============================================================================
 
 def lookup_all(icao_hex: str) -> Optional[dict]:
-    # ... (Same as original) ...
+    """
+    Look up aircraft in all databases and merge into a single record.
+
+    Priority order (higher priority sources override lower for conflicts):
+    1. FAA (authoritative for US registrations)
+    2. ADS-B Exchange
+    3. tar1090-db
+    4. OpenSky Network
+    """
     icao_hex = icao_hex.upper().strip().lstrip("~")
 
     merged = {}
@@ -685,6 +997,14 @@ def lookup_all(icao_hex: str) -> Optional[dict]:
                 merged[k] = v
         sources.append("tar1090")
 
+    # OpenSky Network
+    opensky_data = lookup_opensky(icao_hex)
+    if opensky_data:
+        for k, v in opensky_data.items():
+            if v is not None and (k not in merged or merged[k] is None):
+                merged[k] = v
+        sources.append("opensky")
+
     if merged:
         merged["sources"] = sources
         return merged
@@ -696,6 +1016,7 @@ def get_database_stats() -> dict:
         "adsbx": _db_metadata["adsbx"].copy(),
         "tar1090": _db_metadata["tar1090"].copy(),
         "faa": _db_metadata["faa"].copy(),
+        "opensky": _db_metadata["opensky"].copy(),
         "route_cache_size": len(_route_cache),
     }
 
@@ -729,11 +1050,12 @@ async def sync_databases_to_postgres():
         batches_processed = 0
         
         async with AsyncSessionLocal() as db:
-            for icao in all_icaos:
+            icao_list = list(all_icaos)
+            for i, icao in enumerate(icao_list):
                 data = lookup_all(icao)
                 if not data:
                     continue
-                
+
                 # FIX: Truncate fields to match database VARCHAR limits
                 # This prevents "value too long for type character varying(100)" errors
                 model_data = {
@@ -758,16 +1080,26 @@ async def sync_databases_to_postgres():
                 }
 
                 current_batch.append(model_data)
-                
+
                 if len(current_batch) >= BATCH_SIZE:
                     await _bulk_upsert_batch(db, current_batch)
                     processed_count += len(current_batch)
                     batches_processed += 1
                     current_batch = []
-                    
+
                     if batches_processed % 5 == 0:
                         await db.commit()
-                        await asyncio.sleep(0.01)
+
+                    # Yield control to event loop after every batch to prevent blocking
+                    await asyncio.sleep(0)
+
+                    # Log progress every 50k aircraft
+                    if processed_count % 50000 == 0:
+                        logger.info(f"Sync progress: {processed_count:,} / {len(all_icaos):,} aircraft")
+
+                # Yield control every 1000 iterations even if batch not full
+                elif i % 1000 == 0:
+                    await asyncio.sleep(0)
             
             if current_batch:
                 await _bulk_upsert_batch(db, current_batch)

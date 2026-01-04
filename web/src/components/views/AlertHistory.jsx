@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Clock, Plane, Check, Radar } from 'lucide-react';
-import { useApi } from '../../hooks';
+import { useSocketApi } from '../../hooks';
 
-export function AlertHistory({ apiBase }) {
-  const { data: history, loading, error, refetch } = useApi('/api/v1/alerts/history?limit=50', null, apiBase);
+export function AlertHistory({ apiBase, wsRequest, wsConnected }) {
+  const { data: history, loading, error, refetch } = useSocketApi('/api/v1/alerts/history?limit=50', null, apiBase, { wsRequest, wsConnected });
   const [acknowledgedIds, setAcknowledgedIds] = useState(new Set());
 
   const handleAcknowledge = async (id) => {

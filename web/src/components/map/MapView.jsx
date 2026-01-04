@@ -222,7 +222,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const historyRef = useRef({}); // Store position history for trails
   const pinchStateRef = useRef({ lastDistance: 0, startRange: 0, lastCenterX: 0, lastCenterY: 0, startPanX: 0, startPanY: 0 }); // For smooth pinch-to-zoom and two-finger pan
   const conflictsRef = useRef([]); // Track conflicts for banner
-  const shortTrackFetchedRef = useRef(new Set()); // Track which aircraft have had history fetched
+  const shortTrackFetchedRef = useRef(new Map()); // Track which aircraft have had history fetched (hex -> timestamp)
 
   // Pro panel canvas refs
   const trackCanvasRef = useRef(null);
@@ -893,8 +893,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     };
 
     fetchSafetyEvents();
-    // Refresh every 30 seconds (less frequent since we have real-time push)
-    const interval = setInterval(fetchSafetyEvents, 30000);
+    // Refresh every 60 seconds - real-time push via socket is primary
+    const interval = setInterval(fetchSafetyEvents, 60000);
     return () => clearInterval(interval);
   }, [wsRequest, wsConnected]);
   
@@ -1085,9 +1085,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   }, []);
 
   // Fetch ACARS status via Socket.IO (with HTTP fallback)
+  // Reduced polling when socket is connected since we get real-time updates
   useEffect(() => {
     const fetchAcarsStatus = async () => {
-      // Try Socket.IO first if connected
+      // Use Socket.IO exclusively when connected to reduce HTTP calls
       if (wsRequest && wsConnected) {
         try {
           const data = await wsRequest('acars-status', {});
@@ -1096,49 +1097,75 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             return;
           }
         } catch (err) {
-          // Fall through to HTTP
+          // Socket failed, don't fall back - will retry on next interval
+          console.debug('ACARS status WS request failed:', err.message);
+          return;
         }
       }
 
-      // HTTP fallback
-      const baseUrl = config.apiBaseUrl || '';
-      try {
-        const statusRes = await fetch(`${baseUrl}/api/v1/acars/status`);
-        if (statusRes.ok) {
-          const data = await statusRes.json();
-          setAcarsStatus(data);
+      // HTTP fallback only when socket is not connected
+      if (!wsConnected) {
+        const baseUrl = config.apiBaseUrl || '';
+        try {
+          const statusRes = await fetch(`${baseUrl}/api/v1/acars/status`);
+          if (statusRes.ok) {
+            const data = await statusRes.json();
+            setAcarsStatus(data);
+          }
+        } catch (err) {
+          // Silently fail - ACARS may not be available
         }
-      } catch (err) {
-        // Silently fail - ACARS may not be available
       }
     };
 
     fetchAcarsStatus();
-    const interval = setInterval(fetchAcarsStatus, 10000); // Check status every 10s
+    // Much longer interval when socket connected (30s vs 10s)
+    const pollInterval = wsConnected ? 30000 : 10000;
+    const interval = setInterval(fetchAcarsStatus, pollInterval);
     return () => clearInterval(interval);
   }, [config.apiBaseUrl, wsRequest, wsConnected]);
 
-  // Fetch ACARS messages (only when panel is open)
+  // Fetch ACARS messages (only when panel is open) - prefer socket.io
   useEffect(() => {
     if (!showAcarsPanel) return;
 
     const fetchAcarsMessages = async () => {
-      const baseUrl = config.apiBaseUrl || '';
-      try {
-        const msgRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=50`);
-        if (msgRes.ok) {
-          const data = await msgRes.json();
-          setAcarsMessages(data.messages || []);
+      // Use Socket.IO when connected to reduce HTTP calls
+      if (wsRequest && wsConnected) {
+        try {
+          const data = await wsRequest('acars-recent', { limit: 50 });
+          if (data && !data.error) {
+            setAcarsMessages(data.messages || []);
+            return;
+          }
+        } catch (err) {
+          console.debug('ACARS messages WS request failed:', err.message);
+          // Don't fall back to HTTP when socket is connected
+          return;
         }
-      } catch (err) {
-        console.log('ACARS messages fetch error:', err.message);
+      }
+
+      // HTTP fallback only when socket is not connected
+      if (!wsConnected) {
+        const baseUrl = config.apiBaseUrl || '';
+        try {
+          const msgRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=50`);
+          if (msgRes.ok) {
+            const data = await msgRes.json();
+            setAcarsMessages(data.messages || []);
+          }
+        } catch (err) {
+          console.log('ACARS messages fetch error:', err.message);
+        }
       }
     };
 
     fetchAcarsMessages();
-    const interval = setInterval(fetchAcarsMessages, 10000); // Reduced from 5s to 10s
+    // Longer interval when socket connected (20s vs 10s)
+    const pollInterval = wsConnected ? 20000 : 10000;
+    const interval = setInterval(fetchAcarsMessages, pollInterval);
     return () => clearInterval(interval);
-  }, [showAcarsPanel, config.apiBaseUrl]);
+  }, [showAcarsPanel, config.apiBaseUrl, wsRequest, wsConnected]);
 
   // Lookup hex values from history API for ACARS messages with callsign but no icao_hex
   useEffect(() => {
@@ -1209,12 +1236,52 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     }
   }, [selectedAircraft?.hex, getAircraftInfo]);
 
-  // Prefetch aircraft info for all visible aircraft (uses bulk endpoint)
+  // Lazy prefetch aircraft info - only for aircraft visible in the current map viewport
+  // This reduces API calls by not fetching info for aircraft outside the view
   useEffect(() => {
-    if (aircraft && aircraft.length > 0) {
-      prefetchForAircraft(aircraft);
-    }
-  }, [aircraft, prefetchForAircraft]);
+    if (!aircraft || aircraft.length === 0 || !mapRef.current) return;
+
+    // Debounce to avoid excessive prefetches during rapid updates
+    const timeoutId = setTimeout(() => {
+      const map = mapRef.current;
+      if (!map) return;
+
+      try {
+        const bounds = map.getBounds();
+        // Filter to only aircraft within the current map bounds
+        const visibleAircraft = aircraft.filter(ac => {
+          if (!ac.lat || !ac.lon) return false;
+          return bounds.contains([ac.lat, ac.lon]);
+        });
+
+        // Only prefetch if we have visible aircraft and limit batch size
+        if (visibleAircraft.length > 0) {
+          // Prioritize: selected aircraft, then military, then by distance from center
+          const center = map.getCenter();
+          const sorted = visibleAircraft.sort((a, b) => {
+            // Selected aircraft first
+            if (selectedAircraft?.hex === a.hex) return -1;
+            if (selectedAircraft?.hex === b.hex) return 1;
+            // Military aircraft second
+            if (a.military && !b.military) return -1;
+            if (!a.military && b.military) return 1;
+            // Then by distance from center
+            const distA = Math.hypot(a.lat - center.lat, a.lon - center.lng);
+            const distB = Math.hypot(b.lat - center.lat, b.lon - center.lng);
+            return distA - distB;
+          });
+
+          // Limit to reasonable batch size to avoid API spam
+          const toFetch = sorted.slice(0, 50);
+          prefetchForAircraft(toFetch);
+        }
+      } catch (e) {
+        // Map might not be ready yet
+      }
+    }, 1000); // 1 second debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [aircraft, prefetchForAircraft, selectedAircraft?.hex]);
 
   // Popup drag handlers
   const handlePopupMouseDown = (e) => {
@@ -1450,33 +1517,37 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   }, []);
 
   // Track aircraft position history for trails and profile charts
+  // Faster updates for smoother trails
   useEffect(() => {
     const now = Date.now();
     const maxAge = 5 * 60 * 1000; // 5 minutes of history
-    
+
     setTrackHistory(prev => {
       const updated = { ...prev };
-      
+
       // Add new positions for each aircraft
       aircraft.forEach(ac => {
         if (ac.lat && ac.lon && ac.hex) {
           if (!updated[ac.hex]) {
             updated[ac.hex] = [];
           }
-          
+
           // Calculate distance from feeder
           const dLat = ac.lat - feederLat;
           const dLon = ac.lon - feederLon;
           const latNm = dLat * 60;
           const lonNm = dLon * 60 * Math.cos(feederLat * Math.PI / 180);
           const dist = Math.sqrt(latNm * latNm + lonNm * lonNm);
-          
-          // Only add if position has changed or enough time has passed
+
+          // Only add if position has changed significantly or enough time has passed
+          // Reduced from 3s to 1s for faster updates, and tighter position threshold
           const lastPos = updated[ac.hex][updated[ac.hex].length - 1];
-          if (!lastPos || 
-              now - lastPos.time > 3000 || // At least 3 seconds between points
-              Math.abs(lastPos.lat - ac.lat) > 0.001 || 
-              Math.abs(lastPos.lon - ac.lon) > 0.001) {
+          const positionChanged = !lastPos ||
+              Math.abs(lastPos.lat - ac.lat) > 0.0005 || // ~50m
+              Math.abs(lastPos.lon - ac.lon) > 0.0005;
+          const timeElapsed = !lastPos || (now - lastPos.time > 1000); // 1 second minimum
+
+          if (positionChanged && timeElapsed) {
             updated[ac.hex].push({
               lat: ac.lat,
               lon: ac.lon,
@@ -1488,12 +1559,12 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               time: now
             });
           }
-          
+
           // Remove old positions
           updated[ac.hex] = updated[ac.hex].filter(p => now - p.time < maxAge);
         }
       });
-      
+
       // Clean up aircraft that are no longer present
       const activeHexes = new Set(aircraft.map(ac => ac.hex));
       Object.keys(updated).forEach(hex => {
@@ -1504,73 +1575,180 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           }
         }
       });
-      
+
       return updated;
     });
-  }, [aircraft, feederLat, feederLon]);
 
-  // Fetch historical positions for short tracks when enabled (debounced, prefer WebSocket)
+    // Also update short track history with real-time positions (when enabled)
+    // This ensures smooth continuous trails between API refreshes
+    if (showShortTracks) {
+      setShortTrackHistory(prev => {
+        let hasChanges = false;
+        const updated = { ...prev };
+
+        aircraft.forEach(ac => {
+          if (ac.lat && ac.lon && ac.hex && updated[ac.hex]) {
+            const existing = updated[ac.hex];
+            const lastPos = existing[existing.length - 1];
+
+            // Only add if position changed and time elapsed
+            const positionChanged = !lastPos ||
+              Math.abs(lastPos.lat - ac.lat) > 0.0003 ||
+              Math.abs(lastPos.lon - ac.lon) > 0.0003;
+            const timeElapsed = !lastPos || (now - lastPos.time > 1500); // 1.5 second minimum
+
+            if (positionChanged && timeElapsed) {
+              updated[ac.hex] = [...existing, { lat: ac.lat, lon: ac.lon, time: now }].slice(-100);
+              hasChanges = true;
+            }
+          }
+        });
+
+        return hasChanges ? updated : prev;
+      });
+    }
+  }, [aircraft, feederLat, feederLon, showShortTracks]);
+
+  // Fetch historical positions for short tracks when enabled
+  // Merges historical API data with real-time positions for complete trails
+  // Periodically refreshes to fill gaps when aircraft were out of range
   useEffect(() => {
     if (!showShortTracks) return;
 
     const baseUrl = config.apiBaseUrl || '';
+    const now = Date.now();
+    const REFRESH_INTERVAL = 60000; // Refresh historical data every 60 seconds to fill gaps
 
-    // Debounce the fetch to avoid slamming the API on every aircraft update
+    // Debounce the fetch
     const timeoutId = setTimeout(() => {
       const visibleAircraft = aircraft.filter(ac => ac.hex && ac.lat && ac.lon);
 
-      // Fetch history for aircraft we haven't fetched yet
-      const toFetch = visibleAircraft
-        .filter(ac => !shortTrackFetchedRef.current.has(ac.hex))
-        .slice(0, 10); // Limit concurrent fetches
+      // Prioritize aircraft: selected first, then near map center, then military
+      let prioritized = visibleAircraft;
+      if (mapRef.current) {
+        try {
+          const bounds = mapRef.current.getBounds();
+          const center = mapRef.current.getCenter();
+
+          // Only consider aircraft within the visible bounds
+          prioritized = visibleAircraft
+            .filter(ac => bounds.contains([ac.lat, ac.lon]))
+            .sort((a, b) => {
+              // Selected aircraft first
+              if (selectedAircraft?.hex === a.hex) return -1;
+              if (selectedAircraft?.hex === b.hex) return 1;
+              // Military second
+              if (a.military && !b.military) return -1;
+              if (!a.military && b.military) return 1;
+              // Then by distance from center
+              const distA = Math.hypot(a.lat - center.lat, a.lon - center.lng);
+              const distB = Math.hypot(b.lat - center.lat, b.lon - center.lng);
+              return distA - distB;
+            });
+        } catch (e) {
+          // Map not ready
+        }
+      }
+
+      // Fetch history for aircraft that need it:
+      // - Never fetched before
+      // - Last fetch was more than REFRESH_INTERVAL ago (to fill gaps)
+      const toFetch = prioritized
+        .filter(ac => {
+          const lastFetch = shortTrackFetchedRef.current.get(ac.hex);
+          if (!lastFetch) return true; // Never fetched
+          return (now - lastFetch) > REFRESH_INTERVAL; // Needs refresh
+        })
+        .slice(0, 8); // Fetch up to 8 at a time
 
       if (toFetch.length > 0) {
         toFetch.forEach(async (ac) => {
-          shortTrackFetchedRef.current.add(ac.hex);
+          // Mark as fetching with current timestamp
+          shortTrackFetchedRef.current.set(ac.hex, now);
           try {
             let data;
+            // Use socket.io when connected
             if (wsRequest && wsConnected) {
-              const result = await wsRequest('sightings', { icao_hex: ac.hex, hours: 1, limit: 50 });
+              const result = await wsRequest('sightings', { icao_hex: ac.hex, hours: 1, limit: 100 });
               if (result && result.sightings) {
                 data = result;
               } else {
-                throw new Error('Invalid sightings response');
+                return;
               }
             } else {
-              const res = await fetch(`${baseUrl}/api/v1/history/sightings/${ac.hex}?hours=1&limit=50`);
+              const res = await fetch(`${baseUrl}/api/v1/history/sightings/${ac.hex}?hours=1&limit=100`);
               if (res.ok) {
                 data = await res.json();
               } else {
-                throw new Error('HTTP request failed');
+                return;
               }
             }
+
             if (data.sightings && data.sightings.length > 0) {
-              // Convert to our format and filter to ~5nm trail (about 30 positions at typical speeds)
-              const positions = data.sightings
-                .reverse() // API returns newest first, we want oldest first
-                .slice(-30) // Keep last 30 positions
+              // Convert API data to our format
+              const historicalPositions = data.sightings
                 .map(s => ({
                   lat: s.lat,
                   lon: s.lon,
                   time: new Date(s.timestamp).getTime()
-                }));
+                }))
+                .sort((a, b) => a.time - b.time); // Sort oldest to newest
 
-              setShortTrackHistory(prev => ({
-                ...prev,
-                [ac.hex]: positions
-              }));
+              // Merge with existing real-time positions from trackHistory
+              setShortTrackHistory(prev => {
+                const existing = prev[ac.hex] || [];
+                const realtimePositions = trackHistory[ac.hex] || [];
+
+                // Combine all positions
+                const allPositions = [...historicalPositions];
+
+                // Add real-time positions that are newer than the latest historical
+                const latestHistorical = historicalPositions.length > 0
+                  ? historicalPositions[historicalPositions.length - 1].time
+                  : 0;
+
+                realtimePositions.forEach(p => {
+                  if (p.time > latestHistorical) {
+                    allPositions.push({ lat: p.lat, lon: p.lon, time: p.time });
+                  }
+                });
+
+                // Also preserve any existing positions not in the new data
+                // (in case real-time captured something the API missed)
+                existing.forEach(p => {
+                  const isDuplicate = allPositions.some(ap =>
+                    Math.abs(ap.time - p.time) < 2000 && // Within 2 seconds
+                    Math.abs(ap.lat - p.lat) < 0.0001 &&
+                    Math.abs(ap.lon - p.lon) < 0.0001
+                  );
+                  if (!isDuplicate) {
+                    allPositions.push(p);
+                  }
+                });
+
+                // Sort by time and keep last 100 positions for smooth trails
+                const sorted = allPositions
+                  .sort((a, b) => a.time - b.time)
+                  .slice(-100);
+
+                return {
+                  ...prev,
+                  [ac.hex]: sorted
+                };
+              });
             }
           } catch (e) {
             // Silently fail - real-time data will still work
+            console.debug('Short track fetch failed:', ac.hex, e.message);
           }
         });
       }
 
-      // Cleanup old entries when aircraft disappear (only if needed)
+      // Cleanup old entries when aircraft disappear
       const activeHexes = new Set(aircraft.map(a => a.hex));
       setShortTrackHistory(prev => {
         const hexesToRemove = Object.keys(prev).filter(hex => !activeHexes.has(hex));
-        if (hexesToRemove.length === 0) return prev; // No change needed
+        if (hexesToRemove.length === 0) return prev;
         const updated = { ...prev };
         hexesToRemove.forEach(hex => {
           delete updated[hex];
@@ -1581,7 +1759,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(timeoutId);
-  }, [showShortTracks, aircraft, config.apiBaseUrl, wsRequest, wsConnected]);
+  }, [showShortTracks, aircraft, config.apiBaseUrl, wsRequest, wsConnected, selectedAircraft?.hex, trackHistory]);
 
   // Draw track history canvas when selected aircraft or history changes
   useEffect(() => {
@@ -4128,7 +4306,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [config.mapMode, sortedAircraft, radarRange, feederLat, feederLon, selectedAircraft, selectedMetar, selectedPirep, selectedNavaid, selectedAirport, overlays, aviationData, aviationOverlayData, proPanOffset, followingAircraft, trackHistory, showSelectedTrack, safetyEvents, showShortTracks, shortTrackHistory]);
+  }, [config.mapMode, sortedAircraft, radarRange, feederLat, feederLon, selectedAircraft, selectedMetar, selectedPirep, selectedNavaid, selectedAirport, overlays, aviationData, aviationOverlayData, proPanOffset, followingAircraft, trackHistory, showSelectedTrack, safetyEvents, showShortTracks, shortTrackHistory, config.shortTrackLength]);
 
   // Leaflet map setup
   useEffect(() => {
@@ -4357,7 +4535,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         shortTrackPolylinesRef.current[ac.hex] = polyline;
       }
     });
-  }, [sortedAircraft, config.mapMode, showShortTracks, shortTrackHistory, trackHistory]);
+  }, [sortedAircraft, config.mapMode, config.shortTrackLength, showShortTracks, shortTrackHistory, trackHistory]);
 
   const cycleMapMode = () => {
     const modes = ['radar', 'crt', 'pro', 'map'];

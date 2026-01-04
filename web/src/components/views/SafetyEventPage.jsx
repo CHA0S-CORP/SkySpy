@@ -72,7 +72,7 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
   const replayControlsRef = useRef(null);
   const flightGraphsRef = useRef(null);
 
-  // Fetch event data
+  // Fetch event data - prefer socket.io
   useEffect(() => {
     const fetchEvent = async () => {
       if (!eventId) {
@@ -85,18 +85,40 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
       setError(null);
 
       try {
-        const res = await fetch(`${apiBase}/api/v1/safety/events/${eventId}`);
-        if (!res.ok) {
-          if (res.status === 404) {
-            setError('Safety event not found');
-          } else {
-            setError('Failed to load safety event');
+        let data = null;
+
+        // Prefer socket.io
+        if (wsRequest && wsConnected) {
+          try {
+            data = await wsRequest('safety-event-detail', { event_id: eventId });
+            if (data?.error || data?.error_type === 'not_found') {
+              data = null;
+              if (data?.error_type === 'not_found') {
+                setError('Safety event not found');
+                setLoading(false);
+                return;
+              }
+            }
+          } catch (err) {
+            console.debug('Safety event WS request failed:', err.message);
           }
-          setLoading(false);
-          return;
         }
 
-        const data = await res.json();
+        // HTTP fallback only if socket didn't work
+        if (!data) {
+          const res = await fetch(`${apiBase}/api/v1/safety/events/${eventId}`);
+          if (!res.ok) {
+            if (res.status === 404) {
+              setError('Safety event not found');
+            } else {
+              setError('Failed to load safety event');
+            }
+            setLoading(false);
+            return;
+          }
+          data = await res.json();
+        }
+
         setEvent(data);
 
         // Fetch track data for involved aircraft

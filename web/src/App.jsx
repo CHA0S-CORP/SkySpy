@@ -270,7 +270,7 @@ export default function App() {
             />
           )}
           {activeTab === 'aircraft' && <AircraftList aircraft={aircraft} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} />}
-          {activeTab === 'stats' && <StatsView apiBase={config.apiBaseUrl} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} />}
+          {activeTab === 'stats' && <StatsView apiBase={config.apiBaseUrl} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} wsRequest={wsRequest} wsConnected={connected} />}
           {activeTab === 'history' && (
             <HistoryView
               apiBase={config.apiBaseUrl}
@@ -286,7 +286,7 @@ export default function App() {
             />
           )}
           {activeTab === 'audio' && <AudioView apiBase={config.apiBaseUrl} onSelectAircraft={(hex, callsign) => setActiveTab('airframe', { icao: hex, call: callsign })} />}
-          {activeTab === 'alerts' && <AlertsView apiBase={config.apiBaseUrl} />}
+          {activeTab === 'alerts' && <AlertsView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={connected} />}
           {activeTab === 'system' && <SystemView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={connected} />}
           {activeTab === 'airframe' && (hashParams.icao || hashParams.call || hashParams.tail) && (() => {
             // Find aircraft by icao, callsign, or tail number

@@ -1,5 +1,6 @@
 // Data hooks
 export { useApi } from './useApi';
+export { useSocketApi } from './useSocketApi';
 export { useAviationData } from './useAviationData';
 export { useWebSocket } from './useWebSocket';
 export { useAircraftInfo } from './useAircraftInfo';
