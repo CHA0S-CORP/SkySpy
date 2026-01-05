@@ -1050,6 +1050,26 @@ async def was_looked_up_recently(db: AsyncSession, icao_hex: str, hours: int = 1
     return result.scalar_one_or_none() is not None
 
 
+async def was_looked_up_recently_with_photo(db: AsyncSession, icao_hex: str, hours: int = 1) -> bool:
+    """Check if aircraft was looked up recently AND has a photo URL or local path.
+
+    Only skip re-queueing if we already have photo data for this aircraft.
+    """
+    icao_hex = icao_hex.upper()
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    result = await db.execute(
+        select(AircraftInfo.updated_at)
+        .where(AircraftInfo.icao_hex == icao_hex)
+        .where(AircraftInfo.updated_at >= cutoff)
+        .where(
+            (AircraftInfo.photo_url.isnot(None)) |
+            (AircraftInfo.photo_local_path.isnot(None)) |
+            (AircraftInfo.fetch_failed == True)
+        )
+    )
+    return result.scalar_one_or_none() is not None
+
+
 def get_seen_aircraft_count() -> int:
     """Get count of unique aircraft seen this session."""
     return len(_seen_aircraft_times)
@@ -1169,10 +1189,10 @@ async def check_and_queue_new_aircraft(icao_hex: str, db: Optional[AsyncSession]
     if not is_new_aircraft(icao_hex):
         return
 
-    # If we have a db session, check if already looked up recently
+    # If we have a db session, check if already looked up recently AND has a photo
     if db is not None:
-        if await was_looked_up_recently(db, icao_hex, hours=1):
-            logger.debug(f"Skipping lookup for {icao_hex} - looked up within last hour")
+        if await was_looked_up_recently_with_photo(db, icao_hex, hours=1):
+            logger.debug(f"Skipping lookup for {icao_hex} - looked up within last hour with photo")
             return
 
     await queue_aircraft_lookup(icao_hex)
