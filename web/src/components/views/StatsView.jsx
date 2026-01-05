@@ -406,13 +406,16 @@ function RSSIScatter({ data, loading }) {
   const xScale = (d) => margin.left + ((d - minDist) / (maxDist - minDist || 1)) * plotWidth;
   const yScale = (r) => margin.top + plotHeight - ((r - minRssi) / (maxRssi - minRssi || 1)) * plotHeight;
 
-  // Generate trend line points
+  // Generate trend line points - clamp to plot area
   let trendLinePoints = null;
   if (trendLine && trendLine.slope != null && trendLine.intercept != null) {
     const x1 = minDist;
     const x2 = maxDist;
-    const y1 = trendLine.slope * x1 + trendLine.intercept;
-    const y2 = trendLine.slope * x2 + trendLine.intercept;
+    let y1 = trendLine.slope * x1 + trendLine.intercept;
+    let y2 = trendLine.slope * x2 + trendLine.intercept;
+    // Clamp y values to RSSI range
+    y1 = Math.max(minRssi, Math.min(maxRssi, y1));
+    y2 = Math.max(minRssi, Math.min(maxRssi, y2));
     trendLinePoints = {
       x1: xScale(x1),
       y1: yScale(y1),
@@ -420,6 +423,9 @@ function RSSIScatter({ data, loading }) {
       y2: yScale(y2)
     };
   }
+
+  // Clip path ID for this chart
+  const clipId = 'rssi-scatter-clip';
 
   return (
     <div className="nerd-stats-card rssi-scatter">
@@ -432,6 +438,11 @@ function RSSIScatter({ data, loading }) {
       </div>
       <div className="scatter-content">
         <svg viewBox={`0 0 ${width} ${height}`} className="scatter-svg">
+          <defs>
+            <clipPath id={clipId}>
+              <rect x={margin.left} y={margin.top} width={plotWidth} height={plotHeight} />
+            </clipPath>
+          </defs>
           {/* Axes */}
           <line
             x1={margin.left}
@@ -448,17 +459,11 @@ function RSSIScatter({ data, loading }) {
             className="scatter-axis"
           />
           {/* X-axis label */}
-          <text x={margin.left + plotWidth / 2} y={height - 8} className="scatter-label" textAnchor="middle">Distance (nm)</text>
-          {/* Y-axis label - rotated properly */}
-          <text
-            x={12}
-            y={margin.top + plotHeight / 2}
-            className="scatter-label-y"
-            textAnchor="middle"
-            transform={`rotate(-90, 12, ${margin.top + plotHeight / 2})`}
-          >
-            RSSI (dB)
-          </text>
+          <text x={margin.left + plotWidth / 2} y={height - 4} className="scatter-label" textAnchor="middle">Distance (nm)</text>
+          {/* Y-axis label - use g transform for reliable rotation */}
+          <g transform={`translate(10, ${margin.top + plotHeight / 2}) rotate(-90)`}>
+            <text className="scatter-label-y" textAnchor="middle" dominantBaseline="middle">RSSI (dB)</text>
+          </g>
           {/* Grid lines */}
           {[0.25, 0.5, 0.75].map(pct => (
             <line
@@ -470,26 +475,29 @@ function RSSIScatter({ data, loading }) {
               className="scatter-grid"
             />
           ))}
-          {/* Trend line */}
-          {trendLinePoints && (
-            <line
-              x1={trendLinePoints.x1}
-              y1={trendLinePoints.y1}
-              x2={trendLinePoints.x2}
-              y2={trendLinePoints.y2}
-              className="scatter-trend"
-            />
-          )}
-          {/* Data points */}
-          {scatterData.slice(0, 200).map((point, i) => (
-            <circle
-              key={i}
-              cx={xScale(point.distance_nm)}
-              cy={yScale(point.rssi)}
-              r="2"
-              className="scatter-point"
-            />
-          ))}
+          {/* Clipped content group */}
+          <g clipPath={`url(#${clipId})`}>
+            {/* Trend line */}
+            {trendLinePoints && (
+              <line
+                x1={trendLinePoints.x1}
+                y1={trendLinePoints.y1}
+                x2={trendLinePoints.x2}
+                y2={trendLinePoints.y2}
+                className="scatter-trend"
+              />
+            )}
+            {/* Data points */}
+            {scatterData.slice(0, 200).map((point, i) => (
+              <circle
+                key={i}
+                cx={xScale(point.distance_nm)}
+                cy={yScale(point.rssi)}
+                r="2"
+                className="scatter-point"
+              />
+            ))}
+          </g>
         </svg>
         <div className="scatter-info">
           {trendLine?.interpretation ? (

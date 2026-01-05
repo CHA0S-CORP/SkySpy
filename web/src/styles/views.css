@@ -3714,8 +3714,6 @@
   fill: var(--text-dim);
   font-size: 9px;
   text-anchor: middle;
-  transform: rotate(-90deg);
-  transform-origin: center;
 }
 
 .scatter-point {
