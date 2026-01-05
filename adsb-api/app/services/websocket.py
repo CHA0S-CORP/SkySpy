@@ -1515,26 +1515,21 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
     elif request_type == "history-stats":
         # Historical statistics for dashboard
         from app.routers.history import get_stats
-        from sqlalchemy.ext.asyncio import AsyncSession
 
         hours = params.get("hours", 24)
         military_only = params.get("military_only", False)
         min_altitude = params.get("min_altitude")
         max_altitude = params.get("max_altitude")
-        min_distance = params.get("min_distance")
-        max_distance = params.get("max_distance")
-        category = params.get("category")
         aircraft_type = params.get("aircraft_type")
+        callsign = params.get("callsign")
 
         result = await get_stats(
             hours=hours,
             military_only=military_only,
             min_altitude=min_altitude,
             max_altitude=max_altitude,
-            min_distance=min_distance,
-            max_distance=max_distance,
-            category=category,
             aircraft_type=aircraft_type,
+            callsign=callsign,
             db=db
         )
         return result
@@ -1546,14 +1541,12 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
         hours = params.get("hours", 24)
         interval = params.get("interval", "hour")
         military_only = params.get("military_only", False)
-        category = params.get("category")
         aircraft_type = params.get("aircraft_type")
 
         result = await get_trends(
             hours=hours,
             interval=interval,
             military_only=military_only,
-            category=category,
             aircraft_type=aircraft_type,
             db=db
         )
@@ -1566,14 +1559,12 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
         hours = params.get("hours", 24)
         limit = params.get("limit", 10)
         military_only = params.get("military_only", False)
-        category = params.get("category")
         aircraft_type = params.get("aircraft_type")
 
         result = await get_top_performers(
             hours=hours,
             limit=limit,
             military_only=military_only,
-            category=category,
             aircraft_type=aircraft_type,
             db=db
         )
@@ -1586,11 +1577,17 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
         hours = params.get("hours", 24)
         limit = params.get("limit", 500)
         military_only = params.get("military_only", False)
+        icao_hex = params.get("icao_hex")
+        callsign = params.get("callsign")
+        min_duration = params.get("min_duration")
 
         result = await get_sessions(
-            hours=hours,
-            limit=limit,
+            icao_hex=icao_hex,
+            callsign=callsign,
             military_only=military_only,
+            hours=hours,
+            min_duration=min_duration,
+            limit=limit,
             db=db
         )
         return result
@@ -1601,13 +1598,11 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
 
         hours = params.get("hours", 24)
         military_only = params.get("military_only", False)
-        category = params.get("category")
         aircraft_type = params.get("aircraft_type")
 
         result = await get_distance_analytics(
             hours=hours,
             military_only=military_only,
-            category=category,
             aircraft_type=aircraft_type,
             db=db
         )
@@ -1619,13 +1614,13 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
 
         hours = params.get("hours", 24)
         military_only = params.get("military_only", False)
-        category = params.get("category")
+        min_altitude = params.get("min_altitude")
         aircraft_type = params.get("aircraft_type")
 
         result = await get_speed_analytics(
             hours=hours,
             military_only=military_only,
-            category=category,
+            min_altitude=min_altitude,
             aircraft_type=aircraft_type,
             db=db
         )
@@ -1637,20 +1632,17 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
 
         hours = params.get("hours", 24)
         military_only = params.get("military_only", False)
-        category = params.get("category")
-        aircraft_type = params.get("aircraft_type")
 
         result = await get_correlation_analytics(
             hours=hours,
             military_only=military_only,
-            category=category,
-            aircraft_type=aircraft_type,
             db=db
         )
         return result
 
     elif request_type == "acars-stats":
         # ACARS statistics
+        from sqlalchemy import select, func
         from app.services.acars import acars_service
         from app.models import AcarsMessage
         from datetime import timedelta
@@ -1700,6 +1692,7 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
 
     elif request_type == "safety-stats":
         # Safety statistics
+        from sqlalchemy import select, func
         from app.services.safety import safety_monitor
         from app.models import SafetyEvent
         from datetime import timedelta
