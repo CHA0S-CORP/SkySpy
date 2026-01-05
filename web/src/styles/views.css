@@ -3719,13 +3719,71 @@
 .scatter-point {
   fill: var(--accent-purple);
   opacity: 0.4;
+  transition: r 0.1s ease, opacity 0.1s ease;
+}
+
+.scatter-point.highlighted {
+  opacity: 1;
+  fill: var(--accent-cyan);
 }
 
 .scatter-trend {
-  stroke: var(--accent-purple);
-  stroke-width: 2;
+  stroke: var(--accent-cyan);
+  stroke-width: 1.5;
   stroke-dasharray: 6, 4;
-  opacity: 0.5;
+  opacity: 0.7;
+}
+
+.scatter-tick {
+  stroke: rgba(163, 113, 247, 0.4);
+  stroke-width: 1;
+}
+
+.scatter-tick-label {
+  fill: var(--text-dim);
+  font-size: 7px;
+}
+
+.scatter-svg.interactive {
+  cursor: crosshair;
+}
+
+.cursor-line {
+  stroke: rgba(0, 200, 255, 0.4);
+  stroke-width: 1;
+  stroke-dasharray: 3, 3;
+  pointer-events: none;
+}
+
+.cursor-highlight {
+  fill: none;
+  stroke: var(--accent-cyan);
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.scatter-tooltip {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid var(--accent-cyan);
+  border-radius: 4px;
+  padding: 4px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  color: var(--text-bright);
+  pointer-events: none;
+}
+
+.scatter-tooltip span:first-child {
+  color: var(--accent-cyan);
+}
+
+.scatter-content {
+  position: relative;
 }
 
 .scatter-info {

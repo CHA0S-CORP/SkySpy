@@ -387,9 +387,13 @@ function RSSIScatter({ data, loading }) {
   const trendLine = data?.trend_line;
   const overallStats = data?.overall_statistics || {};
 
+  // Interactive cursor state
+  const [cursor, setCursor] = useState(null);
+  const svgRef = React.useRef(null);
+
   // Chart dimensions - increased for better label visibility
-  const width = 220, height = 140;
-  const margin = { top: 10, right: 15, bottom: 30, left: 40 };
+  const width = 240, height = 160;
+  const margin = { top: 10, right: 15, bottom: 28, left: 38 };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
 
@@ -405,6 +409,31 @@ function RSSIScatter({ data, loading }) {
   // Scale functions
   const xScale = (d) => margin.left + ((d - minDist) / (maxDist - minDist || 1)) * plotWidth;
   const yScale = (r) => margin.top + plotHeight - ((r - minRssi) / (maxRssi - minRssi || 1)) * plotHeight;
+
+  // Inverse scale functions for cursor
+  const xScaleInverse = (px) => minDist + ((px - margin.left) / plotWidth) * (maxDist - minDist);
+  const yScaleInverse = (py) => maxRssi - ((py - margin.top) / plotHeight) * (maxRssi - minRssi);
+
+  // Generate tick values
+  const xTicks = useMemo(() => {
+    const range = maxDist - minDist;
+    const step = range <= 50 ? 10 : range <= 100 ? 25 : range <= 200 ? 50 : 100;
+    const ticks = [];
+    for (let v = Math.ceil(minDist / step) * step; v <= maxDist; v += step) {
+      ticks.push(v);
+    }
+    return ticks;
+  }, [minDist, maxDist]);
+
+  const yTicks = useMemo(() => {
+    const range = maxRssi - minRssi;
+    const step = range <= 20 ? 5 : 10;
+    const ticks = [];
+    for (let v = Math.ceil(minRssi / step) * step; v <= maxRssi; v += step) {
+      ticks.push(v);
+    }
+    return ticks;
+  }, [minRssi, maxRssi]);
 
   // Generate trend line points - clamp to plot area
   let trendLinePoints = null;
@@ -427,6 +456,48 @@ function RSSIScatter({ data, loading }) {
   // Clip path ID for this chart
   const clipId = 'rssi-scatter-clip';
 
+  // Mouse handlers for interactive cursor
+  const handleMouseMove = (e) => {
+    if (!svgRef.current || !scatterData.length) return;
+    const svg = svgRef.current;
+    const rect = svg.getBoundingClientRect();
+    const scaleX = width / rect.width;
+    const scaleY = height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
+    // Check if within plot area
+    if (x >= margin.left && x <= margin.left + plotWidth &&
+        y >= margin.top && y <= margin.top + plotHeight) {
+      const distValue = xScaleInverse(x);
+      const rssiValue = yScaleInverse(y);
+
+      // Find nearest point
+      let nearestPoint = null;
+      let nearestDist = Infinity;
+      scatterData.forEach(point => {
+        const px = xScale(point.distance_nm);
+        const py = yScale(point.rssi);
+        const d = Math.sqrt((px - x) ** 2 + (py - y) ** 2);
+        if (d < nearestDist && d < 15) {
+          nearestDist = d;
+          nearestPoint = point;
+        }
+      });
+
+      setCursor({
+        x, y,
+        distValue: distValue.toFixed(1),
+        rssiValue: rssiValue.toFixed(1),
+        nearestPoint
+      });
+    } else {
+      setCursor(null);
+    }
+  };
+
+  const handleMouseLeave = () => setCursor(null);
+
   return (
     <div className="nerd-stats-card rssi-scatter">
       <div className="nerd-stats-header">
@@ -437,7 +508,13 @@ function RSSIScatter({ data, loading }) {
         )}
       </div>
       <div className="scatter-content">
-        <svg viewBox={`0 0 ${width} ${height}`} className="scatter-svg">
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${width} ${height}`}
+          className="scatter-svg interactive"
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+        >
           <defs>
             <clipPath id={clipId}>
               <rect x={margin.left} y={margin.top} width={plotWidth} height={plotHeight} />
@@ -458,20 +535,61 @@ function RSSIScatter({ data, loading }) {
             y2={margin.top + plotHeight}
             className="scatter-axis"
           />
+          {/* X-axis ticks and labels */}
+          {xTicks.map(tick => (
+            <g key={`x-${tick}`}>
+              <line
+                x1={xScale(tick)}
+                y1={margin.top + plotHeight}
+                x2={xScale(tick)}
+                y2={margin.top + plotHeight + 4}
+                className="scatter-tick"
+              />
+              <text
+                x={xScale(tick)}
+                y={margin.top + plotHeight + 12}
+                className="scatter-tick-label"
+                textAnchor="middle"
+              >
+                {tick}
+              </text>
+            </g>
+          ))}
+          {/* Y-axis ticks and labels */}
+          {yTicks.map(tick => (
+            <g key={`y-${tick}`}>
+              <line
+                x1={margin.left - 4}
+                y1={yScale(tick)}
+                x2={margin.left}
+                y2={yScale(tick)}
+                className="scatter-tick"
+              />
+              <text
+                x={margin.left - 6}
+                y={yScale(tick)}
+                className="scatter-tick-label"
+                textAnchor="end"
+                dominantBaseline="middle"
+              >
+                {tick}
+              </text>
+            </g>
+          ))}
           {/* X-axis label */}
-          <text x={margin.left + plotWidth / 2} y={height - 4} className="scatter-label" textAnchor="middle">Distance (nm)</text>
+          <text x={margin.left + plotWidth / 2} y={height - 2} className="scatter-label" textAnchor="middle">Distance (nm)</text>
           {/* Y-axis label - use g transform for reliable rotation */}
-          <g transform={`translate(10, ${margin.top + plotHeight / 2}) rotate(-90)`}>
+          <g transform={`translate(8, ${margin.top + plotHeight / 2}) rotate(-90)`}>
             <text className="scatter-label-y" textAnchor="middle" dominantBaseline="middle">RSSI (dB)</text>
           </g>
           {/* Grid lines */}
-          {[0.25, 0.5, 0.75].map(pct => (
+          {yTicks.map(tick => (
             <line
-              key={`h-${pct}`}
+              key={`grid-${tick}`}
               x1={margin.left}
-              y1={margin.top + plotHeight * pct}
+              y1={yScale(tick)}
               x2={margin.left + plotWidth}
-              y2={margin.top + plotHeight * pct}
+              y2={yScale(tick)}
               className="scatter-grid"
             />
           ))}
@@ -488,17 +606,51 @@ function RSSIScatter({ data, loading }) {
               />
             )}
             {/* Data points */}
-            {scatterData.slice(0, 200).map((point, i) => (
+            {scatterData.slice(0, 500).map((point, i) => (
               <circle
                 key={i}
                 cx={xScale(point.distance_nm)}
                 cy={yScale(point.rssi)}
-                r="2"
-                className="scatter-point"
+                r={cursor?.nearestPoint === point ? 4 : 2}
+                className={`scatter-point ${cursor?.nearestPoint === point ? 'highlighted' : ''}`}
               />
             ))}
           </g>
+          {/* Interactive cursor */}
+          {cursor && (
+            <g className="scatter-cursor">
+              <line
+                x1={cursor.x}
+                y1={margin.top}
+                x2={cursor.x}
+                y2={margin.top + plotHeight}
+                className="cursor-line"
+              />
+              <line
+                x1={margin.left}
+                y1={cursor.y}
+                x2={margin.left + plotWidth}
+                y2={cursor.y}
+                className="cursor-line"
+              />
+              {cursor.nearestPoint && (
+                <circle
+                  cx={xScale(cursor.nearestPoint.distance_nm)}
+                  cy={yScale(cursor.nearestPoint.rssi)}
+                  r="6"
+                  className="cursor-highlight"
+                />
+              )}
+            </g>
+          )}
         </svg>
+        {/* Cursor tooltip */}
+        {cursor?.nearestPoint && (
+          <div className="scatter-tooltip">
+            <span>{cursor.nearestPoint.distance_nm.toFixed(1)} nm</span>
+            <span>{cursor.nearestPoint.rssi.toFixed(1)} dB</span>
+          </div>
+        )}
         <div className="scatter-info">
           {trendLine?.interpretation ? (
             <span className="trend-interpretation">{trendLine.interpretation}</span>
