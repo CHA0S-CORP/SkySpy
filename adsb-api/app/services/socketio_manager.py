@@ -66,12 +66,18 @@ class SocketIOManager:
     def __init__(self):
         # Create Socket.IO server with ASGI support
         # Use Redis for multi-worker if configured
+        # Reduce ping frequency to lower CPU usage (defaults are 25s/20s which is aggressive)
+        ping_interval = 60  # seconds between pings
+        ping_timeout = 30   # seconds to wait for pong
+
         if settings.redis_url:
             self.sio = socketio.AsyncServer(
                 async_mode='asgi',
                 cors_allowed_origins='*',
                 logger=False,
                 engineio_logger=False,
+                ping_interval=ping_interval,
+                ping_timeout=ping_timeout,
                 client_manager=socketio.AsyncRedisManager(settings.redis_url)
             )
             self._using_redis = True
@@ -82,6 +88,8 @@ class SocketIOManager:
                 cors_allowed_origins='*',
                 logger=False,
                 engineio_logger=False,
+                ping_interval=ping_interval,
+                ping_timeout=ping_timeout,
             )
             self._using_redis = False
             logger.info("Socket.IO using in-memory manager (single worker)")

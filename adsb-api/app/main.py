@@ -595,9 +595,11 @@ async def fetch_and_process_aircraft():
         return []
 
     # Fetch both sources in parallel
+    t0 = time.time()
     results = await asyncio.gather(fetch_1090(), fetch_978())
     for result in results:
         all_aircraft.extend(result)
+    fetch_time = time.time() - t0
 
     logger.debug(f"Fetched {aircraft_1090_count} aircraft from 1090MHz")
 
@@ -614,9 +616,19 @@ async def fetch_and_process_aircraft():
     sse_manager = get_sse_manager()
     sio_manager = get_socketio_manager()
 
+    t1 = time.time()
     await sse_manager.publish_aircraft_update(all_aircraft)
+    sse_time = time.time() - t1
+
+    t2 = time.time()
     if sio_manager:
         await sio_manager.publish_aircraft_update(all_aircraft)
+    sio_time = time.time() - t2
+
+    # Log timing breakdown periodically
+    total_time = time.time() - poll_start
+    if total_time > 0.1:  # Log if poll cycle takes >100ms
+        logger.warning(f"Slow poll: total={total_time*1000:.0f}ms fetch={fetch_time*1000:.0f}ms sse={sse_time*1000:.0f}ms sio={sio_time*1000:.0f}ms aircraft={len(all_aircraft)}")
 
     # Schedule background processing (DB storage + safety monitoring)
     # Skip if previous task is still running to prevent task accumulation
@@ -635,13 +647,20 @@ async def fetch_and_process_aircraft():
 async def background_polling_task():
     """Background task for polling aircraft data."""
     logger.info(f"Background polling started (interval: {settings.polling_interval}s)")
-    
+
+    poll_count = 0
     while True:
         try:
+            loop_start = time.time()
             await fetch_and_process_aircraft()
+            poll_duration = time.time() - loop_start
+            poll_count += 1
+            # Log every 60 iterations (once per minute at 1s interval)
+            if poll_count % 60 == 0:
+                logger.info(f"Poll cycle took {poll_duration*1000:.1f}ms")
         except Exception as e:
             logger.error(f"Error in background polling: {e}")
-        
+
         await asyncio.sleep(settings.polling_interval)
 
 

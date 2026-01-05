@@ -34,6 +34,11 @@ _s3_client = None
 _s3_client_lock = asyncio.Lock()
 _s3_client_init_failed = False
 
+# S3 existence cache to avoid repeated head_object calls
+# Key: "icao:thumb" or "icao:full", Value: (exists: bool, timestamp: float)
+_s3_exists_cache: dict[str, tuple[bool, float]] = {}
+_S3_EXISTS_CACHE_TTL = 300  # 5 minutes
+
 # Regex to extract Planespotters Photo ID
 # Matches: https://t.plnspttrs.net/16653/1531024_35907ab605_t.jpg -> 1531024
 PLANESPOTTERS_ID_REGEX = re.compile(r"plnspttrs\.net/\d+/(\d+)_")
@@ -258,6 +263,10 @@ async def _upload_to_s3(data: bytes, icao_hex: str, is_thumbnail: bool = False) 
 
             url = _get_s3_url(icao_hex, is_thumbnail)
             logger.info(f"Uploaded to S3: {key}")
+            # Update existence cache
+            import time
+            cache_key = f"{icao_hex}:{'thumb' if is_thumbnail else 'full'}"
+            _s3_exists_cache[cache_key] = (True, time.time())
             return url
 
         except Exception as e:
@@ -284,7 +293,7 @@ async def _check_s3_exists(
     return_detailed: bool = False
 ) -> bool | S3CheckResult:
     """
-    Check if photo exists in S3.
+    Check if photo exists in S3, with caching to reduce API calls.
 
     Args:
         icao_hex: Aircraft ICAO hex code
@@ -294,6 +303,18 @@ async def _check_s3_exists(
     Returns:
         bool (default) or S3CheckResult if return_detailed=True
     """
+    import time
+
+    # Check cache first
+    cache_key = f"{icao_hex}:{'thumb' if is_thumbnail else 'full'}"
+    now = time.time()
+    if cache_key in _s3_exists_cache:
+        exists, cached_at = _s3_exists_cache[cache_key]
+        if now - cached_at < _S3_EXISTS_CACHE_TTL:
+            if return_detailed:
+                return S3CheckResult.EXISTS if exists else S3CheckResult.NOT_FOUND
+            return exists
+
     client = await _get_s3_client()
     if not client:
         return S3CheckResult.ERROR if return_detailed else False
@@ -308,11 +329,15 @@ async def _check_s3_exists(
             None,
             lambda: client.head_object(Bucket=settings.s3_bucket, Key=key)
         )
+        # Cache positive result
+        _s3_exists_cache[cache_key] = (True, now)
         return S3CheckResult.EXISTS if return_detailed else True
 
     except ClientError as e:
         error_code = e.response.get('Error', {}).get('Code', '')
         if error_code == '404' or error_code == 'NoSuchKey':
+            # Cache negative result
+            _s3_exists_cache[cache_key] = (False, now)
             return S3CheckResult.NOT_FOUND if return_detailed else False
         # Other errors (permissions, network, etc.) - log and treat as error
         logger.warning(f"S3 head_object error for {icao_hex}: {error_code} - {e}")

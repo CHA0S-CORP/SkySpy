@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     notification_cooldown: int = 300
     
     # Polling
-    polling_interval: int = 1
+    polling_interval: int = 2  # Increased from 1s to reduce CPU usage
     db_store_interval: int = 5
     
     # Redis (optional)
@@ -89,6 +89,7 @@ class Settings(BaseSettings):
     
     # Server
     port: int = 5000
+    session_timeout_minutes: int = 30
 
     # RTL-Airband Radio
     radio_enabled: bool = True
