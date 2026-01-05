@@ -696,6 +696,8 @@ class AcarsMessageResponse(BaseModel):
     mode: Optional[str] = Field(None, description="ACARS mode")
     text: Optional[str] = Field(None, description="Message text content")
     decoded: Optional[dict] = Field(None, description="Decoded message content")
+    decoded_text: Optional[dict] = Field(None, description="Decoded message text fields")
+    formatted_text: Optional[str] = Field(None, description="Human-readable formatted text")
     signal_level: Optional[float] = Field(None, description="Signal level in dB")
     error_count: Optional[int] = Field(None, description="Bit error count")
     station_id: Optional[str] = Field(None, description="Receiving station ID")

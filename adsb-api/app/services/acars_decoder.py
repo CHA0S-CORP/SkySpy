@@ -242,6 +242,8 @@ def decode_h1_message(text: str) -> dict | None:
     - WRN: Warning
     - FLR: Fault Log Report
     - INI: Initialization
+    - P0S/PDC: Pre-Departure Clearance with position
+    - RPT: Maintenance/System Report
 
     Returns decoded dict or None if format not recognized.
     """
@@ -250,6 +252,102 @@ def decode_h1_message(text: str) -> dict | None:
 
     decoded = {}
     text_clean = text.replace('\n', '').replace('\r', '')
+
+    # ========== P0S/PDC - Pre-Departure Clearance with Position ==========
+    # Format: P0SN47379W122205,VASHN,005642,30,FINKA,005822,RW16R,P1,206022,85,172,189K,180K,7306E2
+    # Alaska Airlines style PDC with embedded coordinates
+    pdc_match = re.match(r'^P0S([NS])(\d{5})([EW])(\d{6})', text_clean)
+    if pdc_match:
+        decoded["message_type"] = "Pre-Departure Clearance"
+        decoded["description"] = "PDC with route and clearance data"
+
+        # Parse position (format: DDMM.M for lat, DDDMM.M for lon - tenths of minutes)
+        lat_raw = pdc_match.group(2)  # e.g., "47379" = 47° 37.9'
+        lon_raw = pdc_match.group(4)  # e.g., "122205" = 122° 20.5'
+
+        lat_deg = int(lat_raw[:2])
+        lat_min = int(lat_raw[2:]) / 10
+        lat = lat_deg + lat_min / 60
+        if pdc_match.group(1) == 'S':
+            lat = -lat
+
+        lon_deg = int(lon_raw[:3])
+        lon_min = int(lon_raw[3:]) / 10
+        lon = lon_deg + lon_min / 60
+        if pdc_match.group(3) == 'W':
+            lon = -lon
+
+        decoded["position"] = {"lat": round(lat, 4), "lon": round(lon, 4)}
+
+        # Parse comma-separated fields for waypoints, runway, etc.
+        fields = text_clean.split(',')
+        waypoints = []
+        for field in fields:
+            # Extract 5-letter waypoints
+            wp_matches = re.findall(r'\b([A-Z]{5})\b', field)
+            waypoints.extend(wp_matches)
+            # Extract runway (RWxxL/R/C)
+            rw_match = re.search(r'RW(\d{2}[LRC]?)', field)
+            if rw_match:
+                decoded["runway"] = rw_match.group(1)
+
+        if waypoints:
+            decoded["waypoints"] = list(dict.fromkeys(waypoints))[:10]
+            decoded["route"] = ' → '.join(decoded["waypoints"][:8])
+
+        return decoded
+
+    # ========== RPT - System/Maintenance Report ==========
+    # Format: /BOLIXA. A RPT12 PG1  L-ECS AIR COND SYS REAL
+    # or: A RPT12 PG1 ... B N407KZ 05JAN26 0054 GTI7170 PANC/KDFW
+    rpt_match = re.search(r'RPT(\d+)\s+(?:PG\d+)?\s*(.+?)(?:\s+B\s+|$)', text_clean)
+    if rpt_match or 'RPT' in text_clean:
+        decoded["message_type"] = "System Report"
+        decoded["description"] = "Aircraft system or maintenance report"
+
+        if rpt_match:
+            decoded["report_type"] = f"RPT{rpt_match.group(1)}"
+            report_text = rpt_match.group(2).strip() if rpt_match.group(2) else None
+            if report_text:
+                decoded["report_content"] = report_text
+
+        # Look for ECS, APU, ENG, etc. system identifiers
+        system_match = re.search(r'(L-ECS|R-ECS|ECS|APU|ENG\d?|PACK\d?|BLEED|HYD|ELEC)', text_clean)
+        if system_match:
+            decoded["system"] = system_match.group(1)
+
+        # Extract flight info if present (format: B N407KZ 05JAN26 0054 GTI7170 PANC/KDFW)
+        flight_match = re.search(r'\bB\s+([A-Z0-9-]+)\s+\d{2}[A-Z]{3}\d{2}\s+\d{4}\s+([A-Z]{3}\d+)\s+([A-Z]{4})/([A-Z]{4})', text_clean)
+        if flight_match:
+            decoded["registration"] = flight_match.group(1)
+            decoded["flight_id"] = flight_match.group(2)
+            decoded["origin"] = flight_match.group(3)
+            decoded["destination"] = flight_match.group(4)
+
+        # Extract airports mentioned
+        airports = re.findall(r'\b([A-Z]{4})/([A-Z]{4})\b', text_clean)
+        if airports:
+            decoded["origin"] = airports[0][0]
+            decoded["destination"] = airports[0][1]
+
+        return decoded
+
+    # ========== DR - Departure Route Messages ==========
+    # Format: YVRE2YA.DR1.N407KZ7FD6
+    dr_match = re.match(r'^([A-Z]{4}[A-Z0-9]+)\.DR(\d+)\.([A-Z0-9]+)', text_clean)
+    if dr_match:
+        decoded["message_type"] = "Departure Route"
+        decoded["description"] = "Departure routing message"
+        decoded["route_id"] = dr_match.group(1)
+        decoded["departure_route"] = f"DR{dr_match.group(2)}"
+        decoded["flight_ref"] = dr_match.group(3)
+
+        # Try to extract registration from flight_ref
+        reg_match = re.search(r'([A-Z]-?[A-Z0-9]{3,5})', dr_match.group(3))
+        if reg_match:
+            decoded["registration"] = reg_match.group(1)
+
+        return decoded
 
     # ========== FPN - Flight Plan ==========
     # Format: FPN/RI:DA:KEWR:AA:KDFW:CR:... or #M1BFPN/...
@@ -515,6 +613,35 @@ def decode_h1_message(text: str) -> dict | None:
 
         return decoded
 
+    # ========== Performance/Telemetry Data ==========
+    # Format: 0.99 1.00 0.99\n 15 0.60 0.49 0.27\n 16 0.93 0.91 0.81\n ...
+    # Numeric rows with line numbers and decimal values
+    # Also matches tabular data with timestamps like "22 05JAN26 00:54:57"
+    lines = text.strip().split('\n')
+    numeric_line_count = 0
+    has_line_numbers = False
+    for line in lines:
+        line = line.strip()
+        # Check if line starts with a number (line number) or is mostly numeric
+        if re.match(r'^\d+\s', line) or re.match(r'^[\d.\s]+$', line):
+            numeric_line_count += 1
+        if re.match(r'^\s*\d{1,2}\s+', line):
+            has_line_numbers = True
+
+    if numeric_line_count >= 3 and has_line_numbers:
+        decoded["message_type"] = "Performance Data"
+        decoded["description"] = "Aircraft performance or telemetry data"
+
+        # Try to extract timestamp if present (format: 22 05JAN26 00:54:57)
+        ts_match = re.search(r'(\d{2}[A-Z]{3}\d{2})\s+(\d{2}:\d{2}:\d{2})', text)
+        if ts_match:
+            decoded["data_timestamp"] = f"{ts_match.group(1)} {ts_match.group(2)}"
+
+        # Count data rows
+        decoded["data_rows"] = numeric_line_count
+
+        return decoded
+
     # ========== Generic slash-separated H1 format ==========
     # Many H1 messages use slash-separated fields
     if '/' in text_clean and len(text_clean) > 10:
@@ -540,6 +667,30 @@ def decode_h1_message(text: str) -> dict | None:
                 decoded["waypoints"] = list(dict.fromkeys(waypoints))[:10]
 
             if decoded.get("airports") or decoded.get("waypoints"):
+                return decoded
+
+    # ========== Generic comma-separated format ==========
+    # Many H1 messages use comma-separated fields with waypoints/airports
+    if ',' in text_clean and len(text_clean) > 10:
+        fields = text_clean.split(',')
+        if len(fields) >= 3:
+            waypoints = []
+            airports = []
+            for field in fields:
+                # Extract 5-letter waypoints
+                wp_matches = re.findall(r'\b([A-Z]{5})\b', field)
+                waypoints.extend(wp_matches)
+                # Extract 4-letter airport codes
+                apt_matches = re.findall(r'\b([CKPEGLS][A-Z]{3})\b', field)
+                airports.extend(apt_matches)
+
+            if waypoints or airports:
+                decoded["message_type"] = "H1 Data"
+                decoded["description"] = "Encoded datalink message"
+                if waypoints:
+                    decoded["waypoints"] = list(dict.fromkeys(waypoints))[:10]
+                if airports:
+                    decoded["airports"] = list(dict.fromkeys(airports))[:5]
                 return decoded
 
     return None
@@ -884,7 +1035,13 @@ def format_decoded_text(decoded: dict) -> str:
         decoded.get("sid") or
         decoded.get("company_route") or
         decoded.get("libacars_formatted") or
-        decoded.get("cpdlc_text")
+        decoded.get("cpdlc_text") or
+        decoded.get("runway") or
+        decoded.get("system") or
+        decoded.get("report_content") or
+        decoded.get("data_rows") or
+        decoded.get("departure_route") or
+        decoded.get("airports")
     )
     if not has_meaningful_data:
         return ""
@@ -975,6 +1132,26 @@ def format_decoded_text(decoded: dict) -> str:
         lines.append(f"ETA: {decoded['eta']}")
     if decoded.get("times"):
         lines.append(f"Times: {', '.join(decoded['times'])}")
+
+    # System/Maintenance report info
+    if decoded.get("system"):
+        lines.append(f"System: {decoded['system']}")
+    if decoded.get("report_type"):
+        lines.append(f"Report: {decoded['report_type']}")
+    if decoded.get("report_content"):
+        lines.append(f"Content: {decoded['report_content']}")
+
+    # Performance/Telemetry data
+    if decoded.get("data_rows"):
+        lines.append(f"Data Rows: {decoded['data_rows']}")
+    if decoded.get("data_timestamp"):
+        lines.append(f"Data Time: {decoded['data_timestamp']}")
+
+    # Departure route info
+    if decoded.get("departure_route"):
+        lines.append(f"Departure Route: {decoded['departure_route']}")
+    if decoded.get("route_id"):
+        lines.append(f"Route ID: {decoded['route_id']}")
 
     # CPDLC text
     if decoded.get("cpdlc_text"):

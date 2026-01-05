@@ -104,6 +104,7 @@ export default function App() {
     connected,
     stats,
     safetyEvents,
+    acarsMessages,
     request: wsRequest,
     getAirframeError,
     clearAirframeError,
@@ -265,6 +266,7 @@ export default function App() {
               setConfig={setConfig}
               feederLocation={status?.location}
               safetyEvents={safetyEvents}
+              acarsMessages={acarsMessages}
               wsRequest={wsRequest}
               wsConnected={connected}
               getAirframeError={getAirframeError}
@@ -280,7 +282,7 @@ export default function App() {
             />
           )}
           {activeTab === 'aircraft' && <AircraftList aircraft={aircraft} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} />}
-          {activeTab === 'stats' && <StatsView apiBase={config.apiBaseUrl} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} wsRequest={wsRequest} wsConnected={connected} />}
+          {activeTab === 'stats' && <StatsView apiBase={config.apiBaseUrl} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} wsRequest={wsRequest} wsConnected={connected} aircraft={aircraft} stats={stats} />}
           {activeTab === 'history' && (
             <HistoryView
               apiBase={config.apiBaseUrl}

@@ -1508,5 +1508,364 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
         photo_logger.debug(f"Returning source URL result for {icao}: {result}")
         return result
 
+    # =========================================================================
+    # History & Analytics Endpoints (for StatsView dashboard)
+    # =========================================================================
+
+    elif request_type == "history-stats":
+        # Historical statistics for dashboard
+        from app.routers.history import get_stats
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        hours = params.get("hours", 24)
+        military_only = params.get("military_only", False)
+        min_altitude = params.get("min_altitude")
+        max_altitude = params.get("max_altitude")
+        min_distance = params.get("min_distance")
+        max_distance = params.get("max_distance")
+        category = params.get("category")
+        aircraft_type = params.get("aircraft_type")
+
+        result = await get_stats(
+            hours=hours,
+            military_only=military_only,
+            min_altitude=min_altitude,
+            max_altitude=max_altitude,
+            min_distance=min_distance,
+            max_distance=max_distance,
+            category=category,
+            aircraft_type=aircraft_type,
+            db=db
+        )
+        return result
+
+    elif request_type == "history-trends":
+        # Traffic trends over time
+        from app.routers.history import get_trends
+
+        hours = params.get("hours", 24)
+        interval = params.get("interval", "hour")
+        military_only = params.get("military_only", False)
+        category = params.get("category")
+        aircraft_type = params.get("aircraft_type")
+
+        result = await get_trends(
+            hours=hours,
+            interval=interval,
+            military_only=military_only,
+            category=category,
+            aircraft_type=aircraft_type,
+            db=db
+        )
+        return result
+
+    elif request_type == "history-top":
+        # Top performers (longest tracked, furthest, etc.)
+        from app.routers.history import get_top_performers
+
+        hours = params.get("hours", 24)
+        limit = params.get("limit", 10)
+        military_only = params.get("military_only", False)
+        category = params.get("category")
+        aircraft_type = params.get("aircraft_type")
+
+        result = await get_top_performers(
+            hours=hours,
+            limit=limit,
+            military_only=military_only,
+            category=category,
+            aircraft_type=aircraft_type,
+            db=db
+        )
+        return result
+
+    elif request_type == "history-sessions":
+        # Session list for fleet breakdown
+        from app.routers.history import get_sessions
+
+        hours = params.get("hours", 24)
+        limit = params.get("limit", 500)
+        military_only = params.get("military_only", False)
+
+        result = await get_sessions(
+            hours=hours,
+            limit=limit,
+            military_only=military_only,
+            db=db
+        )
+        return result
+
+    elif request_type == "history-analytics-distance":
+        # Distance analytics for antenna performance
+        from app.routers.history import get_distance_analytics
+
+        hours = params.get("hours", 24)
+        military_only = params.get("military_only", False)
+        category = params.get("category")
+        aircraft_type = params.get("aircraft_type")
+
+        result = await get_distance_analytics(
+            hours=hours,
+            military_only=military_only,
+            category=category,
+            aircraft_type=aircraft_type,
+            db=db
+        )
+        return result
+
+    elif request_type == "history-analytics-speed":
+        # Speed analytics
+        from app.routers.history import get_speed_analytics
+
+        hours = params.get("hours", 24)
+        military_only = params.get("military_only", False)
+        category = params.get("category")
+        aircraft_type = params.get("aircraft_type")
+
+        result = await get_speed_analytics(
+            hours=hours,
+            military_only=military_only,
+            category=category,
+            aircraft_type=aircraft_type,
+            db=db
+        )
+        return result
+
+    elif request_type == "history-analytics-correlation":
+        # Correlation analytics
+        from app.routers.history import get_correlation_analytics
+
+        hours = params.get("hours", 24)
+        military_only = params.get("military_only", False)
+        category = params.get("category")
+        aircraft_type = params.get("aircraft_type")
+
+        result = await get_correlation_analytics(
+            hours=hours,
+            military_only=military_only,
+            category=category,
+            aircraft_type=aircraft_type,
+            db=db
+        )
+        return result
+
+    elif request_type == "acars-stats":
+        # ACARS statistics
+        from app.services.acars import acars_service
+        from app.models import AcarsMessage
+        from datetime import timedelta
+
+        hours = params.get("hours", 24)
+        cutoff = datetime.utcnow() - timedelta(hours=hours)
+
+        # Get service stats
+        service_stats = acars_service.get_stats()
+
+        # Get message counts from database
+        total_query = select(func.count(AcarsMessage.id))
+        total = (await db.execute(total_query)).scalar() or 0
+
+        last_24h_query = select(func.count(AcarsMessage.id)).where(
+            AcarsMessage.timestamp > datetime.utcnow() - timedelta(hours=24)
+        )
+        last_24h = (await db.execute(last_24h_query)).scalar() or 0
+
+        last_hour_query = select(func.count(AcarsMessage.id)).where(
+            AcarsMessage.timestamp > datetime.utcnow() - timedelta(hours=1)
+        )
+        last_hour = (await db.execute(last_hour_query)).scalar() or 0
+
+        # Top labels
+        labels_query = (
+            select(AcarsMessage.label, func.count(AcarsMessage.id).label("count"))
+            .where(AcarsMessage.timestamp > cutoff)
+            .group_by(AcarsMessage.label)
+            .order_by(func.count(AcarsMessage.id).desc())
+            .limit(10)
+        )
+        labels_result = await db.execute(labels_query)
+        top_labels = [{"label": row.label, "count": row.count} for row in labels_result]
+
+        return {
+            "total_messages": total,
+            "last_24h": last_24h,
+            "last_hour": last_hour,
+            "top_labels": top_labels,
+            "service_stats": {
+                "running": service_stats["running"],
+                "acars_total": service_stats["acars"]["total"],
+                "vdlm2_total": service_stats["vdlm2"]["total"],
+            }
+        }
+
+    elif request_type == "safety-stats":
+        # Safety statistics
+        from app.services.safety import safety_monitor
+        from app.models import SafetyEvent
+        from datetime import timedelta
+
+        hours = params.get("hours", 24)
+        cutoff = datetime.utcnow() - timedelta(hours=hours)
+
+        # Total events in period
+        total_query = select(func.count(SafetyEvent.id)).where(SafetyEvent.created_at > cutoff)
+        total_events = (await db.execute(total_query)).scalar() or 0
+
+        # Events by type
+        type_query = (
+            select(SafetyEvent.event_type, func.count(SafetyEvent.id).label("count"))
+            .where(SafetyEvent.created_at > cutoff)
+            .group_by(SafetyEvent.event_type)
+        )
+        type_result = await db.execute(type_query)
+        events_by_type = {row.event_type: row.count for row in type_result}
+
+        # Events by severity
+        severity_query = (
+            select(SafetyEvent.severity, func.count(SafetyEvent.id).label("count"))
+            .where(SafetyEvent.created_at > cutoff)
+            .group_by(SafetyEvent.severity)
+        )
+        severity_result = await db.execute(severity_query)
+        events_by_severity = {row.severity: row.count for row in severity_result}
+
+        return {
+            "total_events": total_events,
+            "events_by_type": events_by_type,
+            "events_by_severity": events_by_severity,
+            "monitoring_enabled": safety_monitor.enabled,
+            "monitor_state": {
+                "tracked_aircraft": len(safety_monitor._aircraft_state),
+            },
+            "time_range_hours": hours
+        }
+
+    elif request_type == "system-status":
+        # System status (CPU, memory, SDR)
+        import psutil
+
+        from app.core import get_settings
+        settings = get_settings()
+
+        # Get CPU and memory
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        memory = psutil.virtual_memory()
+
+        # SDR temperature (if available via rtl_test or similar)
+        # This is a placeholder - actual implementation depends on hardware
+        sdr_temp = None  # Would need to query rtl_433 or similar
+
+        # SDR gain from settings
+        sdr_gain = getattr(settings, 'sdr_gain', None)
+
+        return {
+            "cpu_percent": cpu_percent,
+            "memory_percent": memory.percent,
+            "memory_used_gb": round(memory.used / (1024**3), 2),
+            "memory_total_gb": round(memory.total / (1024**3), 2),
+            "sdr_temp": sdr_temp,
+            "sdr_gain": sdr_gain,
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+
+    elif request_type == "aircraft-stats":
+        # Live aircraft statistics
+        from app.core import get_settings, safe_request
+
+        settings = get_settings()
+
+        # Fetch current aircraft data from ultrafeeder
+        url = f"{settings.ultrafeeder_url}/data/aircraft.json"
+        data = await safe_request(url, timeout=5)
+
+        if not data:
+            return {"error": "Unable to fetch aircraft data"}
+
+        aircraft = data.get("aircraft", [])
+        total = len(aircraft)
+        with_position = sum(1 for ac in aircraft if ac.get("lat") and ac.get("lon"))
+        military = sum(1 for ac in aircraft if ac.get("dbFlags", 0) & 1)
+
+        # Altitude distribution
+        alt_ground = sum(1 for ac in aircraft if ac.get("alt_baro") is not None and ac.get("alt_baro") <= 0)
+        alt_low = sum(1 for ac in aircraft if ac.get("alt_baro") and 0 < ac.get("alt_baro") < 10000)
+        alt_medium = sum(1 for ac in aircraft if ac.get("alt_baro") and 10000 <= ac.get("alt_baro") < 30000)
+        alt_high = sum(1 for ac in aircraft if ac.get("alt_baro") and ac.get("alt_baro") >= 30000)
+
+        # Emergency squawks
+        emergency_squawks = [
+            {"hex": ac.get("hex"), "squawk": ac.get("squawk"), "flight": (ac.get("flight") or "").strip()}
+            for ac in aircraft
+            if ac.get("squawk") in ["7500", "7600", "7700"]
+        ]
+
+        # Message count from ultrafeeder
+        messages = data.get("messages", 0)
+
+        return {
+            "total": total,
+            "with_position": with_position,
+            "military": military,
+            "altitude": {
+                "ground": alt_ground,
+                "low": alt_low,
+                "medium": alt_medium,
+                "high": alt_high
+            },
+            "emergency_squawks": emergency_squawks,
+            "messages": messages,
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+
+    elif request_type == "aircraft-top":
+        # Top aircraft (closest, fastest, highest)
+        from app.core import get_settings, safe_request, calculate_distance_nm, is_valid_position
+
+        settings = get_settings()
+
+        # Fetch current aircraft data
+        url = f"{settings.ultrafeeder_url}/data/aircraft.json"
+        data = await safe_request(url, timeout=5)
+
+        if not data:
+            return {"error": "Unable to fetch aircraft data"}
+
+        aircraft = data.get("aircraft", [])
+
+        # Calculate distances
+        for ac in aircraft:
+            lat, lon = ac.get("lat"), ac.get("lon")
+            if is_valid_position(lat, lon):
+                ac["distance_nm"] = round(
+                    calculate_distance_nm(settings.feeder_lat, settings.feeder_lon, lat, lon), 1
+                )
+
+        # Sort and get top 5 for each category
+        with_distance = [ac for ac in aircraft if ac.get("distance_nm") is not None]
+        with_speed = [ac for ac in aircraft if ac.get("gs") is not None]
+        with_alt = [ac for ac in aircraft if ac.get("alt_baro") is not None]
+
+        def simplify(ac):
+            return {
+                "hex": ac.get("hex"),
+                "flight": (ac.get("flight") or "").strip(),
+                "distance_nm": ac.get("distance_nm"),
+                "gs": ac.get("gs"),
+                "alt": ac.get("alt_baro"),
+                "type": ac.get("t"),
+                "military": bool(ac.get("dbFlags", 0) & 1)
+            }
+
+        closest = [simplify(ac) for ac in sorted(with_distance, key=lambda x: x["distance_nm"])[:5]]
+        fastest = [simplify(ac) for ac in sorted(with_speed, key=lambda x: -x["gs"])[:5]]
+        highest = [simplify(ac) for ac in sorted(with_alt, key=lambda x: -x["alt_baro"])[:5]]
+
+        return {
+            "closest": closest,
+            "fastest": fastest,
+            "highest": highest,
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+
     else:
         return {"error": f"Unknown request type: {request_type}"}

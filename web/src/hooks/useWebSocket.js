@@ -73,6 +73,7 @@ export function useWebSocket(enabled, apiBase, topics = 'all') {
   const [connected, setConnected] = useState(false);
   const [stats, setStats] = useState({ count: 0 });
   const [safetyEvents, setSafetyEvents] = useState([]);
+  const [acarsMessages, setAcarsMessages] = useState([]);
   const [airspaceData, setAirspaceData] = useState({ advisories: [], boundaries: [] });
   const socketRef = useRef(null);
   const mountedRef = useRef(true);
@@ -246,9 +247,20 @@ export function useWebSocket(enabled, apiBase, topics = 'all') {
       }
     });
 
-    // ACARS
+    // ACARS messages - prepend new messages and keep last 100
     socket.on('acars:message', (data) => {
-      console.log('Socket.IO ACARS:', data);
+      if (data) {
+        // Handle both single message and array of messages
+        const newMessages = Array.isArray(data) ? data : [data];
+        setAcarsMessages(prev => [...newMessages, ...prev].slice(0, 100));
+      }
+    });
+
+    // ACARS snapshot - initial batch of recent messages
+    socket.on('acars:snapshot', (data) => {
+      if (data?.messages && Array.isArray(data.messages)) {
+        setAcarsMessages(data.messages.slice(0, 100));
+      }
     });
 
     // Airspace events
@@ -414,6 +426,7 @@ export function useWebSocket(enabled, apiBase, topics = 'all') {
     connected,
     stats,
     safetyEvents,
+    acarsMessages,
     airspaceData,
 
     // Request/response methods

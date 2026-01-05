@@ -1,15 +1,18 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { MessageCircle, X, Filter, Plane } from 'lucide-react';
 
 /**
  * Panel for displaying ACARS/VDL2 messages with decoded airline and label info
+ *
+ * @param {Array} acarsMessages - Real-time ACARS messages from WebSocket (optional)
  */
 export function AcarsPanel({
   apiUrl,
   onClose,
   onSelectAircraft,
   wsRequest,
-  wsConnected
+  wsConnected,
+  acarsMessages: wsAcarsMessages
 }) {
   const [messages, setMessages] = useState([]);
   const [status, setStatus] = useState(null);
@@ -26,12 +29,41 @@ export function AcarsPanel({
   });
   const [showFilters, setShowFilters] = useState(false);
 
-  // Fetch ACARS messages, status, and labels
+  // Use real-time ACARS messages from socket when available
   useEffect(() => {
-    const fetchAcars = async () => {
-      const baseUrl = apiUrl || '';
+    if (wsConnected && wsAcarsMessages && wsAcarsMessages.length > 0) {
+      setMessages(wsAcarsMessages);
+    }
+  }, [wsConnected, wsAcarsMessages]);
 
-      // Fetch messages via HTTP (no Socket.IO endpoint for messages yet)
+  // Fetch initial ACARS history once (socket doesn't provide history on connect)
+  const initialFetchRef = useRef(false);
+  useEffect(() => {
+    if (initialFetchRef.current) return;
+
+    const fetchInitialMessages = async () => {
+      const baseUrl = apiUrl || '';
+      try {
+        const msgRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=50`);
+        if (msgRes.ok) {
+          const data = await msgRes.json();
+          setMessages(data.messages || []);
+          initialFetchRef.current = true;
+        }
+      } catch (err) {
+        console.log('ACARS messages fetch error:', err.message);
+      }
+    };
+
+    fetchInitialMessages();
+  }, [apiUrl]);
+
+  // HTTP fallback polling only when socket not connected
+  useEffect(() => {
+    if (wsConnected) return;
+
+    const fetchMessages = async () => {
+      const baseUrl = apiUrl || '';
       try {
         const msgRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=50`);
         if (msgRes.ok) {
@@ -41,8 +73,17 @@ export function AcarsPanel({
       } catch (err) {
         console.log('ACARS messages fetch error:', err.message);
       }
+    };
 
-      // Fetch status via Socket.IO (with HTTP fallback)
+    const interval = setInterval(fetchMessages, 10000);
+    return () => clearInterval(interval);
+  }, [apiUrl, wsConnected]);
+
+  // Fetch ACARS status via Socket.IO (with HTTP fallback)
+  useEffect(() => {
+    const fetchStatus = async () => {
+      const baseUrl = apiUrl || '';
+
       if (wsRequest && wsConnected) {
         try {
           const data = await wsRequest('acars-status', {});
@@ -55,7 +96,6 @@ export function AcarsPanel({
         }
       }
 
-      // HTTP fallback for status
       try {
         const statusRes = await fetch(`${baseUrl}/api/v1/acars/status`);
         if (statusRes.ok) {
@@ -67,7 +107,13 @@ export function AcarsPanel({
       }
     };
 
-    // Fetch label reference once
+    fetchStatus();
+    const interval = setInterval(fetchStatus, wsConnected ? 30000 : 10000);
+    return () => clearInterval(interval);
+  }, [apiUrl, wsRequest, wsConnected]);
+
+  // Fetch label reference once
+  useEffect(() => {
     const fetchLabels = async () => {
       const baseUrl = apiUrl || '';
       try {
@@ -81,11 +127,8 @@ export function AcarsPanel({
       }
     };
 
-    fetchAcars();
     fetchLabels();
-    const interval = setInterval(fetchAcars, 5000);
-    return () => clearInterval(interval);
-  }, [apiUrl, wsRequest, wsConnected]);
+  }, [apiUrl]);
 
   // Save filters to localStorage
   useEffect(() => {

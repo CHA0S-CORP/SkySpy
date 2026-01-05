@@ -23,6 +23,18 @@ export function useSocketApi(endpoint, interval = null, apiBase = '', options = 
   const mountedRef = useRef(true);
   const lastFetchRef = useRef(0);
 
+  // Store options in refs to avoid triggering re-fetches when they change
+  const wsRequestRef = useRef(wsRequest);
+  const wsConnectedRef = useRef(wsConnected);
+  const socketParamsRef = useRef(socketParams);
+
+  // Update refs when values change (without triggering re-render)
+  useEffect(() => {
+    wsRequestRef.current = wsRequest;
+    wsConnectedRef.current = wsConnected;
+    socketParamsRef.current = socketParams;
+  }, [wsRequest, wsConnected, socketParams]);
+
   // Derive socket event from endpoint if not provided
   // e.g., '/api/v1/aircraft/stats' -> 'aircraft-stats'
   const derivedSocketEvent = socketEvent || deriveSocketEvent(endpoint);
@@ -38,12 +50,12 @@ export function useSocketApi(endpoint, interval = null, apiBase = '', options = 
     try {
       let result = null;
 
-      // Try socket.io first if available and not disabled
-      if (!disableSocket && wsRequest && wsConnected && derivedSocketEvent) {
+      // Try socket.io first if available and not disabled (use refs for current values)
+      if (!disableSocket && wsRequestRef.current && wsConnectedRef.current && derivedSocketEvent) {
         try {
           // Parse query params from endpoint to include in socket request
-          const params = { ...socketParams, ...parseQueryParams(endpoint) };
-          result = await wsRequest(derivedSocketEvent, params);
+          const params = { ...socketParamsRef.current, ...parseQueryParams(endpoint) };
+          result = await wsRequestRef.current(derivedSocketEvent, params);
 
           if (result?.error) {
             // Socket returned error, fall through to HTTP
@@ -76,7 +88,7 @@ export function useSocketApi(endpoint, interval = null, apiBase = '', options = 
         setLoading(false);
       }
     }
-  }, [endpoint, apiBase, wsRequest, wsConnected, derivedSocketEvent, socketParams, disableSocket]);
+  }, [endpoint, apiBase, derivedSocketEvent, disableSocket]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -127,6 +139,7 @@ function deriveSocketEvent(endpoint) {
     '/api/v1/acars/labels': 'acars-labels',
     '/api/v1/safety/stats': 'safety-stats',
     '/api/v1/safety/events': 'safety-events',
+    '/api/v1/system/status': 'system-status',
     '/api/v1/status': 'status',
     '/api/v1/ws/status': 'ws-status',
     '/api/v1/alerts/history': 'alerts-history',

@@ -432,7 +432,7 @@ function LiveSparkline({ data, valueKey, color, height = 60, label, currentValue
 // Main StatsView Component - Bento Grid Layout
 // ============================================================================
 
-export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected }) {
+export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, aircraft: wsAircraft, stats: wsStats }) {
   // Filter state
   const [timeRange, setTimeRange] = useState('24h');
   const [showMilitaryOnly, setShowMilitaryOnly] = useState(false);
@@ -466,27 +466,111 @@ export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected })
 
   const filterParams = buildFilterParams();
 
-  // Socket options for all API calls
+  // Socket-first strategy:
+  // - Real-time data (aircraft, stats) computed from WebSocket push - no polling needed
+  // - Historical/analytics data: fetch once on mount + when filters change (null interval)
+  // - System status: infrequent polling only when socket unavailable
   const socketOpts = { wsRequest, wsConnected };
-  const statsInterval = wsConnected ? 30000 : 5000;
-  const historyInterval = wsConnected ? 120000 : 60000;
 
-  // API data fetching
-  const { data: stats } = useSocketApi(`/api/v1/aircraft/stats?${filterParams}`, statsInterval, apiBase, socketOpts);
-  const { data: top } = useSocketApi('/api/v1/aircraft/top', statsInterval, apiBase, socketOpts);
-  const { data: histStats } = useSocketApi(`/api/v1/history/stats?${filterParams}`, historyInterval, apiBase, socketOpts);
-  const { data: acarsStats } = useSocketApi(`/api/v1/acars/stats?hours=${selectedHours}`, historyInterval, apiBase, socketOpts);
-  const { data: safetyStats } = useSocketApi(`/api/v1/safety/stats?hours=${selectedHours}`, historyInterval, apiBase, socketOpts);
-  const { data: aircraftData } = useSocketApi('/api/v1/aircraft', statsInterval, apiBase, socketOpts);
-  const { data: sessionsData } = useSocketApi(`/api/v1/history/sessions?hours=${selectedHours}&limit=500${showMilitaryOnly ? '&military_only=true' : ''}`, historyInterval, apiBase, socketOpts);
-  const { data: systemData } = useSocketApi('/api/v1/system/status', statsInterval * 2, apiBase, socketOpts);
+  // Aircraft data from WebSocket push (array of aircraft objects)
+  const aircraftData = wsAircraft || null;
 
-  // Analytics endpoints
-  const { data: trendsData } = useSocketApi(`/api/v1/history/trends?${filterParams}&interval=hour`, historyInterval, apiBase, socketOpts);
-  const { data: topPerformersData } = useSocketApi(`/api/v1/history/top?${filterParams}&limit=10`, historyInterval, apiBase, socketOpts);
-  const { data: distanceAnalytics } = useSocketApi(`/api/v1/history/analytics/distance?${filterParams}`, historyInterval, apiBase, socketOpts);
-  const { data: speedAnalytics } = useSocketApi(`/api/v1/history/analytics/speed?${filterParams}`, historyInterval, apiBase, socketOpts);
-  const { data: correlationData } = useSocketApi(`/api/v1/history/analytics/correlation?${filterParams}`, historyInterval, apiBase, socketOpts);
+  // Compute real-time stats from pushed aircraft array (client-side)
+  const computedStats = useMemo(() => {
+    if (!wsAircraft?.length) return null;
+
+    const altDist = { ground: 0, low: 0, medium: 0, high: 0 };
+    let withPosition = 0;
+    let military = 0;
+    const emergencySquawks = [];
+
+    wsAircraft.forEach(ac => {
+      // Count aircraft with position
+      if (ac.lat != null && ac.lon != null) withPosition++;
+
+      // Count military
+      if (ac.military) military++;
+
+      // Emergency squawks
+      if (ac.squawk && ['7500', '7600', '7700'].includes(ac.squawk)) {
+        emergencySquawks.push({ hex: ac.hex, squawk: ac.squawk, flight: ac.flight });
+      }
+
+      // Altitude distribution
+      const alt = ac.alt || ac.altitude || 0;
+      if (ac.on_ground || alt <= 0) {
+        altDist.ground++;
+      } else if (alt < 10000) {
+        altDist.low++;
+      } else if (alt < 30000) {
+        altDist.medium++;
+      } else {
+        altDist.high++;
+      }
+    });
+
+    return {
+      total: wsAircraft.length,
+      with_position: withPosition,
+      military,
+      emergency_squawks: emergencySquawks,
+      altitude: altDist,
+      // Message count not available client-side, will come from server stats
+      messages: wsStats?.count || 0
+    };
+  }, [wsAircraft, wsStats]);
+
+  // Fetch detailed stats only when socket not connected or for filtered queries
+  // When socket is connected, we rely on computedStats for real-time data
+  const { data: fetchedStats } = useSocketApi(
+    `/api/v1/aircraft/stats?${filterParams}`,
+    wsConnected ? null : 30000, // No polling when socket connected
+    apiBase,
+    socketOpts
+  );
+
+  // Use computed stats from WebSocket push, fall back to fetched
+  const stats = computedStats || fetchedStats;
+
+  // Top aircraft - computed from pushed aircraft data or fetched once
+  const computedTop = useMemo(() => {
+    if (!wsAircraft?.length) return null;
+
+    const withDistance = wsAircraft.filter(ac => ac.distance_nm != null);
+    const withSpeed = wsAircraft.filter(ac => ac.gs != null);
+    const withAlt = wsAircraft.filter(ac => ac.alt != null);
+
+    return {
+      closest: [...withDistance].sort((a, b) => a.distance_nm - b.distance_nm).slice(0, 5),
+      fastest: [...withSpeed].sort((a, b) => b.gs - a.gs).slice(0, 5),
+      highest: [...withAlt].sort((a, b) => b.alt - a.alt).slice(0, 5)
+    };
+  }, [wsAircraft]);
+
+  const { data: fetchedTop } = useSocketApi(
+    '/api/v1/aircraft/top',
+    wsConnected ? null : 30000,
+    apiBase,
+    socketOpts
+  );
+
+  const top = computedTop || fetchedTop;
+
+  // Historical data - fetch once, refresh only on filter change (no interval polling)
+  const { data: histStats } = useSocketApi(`/api/v1/history/stats?${filterParams}`, null, apiBase, socketOpts);
+  const { data: acarsStats } = useSocketApi(`/api/v1/acars/stats?hours=${selectedHours}`, null, apiBase, socketOpts);
+  const { data: safetyStats } = useSocketApi(`/api/v1/safety/stats?hours=${selectedHours}`, null, apiBase, socketOpts);
+  const { data: sessionsData } = useSocketApi(`/api/v1/history/sessions?hours=${selectedHours}&limit=500${showMilitaryOnly ? '&military_only=true' : ''}`, null, apiBase, socketOpts);
+
+  // System status - very infrequent polling (5 min) or socket request
+  const { data: systemData } = useSocketApi('/api/v1/system/status', wsConnected ? null : 300000, apiBase, socketOpts);
+
+  // Analytics endpoints - fetch once, no polling (data doesn't change rapidly)
+  const { data: trendsData } = useSocketApi(`/api/v1/history/trends?${filterParams}&interval=hour`, null, apiBase, socketOpts);
+  const { data: topPerformersData } = useSocketApi(`/api/v1/history/top?${filterParams}&limit=10`, null, apiBase, socketOpts);
+  const { data: distanceAnalytics } = useSocketApi(`/api/v1/history/analytics/distance?${filterParams}`, null, apiBase, socketOpts);
+  const { data: speedAnalytics } = useSocketApi(`/api/v1/history/analytics/speed?${filterParams}`, null, apiBase, socketOpts);
+  const { data: correlationData } = useSocketApi(`/api/v1/history/analytics/correlation?${filterParams}`, null, apiBase, socketOpts);
 
   // Throughput history for graphs
   const [throughputHistory, setThroughputHistory] = useState([]);

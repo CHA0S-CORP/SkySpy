@@ -848,41 +848,35 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
 
   const { data, refetch } = useSocketApi(endpoint, null, apiBase, { wsRequest, wsConnected });
 
-  useEffect(() => { refetch(); }, [timeRange, viewType, refetch]);
+  // Note: useSocketApi already refetches when endpoint changes, no need for additional effect
 
-  // Fetch label reference once - prefer socket.io
+  // Fetch label reference once on mount
+  const labelsFetchedRef = useRef(false);
   useEffect(() => {
+    if (labelsFetchedRef.current) return;
+
     const fetchLabels = async () => {
       try {
-        let data = null;
-
-        // Prefer socket.io
-        if (wsRequest && wsConnected) {
-          try {
-            data = await wsRequest('acars-labels', {});
-            if (data?.error) data = null;
-          } catch (err) {
-            console.debug('Labels WS request failed:', err.message);
-          }
-        }
-
-        // HTTP fallback only if socket didn't work
-        if (!data) {
-          const res = await fetch(`${apiBase}/api/v1/acars/labels`);
-          if (res.ok) {
-            data = await res.json();
-          }
-        }
-
-        if (data) {
+        const res = await fetch(`${apiBase}/api/v1/acars/labels`);
+        if (res.ok) {
+          const data = await res.json();
           setLabelReference(data.labels || {});
+          labelsFetchedRef.current = true;
         }
       } catch (err) {
         console.log('Labels fetch error:', err.message);
       }
     };
     fetchLabels();
-  }, [apiBase, wsRequest, wsConnected]);
+  }, [apiBase]);
+
+  // Store ws functions in refs to avoid triggering re-fetches
+  const wsRequestRef = useRef(wsRequest);
+  const wsConnectedRef = useRef(wsConnected);
+  useEffect(() => {
+    wsRequestRef.current = wsRequest;
+    wsConnectedRef.current = wsConnected;
+  }, [wsRequest, wsConnected]);
 
   // Fetch ACARS messages when viewing ACARS tab - prefer socket.io
   useEffect(() => {
@@ -900,10 +894,10 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
 
         let result = null;
 
-        // Prefer socket.io
-        if (wsRequest && wsConnected) {
+        // Prefer socket.io (use refs for current values)
+        if (wsRequestRef.current && wsConnectedRef.current) {
           try {
-            result = await wsRequest('acars-messages', queryParams);
+            result = await wsRequestRef.current('acars-messages', queryParams);
             if (result?.error) result = null;
           } catch (err) {
             console.debug('ACARS WS request failed:', err.message);
@@ -933,7 +927,8 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
       }
     };
     fetchAcars();
-  }, [viewType, timeRange, acarsSource, acarsAirlineFilter, acarsSelectedLabels, apiBase, wsRequest, wsConnected]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewType, timeRange, acarsSource, acarsAirlineFilter, acarsSelectedLabels, apiBase]);
 
   // Lookup hex values from sightings for ACARS messages with callsign but no icao_hex
   useEffect(() => {
@@ -994,7 +989,8 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
     };
 
     lookupCallsigns();
-  }, [viewType, acarsMessages.length, callsignHexCache, apiBase, wsRequest, wsConnected]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewType, acarsMessages.length, apiBase, wsRequest, wsConnected]);
 
   // Lookup ICAO hex from registration for ACARS messages
   useEffect(() => {
@@ -1050,7 +1046,8 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
     };
 
     lookupRegs();
-  }, [viewType, acarsMessages.length, regHexCache, apiBase, wsRequest, wsConnected]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewType, acarsMessages.length, apiBase, wsRequest, wsConnected]);
 
   // Close label dropdown when clicking outside
   useEffect(() => {

@@ -25,7 +25,7 @@ import {
 import { AircraftDetailPage } from '../aircraft/AircraftDetailPage';
 import { useAircraftInfo } from '../../hooks/useAircraftInfo';
 
-function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: wsSafetyEvents, wsRequest, wsConnected, getAirframeError, clearAirframeError, onViewHistoryEvent, hashParams = {}, setHashParams, positionsRef = null, positionSocketConnected = false }) {
+function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: wsSafetyEvents, acarsMessages: wsAcarsMessages, wsRequest, wsConnected, getAirframeError, clearAirframeError, onViewHistoryEvent, hashParams = {}, setHashParams, positionsRef = null, positionSocketConnected = false }) {
   const [selectedAircraft, setSelectedAircraft] = useState(null);
   const [selectedMetar, setSelectedMetar] = useState(null);
   const [selectedPirep, setSelectedPirep] = useState(null);
@@ -1129,47 +1129,59 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     return () => clearInterval(interval);
   }, [config.apiBaseUrl, wsRequest, wsConnected]);
 
-  // Fetch ACARS messages (only when panel is open) - prefer socket.io
+  // Use real-time ACARS messages from socket when connected
   useEffect(() => {
-    if (!showAcarsPanel) return;
+    if (wsConnected && wsAcarsMessages && wsAcarsMessages.length > 0) {
+      setAcarsMessages(wsAcarsMessages);
+    }
+  }, [wsConnected, wsAcarsMessages]);
 
-    const fetchAcarsMessages = async () => {
-      // Use Socket.IO when connected to reduce HTTP calls
-      if (wsRequest && wsConnected) {
-        try {
-          const data = await wsRequest('acars-recent', { limit: 50 });
-          if (data && !data.error) {
-            setAcarsMessages(data.messages || []);
-            return;
-          }
-        } catch (err) {
-          console.debug('ACARS messages WS request failed:', err.message);
-          // Don't fall back to HTTP when socket is connected
-          return;
-        }
-      }
+  // Fetch initial ACARS history once when panel opens (socket doesn't provide history)
+  const acarsInitialFetchRef = useRef(false);
+  useEffect(() => {
+    if (!showAcarsPanel) {
+      acarsInitialFetchRef.current = false;
+      return;
+    }
+    if (acarsInitialFetchRef.current) return;
 
-      // HTTP fallback only when socket is not connected
-      if (!wsConnected) {
-        const baseUrl = config.apiBaseUrl || '';
-        try {
-          const msgRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=50`);
-          if (msgRes.ok) {
-            const data = await msgRes.json();
-            setAcarsMessages(data.messages || []);
-          }
-        } catch (err) {
-          console.log('ACARS messages fetch error:', err.message);
+    const fetchInitialAcars = async () => {
+      const baseUrl = config.apiBaseUrl || '';
+      try {
+        const msgRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=50`);
+        if (msgRes.ok) {
+          const data = await msgRes.json();
+          setAcarsMessages(data.messages || []);
+          acarsInitialFetchRef.current = true;
         }
+      } catch (err) {
+        console.log('ACARS messages fetch error:', err.message);
       }
     };
 
-    fetchAcarsMessages();
-    // Longer interval when socket connected (20s vs 10s)
-    const pollInterval = wsConnected ? 20000 : 10000;
-    const interval = setInterval(fetchAcarsMessages, pollInterval);
+    fetchInitialAcars();
+  }, [showAcarsPanel, config.apiBaseUrl]);
+
+  // HTTP fallback polling only when socket is not connected
+  useEffect(() => {
+    if (!showAcarsPanel || wsConnected) return;
+
+    const fetchAcarsMessages = async () => {
+      const baseUrl = config.apiBaseUrl || '';
+      try {
+        const msgRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=50`);
+        if (msgRes.ok) {
+          const data = await msgRes.json();
+          setAcarsMessages(data.messages || []);
+        }
+      } catch (err) {
+        console.log('ACARS messages fetch error:', err.message);
+      }
+    };
+
+    const interval = setInterval(fetchAcarsMessages, 10000);
     return () => clearInterval(interval);
-  }, [showAcarsPanel, config.apiBaseUrl, wsRequest, wsConnected]);
+  }, [showAcarsPanel, config.apiBaseUrl, wsConnected]);
 
   // Lookup hex values from history API for ACARS messages with callsign but no icao_hex
   useEffect(() => {
@@ -1231,7 +1243,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     };
 
     lookupCallsigns();
-  }, [showAcarsPanel, acarsMessages, aircraft, callsignHexCache, config.apiBaseUrl, wsRequest, wsConnected]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAcarsPanel, acarsMessages, aircraft, config.apiBaseUrl, wsRequest, wsConnected]);
 
   // Fetch aircraft info when selecting aircraft (using robust hook)
   useEffect(() => {
