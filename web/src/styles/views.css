@@ -3648,7 +3648,7 @@
 
 .polar-svg {
   width: 100%;
-  max-width: 220px;
+  max-width: 280px;
   height: auto;
 }
 
@@ -3809,6 +3809,7 @@
   align-items: center;
   gap: 8px;
   flex: 1;
+  position: relative;
 }
 
 .polar-plot {
@@ -3819,6 +3820,40 @@
 .polar-plot .polar-content {
   flex: 1;
   justify-content: center;
+}
+
+.polar-svg.interactive {
+  cursor: crosshair;
+}
+
+.polar-cursor .cursor-sector-line {
+  stroke: rgba(0, 200, 255, 0.5);
+  stroke-width: 1;
+  stroke-dasharray: 4, 2;
+  pointer-events: none;
+}
+
+.polar-tooltip {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid var(--accent-cyan);
+  border-radius: 4px;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  color: var(--text-bright);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.polar-tooltip .tooltip-bearing {
+  color: var(--accent-cyan);
+  font-weight: 600;
+  font-size: 12px;
 }
 
 .polar-axis-minor {

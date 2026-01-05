@@ -297,30 +297,85 @@ function PolarPlot({ data, loading }) {
   const bearingData = data?.bearing_data || [];
   const summary = data?.summary || {};
 
+  // Interactive cursor state
+  const [cursor, setCursor] = useState(null);
+  const svgRef = React.useRef(null);
+
+  // Chart dimensions
+  const width = 240, height = 240;
+  const cx = width / 2, cy = height / 2;
+  const maxR = 95; // Maximum radius for data
+
   // Find max values for normalization
   const maxCount = Math.max(...bearingData.map(d => d.count || 0), 1);
   const maxDistance = Math.max(...bearingData.map(d => d.max_distance_nm || 0), 1);
+
+  // Convert polar to cartesian
+  const polarToCartesian = (angle, radius) => {
+    const rad = (angle - 90) * (Math.PI / 180); // -90 to start at N
+    return {
+      x: cx + radius * Math.cos(rad),
+      y: cy + radius * Math.sin(rad)
+    };
+  };
 
   // Generate polar path from bearing data
   const generatePolarPath = (valueKey, maxValue) => {
     if (!bearingData.length) return '';
 
-    const cx = 100, cy = 105, maxR = 70;
     const points = bearingData.map(sector => {
       const value = sector[valueKey] || 0;
       const normalizedR = (value / maxValue) * maxR;
-      const angle = ((sector.bearing_start + 5) - 90) * (Math.PI / 180); // Center of sector, -90 to start at N
-      const x = cx + normalizedR * Math.cos(angle);
-      const y = cy + normalizedR * Math.sin(angle);
+      const angle = sector.bearing_start + 5; // Center of 10-degree sector
+      const { x, y } = polarToCartesian(angle, normalizedR);
       return `${x},${y}`;
     });
 
-    // Close the path by returning to start
     return `M${points[0]} ${points.slice(1).map(p => `L${p}`).join(' ')} Z`;
   };
 
   const countPath = generatePolarPath('count', maxCount);
   const distancePath = generatePolarPath('max_distance_nm', maxDistance);
+
+  // Ring radii for reference circles
+  const rings = [24, 48, 72, 95];
+
+  // Mouse handlers for interactive cursor
+  const handleMouseMove = (e) => {
+    if (!svgRef.current || !bearingData.length) return;
+    const svg = svgRef.current;
+    const rect = svg.getBoundingClientRect();
+    const scaleX = width / rect.width;
+    const scaleY = height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
+    // Calculate distance from center and angle
+    const dx = x - cx;
+    const dy = y - cy;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance <= maxR + 10) {
+      // Calculate bearing angle (0 = N, 90 = E, etc.)
+      let angle = Math.atan2(dx, -dy) * (180 / Math.PI);
+      if (angle < 0) angle += 360;
+
+      // Find the sector for this angle
+      const sectorIndex = Math.floor(angle / 10);
+      const sector = bearingData.find(s => Math.floor(s.bearing_start / 10) === sectorIndex);
+
+      setCursor({
+        x, y,
+        bearing: Math.round(angle),
+        sector,
+        distance
+      });
+    } else {
+      setCursor(null);
+    }
+  };
+
+  const handleMouseLeave = () => setCursor(null);
 
   return (
     <div className="nerd-stats-card polar-plot">
@@ -332,22 +387,28 @@ function PolarPlot({ data, loading }) {
         )}
       </div>
       <div className="polar-content">
-        <svg viewBox="0 0 200 210" className="polar-svg">
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${width} ${height}`}
+          className="polar-svg interactive"
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+        >
           {/* Concentric circles */}
-          {[18, 36, 54, 70].map(r => (
-            <circle key={r} cx="100" cy="105" r={r} className="polar-ring" />
+          {rings.map(r => (
+            <circle key={r} cx={cx} cy={cy} r={r} className="polar-ring" />
           ))}
           {/* Cardinal directions */}
-          <line x1="100" y1="35" x2="100" y2="175" className="polar-axis" />
-          <line x1="30" y1="105" x2="170" y2="105" className="polar-axis" />
+          <line x1={cx} y1={cy - maxR - 5} x2={cx} y2={cy + maxR + 5} className="polar-axis" />
+          <line x1={cx - maxR - 5} y1={cy} x2={cx + maxR + 5} y2={cy} className="polar-axis" />
           {/* Diagonal axes */}
-          <line x1="50" y1="55" x2="150" y2="155" className="polar-axis-minor" />
-          <line x1="150" y1="55" x2="50" y2="155" className="polar-axis-minor" />
+          <line x1={cx - 70} y1={cy - 70} x2={cx + 70} y2={cy + 70} className="polar-axis-minor" />
+          <line x1={cx + 70} y1={cy - 70} x2={cx - 70} y2={cy + 70} className="polar-axis-minor" />
           {/* Labels */}
-          <text x="100" y="22" className="polar-label">N</text>
-          <text x="100" y="195" className="polar-label">S</text>
-          <text x="14" y="109" className="polar-label">W</text>
-          <text x="182" y="109" className="polar-label">E</text>
+          <text x={cx} y={18} className="polar-label">N</text>
+          <text x={cx} y={height - 8} className="polar-label">S</text>
+          <text x={12} y={cy + 4} className="polar-label">W</text>
+          <text x={width - 12} y={cy + 4} className="polar-label">E</text>
           {/* Distance pattern (outer) */}
           {distancePath && (
             <path d={distancePath} className="polar-pattern-distance" />
@@ -356,7 +417,45 @@ function PolarPlot({ data, loading }) {
           {countPath && (
             <path d={countPath} className="polar-pattern-count" />
           )}
+          {/* Interactive cursor */}
+          {cursor && (
+            <g className="polar-cursor">
+              {/* Bearing line from center */}
+              <line
+                x1={cx}
+                y1={cy}
+                x2={cursor.x}
+                y2={cursor.y}
+                className="cursor-line"
+              />
+              {/* Highlight the hovered sector */}
+              {cursor.sector && (() => {
+                const startAngle = cursor.sector.bearing_start;
+                const endAngle = startAngle + 10;
+                const countR = (cursor.sector.count / maxCount) * maxR;
+                const distR = (cursor.sector.max_distance_nm / maxDistance) * maxR;
+                const start1 = polarToCartesian(startAngle, Math.max(countR, distR));
+                const end1 = polarToCartesian(endAngle, Math.max(countR, distR));
+                return (
+                  <>
+                    <line x1={cx} y1={cy} x2={start1.x} y2={start1.y} className="cursor-sector-line" />
+                    <line x1={cx} y1={cy} x2={end1.x} y2={end1.y} className="cursor-sector-line" />
+                  </>
+                );
+              })()}
+              {/* Center point */}
+              <circle cx={cursor.x} cy={cursor.y} r="4" className="cursor-highlight" />
+            </g>
+          )}
         </svg>
+        {/* Cursor tooltip */}
+        {cursor?.sector && (
+          <div className="polar-tooltip">
+            <span className="tooltip-bearing">{cursor.bearing}°</span>
+            <span>{cursor.sector.count?.toLocaleString()} msgs</span>
+            <span>{cursor.sector.max_distance_nm?.toFixed(1)} nm max</span>
+          </div>
+        )}
         <div className="polar-info">
           <div className="polar-legend">
             <span className="legend-item">
