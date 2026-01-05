@@ -619,14 +619,17 @@ async def fetch_and_process_aircraft():
         await sio_manager.publish_aircraft_update(all_aircraft)
 
     # Schedule background processing (DB storage + safety monitoring)
-    # Don't wait for previous task - if it's still running, let it finish
+    # Skip if previous task is still running to prevent task accumulation
     if all_aircraft:
-        # Make a copy of the data for background processing
-        aircraft_copy = [dict(ac) for ac in all_aircraft]
-        _pending_processing_task = _create_background_task(
-            _process_aircraft_background(aircraft_copy),
-            name="aircraft_processing"
-        )
+        if _pending_processing_task is not None and not _pending_processing_task.done():
+            logger.debug("Skipping background processing - previous task still running")
+        else:
+            # Make a copy of the data for background processing
+            aircraft_copy = [dict(ac) for ac in all_aircraft]
+            _pending_processing_task = _create_background_task(
+                _process_aircraft_background(aircraft_copy),
+                name="aircraft_processing"
+            )
 
 
 async def background_polling_task():

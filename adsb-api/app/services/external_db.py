@@ -92,6 +92,7 @@ _opensky_db: Dict[str, dict] = {}
 _opensky_loaded = False
 _opensky_loading = False
 _opensky_downloading = False
+_opensky_load_event: asyncio.Event = asyncio.Event()  # Signaled when loading completes
 
 # Route cache (callsign -> route info)
 _route_cache: Dict[str, dict] = {}
@@ -755,8 +756,8 @@ async def load_opensky_database(auto_download: bool = True) -> bool:
         return True
 
     if _opensky_loading:
-        while _opensky_loading:
-            await asyncio.sleep(0.1)
+        # Wait for loading to complete using event instead of busy-wait
+        await _opensky_load_event.wait()
         return _opensky_loaded
 
     if not settings.opensky_db_enabled:
@@ -802,6 +803,7 @@ async def load_opensky_database(auto_download: bool = True) -> bool:
         return False
     finally:
         _opensky_loading = False
+        _opensky_load_event.set()  # Signal any waiting tasks
 
 
 def _load_opensky_csv(path: Path) -> int:

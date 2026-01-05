@@ -772,6 +772,8 @@ async def process_download_queue(db_session_factory):
             try:
                 item = await asyncio.wait_for(_download_queue.get(), timeout=5.0)
             except asyncio.TimeoutError:
+                # Sleep briefly on timeout to prevent CPU spinning during low activity
+                await asyncio.sleep(0.5)
                 continue
             
             icao_hex = item["icao_hex"]

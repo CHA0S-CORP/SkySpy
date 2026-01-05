@@ -1128,6 +1128,8 @@ async def process_lookup_queue(db_session_factory):
             try:
                 icao_hex = await asyncio.wait_for(_lookup_queue.get(), timeout=5.0)
             except asyncio.TimeoutError:
+                # Sleep briefly on timeout to prevent CPU spinning during low activity
+                await asyncio.sleep(0.5)
                 continue
             
             logger.info(f"Processing lookup for {icao_hex}")

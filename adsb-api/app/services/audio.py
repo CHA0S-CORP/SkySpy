@@ -1605,6 +1605,8 @@ async def process_transcription_queue(db_session_factory):
                     timeout=5.0
                 )
             except asyncio.TimeoutError:
+                # Sleep briefly on timeout to prevent CPU spinning during low activity
+                await asyncio.sleep(0.5)
                 continue
 
             logger.info(f"Processing transcription job: {transmission_id}, whisper={settings.whisper_enabled}, url={settings.transcription_service_url}")
