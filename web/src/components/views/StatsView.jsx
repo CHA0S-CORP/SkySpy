@@ -305,7 +305,7 @@ function PolarPlot({ data, loading }) {
   const generatePolarPath = (valueKey, maxValue) => {
     if (!bearingData.length) return '';
 
-    const cx = 100, cy = 100, maxR = 75;
+    const cx = 100, cy = 105, maxR = 70;
     const points = bearingData.map(sector => {
       const value = sector[valueKey] || 0;
       const normalizedR = (value / maxValue) * maxR;
@@ -328,26 +328,26 @@ function PolarPlot({ data, loading }) {
         <Navigation size={16} />
         <span>Antenna Coverage</span>
         {summary.coverage_pct != null && (
-          <span className="nerd-badge live">{summary.coverage_pct}% coverage</span>
+          <span className="nerd-badge live">{summary.coverage_pct}% COVERAGE</span>
         )}
       </div>
       <div className="polar-content">
-        <svg viewBox="0 0 200 200" className="polar-svg">
+        <svg viewBox="0 0 200 210" className="polar-svg">
           {/* Concentric circles */}
-          {[20, 40, 60, 75].map(r => (
-            <circle key={r} cx="100" cy="100" r={r} className="polar-ring" />
+          {[18, 36, 54, 70].map(r => (
+            <circle key={r} cx="100" cy="105" r={r} className="polar-ring" />
           ))}
           {/* Cardinal directions */}
-          <line x1="100" y1="25" x2="100" y2="175" className="polar-axis" />
-          <line x1="25" y1="100" x2="175" y2="100" className="polar-axis" />
+          <line x1="100" y1="35" x2="100" y2="175" className="polar-axis" />
+          <line x1="30" y1="105" x2="170" y2="105" className="polar-axis" />
           {/* Diagonal axes */}
-          <line x1="47" y1="47" x2="153" y2="153" className="polar-axis-minor" />
-          <line x1="153" y1="47" x2="47" y2="153" className="polar-axis-minor" />
+          <line x1="50" y1="55" x2="150" y2="155" className="polar-axis-minor" />
+          <line x1="150" y1="55" x2="50" y2="155" className="polar-axis-minor" />
           {/* Labels */}
-          <text x="100" y="15" className="polar-label">N</text>
-          <text x="100" y="192" className="polar-label">S</text>
-          <text x="10" y="104" className="polar-label">W</text>
-          <text x="186" y="104" className="polar-label">E</text>
+          <text x="100" y="22" className="polar-label">N</text>
+          <text x="100" y="195" className="polar-label">S</text>
+          <text x="14" y="109" className="polar-label">W</text>
+          <text x="182" y="109" className="polar-label">E</text>
           {/* Distance pattern (outer) */}
           {distancePath && (
             <path d={distancePath} className="polar-pattern-distance" />
@@ -387,9 +387,9 @@ function RSSIScatter({ data, loading }) {
   const trendLine = data?.trend_line;
   const overallStats = data?.overall_statistics || {};
 
-  // Chart dimensions
-  const width = 200, height = 120;
-  const margin = { top: 10, right: 10, bottom: 20, left: 35 };
+  // Chart dimensions - increased for better label visibility
+  const width = 220, height = 140;
+  const margin = { top: 10, right: 15, bottom: 30, left: 40 };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
 
@@ -427,7 +427,7 @@ function RSSIScatter({ data, loading }) {
         <Signal size={16} />
         <span>Signal vs Distance</span>
         {overallStats.avg_rssi != null && (
-          <span className="nerd-badge live">Avg {overallStats.avg_rssi} dB</span>
+          <span className="nerd-badge live">AVG {overallStats.avg_rssi} DB</span>
         )}
       </div>
       <div className="scatter-content">
@@ -447,9 +447,18 @@ function RSSIScatter({ data, loading }) {
             y2={margin.top + plotHeight}
             className="scatter-axis"
           />
-          {/* Axis labels */}
-          <text x={width / 2} y={height - 2} className="scatter-label">Distance (nm)</text>
-          <text x={5} y={height / 2} className="scatter-label-y" transform={`rotate(-90, 8, ${height / 2})`}>RSSI (dB)</text>
+          {/* X-axis label */}
+          <text x={margin.left + plotWidth / 2} y={height - 8} className="scatter-label" textAnchor="middle">Distance (nm)</text>
+          {/* Y-axis label - rotated properly */}
+          <text
+            x={12}
+            y={margin.top + plotHeight / 2}
+            className="scatter-label-y"
+            textAnchor="middle"
+            transform={`rotate(-90, 12, ${margin.top + plotHeight / 2})`}
+          >
+            RSSI (dB)
+          </text>
           {/* Grid lines */}
           {[0.25, 0.5, 0.75].map(pct => (
             <line
