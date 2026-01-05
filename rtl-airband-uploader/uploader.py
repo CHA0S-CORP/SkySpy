@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Optional, Dict
 
 import requests
+from mutagen.mp3 import MP3
 from prometheus_client import (
     Counter,
     Gauge,
@@ -34,6 +35,7 @@ UPLOAD_ENDPOINT = f"{SKYSPY_API_URL}/api/v1/audio/upload"
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "5"))
 RETRY_INTERVAL = int(os.environ.get("RETRY_INTERVAL", "60"))
 MIN_FILE_SIZE = int(os.environ.get("MIN_FILE_SIZE", "2048"))
+MIN_DURATION_SECONDS = float(os.environ.get("MIN_DURATION_SECONDS", "2.0"))
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "3"))
 UPLOAD_TIMEOUT = int(os.environ.get("UPLOAD_TIMEOUT", "60"))
 METRICS_PORT = int(os.environ.get("METRICS_PORT", "9090"))
@@ -101,7 +103,7 @@ UPLOADS_FAILED = Counter(
 UPLOADS_DISCARDED = Counter(
     "rtl_airband_uploads_discarded_total",
     "Total discarded uploads (empty/too small)",
-    ["channel"],
+    ["channel", "reason"],
 )
 
 UPLOAD_DURATION = Histogram(
@@ -257,6 +259,23 @@ def is_empty_transmission(filepath: Path) -> bool:
         return True
 
 
+def get_audio_duration(filepath: Path) -> Optional[float]:
+    """Get the duration of an MP3 file in seconds."""
+    try:
+        audio = MP3(filepath)
+        return audio.info.length
+    except Exception:
+        return None
+
+
+def is_short_transmission(filepath: Path) -> bool:
+    """Check if audio duration is less than minimum threshold."""
+    duration = get_audio_duration(filepath)
+    if duration is None:
+        return False  # Can't determine, allow it through
+    return duration < MIN_DURATION_SECONDS
+
+
 def save_metadata(metadata: FileMetadata) -> None:
     """Save metadata to a .meta file for retry scenarios."""
     meta_path = metadata.filepath.with_suffix(".meta")
@@ -402,12 +421,23 @@ def process_file(filepath: Path) -> bool:
     metadata = parse_filename(filepath)
     channel = metadata.channel_name
 
-    # Check for empty transmissions
+    # Check for empty transmissions (file size)
     if is_empty_transmission(filepath):
-        UPLOADS_DISCARDED.labels(channel=channel).inc()
+        UPLOADS_DISCARDED.labels(channel=channel, reason="too_small").inc()
         logger.info(
             f"Discarding empty transmission: {filepath.name} "
             f"({metadata.file_size} bytes < {MIN_FILE_SIZE} min)"
+        )
+        cleanup_files(filepath)
+        return True
+
+    # Check for short transmissions (duration < 2s)
+    duration = get_audio_duration(filepath)
+    if duration is not None and duration < MIN_DURATION_SECONDS:
+        UPLOADS_DISCARDED.labels(channel=channel, reason="too_short").inc()
+        logger.info(
+            f"Discarding short transmission: {filepath.name} "
+            f"({duration:.2f}s < {MIN_DURATION_SECONDS}s min)"
         )
         cleanup_files(filepath)
         return True
