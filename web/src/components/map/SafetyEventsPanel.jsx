@@ -45,14 +45,14 @@ export function SafetyEventsPanel({
               className={`safety-event severity-${event.severity} ${isAcknowledged ? 'acknowledged' : ''}`}
             >
               <div className="event-header">
-                <span 
+                <span
                   className="event-callsign clickable"
-                  onClick={() => onSelectAircraft?.(event.hex)}
+                  onClick={() => onSelectAircraft?.(event.icao)}
                 >
-                  {event.callsign || event.hex}
+                  {event.callsign || event.icao}
                 </span>
-                <span className={`event-type-badge ${event.type}`}>
-                  {event.type?.replace(/_/g, ' ').toUpperCase()}
+                <span className={`event-type-badge ${event.event_type}`}>
+                  {event.event_type?.replace(/_/g, ' ').toUpperCase()}
                 </span>
               </div>
               

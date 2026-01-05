@@ -272,9 +272,35 @@ class SocketIOManager:
             if 'safety' in topics or 'all' in topics:
                 active_events = safety_monitor.get_active_events(include_acknowledged=True)
                 if active_events:
+                    # Format events to match publish_safety_event structure
+                    formatted_events = []
+                    for event in active_events:
+                        # Convert Unix timestamp to ISO string if present
+                        timestamp = event.get('timestamp')
+                        if not timestamp and event.get('created_at'):
+                            timestamp = datetime.utcfromtimestamp(event['created_at']).isoformat() + 'Z'
+                        elif not timestamp:
+                            timestamp = datetime.utcnow().isoformat() + 'Z'
+
+                        formatted_events.append({
+                            'id': event.get('id'),
+                            'event_type': event.get('event_type'),
+                            'severity': event.get('severity'),
+                            'icao': event.get('icao'),
+                            'icao_2': event.get('icao_2'),
+                            'callsign': event.get('callsign'),
+                            'callsign_2': event.get('callsign_2'),
+                            'message': event.get('message'),
+                            'details': event.get('details', {}),
+                            'aircraft_snapshot': event.get('aircraft_snapshot'),
+                            'aircraft_snapshot_2': event.get('aircraft_snapshot_2'),
+                            'acknowledged': event.get('acknowledged', False),
+                            'timestamp': timestamp
+                        })
+
                     await self.sio.emit('safety:snapshot', {
-                        'events': active_events,
-                        'count': len(active_events),
+                        'events': formatted_events,
+                        'count': len(formatted_events),
                         'timestamp': datetime.utcnow().isoformat() + 'Z'
                     }, room=sid)
 
