@@ -582,7 +582,24 @@ function LiveSparkline({ data, valueKey, color, height = 60, label, currentValue
 // Main StatsView Component - Bento Grid Layout
 // ============================================================================
 
-export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, aircraft: wsAircraft, stats: wsStats, antennaAnalytics }) {
+export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, aircraft: wsAircraft, stats: wsStats, antennaAnalytics: antennaAnalyticsProp }) {
+  // Local antenna analytics state - uses prop if available, otherwise fetches once on mount
+  const [localAntennaAnalytics, setLocalAntennaAnalytics] = useState(null);
+  const antennaAnalytics = antennaAnalyticsProp || localAntennaAnalytics;
+
+  // Fetch antenna analytics on mount if not provided via prop
+  useEffect(() => {
+    if (!antennaAnalyticsProp && wsRequest && wsConnected) {
+      wsRequest('antenna-analytics', {})
+        .then(data => {
+          if (data && !data.error) {
+            setLocalAntennaAnalytics(data);
+          }
+        })
+        .catch(err => console.debug('Antenna analytics fetch error:', err.message));
+    }
+  }, [antennaAnalyticsProp, wsRequest, wsConnected]);
+
   // Filter state
   const [timeRange, setTimeRange] = useState('24h');
   const [showMilitaryOnly, setShowMilitaryOnly] = useState(false);
