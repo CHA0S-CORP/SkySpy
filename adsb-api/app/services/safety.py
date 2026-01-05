@@ -282,7 +282,8 @@ class SafetyMonitor:
             callsign = (ac.get("flight") or "").strip()
             squawk = ac.get("squawk", "")
 
-            if is_valid_position(lat, lon) and alt is not None:
+            # Only include in proximity check if airborne (>500ft) with valid position
+            if is_valid_position(lat, lon) and alt is not None and alt >= 500:
                 current_positions[icao] = {
                     "lat": lat, "lon": lon, "alt": alt,
                     "vr": vr, "gs": gs, "track": track,
@@ -579,13 +580,22 @@ class SafetyMonitor:
         events = []
         icao_list = list(positions.keys())
 
+        # Pre-calculate bounding box threshold in degrees (rough approximation)
+        # 1 degree lat ~= 60nm, so proximity_nm / 60 gives degree threshold
+        # Use 2x threshold to account for longitude scaling at higher latitudes
+        deg_threshold = (settings.safety_proximity_nm / 60.0) * 2.0
+
         for i, icao1 in enumerate(icao_list):
+            pos1 = positions[icao1]
             for icao2 in icao_list[i + 1:]:
-                pos1 = positions[icao1]
                 pos2 = positions[icao2]
 
-                # Skip if either aircraft is likely on the ground (<500ft)
-                if pos1["alt"] < 500 or pos2["alt"] < 500:
+                # Fast bounding box check - skip expensive haversine if clearly too far
+                lat_diff = abs(pos1["lat"] - pos2["lat"])
+                if lat_diff > deg_threshold:
+                    continue
+                lon_diff = abs(pos1["lon"] - pos2["lon"])
+                if lon_diff > deg_threshold:
                     continue
 
                 dist_nm = calculate_distance_nm(
