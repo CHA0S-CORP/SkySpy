@@ -31,6 +31,9 @@ _s3_client = None
 # Transcription queue
 _transcription_queue: asyncio.Queue = None
 
+# Semaphore to limit concurrent Whisper transcriptions (resource-intensive)
+_whisper_semaphore: asyncio.Semaphore = None
+
 # Statistics
 _stats = {
     "uploads": 0,
@@ -1547,8 +1550,10 @@ async def process_transcription(
 
 async def init_transcription_queue():
     """Initialize the transcription queue."""
-    global _transcription_queue
+    global _transcription_queue, _whisper_semaphore
     _transcription_queue = asyncio.Queue()
+    # Limit to 1 concurrent transcription when using Whisper (resource-intensive)
+    _whisper_semaphore = asyncio.Semaphore(1)
     logger.info("Transcription queue initialized")
 
 
@@ -1559,7 +1564,7 @@ async def process_transcription_queue(db_session_factory):
     Args:
         db_session_factory: Async session factory
     """
-    global _transcription_queue
+    global _transcription_queue, _whisper_semaphore
 
     if _transcription_queue is None:
         await init_transcription_queue()
@@ -1577,8 +1582,12 @@ async def process_transcription_queue(db_session_factory):
             except asyncio.TimeoutError:
                 continue
 
-            # Process transcription
-            await process_transcription(db_session_factory, transmission_id)
+            # Use semaphore to limit concurrent Whisper transcriptions to 1
+            if settings.whisper_enabled and _whisper_semaphore is not None:
+                async with _whisper_semaphore:
+                    await process_transcription(db_session_factory, transmission_id)
+            else:
+                await process_transcription(db_session_factory, transmission_id)
             _transcription_queue.task_done()
 
             # Small delay between jobs
