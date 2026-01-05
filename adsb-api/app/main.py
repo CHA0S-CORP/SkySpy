@@ -776,6 +776,7 @@ async def lifespan(app: FastAPI):
 
     # Start audio transcription queue if enabled
     transcription_task = None
+    logger.info(f"Transcription config: enabled={settings.transcription_enabled}, whisper={settings.whisper_enabled}, url={settings.transcription_service_url}")
     if settings.transcription_enabled:
         await audio_service.init_transcription_queue()
         transcription_task = asyncio.create_task(

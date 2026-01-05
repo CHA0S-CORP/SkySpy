@@ -151,9 +151,15 @@ const handleNewTransmission = (transmission) => {
     ...transmission
   };
 
-  // Add to recent transmissions (avoid duplicates)
-  const exists = globalAudioState.recentTransmissions.some(t => t.id === transmission.id);
-  if (!exists) {
+  // Add to recent transmissions or update existing one
+  const existingIndex = globalAudioState.recentTransmissions.findIndex(t => t.id === transmission.id);
+  if (existingIndex !== -1) {
+    // Update existing transmission (e.g., when transcript completes)
+    globalAudioState.recentTransmissions[existingIndex] = enrichedTransmission;
+    globalAudioState.recentTransmissions = [...globalAudioState.recentTransmissions];
+    notifySubscribers({ updatedTransmission: enrichedTransmission });
+  } else {
+    // Add new transmission
     globalAudioState.recentTransmissions = [enrichedTransmission, ...globalAudioState.recentTransmissions].slice(0, 50);
     notifySubscribers({ newTransmission: enrichedTransmission });
   }
@@ -175,9 +181,9 @@ const handleNewTransmission = (transmission) => {
     }
 
     if (matchesFilter) {
-      // Add to front of queue (latest first)
-      globalAudioState.autoplayQueue.unshift(enrichedTransmission);
-      globalAudioState.autoplayQueue = globalAudioState.autoplayQueue.slice(0, 10);
+      // Add to end of queue (oldest first, play in chronological order)
+      globalAudioState.autoplayQueue.push(enrichedTransmission);
+      globalAudioState.autoplayQueue = globalAudioState.autoplayQueue.slice(-10);
 
       // Process queue if nothing is currently playing
       if (!globalAudioState.playingId) {
@@ -893,6 +899,18 @@ export function AudioView({ apiBase, onSelectAircraft }) {
           const exists = prev.some(t => t.id === updates.newTransmission.id);
           if (exists) return prev;
           return [updates.newTransmission, ...prev].slice(0, 50);
+        });
+      }
+      if ('updatedTransmission' in updates && updates.updatedTransmission) {
+        // Update existing transmission in local realtime list (e.g., transcript completed)
+        setRealtimeTransmissions(prev => {
+          const index = prev.findIndex(t => t.id === updates.updatedTransmission.id);
+          if (index !== -1) {
+            const updated = [...prev];
+            updated[index] = updates.updatedTransmission;
+            return updated;
+          }
+          return prev;
         });
       }
     });

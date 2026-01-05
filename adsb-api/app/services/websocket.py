@@ -1701,13 +1701,13 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
         cutoff = datetime.utcnow() - timedelta(hours=hours)
 
         # Total events in period
-        total_query = select(func.count(SafetyEvent.id)).where(SafetyEvent.created_at > cutoff)
+        total_query = select(func.count(SafetyEvent.id)).where(SafetyEvent.timestamp > cutoff)
         total_events = (await db.execute(total_query)).scalar() or 0
 
         # Events by type
         type_query = (
             select(SafetyEvent.event_type, func.count(SafetyEvent.id).label("count"))
-            .where(SafetyEvent.created_at > cutoff)
+            .where(SafetyEvent.timestamp > cutoff)
             .group_by(SafetyEvent.event_type)
         )
         type_result = await db.execute(type_query)
@@ -1716,7 +1716,7 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
         # Events by severity
         severity_query = (
             select(SafetyEvent.severity, func.count(SafetyEvent.id).label("count"))
-            .where(SafetyEvent.created_at > cutoff)
+            .where(SafetyEvent.timestamp > cutoff)
             .group_by(SafetyEvent.severity)
         )
         severity_result = await db.execute(severity_query)

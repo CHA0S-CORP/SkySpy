@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.models import AudioTransmission
+from app.services.socketio_manager import get_socketio_manager
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -1390,6 +1391,8 @@ async def _transcribe_with_external_service(
     else:
         endpoint = base_url
 
+    logger.info(f"Calling external transcription service: {endpoint}, model={settings.transcription_model}")
+
     # Prepare multipart form data
     files = {
         "file": (filename, audio_data, content_type),
@@ -1527,6 +1530,28 @@ async def process_transcription(
                 await db.commit()
                 _stats["transcriptions_completed"] += 1
                 logger.info(f"Transcription completed for {transmission_id}")
+
+                # Emit socket event to notify frontend of transcript update
+                sio_mgr = get_socketio_manager()
+                if sio_mgr:
+                    audio_url = get_audio_url(transmission.filename, transmission.s3_key, signed=True)
+                    await sio_mgr.publish_audio_transmission({
+                        "id": transmission.id,
+                        "filename": transmission.filename,
+                        "s3_url": audio_url,
+                        "frequency_mhz": transmission.frequency_mhz,
+                        "channel_name": transmission.channel_name,
+                        "duration_seconds": transmission.duration_seconds,
+                        "file_size_bytes": transmission.file_size_bytes,
+                        "format": transmission.format,
+                        "transcription_status": "completed",
+                        "transcript": transcript_text,
+                        "transcript_confidence": transmission.transcript_confidence,
+                        "transcript_language": transmission.transcript_language,
+                        "identified_airframes": transmission.identified_airframes,
+                        "created_at": transmission.created_at.isoformat() + "Z" if transmission.created_at else None,
+                    })
+
                 return True
 
         except httpx.HTTPStatusError as e:
@@ -1582,6 +1607,7 @@ async def process_transcription_queue(db_session_factory):
             except asyncio.TimeoutError:
                 continue
 
+            logger.info(f"Processing transcription job: {transmission_id}, whisper={settings.whisper_enabled}, url={settings.transcription_service_url}")
             # Use semaphore to limit concurrent Whisper transcriptions to 1
             if settings.whisper_enabled and _whisper_semaphore is not None:
                 async with _whisper_semaphore:

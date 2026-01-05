@@ -29,6 +29,7 @@ python-multipart>=0.0.6
 
 
 # Monitoring
+psutil>=5.9.0
 prometheus-client>=0.19.0
 sentry-sdk[fastapi]>=1.39.0
 
