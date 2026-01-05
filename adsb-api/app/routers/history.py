@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Path
-from sqlalchemy import select, func, and_, or_, case, literal_column
+from sqlalchemy import select, func, and_, or_, case, literal_column, text
 from sqlalchemy.ext.asyncio import AsyncSession
 import statistics
 
@@ -1216,32 +1216,48 @@ async def get_antenna_polar_data(
     """Get antenna polar coverage data for polar diagram visualization."""
     cutoff = datetime.utcnow() - timedelta(hours=hours)
 
-    # Build conditions
-    conditions = [
-        AircraftSighting.timestamp > cutoff,
-        AircraftSighting.track.isnot(None),
-        AircraftSighting.distance_nm.isnot(None),
-    ]
-    if min_distance:
-        conditions.append(AircraftSighting.distance_nm >= min_distance)
-
     # Query for bearing-grouped data (36 sectors of 10 degrees each)
     # Track represents the bearing FROM the receiver TO the aircraft
-    bearing_query = (
-        select(
-            (func.floor(AircraftSighting.track / 10) * 10).label('bearing_sector'),
-            func.count(AircraftSighting.id).label('count'),
-            func.avg(AircraftSighting.rssi).label('avg_rssi'),
-            func.min(AircraftSighting.rssi).label('min_rssi'),
-            func.max(AircraftSighting.rssi).label('max_rssi'),
-            func.avg(AircraftSighting.distance_nm).label('avg_distance'),
-            func.max(AircraftSighting.distance_nm).label('max_distance'),
-            func.count(func.distinct(AircraftSighting.icao_hex)).label('unique_aircraft'),
-        )
-        .where(and_(*conditions))
-        .group_by(func.floor(AircraftSighting.track / 10) * 10)
-        .order_by(func.floor(AircraftSighting.track / 10) * 10)
-    )
+    # Use raw SQL to avoid PostgreSQL GROUP BY expression parameter issues
+    if min_distance:
+        bearing_sql = text("""
+            SELECT
+                floor(track / 10) * 10 AS bearing_sector,
+                count(id) AS count,
+                avg(rssi) AS avg_rssi,
+                min(rssi) AS min_rssi,
+                max(rssi) AS max_rssi,
+                avg(distance_nm) AS avg_distance,
+                max(distance_nm) AS max_distance,
+                count(distinct icao_hex) AS unique_aircraft
+            FROM aircraft_sightings
+            WHERE timestamp > :cutoff
+                AND track IS NOT NULL
+                AND distance_nm IS NOT NULL
+                AND distance_nm >= :min_distance
+            GROUP BY floor(track / 10) * 10
+            ORDER BY bearing_sector
+        """)
+        bearing_query = bearing_sql.bindparams(cutoff=cutoff, min_distance=min_distance)
+    else:
+        bearing_sql = text("""
+            SELECT
+                floor(track / 10) * 10 AS bearing_sector,
+                count(id) AS count,
+                avg(rssi) AS avg_rssi,
+                min(rssi) AS min_rssi,
+                max(rssi) AS max_rssi,
+                avg(distance_nm) AS avg_distance,
+                max(distance_nm) AS max_distance,
+                count(distinct icao_hex) AS unique_aircraft
+            FROM aircraft_sightings
+            WHERE timestamp > :cutoff
+                AND track IS NOT NULL
+                AND distance_nm IS NOT NULL
+            GROUP BY floor(track / 10) * 10
+            ORDER BY bearing_sector
+        """)
+        bearing_query = bearing_sql.bindparams(cutoff=cutoff)
 
     result = await db_execute_safe(db, bearing_query)
 
@@ -1250,9 +1266,9 @@ async def get_antenna_polar_data(
     sectors_with_data = 0
 
     if result:
-        for row in result:
-            sector = int(row.bearing_sector) if row.bearing_sector is not None else 0
-            count = row.count or 0
+        for row in result.mappings():
+            sector = int(row['bearing_sector']) if row['bearing_sector'] is not None else 0
+            count = row['count'] or 0
             total_count += count
             if count > 0:
                 sectors_with_data += 1
@@ -1261,12 +1277,12 @@ async def get_antenna_polar_data(
                 "bearing_start": sector,
                 "bearing_end": (sector + 10) % 360,
                 "count": count,
-                "avg_rssi": round(row.avg_rssi, 1) if row.avg_rssi else None,
-                "min_rssi": round(row.min_rssi, 1) if row.min_rssi else None,
-                "max_rssi": round(row.max_rssi, 1) if row.max_rssi else None,
-                "avg_distance_nm": round(row.avg_distance, 1) if row.avg_distance else None,
-                "max_distance_nm": round(row.max_distance, 1) if row.max_distance else None,
-                "unique_aircraft": row.unique_aircraft or 0,
+                "avg_rssi": round(float(row['avg_rssi']), 1) if row['avg_rssi'] else None,
+                "min_rssi": round(float(row['min_rssi']), 1) if row['min_rssi'] else None,
+                "max_rssi": round(float(row['max_rssi']), 1) if row['max_rssi'] else None,
+                "avg_distance_nm": round(float(row['avg_distance']), 1) if row['avg_distance'] else None,
+                "max_distance_nm": round(float(row['max_distance']), 1) if row['max_distance'] else None,
+                "unique_aircraft": row['unique_aircraft'] or 0,
             })
 
     # Fill in missing sectors with zero data
