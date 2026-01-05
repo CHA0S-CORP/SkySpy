@@ -85,6 +85,7 @@ export function useSocketIO(enabled, apiBase, topics = 'all') {
   const [filteredStats, setFilteredStats] = useState(null);
   const [safetyEvents, setSafetyEvents] = useState([]);
   const [airspaceData, setAirspaceData] = useState({ advisories: [], boundaries: [] });
+  const [antennaAnalytics, setAntennaAnalytics] = useState(null);
   const socketRef = useRef(null);
   const mountedRef = useRef(true);
   const statsFiltersRef = useRef(null);
@@ -292,6 +293,13 @@ export function useSocketIO(enabled, apiBase, topics = 'all') {
       }
     });
 
+    // Antenna analytics events (periodic broadcast from server)
+    socket.on('antenna:analytics', (data) => {
+      if (data) {
+        setAntennaAnalytics(data);
+      }
+    });
+
     // Request/response events
     socket.on('response', (data) => {
       if (data.request_id && pendingRequests.current.has(data.request_id)) {
@@ -470,6 +478,7 @@ export function useSocketIO(enabled, apiBase, topics = 'all') {
     filteredStats,
     safetyEvents,
     airspaceData,
+    antennaAnalytics,
 
     // Request/response methods
     request,

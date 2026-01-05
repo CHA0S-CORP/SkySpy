@@ -1860,5 +1860,41 @@ async def fetch_requested_data(request_type: str, params: dict, db) -> dict:
             "timestamp": datetime.utcnow().isoformat() + "Z"
         }
 
+    # =========================================================================
+    # Antenna Analytics Endpoints
+    # =========================================================================
+
+    elif request_type == "antenna-polar":
+        # Polar coverage data for antenna diagram (from cache)
+        from app.services.antenna_analytics import get_cached_polar
+        result = get_cached_polar()
+        if result is None:
+            return {"error": "Antenna analytics not yet calculated"}
+        return result
+
+    elif request_type == "antenna-rssi":
+        # RSSI vs distance data for scatter plot (from cache)
+        from app.services.antenna_analytics import get_cached_rssi
+        result = get_cached_rssi()
+        if result is None:
+            return {"error": "Antenna analytics not yet calculated"}
+        return result
+
+    elif request_type == "antenna-summary":
+        # Antenna performance summary (from cache)
+        from app.services.antenna_analytics import get_cached_summary
+        result = get_cached_summary()
+        if result is None:
+            return {"error": "Antenna analytics not yet calculated"}
+        return result
+
+    elif request_type == "antenna-analytics":
+        # All antenna analytics data (from cache)
+        from app.services.antenna_analytics import get_cached_data
+        result = get_cached_data()
+        if result.get("polar") is None:
+            return {"error": "Antenna analytics not yet calculated"}
+        return result
+
     else:
         return {"error": f"Unknown request type: {request_type}"}

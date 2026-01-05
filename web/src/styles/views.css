@@ -3742,6 +3742,121 @@
   color: var(--text-dim);
 }
 
+/* Real Polar Plot Styles */
+.polar-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.polar-axis-minor {
+  stroke: rgba(163, 113, 247, 0.1);
+  stroke-width: 1;
+  stroke-dasharray: 2, 4;
+}
+
+.polar-pattern-count {
+  fill: rgba(0, 200, 255, 0.15);
+  stroke: var(--accent-cyan);
+  stroke-width: 1.5;
+  opacity: 0.8;
+}
+
+.polar-pattern-distance {
+  fill: rgba(163, 113, 247, 0.1);
+  stroke: var(--accent-purple);
+  stroke-width: 1.5;
+  stroke-dasharray: 4, 2;
+  opacity: 0.6;
+}
+
+.polar-legend {
+  display: flex;
+  gap: 12px;
+  font-size: 9px;
+  color: var(--text-dim);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legend-dot.count {
+  background: var(--accent-cyan);
+  opacity: 0.8;
+}
+
+.legend-dot.distance {
+  background: var(--accent-purple);
+  opacity: 0.6;
+}
+
+.polar-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* Real RSSI Scatter Styles */
+.scatter-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.scatter-grid {
+  stroke: rgba(163, 113, 247, 0.08);
+  stroke-width: 1;
+  stroke-dasharray: 2, 4;
+}
+
+.scatter-point {
+  fill: var(--accent-purple);
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.scatter-point:hover {
+  opacity: 1;
+}
+
+.scatter-trend {
+  stroke: var(--accent-cyan);
+  stroke-width: 1.5;
+  opacity: 0.8;
+}
+
+.trend-interpretation {
+  font-size: 10px;
+  color: var(--accent-cyan);
+  font-weight: 500;
+}
+
+.scatter-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 9px;
+  color: var(--text-dim);
+}
+
+/* Badge variant for live data */
+.nerd-badge.live {
+  background: rgba(0, 200, 255, 0.15);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(0, 200, 255, 0.3);
+}
+
 /* ============================================================================
    Right Sidebar - System & Safety Cards
    ============================================================================ */

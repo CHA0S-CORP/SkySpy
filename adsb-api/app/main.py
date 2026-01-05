@@ -52,6 +52,7 @@ from app.services import external_db
 from app.services import airspace as airspace_service
 from app.services import audio as audio_service
 from app.services import geodata as geodata_service
+from app.services import antenna_analytics
 from app.routers import aircraft, map, history, alerts, safety, notifications, system, aviation, airframe, acars, audio
 
 logging.basicConfig(level=logging.INFO)
@@ -774,6 +775,10 @@ async def lifespan(app: FastAPI):
     geodata_task = await geodata_service.start_refresh_task(AsyncSessionLocal)
     logger.info("Geographic data refresh service started (daily refresh)")
 
+    # Start antenna analytics refresh service (calculates and caches antenna metrics)
+    antenna_task = await antenna_analytics.start_refresh_task(AsyncSessionLocal)
+    logger.info("Antenna analytics service started (5min refresh)")
+
     # Start audio transcription queue if enabled
     transcription_task = None
     logger.info(f"Transcription config: enabled={settings.transcription_enabled}, whisper={settings.whisper_enabled}, url={settings.transcription_service_url}")
@@ -842,6 +847,9 @@ async def lifespan(app: FastAPI):
 
     # Stop geographic data refresh service
     await geodata_service.stop_refresh_task()
+
+    # Stop antenna analytics refresh service
+    await antenna_analytics.stop_refresh_task()
 
     # Stop ACARS service
     await acars_service.stop()

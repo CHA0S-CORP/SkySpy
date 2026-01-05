@@ -291,39 +291,87 @@ function SafetyAlertsSummary({ safetyStats, timeRange }) {
 }
 
 /**
- * PolarPlotPlaceholder - Placeholder for antenna reception diagram
+ * PolarPlot - Antenna reception polar diagram with real data
  */
-function PolarPlotPlaceholder() {
+function PolarPlot({ data, loading }) {
+  const bearingData = data?.bearing_data || [];
+  const summary = data?.summary || {};
+
+  // Find max values for normalization
+  const maxCount = Math.max(...bearingData.map(d => d.count || 0), 1);
+  const maxDistance = Math.max(...bearingData.map(d => d.max_distance_nm || 0), 1);
+
+  // Generate polar path from bearing data
+  const generatePolarPath = (valueKey, maxValue) => {
+    if (!bearingData.length) return '';
+
+    const cx = 100, cy = 100, maxR = 75;
+    const points = bearingData.map(sector => {
+      const value = sector[valueKey] || 0;
+      const normalizedR = (value / maxValue) * maxR;
+      const angle = ((sector.bearing_start + 5) - 90) * (Math.PI / 180); // Center of sector, -90 to start at N
+      const x = cx + normalizedR * Math.cos(angle);
+      const y = cy + normalizedR * Math.sin(angle);
+      return `${x},${y}`;
+    });
+
+    // Close the path by returning to start
+    return `M${points[0]} ${points.slice(1).map(p => `L${p}`).join(' ')} Z`;
+  };
+
+  const countPath = generatePolarPath('count', maxCount);
+  const distancePath = generatePolarPath('max_distance_nm', maxDistance);
+
   return (
     <div className="nerd-stats-card polar-plot">
       <div className="nerd-stats-header">
         <Navigation size={16} />
         <span>Antenna Coverage</span>
-        <span className="nerd-badge">Coming Soon</span>
+        {summary.coverage_pct != null && (
+          <span className="nerd-badge live">{summary.coverage_pct}% coverage</span>
+        )}
       </div>
-      <div className="polar-placeholder">
+      <div className="polar-content">
         <svg viewBox="0 0 200 200" className="polar-svg">
           {/* Concentric circles */}
-          {[20, 40, 60, 80].map(r => (
+          {[20, 40, 60, 75].map(r => (
             <circle key={r} cx="100" cy="100" r={r} className="polar-ring" />
           ))}
           {/* Cardinal directions */}
-          <line x1="100" y1="20" x2="100" y2="180" className="polar-axis" />
-          <line x1="20" y1="100" x2="180" y2="100" className="polar-axis" />
+          <line x1="100" y1="25" x2="100" y2="175" className="polar-axis" />
+          <line x1="25" y1="100" x2="175" y2="100" className="polar-axis" />
+          {/* Diagonal axes */}
+          <line x1="47" y1="47" x2="153" y2="153" className="polar-axis-minor" />
+          <line x1="153" y1="47" x2="47" y2="153" className="polar-axis-minor" />
           {/* Labels */}
-          <text x="100" y="12" className="polar-label">N</text>
-          <text x="100" y="195" className="polar-label">S</text>
-          <text x="8" y="104" className="polar-label">W</text>
-          <text x="188" y="104" className="polar-label">E</text>
-          {/* Placeholder reception pattern */}
-          <path
-            d="M100,30 Q160,60 170,100 Q160,140 100,170 Q40,140 30,100 Q40,60 100,30"
-            className="polar-pattern"
-          />
+          <text x="100" y="15" className="polar-label">N</text>
+          <text x="100" y="192" className="polar-label">S</text>
+          <text x="10" y="104" className="polar-label">W</text>
+          <text x="186" y="104" className="polar-label">E</text>
+          {/* Distance pattern (outer) */}
+          {distancePath && (
+            <path d={distancePath} className="polar-pattern-distance" />
+          )}
+          {/* Count pattern (inner) */}
+          {countPath && (
+            <path d={countPath} className="polar-pattern-count" />
+          )}
         </svg>
         <div className="polar-info">
-          <span>Polar diagram showing antenna reception pattern</span>
-          <span>Helps identify obstructions and optimize placement</span>
+          <div className="polar-legend">
+            <span className="legend-item">
+              <span className="legend-dot count"></span>
+              Reception count
+            </span>
+            <span className="legend-item">
+              <span className="legend-dot distance"></span>
+              Max range
+            </span>
+          </div>
+          <div className="polar-stats">
+            <span>{summary.total_sightings?.toLocaleString() || 0} sightings</span>
+            <span>{summary.sectors_with_data || 0}/36 sectors</span>
+          </div>
         </div>
       </div>
     </div>
@@ -331,37 +379,121 @@ function PolarPlotPlaceholder() {
 }
 
 /**
- * RSSIScatterPlaceholder - Placeholder for RSSI vs Distance chart
+ * RSSIScatter - RSSI vs Distance scatter plot with real data
  */
-function RSSIScatterPlaceholder() {
+function RSSIScatter({ data, loading }) {
+  const scatterData = data?.scatter_data || [];
+  const bandStats = data?.band_statistics || [];
+  const trendLine = data?.trend_line;
+  const overallStats = data?.overall_statistics || {};
+
+  // Chart dimensions
+  const width = 200, height = 120;
+  const margin = { top: 10, right: 10, bottom: 20, left: 35 };
+  const plotWidth = width - margin.left - margin.right;
+  const plotHeight = height - margin.top - margin.bottom;
+
+  // Calculate scales from data
+  const distances = scatterData.map(d => d.distance_nm);
+  const rssis = scatterData.map(d => d.rssi);
+
+  const minDist = Math.min(...distances, 0);
+  const maxDist = Math.max(...distances, 200);
+  const minRssi = Math.min(...rssis, -30);
+  const maxRssi = Math.max(...rssis, 0);
+
+  // Scale functions
+  const xScale = (d) => margin.left + ((d - minDist) / (maxDist - minDist || 1)) * plotWidth;
+  const yScale = (r) => margin.top + plotHeight - ((r - minRssi) / (maxRssi - minRssi || 1)) * plotHeight;
+
+  // Generate trend line points
+  let trendLinePoints = null;
+  if (trendLine && trendLine.slope != null && trendLine.intercept != null) {
+    const x1 = minDist;
+    const x2 = maxDist;
+    const y1 = trendLine.slope * x1 + trendLine.intercept;
+    const y2 = trendLine.slope * x2 + trendLine.intercept;
+    trendLinePoints = {
+      x1: xScale(x1),
+      y1: yScale(y1),
+      x2: xScale(x2),
+      y2: yScale(y2)
+    };
+  }
+
   return (
     <div className="nerd-stats-card rssi-scatter">
       <div className="nerd-stats-header">
         <Signal size={16} />
         <span>Signal vs Distance</span>
-        <span className="nerd-badge">Coming Soon</span>
+        {overallStats.avg_rssi != null && (
+          <span className="nerd-badge live">Avg {overallStats.avg_rssi} dB</span>
+        )}
       </div>
-      <div className="scatter-placeholder">
-        <svg viewBox="0 0 200 120" className="scatter-svg">
+      <div className="scatter-content">
+        <svg viewBox={`0 0 ${width} ${height}`} className="scatter-svg">
           {/* Axes */}
-          <line x1="30" y1="100" x2="190" y2="100" className="scatter-axis" />
-          <line x1="30" y1="10" x2="30" y2="100" className="scatter-axis" />
+          <line
+            x1={margin.left}
+            y1={margin.top + plotHeight}
+            x2={margin.left + plotWidth}
+            y2={margin.top + plotHeight}
+            className="scatter-axis"
+          />
+          <line
+            x1={margin.left}
+            y1={margin.top}
+            x2={margin.left}
+            y2={margin.top + plotHeight}
+            className="scatter-axis"
+          />
           {/* Axis labels */}
-          <text x="110" y="115" className="scatter-label">Distance (nm)</text>
-          <text x="10" y="55" className="scatter-label-y">RSSI</text>
-          {/* Placeholder data points */}
-          {[
-            [40, 30], [55, 35], [70, 45], [85, 50], [100, 55],
-            [115, 60], [130, 70], [145, 75], [160, 85], [175, 90]
-          ].map(([x, y], i) => (
-            <circle key={i} cx={x} cy={y} r="3" className="scatter-point" />
+          <text x={width / 2} y={height - 2} className="scatter-label">Distance (nm)</text>
+          <text x={5} y={height / 2} className="scatter-label-y" transform={`rotate(-90, 8, ${height / 2})`}>RSSI (dB)</text>
+          {/* Grid lines */}
+          {[0.25, 0.5, 0.75].map(pct => (
+            <line
+              key={`h-${pct}`}
+              x1={margin.left}
+              y1={margin.top + plotHeight * pct}
+              x2={margin.left + plotWidth}
+              y2={margin.top + plotHeight * pct}
+              className="scatter-grid"
+            />
           ))}
-          {/* Trend line placeholder */}
-          <line x1="40" y1="30" x2="175" y2="90" className="scatter-trend" />
+          {/* Trend line */}
+          {trendLinePoints && (
+            <line
+              x1={trendLinePoints.x1}
+              y1={trendLinePoints.y1}
+              x2={trendLinePoints.x2}
+              y2={trendLinePoints.y2}
+              className="scatter-trend"
+            />
+          )}
+          {/* Data points */}
+          {scatterData.slice(0, 200).map((point, i) => (
+            <circle
+              key={i}
+              cx={xScale(point.distance_nm)}
+              cy={yScale(point.rssi)}
+              r="2"
+              className="scatter-point"
+            />
+          ))}
         </svg>
         <div className="scatter-info">
-          <span>Signal strength correlation with distance</span>
-          <span>Helps diagnose antenna and SDR performance</span>
+          {trendLine?.interpretation ? (
+            <span className="trend-interpretation">{trendLine.interpretation}</span>
+          ) : (
+            <span>Signal strength vs distance correlation</span>
+          )}
+          <div className="scatter-stats">
+            <span>{scatterData.length} samples</span>
+            {bandStats.length > 0 && (
+              <span>Best: {bandStats[0]?.band}</span>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -432,7 +564,7 @@ function LiveSparkline({ data, valueKey, color, height = 60, label, currentValue
 // Main StatsView Component - Bento Grid Layout
 // ============================================================================
 
-export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, aircraft: wsAircraft, stats: wsStats }) {
+export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, aircraft: wsAircraft, stats: wsStats, antennaAnalytics }) {
   // Filter state
   const [timeRange, setTimeRange] = useState('24h');
   const [showMilitaryOnly, setShowMilitaryOnly] = useState(false);
@@ -1048,7 +1180,7 @@ export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, a
             </div>
           )}
 
-          {/* Nerd Stats Section */}
+          {/* Antenna Analytics Section */}
           <div className="nerd-stats-section">
             <div className="section-header">
               <BarChart3 size={16} />
@@ -1056,8 +1188,8 @@ export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, a
               <span className="section-badge beta">Beta</span>
             </div>
             <div className="nerd-stats-grid">
-              <PolarPlotPlaceholder />
-              <RSSIScatterPlaceholder />
+              <PolarPlot data={antennaAnalytics?.polar} />
+              <RSSIScatter data={antennaAnalytics?.rssi} />
             </div>
           </div>
 

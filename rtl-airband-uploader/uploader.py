@@ -442,6 +442,20 @@ def process_file(filepath: Path) -> bool:
         cleanup_files(filepath)
         return True
 
+    # Fallback: If duration couldn't be read, estimate from file size
+    # MP3 at ~32kbps (typical for voice) = ~4000 bytes/second
+    # Be conservative: assume 24kbps = ~3000 bytes/second
+    if duration is None:
+        estimated_duration = metadata.file_size / 3000.0
+        if estimated_duration < MIN_DURATION_SECONDS:
+            UPLOADS_DISCARDED.labels(channel=channel, reason="too_short_estimated").inc()
+            logger.info(
+                f"Discarding short transmission (estimated): {filepath.name} "
+                f"(~{estimated_duration:.2f}s < {MIN_DURATION_SECONDS}s min, {metadata.file_size} bytes)"
+            )
+            cleanup_files(filepath)
+            return True
+
     # Save metadata backup
     meta_path = filepath.with_suffix(".meta")
     if not meta_path.exists():

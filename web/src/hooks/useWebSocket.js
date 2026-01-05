@@ -75,6 +75,7 @@ export function useWebSocket(enabled, apiBase, topics = 'all') {
   const [safetyEvents, setSafetyEvents] = useState([]);
   const [acarsMessages, setAcarsMessages] = useState([]);
   const [airspaceData, setAirspaceData] = useState({ advisories: [], boundaries: [] });
+  const [antennaAnalytics, setAntennaAnalytics] = useState(null);
   const socketRef = useRef(null);
   const mountedRef = useRef(true);
   const pendingRequests = useRef(new Map());
@@ -300,6 +301,13 @@ export function useWebSocket(enabled, apiBase, topics = 'all') {
       }
     });
 
+    // Antenna analytics (periodic broadcast from server)
+    socket.on('antenna:analytics', (data) => {
+      if (data) {
+        setAntennaAnalytics(data);
+      }
+    });
+
     // Request/Response pattern - backend emits 'response' and 'error' events
     socket.on('response', (data) => {
       if (data?.request_id && pendingRequests.current.has(data.request_id)) {
@@ -428,6 +436,7 @@ export function useWebSocket(enabled, apiBase, topics = 'all') {
     safetyEvents,
     acarsMessages,
     airspaceData,
+    antennaAnalytics,
 
     // Request/response methods
     request,

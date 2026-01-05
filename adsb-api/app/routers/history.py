@@ -1172,3 +1172,414 @@ async def get_correlation_analytics(
         },
         "time_range_hours": hours,
     }
+
+
+# ============================================================================
+# Antenna Analytics Endpoints
+# ============================================================================
+
+@router.get(
+    "/analytics/antenna/polar",
+    summary="Get Antenna Polar Coverage Data",
+    description="""
+Get antenna reception coverage by bearing (polar diagram data).
+
+Returns signal strength and reception counts grouped by bearing (0-360 degrees),
+allowing visualization of antenna directionality and reception patterns.
+
+**Data:**
+- **bearing_data**: Reception statistics per bearing sector (36 sectors of 10° each)
+- **max_distance_by_bearing**: Furthest reception by bearing
+- **avg_rssi_by_bearing**: Average signal strength by bearing
+    """,
+    responses={
+        200: {
+            "description": "Polar coverage data",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "bearing_data": [
+                            {"bearing_start": 0, "bearing_end": 10, "count": 150, "avg_rssi": -12.5, "max_distance_nm": 125.3}
+                        ],
+                        "summary": {"total_sightings": 5000, "coverage_pct": 95.5}
+                    }
+                }
+            }
+        }
+    }
+)
+async def get_antenna_polar_data(
+    hours: int = Query(24, ge=1, le=168, description="Time range in hours"),
+    min_distance: Optional[float] = Query(None, description="Minimum distance filter (nm)"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get antenna polar coverage data for polar diagram visualization."""
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+
+    # Build conditions
+    conditions = [
+        AircraftSighting.timestamp > cutoff,
+        AircraftSighting.track.isnot(None),
+        AircraftSighting.distance_nm.isnot(None),
+    ]
+    if min_distance:
+        conditions.append(AircraftSighting.distance_nm >= min_distance)
+
+    # Query for bearing-grouped data (36 sectors of 10 degrees each)
+    # Track represents the bearing FROM the receiver TO the aircraft
+    bearing_query = (
+        select(
+            (func.floor(AircraftSighting.track / 10) * 10).label('bearing_sector'),
+            func.count(AircraftSighting.id).label('count'),
+            func.avg(AircraftSighting.rssi).label('avg_rssi'),
+            func.min(AircraftSighting.rssi).label('min_rssi'),
+            func.max(AircraftSighting.rssi).label('max_rssi'),
+            func.avg(AircraftSighting.distance_nm).label('avg_distance'),
+            func.max(AircraftSighting.distance_nm).label('max_distance'),
+            func.count(func.distinct(AircraftSighting.icao_hex)).label('unique_aircraft'),
+        )
+        .where(and_(*conditions))
+        .group_by(func.floor(AircraftSighting.track / 10) * 10)
+        .order_by(func.floor(AircraftSighting.track / 10) * 10)
+    )
+
+    result = await db_execute_safe(db, bearing_query)
+
+    bearing_data = []
+    total_count = 0
+    sectors_with_data = 0
+
+    if result:
+        for row in result:
+            sector = int(row.bearing_sector) if row.bearing_sector is not None else 0
+            count = row.count or 0
+            total_count += count
+            if count > 0:
+                sectors_with_data += 1
+
+            bearing_data.append({
+                "bearing_start": sector,
+                "bearing_end": (sector + 10) % 360,
+                "count": count,
+                "avg_rssi": round(row.avg_rssi, 1) if row.avg_rssi else None,
+                "min_rssi": round(row.min_rssi, 1) if row.min_rssi else None,
+                "max_rssi": round(row.max_rssi, 1) if row.max_rssi else None,
+                "avg_distance_nm": round(row.avg_distance, 1) if row.avg_distance else None,
+                "max_distance_nm": round(row.max_distance, 1) if row.max_distance else None,
+                "unique_aircraft": row.unique_aircraft or 0,
+            })
+
+    # Fill in missing sectors with zero data
+    existing_sectors = {d['bearing_start'] for d in bearing_data}
+    for sector in range(0, 360, 10):
+        if sector not in existing_sectors:
+            bearing_data.append({
+                "bearing_start": sector,
+                "bearing_end": (sector + 10) % 360,
+                "count": 0,
+                "avg_rssi": None,
+                "min_rssi": None,
+                "max_rssi": None,
+                "avg_distance_nm": None,
+                "max_distance_nm": None,
+                "unique_aircraft": 0,
+            })
+
+    # Sort by bearing
+    bearing_data.sort(key=lambda x: x['bearing_start'])
+
+    return {
+        "bearing_data": bearing_data,
+        "summary": {
+            "total_sightings": total_count,
+            "sectors_with_data": sectors_with_data,
+            "coverage_pct": round((sectors_with_data / 36) * 100, 1),
+        },
+        "time_range_hours": hours,
+    }
+
+
+@router.get(
+    "/analytics/antenna/rssi",
+    summary="Get RSSI vs Distance Data",
+    description="""
+Get signal strength (RSSI) correlation with distance.
+
+Returns data points showing how signal strength varies with distance,
+useful for diagnosing antenna and SDR performance.
+
+**Data:**
+- **scatter_data**: Individual data points (sampled for performance)
+- **band_statistics**: Aggregated statistics by distance bands
+- **overall_statistics**: Overall RSSI statistics
+    """,
+    responses={
+        200: {
+            "description": "RSSI vs distance data",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "scatter_data": [
+                            {"distance_nm": 25.3, "rssi": -8.5, "altitude": 35000}
+                        ],
+                        "band_statistics": [
+                            {"band": "0-25nm", "avg_rssi": -5.2, "count": 500}
+                        ]
+                    }
+                }
+            }
+        }
+    }
+)
+async def get_rssi_distance_data(
+    hours: int = Query(24, ge=1, le=168, description="Time range in hours"),
+    sample_size: int = Query(500, ge=100, le=2000, description="Max scatter points to return"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get RSSI vs distance correlation data for scatter plot visualization."""
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+
+    # Build conditions
+    conditions = [
+        AircraftSighting.timestamp > cutoff,
+        AircraftSighting.rssi.isnot(None),
+        AircraftSighting.distance_nm.isnot(None),
+        AircraftSighting.distance_nm > 0,
+    ]
+
+    # Get sampled scatter data points
+    # Using a simple sampling approach: order by id and take every Nth record
+    scatter_query = (
+        select(
+            AircraftSighting.distance_nm,
+            AircraftSighting.rssi,
+            AircraftSighting.altitude_baro,
+            AircraftSighting.icao_hex,
+        )
+        .where(and_(*conditions))
+        .order_by(func.random())
+        .limit(sample_size)
+    )
+
+    scatter_result = await db_execute_safe(db, scatter_query)
+
+    scatter_data = []
+    if scatter_result:
+        for row in scatter_result:
+            scatter_data.append({
+                "distance_nm": round(row.distance_nm, 1),
+                "rssi": round(row.rssi, 1),
+                "altitude": row.altitude_baro,
+                "icao": row.icao_hex,
+            })
+
+    # Get aggregated statistics by distance bands
+    band_query = (
+        select(
+            case(
+                (AircraftSighting.distance_nm < 25, '0-25nm'),
+                (AircraftSighting.distance_nm < 50, '25-50nm'),
+                (AircraftSighting.distance_nm < 75, '50-75nm'),
+                (AircraftSighting.distance_nm < 100, '75-100nm'),
+                (AircraftSighting.distance_nm < 150, '100-150nm'),
+                else_='150+nm'
+            ).label('distance_band'),
+            func.count(AircraftSighting.id).label('count'),
+            func.avg(AircraftSighting.rssi).label('avg_rssi'),
+            func.min(AircraftSighting.rssi).label('min_rssi'),
+            func.max(AircraftSighting.rssi).label('max_rssi'),
+            func.avg(AircraftSighting.distance_nm).label('avg_distance'),
+        )
+        .where(and_(*conditions))
+        .group_by('distance_band')
+    )
+
+    band_result = await db_execute_safe(db, band_query)
+
+    band_statistics = []
+    total_count = 0
+    all_rssi = []
+
+    if band_result:
+        for row in band_result:
+            count = row.count or 0
+            total_count += count
+            if row.avg_rssi:
+                all_rssi.extend([row.avg_rssi] * min(count, 100))  # Weighted approx
+
+            band_statistics.append({
+                "band": row.distance_band,
+                "count": count,
+                "avg_rssi": round(row.avg_rssi, 1) if row.avg_rssi else None,
+                "min_rssi": round(row.min_rssi, 1) if row.min_rssi else None,
+                "max_rssi": round(row.max_rssi, 1) if row.max_rssi else None,
+                "avg_distance_nm": round(row.avg_distance, 1) if row.avg_distance else None,
+            })
+
+    # Sort bands in order
+    band_order = ['0-25nm', '25-50nm', '50-75nm', '75-100nm', '100-150nm', '150+nm']
+    band_statistics.sort(key=lambda x: band_order.index(x['band']) if x['band'] in band_order else 99)
+
+    # Calculate overall statistics
+    overall_stats = {}
+    if all_rssi:
+        overall_stats = {
+            "count": total_count,
+            "avg_rssi": round(statistics.mean(all_rssi), 1),
+            "median_rssi": round(statistics.median(all_rssi), 1),
+        }
+
+    # Calculate linear regression trend line (simple least squares)
+    trend_line = None
+    if len(scatter_data) > 10:
+        distances = [d['distance_nm'] for d in scatter_data]
+        rssis = [d['rssi'] for d in scatter_data]
+        n = len(distances)
+        sum_x = sum(distances)
+        sum_y = sum(rssis)
+        sum_xy = sum(d * r for d, r in zip(distances, rssis))
+        sum_x2 = sum(d ** 2 for d in distances)
+
+        denom = n * sum_x2 - sum_x ** 2
+        if denom != 0:
+            slope = (n * sum_xy - sum_x * sum_y) / denom
+            intercept = (sum_y - slope * sum_x) / n
+            trend_line = {
+                "slope": round(slope, 4),
+                "intercept": round(intercept, 2),
+                "interpretation": f"RSSI decreases by {abs(round(slope * 10, 2))} dB per 10nm" if slope < 0 else f"RSSI increases by {round(slope * 10, 2)} dB per 10nm"
+            }
+
+    return {
+        "scatter_data": scatter_data,
+        "band_statistics": band_statistics,
+        "overall_statistics": overall_stats,
+        "trend_line": trend_line,
+        "time_range_hours": hours,
+        "sample_size": len(scatter_data),
+    }
+
+
+@router.get(
+    "/analytics/antenna/summary",
+    summary="Get Antenna Performance Summary",
+    description="""
+Get overall antenna performance summary statistics.
+
+Returns key metrics for antenna diagnostics:
+- Reception range statistics
+- Signal strength statistics
+- Coverage analysis
+- Performance over time
+    """,
+    responses={
+        200: {
+            "description": "Antenna performance summary",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "range": {"max_nm": 250.0, "avg_nm": 85.3, "percentile_90": 180.5},
+                        "signal": {"avg_rssi": -10.5, "best_rssi": -2.1},
+                        "coverage": {"sectors_active": 35, "coverage_pct": 97.2}
+                    }
+                }
+            }
+        }
+    }
+)
+async def get_antenna_summary(
+    hours: int = Query(24, ge=1, le=168, description="Time range in hours"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get antenna performance summary statistics."""
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+
+    conditions = [
+        AircraftSighting.timestamp > cutoff,
+        AircraftSighting.distance_nm.isnot(None),
+    ]
+
+    # Get range statistics
+    range_query = (
+        select(
+            func.count(AircraftSighting.id).label('total_sightings'),
+            func.count(func.distinct(AircraftSighting.icao_hex)).label('unique_aircraft'),
+            func.avg(AircraftSighting.distance_nm).label('avg_distance'),
+            func.max(AircraftSighting.distance_nm).label('max_distance'),
+            func.min(AircraftSighting.distance_nm).label('min_distance'),
+        )
+        .where(and_(*conditions))
+    )
+
+    range_result = await db_execute_safe(db, range_query)
+    range_stats = range_result.first() if range_result else None
+
+    # Get RSSI statistics
+    rssi_conditions = conditions + [AircraftSighting.rssi.isnot(None)]
+    rssi_query = (
+        select(
+            func.avg(AircraftSighting.rssi).label('avg_rssi'),
+            func.min(AircraftSighting.rssi).label('min_rssi'),
+            func.max(AircraftSighting.rssi).label('max_rssi'),
+        )
+        .where(and_(*rssi_conditions))
+    )
+
+    rssi_result = await db_execute_safe(db, rssi_query)
+    rssi_stats = rssi_result.first() if rssi_result else None
+
+    # Get coverage by bearing (count of unique sectors with data)
+    coverage_query = (
+        select(
+            func.count(func.distinct(func.floor(AircraftSighting.track / 10))).label('sectors_with_data')
+        )
+        .where(and_(*conditions, AircraftSighting.track.isnot(None)))
+    )
+
+    coverage_result = await db_execute_safe(db, coverage_query)
+    coverage_data = coverage_result.scalar() if coverage_result else 0
+
+    # Get distance percentiles (approximation using subquery)
+    distances = []
+    dist_query = (
+        select(AircraftSighting.distance_nm)
+        .where(and_(*conditions))
+        .order_by(AircraftSighting.distance_nm)
+        .limit(10000)
+    )
+    dist_result = await db_execute_safe(db, dist_query)
+    if dist_result:
+        distances = [row.distance_nm for row in dist_result if row.distance_nm]
+
+    percentiles = {}
+    if distances:
+        sorted_dist = sorted(distances)
+        n = len(sorted_dist)
+        percentiles = {
+            "p50": round(sorted_dist[n // 2], 1),
+            "p75": round(sorted_dist[int(n * 0.75)], 1),
+            "p90": round(sorted_dist[int(n * 0.90)], 1),
+            "p95": round(sorted_dist[int(n * 0.95)], 1),
+        }
+
+    return {
+        "range": {
+            "total_sightings": range_stats.total_sightings if range_stats else 0,
+            "unique_aircraft": range_stats.unique_aircraft if range_stats else 0,
+            "avg_nm": round(range_stats.avg_distance, 1) if range_stats and range_stats.avg_distance else None,
+            "max_nm": round(range_stats.max_distance, 1) if range_stats and range_stats.max_distance else None,
+            "min_nm": round(range_stats.min_distance, 1) if range_stats and range_stats.min_distance else None,
+            **percentiles,
+        },
+        "signal": {
+            "avg_rssi": round(rssi_stats.avg_rssi, 1) if rssi_stats and rssi_stats.avg_rssi else None,
+            "best_rssi": round(rssi_stats.max_rssi, 1) if rssi_stats and rssi_stats.max_rssi else None,
+            "worst_rssi": round(rssi_stats.min_rssi, 1) if rssi_stats and rssi_stats.min_rssi else None,
+        },
+        "coverage": {
+            "sectors_active": coverage_data or 0,
+            "total_sectors": 36,
+            "coverage_pct": round((coverage_data or 0) / 36 * 100, 1),
+        },
+        "time_range_hours": hours,
+    }

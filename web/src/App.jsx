@@ -105,6 +105,7 @@ export default function App() {
     stats,
     safetyEvents,
     acarsMessages,
+    antennaAnalytics,
     request: wsRequest,
     getAirframeError,
     clearAirframeError,
@@ -282,7 +283,7 @@ export default function App() {
             />
           )}
           {activeTab === 'aircraft' && <AircraftList aircraft={aircraft} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} />}
-          {activeTab === 'stats' && <StatsView apiBase={config.apiBaseUrl} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} wsRequest={wsRequest} wsConnected={connected} aircraft={aircraft} stats={stats} />}
+          {activeTab === 'stats' && <StatsView apiBase={config.apiBaseUrl} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} wsRequest={wsRequest} wsConnected={connected} aircraft={aircraft} stats={stats} antennaAnalytics={antennaAnalytics} />}
           {activeTab === 'history' && (
             <HistoryView
               apiBase={config.apiBaseUrl}

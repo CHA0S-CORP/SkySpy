@@ -752,6 +752,21 @@ class SocketIOManager:
             'timestamp': datetime.utcnow().isoformat() + 'Z'
         })
 
+    async def broadcast_antenna_analytics(self, data: dict):
+        """
+        Broadcast antenna analytics update to stats subscribers.
+
+        Args:
+            data: Antenna analytics data containing polar, rssi, and summary
+        """
+        await self.broadcast_to_room('stats', 'antenna:analytics', {
+            'polar': data.get('polar'),
+            'rssi': data.get('rssi'),
+            'summary': data.get('summary'),
+            'last_updated': data.get('last_updated'),
+            'timestamp': datetime.utcnow().isoformat() + 'Z'
+        })
+
     # =========================================================================
     # Status Methods
     # =========================================================================
