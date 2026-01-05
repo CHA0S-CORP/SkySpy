@@ -1537,10 +1537,11 @@ async def process_transcription(
 
         except Exception as e:
             transmission.transcription_status = "failed"
-            transmission.transcription_error = str(e)
+            error_msg = str(e) or repr(e) or type(e).__name__
+            transmission.transcription_error = error_msg
             await db.commit()
             _stats["transcriptions_failed"] += 1
-            logger.error(f"Transcription failed for {transmission_id}: {e}")
+            logger.error(f"Transcription failed for {transmission_id}: {error_msg}")
             return False
 
 
