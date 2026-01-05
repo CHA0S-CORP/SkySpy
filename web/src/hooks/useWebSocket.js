@@ -214,6 +214,13 @@ export function useWebSocket(enabled, apiBase, topics = 'all') {
     });
 
     // Safety events
+    socket.on('safety:snapshot', (data) => {
+      if (data?.events && Array.isArray(data.events)) {
+        console.log('Safety snapshot received:', data.events.length, 'events');
+        setSafetyEvents(data.events.slice(0, 100));
+      }
+    });
+
     socket.on('safety:event', (data) => {
       if (data) {
         console.log('Socket.IO safety event:', data);

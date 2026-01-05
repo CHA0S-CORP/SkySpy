@@ -15,7 +15,7 @@ import statistics
 from datetime import datetime, timedelta
 from typing import Optional
 
-from sqlalchemy import select, func, and_, case
+from sqlalchemy import select, func, and_, case, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AircraftSighting
@@ -41,34 +41,33 @@ async def calculate_polar_data(db: AsyncSession, hours: int = 24) -> dict:
     """Calculate antenna polar coverage data."""
     cutoff = datetime.utcnow() - timedelta(hours=hours)
 
-    conditions = [
-        AircraftSighting.timestamp > cutoff,
-        AircraftSighting.track.isnot(None),
-        AircraftSighting.distance_nm.isnot(None),
-    ]
-
     # Query for bearing-grouped data (36 sectors of 10 degrees each)
-    bearing_query = (
-        select(
-            (func.floor(AircraftSighting.track / 10) * 10).label('bearing_sector'),
-            func.count(AircraftSighting.id).label('count'),
-            func.avg(AircraftSighting.rssi).label('avg_rssi'),
-            func.min(AircraftSighting.rssi).label('min_rssi'),
-            func.max(AircraftSighting.rssi).label('max_rssi'),
-            func.avg(AircraftSighting.distance_nm).label('avg_distance'),
-            func.max(AircraftSighting.distance_nm).label('max_distance'),
-            func.count(func.distinct(AircraftSighting.icao_hex)).label('unique_aircraft'),
-        )
-        .where(and_(*conditions))
-        .group_by(func.floor(AircraftSighting.track / 10) * 10)
-        .order_by(func.floor(AircraftSighting.track / 10) * 10)
-    )
+    # Use raw SQL to avoid PostgreSQL GROUP BY expression parameter issues
+    bearing_sql = text("""
+        SELECT
+            floor(track / 10) * 10 AS bearing_sector,
+            count(id) AS count,
+            avg(rssi) AS avg_rssi,
+            min(rssi) AS min_rssi,
+            max(rssi) AS max_rssi,
+            avg(distance_nm) AS avg_distance,
+            max(distance_nm) AS max_distance,
+            count(distinct icao_hex) AS unique_aircraft
+        FROM aircraft_sightings
+        WHERE timestamp > :cutoff
+            AND track IS NOT NULL
+            AND distance_nm IS NOT NULL
+        GROUP BY floor(track / 10) * 10
+        ORDER BY bearing_sector
+    """)
+    bearing_query = bearing_sql.bindparams(cutoff=cutoff)
 
     try:
         result = await db.execute(bearing_query)
-        rows = result.all()
+        rows = result.mappings().all()
     except Exception as e:
         logger.error(f"Error calculating polar data: {e}")
+        await db.rollback()
         return {"bearing_data": [], "summary": {}}
 
     bearing_data = []
@@ -76,8 +75,8 @@ async def calculate_polar_data(db: AsyncSession, hours: int = 24) -> dict:
     sectors_with_data = 0
 
     for row in rows:
-        sector = int(row.bearing_sector) if row.bearing_sector is not None else 0
-        count = row.count or 0
+        sector = int(row['bearing_sector']) if row['bearing_sector'] is not None else 0
+        count = row['count'] or 0
         total_count += count
         if count > 0:
             sectors_with_data += 1
@@ -86,12 +85,12 @@ async def calculate_polar_data(db: AsyncSession, hours: int = 24) -> dict:
             "bearing_start": sector,
             "bearing_end": (sector + 10) % 360,
             "count": count,
-            "avg_rssi": round(row.avg_rssi, 1) if row.avg_rssi else None,
-            "min_rssi": round(row.min_rssi, 1) if row.min_rssi else None,
-            "max_rssi": round(row.max_rssi, 1) if row.max_rssi else None,
-            "avg_distance_nm": round(row.avg_distance, 1) if row.avg_distance else None,
-            "max_distance_nm": round(row.max_distance, 1) if row.max_distance else None,
-            "unique_aircraft": row.unique_aircraft or 0,
+            "avg_rssi": round(float(row['avg_rssi']), 1) if row['avg_rssi'] else None,
+            "min_rssi": round(float(row['min_rssi']), 1) if row['min_rssi'] else None,
+            "max_rssi": round(float(row['max_rssi']), 1) if row['max_rssi'] else None,
+            "avg_distance_nm": round(float(row['avg_distance']), 1) if row['avg_distance'] else None,
+            "max_distance_nm": round(float(row['max_distance']), 1) if row['max_distance'] else None,
+            "unique_aircraft": row['unique_aircraft'] or 0,
         })
 
     # Fill in missing sectors with zero data
@@ -155,6 +154,7 @@ async def calculate_rssi_data(
         scatter_rows = scatter_result.all()
     except Exception as e:
         logger.error(f"Error fetching scatter data: {e}")
+        await db.rollback()
         scatter_rows = []
 
     scatter_data = []
@@ -192,6 +192,7 @@ async def calculate_rssi_data(
         band_rows = band_result.all()
     except Exception as e:
         logger.error(f"Error fetching band data: {e}")
+        await db.rollback()
         band_rows = []
 
     band_statistics = []
@@ -289,6 +290,7 @@ async def calculate_summary(db: AsyncSession, hours: int = 24) -> dict:
         range_stats = range_result.first()
     except Exception as e:
         logger.error(f"Error fetching range stats: {e}")
+        await db.rollback()
         range_stats = None
 
     # Get RSSI statistics
@@ -307,6 +309,7 @@ async def calculate_summary(db: AsyncSession, hours: int = 24) -> dict:
         rssi_stats = rssi_result.first()
     except Exception as e:
         logger.error(f"Error fetching RSSI stats: {e}")
+        await db.rollback()
         rssi_stats = None
 
     # Get coverage by bearing
@@ -324,6 +327,7 @@ async def calculate_summary(db: AsyncSession, hours: int = 24) -> dict:
         coverage_data = coverage_result.scalar() or 0
     except Exception as e:
         logger.error(f"Error fetching coverage: {e}")
+        await db.rollback()
         coverage_data = 0
 
     # Get distance percentiles
@@ -349,6 +353,7 @@ async def calculate_summary(db: AsyncSession, hours: int = 24) -> dict:
             }
     except Exception as e:
         logger.error(f"Error calculating percentiles: {e}")
+        await db.rollback()
 
     return {
         "range": {

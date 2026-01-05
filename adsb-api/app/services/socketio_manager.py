@@ -22,6 +22,7 @@ Supports Redis for multi-worker deployments.
 - airspace:snapshot - Initial airspace state
 - airspace:advisory - Advisory update
 - airspace:boundary - Boundary update
+- safety:snapshot - Initial active safety events on connect
 - safety:event - Safety event (TCAS, conflicts)
 - alert:triggered - Custom alert matched
 - acars:message - ACARS/VDL2 message
@@ -53,6 +54,7 @@ import socketio
 
 from app.core.config import get_settings
 from app.core.utils import calculate_distance_nm, is_valid_position
+from app.services.safety import safety_monitor
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -265,6 +267,16 @@ class SocketIOManager:
             if 'airspace' in topics or 'all' in topics:
                 if self._last_airspace_state:
                     await self.sio.emit('airspace:snapshot', self._last_airspace_state, room=sid)
+
+            # Send active safety events
+            if 'safety' in topics or 'all' in topics:
+                active_events = safety_monitor.get_active_events(include_acknowledged=True)
+                if active_events:
+                    await self.sio.emit('safety:snapshot', {
+                        'events': active_events,
+                        'count': len(active_events),
+                        'timestamp': datetime.utcnow().isoformat() + 'Z'
+                    }, room=sid)
 
         except Exception as e:
             logger.warning(f"Failed to send initial state to {sid}: {e}")
