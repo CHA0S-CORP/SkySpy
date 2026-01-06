@@ -284,6 +284,33 @@ services:
       retries: 3
       start_period: 5s
 
+  # Mock airband transmission uploader for testing audio pipeline
+  mock-airband-uploader:
+    build:
+      context: ./test/mock-airband-uploader
+      dockerfile: Dockerfile
+    image: ghcr.io/cha0s-corp/rtl-airband-mock:latest
+    profiles: ["dev"]
+    container_name: mock-airband-uploader
+    environment:
+      - SKYSPY_API_URL=http://api:5000
+      - METRICS_PORT=9091
+      - MIN_TRANSMISSION_INTERVAL=5
+      - MAX_TRANSMISSION_INTERVAL=30
+    ports:
+      - "9091:9091"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:9091/metrics', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
 networks:
   test-network:
     driver: bridge
