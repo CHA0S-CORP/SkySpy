@@ -62,13 +62,13 @@ else:
         pool_pre_ping=True,
         pool_recycle=300,  # Recycle every 5 min to avoid stale connections
         pool_size=5,       # Reduced for RPi - PgBouncer handles backend pooling
-        max_overflow=5,    # Allow bursts up to 10 total
+        max_overflow=20,    # Allow bursts up to 10 total
         pool_timeout=30,   # Give PgBouncer time to allocate slots
         connect_args={
             "timeout": 10,
             "command_timeout": 60,
             "server_settings": {
-                "jit": "off",  # Disable JIT for short OLTP queries (saves CPU)
+              
             },
             # CRITICAL for PgBouncer transaction pooling mode
             "statement_cache_size": 0,
