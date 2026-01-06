@@ -55,7 +55,7 @@ RUN ldconfig
 
 COPY adsb-api/pyproject.toml .
 COPY adsb-api/atc-whisper/ ./atc-whisper/
-RUN pip install --no-cache-dir -e ./atc-whisper && pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir ./atc-whisper && pip install --no-cache-dir -e .
 
 # Copy application package
 COPY adsb-api/app/ ./app/
