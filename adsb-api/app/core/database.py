@@ -41,29 +41,38 @@ if async_url.startswith("sqlite"):
         echo=False,
     )
 else:
-    # Optimized for RPi 5 + PgBouncer:
-    # - pool_size=20: RPi5 can easily handle this concurrency. 
-    #                 We need enough local slots to feed PgBouncer.
-    # - max_overflow=20: Allow bursts up to 40 total connections locally.
-    # - statement_cache_size=0: CRITICAL for PgBouncer transaction pooling. 
-    #                           Prevents "prepared statement X does not exist" errors.
-    # - pool_pre_ping=True: Vital to detect if PgBouncer closed a connection.
+    # Optimized for RPi + PgBouncer Transaction Pooling:
+    #
+    # PgBouncer transaction pooling requires special handling:
+    # - statement_cache_size=0: CRITICAL - prepared statements don't work across
+    #   different backend connections that PgBouncer may assign.
+    # - pool_pre_ping=True: Detect if PgBouncer closed a connection.
+    # - prepared_statement_cache_size=0: asyncpg-specific, same reason.
+    #
+    # Connection pool sizing for RPi:
+    # - pool_size=5: Base connections (RPi4/5 memory-conscious)
+    # - max_overflow=5: Allow bursts up to 10 total
+    # - PgBouncer handles the actual PostgreSQL connection pooling,
+    #   so we don't need many local connections.
+    #
+    # For RPi5 with more RAM, you can increase to pool_size=10, max_overflow=10
     engine = create_async_engine(
         async_url,
         echo=False,
         pool_pre_ping=True,
-        pool_recycle=300,  # Recycle every 5 min
-        pool_size=20,      # Increased from 3 for RPi5
-        max_overflow=20,   # Increased from 7
+        pool_recycle=300,  # Recycle every 5 min to avoid stale connections
+        pool_size=5,       # Reduced for RPi - PgBouncer handles backend pooling
+        max_overflow=5,    # Allow bursts up to 10 total
         pool_timeout=30,   # Give PgBouncer time to allocate slots
         connect_args={
             "timeout": 10,
             "command_timeout": 60,
-            # "server_settings": {
-            #     "jit": "off",  # Optimization: Disable JIT for short OLTP queries
-            # },
-            # key fix for pgbouncer compatibility with asyncpg
+            "server_settings": {
+                "jit": "off",  # Disable JIT for short OLTP queries (saves CPU)
+            },
+            # CRITICAL for PgBouncer transaction pooling mode
             "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0,
         },
     )
 

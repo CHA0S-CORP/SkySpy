@@ -16,6 +16,39 @@ from app.core.config import get_settings
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
+# Shared HTTP client with connection pooling for efficiency
+# Limits total connections to reduce memory on RPi
+_http_client: Optional[httpx.AsyncClient] = None
+_http_client_lock = asyncio.Lock()
+
+
+async def get_http_client() -> httpx.AsyncClient:
+    """Get or create the shared HTTP client with connection pooling."""
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        async with _http_client_lock:
+            # Double-check after acquiring lock
+            if _http_client is None or _http_client.is_closed:
+                _http_client = httpx.AsyncClient(
+                    timeout=httpx.Timeout(10.0, connect=5.0),
+                    limits=httpx.Limits(
+                        max_connections=20,  # Total connections (reduced for RPi)
+                        max_keepalive_connections=10,  # Keep-alive pool
+                        keepalive_expiry=30.0,  # Close idle connections after 30s
+                    ),
+                    headers={"User-Agent": "ADS-B-API/2.6 (aircraft-tracker)"},
+                    follow_redirects=True,
+                )
+    return _http_client
+
+
+async def close_http_client():
+    """Close the shared HTTP client. Call during shutdown."""
+    global _http_client
+    if _http_client is not None and not _http_client.is_closed:
+        await _http_client.aclose()
+        _http_client = None
+
 # Rate limiting: track last request time per domain
 _domain_last_request: dict[str, float] = {}
 _domain_rate_limits: dict[str, float] = {
@@ -112,14 +145,17 @@ async def safe_request(
     """
     Make a safe HTTP request with timeout, rate limiting, and 429 handling.
 
+    Uses a shared connection pool for efficiency on RPi.
+
     Features:
     - Per-domain rate limiting to avoid hitting external API rate limits
     - Automatic retry with exponential backoff on 429 responses
     - Respects Retry-After header when provided
+    - Connection pooling via shared httpx.AsyncClient
 
     Args:
         url: The URL to request
-        timeout: Request timeout in seconds
+        timeout: Request timeout in seconds (per-request override)
         max_retries: Maximum retry attempts on 429
         is_upstream: Legacy parameter, no longer used
     """
@@ -132,7 +168,7 @@ async def safe_request(
     backoff_until = _domain_backoff_until.get(domain, 0)
     if now < backoff_until:
         wait_time = backoff_until - now
-        logger.debug(f"Rate limited: {domain} in backoff for {wait_time:.1f}s more")
+        logger.debug("Rate limited: %s in backoff for %.1fs more", domain, wait_time)
         return None
 
     # Apply per-domain rate limiting to avoid hitting external API limits
@@ -146,48 +182,47 @@ async def safe_request(
 
     _domain_last_request[domain] = time.time()
 
+    # Get shared client (connection pooling)
+    client = await get_http_client()
+
     # Make request with retry logic
     for attempt in range(max_retries + 1):
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.get(
-                    url,
-                    headers={"User-Agent": "ADS-B-API/2.6 (aircraft-tracker)"}
-                )
+            response = await client.get(url, timeout=timeout)
 
-                # Handle rate limiting
-                if response.status_code == 429:
-                    # Get retry delay from header or use exponential backoff
-                    retry_after = response.headers.get("Retry-After")
-                    if retry_after:
-                        try:
-                            delay = int(retry_after)
-                        except ValueError:
-                            delay = 60  # Default if header is invalid
-                    else:
-                        delay = min(60, 5 * (2 ** attempt))  # Exponential backoff, max 60s
+            # Handle rate limiting
+            if response.status_code == 429:
+                # Get retry delay from header or use exponential backoff
+                retry_after = response.headers.get("Retry-After")
+                if retry_after:
+                    try:
+                        delay = int(retry_after)
+                    except ValueError:
+                        delay = 60  # Default if header is invalid
+                else:
+                    delay = min(60, 5 * (2 ** attempt))  # Exponential backoff, max 60s
 
-                    logger.warning(f"Rate limited (429) from {domain}, backing off for {delay}s")
-                    _domain_backoff_until[domain] = time.time() + delay
+                logger.warning("Rate limited (429) from %s, backing off for %ds", domain, delay)
+                _domain_backoff_until[domain] = time.time() + delay
 
-                    if attempt < max_retries:
-                        await asyncio.sleep(delay)
-                        continue
-                    return None
+                if attempt < max_retries:
+                    await asyncio.sleep(delay)
+                    continue
+                return None
 
-                response.raise_for_status()
-                return response.json()
+            response.raise_for_status()
+            return response.json()
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429 and attempt < max_retries:
                 delay = min(60, 5 * (2 ** attempt))
-                logger.warning(f"Rate limited (429) from {domain}, retrying in {delay}s")
+                logger.warning("Rate limited (429) from %s, retrying in %ds", domain, delay)
                 await asyncio.sleep(delay)
                 continue
-            logger.debug(f"HTTP error from {domain}: {e.response.status_code}")
+            logger.debug("HTTP error from %s: %d", domain, e.response.status_code)
             return None
         except Exception as e:
-            logger.debug(f"Request failed for {url}: {e}")
+            logger.debug("Request failed for %s: %s", url, e)
             return None
 
     return None

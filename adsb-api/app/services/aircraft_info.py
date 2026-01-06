@@ -37,7 +37,6 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-import httpx
 import sentry_sdk
 from prometheus_client import Counter, Histogram, Gauge
 from sqlalchemy import select
@@ -747,29 +746,27 @@ async def _fetch_photo_from_hexdb(icao_hex: str) -> Optional[dict]:
 
     These are direct image URLs that can be downloaded/cached.
     """
+    from app.core.utils import get_http_client
+
     with sentry_sdk.start_span(op="http.client", description=f"hexdb.io photo {icao_hex}") as span:
         span.set_data("icao_hex", icao_hex)
         try:
             photo_url = f"https://hexdb.io/hex-image?hex={icao_hex.lower()}"
             thumbnail_url = f"https://hexdb.io/hex-image-thumb?hex={icao_hex.lower()}"
 
-            # Verify the image exists with a HEAD request
-            async with httpx.AsyncClient(timeout=10) as client:
-                response = await client.head(
-                    photo_url,
-                    follow_redirects=True,
-                    headers={"User-Agent": "ADS-B-API/2.6 (aircraft-tracker)"}
-                )
-                if response.status_code != 200:
-                    logger.debug(f"hexdb.io photo not found for {icao_hex}: {response.status_code}")
-                    span.set_data("result", "not_found")
-                    return None
+            # Verify the image exists with a HEAD request using shared client
+            client = await get_http_client()
+            response = await client.head(photo_url, timeout=10)
+            if response.status_code != 200:
+                logger.debug("hexdb.io photo not found for %s: %d", icao_hex, response.status_code)
+                span.set_data("result", "not_found")
+                return None
 
-                content_type = response.headers.get("content-type", "")
-                if not content_type.startswith("image/"):
-                    logger.debug(f"hexdb.io non-image response for {icao_hex}: {content_type}")
-                    span.set_data("result", "invalid_content_type")
-                    return None
+            content_type = response.headers.get("content-type", "")
+            if not content_type.startswith("image/"):
+                logger.debug("hexdb.io non-image response for %s: %s", icao_hex, content_type)
+                span.set_data("result", "invalid_content_type")
+                return None
 
             span.set_data("result", "success")
             return {

@@ -9,7 +9,6 @@ import logging
 import os
 import re
 import time
-import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Optional
@@ -46,13 +45,14 @@ from app.services.alerts import check_alerts, store_alert_history
 from app.services.acars import acars_service, store_acars_message
 from app.services.aircraft_info import (
     init_lookup_queue, process_lookup_queue, check_and_queue_new_aircraft,
-    get_seen_aircraft_count, _cleanup_old_rate_limits
+    get_seen_aircraft_count
 )
 from app.services import external_db
 from app.services import airspace as airspace_service
 from app.services import audio as audio_service
 from app.services import geodata as geodata_service
 from app.services import antenna_analytics
+from app.services import stats_cache
 from app.routers import aircraft, map, history, alerts, safety, notifications, system, aviation, airframe, acars, audio
 
 logging.basicConfig(level=logging.INFO)
@@ -126,10 +126,6 @@ ACTIVE_SESSIONS = Gauge(
     "skyspy_api_active_sessions",
     "Number of active aircraft tracking sessions"
 )
-
-# Track DB store timing
-_last_db_store_time = 0
-_db_store_lock = threading.Lock()
 
 # Active session cache
 _active_sessions: dict[str, int] = {}
@@ -379,7 +375,8 @@ async def process_aircraft_data(db: AsyncSession, aircraft_list: list[dict], sou
                 alerts_list = await check_alerts(db, ac, distance_nm)
                 for alert in alerts_list:
                     # Track alerts in Prometheus
-                    ALERTS_TRIGGERED_TOTAL.labels(priority=alert["priority"]).inc()
+                    if settings.prometheus_enabled:
+                        ALERTS_TRIGGERED_TOTAL.labels(priority=alert["priority"]).inc()
 
                     aircraft_data = {
                         "hex": icao,
@@ -460,8 +457,9 @@ async def _store_aircraft_to_db(aircraft_list: list[dict]):
                     process_aircraft_data(db, aircraft_list, "1090"),
                     timeout=timeout_seconds
                 )
-                DB_OPERATION_DURATION.labels(operation="store_aircraft").observe(time.time() - db_start)
-                logger.debug(f"Stored {len(aircraft_list)} aircraft to database")
+                if settings.prometheus_enabled:
+                    DB_OPERATION_DURATION.labels(operation="store_aircraft").observe(time.time() - db_start)
+                logger.debug("Stored %d aircraft to database", len(aircraft_list))
             except asyncio.TimeoutError:
                 logger.warning(f"process_aircraft_data timed out after {timeout_seconds:.1f}s for {len(aircraft_list)} aircraft")
                 await db.rollback()
@@ -485,10 +483,11 @@ async def _run_safety_monitoring(aircraft_list: list[dict]):
         if safety_events:
             async with AsyncSessionLocal() as db:
                 for event in safety_events:
-                    SAFETY_EVENTS_TOTAL.labels(
-                        event_type=event["event_type"],
-                        severity=event["severity"]
-                    ).inc()
+                    if settings.prometheus_enabled:
+                        SAFETY_EVENTS_TOTAL.labels(
+                            event_type=event["event_type"],
+                            severity=event["severity"]
+                        ).inc()
 
                     db_id = await store_safety_event(db, event)
                     if db_id:
@@ -555,7 +554,7 @@ _processing_lock = asyncio.Lock()
 
 async def fetch_and_process_aircraft():
     """Fetch aircraft data and broadcast immediately, then process in background."""
-    global _last_db_store_time, _pending_processing_task
+    global _pending_processing_task
 
     poll_start = time.time()
     all_aircraft = []
@@ -601,16 +600,15 @@ async def fetch_and_process_aircraft():
         all_aircraft.extend(result)
     fetch_time = time.time() - t0
 
-    logger.debug(f"Fetched {aircraft_1090_count} aircraft from 1090MHz")
+    logger.debug("Fetched %d aircraft from 1090MHz", aircraft_1090_count)
 
-    # Update Prometheus gauges for aircraft counts
-    AIRCRAFT_COUNT.labels(source="1090").set(aircraft_1090_count)
-    AIRCRAFT_COUNT.labels(source="978").set(aircraft_978_count)
-    AIRCRAFT_COUNT.labels(source="total").set(len(all_aircraft))
-    ACTIVE_SESSIONS.set(len(_active_sessions))
-
-    # Record poll duration (just the fetch, not processing)
-    AIRCRAFT_POLL_DURATION.observe(time.time() - poll_start)
+    # Update Prometheus gauges for aircraft counts (if enabled)
+    if settings.prometheus_enabled:
+        AIRCRAFT_COUNT.labels(source="1090").set(aircraft_1090_count)
+        AIRCRAFT_COUNT.labels(source="978").set(aircraft_978_count)
+        AIRCRAFT_COUNT.labels(source="total").set(len(all_aircraft))
+        ACTIVE_SESSIONS.set(len(_active_sessions))
+        AIRCRAFT_POLL_DURATION.observe(time.time() - poll_start)
 
     # PRIORITY: Broadcast immediately to clients before any DB/safety processing
     sse_manager = get_sse_manager()
@@ -625,6 +623,9 @@ async def fetch_and_process_aircraft():
         await sio_manager.publish_aircraft_update(all_aircraft)
     sio_time = time.time() - t2
 
+    # Update aircraft stats cache (synchronous, fast - no DB queries)
+    stats_cache.update_aircraft_stats_cache(all_aircraft)
+
     # Log timing breakdown periodically
     total_time = time.time() - poll_start
     if total_time > 0.1:  # Log if poll cycle takes >100ms
@@ -636,10 +637,10 @@ async def fetch_and_process_aircraft():
         if _pending_processing_task is not None and not _pending_processing_task.done():
             logger.debug("Skipping background processing - previous task still running")
         else:
-            # Make a copy of the data for background processing
-            aircraft_copy = [dict(ac) for ac in all_aircraft]
+            # Pass list directly - background processing only reads, doesn't mutate
+            # The list reference is captured at task creation time
             _pending_processing_task = _create_background_task(
-                _process_aircraft_background(aircraft_copy),
+                _process_aircraft_background(all_aircraft),
                 name="aircraft_processing"
             )
 
@@ -665,38 +666,50 @@ async def background_polling_task():
 
 
 async def cleanup_old_sessions():
-    """Clean up stale session references."""
+    """Clean up stale session references using batch query."""
+    if not _active_sessions:
+        return
+
     now = datetime.utcnow()
+    stale_cutoff = now - timedelta(minutes=10)
     stale_keys = []
-    
+
+    # Get all session IDs in one batch query instead of N queries
+    session_ids = list(_active_sessions.values())
+    key_by_id = {v: k for k, v in _active_sessions.items()}
+
     async with AsyncSessionLocal() as db:
-        for k, sid in list(_active_sessions.items()):
-            result = await db.execute(
-                select(AircraftSession).where(AircraftSession.id == sid)
-            )
-            session = result.scalar_one_or_none()
-            if session and session.last_seen < now - timedelta(minutes=10):
-                stale_keys.append(k)
-            elif not session:
-                stale_keys.append(k)
-    
+        result = await db.execute(
+            select(AircraftSession.id, AircraftSession.last_seen)
+            .where(AircraftSession.id.in_(session_ids))
+        )
+        existing_sessions = {row.id: row.last_seen for row in result.fetchall()}
+
+    # Find stale or deleted sessions
+    for sid, key in key_by_id.items():
+        last_seen = existing_sessions.get(sid)
+        if last_seen is None or last_seen < stale_cutoff:
+            stale_keys.append(key)
+
     for k in stale_keys:
         _active_sessions.pop(k, None)
-    
+
     if stale_keys:
-        logger.debug(f"Cleaned up {len(stale_keys)} stale sessions")
+        logger.debug("Cleaned up %d stale sessions", len(stale_keys))
 
 
 async def session_cleanup_task():
     """Background task for cleaning up sessions and rate limit entries."""
+    from app.services.aircraft_info import cleanup_memory_caches
+
     while True:
         await asyncio.sleep(300)  # Every 5 minutes
         try:
             await cleanup_old_sessions()
-            # Clean up old rate limit entries to prevent memory growth
-            _cleanup_old_rate_limits()
+            # Clean up all memory caches to prevent unbounded growth
+            cleanup_memory_caches()
         except Exception as e:
-            logger.error(f"Error cleaning sessions: {e}")
+            logger.error("Error cleaning sessions: %s", e)
 
 
 @asynccontextmanager
@@ -801,6 +814,10 @@ async def lifespan(app: FastAPI):
     antenna_task = await antenna_analytics.start_refresh_task(AsyncSessionLocal)
     logger.info("Antenna analytics service started (5min refresh)")
 
+    # Start stats cache refresh service (history and safety stats)
+    stats_cache_tasks = await stats_cache.start_refresh_tasks(AsyncSessionLocal)
+    logger.info("Stats cache service started (history: 60s, safety: 30s)")
+
     # Start audio transcription queue if enabled
     transcription_task = None
     logger.info(f"Transcription config: enabled={settings.transcription_enabled}, whisper={settings.whisper_enabled}, url={settings.transcription_service_url}")
@@ -873,6 +890,9 @@ async def lifespan(app: FastAPI):
     # Stop antenna analytics refresh service
     await antenna_analytics.stop_refresh_task()
 
+    # Stop stats cache refresh service
+    await stats_cache.stop_refresh_tasks()
+
     # Stop ACARS service
     await acars_service.stop()
 
@@ -885,6 +905,10 @@ async def lifespan(app: FastAPI):
     ws_mgr = get_ws_manager()
     if hasattr(ws_mgr, "stop"):
         await ws_mgr.stop()
+
+    # Close shared HTTP client
+    from app.core import close_http_client
+    await close_http_client()
 
     await close_db()
     logger.info("Shutdown complete")
@@ -1004,10 +1028,11 @@ async def prometheus_metrics_middleware(request: Request, call_next):
 
     start_time = time.time()
     response = await call_next(request)
-    duration = time.time() - start_time
 
-    REQUEST_COUNT.labels(method=method, endpoint=path, status=response.status_code).inc()
-    REQUEST_LATENCY.labels(method=method, endpoint=path).observe(duration)
+    if settings.prometheus_enabled:
+        duration = time.time() - start_time
+        REQUEST_COUNT.labels(method=method, endpoint=path, status=response.status_code).inc()
+        REQUEST_LATENCY.labels(method=method, endpoint=path).observe(duration)
 
     return response
 
@@ -1087,11 +1112,13 @@ async def serve_frontend():
 # Socket.IO handles its own /socket.io path internally
 app.mount("/socket.io", get_socketio_app())
 
-# Mount static files if directory exists
+# Mount static files if directories exist
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
-    app.mount("/assets", StaticFiles(directory=os.path.join(static_dir, "assets")), name="assets")
+    assets_dir = os.path.join(static_dir, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
 
 if __name__ == "__main__":

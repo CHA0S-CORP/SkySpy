@@ -3,7 +3,6 @@ Safety monitoring service for TCAS conflicts and dangerous flight parameters.
 """
 import logging
 import math
-import threading
 import time
 import uuid
 from typing import Optional
@@ -74,8 +73,8 @@ class SafetyMonitor:
         self._event_cooldown: dict[str, float] = {}
         self._active_events: dict[str, dict] = {}  # event_id -> event data
         self._acknowledged_events: set[str] = set()  # Set of acknowledged event IDs
-        self._lock = threading.Lock()
         self._enabled = settings.safety_monitoring_enabled
+        self._last_cleanup = 0.0  # Track last cleanup time to avoid excessive cleanup
     
     @property
     def enabled(self) -> bool:
@@ -107,33 +106,42 @@ class SafetyMonitor:
         self._event_cooldown[key] = time.time()
     
     def _cleanup_old_state(self):
-        """Remove state older than retention period and expired events."""
+        """Remove state older than retention period and expired events.
+
+        Note: This is called frequently but only does work every 5 seconds
+        to reduce CPU overhead.
+        """
         now = time.time()
+
+        # Only cleanup every 5 seconds to reduce overhead
+        if now - self._last_cleanup < 5.0:
+            return
+        self._last_cleanup = now
+
         cutoff = now - self.HISTORY_RETENTION
         event_cutoff = now - self.EVENT_EXPIRY
 
-        with self._lock:
-            # Clean up old aircraft state
-            to_remove = [
-                icao for icao, state in self._aircraft_state.items()
-                if state.get("last_update", 0) < cutoff
-            ]
-            for icao in to_remove:
-                del self._aircraft_state[icao]
+        # Clean up old aircraft state
+        to_remove = [
+            icao for icao, state in self._aircraft_state.items()
+            if state.get("last_update", 0) < cutoff
+        ]
+        for icao in to_remove:
+            del self._aircraft_state[icao]
 
-            # Clean up old cooldowns
-            old_cooldowns = [k for k, v in self._event_cooldown.items() if v < cutoff]
-            for k in old_cooldowns:
-                del self._event_cooldown[k]
+        # Clean up old cooldowns
+        old_cooldowns = [k for k, v in self._event_cooldown.items() if v < cutoff]
+        for k in old_cooldowns:
+            del self._event_cooldown[k]
 
-            # Clean up expired events
-            expired_events = [
-                eid for eid, event in self._active_events.items()
-                if event.get("last_seen", 0) < event_cutoff
-            ]
-            for eid in expired_events:
-                del self._active_events[eid]
-                self._acknowledged_events.discard(eid)
+        # Clean up expired events
+        expired_events = [
+            eid for eid, event in self._active_events.items()
+            if event.get("last_seen", 0) < event_cutoff
+        ]
+        for eid in expired_events:
+            del self._active_events[eid]
+            self._acknowledged_events.discard(eid)
 
     def _generate_event_id(self, event_type: str, icao: str, icao_2: Optional[str] = None) -> str:
         """Generate a stable event ID for deduplication."""
@@ -143,7 +151,11 @@ class SafetyMonitor:
         return f"{event_type}:{icao}"
 
     def _store_event(self, event: dict) -> dict:
-        """Store an event and return it with ID and metadata."""
+        """Store an event and return it with ID and metadata.
+
+        Note: This is called from update_aircraft which runs in a single async task,
+        so no lock is needed for thread safety.
+        """
         event_id = self._generate_event_id(
             event["event_type"],
             event["icao"],
@@ -151,111 +163,104 @@ class SafetyMonitor:
         )
         now = time.time()
 
-        with self._lock:
-            # Check if event already exists
-            if event_id in self._active_events:
-                # Update existing event
-                existing = self._active_events[event_id]
-                existing.update(event)
-                existing["last_seen"] = now
-                existing["acknowledged"] = event_id in self._acknowledged_events
-                return existing
-            else:
-                # New event
-                event["id"] = event_id
-                event["created_at"] = now
-                event["last_seen"] = now
-                event["acknowledged"] = False
-                self._active_events[event_id] = event
-                return event
+        # Check if event already exists
+        if event_id in self._active_events:
+            # Update existing event
+            existing = self._active_events[event_id]
+            existing.update(event)
+            existing["last_seen"] = now
+            existing["acknowledged"] = event_id in self._acknowledged_events
+            return existing
+        else:
+            # New event
+            event["id"] = event_id
+            event["created_at"] = now
+            event["last_seen"] = now
+            event["acknowledged"] = False
+            self._active_events[event_id] = event
+            return event
 
     def find_event_by_db_id(self, db_id: int) -> Optional[str]:
         """Find an active event's string ID by its database ID."""
-        with self._lock:
-            for event_id, event in self._active_events.items():
-                if event.get("db_id") == db_id:
-                    return event_id
-            return None
+        for event_id, event in self._active_events.items():
+            if event.get("db_id") == db_id:
+                return event_id
+        return None
 
     def acknowledge_event(self, event_id: str) -> bool:
         """Acknowledge an event by ID (string or numeric db_id). Returns True if successful."""
-        with self._lock:
-            # Direct string ID match
-            if event_id in self._active_events:
-                self._acknowledged_events.add(event_id)
-                self._active_events[event_id]["acknowledged"] = True
-                return True
+        # Direct string ID match
+        if event_id in self._active_events:
+            self._acknowledged_events.add(event_id)
+            self._active_events[event_id]["acknowledged"] = True
+            return True
 
-            # Try numeric db_id lookup
-            try:
-                db_id = int(event_id)
-                for eid, event in self._active_events.items():
-                    if event.get("db_id") == db_id:
-                        self._acknowledged_events.add(eid)
-                        event["acknowledged"] = True
-                        return True
-            except (ValueError, TypeError):
-                pass
+        # Try numeric db_id lookup
+        try:
+            db_id = int(event_id)
+            for eid, event in self._active_events.items():
+                if event.get("db_id") == db_id:
+                    self._acknowledged_events.add(eid)
+                    event["acknowledged"] = True
+                    return True
+        except (ValueError, TypeError):
+            pass
 
-            return False
+        return False
 
     def unacknowledge_event(self, event_id: str) -> bool:
         """Remove acknowledgment from an event. Returns True if successful."""
-        with self._lock:
-            # Direct string ID match
-            if event_id in self._active_events:
-                self._acknowledged_events.discard(event_id)
-                self._active_events[event_id]["acknowledged"] = False
-                return True
+        # Direct string ID match
+        if event_id in self._active_events:
+            self._acknowledged_events.discard(event_id)
+            self._active_events[event_id]["acknowledged"] = False
+            return True
 
-            # Try numeric db_id lookup
-            try:
-                db_id = int(event_id)
-                for eid, event in self._active_events.items():
-                    if event.get("db_id") == db_id:
-                        self._acknowledged_events.discard(eid)
-                        event["acknowledged"] = False
-                        return True
-            except (ValueError, TypeError):
-                pass
+        # Try numeric db_id lookup
+        try:
+            db_id = int(event_id)
+            for eid, event in self._active_events.items():
+                if event.get("db_id") == db_id:
+                    self._acknowledged_events.discard(eid)
+                    event["acknowledged"] = False
+                    return True
+        except (ValueError, TypeError):
+            pass
 
-            return False
+        return False
 
     def get_active_events(self, include_acknowledged: bool = True) -> list[dict]:
         """Get all active safety events."""
-        with self._lock:
-            events = list(self._active_events.values())
-            if not include_acknowledged:
-                events = [e for e in events if not e.get("acknowledged", False)]
-            return events
+        events = list(self._active_events.values())
+        if not include_acknowledged:
+            events = [e for e in events if not e.get("acknowledged", False)]
+        return events
 
     def clear_event(self, event_id: str) -> bool:
         """Remove an event entirely. Returns True if successful."""
-        with self._lock:
-            # Direct string ID match
-            if event_id in self._active_events:
-                del self._active_events[event_id]
-                self._acknowledged_events.discard(event_id)
-                return True
+        # Direct string ID match
+        if event_id in self._active_events:
+            del self._active_events[event_id]
+            self._acknowledged_events.discard(event_id)
+            return True
 
-            # Try numeric db_id lookup
-            try:
-                db_id = int(event_id)
-                for eid, event in list(self._active_events.items()):
-                    if event.get("db_id") == db_id:
-                        del self._active_events[eid]
-                        self._acknowledged_events.discard(eid)
-                        return True
-            except (ValueError, TypeError):
-                pass
+        # Try numeric db_id lookup
+        try:
+            db_id = int(event_id)
+            for eid, event in list(self._active_events.items()):
+                if event.get("db_id") == db_id:
+                    del self._active_events[eid]
+                    self._acknowledged_events.discard(eid)
+                    return True
+        except (ValueError, TypeError):
+            pass
 
-            return False
+        return False
 
     def clear_all_events(self):
         """Clear all active events and acknowledgments."""
-        with self._lock:
-            self._active_events.clear()
-            self._acknowledged_events.clear()
+        self._active_events.clear()
+        self._acknowledged_events.clear()
     
     def update_aircraft(self, aircraft_list: list[dict]) -> list[dict]:
         """Process aircraft list and detect safety events."""
@@ -350,36 +355,35 @@ class SafetyMonitor:
         lat: Optional[float], lon: Optional[float],
         gs: Optional[float], track: Optional[float], now: float
     ):
-        """Update aircraft state history."""
-        with self._lock:
-            if icao not in self._aircraft_state:
-                self._aircraft_state[icao] = {
-                    "vs_history": [],
-                    "alt_history": [],
-                    "last_update": now
-                }
-            
-            state = self._aircraft_state[icao]
-            state["last_update"] = now
-            
-            if vr is not None:
-                state["vs_history"].append((now, vr))
-                state["vs_history"] = [
-                    (t, v) for t, v in state["vs_history"]
-                    if t > now - self.HISTORY_RETENTION
-                ]
-            
-            if alt is not None:
-                state["alt_history"].append((now, alt))
-                state["alt_history"] = [
-                    (t, a) for t, a in state["alt_history"]
-                    if t > now - self.HISTORY_RETENTION
-                ]
-            
-            state["lat"] = lat
-            state["lon"] = lon
-            state["gs"] = gs
-            state["track"] = track
+        """Update aircraft state history.
+
+        Note: Called from update_aircraft which runs in a single async task.
+        """
+        if icao not in self._aircraft_state:
+            self._aircraft_state[icao] = {
+                "vs_history": [],
+                "alt_history": [],
+                "last_update": now
+            }
+
+        state = self._aircraft_state[icao]
+        state["last_update"] = now
+
+        if vr is not None:
+            state["vs_history"].append((now, vr))
+            # Keep only last 5 entries instead of filtering by time each update
+            if len(state["vs_history"]) > 10:
+                state["vs_history"] = state["vs_history"][-10:]
+
+        if alt is not None:
+            state["alt_history"].append((now, alt))
+            if len(state["alt_history"]) > 10:
+                state["alt_history"] = state["alt_history"][-10:]
+
+        state["lat"] = lat
+        state["lon"] = lon
+        state["gs"] = gs
+        state["track"] = track
     
     def _check_vertical_speed_events(
         self, icao: str, callsign: str,
@@ -429,107 +433,107 @@ class SafetyMonitor:
         
         # VS reversal detection (potential TCAS RA)
         # Only triggers when aircraft changes vertical direction (climb to descent or vice versa)
-        with self._lock:
-            state = self._aircraft_state.get(icao)
-            if state and len(state.get("vs_history", [])) >= 2:
-                vs_history = state["vs_history"]
+        state = self._aircraft_state.get(icao)
+        if state and len(state.get("vs_history", [])) >= 2:
+            vs_history = state["vs_history"]
 
-                # Look for VS from ~4 seconds ago to detect reversals
-                target_time = now - 4
-                prev_vs = None
-                for t, v in reversed(vs_history[:-1]):
-                    if t <= target_time:
-                        prev_vs = v
-                        break
+            # Look for VS from ~4 seconds ago to detect reversals
+            target_time = now - 4
+            prev_vs = None
+            for t, v in reversed(vs_history[:-1]):
+                if t <= target_time:
+                    prev_vs = v
+                    break
 
-                if prev_vs is None and len(vs_history) >= 2:
-                    prev_vs = vs_history[-2][1]
+            if prev_vs is None and len(vs_history) >= 2:
+                prev_vs = vs_history[-2][1]
 
-                if prev_vs is not None:
-                    # Only trigger if there's an actual sign change (reversal)
-                    # prev_vs * current_vs < 0 means one is positive and one is negative
-                    is_sign_change = prev_vs * current_vs < 0
+            if prev_vs is not None:
+                # Only trigger if there's an actual sign change (reversal)
+                # prev_vs * current_vs < 0 means one is positive and one is negative
+                is_sign_change = prev_vs * current_vs < 0
 
-                    if is_sign_change:
-                        abs_change = abs(current_vs - prev_vs)
+                if is_sign_change:
+                    abs_change = abs(current_vs - prev_vs)
 
-                        # Skip VS reversals during takeoff (low altitude + now climbing)
-                        # Aircraft commonly have brief negative VS during rotation/liftoff
-                        is_takeoff = alt is not None and alt < 3000 and current_vs > 0
+                    # Skip VS reversals during takeoff (low altitude + now climbing)
+                    # Aircraft commonly have brief negative VS during rotation/liftoff
+                    is_takeoff = alt is not None and alt < 3000 and current_vs > 0
 
-                        # TCAS RA: High magnitude reversal (both sides have significant VS)
-                        is_tcas_ra = not is_takeoff and (
-                            abs(prev_vs) >= settings.safety_tcas_vs_threshold and
-                            abs(current_vs) >= settings.safety_tcas_vs_threshold
-                        )
+                    # TCAS RA: High magnitude reversal (both sides have significant VS)
+                    is_tcas_ra = not is_takeoff and (
+                        abs(prev_vs) >= settings.safety_tcas_vs_threshold and
+                        abs(current_vs) >= settings.safety_tcas_vs_threshold
+                    )
 
-                        if is_tcas_ra:
-                            event_type = "tcas_ra"
-                            severity = "critical"
-                            tcas_display_name = callsign or icao
-                            msg = f"TCAS RA suspected: {tcas_display_name} VS reversed from {prev_vs:+d} to {current_vs:+d} fpm"
-                        elif not is_takeoff:
-                            # Regular VS reversal - only if change magnitude is significant
-                            if abs_change < settings.safety_vs_change_threshold:
-                                # Not significant enough, skip
-                                pass
+                    if is_tcas_ra:
+                        event_type = "tcas_ra"
+                        severity = "critical"
+                        tcas_display_name = callsign or icao
+                        msg = (f"TCAS RA suspected: {tcas_display_name} "
+                               f"VS reversed from {prev_vs:+d} to {current_vs:+d} fpm")
+                    elif not is_takeoff:
+                        # Regular VS reversal - only if change magnitude is significant
+                        if abs_change < settings.safety_vs_change_threshold:
+                            # Not significant enough, skip
+                            pass
+                        else:
+                            event_type = "vs_reversal"
+                            # Severity based on magnitude
+                            if abs_change >= 4000:
+                                severity = "warning"
                             else:
-                                event_type = "vs_reversal"
-                                # Severity based on magnitude
-                                if abs_change >= 4000:
-                                    severity = "warning"
-                                else:
-                                    severity = "low"
-                                display_name = callsign or icao
-                                msg = f"VS reversal: {display_name} {prev_vs:+d} → {current_vs:+d} fpm"
+                                severity = "low"
+                            display_name = callsign or icao
+                            msg = f"VS reversal: {display_name} {prev_vs:+d} → {current_vs:+d} fpm"
 
-                                if self._can_trigger_event(event_type, icao):
-                                    events.append({
-                                        "event_type": event_type,
-                                        "severity": severity,
-                                        "icao": icao,
-                                        "callsign": display_name,
-                                        "flight": display_name,
-                                        "message": msg,
-                                        "details": {
-                                            "previous_vs": prev_vs,
-                                            "current_vs": current_vs,
-                                            "vs_change": current_vs - prev_vs,
-                                            "altitude": alt,
-                                            "lat": ac.get("lat"),
-                                            "lon": ac.get("lon"),
-                                            "gs": ac.get("gs"),
-                                            "squawk": ac.get("squawk"),
-                                            "threshold": settings.safety_vs_change_threshold
-                                        },
-                                        "aircraft_snapshot": self._build_aircraft_snapshot(ac),
-                                    })
-                                    self._mark_event_triggered(event_type, icao)
+                            if self._can_trigger_event(event_type, icao):
+                                events.append({
+                                    "event_type": event_type,
+                                    "severity": severity,
+                                    "icao": icao,
+                                    "callsign": display_name,
+                                    "flight": display_name,
+                                    "message": msg,
+                                    "details": {
+                                        "previous_vs": prev_vs,
+                                        "current_vs": current_vs,
+                                        "vs_change": current_vs - prev_vs,
+                                        "altitude": alt,
+                                        "lat": ac.get("lat"),
+                                        "lon": ac.get("lon"),
+                                        "gs": ac.get("gs"),
+                                        "squawk": ac.get("squawk"),
+                                        "threshold": settings.safety_vs_change_threshold
+                                    },
+                                    "aircraft_snapshot": self._build_aircraft_snapshot(ac),
+                                })
+                                self._mark_event_triggered(event_type, icao)
 
-                        # Handle TCAS RA event separately (already checked is_tcas_ra above)
-                        if is_tcas_ra and self._can_trigger_event("tcas_ra", icao):
-                            events.append({
-                                "event_type": "tcas_ra",
-                                "severity": "critical",
-                                "icao": icao,
-                                "callsign": tcas_display_name,
-                                "flight": tcas_display_name,
-                                "message": msg,
-                                "details": {
-                                    "previous_vs": prev_vs,
-                                    "current_vs": current_vs,
-                                    "vs_change": current_vs - prev_vs,
-                                    "altitude": alt,
-                                    "lat": ac.get("lat"),
-                                    "lon": ac.get("lon"),
-                                    "gs": ac.get("gs"),
-                                    "squawk": ac.get("squawk"),
-                                    "threshold": settings.safety_tcas_vs_threshold
-                                },
-                                "aircraft_snapshot": self._build_aircraft_snapshot(ac),
-                            })
-                            self._mark_event_triggered("tcas_ra", icao)
-        
+                    # Handle TCAS RA event separately (already checked is_tcas_ra above)
+                    if is_tcas_ra and self._can_trigger_event("tcas_ra", icao):
+                        events.append({
+                            "event_type": "tcas_ra",
+                            "severity": "critical",
+                            "icao": icao,
+                            "callsign": tcas_display_name,
+                            "flight": tcas_display_name,
+                            "message": msg,
+                            "details": {
+                                "previous_vs": prev_vs,
+                                "current_vs": current_vs,
+                                "vs_change": current_vs - prev_vs,
+                                "altitude": alt,
+                                "lat": ac.get("lat"),
+                                "lon": ac.get("lon"),
+                                "gs": ac.get("gs"),
+                                "squawk": ac.get("squawk"),
+                                "threshold": settings.safety_tcas_vs_threshold
+                            },
+                            "aircraft_snapshot": self._build_aircraft_snapshot(ac),
+                        })
+                        self._mark_event_triggered("tcas_ra", icao)
+
         return events
     
     def _is_near_major_airport(self, lat: float, lon: float, radius_nm: float = 5.0) -> bool:
@@ -733,29 +737,28 @@ class SafetyMonitor:
     
     def get_stats(self) -> dict:
         """Get safety monitor statistics."""
-        with self._lock:
-            active_count = len(self._active_events)
-            acked_count = len(self._acknowledged_events)
-            unacked_count = active_count - acked_count
+        active_count = len(self._active_events)
+        acked_count = len(self._acknowledged_events)
+        unacked_count = active_count - acked_count
 
-            # Count by severity
-            severity_counts = {"critical": 0, "warning": 0, "low": 0}
-            for event in self._active_events.values():
-                sev = event.get("severity", "low")
-                if sev in severity_counts:
-                    severity_counts[sev] += 1
+        # Count by severity
+        severity_counts = {"critical": 0, "warning": 0, "low": 0}
+        for event in self._active_events.values():
+            sev = event.get("severity", "low")
+            if sev in severity_counts:
+                severity_counts[sev] += 1
 
-            return {
-                "tracked_aircraft": len(self._aircraft_state),
-                "active_cooldowns": len(self._event_cooldown),
-                "monitoring_enabled": self.enabled,
-                "active_events": active_count,
-                "acknowledged_events": acked_count,
-                "unacknowledged_events": unacked_count,
-                "events_by_severity": severity_counts,
-                "thresholds": self.get_thresholds()
-            }
-    
+        return {
+            "tracked_aircraft": len(self._aircraft_state),
+            "active_cooldowns": len(self._event_cooldown),
+            "monitoring_enabled": self.enabled,
+            "active_events": active_count,
+            "acknowledged_events": acked_count,
+            "unacknowledged_events": unacked_count,
+            "events_by_severity": severity_counts,
+            "thresholds": self.get_thresholds()
+        }
+
     def get_thresholds(self) -> dict:
         """Get current threshold values."""
         return {
@@ -764,14 +767,13 @@ class SafetyMonitor:
             "proximity_nm": settings.safety_proximity_nm,
             "altitude_diff_ft": settings.safety_altitude_diff_ft,
         }
-    
+
     def get_state(self) -> dict:
         """Get current monitor state."""
-        with self._lock:
-            return {
-                "tracked_aircraft": len(self._aircraft_state),
-                "active_cooldowns": len(self._event_cooldown),
-            }
+        return {
+            "tracked_aircraft": len(self._aircraft_state),
+            "active_cooldowns": len(self._event_cooldown),
+        }
 
     def generate_test_events(self) -> list[dict]:
         """Generate test events for all safety event types."""
@@ -950,17 +952,16 @@ class SafetyMonitor:
         })
 
         # Add all test events to active events
-        with self._lock:
-            for event in test_events:
-                event_id = f"test_{event['event_type']}:{event['icao']}:{uuid.uuid4().hex[:8]}"
-                event["id"] = event_id
-                event["created_at"] = now
-                event["last_seen"] = now
-                event["acknowledged"] = False
-                event["is_test"] = True
-                self._active_events[event_id] = event
+        for event in test_events:
+            event_id = f"test_{event['event_type']}:{event['icao']}:{uuid.uuid4().hex[:8]}"
+            event["id"] = event_id
+            event["created_at"] = now
+            event["last_seen"] = now
+            event["acknowledged"] = False
+            event["is_test"] = True
+            self._active_events[event_id] = event
 
-        logger.info(f"Generated {len(test_events)} test safety events")
+        logger.info("Generated %d test safety events", len(test_events))
         return test_events
 
 

@@ -356,19 +356,15 @@ async def get_sessions(
     response_model=HistoryStatsResponse,
     summary="Get Historical Statistics",
     description="""
-Get aggregate statistics about historical data with optional filters.
+Get aggregate statistics about historical data.
 
-**Filters:**
-- **military_only**: Only include military aircraft
-- **min_altitude/max_altitude**: Filter by altitude range
-- **aircraft_type**: Filter by type code (B738, A320, comma-separated)
-- **callsign**: Partial callsign match
+Data is pre-computed every 60 seconds and served from cache for fast response.
 
 Returns:
 - Total sightings and sessions
 - Unique aircraft count
 - Military session count
-- Time range covered
+- Time range covered (24 hours)
 - Altitude and distance statistics
     """,
     responses={
@@ -390,111 +386,19 @@ Returns:
                     }
                 }
             }
-        }
+        },
+        503: {"description": "Stats not yet available"}
     }
 )
-async def get_stats(
-    hours: int = Query(24, ge=1, le=168, description="Time range for statistics"),
-    military_only: bool = Query(False, description="Only include military aircraft"),
-    min_altitude: Optional[int] = Query(None, description="Minimum altitude in feet"),
-    max_altitude: Optional[int] = Query(None, description="Maximum altitude in feet"),
-    aircraft_type: Optional[str] = Query(None, description="Filter by aircraft type codes, comma-separated"),
-    callsign: Optional[str] = Query(None, description="Filter by callsign (partial match)"),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get historical data statistics with filters."""
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
-    filters_applied = {}
+async def get_stats():
+    """Get historical data statistics from cache."""
+    from fastapi import HTTPException
+    from app.services.stats_cache import get_history_stats
 
-    # Build conditions for sightings
-    sighting_conditions = [AircraftSighting.timestamp > cutoff]
-    if military_only:
-        sighting_conditions.append(AircraftSighting.is_military == True)
-        filters_applied["military_only"] = True
-    if min_altitude is not None:
-        sighting_conditions.append(AircraftSighting.altitude_baro >= min_altitude)
-        filters_applied["min_altitude"] = min_altitude
-    if max_altitude is not None:
-        sighting_conditions.append(AircraftSighting.altitude_baro <= max_altitude)
-        filters_applied["max_altitude"] = max_altitude
-    if callsign:
-        sighting_conditions.append(AircraftSighting.callsign.ilike(f"%{callsign}%"))
-        filters_applied["callsign"] = callsign
-
-    # Build conditions for sessions
-    session_conditions = [AircraftSession.last_seen > cutoff]
-    if military_only:
-        session_conditions.append(AircraftSession.is_military == True)
-    if aircraft_type:
-        types = [t.strip().upper() for t in aircraft_type.split(",")]
-        session_conditions.append(AircraftSession.aircraft_type.in_(types))
-        filters_applied["aircraft_type"] = types
-    if callsign:
-        session_conditions.append(AircraftSession.callsign.ilike(f"%{callsign}%"))
-    if min_altitude is not None:
-        session_conditions.append(AircraftSession.max_altitude >= min_altitude)
-    if max_altitude is not None:
-        session_conditions.append(AircraftSession.min_altitude <= max_altitude)
-
-    sightings_count = (await db.execute(
-        select(func.count(AircraftSighting.id)).where(and_(*sighting_conditions))
-    )).scalar()
-
-    sessions_count = (await db.execute(
-        select(func.count(AircraftSession.id)).where(and_(*session_conditions))
-    )).scalar()
-
-    unique_aircraft = (await db.execute(
-        select(func.count(func.distinct(AircraftSession.icao_hex)))
-        .where(and_(*session_conditions))
-    )).scalar()
-
-    military_sessions = (await db.execute(
-        select(func.count(AircraftSession.id))
-        .where(and_(AircraftSession.last_seen > cutoff, AircraftSession.is_military == True))
-    )).scalar()
-
-    # Get altitude stats
-    alt_stats = (await db.execute(
-        select(
-            func.avg(AircraftSighting.altitude_baro).label("avg_alt"),
-            func.max(AircraftSighting.altitude_baro).label("max_alt"),
-            func.min(AircraftSighting.altitude_baro).label("min_alt")
-        ).where(and_(*sighting_conditions, AircraftSighting.altitude_baro.isnot(None)))
-    )).first()
-
-    # Get distance stats
-    dist_stats = (await db.execute(
-        select(
-            func.avg(AircraftSighting.distance_nm).label("avg_dist"),
-            func.max(AircraftSighting.distance_nm).label("max_dist"),
-            func.min(AircraftSighting.distance_nm).label("min_dist")
-        ).where(and_(*sighting_conditions, AircraftSighting.distance_nm.isnot(None)))
-    )).first()
-
-    # Get speed stats
-    speed_stats = (await db.execute(
-        select(
-            func.avg(AircraftSighting.ground_speed).label("avg_speed"),
-            func.max(AircraftSighting.ground_speed).label("max_speed")
-        ).where(and_(*sighting_conditions, AircraftSighting.ground_speed.isnot(None)))
-    )).first()
-
-    return {
-        "total_sightings": sightings_count or 0,
-        "total_sessions": sessions_count or 0,
-        "unique_aircraft": unique_aircraft or 0,
-        "military_sessions": military_sessions or 0,
-        "time_range_hours": hours,
-        "avg_altitude": round(alt_stats.avg_alt) if alt_stats and alt_stats.avg_alt else None,
-        "max_altitude": alt_stats.max_alt if alt_stats else None,
-        "min_altitude": alt_stats.min_alt if alt_stats else None,
-        "avg_distance_nm": round(dist_stats.avg_dist, 1) if dist_stats and dist_stats.avg_dist else None,
-        "max_distance_nm": round(dist_stats.max_dist, 1) if dist_stats and dist_stats.max_dist else None,
-        "avg_speed": round(speed_stats.avg_speed) if speed_stats and speed_stats.avg_speed else None,
-        "max_speed": round(speed_stats.max_speed) if speed_stats and speed_stats.max_speed else None,
-        "filters_applied": filters_applied if filters_applied else None,
-    }
+    cached = get_history_stats()
+    if cached is None:
+        raise HTTPException(status_code=503, detail="Stats not yet available, please retry in a few seconds")
+    return cached
 
 
 # ============================================================================
@@ -505,15 +409,11 @@ async def get_stats(
     "/trends",
     summary="Get Historical Trends",
     description="""
-Get time-series data for aircraft metrics over a specified time range.
+Get time-series data for aircraft metrics over the last 24 hours.
 
-**Parameters:**
-- **hours**: Time range (1-168 hours)
-- **interval**: Aggregation interval (15min, hour, day)
-- **military_only**: Filter to military aircraft only
-- **aircraft_type**: Filter by type codes (comma-separated)
+Data is pre-computed every 60 seconds and served from cache for fast response.
 
-Returns metrics per interval:
+Returns metrics per hour interval:
 - Aircraft count and unique aircraft
 - Average/max altitude, distance, speed
 - Position count
@@ -544,100 +444,19 @@ Returns metrics per interval:
                     }
                 }
             }
-        }
+        },
+        503: {"description": "Stats not yet available"}
     }
 )
-async def get_trends(
-    hours: int = Query(24, ge=1, le=168, description="Time range in hours"),
-    interval: str = Query("hour", description="Aggregation interval", enum=["15min", "hour", "day"]),
-    military_only: bool = Query(False, description="Only military aircraft"),
-    aircraft_type: Optional[str] = Query(None, description="Filter by aircraft type codes, comma-separated"),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get time-series trend data for aircraft metrics."""
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+async def get_trends():
+    """Get time-series trend data for aircraft metrics from cache."""
+    from fastapi import HTTPException
+    from app.services.stats_cache import get_history_trends
 
-    # Map interval to PostgreSQL date_trunc interval
-    interval_map = {
-        "15min": "15 minutes",
-        "hour": "hour",
-        "day": "day"
-    }
-    pg_interval = interval_map.get(interval, "hour")
-
-    # Build conditions
-    conditions = [AircraftSighting.timestamp > cutoff]
-    if military_only:
-        conditions.append(AircraftSighting.is_military == True)
-
-    # For trends, we use sightings data to get per-interval aggregates
-    if pg_interval == "15 minutes":
-        # PostgreSQL doesn't have 15min interval, use custom truncation
-        interval_expr = func.date_trunc('hour', AircraftSighting.timestamp) + \
-            (func.floor(func.extract('minute', AircraftSighting.timestamp) / 15) * literal_column("interval '15 minutes'"))
-    else:
-        interval_expr = func.date_trunc(pg_interval, AircraftSighting.timestamp)
-
-    trend_query = (
-        select(
-            interval_expr.label('interval_start'),
-            func.count(AircraftSighting.id).label('position_count'),
-            func.count(func.distinct(AircraftSighting.icao_hex)).label('unique_aircraft'),
-            func.sum(case((AircraftSighting.is_military == True, 1), else_=0)).label('military_count'),
-            func.avg(AircraftSighting.altitude_baro).label('avg_altitude'),
-            func.max(AircraftSighting.altitude_baro).label('max_altitude'),
-            func.avg(AircraftSighting.distance_nm).label('avg_distance'),
-            func.max(AircraftSighting.distance_nm).label('max_distance'),
-            func.avg(AircraftSighting.ground_speed).label('avg_speed'),
-            func.max(AircraftSighting.ground_speed).label('max_speed')
-        )
-        .where(and_(*conditions))
-        .group_by(interval_expr)
-        .order_by(interval_expr)
-    )
-
-    result = await db_execute_safe(db, trend_query)
-    intervals = []
-    peak_concurrent = 0
-    peak_interval = None
-
-    if result:
-        for row in result:
-            unique = row.unique_aircraft or 0
-            if unique > peak_concurrent:
-                peak_concurrent = unique
-                peak_interval = row.interval_start
-
-            intervals.append({
-                "timestamp": row.interval_start.isoformat() + "Z" if row.interval_start else None,
-                "position_count": row.position_count or 0,
-                "unique_aircraft": unique,
-                "military_count": row.military_count or 0,
-                "avg_altitude": round(row.avg_altitude) if row.avg_altitude else None,
-                "max_altitude": row.max_altitude,
-                "avg_distance_nm": round(row.avg_distance, 1) if row.avg_distance else None,
-                "max_distance_nm": round(row.max_distance, 1) if row.max_distance else None,
-                "avg_speed": round(row.avg_speed) if row.avg_speed else None,
-                "max_speed": row.max_speed,
-            })
-
-    # Get total unique aircraft for the period
-    total_unique = (await db.execute(
-        select(func.count(func.distinct(AircraftSighting.icao_hex)))
-        .where(and_(*conditions))
-    )).scalar() or 0
-
-    return {
-        "intervals": intervals,
-        "interval_type": interval,
-        "time_range_hours": hours,
-        "summary": {
-            "total_unique_aircraft": total_unique,
-            "peak_concurrent": peak_concurrent,
-            "peak_interval": peak_interval.isoformat() + "Z" if peak_interval else None,
-            "total_intervals": len(intervals)
-        }
-    }
+    cached = get_history_trends()
+    if cached is None:
+        raise HTTPException(status_code=503, detail="Stats not yet available, please retry in a few seconds")
+    return cached
 
 
 # ============================================================================
@@ -652,8 +471,10 @@ Get top aircraft by various metrics:
 - **longest_tracked**: Sessions with longest duration
 - **furthest_distance**: Aircraft seen at greatest distance
 - **highest_altitude**: Aircraft at highest altitude
-- **fastest_aircraft**: Highest ground speed recorded
 - **most_positions**: Most position reports (best tracked)
+- **closest_approach**: Aircraft with closest approach distance
+
+Data is pre-computed every 60 seconds and served from cache for fast response.
     """,
     responses={
         200: {
@@ -670,106 +491,19 @@ Get top aircraft by various metrics:
                     }
                 }
             }
-        }
+        },
+        503: {"description": "Stats not yet available"}
     }
 )
-async def get_top_performers(
-    hours: int = Query(24, ge=1, le=168, description="Time range in hours"),
-    limit: int = Query(10, ge=1, le=50, description="Number of results per category"),
-    military_only: bool = Query(False, description="Only military aircraft"),
-    aircraft_type: Optional[str] = Query(None, description="Filter by aircraft type codes"),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get top performing aircraft by various metrics."""
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+async def get_top_performers():
+    """Get top performing aircraft by various metrics from cache."""
+    from fastapi import HTTPException
+    from app.services.stats_cache import get_history_top
 
-    # Build session conditions
-    session_conditions = [AircraftSession.last_seen > cutoff]
-    if military_only:
-        session_conditions.append(AircraftSession.is_military == True)
-    if aircraft_type:
-        types = [t.strip().upper() for t in aircraft_type.split(",")]
-        session_conditions.append(AircraftSession.aircraft_type.in_(types))
-
-    # Helper to format session
-    def format_session(s):
-        duration = (s.last_seen - s.first_seen).total_seconds() / 60
-        return {
-            "icao_hex": s.icao_hex,
-            "callsign": s.callsign,
-            "aircraft_type": s.aircraft_type,
-            "is_military": s.is_military,
-            "first_seen": s.first_seen.isoformat() + "Z",
-            "last_seen": s.last_seen.isoformat() + "Z",
-            "duration_min": round(duration, 1),
-            "positions": s.total_positions,
-            "min_distance_nm": round(s.min_distance_nm, 1) if s.min_distance_nm else None,
-            "max_distance_nm": round(s.max_distance_nm, 1) if s.max_distance_nm else None,
-            "min_altitude": s.min_altitude,
-            "max_altitude": s.max_altitude,
-            "max_speed": s.max_speed if hasattr(s, 'max_speed') else None,
-        }
-
-    # Longest tracked (by duration)
-    duration_expr = func.extract('epoch', AircraftSession.last_seen - AircraftSession.first_seen)
-    longest_query = (
-        select(AircraftSession)
-        .where(and_(*session_conditions))
-        .order_by(duration_expr.desc())
-        .limit(limit)
-    )
-    longest_result = await db_execute_safe(db, longest_query)
-    longest_tracked = [format_session(s) for s in longest_result.scalars()] if longest_result else []
-
-    # Furthest distance
-    furthest_query = (
-        select(AircraftSession)
-        .where(and_(*session_conditions, AircraftSession.max_distance_nm.isnot(None)))
-        .order_by(AircraftSession.max_distance_nm.desc())
-        .limit(limit)
-    )
-    furthest_result = await db_execute_safe(db, furthest_query)
-    furthest_distance = [format_session(s) for s in furthest_result.scalars()] if furthest_result else []
-
-    # Highest altitude
-    highest_query = (
-        select(AircraftSession)
-        .where(and_(*session_conditions, AircraftSession.max_altitude.isnot(None)))
-        .order_by(AircraftSession.max_altitude.desc())
-        .limit(limit)
-    )
-    highest_result = await db_execute_safe(db, highest_query)
-    highest_altitude = [format_session(s) for s in highest_result.scalars()] if highest_result else []
-
-    # Most positions (best tracked)
-    most_pos_query = (
-        select(AircraftSession)
-        .where(and_(*session_conditions))
-        .order_by(AircraftSession.total_positions.desc())
-        .limit(limit)
-    )
-    most_pos_result = await db_execute_safe(db, most_pos_query)
-    most_positions = [format_session(s) for s in most_pos_result.scalars()] if most_pos_result else []
-
-    # Closest approach
-    closest_query = (
-        select(AircraftSession)
-        .where(and_(*session_conditions, AircraftSession.min_distance_nm.isnot(None)))
-        .order_by(AircraftSession.min_distance_nm.asc())
-        .limit(limit)
-    )
-    closest_result = await db_execute_safe(db, closest_query)
-    closest_approach = [format_session(s) for s in closest_result.scalars()] if closest_result else []
-
-    return {
-        "longest_tracked": longest_tracked,
-        "furthest_distance": furthest_distance,
-        "highest_altitude": highest_altitude,
-        "most_positions": most_positions,
-        "closest_approach": closest_approach,
-        "time_range_hours": hours,
-        "limit": limit,
-    }
+    cached = get_history_top()
+    if cached is None:
+        raise HTTPException(status_code=503, detail="Stats not yet available, please retry in a few seconds")
+    return cached
 
 
 # ============================================================================

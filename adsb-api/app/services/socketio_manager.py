@@ -44,7 +44,6 @@ Clients join rooms to receive specific event types:
 - aircraft, airspace, safety, alerts, acars
 """
 import asyncio
-import json
 import logging
 import time
 from datetime import datetime
@@ -111,6 +110,19 @@ class SocketIOManager:
         # Maps sid -> filter dict
         self._client_filters: dict[str, dict] = {}
 
+        # Rate limiting for filter updates (sid -> last update timestamp)
+        self._filter_update_times: dict[str, float] = {}
+        self._filter_rate_limit_seconds = 1.0  # Min seconds between filter updates
+
+        # Heartbeat throttling - only send every N seconds
+        self._last_heartbeat_time: float = 0
+        self._heartbeat_interval_seconds = 5.0  # Send heartbeat every 5 seconds
+        self._last_heartbeat_count: int = 0  # Track count to detect changes
+
+        # Distance cache: icao -> (lat, lon, distance_nm)
+        # Only recalculate when position changes significantly
+        self._distance_cache: dict[str, tuple[float, float, float]] = {}
+
         # Register event handlers
         self._register_handlers()
 
@@ -140,9 +152,9 @@ class SocketIOManager:
         async def disconnect(sid):
             """Handle client disconnection."""
             self._connection_count = max(0, self._connection_count - 1)
-            # Clean up client filters
-            if sid in self._client_filters:
-                del self._client_filters[sid]
+            # Clean up client state
+            self._client_filters.pop(sid, None)
+            self._filter_update_times.pop(sid, None)
             logger.info(f"Socket.IO client disconnected: {sid} (total: {self._connection_count})")
 
         @self.sio.event
@@ -183,25 +195,34 @@ class SocketIOManager:
 
         @self.sio.event
         async def update_stats_filters(sid, data):
-            """Update stats filters for a client."""
+            """Update stats filters for a client with rate limiting."""
+            # Rate limit filter updates to prevent abuse
+            now = time.time()
+            last_update = self._filter_update_times.get(sid, 0)
+            if now - last_update < self._filter_rate_limit_seconds:
+                return  # Silently ignore too-frequent updates
+
             if sid not in self._client_filters:
                 self._client_filters[sid] = {}
 
             filters = data if isinstance(data, dict) else {}
+            old_filters = self._client_filters[sid].copy()
+
             self._client_filters[sid].update({
-                'military_only': filters.get('military_only', self._client_filters[sid].get('military_only', False)),
-                'category': filters.get('category', self._client_filters[sid].get('category')),
-                'min_altitude': filters.get('min_altitude', self._client_filters[sid].get('min_altitude')),
-                'max_altitude': filters.get('max_altitude', self._client_filters[sid].get('max_altitude')),
-                'min_distance': filters.get('min_distance', self._client_filters[sid].get('min_distance')),
-                'max_distance': filters.get('max_distance', self._client_filters[sid].get('max_distance')),
-                'aircraft_type': filters.get('aircraft_type', self._client_filters[sid].get('aircraft_type')),
+                'military_only': filters.get('military_only', old_filters.get('military_only', False)),
+                'category': filters.get('category', old_filters.get('category')),
+                'min_altitude': filters.get('min_altitude', old_filters.get('min_altitude')),
+                'max_altitude': filters.get('max_altitude', old_filters.get('max_altitude')),
+                'min_distance': filters.get('min_distance', old_filters.get('min_distance')),
+                'max_distance': filters.get('max_distance', old_filters.get('max_distance')),
+                'aircraft_type': filters.get('aircraft_type', old_filters.get('aircraft_type')),
             })
 
-            logger.debug(f"Client {sid} updated stats filters: {self._client_filters[sid]}")
-
-            # Send updated filtered stats
-            await self._send_filtered_stats(sid)
+            # Only send update if filters actually changed
+            if self._client_filters[sid] != old_filters:
+                self._filter_update_times[sid] = now
+                logger.debug(f"Client {sid} updated stats filters: {self._client_filters[sid]}")
+                await self._send_filtered_stats(sid)
 
         @self.sio.event
         async def unsubscribe(sid, data):
@@ -335,31 +356,56 @@ class SocketIOManager:
             logger.warning(f"Failed to send filtered stats to {sid}: {e}")
 
     def _apply_aircraft_filters(self, aircraft: list[dict], filters: dict) -> list[dict]:
-        """Apply filters to aircraft list."""
-        result = aircraft.copy()
+        """Apply filters to aircraft list in a single pass."""
+        # Early return if no filters active
+        if not any(filters.get(k) is not None and filters.get(k) is not False
+                   for k in ('military_only', 'category', 'min_altitude',
+                             'max_altitude', 'min_distance', 'max_distance')):
+            return aircraft
 
-        if filters.get('military_only'):
-            result = [a for a in result if a.get('dbFlags', 0) & 1]
+        # Pre-compute filter values once
+        military_only = filters.get('military_only', False)
+        category_filter = filters.get('category')
+        categories = None
+        if category_filter:
+            categories = {c.strip().upper() for c in category_filter.split(',')}
+        min_alt = filters.get('min_altitude')
+        max_alt = filters.get('max_altitude')
+        min_dist = filters.get('min_distance')
+        max_dist = filters.get('max_distance')
 
-        if filters.get('category'):
-            categories = [c.strip().upper() for c in filters['category'].split(',')]
-            result = [a for a in result if a.get('category', '').upper() in categories]
+        # Single-pass filter
+        result = []
+        for a in aircraft:
+            # Military filter
+            if military_only and not (a.get('dbFlags', 0) & 1):
+                continue
 
-        if filters.get('min_altitude') is not None:
-            result = [a for a in result
-                      if isinstance(a.get('alt_baro'), int) and a['alt_baro'] >= filters['min_altitude']]
+            # Category filter
+            if categories:
+                ac_cat = a.get('category', '').upper()
+                if ac_cat not in categories:
+                    continue
 
-        if filters.get('max_altitude') is not None:
-            result = [a for a in result
-                      if isinstance(a.get('alt_baro'), int) and a['alt_baro'] <= filters['max_altitude']]
+            # Altitude filters
+            alt = a.get('alt_baro')
+            if min_alt is not None:
+                if not isinstance(alt, int) or alt < min_alt:
+                    continue
+            if max_alt is not None:
+                if not isinstance(alt, int) or alt > max_alt:
+                    continue
 
-        if filters.get('min_distance') is not None:
-            result = [a for a in result
-                      if a.get('distance_nm') is not None and a['distance_nm'] >= filters['min_distance']]
+            # Distance filters
+            dist = a.get('distance_nm')
+            if min_dist is not None:
+                if dist is None or dist < min_dist:
+                    continue
+            if max_dist is not None:
+                if dist is None or dist > max_dist:
+                    continue
 
-        if filters.get('max_distance') is not None:
-            result = [a for a in result
-                      if a.get('distance_nm') is not None and a['distance_nm'] <= filters['max_distance']]
+            result.append(a)
 
         return result
 
@@ -442,18 +488,73 @@ class SocketIOManager:
         await self.sio.emit(event, data, room=room)
 
     async def broadcast_filtered_stats(self):
-        """Broadcast filtered stats to all clients with stats subscriptions."""
+        """Broadcast filtered stats to all clients with stats subscriptions.
+
+        Optimized to:
+        1. Calculate base stats once for all clients
+        2. Group clients by filter signature to avoid duplicate calculations
+        3. Use asyncio.gather for parallel emission
+        """
+        if not self._client_filters:
+            return
+
+        aircraft_list = list(self._last_aircraft_state.values())
+        if not aircraft_list:
+            return
+
+        # Group clients by their filter signature to avoid duplicate calculations
+        filter_groups: dict[str, tuple[dict, list[str]]] = {}
         for sid, filters in self._client_filters.items():
+            # Create a hashable signature for the filter
+            sig = (
+                filters.get('military_only', False),
+                filters.get('category'),
+                filters.get('min_altitude'),
+                filters.get('max_altitude'),
+                filters.get('min_distance'),
+                filters.get('max_distance'),
+                filters.get('aircraft_type'),
+            )
+            sig_key = str(sig)
+            if sig_key not in filter_groups:
+                filter_groups[sig_key] = (filters, [])
+            filter_groups[sig_key][1].append(sid)
+
+        timestamp = datetime.utcnow().isoformat() + 'Z'
+        tasks = []
+
+        # Calculate stats once per unique filter combination
+        for sig_key, (filters, sids) in filter_groups.items():
             try:
-                await self._send_filtered_stats(sid)
+                filtered_aircraft = self._apply_aircraft_filters(aircraft_list, filters)
+                stats = self._calculate_stats(filtered_aircraft)
+                stats['filters_applied'] = {k: v for k, v in filters.items() if v is not None}
+                stats['timestamp'] = timestamp
+
+                # Emit to all clients with this filter in parallel
+                for sid in sids:
+                    tasks.append(self.sio.emit('stats:update', stats, room=sid))
             except Exception as e:
-                logger.warning(f"Failed to broadcast stats to {sid}: {e}")
+                logger.warning(f"Failed to calculate stats for filter {sig_key}: {e}")
+
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def publish_aircraft_update(self, aircraft_list: list[dict]):
         """Publish aircraft updates, detecting changes.
 
         Uses asyncio.gather to broadcast all updates in parallel for lower latency.
         """
+        # Skip expensive processing if no clients connected
+        if self._connection_count == 0:
+            # Still update state for when clients connect
+            self._last_aircraft_state = {
+                ac.get('hex', '').upper(): ac
+                for ac in aircraft_list
+                if ac.get('hex')
+            }
+            return
+
         current_state = {}
         new_aircraft = []
         updated_aircraft = []
@@ -475,6 +576,8 @@ class SocketIOManager:
         for icao in self._last_aircraft_state:
             if icao not in current_state:
                 removed_icaos.append(icao)
+                # Clean up distance cache for removed aircraft
+                self._distance_cache.pop(icao, None)
 
         self._last_aircraft_state = current_state
         timestamp = datetime.utcnow().isoformat() + 'Z'
@@ -500,11 +603,20 @@ class SocketIOManager:
                 'timestamp': timestamp
             }))
 
-        # Always send heartbeat
-        broadcasts.append(self.broadcast_to_room('aircraft', 'aircraft:heartbeat', {
-            'count': len(current_state),
-            'timestamp': timestamp
-        }))
+        # Throttled heartbeat - only send periodically or when count changes
+        now = time.time()
+        current_count = len(current_state)
+        should_heartbeat = (
+            now - self._last_heartbeat_time >= self._heartbeat_interval_seconds or
+            current_count != self._last_heartbeat_count
+        )
+        if should_heartbeat:
+            self._last_heartbeat_time = now
+            self._last_heartbeat_count = current_count
+            broadcasts.append(self.broadcast_to_room('aircraft', 'aircraft:heartbeat', {
+                'count': current_count,
+                'timestamp': timestamp
+            }))
 
         # Position updates go in parallel too (most important for low latency)
         broadcasts.append(self.publish_position_update(aircraft_list))
@@ -626,19 +738,38 @@ class SocketIOManager:
 
         return False
 
+    def _get_cached_distance(self, icao: str, lat: float, lon: float) -> Optional[float]:
+        """Get distance from cache or calculate and cache it.
+
+        Only recalculates if position has moved > 0.01 degrees (~0.6nm).
+        """
+        cached = self._distance_cache.get(icao)
+        if cached:
+            cached_lat, cached_lon, cached_dist = cached
+            # Check if position has changed significantly (> ~0.6nm)
+            if abs(lat - cached_lat) < 0.01 and abs(lon - cached_lon) < 0.01:
+                return cached_dist
+
+        # Calculate new distance
+        distance_nm = round(
+            calculate_distance_nm(settings.feeder_lat, settings.feeder_lon, lat, lon),
+            1
+        )
+        self._distance_cache[icao] = (lat, lon, distance_nm)
+        return distance_nm
+
     def _simplify_aircraft(self, ac: dict) -> dict:
         """Simplify aircraft data for transmission."""
-        # Calculate distance from feeder if position is valid
         lat, lon = ac.get('lat'), ac.get('lon')
+        icao = ac.get('hex', '').upper()
+
+        # Use cached distance calculation
         distance_nm = None
-        if is_valid_position(lat, lon):
-            distance_nm = round(
-                calculate_distance_nm(settings.feeder_lat, settings.feeder_lon, lat, lon),
-                1
-            )
+        if is_valid_position(lat, lon) and icao:
+            distance_nm = self._get_cached_distance(icao, lat, lon)
 
         return {
-            'hex': ac.get('hex'),
+            'hex': icao,
             'flight': (ac.get('flight') or '').strip(),
             'lat': lat,
             'lon': lon,

@@ -193,12 +193,9 @@ async def get_event(
     response_model=SafetyStatsResponse,
     summary="Get Safety Statistics",
     description="""
-Get comprehensive safety monitoring statistics with optional filters.
+Get comprehensive safety monitoring statistics.
 
-**Filters:**
-- **event_type**: Filter by specific event type(s) - comma-separated
-- **severity**: Filter by severity level(s) - comma-separated
-- **icao_hex**: Filter by aircraft ICAO hex
+Data is pre-computed every 30 seconds and served from cache for fast response.
 
 **Returns:**
 - Current monitoring status and thresholds
@@ -237,173 +234,19 @@ Get comprehensive safety monitoring statistics with optional filters.
                     }
                 }
             }
-        }
+        },
+        503: {"description": "Stats not yet available"}
     }
 )
-async def get_stats(
-    hours: int = Query(24, ge=1, le=168, description="Time range for statistics"),
-    event_type: Optional[str] = Query(None, description="Filter by event type(s), comma-separated"),
-    severity: Optional[str] = Query(None, description="Filter by severity level(s), comma-separated"),
-    icao_hex: Optional[str] = Query(None, description="Filter by aircraft ICAO hex"),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get safety monitoring statistics with optional filters."""
-    now = datetime.utcnow()
-    cutoff = now - timedelta(hours=hours)
+async def get_stats():
+    """Get safety monitoring statistics from cache."""
+    from fastapi import HTTPException
+    from app.services.stats_cache import get_safety_stats
 
-    # Build base conditions
-    conditions = [SafetyEvent.timestamp > cutoff]
-
-    # Apply filters
-    if event_type:
-        types = [t.strip() for t in event_type.split(",")]
-        conditions.append(SafetyEvent.event_type.in_(types))
-
-    if severity:
-        severities = [s.strip() for s in severity.split(",")]
-        conditions.append(SafetyEvent.severity.in_(severities))
-
-    if icao_hex:
-        icao_upper = icao_hex.upper()
-        conditions.append(
-            (SafetyEvent.icao_hex == icao_upper) |
-            (SafetyEvent.icao_hex_2 == icao_upper)
-        )
-
-    # Events by type
-    type_query = (
-        select(SafetyEvent.event_type, func.count(SafetyEvent.id))
-        .where(and_(*conditions))
-        .group_by(SafetyEvent.event_type)
-    )
-    type_result = await db_execute_safe(db, type_query)
-    events_by_type = {row[0]: row[1] for row in type_result} if type_result else {}
-
-    # Events by severity
-    severity_query = (
-        select(SafetyEvent.severity, func.count(SafetyEvent.id))
-        .where(and_(*conditions))
-        .group_by(SafetyEvent.severity)
-    )
-    severity_result = await db_execute_safe(db, severity_query)
-    events_by_severity = {row[0]: row[1] for row in severity_result} if severity_result else {}
-
-    # Events by type AND severity (cross-tabulation)
-    type_severity_query = (
-        select(SafetyEvent.event_type, SafetyEvent.severity, func.count(SafetyEvent.id))
-        .where(and_(*conditions))
-        .group_by(SafetyEvent.event_type, SafetyEvent.severity)
-    )
-    type_severity_result = await db_execute_safe(db, type_severity_query)
-    events_by_type_severity = {}
-    if type_severity_result:
-        for event_type_val, sev, count in type_severity_result:
-            if event_type_val not in events_by_type_severity:
-                events_by_type_severity[event_type_val] = {}
-            events_by_type_severity[event_type_val][sev] = count
-
-    # Unique aircraft count
-    unique_query = (
-        select(func.count(func.distinct(SafetyEvent.icao_hex)))
-        .where(and_(*conditions))
-    )
-    unique_result = await db_execute_safe(db, unique_query)
-    unique_aircraft = unique_result.scalar() if unique_result else 0
-
-    # Hourly distribution
-    # Use date_trunc to bucket by hour
-    hour_bucket = func.date_trunc('hour', SafetyEvent.timestamp).label('hour')
-    hour_query = (
-        select(
-            hour_bucket,
-            func.count(SafetyEvent.id).label('count'),
-            func.sum(case((SafetyEvent.severity == 'critical', 1), else_=0)).label('critical'),
-            func.sum(case((SafetyEvent.severity == 'warning', 1), else_=0)).label('warning'),
-            func.sum(case((SafetyEvent.severity == 'low', 1), else_=0)).label('low')
-        )
-        .where(and_(*conditions))
-        .group_by(hour_bucket)
-        .order_by(hour_bucket)
-    )
-    hour_result = await db_execute_safe(db, hour_query)
-    events_by_hour = []
-    if hour_result:
-        for row in hour_result:
-            events_by_hour.append({
-                "hour": row.hour.isoformat() + "Z" if row.hour else None,
-                "count": row.count or 0,
-                "critical": row.critical or 0,
-                "warning": row.warning or 0,
-                "low": row.low or 0
-            })
-
-    # Top aircraft by event count
-    top_aircraft_query = (
-        select(
-            SafetyEvent.icao_hex,
-            SafetyEvent.callsign,
-            func.count(SafetyEvent.id).label('count'),
-            func.max(SafetyEvent.severity).label('worst_severity')
-        )
-        .where(and_(*conditions))
-        .group_by(SafetyEvent.icao_hex, SafetyEvent.callsign)
-        .order_by(func.count(SafetyEvent.id).desc())
-        .limit(10)
-    )
-    top_aircraft_result = await db_execute_safe(db, top_aircraft_query)
-    top_aircraft = []
-    if top_aircraft_result:
-        severity_order = {'critical': 3, 'warning': 2, 'low': 1}
-        for row in top_aircraft_result:
-            top_aircraft.append({
-                "icao": row.icao_hex,
-                "callsign": row.callsign,
-                "count": row.count,
-                "worst_severity": row.worst_severity
-            })
-        # Sort by severity priority then count
-        top_aircraft.sort(key=lambda x: (-severity_order.get(x['worst_severity'], 0), -x['count']))
-
-    # Recent events
-    recent_query = (
-        select(SafetyEvent)
-        .where(and_(*conditions))
-        .order_by(SafetyEvent.timestamp.desc())
-        .limit(10)
-    )
-    recent_result = await db_execute_safe(db, recent_query)
-    recent_events = [
-        {
-            "id": e.id,
-            "event_type": e.event_type,
-            "severity": e.severity,
-            "icao": e.icao_hex,
-            "callsign": e.callsign,
-            "message": e.message,
-            "timestamp": e.timestamp.isoformat() + "Z",
-        }
-        for e in recent_result.scalars()
-    ] if recent_result else []
-
-    total_events = sum(events_by_type.values())
-    event_rate = total_events / hours if hours > 0 else 0
-
-    return {
-        "monitoring_enabled": safety_monitor.enabled,
-        "thresholds": safety_monitor.get_thresholds(),
-        "time_range_hours": hours,
-        "events_by_type": events_by_type,
-        "events_by_severity": events_by_severity,
-        "events_by_type_severity": events_by_type_severity,
-        "total_events": total_events,
-        "unique_aircraft": unique_aircraft or 0,
-        "event_rate_per_hour": round(event_rate, 2),
-        "events_by_hour": events_by_hour,
-        "top_aircraft": top_aircraft,
-        "recent_events": recent_events,
-        "monitor_state": safety_monitor.get_state(),
-        "timestamp": now.isoformat() + "Z",
-    }
+    cached = get_safety_stats()
+    if cached is None:
+        raise HTTPException(status_code=503, detail="Stats not yet available, please retry in a few seconds")
+    return cached
 
 
 @router.get(

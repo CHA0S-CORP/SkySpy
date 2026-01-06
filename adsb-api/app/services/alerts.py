@@ -161,7 +161,31 @@ def evaluate_single_condition(
         elif operator == "contains":
             return value in ac_type
         return ac_type == value
-    
+
+    elif cond_type == "registration":
+        # Registration/tail number (e.g., N12345, G-ABCD)
+        ac_val = (aircraft.get("r") or "").strip().upper()
+        if operator == "eq":
+            return ac_val == value
+        elif operator == "neq":
+            return ac_val != value
+        elif operator == "contains":
+            return value in ac_val
+        elif operator == "startswith":
+            return ac_val.startswith(value)
+        return ac_val == value
+
+    elif cond_type == "operator":
+        # Operator ICAO code (e.g., UAL, AAL, DAL)
+        ac_val = (aircraft.get("ownOp") or "").strip().upper()
+        if operator == "eq":
+            return ac_val == value
+        elif operator == "neq":
+            return ac_val != value
+        elif operator == "contains":
+            return value in ac_val
+        return ac_val == value
+
     return False
 
 

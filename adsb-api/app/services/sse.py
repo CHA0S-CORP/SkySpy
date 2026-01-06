@@ -48,6 +48,10 @@ class SSEManager:
             if q in self._subscribers:
                 self._subscribers.remove(q)
                 logger.info(f"SSE subscriber removed. Total: {len(self._subscribers)}")
+
+    def has_subscribers(self) -> bool:
+        """Check if there are any active subscribers."""
+        return len(self._subscribers) > 0
     
     async def broadcast(self, event_type: str, data: dict):
         """Send event to all subscribers."""
@@ -96,11 +100,21 @@ class SSEManager:
     
     async def publish_aircraft_update(self, aircraft_list: list[dict]):
         """Publish aircraft updates, detecting changes."""
+        # Skip expensive processing if no subscribers
+        if not self.has_subscribers():
+            # Still update state for when subscribers connect
+            self._last_aircraft_state = {
+                ac.get("hex", "").upper(): ac
+                for ac in aircraft_list
+                if ac.get("hex")
+            }
+            return
+
         current_state = {}
         new_aircraft = []
         updated_aircraft = []
         removed_icaos = []
-        
+
         for ac in aircraft_list:
             icao = ac.get("hex", "").upper()
             if not icao:

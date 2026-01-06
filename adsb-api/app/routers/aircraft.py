@@ -142,186 +142,49 @@ async def get_aircraft(db: AsyncSession = Depends(get_db)):
     summary="Get Top Aircraft by Category",
     description="""
 Get the top 5 aircraft in various categories.
+
+Data is pre-computed every ~5 seconds and served from cache.
     """,
     responses={
         200: {
             "description": "Top aircraft by category",
         },
-        503: {"model": ErrorResponse, "description": "Database unavailable"}
+        503: {"model": ErrorResponse, "description": "Stats not yet available"}
     }
 )
-async def get_top_aircraft(db: AsyncSession = Depends(get_db)):
+async def get_top_aircraft():
     """Get top aircraft by various criteria (closest, highest, fastest, climbing, military)."""
-    try:
-        aircraft = await _get_current_aircraft(db)
-        
-        # We process in memory because N is small (<1000) and it's cleaner than 5 complex DB queries
-        
-        # Top 5 by closest
-        closest = sorted(
-            [a for a in aircraft if is_valid_position(a.get("lat"), a.get("lon"))],
-            key=lambda x: x.get("distance_nm") if x.get("distance_nm") is not None else 99999
-        )[:5]
-        
-        # Top 5 by altitude
-        highest = sorted(
-            [a for a in aircraft if isinstance(a.get("alt_baro"), (int, float))],
-            key=lambda x: x["alt_baro"],
-            reverse=True
-        )[:5]
-        
-        # Top 5 by speed
-        fastest = sorted(
-            [a for a in aircraft if a.get("gs")],
-            key=lambda x: x["gs"],
-            reverse=True
-        )[:5]
-        
-        # Top 5 by vertical rate
-        climbing = sorted(
-            [a for a in aircraft if a.get("baro_rate")],
-            key=lambda x: abs(x.get("baro_rate", 0)),
-            reverse=True
-        )[:5]
-        
-        # Military
-        military = [a for a in aircraft if a.get("dbFlags", 0) & 1][:5]
-        
-        return {
-            "closest": [simplify_aircraft(a, a.get("distance_nm")) for a in closest],
-            "highest": [simplify_aircraft(a, a.get("distance_nm")) for a in highest],
-            "fastest": [simplify_aircraft(a, a.get("distance_nm")) for a in fastest],
-            "climbing": [simplify_aircraft(a, a.get("distance_nm")) for a in climbing],
-            "military": [simplify_aircraft(a, a.get("distance_nm")) for a in military],
-            "total": len(aircraft),
-            "timestamp": datetime.utcnow().isoformat() + "Z"
-        }
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Error fetching aircraft data: {str(e)}")
+    from app.services.stats_cache import get_top_aircraft as get_cached_top
+
+    cached = get_cached_top()
+    if cached is None:
+        raise HTTPException(status_code=503, detail="Stats not yet available, please retry in a few seconds")
+    return cached
 
 
 @router.get(
     "/aircraft/stats",
     response_model=AircraftStatsResponse,
     summary="Get Aircraft Statistics",
-    description="Get aggregate statistics about currently tracked aircraft.",
+    description="""
+Get aggregate statistics about currently tracked aircraft.
+
+Data is pre-computed every ~5 seconds and served from cache.
+Note: Filters are not supported in cached mode - use Socket.IO subscribe_stats for filtered stats.
+    """,
     responses={
         200: {"description": "Aircraft statistics"},
-        503: {"model": ErrorResponse, "description": "Database unavailable"}
+        503: {"model": ErrorResponse, "description": "Stats not yet available"}
     }
 )
-async def get_aircraft_stats(
-    category: Optional[str] = Query(None, description="Filter by aircraft category"),
-    military_only: bool = Query(False, description="Only include military aircraft"),
-    min_altitude: Optional[int] = Query(None, description="Minimum altitude in feet"),
-    max_altitude: Optional[int] = Query(None, description="Maximum altitude in feet"),
-    min_distance: Optional[float] = Query(None, description="Minimum distance from feeder"),
-    max_distance: Optional[float] = Query(None, description="Maximum distance from feeder"),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get aggregate statistics about currently tracked aircraft with optional filters."""
-    try:
-        aircraft = await _get_current_aircraft(db)
-        
-        # Build filters applied tracking
-        filters_applied = {}
+async def get_aircraft_stats():
+    """Get aggregate statistics about currently tracked aircraft."""
+    from app.services.stats_cache import get_aircraft_stats as get_cached_stats
 
-        # Apply filters
-        if category:
-            categories_list = [c.strip().upper() for c in category.split(",")]
-            aircraft = [a for a in aircraft if a.get("category", "").upper() in categories_list]
-            filters_applied["category"] = categories_list
-
-        if military_only:
-            aircraft = [a for a in aircraft if a.get("dbFlags", 0) & 1]
-            filters_applied["military_only"] = True
-
-        if min_altitude is not None:
-            aircraft = [
-                a for a in aircraft
-                if isinstance(a.get("alt_baro"), (int, float)) and a["alt_baro"] >= min_altitude
-            ]
-            filters_applied["min_altitude"] = min_altitude
-
-        if max_altitude is not None:
-            aircraft = [
-                a for a in aircraft
-                if isinstance(a.get("alt_baro"), (int, float)) and a["alt_baro"] <= max_altitude
-            ]
-            filters_applied["max_altitude"] = max_altitude
-
-        if min_distance is not None:
-            aircraft = [
-                a for a in aircraft
-                if a.get("distance_nm") is not None and a["distance_nm"] >= min_distance
-            ]
-            filters_applied["min_distance"] = min_distance
-
-        if max_distance is not None:
-            aircraft = [
-                a for a in aircraft
-                if a.get("distance_nm") is not None and a["distance_nm"] <= max_distance
-            ]
-            filters_applied["max_distance"] = max_distance
-
-        with_pos = sum(1 for a in aircraft if is_valid_position(a.get("lat"), a.get("lon")))
-        military_count = sum(1 for a in aircraft if a.get("dbFlags", 0) & 1)
-        emergency = [
-            {"hex": a.get("hex"), "flight": a.get("flight"), "squawk": a.get("squawk")}
-            for a in aircraft if a.get("squawk") in ["7500", "7600", "7700"]
-        ]
-
-        # Category breakdown
-        categories_count = {}
-        for a in aircraft:
-            cat = a.get("category", "unknown")
-            categories_count[cat] = categories_count.get(cat, 0) + 1
-
-        # Altitude breakdown
-        alt_ground = sum(
-            1 for a in aircraft
-            if a.get("alt_baro") == "ground" or
-            (isinstance(a.get("alt_baro"), (int, float)) and a.get("alt_baro", 99999) <= 0)
-        )
-        alt_low = sum(
-            1 for a in aircraft
-            if isinstance(a.get("alt_baro"), (int, float)) and 0 < a["alt_baro"] < 10000
-        )
-        alt_med = sum(
-            1 for a in aircraft
-            if isinstance(a.get("alt_baro"), (int, float)) and 10000 <= a["alt_baro"] < 30000
-        )
-        alt_high = sum(
-            1 for a in aircraft
-            if isinstance(a.get("alt_baro"), (int, float)) and a["alt_baro"] >= 30000
-        )
-
-        # Distance breakdown
-        dist_close = sum(1 for a in aircraft if a.get("distance_nm") is not None and a["distance_nm"] < 25)
-        dist_near = sum(1 for a in aircraft if a.get("distance_nm") is not None and 25 <= a["distance_nm"] < 50)
-        dist_mid = sum(1 for a in aircraft if a.get("distance_nm") is not None and 50 <= a["distance_nm"] < 100)
-        dist_far = sum(1 for a in aircraft if a.get("distance_nm") is not None and a["distance_nm"] >= 100)
-
-        # Speed breakdown
-        speed_slow = sum(1 for a in aircraft if a.get("gs") and a["gs"] < 200)
-        speed_med = sum(1 for a in aircraft if a.get("gs") and 200 <= a["gs"] < 400)
-        speed_fast = sum(1 for a in aircraft if a.get("gs") and a["gs"] >= 400)
-
-        return {
-            "total": len(aircraft),
-            "with_position": with_pos,
-            "military": military_count,
-            "emergency": emergency,
-            "categories": categories_count,
-            "altitude": {"ground": alt_ground, "low": alt_low, "medium": alt_med, "high": alt_high},
-            "distance": {"close": dist_close, "near": dist_near, "mid": dist_mid, "far": dist_far},
-            "speed": {"slow": speed_slow, "medium": speed_med, "fast": speed_fast},
-            "messages": 0,
-            "filters_applied": filters_applied if filters_applied else None,
-            "timestamp": datetime.utcnow().isoformat() + "Z"
-        }
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Error fetching stats: {str(e)}")
+    cached = get_cached_stats()
+    if cached is None:
+        raise HTTPException(status_code=503, detail="Stats not yet available, please retry in a few seconds")
+    return cached
 
 
 @router.get(

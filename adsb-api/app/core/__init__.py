@@ -17,6 +17,8 @@ from app.core.utils import (
     safe_request,
     get_aircraft_icon,
     simplify_aircraft,
+    get_http_client,
+    close_http_client,
 )
 
 __all__ = [
@@ -40,4 +42,6 @@ __all__ = [
     "safe_request",
     "get_aircraft_icon",
     "simplify_aircraft",
+    "get_http_client",
+    "close_http_client",
 ]
