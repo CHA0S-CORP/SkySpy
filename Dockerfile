@@ -35,11 +35,17 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install only runtime dependencies for libacars
+# Install runtime dependencies for libacars and atc-whisper
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     zlib1g \
     libxml2 \
+    # For scipy/numpy performance (atc-whisper)
+    libopenblas0 \
+    libatlas3-base \
+    # For building webrtcvad (atc-whisper)
+    build-essential \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy libacars from builder stage
@@ -48,7 +54,8 @@ COPY --from=libacars-builder /usr/local/include/libacars-2/ /usr/local/include/l
 RUN ldconfig
 
 COPY adsb-api/pyproject.toml .
-RUN pip install --no-cache-dir -e .
+COPY adsb-api/atc-whisper/ ./atc-whisper/
+RUN pip install --no-cache-dir -e ./atc-whisper && pip install --no-cache-dir -e .
 
 # Copy application package
 COPY adsb-api/app/ ./app/

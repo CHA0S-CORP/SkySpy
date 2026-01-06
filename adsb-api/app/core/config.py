@@ -108,6 +108,15 @@ class Settings(BaseSettings):
     whisper_enabled: bool = False
     whisper_url: str = "http://whisper:9000"
 
+    # ATC Whisper (optimized ATC transcription with preprocessing and VAD)
+    # Uses transcription_service_url and transcription_model for the backend
+    atc_whisper_enabled: bool = False
+    atc_whisper_max_concurrent: int = 2  # Limit for RPi
+    atc_whisper_segment_by_vad: bool = True  # Split audio by voice activity
+    atc_whisper_preprocess: bool = True  # Apply ATC-optimized preprocessing
+    atc_whisper_noise_reduce: bool = True  # Apply noise reduction
+    atc_whisper_postprocess: bool = True  # Apply ATC-specific text corrections
+
     @property
     def ultrafeeder_url(self) -> str:
         return f"http://{self.ultrafeeder_host}:{self.ultrafeeder_port}"

@@ -1412,6 +1412,137 @@ async def _transcribe_with_external_service(
     return response.json()
 
 
+async def _transcribe_with_atc_whisper(
+    audio_data: bytes,
+    filename: str,
+) -> dict:
+    """
+    Transcribe audio using atc-whisper library with ATC-optimized preprocessing.
+
+    Features:
+    - Bandpass filtering for airband frequencies (300-3400Hz)
+    - Noise reduction for AM hiss
+    - Voice Activity Detection to segment by transmissions
+    - ATC-specific post-processing corrections
+
+    Uses transcription_service_url and transcription_model from settings.
+    """
+    try:
+        # Import atc-whisper components (lazy import to handle optional dependency)
+        from atc_whisper import (
+            ATCTranscriber,
+            ATCPostProcessor,
+            TranscriptionConfig,
+            PreprocessConfig,
+            VADConfig,
+            BatchResult,
+        )
+        from atc_whisper.models import TranscriptionModel
+        from atc_whisper.preprocessing import load_audio
+    except ImportError as e:
+        logger.error(f"atc-whisper not installed: {e}. Install with: pip install -e ./atc-whisper")
+        raise ValueError("atc-whisper library not available") from e
+
+    # Build base URL from transcription_service_url
+    base_url = settings.transcription_service_url.rstrip("/")
+    # Remove /v1/audio/transcriptions suffix if present (atc-whisper adds it)
+    if base_url.endswith("/v1/audio/transcriptions"):
+        base_url = base_url[:-len("/audio/transcriptions")]
+    elif not base_url.endswith("/v1"):
+        pass  # Keep as-is, atc-whisper will add /v1/audio/transcriptions
+
+    # Determine model
+    model_str = settings.transcription_model or "large-v3"
+    # Try to map to TranscriptionModel enum, fallback to string
+    try:
+        model = TranscriptionModel(model_str)
+    except ValueError:
+        # Model string not in enum, use large-v3 as default
+        model = TranscriptionModel.LARGE_V3
+        logger.warning(f"Model '{model_str}' not in TranscriptionModel enum, using large-v3")
+
+    # Configure transcription
+    config = TranscriptionConfig(
+        base_url=base_url,
+        model=model,
+        language="en",
+        max_concurrent=settings.atc_whisper_max_concurrent,
+    )
+
+    # Configure preprocessing (ATC-optimized)
+    preprocess_config = PreprocessConfig(
+        noise_reduce=settings.atc_whisper_noise_reduce,
+    )
+
+    # Configure VAD
+    vad_config = VADConfig(
+        aggressiveness=2,
+        min_speech_ms=200,
+        min_silence_ms=300,
+    )
+
+    # Write audio data to a temporary file for processing
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=Path(filename).suffix, delete=False) as tmp:
+        tmp.write(audio_data)
+        tmp_path = tmp.name
+
+    try:
+        async with ATCTranscriber(config, preprocess_config, vad_config) as transcriber:
+            if settings.atc_whisper_segment_by_vad:
+                result = await transcriber.transcribe_file(tmp_path, segment_by_vad=True)
+            else:
+                result = await transcriber.transcribe_file(tmp_path, segment_by_vad=False)
+
+            # Handle BatchResult vs TranscriptionResult
+            if isinstance(result, BatchResult):
+                text = result.full_text
+                segments = []
+                for r in result.results:
+                    if r.source_segment:
+                        segments.append({
+                            "start": r.source_segment.start_ms / 1000,
+                            "end": r.source_segment.end_ms / 1000,
+                            "text": r.text,
+                        })
+                    else:
+                        segments.extend(r.segments)
+                duration = result.total_duration_seconds
+                preprocess_ms = result.total_preprocess_ms
+                transcribe_ms = result.total_transcribe_ms
+            else:
+                text = result.text
+                segments = result.segments
+                duration = result.duration_seconds
+                preprocess_ms = result.preprocess_ms
+                transcribe_ms = result.transcribe_ms
+
+            # Apply ATC post-processing corrections
+            if settings.atc_whisper_postprocess:
+                text = ATCPostProcessor.process(text)
+
+            logger.info(
+                f"ATC Whisper transcription complete: "
+                f"duration={duration:.1f}s, preprocess={preprocess_ms:.0f}ms, "
+                f"transcribe={transcribe_ms:.0f}ms, segments={len(segments)}"
+            )
+
+            return {
+                "text": text,
+                "segments": segments,
+                "language": "en",
+                "duration": duration,
+            }
+
+    finally:
+        # Clean up temp file
+        import os
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+
 async def _fetch_audio_data(
     client: httpx.AsyncClient,
     filename: str,
@@ -1465,8 +1596,13 @@ async def process_transcription(
         True if transcription succeeded
     """
     # Check if we have a transcription service configured
-    if not settings.whisper_enabled and not settings.transcription_service_url:
-        logger.error("No transcription service configured (whisper or external)")
+    has_transcription = (
+        settings.whisper_enabled
+        or settings.transcription_service_url
+        or settings.atc_whisper_enabled
+    )
+    if not has_transcription:
+        logger.error("No transcription service configured")
         return False
 
     async with db_session_factory() as db:
@@ -1488,15 +1624,20 @@ async def process_transcription(
         try:
             # Call transcription service
             async with httpx.AsyncClient(timeout=120.0) as client:
-                # Both whisper and external service need audio file data
+                # All transcription methods need audio file data
                 audio_data = await _fetch_audio_data(
                     client, transmission.filename, transmission.s3_key
                 )
                 if not audio_data:
                     raise ValueError("Failed to fetch audio data")
 
-                if settings.whisper_enabled:
-                    # Whisper service uses multipart file upload
+                if settings.atc_whisper_enabled:
+                    # ATC Whisper with preprocessing, VAD, and post-processing
+                    result_data = await _transcribe_with_atc_whisper(
+                        audio_data, transmission.filename
+                    )
+                elif settings.whisper_enabled:
+                    # Local Whisper service uses multipart file upload
                     result_data = await _transcribe_with_whisper(
                         client, audio_data, transmission.filename
                     )
@@ -1851,12 +1992,20 @@ async def get_audio_stats(db: AsyncSession) -> dict:
 
 def get_service_stats() -> dict:
     """Get service-level statistics."""
+    transcription_enabled = (
+        settings.transcription_enabled
+        or settings.whisper_enabled
+        or settings.atc_whisper_enabled
+    )
     return {
         "radio_enabled": settings.radio_enabled,
         "radio_audio_dir": settings.radio_audio_dir,
-        "transcription_enabled": settings.transcription_enabled or settings.whisper_enabled,
+        "transcription_enabled": transcription_enabled,
         "whisper_enabled": settings.whisper_enabled,
         "whisper_url": settings.whisper_url if settings.whisper_enabled else None,
+        "atc_whisper_enabled": settings.atc_whisper_enabled,
+        "atc_whisper_vad": settings.atc_whisper_segment_by_vad,
+        "atc_whisper_preprocess": settings.atc_whisper_preprocess,
         "s3_enabled": settings.s3_enabled,
         "s3_prefix": settings.radio_s3_prefix,
         "queue_size": _transcription_queue.qsize() if _transcription_queue else 0,
