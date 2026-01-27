@@ -1444,12 +1444,16 @@ async def _transcribe_with_atc_whisper(
         raise ValueError("atc-whisper library not available") from e
 
     # Build base URL from transcription_service_url
+    logger.info(f"ATC Whisper: transcription_service_url={settings.transcription_service_url}")
+    if not settings.transcription_service_url:
+        raise ValueError("TRANSCRIPTION_SERVICE_URL is not set but ATC_WHISPER_ENABLED=true")
     base_url = settings.transcription_service_url.rstrip("/")
     # Remove /v1/audio/transcriptions suffix if present (atc-whisper adds it)
     if base_url.endswith("/v1/audio/transcriptions"):
         base_url = base_url[:-len("/audio/transcriptions")]
     elif not base_url.endswith("/v1"):
         pass  # Keep as-is, atc-whisper will add /v1/audio/transcriptions
+    logger.info(f"ATC Whisper: using base_url={base_url}")
 
     # Determine model
     model_str = settings.transcription_model or "large-v3"
