@@ -1,0 +1,3054 @@
+/* ============================================================================
+   Extended Stats Components Styles
+   Covers: FlightPatterns, Geographic, SessionAnalytics, TimeComparison,
+   ACARS Stats, and Achievements sections
+   ============================================================================ */
+
+/* ============================================================================
+   Shared Section Styles
+   ============================================================================ */
+
+.stats-section {
+  background: linear-gradient(135deg, rgba(20, 30, 45, 0.9), rgba(15, 25, 35, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 20px;
+}
+
+.stats-section .section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.stats-section .section-header svg {
+  color: var(--accent-cyan);
+}
+
+.stats-section .section-status {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.stats-section .section-status.active {
+  background: rgba(0, 255, 136, 0.15);
+  color: var(--accent-green);
+}
+
+.stats-section .section-status.inactive {
+  background: rgba(107, 114, 128, 0.15);
+  color: var(--text-dim);
+}
+
+.stats-section .section-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.stats-section .section-loading svg {
+  color: var(--accent-cyan);
+  opacity: 0.7;
+}
+
+.stats-section .section-loading span {
+  font-size: 13px;
+}
+
+.stats-section .card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+}
+
+.stats-section .card-header svg {
+  color: var(--accent-cyan);
+  opacity: 0.8;
+}
+
+.stats-section .card-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(0, 200, 255, 0.1);
+  color: var(--accent-cyan);
+}
+
+.stats-section .empty-state {
+  text-align: center;
+  padding: 24px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+/* ============================================================================
+   Flight Patterns Section
+   ============================================================================ */
+
+.flight-patterns-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.patterns-card {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+/* Routes Card */
+.routes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.route-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.route-rank {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  width: 18px;
+  text-align: center;
+}
+
+.route-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.route-path {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.route-origin,
+.route-dest {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.route-path svg {
+  color: var(--text-dim);
+}
+
+.route-bar-container {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.route-bar-fill {
+  height: 100%;
+  background: var(--accent-cyan);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.route-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  min-width: 30px;
+  text-align: right;
+}
+
+/* Hours Heatmap */
+.hours-heatmap {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 3px;
+}
+
+.hour-cell {
+  aspect-ratio: 1;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  cursor: default;
+}
+
+.hour-cell:hover {
+  transform: scale(1.1);
+  z-index: 1;
+}
+
+.hour-label {
+  font-size: 9px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-primary);
+  opacity: 0.8;
+}
+
+.hours-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  justify-content: center;
+}
+
+.hours-legend .legend-label {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.legend-gradient {
+  width: 80px;
+  height: 8px;
+  background: linear-gradient(90deg, rgba(0, 200, 255, 0.1), rgba(0, 200, 255, 0.8));
+  border-radius: 4px;
+}
+
+/* Aircraft Types Chart */
+.types-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.type-bar-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.type-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.type-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.type-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: #f4f4f5;
+}
+
+.type-bar-track {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.type-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* Duration List */
+.duration-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.duration-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+}
+
+.duration-type {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.duration-value-container {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.duration-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+}
+
+.duration-range {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* ============================================================================
+   Geographic Section
+   ============================================================================ */
+
+.geographic-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.geo-card {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+/* Countries Pie Chart */
+.countries-content {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.pie-chart-container {
+  width: 140px;
+  height: 140px;
+  flex-shrink: 0;
+}
+
+.pie-chart {
+  width: 100%;
+  height: 100%;
+}
+
+.pie-segment {
+  transition: opacity 0.2s;
+  cursor: default;
+}
+
+.pie-segment:hover {
+  opacity: 0.8;
+}
+
+.pie-center-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 700;
+  fill: var(--text-primary);
+}
+
+.pie-center-label {
+  font-size: 8px;
+  fill: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.countries-legend {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.countries-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.countries-legend .legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.countries-legend .legend-label {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.countries-legend .legend-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* Airlines List */
+.airlines-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.airline-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.airline-rank {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  width: 18px;
+  text-align: center;
+}
+
+.airline-info {
+  min-width: 100px;
+}
+
+.airline-name {
+  font-size: 12px;
+  color: var(--text-primary);
+  display: block;
+}
+
+.airline-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.airline-bar-container {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.airline-bar-fill {
+  height: 100%;
+  background: var(--accent-green);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.airline-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-green);
+  min-width: 30px;
+  text-align: right;
+}
+
+/* Airports Grid */
+.airports-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.airport-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.2s;
+}
+
+.airport-chip:hover {
+  border-color: rgba(0, 200, 255, 0.3);
+  background: rgba(0, 200, 255, 0.05);
+}
+
+.airport-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.airport-name {
+  font-size: 9px;
+  color: var(--text-dim);
+  text-align: center;
+  margin-top: 2px;
+}
+
+.airport-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--accent-cyan);
+  margin-top: 4px;
+}
+
+.airports-overflow {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 10px;
+}
+
+/* Regions */
+.regions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.region-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.region-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 80px;
+}
+
+.region-bar-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.region-bar-fill {
+  height: 100%;
+  background: var(--accent-purple);
+  border-radius: 3px;
+}
+
+.region-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--accent-purple);
+  min-width: 30px;
+  text-align: right;
+}
+
+/* ============================================================================
+   Session Analytics Section
+   ============================================================================ */
+
+.session-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.analytics-card {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+/* Quality Gauge */
+.quality-gauge-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.quality-gauge {
+  width: 180px;
+  height: 110px;
+}
+
+.gauge-value-arc {
+  transition: stroke-dasharray 0.5s ease;
+}
+
+.gauge-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 28px;
+  font-weight: 700;
+  fill: var(--text-primary);
+}
+
+.gauge-label {
+  font-size: 10px;
+  fill: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.quality-details {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.quality-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.quality-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+
+.quality-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Engagement Metrics */
+.engagement-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.engagement-metric {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+}
+
+.metric-icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 200, 255, 0.1);
+  border-radius: 8px;
+  color: var(--accent-cyan);
+}
+
+.metric-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+
+.metric-subtext {
+  font-size: 10px;
+  color: var(--accent-cyan);
+}
+
+.metric-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.metric-trend {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.metric-trend.up {
+  color: var(--accent-green);
+}
+
+.metric-trend.down {
+  color: var(--accent-red);
+}
+
+/* Completeness Bars */
+.completeness-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.completeness-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.completeness-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.completeness-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.completeness-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.completeness-bar-track {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.completeness-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* Session Distribution */
+.session-distribution {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dist-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dist-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  min-width: 70px;
+}
+
+.dist-bar-track {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.dist-bar-fill {
+  height: 100%;
+  background: var(--accent-purple);
+  border-radius: 4px;
+}
+
+.dist-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--accent-purple);
+  min-width: 30px;
+  text-align: right;
+}
+
+/* ============================================================================
+   Time Comparison Section
+   ============================================================================ */
+
+.time-comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.comparison-card {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+/* Week over Week */
+.wow-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.wow-metric {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+}
+
+.wow-metric-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.wow-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.wow-change {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.wow-change.positive {
+  color: var(--accent-green);
+}
+
+.wow-change.negative {
+  color: var(--accent-red);
+}
+
+.wow-change.neutral {
+  color: var(--text-dim);
+}
+
+.wow-values {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.wow-current {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.wow-vs {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.wow-previous {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* Day/Night */
+.daynight-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.daynight-bar {
+  display: flex;
+  height: 32px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.daynight-day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f7d794, #f9ca24);
+  color: #333;
+  transition: width 0.3s ease;
+}
+
+.daynight-night {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #5f27cd, #341f97);
+  color: white;
+  transition: width 0.3s ease;
+}
+
+.daynight-stats {
+  display: flex;
+  justify-content: space-around;
+}
+
+.daynight-stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.daynight-stat.day svg {
+  color: #f9ca24;
+}
+
+.daynight-stat.night svg {
+  color: #5f27cd;
+}
+
+.daynight-stat-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.daynight-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.daynight-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.daynight-times {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* Weekend/Weekday */
+.weekend-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.weekend-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.weekend-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.weekend-bar-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 70px;
+}
+
+.weekend-bar-track {
+  flex: 1;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.weekend-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.weekend-bar-fill.weekday {
+  background: var(--accent-cyan);
+}
+
+.weekend-bar-fill.weekend {
+  background: var(--accent-purple);
+}
+
+.weekend-bar-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 60px;
+  text-align: right;
+}
+
+.weekend-totals {
+  display: flex;
+  justify-content: space-around;
+}
+
+.weekend-total {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.total-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.total-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* Trends */
+.trends-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.trend-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trend-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.trend-bars {
+  display: flex;
+  align-items: flex-end;
+  height: 50px;
+  gap: 2px;
+}
+
+.trend-bar {
+  flex: 1;
+  background: var(--accent-cyan);
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+  transition: height 0.3s ease;
+  cursor: default;
+}
+
+.trend-bar:hover {
+  opacity: 0.8;
+}
+
+.trend-bar.weekly {
+  background: var(--accent-green);
+}
+
+.trend-bar.monthly {
+  background: var(--accent-purple);
+}
+
+/* ============================================================================
+   ACARS Stats Section
+   ============================================================================ */
+
+.acars-summary {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+}
+
+.acars-summary-stat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.acars-summary-stat svg {
+  color: var(--accent-cyan);
+}
+
+.acars-summary-stat .stat-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.acars-summary-stat .stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+
+.acars-summary-stat .stat-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.acars-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.acars-card {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+/* ACARS Types */
+.acars-types-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.acars-type-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.acars-type-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.acars-type-label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.type-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 2px 6px;
+  background: rgba(0, 200, 255, 0.1);
+  border-radius: 3px;
+}
+
+.type-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.acars-type-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.acars-type-bar-track {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.acars-type-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* ACARS Airlines */
+.acars-airlines-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.acars-airline-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ACARS Trend */
+.acars-trend-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trend-bars-container {
+  display: flex;
+  align-items: flex-end;
+  height: 80px;
+  gap: 2px;
+}
+
+.acars-trend-bar {
+  flex: 1;
+  background: linear-gradient(180deg, var(--accent-cyan), rgba(0, 200, 255, 0.3));
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+  transition: height 0.3s ease;
+  position: relative;
+}
+
+.acars-trend-bar:hover {
+  background: var(--accent-cyan);
+}
+
+.acars-trend-bar .bar-tooltip {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.acars-trend-bar:hover .bar-tooltip {
+  display: block;
+}
+
+.trend-x-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* Service Stats */
+.service-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.service-stat {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+}
+
+.service-stat-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.service-stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* ============================================================================
+   Achievements Section
+   ============================================================================ */
+
+.achievements-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.achievements-card {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+/* Records Grid */
+.records-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.record-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.05), rgba(255, 215, 0, 0.02));
+  border: 1px solid rgba(255, 215, 0, 0.15);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.record-card.clickable {
+  cursor: pointer;
+}
+
+.record-card:hover {
+  border-color: rgba(255, 215, 0, 0.3);
+  transform: translateY(-2px);
+}
+
+.record-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 215, 0, 0.15);
+  border-radius: 10px;
+  color: #ffd700;
+  flex-shrink: 0;
+}
+
+.record-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.record-title {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.record-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 2px 0;
+}
+
+.record-aircraft {
+  font-size: 11px;
+  color: var(--accent-cyan);
+}
+
+.record-date {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* Rare Sightings */
+.sightings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sighting-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.sighting-item.clickable {
+  cursor: pointer;
+}
+
+.sighting-item:hover {
+  background: rgba(0, 200, 255, 0.05);
+}
+
+.sighting-rarity {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.sighting-rarity svg {
+  color: white;
+}
+
+.sighting-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sighting-type {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: block;
+}
+
+.sighting-callsign {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.sighting-details {
+  text-align: right;
+}
+
+.sighting-reason {
+  font-size: 10px;
+  color: var(--accent-purple);
+  display: block;
+}
+
+.sighting-date {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* Collection Progress */
+.collection-items {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.collection-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.collection-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.collection-header svg {
+  color: var(--accent-cyan);
+}
+
+.collection-header span:first-of-type {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.collection-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.collection-bar-track {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.collection-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.collection-bar-fill.types {
+  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-green));
+}
+
+.collection-bar-fill.airlines {
+  background: linear-gradient(90deg, var(--accent-purple), var(--accent-cyan));
+}
+
+.collection-bar-fill.countries {
+  background: linear-gradient(90deg, #ff9f43, #f7d794);
+}
+
+.recent-unlocks {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.unlocks-title {
+  font-size: 11px;
+  color: var(--text-dim);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.unlocks-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.unlock-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(0, 255, 136, 0.1);
+  border-radius: 4px;
+  font-size: 10px;
+  color: var(--accent-green);
+}
+
+/* Streaks */
+.streaks-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.streak-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+}
+
+.streak-item.active {
+  background: rgba(255, 159, 67, 0.08);
+  border-color: rgba(255, 159, 67, 0.2);
+}
+
+.streak-icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 159, 67, 0.1);
+  border-radius: 8px;
+  color: var(--text-dim);
+}
+
+.streak-item.active .streak-icon {
+  background: rgba(255, 159, 67, 0.2);
+  color: #ff9f43;
+}
+
+.streak-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.streak-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-dim);
+  line-height: 1.1;
+}
+
+.streak-item.active .streak-value {
+  color: #ff9f43;
+}
+
+.streak-label {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.best-streak {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 8px;
+  background: rgba(255, 215, 0, 0.05);
+  border-radius: 6px;
+  font-size: 11px;
+  color: #ffd700;
+}
+
+/* Milestones */
+.milestones-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.milestone-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  opacity: 0.6;
+}
+
+.milestone-item.achieved {
+  opacity: 1;
+  background: rgba(0, 255, 136, 0.05);
+  border: 1px solid rgba(0, 255, 136, 0.15);
+}
+
+.milestone-icon {
+  color: var(--text-dim);
+}
+
+.milestone-item.achieved .milestone-icon {
+  color: var(--accent-green);
+}
+
+.milestone-content {
+  flex: 1;
+}
+
+.milestone-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: block;
+}
+
+.milestone-description {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.milestone-progress {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.milestone-progress-fill {
+  height: 100%;
+  background: var(--accent-cyan);
+  border-radius: 2px;
+}
+
+.milestone-date {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* Badges */
+.badges-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.badge-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px;
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+
+.badge-item.locked {
+  opacity: 0.4;
+}
+
+.badge-item.unlocked {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.badge-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: white;
+}
+
+.badge-item.locked .badge-icon {
+  background: rgba(107, 114, 128, 0.3) !important;
+  color: var(--text-dim);
+}
+
+.badge-name {
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* ============================================================================
+   Responsive Adjustments
+   ============================================================================ */
+
+@media (max-width: 1200px) {
+  .flight-patterns-grid,
+  .geographic-grid,
+  .session-analytics-grid,
+  .time-comparison-grid,
+  .acars-stats-grid,
+  .achievements-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .countries-content {
+    flex-direction: column;
+  }
+
+  .pie-chart-container {
+    width: 120px;
+    height: 120px;
+  }
+
+  .airports-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .engagement-metrics,
+  .wow-metrics,
+  .records-grid,
+  .streaks-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .badges-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .acars-summary {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .hours-heatmap {
+    grid-template-columns: repeat(8, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .badges-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .airports-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================================
+   Standalone Stats Pages - Full Page Views
+   ============================================================================ */
+
+.stats-page {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.stats-page .page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.stats-page .page-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stats-page .page-title svg {
+  color: var(--accent-cyan);
+}
+
+.stats-page .page-title h1 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.stats-page .service-status {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 4px;
+  margin-left: 12px;
+}
+
+.stats-page .service-status.active {
+  background: rgba(0, 255, 136, 0.15);
+  color: var(--accent-green);
+}
+
+.stats-page .service-status.inactive {
+  background: rgba(107, 114, 128, 0.15);
+  color: var(--text-dim);
+}
+
+.stats-page .page-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.stats-page .refresh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.stats-page .refresh-btn:hover {
+  background: rgba(0, 200, 255, 0.1);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.stats-page .refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.stats-page .refresh-btn .spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Stats Filters Bar */
+.stats-filters {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, rgba(20, 30, 45, 0.9), rgba(15, 25, 35, 0.95));
+  border: 1px solid rgba(0, 200, 255, 0.15);
+  border-radius: 12px;
+  flex-wrap: wrap;
+}
+
+.stats-filters .filter-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stats-filters .filter-group svg {
+  color: var(--text-dim);
+}
+
+.stats-filters .filter-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.stats-filters .filter-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+}
+
+.time-range-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.time-range-buttons .time-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.time-range-buttons .time-btn:hover {
+  background: rgba(0, 200, 255, 0.1);
+  border-color: var(--accent-cyan);
+}
+
+.time-range-buttons .time-btn.active {
+  background: rgba(0, 200, 255, 0.15);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.advanced-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.advanced-filter-btn:hover,
+.advanced-filter-btn.active {
+  background: rgba(0, 200, 255, 0.1);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.advanced-filter-btn .chevron {
+  transition: transform 0.2s;
+}
+
+.advanced-filter-btn .chevron.open {
+  transform: rotate(180deg);
+}
+
+.advanced-filters-panel {
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-top: -8px;
+}
+
+.advanced-filters-panel .filter-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.advanced-filters-panel .filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 200px;
+}
+
+.advanced-filters-panel .filter-field label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.advanced-filters-panel .filter-field input,
+.advanced-filters-panel .filter-field select {
+  padding: 8px 12px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.advanced-filters-panel .filter-field input:focus,
+.advanced-filters-panel .filter-field select:focus {
+  border-color: var(--accent-cyan);
+}
+
+/* View Tabs in Filters */
+.view-tabs {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.view-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-tab:hover {
+  background: rgba(0, 200, 255, 0.1);
+  border-color: rgba(0, 200, 255, 0.3);
+}
+
+.view-tab.active {
+  background: rgba(0, 200, 255, 0.15);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+/* Summary Cards */
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.summary-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  background: linear-gradient(135deg, rgba(20, 30, 45, 0.9), rgba(15, 25, 35, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.summary-card.gold .summary-icon {
+  background: rgba(255, 215, 0, 0.15);
+  color: #ffd700;
+}
+
+.summary-card.purple .summary-icon {
+  background: rgba(163, 113, 247, 0.15);
+  color: var(--accent-purple);
+}
+
+.summary-card.orange .summary-icon {
+  background: rgba(255, 159, 67, 0.15);
+  color: #ff9f43;
+}
+
+.summary-card.green .summary-icon {
+  background: rgba(0, 255, 136, 0.15);
+  color: var(--accent-green);
+}
+
+.summary-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 200, 255, 0.1);
+  border-radius: 12px;
+  color: var(--accent-cyan);
+}
+
+.summary-icon.up { color: var(--accent-green); }
+.summary-icon.down { color: var(--accent-red); }
+
+.summary-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+
+.summary-value.positive { color: var(--accent-green); }
+.summary-value.negative { color: var(--accent-red); }
+.summary-value.neutral { color: var(--text-secondary); }
+
+.summary-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+/* Loading and Error States */
+.stats-page .loading-state,
+.stats-page .error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.stats-page .loading-state svg {
+  color: var(--accent-cyan);
+  margin-bottom: 12px;
+}
+
+.stats-page .error-state button {
+  margin-top: 16px;
+  padding: 8px 20px;
+  background: rgba(0, 200, 255, 0.1);
+  border: 1px solid var(--accent-cyan);
+  border-radius: 6px;
+  color: var(--accent-cyan);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.stats-page .error-state button:hover {
+  background: rgba(0, 200, 255, 0.2);
+}
+
+/* Expanded Grids for Full Pages */
+.flight-patterns-grid.expanded,
+.geographic-grid.expanded,
+.session-analytics-grid.expanded,
+.time-comparison-grid.expanded,
+.acars-stats-grid.expanded,
+.achievements-grid.expanded {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.achievements-grid.expanded .full-width,
+.acars-stats-grid.expanded .full-width {
+  grid-column: 1 / -1;
+}
+
+/* Large Cards for Full Pages */
+.patterns-card.large,
+.geo-card.large,
+.analytics-card.large,
+.comparison-card.large,
+.acars-card.large,
+.achievements-card.large {
+  padding: 20px;
+}
+
+/* Hours Bar Chart */
+.hours-bar-chart {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.hours-bar-chart .bar-chart-title {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+.hours-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 80px;
+}
+
+.hour-bar-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.hour-bar {
+  width: 100%;
+  background: var(--accent-cyan);
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+  transition: height 0.3s ease;
+}
+
+.hour-bar-label {
+  font-size: 8px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+/* Trend Tabs */
+.trend-tabs {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.trend-tab {
+  padding: 4px 10px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.trend-tab:hover {
+  border-color: var(--accent-cyan);
+  color: var(--text-secondary);
+}
+
+.trend-tab.active {
+  background: rgba(0, 200, 255, 0.1);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+/* Large Trend Charts */
+.trend-chart.large .trend-bars {
+  height: 120px;
+}
+
+.trend-bars.large {
+  height: 120px;
+  gap: 3px;
+}
+
+.trend-bars.large .trend-bar-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.trend-bar-label {
+  font-size: 8px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+/* Large Pie Chart */
+.pie-chart-container.large {
+  width: 180px;
+  height: 180px;
+}
+
+/* Expanded Legend */
+.countries-legend.expanded {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.countries-legend.expanded .legend-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-left: 8px;
+}
+
+/* Countries Bar Chart */
+.countries-bar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.country-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.country-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 80px;
+}
+
+.country-bar-track {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.country-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.country-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  min-width: 30px;
+  text-align: right;
+}
+
+/* Expanded Airports Grid */
+.airports-grid.expanded {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* Expanded Quality Section */
+.quality-gauge-container.large .quality-gauge {
+  width: 220px;
+  height: 140px;
+}
+
+.quality-details.expanded {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* Expanded Engagement Metrics */
+.engagement-metrics.expanded {
+  gap: 16px;
+}
+
+.engagement-metric.large {
+  padding: 16px;
+}
+
+.engagement-metric.large .metric-icon {
+  width: 48px;
+  height: 48px;
+}
+
+.metric-description {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+/* Expanded Completeness */
+.completeness-bars.expanded {
+  gap: 12px;
+}
+
+.completeness-item.expanded {
+  gap: 6px;
+}
+
+.completeness-item.expanded .completeness-header {
+  gap: 8px;
+}
+
+.completeness-item.expanded .completeness-header svg {
+  color: var(--text-dim);
+}
+
+/* Most Watched List */
+.most-watched-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.watched-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+}
+
+.watched-rank {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  width: 20px;
+  text-align: center;
+}
+
+.watched-info {
+  flex: 1;
+}
+
+.watched-callsign {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: block;
+}
+
+.watched-type {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.watched-stats {
+  text-align: right;
+}
+
+.watched-duration {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  display: block;
+}
+
+.watched-sessions {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* Return Visitors */
+.return-visitors-content {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.return-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+}
+
+.return-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.return-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.frequent-visitors {
+  grid-column: 1 / -1;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.frequent-title {
+  font-size: 11px;
+  color: var(--text-dim);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.frequent-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.frequent-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(0, 200, 255, 0.05);
+  border-radius: 6px;
+}
+
+.frequent-callsign {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.frequent-visits {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* Large Day/Night Section */
+.daynight-bar.large {
+  height: 48px;
+  border-radius: 8px;
+}
+
+.daynight-bar.large .daynight-pct {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+.daynight-stats.expanded {
+  gap: 40px;
+}
+
+.daynight-stat.day svg,
+.daynight-stat.night svg {
+  width: 28px;
+  height: 28px;
+}
+
+.daynight-peak {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.daynight-times.expanded {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  gap: 24px;
+}
+
+.daynight-times.expanded span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Large Weekend Section */
+.weekend-bars.large .weekend-bar-track {
+  height: 28px;
+}
+
+.weekend-totals.expanded {
+  gap: 24px;
+}
+
+.weekend-total .total-days {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.weekend-total.comparison .total-value {
+  font-size: 20px;
+}
+
+/* Large WoW Metrics */
+.wow-metrics.expanded {
+  gap: 16px;
+}
+
+.wow-metric.large {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+}
+
+.wow-metric-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 200, 255, 0.1);
+  border-radius: 10px;
+  color: var(--accent-cyan);
+}
+
+.wow-metric-content {
+  flex: 1;
+}
+
+/* Expanded ACARS */
+.acars-types-chart.expanded,
+.acars-airlines-list.expanded {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.acars-type-item.expanded,
+.acars-airline-item.expanded {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.acars-type-item.expanded:last-child,
+.acars-airline-item.expanded:last-child {
+  border-bottom: none;
+}
+
+.acars-trend-chart.expanded .trend-bars-container {
+  height: 120px;
+}
+
+.acars-trend-bar-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.trend-hour-label {
+  font-size: 8px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.trend-x-axis.expanded {
+  margin-top: 8px;
+}
+
+.service-stats-grid.expanded {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.service-stats-grid.expanded .service-stat {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.service-stats-grid.expanded .service-stat svg {
+  color: var(--accent-cyan);
+}
+
+.service-indicator {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.service-indicator.running {
+  background: rgba(0, 255, 136, 0.15);
+  color: var(--accent-green);
+}
+
+.service-indicator.stopped {
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--accent-red);
+}
+
+/* Message Distribution */
+.message-distribution {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.distribution-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  padding: 8px 0;
+}
+
+.distribution-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 4px;
+  opacity: 0.2;
+}
+
+.distribution-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-primary);
+  position: relative;
+  z-index: 1;
+  min-width: 30px;
+}
+
+.distribution-pct {
+  margin-left: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  position: relative;
+  z-index: 1;
+}
+
+/* Achievements Content */
+.achievements-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Large Records Grid */
+.records-grid.large {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.record-card.large {
+  padding: 18px;
+}
+
+.record-card.large .record-icon {
+  width: 56px;
+  height: 56px;
+}
+
+.record-card.large .record-icon.large {
+  width: 64px;
+  height: 64px;
+}
+
+.record-card.large .record-value {
+  font-size: 20px;
+}
+
+.record-card.large .record-date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+/* Large Sightings List */
+.sightings-list.expanded {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.sighting-item.large {
+  padding: 14px;
+}
+
+.sighting-item.large .sighting-rarity {
+  width: 36px;
+  height: 36px;
+}
+
+.sighting-item.large .sighting-rarity.large {
+  width: 44px;
+  height: 44px;
+}
+
+.sighting-rarity-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.7;
+}
+
+/* Large Collection Items */
+.collection-items.expanded {
+  gap: 20px;
+}
+
+.collection-item.large {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 10px;
+}
+
+.collection-item.large .collection-header {
+  margin-bottom: 10px;
+}
+
+.collection-item.large .collection-header svg {
+  width: 24px;
+  height: 24px;
+}
+
+.collection-bar-track.large {
+  height: 12px;
+  border-radius: 6px;
+}
+
+.collection-pct {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 6px;
+}
+
+.recent-unlocks.expanded {
+  margin-top: 24px;
+  padding: 16px;
+  background: rgba(0, 255, 136, 0.03);
+  border-radius: 10px;
+}
+
+.recent-unlocks.expanded .unlocks-list {
+  gap: 8px;
+}
+
+.recent-unlocks.expanded .unlock-chip {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+/* Large Milestones */
+.milestones-list.expanded {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.milestone-item.large {
+  padding: 16px;
+}
+
+.milestone-item.large .milestone-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.milestone-progress.large {
+  height: 6px;
+  position: relative;
+}
+
+.milestone-progress-text {
+  position: absolute;
+  right: 0;
+  top: -16px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* Large Streaks */
+.streaks-grid.large {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.streak-item.large {
+  flex-direction: column;
+  text-align: center;
+  padding: 24px 16px;
+}
+
+.streak-item.large .streak-icon {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 12px;
+}
+
+.streak-item.large .streak-icon.large {
+  width: 72px;
+  height: 72px;
+}
+
+.streak-item.large .streak-icon.early {
+  background: rgba(247, 215, 148, 0.15);
+  color: #f7d794;
+}
+
+.streak-item.large.active .streak-icon.early {
+  background: rgba(247, 215, 148, 0.25);
+}
+
+.streak-item.large .streak-icon.night {
+  background: rgba(95, 39, 205, 0.15);
+  color: #5f27cd;
+}
+
+.streak-item.large.active .streak-icon.night {
+  background: rgba(95, 39, 205, 0.25);
+}
+
+.streak-item.large .streak-icon.variety {
+  background: rgba(0, 200, 255, 0.15);
+  color: var(--accent-cyan);
+}
+
+.streak-item.large.active .streak-icon.variety {
+  background: rgba(0, 200, 255, 0.25);
+}
+
+.streak-item.large .streak-value {
+  font-size: 32px;
+}
+
+.streak-description {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.best-streaks {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+  justify-content: center;
+}
+
+.best-streak strong {
+  color: var(--text-primary);
+}
+
+/* Large Badges Grid */
+.badges-grid.large {
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+}
+
+.badge-item.large {
+  padding: 20px 12px;
+}
+
+.badge-item.large .badge-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+}
+
+.badge-item.large .badge-icon.large {
+  width: 72px;
+  height: 72px;
+}
+
+.badge-item.large .badge-name {
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.badge-description {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-align: center;
+  margin-top: 4px;
+  line-height: 1.3;
+}
+
+.badge-date {
+  font-size: 9px;
+  color: var(--text-dim);
+  margin-top: 6px;
+}
+
+/* Responsive for Stats Pages */
+@media (max-width: 1200px) {
+  .summary-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .flight-patterns-grid.expanded,
+  .geographic-grid.expanded,
+  .session-analytics-grid.expanded,
+  .time-comparison-grid.expanded,
+  .acars-stats-grid.expanded,
+  .achievements-grid.expanded {
+    grid-template-columns: 1fr;
+  }
+
+  .records-grid.large {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .streaks-grid.large {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .badges-grid.large {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .return-visitors-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .stats-page {
+    padding: 16px;
+  }
+
+  .stats-page .page-title h1 {
+    font-size: 20px;
+  }
+
+  .stats-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .time-range-buttons {
+    flex-wrap: wrap;
+  }
+
+  .view-tabs {
+    margin-left: 0;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .summary-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .quality-details.expanded {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .airports-grid.expanded {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .service-stats-grid.expanded {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .records-grid.large {
+    grid-template-columns: 1fr;
+  }
+
+  .streaks-grid.large {
+    grid-template-columns: 1fr;
+  }
+
+  .badges-grid.large {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .badges-grid.large {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .airports-grid.expanded {
+    grid-template-columns: 1fr;
+  }
+
+  .service-stats-grid.expanded {
+    grid-template-columns: 1fr;
+  }
+}

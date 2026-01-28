@@ -1,19 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Plane, Radio, Bell, Activity, BarChart3, History,
   Map as MapIcon, Radar, ChevronLeft, ChevronRight, ChevronDown,
   Layers, ExternalLink, Ship, LineChart, MessageSquare,
-  LayoutDashboard, Database, Clock, Settings
+  LayoutDashboard, Database, Clock, Settings, FileWarning, Archive,
+  Crosshair
 } from 'lucide-react';
+import { useAlertNotifications } from '../../hooks/useAlertNotifications';
+import { useAuth } from '../../contexts/AuthContext';
 
+// Tab definitions with feature permissions
 const tabs = [
-  { id: 'map', icon: Radar, label: 'Live Map' },
-  { id: 'aircraft', icon: Plane, label: 'Aircraft List' },
-  { id: 'stats', icon: BarChart3, label: 'Statistics' },
-  { id: 'history', icon: History, label: 'History' },
-  { id: 'audio', icon: Radio, label: 'Radio' },
-  { id: 'alerts', icon: Bell, label: 'Alerts' },
-  { id: 'system', icon: Activity, label: 'System' }
+  { id: 'map', icon: Radar, label: 'Live Map', feature: 'aircraft' },
+  { id: 'aircraft', icon: Plane, label: 'Aircraft List', feature: 'aircraft' },
+  { id: 'stats', icon: BarChart3, label: 'Statistics', feature: 'aircraft' },
+  { id: 'history', icon: History, label: 'History', feature: 'history' },
+  { id: 'audio', icon: Radio, label: 'Radio', feature: 'audio' },
+  { id: 'notams', icon: FileWarning, label: 'NOTAMs', feature: 'aircraft' },
+  { id: 'archive', icon: Archive, label: 'Archive', feature: 'history' },
+  { id: 'alerts', icon: Bell, label: 'Alerts', feature: 'alerts' },
+  { id: 'system', icon: Activity, label: 'System', feature: 'system' }
 ];
 
 const externalServices = [
@@ -27,9 +33,32 @@ const externalServices = [
   { id: 'prometheus', icon: Database, label: 'Prometheus', path: '/prometheus/', desc: 'Metrics' },
 ];
 
-export function Sidebar({ activeTab, setActiveTab, connected, collapsed, setCollapsed, stats, onOpenSettings }) {
+export function Sidebar({ activeTab, setActiveTab, connected, collapsed, setCollapsed, stats, onOpenSettings, onLaunchCannonball }) {
   const [servicesExpanded, setServicesExpanded] = useState(false);
   const [time, setTime] = useState(new Date());
+  const { unacknowledgedCount, markAllAsRead } = useAlertNotifications();
+  const { canAccessFeature, config: authConfig } = useAuth();
+
+  // Filter tabs based on permissions
+  const visibleTabs = useMemo(() => {
+    // If auth is disabled or public mode, show all tabs
+    if (!authConfig.authEnabled || authConfig.publicMode) {
+      return tabs;
+    }
+
+    // Filter based on feature access
+    return tabs.filter(tab => {
+      if (!tab.feature) return true;
+      return canAccessFeature(tab.feature, 'read');
+    });
+  }, [authConfig.authEnabled, authConfig.publicMode, canAccessFeature]);
+
+  // Mark alerts as read when user navigates to alerts tab
+  useEffect(() => {
+    if (activeTab === 'alerts' && unacknowledgedCount > 0) {
+      markAllAsRead();
+    }
+  }, [activeTab, unacknowledgedCount, markAllAsRead]);
 
   useEffect(() => {
     const id = setInterval(() => setTime(new Date()), 1000);
@@ -55,7 +84,7 @@ export function Sidebar({ activeTab, setActiveTab, connected, collapsed, setColl
 
       <div className="sidebar-header">
         <div className="logo">
-          <img src="/static/logo.png" alt="SkySpy" className="logo-image" />
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="SkySpy" className="logo-image" />
           {!collapsed && (
             <span className="logo-text">
               <span className="logo-sky">Sky</span>
@@ -74,7 +103,7 @@ export function Sidebar({ activeTab, setActiveTab, connected, collapsed, setColl
       </button>
 
       <nav className="sidebar-nav">
-        {tabs.map(({ id, icon: Icon, label }) => (
+        {visibleTabs.map(({ id, icon: Icon, label }) => (
           <button
             key={id}
             className={`nav-item ${activeTab === id ? 'active' : ''}`}
@@ -83,8 +112,25 @@ export function Sidebar({ activeTab, setActiveTab, connected, collapsed, setColl
           >
             <Icon size={18} />
             {!collapsed && <span>{label}</span>}
+            {id === 'alerts' && unacknowledgedCount > 0 && (
+              <span className="nav-badge" title={`${unacknowledgedCount} unread alert${unacknowledgedCount !== 1 ? 's' : ''}`}>
+                {unacknowledgedCount > 99 ? '99+' : unacknowledgedCount}
+              </span>
+            )}
           </button>
         ))}
+
+        {/* Cannonball Mode Button */}
+        {onLaunchCannonball && (
+          <button
+            className="nav-item cannonball-btn"
+            onClick={onLaunchCannonball}
+            title={collapsed ? 'Cannonball Mode' : undefined}
+          >
+            <Crosshair size={18} />
+            {!collapsed && <span>Cannonball</span>}
+          </button>
+        )}
 
         <div className="nav-divider" />
 

@@ -23,11 +23,20 @@
 /* 6. Views - Stats, history, alerts, system, settings */
 @import './views.css';
 
+/* 6b. Extended Stats - Flight patterns, geographic, achievements */
+@import './stats-extended.css';
+
 /* 7. ACARS - ACARS panel and stats */
 @import './acars.css';
 
 /* 8. Aircraft Detail - Detail overlay, safety events, track replay */
 @import './aircraft-detail.css';
 
-/* 9. Responsive - Breakpoints, mobile menu, touch improvements */
+/* 9. Auth - Login, user menu, permissions */
+@import './auth.css';
+
+/* 10. Cannonball Mode - Full-screen threat detection UI */
+@import './cannonball.css';
+
+/* 11. Responsive - Breakpoints, mobile menu, touch improvements */
 @import './responsive.css';

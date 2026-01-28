@@ -1,0 +1,208 @@
+{
+  "aircraft": {
+    "hex": "A12345",
+    "flight": "UAL123  ",
+    "r": "N12345",
+    "t": "B738",
+    "lat": 37.7749,
+    "lon": -122.4194,
+    "alt_baro": 35000,
+    "alt_geom": 34800,
+    "gs": 450,
+    "tas": 470,
+    "ias": 280,
+    "track": 270,
+    "baro_rate": -500,
+    "geom_rate": -480,
+    "squawk": "1200",
+    "seen": 1.2,
+    "seen_pos": 0.8,
+    "messages": 1500
+  },
+  "airframeInfo": {
+    "icao_hex": "A12345",
+    "registration": "N12345",
+    "type_code": "B738",
+    "type_name": "Boeing 737-800",
+    "manufacturer": "Boeing",
+    "model": "737-800",
+    "serial_number": "29546",
+    "year_built": 2015,
+    "operator": "United Airlines",
+    "operator_icao": "UAL",
+    "owner": "Wells Fargo Trust Company",
+    "country": "United States",
+    "is_military": false,
+    "category": "A3",
+    "photo_url": "https://cdn.planespotters.net/12345/photo.jpg",
+    "photo_thumbnail_url": "https://cdn.planespotters.net/12345/thumb.jpg",
+    "photo_photographer": "John Doe",
+    "photo_source": "planespotters.net",
+    "source_data": [
+      {
+        "source": "faa",
+        "registration": "N12345",
+        "type_code": "B738",
+        "manufacturer": "BOEING",
+        "updated_at": "2024-01-15T00:00:00Z"
+      },
+      {
+        "source": "opensky",
+        "registration": "N12345",
+        "type_code": "B738",
+        "operator": "United Airlines",
+        "updated_at": "2024-01-10T00:00:00Z"
+      }
+    ]
+  },
+  "sightings": [
+    {
+      "id": 1,
+      "icao_hex": "A12345",
+      "callsign": "UAL123",
+      "registration": "N12345",
+      "timestamp": "2024-01-20T15:30:00Z",
+      "lat": 37.7749,
+      "lon": -122.4194,
+      "altitude": 35000,
+      "gs": 450,
+      "track": 270,
+      "vr": -500,
+      "distance_nm": 12.5
+    },
+    {
+      "id": 2,
+      "icao_hex": "A12345",
+      "callsign": "UAL123",
+      "registration": "N12345",
+      "timestamp": "2024-01-20T15:29:00Z",
+      "lat": 37.7850,
+      "lon": -122.4094,
+      "altitude": 34500,
+      "gs": 455,
+      "track": 268,
+      "vr": -600,
+      "distance_nm": 11.8
+    },
+    {
+      "id": 3,
+      "icao_hex": "A12345",
+      "callsign": "UAL123",
+      "registration": "N12345",
+      "timestamp": "2024-01-20T15:28:00Z",
+      "lat": 37.7950,
+      "lon": -122.3994,
+      "altitude": 34000,
+      "gs": 460,
+      "track": 265,
+      "vr": -650,
+      "distance_nm": 11.2
+    }
+  ],
+  "radioTransmissions": [
+    {
+      "id": "radio-1",
+      "matched_callsign": "UAL123",
+      "channel_name": "SFO Tower",
+      "frequency_mhz": 120.500,
+      "transcript": "United 123, descend and maintain flight level three five zero",
+      "raw_text": "UAL123",
+      "confidence": 0.95,
+      "audio_url": "/api/v1/audio/radio-1/stream",
+      "duration_seconds": 8.5,
+      "created_at": "2024-01-20T15:28:00Z"
+    },
+    {
+      "id": "radio-2",
+      "matched_callsign": "UAL123",
+      "channel_name": "NorCal Approach",
+      "frequency_mhz": 135.650,
+      "transcript": "United 123, turn left heading two seven zero",
+      "raw_text": "UAL123",
+      "confidence": 0.88,
+      "audio_url": "/api/v1/audio/radio-2/stream",
+      "duration_seconds": 5.2,
+      "created_at": "2024-01-20T15:25:00Z"
+    }
+  ],
+  "acarsMessages": [
+    {
+      "id": "acars-1",
+      "icao_hex": "A12345",
+      "callsign": "UAL123",
+      "label": "H1",
+      "text": "FUEL REMAINING: 15.2T\nETA SFO: 1545Z\nWX: CAVOK",
+      "formatted_text": "Fuel: 15.2T\nETA: 15:45Z\nWeather: CAVOK",
+      "source": "ACARS",
+      "frequency": 131.550,
+      "timestamp": "2024-01-20T15:27:00Z",
+      "label_info": {
+        "description": "Flight operations"
+      },
+      "airline": {
+        "name": "United Airlines",
+        "icao": "UAL",
+        "iata": "UA"
+      }
+    },
+    {
+      "id": "acars-2",
+      "icao_hex": "A12345",
+      "callsign": "UAL123",
+      "label": "5Z",
+      "text": "ATIS INFO BRAVO CURRENT",
+      "source": "VDL",
+      "frequency": 136.900,
+      "timestamp": "2024-01-20T15:20:00Z"
+    }
+  ],
+  "safetyEvents": [
+    {
+      "id": "safety-1",
+      "icao": "A12345",
+      "icao_2": "B67890",
+      "callsign": "UAL123",
+      "callsign_2": "DAL456",
+      "event_type": "proximity_conflict",
+      "severity": "warning",
+      "message": "Proximity alert: 2.5nm horizontal, 500ft vertical separation with DAL456",
+      "timestamp": "2024-01-20T15:26:00Z",
+      "lat": 37.7800,
+      "lon": -122.4100,
+      "details": {
+        "altitude": 35000,
+        "distance_nm": 2.5,
+        "altitude_diff_ft": 500
+      },
+      "aircraft_snapshot": {
+        "hex": "A12345",
+        "flight": "UAL123",
+        "lat": 37.7800,
+        "lon": -122.4100,
+        "alt_baro": 35000,
+        "gs": 450,
+        "track": 270,
+        "baro_rate": -500
+      },
+      "aircraft_snapshot_2": {
+        "hex": "B67890",
+        "flight": "DAL456",
+        "lat": 37.7850,
+        "lon": -122.4050,
+        "alt_baro": 35500,
+        "gs": 440,
+        "track": 90,
+        "baro_rate": 200
+      }
+    }
+  ],
+  "feederLocation": {
+    "lat": 37.6213,
+    "lon": -122.3790
+  },
+  "trackHistory": [
+    { "lat": 37.7749, "lon": -122.4194, "alt": 35000, "ts": 1705764600000 },
+    { "lat": 37.7850, "lon": -122.4094, "alt": 34500, "ts": 1705764540000 },
+    { "lat": 37.7950, "lon": -122.3994, "alt": 34000, "ts": 1705764480000 }
+  ]
+}

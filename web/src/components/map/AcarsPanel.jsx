@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { MessageCircle, X, Filter, Plane } from 'lucide-react';
 
+// Helper to safely parse JSON from fetch response
+const safeJson = async (res) => {
+  if (!res.ok) return null;
+  const ct = res.headers.get('content-type');
+  if (!ct || !ct.includes('application/json')) return null;
+  try { return await res.json(); } catch { return null; }
+};
+
 /**
  * Panel for displaying ACARS/VDL2 messages with decoded airline and label info
  *
@@ -44,10 +52,12 @@ export function AcarsPanel({
     const fetchInitialMessages = async () => {
       const baseUrl = apiUrl || '';
       try {
-        const msgRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=50`);
-        if (msgRes.ok) {
-          const data = await msgRes.json();
-          setMessages(data.messages || []);
+        // Django API uses /api/v1/acars (was /api/v1/acars/messages/recent)
+        const msgRes = await fetch(`${baseUrl}/api/v1/acars?limit=50`);
+        const data = await safeJson(msgRes);
+        if (data) {
+          // Django API returns messages in 'messages', 'results', or directly as array
+          setMessages(data.messages || data.results || (Array.isArray(data) ? data : []));
           initialFetchRef.current = true;
         }
       } catch (err) {
@@ -65,10 +75,11 @@ export function AcarsPanel({
     const fetchMessages = async () => {
       const baseUrl = apiUrl || '';
       try {
-        const msgRes = await fetch(`${baseUrl}/api/v1/acars/messages/recent?limit=50`);
-        if (msgRes.ok) {
-          const data = await msgRes.json();
-          setMessages(data.messages || []);
+        // Django API uses /api/v1/acars (was /api/v1/acars/messages/recent)
+        const msgRes = await fetch(`${baseUrl}/api/v1/acars?limit=50`);
+        const data = await safeJson(msgRes);
+        if (data) {
+          setMessages(data.messages || data.results || (Array.isArray(data) ? data : []));
         }
       } catch (err) {
         console.log('ACARS messages fetch error:', err.message);
@@ -79,7 +90,7 @@ export function AcarsPanel({
     return () => clearInterval(interval);
   }, [apiUrl, wsConnected]);
 
-  // Fetch ACARS status via Socket.IO (with HTTP fallback)
+  // Fetch ACARS status via WebSocket (with HTTP fallback)
   useEffect(() => {
     const fetchStatus = async () => {
       const baseUrl = apiUrl || '';
@@ -98,10 +109,8 @@ export function AcarsPanel({
 
       try {
         const statusRes = await fetch(`${baseUrl}/api/v1/acars/status`);
-        if (statusRes.ok) {
-          const data = await statusRes.json();
-          setStatus(data);
-        }
+        const data = await safeJson(statusRes);
+        if (data) setStatus(data);
       } catch (err) {
         console.log('ACARS status fetch error:', err.message);
       }
@@ -118,10 +127,8 @@ export function AcarsPanel({
       const baseUrl = apiUrl || '';
       try {
         const res = await fetch(`${baseUrl}/api/v1/acars/labels`);
-        if (res.ok) {
-          const data = await res.json();
-          setLabels(data.labels || {});
-        }
+        const data = await safeJson(res);
+        if (data) setLabels(data.labels || {});
       } catch (err) {
         console.log('Labels fetch error:', err.message);
       }
@@ -285,8 +292,8 @@ export function AcarsPanel({
         {filteredMessages.length === 0 ? (
           <div className="acars-empty">No messages match filters</div>
         ) : (
-          filteredMessages.map((msg, i) => (
-            <div key={i} className="acars-message">
+          filteredMessages.map((msg) => (
+            <div key={msg.id || `${msg.icao_hex}-${msg.timestamp}-${msg.label}`} className="acars-message">
               <div className="acars-msg-header">
                 <div className="acars-msg-flight">
                   <span

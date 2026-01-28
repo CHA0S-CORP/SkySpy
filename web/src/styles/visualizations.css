@@ -1,0 +1,1038 @@
+/* ============================================================================
+   Visualization Components Styles
+   ============================================================================ */
+
+/* ============================================================================
+   Enhanced Mini Graph
+   ============================================================================ */
+
+.enhanced-mini-graph {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.enhanced-mini-graph .mini-graph-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+}
+
+.enhanced-mini-graph .mini-graph-label {
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.enhanced-mini-graph .mini-graph-zoom {
+  color: var(--accent-cyan);
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.enhanced-mini-graph .mini-graph-current {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+}
+
+.enhanced-mini-graph .mini-graph-svg-container {
+  background: rgba(20, 30, 40, 0.4);
+  border-radius: 4px;
+  cursor: crosshair;
+  user-select: none;
+}
+
+.enhanced-mini-graph .mini-graph-svg-container.zoomable {
+  cursor: grab;
+}
+
+.enhanced-mini-graph .mini-graph-svg-container.dragging {
+  cursor: grabbing;
+}
+
+.enhanced-mini-graph .mini-graph-range {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.enhanced-mini-graph .mini-graph-controls {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.enhanced-mini-graph .mini-graph-controls button {
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.enhanced-mini-graph .mini-graph-controls button:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.enhanced-mini-graph .mini-graph-controls button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Size variants */
+.enhanced-mini-graph.size-compact {
+  min-width: 150px;
+}
+
+.enhanced-mini-graph.size-default {
+  min-width: 200px;
+}
+
+.enhanced-mini-graph.size-large {
+  min-width: 300px;
+}
+
+/* ============================================================================
+   Timeline View
+   ============================================================================ */
+
+.timeline-view {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.timeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.timeline-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.timeline-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.timeline-zoom-indicator {
+  color: var(--accent-cyan);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.timeline-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.timeline-controls button {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.timeline-controls button:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--accent-cyan);
+}
+
+.timeline-controls button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.timeline-legend {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: rgba(20, 30, 40, 0.4);
+  border-radius: 6px;
+}
+
+.timeline-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.timeline-container {
+  position: relative;
+  background: rgba(20, 30, 40, 0.4);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: grab;
+}
+
+.timeline-container.dragging {
+  cursor: grabbing;
+}
+
+.timeline-svg {
+  display: block;
+}
+
+.timeline-event {
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.timeline-event:hover {
+  opacity: 1 !important;
+}
+
+.timeline-event .pulse-ring {
+  animation: pulse 1.5s ease-out infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+.timeline-tooltip {
+  position: absolute;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  pointer-events: none;
+  min-width: 180px;
+}
+
+.timeline-tooltip .tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.timeline-tooltip .tooltip-severity {
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.timeline-tooltip .tooltip-type {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}
+
+.timeline-tooltip .tooltip-time {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+  margin-bottom: 4px;
+}
+
+.timeline-tooltip .tooltip-message {
+  font-size: 12px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  max-width: 250px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timeline-tooltip .tooltip-aircraft {
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent-cyan);
+}
+
+.timeline-overview {
+  height: 8px;
+  background: rgba(90, 122, 154, 0.2);
+  border-radius: 4px;
+  margin-top: 8px;
+  position: relative;
+}
+
+.timeline-overview-window {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: var(--accent-cyan);
+  border-radius: 4px;
+  opacity: 0.3;
+}
+
+/* ============================================================================
+   Activity Heatmap
+   ============================================================================ */
+
+.activity-heatmap {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.heatmap-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.heatmap-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.heatmap-total {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.heatmap-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.heatmap-hour-labels {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.heatmap-hour-labels .label-spacer {
+  width: 32px;
+  flex-shrink: 0;
+}
+
+.heatmap-hour-labels .hour-label {
+  flex: 1;
+  font-size: 8px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.heatmap-hour-labels .hour-label.major {
+  color: var(--text-secondary);
+}
+
+.heatmap-hour-labels .hour-label.block-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.heatmap-row {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.heatmap-row .day-label {
+  width: 32px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.heatmap-cell {
+  flex: 1;
+  aspect-ratio: 1;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.heatmap-grid.variant-full .heatmap-cell {
+  min-width: 6px;
+  max-width: 16px;
+  height: 16px;
+  aspect-ratio: auto;
+}
+
+.heatmap-grid.variant-compact .heatmap-cell {
+  min-width: 40px;
+  height: 28px;
+  aspect-ratio: auto;
+}
+
+.heatmap-cell:hover {
+  transform: scale(1.2);
+  z-index: 1;
+}
+
+.heatmap-cell .cell-count {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-primary);
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.heatmap-legend .legend-label {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.heatmap-legend .legend-scale {
+  display: flex;
+  gap: 2px;
+}
+
+.heatmap-legend .legend-cell {
+  width: 16px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+/* ============================================================================
+   Virtual List
+   ============================================================================ */
+
+.virtual-list {
+  overflow-y: auto;
+}
+
+.virtual-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.virtual-list::-webkit-scrollbar-track {
+  background: rgba(90, 122, 154, 0.1);
+  border-radius: 4px;
+}
+
+.virtual-list::-webkit-scrollbar-thumb {
+  background: rgba(90, 122, 154, 0.3);
+  border-radius: 4px;
+}
+
+.virtual-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(90, 122, 154, 0.5);
+}
+
+.virtual-list-inner {
+  will-change: transform;
+}
+
+.virtual-list-item {
+  box-sizing: border-box;
+}
+
+/* ============================================================================
+   Analytics Panel
+   ============================================================================ */
+
+.analytics-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-top: 16px;
+}
+
+.analytics-panel-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.analytics-panel-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.analytics-panel-toggle svg:first-child {
+  color: var(--accent-cyan);
+}
+
+.analytics-panel-toggle svg:last-child {
+  margin-left: auto;
+}
+
+.analytics-panel-content {
+  padding: 0 16px 16px;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.analytics-card {
+  background: rgba(20, 30, 40, 0.4);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.analytics-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.analytics-card-header svg {
+  color: var(--accent-cyan);
+}
+
+.analytics-card-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.analytics-loading {
+  padding: 20px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.analytics-error {
+  padding: 10px;
+  color: var(--accent-red);
+  font-size: 11px;
+}
+
+.analytics-stats {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 10px;
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.analytics-bar-chart {
+  display: block;
+}
+
+.analytics-polar-plot {
+  display: block;
+}
+
+.analytics-rssi-curve {
+  display: block;
+}
+
+/* ============================================================================
+   Comparison Panel (for safety events)
+   ============================================================================ */
+
+.comparison-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-card);
+  border-top: 2px solid var(--accent-cyan);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+}
+
+.comparison-panel.visible {
+  transform: translateY(0);
+}
+
+.comparison-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.comparison-panel-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comparison-panel-header .close-btn {
+  padding: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.comparison-panel-header .close-btn:hover {
+  color: var(--text-primary);
+}
+
+.comparison-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 16px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.comparison-item {
+  background: rgba(20, 30, 40, 0.4);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.comparison-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.comparison-item-header .severity-badge {
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.comparison-item-header .remove-btn {
+  padding: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.comparison-item-header .remove-btn:hover {
+  color: var(--accent-red);
+}
+
+.comparison-item-details {
+  font-size: 12px;
+}
+
+.comparison-item-details dt {
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 8px;
+}
+
+.comparison-item-details dd {
+  margin: 2px 0 0;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Comparison mode toggle on event cards */
+.comparison-checkbox {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.comparison-checkbox:hover {
+  border-color: var(--accent-cyan);
+}
+
+.comparison-checkbox.selected {
+  background: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+}
+
+.comparison-checkbox svg {
+  color: var(--bg-primary);
+}
+
+/* Comparison mode toolbar */
+.comparison-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(20, 30, 45, 0.95), rgba(15, 25, 40, 0.98));
+  border: 1px solid rgba(0, 200, 255, 0.15);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.comparison-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(90, 122, 154, 0.3);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.comparison-toggle-btn:hover {
+  background: rgba(0, 200, 255, 0.1);
+  border-color: rgba(0, 200, 255, 0.4);
+  color: var(--text-primary);
+}
+
+.comparison-toggle-btn.active {
+  background: rgba(0, 200, 255, 0.2);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.comparison-toggle-btn svg {
+  flex-shrink: 0;
+}
+
+.comparison-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.comparison-clear-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(255, 71, 87, 0.1);
+  border: 1px solid rgba(255, 71, 87, 0.3);
+  border-radius: 6px;
+  color: #ff4757;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.comparison-clear-btn:hover {
+  background: rgba(255, 71, 87, 0.2);
+  border-color: rgba(255, 71, 87, 0.5);
+}
+
+/* Selected for comparison state on event cards */
+.safety-event-item.selected-for-comparison {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 2px rgba(0, 200, 255, 0.2), 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Comparison checkbox styling */
+.comparison-checkbox {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.comparison-checkbox input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.comparison-checkbox .checkbox-indicator {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(90, 122, 154, 0.4);
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.comparison-checkbox input:checked + .checkbox-indicator {
+  background: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+}
+
+.comparison-checkbox input:checked + .checkbox-indicator::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 3px;
+  width: 5px;
+  height: 9px;
+  border: solid var(--bg-primary);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.comparison-checkbox:hover .checkbox-indicator {
+  border-color: var(--accent-cyan);
+}
+
+/* Comparison close button */
+.comparison-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(90, 122, 154, 0.3);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.comparison-close-btn:hover {
+  background: rgba(255, 71, 87, 0.1);
+  border-color: rgba(255, 71, 87, 0.4);
+  color: #ff4757;
+}
+
+/* Comparison event card in panel */
+.comparison-event-card {
+  background: rgba(20, 30, 40, 0.6);
+  border: 1px solid rgba(90, 122, 154, 0.2);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.comparison-event-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.comparison-event-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.comparison-event-type {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.comparison-event-time {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.comparison-event-message {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+}
+
+.comparison-event-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.comparison-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.comparison-detail-label {
+  color: var(--text-dim);
+  min-width: 80px;
+}
+
+.comparison-detail-value {
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.comparison-view-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(0, 200, 255, 0.1);
+  border: 1px solid rgba(0, 200, 255, 0.3);
+  border-radius: 6px;
+  color: var(--accent-cyan);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: auto;
+}
+
+.comparison-view-btn:hover {
+  background: rgba(0, 200, 255, 0.2);
+  border-color: rgba(0, 200, 255, 0.5);
+}
+
+/* Update comparison panel to show by default when rendered */
+.comparison-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, rgba(20, 30, 45, 0.98), rgba(15, 25, 40, 0.99));
+  border-top: 2px solid var(--accent-cyan);
+  box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  backdrop-filter: blur(20px);
+}
+
+/* ============================================================================
+   Live Mode Indicator
+   ============================================================================ */
+
+.live-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(0, 255, 136, 0.1);
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #00ff88;
+}
+
+.live-indicator .live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #00ff88;
+  animation: live-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.2);
+  }
+}
+
+.live-indicator.paused {
+  background: rgba(255, 159, 67, 0.1);
+  border-color: rgba(255, 159, 67, 0.3);
+  color: #ff9f43;
+}
+
+.live-indicator.paused .live-dot {
+  background: #ff9f43;
+  animation: none;
+}
+
+/* New items badge */
+.new-items-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--accent-cyan);
+  color: var(--bg-primary);
+  font-size: 10px;
+  font-weight: 600;
+  animation: badge-pop 0.3s ease;
+}
+
+@keyframes badge-pop {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}

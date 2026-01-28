@@ -19,7 +19,9 @@ src/
 │
 ├── hooks/                     # Custom React hooks
 │   ├── index.js               # Barrel export
-│   ├── useWebSocket.js        # WebSocket connection for real-time updates
+│   ├── useNativeWebSocket.js  # Low-level WebSocket with reconnection
+│   ├── useChannelsSocket.js   # Django Channels WebSocket for real-time data
+│   ├── usePositionChannels.js # High-frequency position updates
 │   ├── useApi.js              # API fetch with polling
 │   ├── useMapAlarms.js        # TCAS-style audio alarm system
 │   ├── useAviationData.js     # Aviation data fetching (NAVAIDs, METARs, etc)
@@ -110,7 +112,7 @@ import {
 
 ### Importing Hooks
 ```javascript
-import { useWebSocket, useApi } from './hooks';
+import { useChannelsSocket, usePositionChannels, useApi } from './hooks';
 import { useMapAlarms, useSafetyEvents, useTrackHistory } from './hooks';
 ```
 

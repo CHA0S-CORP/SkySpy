@@ -1,0 +1,323 @@
+{
+  "sessions": [
+    {
+      "icao_hex": "A12345",
+      "callsign": "UAL123",
+      "type": "B738",
+      "registration": "N12345",
+      "is_military": false,
+      "first_seen": "2024-01-15T10:30:00Z",
+      "last_seen": "2024-01-15T11:45:00Z",
+      "duration_min": 75,
+      "max_alt": 35000,
+      "min_distance_nm": 2.5,
+      "max_distance_nm": 45.0,
+      "max_rssi": -8.5,
+      "max_vr": 2500,
+      "message_count": 1523,
+      "squawk": "1234",
+      "safety_event_count": 0
+    },
+    {
+      "icao_hex": "AE1234",
+      "callsign": "RCH001",
+      "type": "C17",
+      "registration": "02-1234",
+      "is_military": true,
+      "first_seen": "2024-01-15T09:00:00Z",
+      "last_seen": "2024-01-15T10:30:00Z",
+      "duration_min": 90,
+      "max_alt": 28000,
+      "min_distance_nm": 5.2,
+      "max_distance_nm": 120.0,
+      "max_rssi": -12.3,
+      "max_vr": 1800,
+      "message_count": 2105,
+      "squawk": "4567",
+      "safety_event_count": 2
+    },
+    {
+      "icao_hex": "C78901",
+      "callsign": "DAL456",
+      "type": "A320",
+      "registration": "N78901",
+      "is_military": false,
+      "first_seen": "2024-01-15T08:15:00Z",
+      "last_seen": "2024-01-15T09:45:00Z",
+      "duration_min": 90,
+      "max_alt": 38000,
+      "min_distance_nm": 1.8,
+      "max_distance_nm": 85.0,
+      "max_rssi": -5.2,
+      "max_vr": 3200,
+      "message_count": 1876,
+      "squawk": "2345",
+      "safety_event_count": 0
+    },
+    {
+      "icao_hex": "D45678",
+      "callsign": "SWA789",
+      "type": "B737",
+      "registration": "N45678",
+      "is_military": false,
+      "first_seen": "2024-01-15T07:00:00Z",
+      "last_seen": "2024-01-15T08:30:00Z",
+      "duration_min": 90,
+      "max_alt": 32000,
+      "min_distance_nm": 3.1,
+      "max_distance_nm": 65.0,
+      "max_rssi": -10.1,
+      "max_vr": 2800,
+      "message_count": 1654,
+      "squawk": "3456",
+      "safety_event_count": 1
+    }
+  ],
+  "sightings": [
+    {
+      "timestamp": "2024-01-15T11:30:00Z",
+      "icao_hex": "A12345",
+      "callsign": "UAL123",
+      "altitude": 35000,
+      "gs": 485,
+      "distance_nm": 12.5,
+      "rssi": -8.5,
+      "lat": 37.7749,
+      "lon": -122.4194
+    },
+    {
+      "timestamp": "2024-01-15T11:28:00Z",
+      "icao_hex": "AE1234",
+      "callsign": "RCH001",
+      "altitude": 28000,
+      "gs": 420,
+      "distance_nm": 25.3,
+      "rssi": -12.3,
+      "lat": 37.8044,
+      "lon": -122.2712
+    },
+    {
+      "timestamp": "2024-01-15T11:25:00Z",
+      "icao_hex": "C78901",
+      "callsign": "DAL456",
+      "altitude": 38000,
+      "gs": 510,
+      "distance_nm": 8.7,
+      "rssi": -5.2,
+      "lat": 37.6213,
+      "lon": -122.3790
+    },
+    {
+      "timestamp": "2024-01-15T11:20:00Z",
+      "icao_hex": "D45678",
+      "callsign": "SWA789",
+      "altitude": 15000,
+      "gs": 320,
+      "distance_nm": 5.2,
+      "rssi": -4.1,
+      "lat": 37.7129,
+      "lon": -122.4568
+    },
+    {
+      "timestamp": "2024-01-15T11:18:00Z",
+      "icao_hex": "E90123",
+      "callsign": "AAL321",
+      "altitude": 22000,
+      "gs": 380,
+      "distance_nm": 18.9,
+      "rssi": -15.7,
+      "lat": 37.5585,
+      "lon": -122.2711
+    }
+  ],
+  "acars": [
+    {
+      "timestamp": "2024-01-15T11:35:00Z",
+      "icao_hex": "A12345",
+      "callsign": "UAL123",
+      "registration": "N12345",
+      "label": "H1",
+      "source": "acars",
+      "frequency": 131.55,
+      "text": "DEPARTURE FROM KSFO TO KLAX AT 1130Z",
+      "formatted_text": "Departure Message\nOrigin: KSFO\nDestination: KLAX\nTime: 1130Z",
+      "airline": {
+        "name": "United Airlines",
+        "icao": "UAL",
+        "iata": "UA"
+      }
+    },
+    {
+      "timestamp": "2024-01-15T11:30:00Z",
+      "icao_hex": "C78901",
+      "callsign": "DAL456",
+      "registration": "N78901",
+      "label": "C1",
+      "source": "vdlm2",
+      "frequency": 136.975,
+      "text": "POS N3745.2 W12225.1 FL380 M082 1130Z",
+      "formatted_text": "Position Report\nLat: N3745.2\nLon: W12225.1\nFL: 380\nMach: 0.82\nTime: 1130Z",
+      "airline": {
+        "name": "Delta Air Lines",
+        "icao": "DAL",
+        "iata": "DL"
+      }
+    },
+    {
+      "timestamp": "2024-01-15T11:25:00Z",
+      "icao_hex": "D45678",
+      "callsign": "SWA789",
+      "registration": "N45678",
+      "label": "80",
+      "source": "acars",
+      "frequency": 131.55,
+      "text": "KSFO 151130Z 28015KT 10SM FEW025 SCT040 18/12 A3012",
+      "formatted_text": "Terminal Weather (METAR)\nStation: KSFO\nTime: 151130Z\nWind: 280/15\nVisibility: 10SM\nClouds: FEW025 SCT040\nTemp/Dew: 18/12\nAltimeter: 30.12",
+      "airline": {
+        "name": "Southwest Airlines",
+        "icao": "SWA",
+        "iata": "WN"
+      }
+    },
+    {
+      "timestamp": "2024-01-15T11:20:00Z",
+      "icao_hex": null,
+      "callsign": "AAL321",
+      "registration": "N90123",
+      "label": "10",
+      "source": "acars",
+      "frequency": 131.55,
+      "text": "OUT 1120Z KSFO",
+      "formatted_text": "OOOI - OUT (Leaving Gate)\nTime: 1120Z\nAirport: KSFO",
+      "airline": {
+        "name": "American Airlines",
+        "icao": "AAL",
+        "iata": "AA"
+      }
+    },
+    {
+      "timestamp": "2024-01-15T11:15:00Z",
+      "icao_hex": "A12345",
+      "callsign": "UAL123",
+      "registration": "N12345",
+      "label": "AA",
+      "source": "acars",
+      "frequency": 131.55,
+      "text": "REQUEST PUSH AND START",
+      "formatted_text": null,
+      "airline": {
+        "name": "United Airlines",
+        "icao": "UAL",
+        "iata": "UA"
+      }
+    }
+  ],
+  "safety_events": [
+    {
+      "id": "evt-001",
+      "timestamp": "2024-01-15T10:45:00Z",
+      "event_type": "loss_of_separation",
+      "severity": "critical",
+      "message": "Loss of separation between UAL123 and DAL456 - 1.2nm horizontal, 400ft vertical",
+      "icao": "A12345",
+      "callsign": "UAL123",
+      "icao_2": "C78901",
+      "callsign_2": "DAL456",
+      "details": {
+        "horizontal_nm": 1.2,
+        "vertical_ft": 400,
+        "lat": 37.7500,
+        "lon": -122.4000
+      },
+      "aircraft_snapshot": {
+        "hex": "A12345",
+        "flight": "UAL123",
+        "lat": 37.7510,
+        "lon": -122.4010,
+        "alt_baro": 25000,
+        "gs": 280,
+        "track": 90,
+        "baro_rate": -500
+      },
+      "aircraft_snapshot_2": {
+        "hex": "C78901",
+        "flight": "DAL456",
+        "lat": 37.7490,
+        "lon": -122.3990,
+        "alt_baro": 25400,
+        "gs": 290,
+        "track": 270,
+        "baro_rate": 0
+      },
+      "acknowledged": false,
+      "resolved": false
+    },
+    {
+      "id": "evt-002",
+      "timestamp": "2024-01-15T09:30:00Z",
+      "event_type": "tcas_ra",
+      "severity": "warning",
+      "message": "TCAS Resolution Advisory - RCH001 climb commanded",
+      "icao": "AE1234",
+      "callsign": "RCH001",
+      "icao_2": null,
+      "callsign_2": null,
+      "details": {
+        "horizontal_nm": 2.5,
+        "vertical_ft": 800,
+        "lat": 37.8000,
+        "lon": -122.3000
+      },
+      "aircraft_snapshot": {
+        "hex": "AE1234",
+        "flight": "RCH001",
+        "lat": 37.8000,
+        "lon": -122.3000,
+        "alt_baro": 18000,
+        "gs": 350,
+        "track": 180,
+        "baro_rate": 2000
+      },
+      "aircraft_snapshot_2": null,
+      "acknowledged": true,
+      "resolved": false
+    },
+    {
+      "id": "evt-003",
+      "timestamp": "2024-01-15T08:15:00Z",
+      "event_type": "altitude_deviation",
+      "severity": "info",
+      "message": "SWA789 deviated from assigned altitude FL320 - currently at FL280",
+      "icao": "D45678",
+      "callsign": "SWA789",
+      "icao_2": null,
+      "callsign_2": null,
+      "details": {
+        "assigned_altitude": 32000,
+        "actual_altitude": 28000,
+        "deviation_ft": 4000,
+        "lat": 37.6500,
+        "lon": -122.4500
+      },
+      "aircraft_snapshot": {
+        "hex": "D45678",
+        "flight": "SWA789",
+        "lat": 37.6500,
+        "lon": -122.4500,
+        "alt_baro": 28000,
+        "gs": 450,
+        "track": 120,
+        "baro_rate": -1500
+      },
+      "aircraft_snapshot_2": null,
+      "acknowledged": false,
+      "resolved": true
+    }
+  ],
+  "pagination": {
+    "total": 150,
+    "page": 1,
+    "per_page": 50,
+    "total_pages": 3
+  }
+}

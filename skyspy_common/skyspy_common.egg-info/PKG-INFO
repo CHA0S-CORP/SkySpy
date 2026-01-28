@@ -1,0 +1,174 @@
+Metadata-Version: 2.4
+Name: skyspy-common
+Version: 1.0.0
+Summary: Shared utilities and bindings for SkysPy services
+License: MIT
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Provides-Extra: cffi
+Requires-Dist: cffi>=1.15.0; extra == "cffi"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.21.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Provides-Extra: all
+Requires-Dist: skyspy-common[cffi,dev]; extra == "all"
+
+# SkysPy Common
+
+Shared utilities and bindings for SkysPy services, including the libacars C library binding for ACARS message decoding.
+
+## Features
+
+- **CFFI/ctypes binding** for libacars with automatic fallback
+- **Context managers** for safe resource management
+- **Async support** via thread pool executor
+- **Batch decoding** for high-throughput scenarios
+- **Structured logging** for observability
+- **Comprehensive validation** with detailed error messages
+- **Custom exception hierarchy** for precise error handling
+
+## Installation
+
+```bash
+# Install as editable package
+pip install -e ./skyspy_common
+
+# With CFFI support (recommended for performance)
+pip install -e ./skyspy_common[cffi]
+
+# With development dependencies
+pip install -e ./skyspy_common[dev]
+```
+
+## Usage
+
+### Basic Decoding
+
+```python
+from skyspy_common.libacars import decode_acars_apps, MsgDir, is_available
+
+if is_available():
+    result = decode_acars_apps("H1", message_text, MsgDir.AIR2GND)
+    if result:
+        print(result)
+```
+
+### Async Decoding
+
+```python
+from skyspy_common.libacars import decode_acars_apps_async, MsgDir
+
+result = await decode_acars_apps_async("H1", message_text, MsgDir.AIR2GND)
+```
+
+### Batch Decoding
+
+```python
+from skyspy_common.libacars import decode_batch, BatchMessage
+
+messages = [
+    BatchMessage(label="H1", text=text1, id="msg-1"),
+    BatchMessage(label="SA", text=text2, id="msg-2"),
+]
+results = decode_batch(messages)
+
+for result in results:
+    if result.success:
+        print(f"{result.id}: {result.data}")
+```
+
+### Error Handling
+
+```python
+from skyspy_common.libacars import (
+    decode_acars_apps,
+    LibacarsDecodeError,
+    LibacarsValidationError,
+    LibacarsDisabledError,
+)
+
+try:
+    result = decode_acars_apps("H1", text, raise_on_error=True)
+except LibacarsValidationError as e:
+    print(f"Invalid input: {e.field} - {e.message}")
+except LibacarsDecodeError as e:
+    print(f"Decode failed: {e.message}")
+except LibacarsDisabledError as e:
+    print(f"Library disabled: {e.reason}")
+```
+
+### Statistics
+
+```python
+from skyspy_common.libacars import get_stats, reset_stats
+
+stats = get_stats()
+print(f"Success rate: {stats['success_rate']}%")
+print(f"Avg decode time: {stats['avg_decode_time_ms']}ms")
+
+# Reset statistics
+reset_stats()
+```
+
+## API Reference
+
+### Core Functions
+
+- `decode_acars_apps(label, text, direction, *, raise_on_error)` - Decode to JSON dict
+- `decode_acars_apps_text(label, text, direction, *, raise_on_error)` - Decode to formatted text
+- `extract_sublabel_mfi(label, text, direction)` - Extract H1 sublabel and MFI
+
+### Async Functions
+
+- `decode_acars_apps_async(...)` - Async version of decode_acars_apps
+- `decode_acars_apps_text_async(...)` - Async version of decode_acars_apps_text
+- `decode_batch_async(messages, *, output_format, max_concurrency)` - Async batch decoding
+
+### Batch Functions
+
+- `decode_batch(messages, *, output_format)` - Synchronous batch decoding
+
+### State Management
+
+- `is_available()` - Check if libacars is available and enabled
+- `get_backend()` - Get current backend ("cffi", "ctypes", or "unavailable")
+- `get_stats()` - Get performance statistics
+- `reset_stats()` - Reset statistics counters
+- `reset_error_state()` - Re-enable library after consecutive errors
+- `shutdown()` - Clean up resources (thread pool)
+
+### Exceptions
+
+- `LibacarsError` - Base exception
+- `LibacarsLoadError` - Library loading failed
+- `LibacarsDecodeError` - Message decoding failed
+- `LibacarsMemoryError` - Memory allocation failed
+- `LibacarsValidationError` - Input validation failed
+- `LibacarsDisabledError` - Library is disabled
+
+### Validation
+
+- `validate_acars_message(label, text)` - Validate complete message
+- `validate_label(label)` - Validate label only
+- `validate_text(text)` - Validate text only
+- `validate_and_raise(label, text)` - Validate and raise on error
+
+## Running Tests
+
+```bash
+cd skyspy_common
+pip install -e .[dev]
+pytest
+```
+
+## License
+
+MIT

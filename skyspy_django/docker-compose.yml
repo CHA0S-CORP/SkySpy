@@ -1,0 +1,318 @@
+# =============================================================================
+# SkysPy Django API - Docker Compose
+# =============================================================================
+#
+# Services:
+#   - api: Django API server (Daphne ASGI for WebSocket support)
+#   - celery-worker: Background task processing
+#   - celery-beat: Periodic task scheduler
+#   - redis: Message broker and cache
+#   - postgres: PostgreSQL database
+#
+# Usage:
+#   docker-compose up -d              # Start all services
+#   docker-compose logs -f api        # View API logs
+#   docker-compose exec api bash      # Shell into API container
+#
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: skyspy-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-adsb}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-adsb}
+      POSTGRES_DB: ${POSTGRES_DB:-adsb}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-adsb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - skyspy-network
+
+  # ---------------------------------------------------------------------------
+  # Redis (Message Broker & Cache)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: skyspy-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - skyspy-network
+
+  # ---------------------------------------------------------------------------
+  # Django API Server (Daphne ASGI)
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: skyspy-api
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      # Django
+      DEBUG: ${DEBUG:-False}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-your-secret-key-change-in-production}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-adsb}:${POSTGRES_PASSWORD:-adsb}@postgres:5432/${POSTGRES_DB:-adsb}
+
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+
+      # ADS-B Sources
+      ULTRAFEEDER_HOST: ${ULTRAFEEDER_HOST:-ultrafeeder}
+      ULTRAFEEDER_PORT: ${ULTRAFEEDER_PORT:-80}
+      DUMP978_HOST: ${DUMP978_HOST:-dump978}
+      DUMP978_PORT: ${DUMP978_PORT:-80}
+
+      # Feeder Location
+      FEEDER_LAT: ${FEEDER_LAT:-47.9377}
+      FEEDER_LON: ${FEEDER_LON:--121.9687}
+
+      # Polling
+      POLLING_INTERVAL: ${POLLING_INTERVAL:-2}
+      DB_STORE_INTERVAL: ${DB_STORE_INTERVAL:-5}
+      SESSION_TIMEOUT_MINUTES: ${SESSION_TIMEOUT_MINUTES:-30}
+
+      # Safety Monitoring
+      SAFETY_MONITORING_ENABLED: ${SAFETY_MONITORING_ENABLED:-True}
+
+      # ACARS
+      ACARS_ENABLED: ${ACARS_ENABLED:-True}
+      ACARS_PORT: ${ACARS_PORT:-5555}
+      VDLM2_PORT: ${VDLM2_PORT:-5556}
+
+      # Notifications
+      APPRISE_URLS: ${APPRISE_URLS:-}
+      NOTIFICATION_COOLDOWN: ${NOTIFICATION_COOLDOWN:-300}
+
+      # Photo Cache
+      PHOTO_CACHE_ENABLED: ${PHOTO_CACHE_ENABLED:-True}
+      PHOTO_CACHE_DIR: /data/photos
+      PHOTO_AUTO_DOWNLOAD: ${PHOTO_AUTO_DOWNLOAD:-True}
+
+      # Radio/Audio
+      RADIO_ENABLED: ${RADIO_ENABLED:-True}
+      RADIO_AUDIO_DIR: /data/radio
+      RADIO_MAX_FILE_SIZE_MB: ${RADIO_MAX_FILE_SIZE_MB:-50}
+      RADIO_RETENTION_DAYS: ${RADIO_RETENTION_DAYS:-7}
+
+      # Transcription
+      TRANSCRIPTION_ENABLED: ${TRANSCRIPTION_ENABLED:-False}
+      WHISPER_ENABLED: ${WHISPER_ENABLED:-False}
+      WHISPER_URL: ${WHISPER_URL:-http://whisper:9000}
+
+      # OpenSky Database
+      OPENSKY_DB_ENABLED: ${OPENSKY_DB_ENABLED:-True}
+      OPENSKY_DB_PATH: /data/opensky/aircraft-database.csv
+
+      # S3 Storage (optional)
+      S3_ENABLED: ${S3_ENABLED:-False}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
+
+      # Monitoring (optional)
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+      PROMETHEUS_ENABLED: ${PROMETHEUS_ENABLED:-True}
+
+      # OpenAIP (global airspace data)
+      OPENAIP_ENABLED: ${OPENAIP_ENABLED:-True}
+      OPENAIP_API_KEY: ${OPENAIP_API_KEY:-}
+    volumes:
+      - photo_cache:/data/photos
+      - radio_data:/data/radio
+      - opensky_data:/data/opensky
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - skyspy-network
+    command: >
+      sh -c "
+        echo 'Running database migrations...' &&
+        python manage.py migrate --noinput &&
+        echo 'Populating initial aviation data...' &&
+        python manage.py populate_data || echo 'Data population completed (some errors may be normal on first run)' &&
+        echo 'Starting Daphne ASGI server...' &&
+        daphne -b 0.0.0.0 -p 8000 skyspy.asgi:application
+      "
+
+  # ---------------------------------------------------------------------------
+  # Celery Worker (Background Tasks)
+  # ---------------------------------------------------------------------------
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: skyspy-celery-worker
+    restart: unless-stopped
+    environment:
+      # Same environment as API
+      DEBUG: ${DEBUG:-False}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-your-secret-key-change-in-production}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-adsb}:${POSTGRES_PASSWORD:-adsb}@postgres:5432/${POSTGRES_DB:-adsb}
+      REDIS_URL: redis://redis:6379/0
+      ULTRAFEEDER_HOST: ${ULTRAFEEDER_HOST:-ultrafeeder}
+      ULTRAFEEDER_PORT: ${ULTRAFEEDER_PORT:-80}
+      DUMP978_HOST: ${DUMP978_HOST:-dump978}
+      DUMP978_PORT: ${DUMP978_PORT:-80}
+      FEEDER_LAT: ${FEEDER_LAT:-47.9377}
+      FEEDER_LON: ${FEEDER_LON:--121.9687}
+      POLLING_INTERVAL: ${POLLING_INTERVAL:-2}
+      SESSION_TIMEOUT_MINUTES: ${SESSION_TIMEOUT_MINUTES:-30}
+      SAFETY_MONITORING_ENABLED: ${SAFETY_MONITORING_ENABLED:-True}
+      ACARS_ENABLED: ${ACARS_ENABLED:-True}
+      APPRISE_URLS: ${APPRISE_URLS:-}
+      PHOTO_CACHE_ENABLED: ${PHOTO_CACHE_ENABLED:-True}
+      PHOTO_CACHE_DIR: /data/photos
+      RADIO_ENABLED: ${RADIO_ENABLED:-True}
+      RADIO_AUDIO_DIR: /data/radio
+      TRANSCRIPTION_ENABLED: ${TRANSCRIPTION_ENABLED:-False}
+      WHISPER_ENABLED: ${WHISPER_ENABLED:-False}
+      WHISPER_URL: ${WHISPER_URL:-http://whisper:9000}
+      OPENSKY_DB_ENABLED: ${OPENSKY_DB_ENABLED:-True}
+      OPENSKY_DB_PATH: /data/opensky/aircraft-database.csv
+      S3_ENABLED: ${S3_ENABLED:-False}
+      S3_BUCKET: ${S3_BUCKET:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+
+      # OpenAIP (global airspace data)
+      OPENAIP_ENABLED: ${OPENAIP_ENABLED:-True}
+      OPENAIP_API_KEY: ${OPENAIP_API_KEY:-}
+    volumes:
+      - photo_cache:/data/photos
+      - radio_data:/data/radio
+      - opensky_data:/data/opensky
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - skyspy-network
+    command: >
+      celery -A skyspy worker
+      --loglevel=info
+      --concurrency=100
+      --queues=polling,default,database,transcription,notifications
+      --pool=gevent
+
+  # ---------------------------------------------------------------------------
+  # Celery Beat (Periodic Task Scheduler)
+  # ---------------------------------------------------------------------------
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: skyspy-celery-beat
+    restart: unless-stopped
+    environment:
+      DEBUG: ${DEBUG:-False}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-your-secret-key-change-in-production}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-adsb}:${POSTGRES_PASSWORD:-adsb}@postgres:5432/${POSTGRES_DB:-adsb}
+      REDIS_URL: redis://redis:6379/0
+
+      # OpenAIP (global airspace data)
+      OPENAIP_ENABLED: ${OPENAIP_ENABLED:-True}
+      OPENAIP_API_KEY: ${OPENAIP_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      celery-worker:
+        condition: service_started
+    networks:
+      - skyspy-network
+    command: >
+      celery -A skyspy beat
+      --loglevel=info
+      --scheduler=django_celery_beat.schedulers:DatabaseScheduler
+
+  # ---------------------------------------------------------------------------
+  # ACARS UDP Listener (optional - runs as management command)
+  # ---------------------------------------------------------------------------
+  acars-listener:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: skyspy-acars-listener
+    restart: unless-stopped
+    profiles:
+      - acars  # Only starts with: docker-compose --profile acars up
+    environment:
+      DEBUG: ${DEBUG:-False}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-your-secret-key-change-in-production}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-adsb}:${POSTGRES_PASSWORD:-adsb}@postgres:5432/${POSTGRES_DB:-adsb}
+      REDIS_URL: redis://redis:6379/0
+      ACARS_ENABLED: ${ACARS_ENABLED:-True}
+      ACARS_PORT: ${ACARS_PORT:-5555}
+      VDLM2_PORT: ${VDLM2_PORT:-5556}
+    ports:
+      - "${ACARS_PORT:-5555}:5555/udp"
+      - "${VDLM2_PORT:-5556}:5556/udp"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - skyspy-network
+    command: python manage.py run_acars
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  skyspy-network:
+    driver: bridge
+    name: skyspy-network
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  postgres_data:
+    name: skyspy-postgres-data
+  redis_data:
+    name: skyspy-redis-data
+  photo_cache:
+    name: skyspy-photo-cache
+  radio_data:
+    name: skyspy-radio-data
+  opensky_data:
+    name: skyspy-opensky-data

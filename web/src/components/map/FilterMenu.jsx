@@ -1,15 +1,52 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Filter, X } from 'lucide-react';
 
 /**
  * Traffic filter menu for filtering displayed aircraft
  */
-export function FilterMenu({ 
-  show, 
-  filters, 
+export function FilterMenu({
+  show,
+  filters,
   onFiltersChange,
-  onClose 
+  onClose
 }) {
+  const menuRef = useRef(null);
+
+  // Close on click outside
+  useEffect(() => {
+    if (!show) return;
+
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        onClose();
+      }
+    };
+
+    // Small delay to prevent immediate close when opening
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [show, onClose]);
+
+  // Close on Escape key
+  useEffect(() => {
+    if (!show) return;
+
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [show, onClose]);
+
   if (!show) return null;
 
   const handleChange = (key, value) => {
@@ -17,7 +54,7 @@ export function FilterMenu({
   };
 
   return (
-    <div className="filter-menu">
+    <div className="filter-menu" ref={menuRef}>
       <div className="filter-menu-header">
         <Filter size={16} />
         <span>Traffic Filters</span>

@@ -1,0 +1,1260 @@
+/**
+ * Cannonball Mode Styles
+ *
+ * Full-screen, high-contrast interface for law enforcement detection.
+ * Optimized for glanceable viewing while driving.
+ */
+
+/* ============================================================================
+   Base Layout
+   ============================================================================ */
+
+.cannonball-mode {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-cannonball, 9999);
+  background: #0a0a0a;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ============================================================================
+   Status Bar
+   ============================================================================ */
+
+.cannonball-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.8);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.status-left,
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-indicator.active {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.status-indicator.inactive {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.threat-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #ef4444;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 700;
+  animation: pulse-badge 1s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.status-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.status-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.status-btn.active {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.status-btn.exit-btn {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.status-btn.exit-btn:hover {
+  background: rgba(239, 68, 68, 0.4);
+}
+
+/* ============================================================================
+   Main Content Area
+   ============================================================================ */
+
+.cannonball-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  min-height: 0;
+}
+
+/* ============================================================================
+   Threat Display
+   ============================================================================ */
+
+.threat-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  max-width: 500px;
+  animation: threat-enter 0.3s ease-out;
+}
+
+@keyframes threat-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.threat-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 24px;
+}
+
+.threat-category {
+  font-size: 24px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: currentColor;
+}
+
+.threat-callsign {
+  font-size: 18px;
+  font-weight: 500;
+  opacity: 0.7;
+  font-family: 'SF Mono', 'Menlo', monospace;
+}
+
+.threat-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+/* Direction Arrow */
+.direction-arrow {
+  width: 100px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 3px solid currentColor;
+  transition: transform 0.3s ease-out;
+}
+
+.direction-arrow svg {
+  stroke-width: 2;
+}
+
+/* Distance Display */
+.distance-display {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.distance-value {
+  font-size: 96px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -2px;
+}
+
+.distance-unit {
+  font-size: 32px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.direction-label {
+  font-size: 28px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  opacity: 0.8;
+}
+
+/* Threat Footer */
+.threat-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+  width: 100%;
+}
+
+.threat-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trend-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 16px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.trend-indicator.approaching {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  animation: pulse-trend 1s ease-in-out infinite;
+}
+
+.trend-indicator.departing {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.trend-indicator.holding {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+@keyframes pulse-trend {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.threat-details {
+  display: flex;
+  gap: 24px;
+  font-size: 16px;
+  opacity: 0.6;
+}
+
+.threat-details .detail {
+  font-family: 'SF Mono', 'Menlo', monospace;
+}
+
+/* Threat Level Colors */
+.threat-critical,
+.threat-display.threat-critical {
+  color: #ef4444;
+}
+
+.threat-warning,
+.threat-display.threat-warning {
+  color: #f59e0b;
+}
+
+.threat-info,
+.threat-display.threat-info {
+  color: #22c55e;
+}
+
+/* Critical threat pulsing */
+.threat-display.threat-critical {
+  animation: critical-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes critical-pulse {
+  0%, 100% {
+    text-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+  }
+  50% {
+    text-shadow: 0 0 40px rgba(239, 68, 68, 0.8);
+  }
+}
+
+/* ============================================================================
+   Clear Status
+   ============================================================================ */
+
+.clear-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 24px;
+}
+
+.clear-icon {
+  width: 150px;
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clear-circle {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 8px solid #22c55e;
+  animation: clear-pulse 2s ease-in-out infinite;
+}
+
+@keyframes clear-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+}
+
+.clear-text {
+  font-size: 48px;
+  font-weight: 800;
+  color: #22c55e;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+}
+
+.clear-subtext {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* ============================================================================
+   Threat List (Secondary Threats)
+   ============================================================================ */
+
+.threat-list {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  background: rgba(0, 0, 0, 0.6);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.threat-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid currentColor;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.threat-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.item-category {
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.item-distance {
+  font-family: 'SF Mono', 'Menlo', monospace;
+}
+
+.item-direction {
+  opacity: 0.7;
+}
+
+/* ============================================================================
+   GPS Error
+   ============================================================================ */
+
+.gps-error {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: rgba(239, 68, 68, 0.9);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ============================================================================
+   History Panel
+   ============================================================================ */
+
+.history-panel {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-cannonball-panel, 8100);
+  background: #0a0a0a;
+  display: flex;
+  flex-direction: column;
+  animation: panel-enter 0.2s ease-out;
+}
+
+@keyframes panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.history-header h3 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.history-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.history-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+
+.history-actions .clear-btn:hover {
+  background: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+.history-actions .close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.history-stats {
+  display: flex;
+  gap: 16px;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  overflow-x: auto;
+}
+
+.history-stats .stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 80px;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #22c55e;
+}
+
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 0.5px;
+}
+
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.history-empty {
+  text-align: center;
+  padding: 40px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.history-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 3px solid currentColor;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.history-item .item-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.history-item .item-category {
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.history-item .item-callsign {
+  font-family: 'SF Mono', 'Menlo', monospace;
+  opacity: 0.7;
+}
+
+.history-item .item-details {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* ============================================================================
+   Landscape Optimizations
+   ============================================================================ */
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .cannonball-status-bar {
+    padding: 8px 16px;
+  }
+
+  .cannonball-main {
+    padding: 12px 24px;
+  }
+
+  .threat-header {
+    margin-bottom: 12px;
+  }
+
+  .threat-category {
+    font-size: 20px;
+  }
+
+  .distance-value {
+    font-size: 72px;
+  }
+
+  .distance-unit {
+    font-size: 24px;
+  }
+
+  .direction-arrow {
+    width: 70px;
+    height: 70px;
+  }
+
+  .direction-arrow svg {
+    width: 50px;
+    height: 50px;
+  }
+
+  .clear-circle {
+    width: 80px;
+    height: 80px;
+    border-width: 6px;
+  }
+
+  .clear-text {
+    font-size: 36px;
+  }
+}
+
+/* ============================================================================
+   Mobile Optimizations
+   ============================================================================ */
+
+@media (max-width: 480px) {
+  .distance-value {
+    font-size: 80px;
+  }
+
+  .threat-category {
+    font-size: 20px;
+  }
+
+  .direction-label {
+    font-size: 24px;
+  }
+}
+
+/* ============================================================================
+   Theme Variants
+   ============================================================================ */
+
+/* Red Theme - Night vision friendly */
+.cannonball-mode.theme-red {
+  background: #1a0a0a;
+}
+
+.cannonball-mode.theme-red .cannonball-status-bar {
+  background: rgba(40, 10, 10, 0.9);
+  border-bottom-color: rgba(255, 100, 100, 0.2);
+}
+
+.cannonball-mode.theme-red .status-indicator.active {
+  background: rgba(200, 50, 50, 0.3);
+  color: #ff6b6b;
+}
+
+.cannonball-mode.theme-red .status-btn.active {
+  background: rgba(200, 50, 50, 0.3);
+  color: #ff6b6b;
+}
+
+.cannonball-mode.theme-red .clear-circle {
+  border-color: #ff6b6b;
+}
+
+.cannonball-mode.theme-red .clear-text {
+  color: #ff6b6b;
+}
+
+.cannonball-mode.theme-red .threat-info,
+.cannonball-mode.theme-red .threat-display.threat-info {
+  color: #ff6b6b;
+}
+
+.cannonball-mode.theme-red .stat-value {
+  color: #ff6b6b;
+}
+
+/* High Contrast Theme */
+.cannonball-mode.theme-highContrast {
+  background: #000;
+}
+
+.cannonball-mode.theme-highContrast .cannonball-status-bar {
+  background: #000;
+  border-bottom: 2px solid #fff;
+}
+
+.cannonball-mode.theme-highContrast .status-indicator {
+  font-weight: 700;
+}
+
+.cannonball-mode.theme-highContrast .status-indicator.active {
+  background: #fff;
+  color: #000;
+}
+
+.cannonball-mode.theme-highContrast .status-indicator.inactive {
+  background: #ff0;
+  color: #000;
+}
+
+.cannonball-mode.theme-highContrast .threat-badge {
+  background: #ff0;
+  color: #000;
+}
+
+.cannonball-mode.theme-highContrast .distance-value {
+  font-weight: 900;
+  text-shadow: 0 0 30px currentColor;
+}
+
+.cannonball-mode.theme-highContrast .direction-arrow {
+  border-width: 5px;
+}
+
+.cannonball-mode.theme-highContrast .threat-critical,
+.cannonball-mode.theme-highContrast .threat-display.threat-critical {
+  color: #ff0;
+}
+
+.cannonball-mode.theme-highContrast .threat-warning,
+.cannonball-mode.theme-highContrast .threat-display.threat-warning {
+  color: #ffa500;
+}
+
+.cannonball-mode.theme-highContrast .threat-info,
+.cannonball-mode.theme-highContrast .threat-display.threat-info {
+  color: #0f0;
+}
+
+.cannonball-mode.theme-highContrast .clear-circle {
+  border-color: #0f0;
+  border-width: 10px;
+}
+
+.cannonball-mode.theme-highContrast .clear-text {
+  color: #0f0;
+  font-weight: 900;
+  text-shadow: 0 0 20px #0f0;
+}
+
+/* ============================================================================
+   Settings Panel
+   ============================================================================ */
+
+.settings-panel {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-cannonball-settings, 8200);
+  background: #0a0a0a;
+  display: flex;
+  flex-direction: column;
+  animation: panel-enter 0.2s ease-out;
+  overflow: hidden;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.settings-header h3 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.settings-header .close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+
+.settings-header .close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.settings-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* Quick Toggles */
+.settings-quick-toggles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.settings-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid transparent;
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.settings-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.settings-toggle.active {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.5);
+  color: #22c55e;
+}
+
+/* Settings Sections */
+.settings-section {
+  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.settings-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-section-header:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.section-content {
+  padding: 12px 16px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Slider Settings */
+.settings-slider {
+  margin-bottom: 16px;
+}
+
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.slider-label {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.slider-value {
+  color: #22c55e;
+  font-weight: 600;
+  font-family: 'SF Mono', 'Menlo', monospace;
+}
+
+.settings-slider input[type="range"] {
+  width: 100%;
+  height: 6px;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.settings-slider input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: #22c55e;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* Button Groups */
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.button-group {
+  display: flex;
+  gap: 4px;
+}
+
+.button-group button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: capitalize;
+}
+
+.button-group button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.button-group button.active {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+/* Toggle Rows */
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.settings-toggle-row span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-toggle-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #22c55e;
+  cursor: pointer;
+}
+
+/* Settings Footer */
+.settings-footer {
+  padding: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.reset-btn {
+  width: 100%;
+  padding: 12px;
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 8px;
+  color: #ef4444;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.reset-btn:hover {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+/* ============================================================================
+   Threat Grid
+   ============================================================================ */
+
+.threat-grid {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  max-width: 600px;
+  padding: 12px;
+}
+
+.threat-grid.grid-1 {
+  grid-template-columns: 1fr;
+}
+
+.threat-grid.grid-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.threat-grid.grid-3 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.threat-grid.grid-4 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.threat-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid var(--threat-color, rgba(255, 255, 255, 0.2));
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 140px;
+}
+
+.threat-cell:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.threat-cell.selected {
+  border-width: 3px;
+  box-shadow: 0 0 20px var(--threat-color);
+}
+
+.threat-cell.empty {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.threat-cell.empty .empty-text {
+  font-size: 32px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.cell-arrow {
+  color: var(--threat-color);
+  margin-bottom: 8px;
+  transition: transform 0.3s ease-out;
+}
+
+.cell-distance {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--threat-color);
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-category {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.8;
+  margin-top: 4px;
+}
+
+.cell-direction {
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.6;
+}
+
+.cell-trend {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0.7;
+}
+
+.cell-trend.approaching {
+  color: #ef4444;
+}
+
+.cell-trend.departing {
+  color: #22c55e;
+}
+
+.cell-eta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  opacity: 0.6;
+  margin-top: 4px;
+}
+
+.cell-callsign {
+  position: absolute;
+  bottom: 8px;
+  font-size: 10px;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  opacity: 0.5;
+}
+
+.cycle-indicator {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+/* ============================================================================
+   Mini Radar
+   ============================================================================ */
+
+.mini-radar {
+  position: relative;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.mini-radar.expanded {
+  border-radius: 12px;
+}
+
+.radar-blip {
+  transition: all 0.3s ease-out;
+}
+
+.radar-blip-pulse {
+  animation: blip-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes blip-pulse {
+  0%, 100% {
+    opacity: 0.5;
+    r: 12;
+  }
+  50% {
+    opacity: 0.2;
+    r: 18;
+  }
+}
+
+.radar-legend {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  font-size: 10px;
+}
+
+.legend-item {
+  opacity: 0.7;
+}
+
+.legend-item.critical {
+  color: #ef4444;
+}
+
+.legend-item.warning {
+  color: #f59e0b;
+}
+
+.legend-item.info {
+  color: #22c55e;
+}
+
+/* Mini Radar Overlay */
+.mini-radar-overlay {
+  position: absolute;
+  bottom: -60px;
+  right: 0;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.mini-radar-overlay:hover {
+  opacity: 1;
+}
+
+/* ============================================================================
+   Radar View (Full Screen)
+   ============================================================================ */
+
+.radar-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 20px;
+}
+
+.radar-fullscreen {
+  border: 2px solid rgba(34, 197, 94, 0.3);
+  border-radius: 50%;
+}
+
+.radar-selected-info {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 12px 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  font-size: 16px;
+}
+
+.info-category {
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.info-distance {
+  font-family: 'SF Mono', 'Menlo', monospace;
+  color: #22c55e;
+}
+
+.info-direction {
+  opacity: 0.7;
+}
+
+/* ============================================================================
+   Cannonball Button in Sidebar
+   ============================================================================ */
+
+.cannonball-btn {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(245, 158, 11, 0.2)) !important;
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+}
+
+.cannonball-btn:hover {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(245, 158, 11, 0.3)) !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
+}
+
+.cannonball-btn svg {
+  color: #ef4444;
+}

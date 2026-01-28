@@ -1,15 +1,22 @@
 services:
-  # Test runner service
+  # Django API Test runner service
   api-test:
-    container_name: adsb_api_test
+    container_name: skyspy_api_test
     build:
-      context: ./adsb-api
-      dockerfile: Dockerfile.test
+      context: .
+      dockerfile: Dockerfile
     profiles: ["test"]
     environment:
+      # Django Settings
+      - DJANGO_SETTINGS_MODULE=skyspy.tests.test_settings
+      - DJANGO_SECRET_KEY=test-secret-key-for-testing-only
+      - DEBUG=False
+
       # Database: Point to pgbouncer instead of postgres
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:5432/${POSTGRES_DB}
-      - REDIS_URL=${REDIS_URL}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-adsb}:${POSTGRES_PASSWORD:-adsb}@pgbouncer:5432/${POSTGRES_DB:-adsb}
+
+      # Redis
+      - REDIS_URL=redis://redis:6379/0
 
       # ADS-B Sources
       - ULTRAFEEDER_HOST=${ULTRAFEEDER_HOST:-ultrafeeder}
@@ -18,25 +25,33 @@ services:
       - DUMP978_PORT=${DUMP978_PORT:-80}
 
       # Feeder Location
-      - FEEDER_LAT=${FEEDER_LAT}
-      - FEEDER_LON=${FEEDER_LON}
+      - FEEDER_LAT=${FEEDER_LAT:-47.9377}
+      - FEEDER_LON=${FEEDER_LON:--121.9687}
 
       # Notifications
-      - APPRISE_URLS=${APPRISE_URLS}
-      - NOTIFICATION_COOLDOWN=${NOTIFICATION_COOLDOWN}
+      - APPRISE_URLS=${APPRISE_URLS:-}
+      - NOTIFICATION_COOLDOWN=${NOTIFICATION_COOLDOWN:-300}
 
       # Safety Monitoring
       - SAFETY_MONITORING_ENABLED=true
-      - SAFETY_PROXIMITY_NM=1.0
-      - SAFETY_ALTITUDE_DIFF_FT=1000
+
+      # Disable external services for tests
+      - PHOTO_CACHE_ENABLED=false
+      - S3_ENABLED=false
+      - WHISPER_ENABLED=false
+      - TRANSCRIPTION_ENABLED=false
+      - OPENSKY_DB_ENABLED=false
+      - LLM_ENABLED=false
+      - SENTRY_DSN=
+      - PROMETHEUS_ENABLED=false
 
       # Python
-      - PYTHONDONTWRITEBYTECODE=${PYTHONDONTWRITEBYTECODE}
-      - PYTHONUNBUFFERED=${PYTHONUNBUFFERED}
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
     volumes:
       - ./test-results:/app/test-results
     depends_on:
-      pgbouncer: # Changed dependency to pgbouncer
+      pgbouncer:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -46,59 +61,101 @@ services:
         condition: service_healthy
     networks:
       - test-network
+    working_dir: /app
+    command: >
+      sh -c "
+        echo 'Running database migrations...' &&
+        python manage.py migrate --noinput &&
+        echo 'Running tests...' &&
+        pytest -v --tb=short --junitxml=/app/test-results/results.xml
+      "
 
+  # Django API Development server
   api:
-    container_name: adsb_api_dev
+    container_name: skyspy_api_dev
     build:
       context: .
       dockerfile: Dockerfile
     profiles: ["dev"]
     environment:
-      # Database: Point to pgbouncer instead of postgres
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:5432/${POSTGRES_DB}
+      # Django Settings
+      - DJANGO_SETTINGS_MODULE=skyspy.settings
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-dev-secret-key-change-in-production}
+      - DEBUG=${DEBUG:-True}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
 
-      
-      - REDIS_URL=${REDIS_URL}
+      # Database: Point to pgbouncer instead of postgres
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-adsb}:${POSTGRES_PASSWORD:-adsb}@pgbouncer:5432/${POSTGRES_DB:-adsb}
+
+      # Redis
+      - REDIS_URL=redis://redis:6379/0
+
+      # ADS-B Sources
       - ULTRAFEEDER_HOST=${ULTRAFEEDER_HOST:-ultrafeeder}
       - ULTRAFEEDER_PORT=${ULTRAFEEDER_PORT:-80}
       - DUMP978_HOST=${DUMP978_HOST:-dump978}
       - DUMP978_PORT=${DUMP978_PORT:-80}
-      - FEEDER_LAT=${FEEDER_LAT}
-      - FEEDER_LON=${FEEDER_LON}
-      - APPRISE_URLS=${APPRISE_URLS}
-      - POLLING_INTERVAL=${POLLING_INTERVAL}
-      - DB_STORE_INTERVAL=${DB_STORE_INTERVAL}
-      - NOTIFICATION_COOLDOWN=${NOTIFICATION_COOLDOWN}
-      - PYTHONDONTWRITEBYTECODE=${PYTHONDONTWRITEBYTECODE}
-      - PYTHONUNBUFFERED=${PYTHONUNBUFFERED}
-      - PORT=${PORT}
+
+      # Feeder Location
+      - FEEDER_LAT=${FEEDER_LAT:-47.9377}
+      - FEEDER_LON=${FEEDER_LON:--121.9687}
+
+      # Polling
+      - POLLING_INTERVAL=${POLLING_INTERVAL:-2}
+      - DB_STORE_INTERVAL=${DB_STORE_INTERVAL:-5}
+      - SESSION_TIMEOUT_MINUTES=${SESSION_TIMEOUT_MINUTES:-30}
+
+      # Notifications
+      - APPRISE_URLS=${APPRISE_URLS:-}
+      - NOTIFICATION_COOLDOWN=${NOTIFICATION_COOLDOWN:-300}
+
+      # Safety Monitoring
+      - SAFETY_MONITORING_ENABLED=${SAFETY_MONITORING_ENABLED:-True}
+
       # ACARS settings
-      - ACARS_ENABLED=${ACARS_ENABLED}
-      - ACARS_PORT=${ACARS_PORT}
-      - VDLM2_PORT=${VDLM2_PORT}
-      # Open SKY DB
-      - OPENSKY_DB_ENABLED=${OPENSKY_DB_ENABLED}
-      - OPENSKY_DB_PATH=${OPENSKY_DB_PATH}
+      - ACARS_ENABLED=${ACARS_ENABLED:-True}
+      - ACARS_PORT=${ACARS_PORT:-5555}
+      - VDLM2_PORT=${VDLM2_PORT:-5556}
+
+      # OpenSky DB
+      - OPENSKY_DB_ENABLED=${OPENSKY_DB_ENABLED:-True}
+      - OPENSKY_DB_PATH=${OPENSKY_DB_PATH:-/data/opensky/aircraft-database.csv}
+
       # Photo Cache
-      - PHOTO_CACHE_ENABLED=${PHOTO_CACHE_ENABLED:-true}
+      - PHOTO_CACHE_ENABLED=${PHOTO_CACHE_ENABLED:-True}
       - PHOTO_CACHE_DIR=${PHOTO_CACHE_DIR:-/data/photos}
+      - PHOTO_AUTO_DOWNLOAD=${PHOTO_AUTO_DOWNLOAD:-True}
+
+      # S3 Storage
       - S3_ENABLED=${S3_ENABLED:-false}
-      - S3_BUCKET=${S3_BUCKET}
+      - S3_BUCKET=${S3_BUCKET:-}
       - S3_REGION=${S3_REGION:-us-west-1}
-      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
-      - S3_SECRET_KEY=${S3_SECRET_KEY}
-      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL}
-      - S3_PREFIX=${S3_PREFIX:-airfame-cache}
-      - S3_PUBLIC_URL=${S3_PUBLIC_URL}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-}
+
+      # Radio/Audio
+      - RADIO_ENABLED=${RADIO_ENABLED:-True}
+      - RADIO_AUDIO_DIR=${RADIO_AUDIO_DIR:-/data/radio}
+
+      # Transcription
+      - TRANSCRIPTION_ENABLED=${TRANSCRIPTION_ENABLED:-False}
+      - WHISPER_ENABLED=${WHISPER_ENABLED:-False}
+      - WHISPER_URL=${WHISPER_URL:-http://whisper:9000}
+
       # Sentry
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-local-dev}
+
+      # Python
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
     volumes:
       - ./test/api-cache:/data
     ports:
-      - "${API_PORT}:5000"
+      - "${API_PORT:-8000}:8000"
     depends_on:
-      pgbouncer: # Changed dependency to pgbouncer
+      pgbouncer:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -107,29 +164,101 @@ services:
       dump978:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/api/v1/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
       interval: 10s
       timeout: 5s
       retries: 3
     networks:
       - test-network
+    command: >
+      sh -c "
+        echo 'Running database migrations...' &&
+        python manage.py migrate --noinput &&
+        echo 'Starting Daphne ASGI server...' &&
+        daphne -b 0.0.0.0 -p 8000 skyspy.asgi:application
+      "
 
-  # --- NEW SERVICE: PgBouncer ---
+  # Celery Worker for dev profile
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: skyspy_celery_worker_dev
+    profiles: ["dev"]
+    environment:
+      - DJANGO_SETTINGS_MODULE=skyspy.settings
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-dev-secret-key-change-in-production}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-adsb}:${POSTGRES_PASSWORD:-adsb}@pgbouncer:5432/${POSTGRES_DB:-adsb}
+      - REDIS_URL=redis://redis:6379/0
+      - ULTRAFEEDER_HOST=${ULTRAFEEDER_HOST:-ultrafeeder}
+      - ULTRAFEEDER_PORT=${ULTRAFEEDER_PORT:-80}
+      - FEEDER_LAT=${FEEDER_LAT:-47.9377}
+      - FEEDER_LON=${FEEDER_LON:--121.9687}
+      - POLLING_INTERVAL=${POLLING_INTERVAL:-2}
+      - SAFETY_MONITORING_ENABLED=${SAFETY_MONITORING_ENABLED:-True}
+      - ACARS_ENABLED=${ACARS_ENABLED:-True}
+      - PHOTO_CACHE_ENABLED=${PHOTO_CACHE_ENABLED:-true}
+      - PHOTO_CACHE_DIR=/data/photos
+      - RADIO_ENABLED=${RADIO_ENABLED:-True}
+      - RADIO_AUDIO_DIR=/data/radio
+    volumes:
+      - ./test/api-cache:/data
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - test-network
+    command: >
+      celery -A skyspy worker
+      --loglevel=info
+      --concurrency=50
+      --queues=polling,default,database,transcription,notifications
+      --pool=gevent
+
+  # Celery Beat for dev profile
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: skyspy_celery_beat_dev
+    profiles: ["dev"]
+    environment:
+      - DJANGO_SETTINGS_MODULE=skyspy.settings
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-dev-secret-key-change-in-production}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-adsb}:${POSTGRES_PASSWORD:-adsb}@pgbouncer:5432/${POSTGRES_DB:-adsb}
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      celery-worker:
+        condition: service_started
+    networks:
+      - test-network
+    command: >
+      celery -A skyspy beat
+      --loglevel=info
+      --scheduler=django_celery_beat.schedulers:DatabaseScheduler
+
+  # --- PgBouncer ---
   pgbouncer:
     image: edoburu/pgbouncer:latest
     profiles: ["dev","test"]
-    container_name: adsb_pgbouncer
+    container_name: skyspy_pgbouncer
     environment:
-      - DB_USER=${POSTGRES_USER}
-      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_USER=${POSTGRES_USER:-adsb}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-adsb}
       - DB_HOST=postgres
-      - DB_NAME=${POSTGRES_DB}
+      - DB_NAME=${POSTGRES_DB:-adsb}
       # Transaction pooling is best for modern async apps
       - POOL_MODE=transaction
       - MAX_CLIENT_CONN=1000
       - DEFAULT_POOL_SIZE=20
       - AUTH_TYPE=plain
-      - ADMIN_USERS=${POSTGRES_USER}
+      - ADMIN_USERS=${POSTGRES_USER:-adsb}
     ports:
       - "5432" # Internal port exposure
     depends_on:
@@ -147,17 +276,17 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile.dev
-    container_name: adsb-dashboard-dev
+    container_name: skyspy-dashboard-dev
     working_dir: /app
     profiles: ["dev"]
     ports:
-      - "${DASHBOARD_PORT}:3000"
+      - "${DASHBOARD_PORT:-3000}:3000"
     volumes:
       - ./web/src:/app/src
       - ./web/public:/app/public
       - ./web/index.html:/app/index.html
     environment:
-      - NODE_ENV=${NODE_ENV}
+      - NODE_ENV=${NODE_ENV:-development}
     stdin_open: true
     tty: true
 
@@ -165,12 +294,13 @@ services:
   postgres:
     image: postgres:16-alpine
     profiles: ["dev","test"]
+    container_name: skyspy_postgres_test
     environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER:-adsb}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-adsb}
+      - POSTGRES_DB=${POSTGRES_DB:-adsb}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U adsb -d adsb_test"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-adsb} -d ${POSTGRES_DB:-adsb}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -183,6 +313,7 @@ services:
   redis:
     image: redis:7-alpine
     profiles: ["dev","test"]
+    container_name: skyspy_redis_test
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -203,11 +334,11 @@ services:
     command: ["python3", "mock_1090.py"]
     environment:
       - MOCK_TYPE=ultrafeeder
-      - ADSBX_API_KEY=${ADSBX_API_KEY}
+      - ADSBX_API_KEY=${ADSBX_API_KEY:-}
     networks:
       - test-network
     ports:
-      - ${ULTRAFEEDER_PORT_EXTERNAL}:80
+      - ${ULTRAFEEDER_PORT_EXTERNAL:-18080}:80
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
       interval: 10s
@@ -224,19 +355,19 @@ services:
     command: ["python3", "mock_1090.py"]
     environment:
       - MOCK_TYPE=dump978
-      - ADSBX_API_KEY=${ADSBX_API_KEY}
+      - ADSBX_API_KEY=${ADSBX_API_KEY:-}
     networks:
       - test-network
     ports:
-      - ${DUMP978_PORT_EXTERNAL}:80
+      - ${DUMP978_PORT_EXTERNAL:-18081}:80
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
       interval: 10s
       timeout: 5s
       retries: 3
-  
+
   acarshub-mock:
-    build: 
+    build:
       context: ./test/acars-mock/
       dockerfile: Dockerfile
     image: ghcr.io/cha0s-corp/acarshub-mock:latest
@@ -247,36 +378,32 @@ services:
       - test-network
     ports:
       # Web interface
-      - "${ACARSHUB_WEB_PORT}:8080"
+      - "${ACARSHUB_WEB_PORT:-8080}:8080"
       # UDP ports (same as real ACARSHUB - for receiving from decoders)
-      - "${ACARS_UDP_PORT}:5550/udp"   # ACARS (acarsdec)
-      - "${VDLM2_UDP_PORT}:5555/udp"   # VDLM2 (dumpvdl2)
-      - "${HFDL_UDP_PORT}:5556/udp"    # HFDL (dumphfdl)
-      - "${IMSL_UDP_PORT}:5557/udp"    # IMSL (Inmarsat)
-      - "${IRDM_UDP_PORT}:5558/udp"    # IRDM (Iridium)
+      - "${ACARS_UDP_PORT:-5550}:5550/udp"   # ACARS (acarsdec)
+      - "${VDLM2_UDP_PORT:-5555}:5555/udp"   # VDLM2 (dumpvdl2)
+      - "${HFDL_UDP_PORT:-5556}:5556/udp"    # HFDL (dumphfdl)
+      - "${IMSL_UDP_PORT:-5557}:5557/udp"    # IMSL (Inmarsat)
+      - "${IRDM_UDP_PORT:-5558}:5558/udp"    # IRDM (Iridium)
       # TCP relay ports (for consuming messages)
-      - "${ACARS_TCP_PORT}:15550"      # ACARS TCP relay
-      - "${VDLM2_TCP_PORT}:15555"      # VDLM2 TCP relay
-      - "${HFDL_TCP_PORT}:15556"       # HFDL TCP relay
-      - "${IMSL_TCP_PORT}:15557"       # IMSL TCP relay
-      - "${IRDM_TCP_PORT}:15558"       # IRDM TCP relay
-    
+      - "${ACARS_TCP_PORT:-15550}:15550"      # ACARS TCP relay
+      - "${VDLM2_TCP_PORT:-15555}:15555"      # VDLM2 TCP relay
+      - "${HFDL_TCP_PORT:-15556}:15556"       # HFDL TCP relay
+      - "${IMSL_TCP_PORT:-15557}:15557"       # IMSL TCP relay
+      - "${IRDM_TCP_PORT:-15558}:15558"       # IRDM TCP relay
+
     environment:
       # Mock message generation
-      - MOCK_ENABLED=${MOCK_ENABLED}
-      - MOCK_INTERVAL_MIN=${MOCK_INTERVAL_MIN}
-      - MOCK_INTERVAL_MAX=${MOCK_INTERVAL_MAX}
+      - MOCK_ENABLED=${MOCK_ENABLED:-true}
+      - MOCK_INTERVAL_MIN=${MOCK_INTERVAL_MIN:-1}
+      - MOCK_INTERVAL_MAX=${MOCK_INTERVAL_MAX:-5}
 
       # Station identification
-      - STATION_ID=${STATION_ID}
+      - STATION_ID=${STATION_ID:-test-station}
 
-      # Relay configuration - set these to send messages to your service
-      # Uncomment and configure:
-      - RELAY_HOST=${RELAY_HOST}
-      - RELAY_PORT=${RELAY_PORT}
-      - RELAY_PROTOCOL=${RELAY_PROTOCOL}
-    
-    # Optional: healthcheck
+      # Relay configuration - only set if you want to relay to another service
+      # RELAY_HOST, RELAY_PORT, RELAY_PROTOCOL are optional
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/stats"]
       interval: 30s
@@ -293,7 +420,7 @@ services:
     profiles: ["dev"]
     container_name: mock-airband-uploader
     environment:
-      - SKYSPY_API_URL=http://api:5000
+      - SKYSPY_API_URL=http://api:8000
       - METRICS_PORT=9091
       - MIN_TRANSMISSION_INTERVAL=5
       - MAX_TRANSMISSION_INTERVAL=30

@@ -9,8 +9,8 @@ COPY vite.config.js ./
 # Install dependencies
 RUN npm install
 
-# Set API target for Docker environment
-ENV VITE_API_TARGET=http://host.docker.internal:5000
+# Set API target for Docker environment (connects to api service on same network)
+ENV VITE_API_TARGET=http://api:8000
 
 # Expose port
 EXPOSE 3000

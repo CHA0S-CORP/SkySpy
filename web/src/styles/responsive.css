@@ -1652,3 +1652,305 @@
     padding-top: 0;
   }
 }
+
+/* ============================================================================
+   Aircraft List Responsive Styles
+   ============================================================================ */
+
+/* Large desktop (>1200px): Full table, all columns */
+@media (min-width: 1201px) {
+  .aircraft-list-container {
+    max-height: calc(100vh - 200px);
+  }
+
+  .al-card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
+}
+
+/* Tablet/Small Desktop (768-1200px): Table with hidden columns */
+@media (max-width: 1200px) {
+  /* Hide Heading and Signal columns on smaller screens in table view */
+  .aircraft-list-container.view-table .aircraft-table th:nth-child(7),
+  .aircraft-list-container.view-table .aircraft-table td:nth-child(7),
+  .aircraft-list-container.view-table .aircraft-table th:nth-child(9),
+  .aircraft-list-container.view-table .aircraft-table td:nth-child(9) {
+    display: none;
+  }
+
+  .al-card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+
+  .list-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .toolbar-actions {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 8px;
+  }
+}
+
+/* Mobile (< 768px): Force card view, full-width search, touch-friendly */
+@media (max-width: 768px) {
+  /* Force card view on mobile */
+  .aircraft-list-container.view-table .aircraft-table-wrapper {
+    display: none !important;
+  }
+
+  .aircraft-list-container.view-table .al-card-grid-wrapper {
+    display: block !important;
+  }
+
+  /* Hide view toggle on mobile - cards only */
+  .al-view-toggle,
+  .al-density-toggle {
+    display: none !important;
+  }
+
+  /* Hide column selector on mobile */
+  .al-column-selector {
+    display: none !important;
+  }
+
+  /* Full-width search */
+  .list-toolbar {
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .list-toolbar .search-box {
+    width: 100%;
+    min-width: unset;
+  }
+
+  .toolbar-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  /* Touch-friendly quick filter chips */
+  .quick-filters {
+    padding: 8px 12px 12px;
+    gap: 6px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .quick-filter-chip {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    min-height: 36px;
+  }
+
+  /* Card grid adjustments */
+  .al-card-grid-wrapper {
+    padding: 12px;
+  }
+
+  .al-card-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  /* Card touch improvements */
+  .al-card {
+    padding: 12px;
+  }
+
+  .al-card:active {
+    transform: scale(0.98);
+    transition: transform 0.1s;
+  }
+
+  /* Footer adjustments */
+  .list-footer {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
+
+  .footer-stats,
+  .footer-legend {
+    justify-content: center;
+  }
+
+  /* Advanced filters - stack vertically */
+  .advanced-filters {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .filter-group {
+    width: 100%;
+  }
+
+  .range-inputs {
+    flex-wrap: wrap;
+  }
+
+  .range-inputs input {
+    flex: 1;
+    min-width: 80px;
+  }
+}
+
+/* Small Phone (< 480px): Compact cards, essential data only */
+@media (max-width: 480px) {
+  /* More compact toolbar */
+  .list-toolbar {
+    padding: 10px;
+  }
+
+  /* Compact quick filters */
+  .quick-filters {
+    padding: 6px 10px 10px;
+  }
+
+  .quick-filter-chip {
+    padding: 6px 10px;
+    font-size: 11px;
+    min-height: 32px;
+  }
+
+  .quick-filter-chip span:not(.chip-count) {
+    display: none;
+  }
+
+  /* Compact card grid */
+  .al-card-grid-wrapper {
+    padding: 8px;
+  }
+
+  .al-card-grid {
+    gap: 8px;
+  }
+
+  /* Compact cards - show essential data only */
+  .al-card {
+    padding: 10px;
+  }
+
+  .al-card.compact .al-card-telemetry {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* Hide non-essential telemetry in compact mode */
+  .al-card.compact .al-card-telem-item:nth-child(n+4) {
+    display: none;
+  }
+
+  .al-card-header {
+    margin-bottom: 8px;
+  }
+
+  .al-card-callsign {
+    font-size: 14px;
+  }
+
+  .al-card-icao {
+    font-size: 10px;
+  }
+
+  .al-card-telemetry {
+    gap: 6px;
+  }
+
+  .al-card-telem-item {
+    padding: 4px 6px;
+  }
+
+  .al-card-telem-label {
+    font-size: 8px;
+  }
+
+  .al-card-telem-value {
+    font-size: 12px;
+  }
+
+  /* Compact footer */
+  .list-footer {
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+
+  .footer-legend {
+    display: none;
+  }
+
+  /* Compact filter toggle */
+  .filter-toggle-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .filter-toggle-btn span:not(.filter-count) {
+    display: none;
+  }
+
+  .clear-filters-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .clear-filters-btn span {
+    display: none;
+  }
+}
+
+/* Touch device improvements for Aircraft List */
+@media (pointer: coarse) {
+  .al-card:active {
+    transform: scale(0.98);
+  }
+
+  .quick-filter-chip:active {
+    transform: scale(0.95);
+  }
+
+  .al-view-toggle button:active,
+  .al-density-toggle button:active {
+    transform: scale(0.95);
+  }
+
+  .al-column-btn:active {
+    transform: scale(0.95);
+  }
+
+  /* Larger touch targets */
+  .al-view-toggle button,
+  .al-density-toggle button {
+    min-height: 36px;
+    min-width: 36px;
+  }
+
+  .al-column-btn {
+    min-height: 36px;
+  }
+
+  .filter-toggle-btn,
+  .clear-filters-btn {
+    min-height: 36px;
+  }
+
+  /* Smooth scrolling for card grid */
+  .al-card-grid-wrapper {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* Touch-friendly column selector items */
+  .al-column-item {
+    min-height: 44px;
+  }
+
+  .al-preset-btn {
+    min-height: 36px;
+  }
+}

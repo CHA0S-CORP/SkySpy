@@ -1,0 +1,287 @@
+{
+  "rules": [
+    {
+      "id": 1,
+      "name": "Military Aircraft Alert",
+      "description": "Alerts when military aircraft are detected",
+      "enabled": true,
+      "priority": "warning",
+      "conditions": {
+        "logic": "AND",
+        "groups": [
+          {
+            "logic": "AND",
+            "conditions": [
+              { "type": "military", "operator": "eq", "value": "true" }
+            ]
+          }
+        ]
+      },
+      "cooldown": 300,
+      "trigger_count": 15,
+      "last_triggered": "2025-01-27T14:30:00Z",
+      "created_at": "2025-01-15T10:00:00Z"
+    },
+    {
+      "id": 2,
+      "name": "Low Altitude Warning",
+      "description": "Alerts for aircraft below 1000ft",
+      "enabled": true,
+      "priority": "critical",
+      "conditions": {
+        "logic": "AND",
+        "groups": [
+          {
+            "logic": "AND",
+            "conditions": [
+              { "type": "altitude_below", "operator": "eq", "value": "1000" }
+            ]
+          }
+        ]
+      },
+      "cooldown": 60,
+      "trigger_count": 42,
+      "last_triggered": "2025-01-27T15:45:00Z",
+      "created_at": "2025-01-10T08:00:00Z"
+    },
+    {
+      "id": 3,
+      "name": "Emergency Squawk",
+      "description": "Detects 7500, 7600, 7700 squawk codes",
+      "enabled": false,
+      "priority": "critical",
+      "conditions": {
+        "logic": "AND",
+        "groups": [
+          {
+            "logic": "AND",
+            "conditions": [
+              { "type": "emergency", "operator": "eq", "value": "true" }
+            ]
+          }
+        ]
+      },
+      "cooldown": 0,
+      "trigger_count": 2,
+      "last_triggered": "2025-01-20T09:15:00Z",
+      "created_at": "2025-01-05T12:00:00Z"
+    },
+    {
+      "id": 4,
+      "name": "Helicopter Watch",
+      "description": "Track helicopter activity",
+      "enabled": true,
+      "priority": "info",
+      "conditions": {
+        "logic": "AND",
+        "groups": [
+          {
+            "logic": "AND",
+            "conditions": [
+              { "type": "helicopter", "operator": "eq", "value": "true" }
+            ]
+          }
+        ]
+      },
+      "cooldown": 600,
+      "trigger_count": 8,
+      "last_triggered": "2025-01-26T18:00:00Z",
+      "created_at": "2025-01-12T14:00:00Z"
+    },
+    {
+      "id": 5,
+      "name": "Specific Callsign",
+      "description": "Watch for UAL flights",
+      "enabled": true,
+      "priority": "info",
+      "conditions": {
+        "logic": "AND",
+        "groups": [
+          {
+            "logic": "AND",
+            "conditions": [
+              { "type": "callsign", "operator": "startswith", "value": "UAL" }
+            ]
+          }
+        ]
+      },
+      "cooldown": 300,
+      "trigger_count": 120,
+      "last_triggered": "2025-01-27T16:00:00Z",
+      "created_at": "2025-01-08T09:00:00Z"
+    }
+  ],
+  "history": [
+    {
+      "id": 101,
+      "rule_name": "Military Aircraft Alert",
+      "rule_id": 1,
+      "severity": "warning",
+      "callsign": "DUKE01",
+      "hex": "AE1234",
+      "message": "Military aircraft detected: DUKE01",
+      "triggered_at": "2025-01-27T14:30:00Z",
+      "acknowledged": false
+    },
+    {
+      "id": 102,
+      "rule_name": "Low Altitude Warning",
+      "rule_id": 2,
+      "severity": "critical",
+      "callsign": "N12345",
+      "hex": "A12345",
+      "message": "Aircraft below 1000ft: N12345 at 850ft",
+      "triggered_at": "2025-01-27T15:45:00Z",
+      "acknowledged": false
+    },
+    {
+      "id": 103,
+      "rule_name": "Specific Callsign",
+      "rule_id": 5,
+      "severity": "info",
+      "callsign": "UAL456",
+      "hex": "A45678",
+      "message": "UAL flight detected: UAL456",
+      "triggered_at": "2025-01-27T16:00:00Z",
+      "acknowledged": true
+    },
+    {
+      "id": 104,
+      "rule_name": "Helicopter Watch",
+      "rule_id": 4,
+      "severity": "info",
+      "callsign": "N999PD",
+      "hex": "A99999",
+      "message": "Helicopter detected: N999PD",
+      "triggered_at": "2025-01-26T18:00:00Z",
+      "acknowledged": true
+    },
+    {
+      "id": 105,
+      "rule_name": "Emergency Squawk",
+      "rule_id": 3,
+      "severity": "critical",
+      "callsign": "DAL789",
+      "hex": "A78901",
+      "message": "Emergency squawk 7700: DAL789",
+      "triggered_at": "2025-01-20T09:15:00Z",
+      "acknowledged": true
+    }
+  ],
+  "aircraft": [
+    {
+      "hex": "AE5678",
+      "flight": "DUKE02",
+      "r": "12-3456",
+      "t": "C17",
+      "alt_baro": 25000,
+      "gs": 420,
+      "squawk": "1234",
+      "lat": 40.7128,
+      "lon": -74.0060,
+      "dbFlags": 1,
+      "calculatedDistance": 5.2
+    },
+    {
+      "hex": "A11111",
+      "flight": "UAL123",
+      "r": "N12345",
+      "t": "B738",
+      "alt_baro": 500,
+      "gs": 180,
+      "squawk": "1200",
+      "lat": 40.6413,
+      "lon": -73.7781,
+      "calculatedDistance": 2.1
+    },
+    {
+      "hex": "A22222",
+      "flight": "N456PD",
+      "r": "N456PD",
+      "t": "H60",
+      "alt_baro": 1500,
+      "gs": 120,
+      "squawk": "0000",
+      "lat": 40.7589,
+      "lon": -73.9851,
+      "category": "A7",
+      "calculatedDistance": 8.5
+    },
+    {
+      "hex": "A33333",
+      "flight": "AAL999",
+      "r": "N789AA",
+      "t": "A321",
+      "alt_baro": 35000,
+      "gs": 480,
+      "squawk": "7700",
+      "lat": 41.0534,
+      "lon": -74.1310,
+      "emergency": "general",
+      "calculatedDistance": 15.3
+    }
+  ],
+  "channels": [
+    {
+      "id": 1,
+      "name": "Discord Alerts",
+      "channel_type": "discord",
+      "enabled": true
+    },
+    {
+      "id": 2,
+      "name": "Telegram Channel",
+      "channel_type": "telegram",
+      "enabled": true
+    },
+    {
+      "id": 3,
+      "name": "Email Notifications",
+      "channel_type": "email",
+      "enabled": false
+    }
+  ],
+  "importRules": {
+    "version": "1.0",
+    "exported_at": "2025-01-27T12:00:00Z",
+    "source": "SkySpy",
+    "rules": [
+      {
+        "name": "Imported Rule 1",
+        "description": "Test imported rule",
+        "priority": "warning",
+        "enabled": true,
+        "conditions": [
+          { "type": "callsign", "operator": "contains", "value": "TEST" }
+        ],
+        "cooldown_minutes": 5
+      },
+      {
+        "name": "Imported Rule 2",
+        "description": "Another imported rule",
+        "priority": "info",
+        "enabled": false,
+        "conditions": [
+          { "type": "distance_within", "operator": "equals", "value": "10" }
+        ],
+        "cooldown_minutes": 10
+      }
+    ]
+  },
+  "invalidImportRules": {
+    "version": "1.0",
+    "rules": [
+      {
+        "name": "",
+        "conditions": []
+      },
+      {
+        "name": "AB",
+        "priority": "invalid_priority",
+        "conditions": [
+          { "type": "invalid_type", "operator": "equals", "value": "" }
+        ]
+      }
+    ]
+  }
+}

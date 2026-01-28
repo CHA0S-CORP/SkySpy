@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { AlertTriangle, ChevronDown, ChevronUp, Play, Pause, SkipBack, SkipForward, ArrowLeft, Copy, Check, Zap, Radar, Clock, Plane, Activity, Navigation, Shield, Target } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { ReplayControls } from '../safety/ReplayControls';
+import { TelemetryGraphs } from '../safety/TelemetryGraphs';
+import { CollapsibleSection } from '../common/CollapsibleSection';
 
 // Enhanced slider and animation styles
 const sliderStyles = `
@@ -62,6 +65,8 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
   const [replayState, setReplayState] = useState({ position: 100, isPlaying: false, speed: 1 });
   const [graphZoomState, setGraphZoomState] = useState({ zoom: 1, offset: 0 });
   const [copied, setCopied] = useState(false);
+  const [acknowledging, setAcknowledging] = useState(false);
+  const [acknowledged, setAcknowledged] = useState(false);
 
   const mapRef = useRef(null);
   const mapContainerRef = useRef(null);
@@ -72,7 +77,7 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
   const replayControlsRef = useRef(null);
   const flightGraphsRef = useRef(null);
 
-  // Fetch event data - prefer socket.io
+  // Fetch event data - prefer WebSocket with HTTP fallback
   useEffect(() => {
     const fetchEvent = async () => {
       if (!eventId) {
@@ -87,10 +92,10 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
       try {
         let data = null;
 
-        // Prefer socket.io
+        // Prefer WebSocket for event detail
         if (wsRequest && wsConnected) {
           try {
-            data = await wsRequest('safety-event-detail', { event_id: eventId });
+            data = await wsRequest('safety-event-detail', { event_id: eventId, id: eventId });
             if (data?.error || data?.error_type === 'not_found') {
               data = null;
               if (data?.error_type === 'not_found') {
@@ -104,7 +109,7 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
           }
         }
 
-        // HTTP fallback only if socket didn't work
+        // HTTP fallback - use Django API endpoint
         if (!data) {
           const res = await fetch(`${apiBase}/api/v1/safety/events/${eventId}`);
           if (!res.ok) {
@@ -116,10 +121,22 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
             setLoading(false);
             return;
           }
+          const contentType = res.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            setError('Invalid response from server');
+            setLoading(false);
+            return;
+          }
           data = await res.json();
         }
 
+        // Handle nested data structure from Django REST Framework
+        if (data?.data) {
+          data = data.data;
+        }
+
         setEvent(data);
+        setAcknowledged(data.acknowledged || data.resolved || false);
 
         // Fetch track data for involved aircraft
         const icaos = [data.icao, data.icao_2].filter(Boolean);
@@ -133,6 +150,8 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
                 const result = await wsRequest('sightings', { icao_hex: icao, hours: 2, limit: 500 });
                 if (result && Array.isArray(result.sightings)) {
                   trackResult = result;
+                } else if (result?.data?.sightings && Array.isArray(result.data.sightings)) {
+                  trackResult = result.data;
                 }
               } catch (wsErr) {
                 console.warn('WebSocket sightings request failed, falling back to HTTP:', wsErr.message);
@@ -140,18 +159,25 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
             }
 
             // Fallback to HTTP if WebSocket failed or unavailable
+            // Django API uses /api/v1/sightings with query params (was /api/v1/history/sightings/{icao})
             if (!trackResult) {
-              const trackRes = await fetch(`${apiBase}/api/v1/history/sightings/${icao}?hours=2&limit=500`);
+              const trackRes = await fetch(`${apiBase}/api/v1/sightings?icao_hex=${icao}&hours=2&limit=500`);
               if (trackRes.ok) {
-                const httpResult = await trackRes.json();
-                if (httpResult && Array.isArray(httpResult.sightings)) {
-                  trackResult = httpResult;
+                const ct = trackRes.headers.get('content-type');
+                if (ct && ct.includes('application/json')) {
+                  const httpResult = await trackRes.json();
+                  if (httpResult && (Array.isArray(httpResult.sightings) || Array.isArray(httpResult.results))) {
+                    trackResult = httpResult;
+                  } else if (httpResult?.data?.sightings || httpResult?.data?.results) {
+                    trackResult = httpResult.data;
+                  }
                 }
               }
             }
 
-            if (trackResult && trackResult.sightings) {
-              setTrackData(prev => ({ ...prev, [icao]: trackResult.sightings }));
+            const sightings = trackResult?.sightings || trackResult?.results || [];
+            if (sightings.length > 0) {
+              setTrackData(prev => ({ ...prev, [icao]: sightings }));
             }
           } catch (err) {
             console.error('Failed to fetch track data for', icao, err);
@@ -168,6 +194,33 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
     fetchEvent();
   }, [eventId, apiBase, wsRequest, wsConnected]);
 
+  // Listen for real-time updates to this specific event via custom events
+  useEffect(() => {
+    if (!eventId) return;
+
+    const handleSafetyUpdate = (e) => {
+      const data = e.detail;
+      if (!data) return;
+
+      const updatedEventId = data.id || data.event_id;
+      if (updatedEventId === eventId || String(updatedEventId) === String(eventId)) {
+        setEvent(prev => prev ? { ...prev, ...data } : prev);
+        if (data.acknowledged || data.resolved) {
+          setAcknowledged(true);
+        }
+      }
+    };
+
+    // Listen for safety event updates from WebSocket (dispatched by useChannelsSocket)
+    window.addEventListener('skyspy:safety:event_updated', handleSafetyUpdate);
+    window.addEventListener('skyspy:safety:event_resolved', handleSafetyUpdate);
+
+    return () => {
+      window.removeEventListener('skyspy:safety:event_updated', handleSafetyUpdate);
+      window.removeEventListener('skyspy:safety:event_resolved', handleSafetyUpdate);
+    };
+  }, [eventId]);
+
   // Copy link to clipboard
   const copyLink = useCallback(() => {
     const url = `${window.location.origin}${window.location.pathname}#event?id=${eventId}`;
@@ -176,6 +229,49 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
       setTimeout(() => setCopied(false), 2000);
     });
   }, [eventId]);
+
+  // Acknowledge event via Django API
+  const acknowledgeEvent = useCallback(async () => {
+    if (!eventId || acknowledging || acknowledged) return;
+
+    setAcknowledging(true);
+
+    try {
+      // Try WebSocket first
+      if (wsRequest && wsConnected) {
+        try {
+          const result = await wsRequest('safety-acknowledge', { event_id: eventId, id: eventId });
+          if (result && !result.error) {
+            setAcknowledged(true);
+            setEvent(prev => prev ? { ...prev, acknowledged: true } : prev);
+            setAcknowledging(false);
+            return;
+          }
+        } catch (wsErr) {
+          console.debug('WebSocket acknowledge failed, falling back to HTTP:', wsErr.message);
+        }
+      }
+
+      // HTTP fallback - POST to Django API endpoint
+      const res = await fetch(`${apiBase}/api/v1/safety/events/${eventId}/acknowledge`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (res.ok) {
+        setAcknowledged(true);
+        setEvent(prev => prev ? { ...prev, acknowledged: true } : prev);
+      } else {
+        console.error('Failed to acknowledge event:', res.status);
+      }
+    } catch (err) {
+      console.error('Failed to acknowledge event:', err);
+    }
+
+    setAcknowledging(false);
+  }, [eventId, apiBase, wsRequest, wsConnected, acknowledging, acknowledged]);
 
   // Create aircraft icon
   const createAircraftIcon = useCallback((track, color) => {
@@ -778,6 +874,25 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
           {copied ? <Check size={16} /> : <Copy size={16} />}
           <span>{copied ? 'Copied!' : 'Share'}</span>
         </button>
+
+        {/* Acknowledge button - only show if not yet acknowledged */}
+        {!acknowledged && (
+          <button
+            className={`sep-acknowledge-btn ${acknowledging ? 'loading' : ''}`}
+            onClick={acknowledgeEvent}
+            disabled={acknowledging}
+            title="Acknowledge this safety event"
+          >
+            <Check size={16} />
+            <span>{acknowledging ? 'Acknowledging...' : 'Acknowledge'}</span>
+          </button>
+        )}
+        {acknowledged && (
+          <div className="sep-acknowledged-badge">
+            <Check size={14} />
+            <span>Acknowledged</span>
+          </div>
+        )}
       </div>
 
       {/* Main content grid */}
@@ -939,25 +1054,19 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
             </div>
           </div>
 
-          {/* Raw telemetry toggle */}
+          {/* Raw telemetry section - using CollapsibleSection component */}
           {hasSnapshot && (
-            <div className="sep-telemetry-section">
-              <button
-                className={`sep-telemetry-toggle ${isExpanded ? 'expanded' : ''}`}
-                onClick={() => setExpandedSnapshots(prev => ({ ...prev, [eventId]: !prev[eventId] }))}
-              >
-                <Radar size={16} />
-                <span>Raw Telemetry Snapshot</span>
-                {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-              </button>
-
-              {isExpanded && (
-                <div className="sep-telemetry-content">
-                  {renderSnapshot(event.aircraft_snapshot, event.aircraft_snapshot_2 ? 'Aircraft 1' : null)}
-                  {renderSnapshot(event.aircraft_snapshot_2, 'Aircraft 2')}
-                </div>
-              )}
-            </div>
+            <CollapsibleSection
+              title="Raw Telemetry Snapshot"
+              icon={<Radar size={16} />}
+              defaultExpanded={false}
+              className="sep-telemetry-section"
+            >
+              <div className="sep-telemetry-content-inner">
+                {renderSnapshot(event.aircraft_snapshot, event.aircraft_snapshot_2 ? 'Aircraft 1' : null)}
+                {renderSnapshot(event.aircraft_snapshot_2, 'Aircraft 2')}
+              </div>
+            </CollapsibleSection>
           )}
         </div>
 
@@ -984,79 +1093,20 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
             <div className="sep-map-overlay-gradient" />
           </div>
 
-          {/* Timeline/Replay controls */}
-          <div className="sep-replay-panel" ref={replayControlsRef}>
-            <div className="sep-replay-header">
-              <Activity size={14} />
-              <span>Flight Timeline</span>
-              <span className="sep-replay-time">{getReplayTimestamp || '--:--:--'}</span>
-            </div>
-
-            <div className="sep-timeline-container">
-              <div className="sep-timeline-track">
-                <div
-                  className="sep-timeline-progress"
-                  style={{ width: `${replayState.position}%` }}
-                />
-                {/* Timeline ticks */}
-                <div className="sep-timeline-ticks">
-                  {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map(tick => (
-                    <div key={tick} className={`sep-timeline-tick ${tick === 50 ? 'major' : ''}`} style={{ left: `${tick}%` }}>
-                      <div className="sep-tick-line" />
-                      {tick % 25 === 0 && <span className="sep-tick-label">{tick}%</span>}
-                    </div>
-                  ))}
-                </div>
-                <div
-                  className="sep-timeline-event-marker"
-                  style={{ left: '50%' }}
-                  title="Event occurred here"
-                />
-                <input
-                  type="range"
-                  className="sep-timeline-slider safety-page-slider"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  value={replayState.position}
-                  onChange={(e) => handleReplayChange(parseFloat(e.target.value))}
-                />
-              </div>
-            </div>
-
-            <div className="sep-replay-controls">
-              <div className="sep-control-group">
-                <button className="sep-control-btn" onClick={skipToStart} title="Jump to start">
-                  <SkipBack size={16} />
-                </button>
-                <button className={`sep-control-btn sep-play-btn ${replayState.isPlaying ? 'playing' : ''}`} onClick={togglePlay}>
-                  {replayState.isPlaying ? <Pause size={20} /> : <Play size={20} />}
-                </button>
-                <button className="sep-control-btn" onClick={skipToEnd} title="Jump to end">
-                  <SkipForward size={16} />
-                </button>
-              </div>
-
-              <button className="sep-jump-to-event" onClick={jumpToEvent}>
-                <AlertTriangle size={14} />
-                Jump to Event
-              </button>
-
-              <div className="sep-speed-control">
-                <span>Speed</span>
-                <div className="sep-speed-buttons">
-                  {[0.5, 1, 2, 4].map(speed => (
-                    <button
-                      key={speed}
-                      className={`sep-speed-btn ${replayState.speed === speed ? 'active' : ''}`}
-                      onClick={() => handleSpeedChange(speed)}
-                    >
-                      {speed}x
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
+          {/* Timeline/Replay controls - using new ReplayControls component */}
+          <div ref={replayControlsRef}>
+            <ReplayControls
+              position={replayState.position}
+              isPlaying={replayState.isPlaying}
+              speed={replayState.speed}
+              currentTime={getReplayTimestamp}
+              onPositionChange={handleReplayChange}
+              onPlayPause={togglePlay}
+              onSkipToStart={skipToStart}
+              onSkipToEnd={skipToEnd}
+              onJumpToEvent={jumpToEvent}
+              onSpeedChange={handleSpeedChange}
+            />
           </div>
         </div>
       </div>

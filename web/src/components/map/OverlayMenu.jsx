@@ -1,15 +1,52 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Layers, X, Radio, Plane, Cloud, AlertTriangle, MapPin } from 'lucide-react';
 
 /**
  * Menu for toggling aviation data overlays
  */
-export function OverlayMenu({ 
-  show, 
-  overlays, 
+export function OverlayMenu({
+  show,
+  overlays,
   onOverlaysChange,
-  onClose 
+  onClose
 }) {
+  const menuRef = useRef(null);
+
+  // Close on click outside
+  useEffect(() => {
+    if (!show) return;
+
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        onClose();
+      }
+    };
+
+    // Small delay to prevent immediate close when opening
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [show, onClose]);
+
+  // Close on Escape key
+  useEffect(() => {
+    if (!show) return;
+
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [show, onClose]);
+
   if (!show) return null;
 
   const handleToggle = (key) => {
@@ -17,7 +54,7 @@ export function OverlayMenu({
   };
 
   return (
-    <div className="overlay-menu">
+    <div className="overlay-menu" ref={menuRef}>
       <div className="overlay-menu-header">
         <Layers size={16} />
         <span>Map Overlays</span>

@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
-ADSBexchange Live Proxy with Conflict Detection.
-Fetches live data from ADSBx API, formats it for tar1090/readsb, 
-and runs local conflict detection analysis.
+ADS-B Mock Service / ADSBexchange Live Proxy.
+
+Works in two modes:
+- SYNTHETIC: Generates realistic mock aircraft data (no API key needed)
+- LIVE: Fetches real data from ADSBx API with synthetic fallback
 
 Environment Variables:
-    ADSBX_API_KEY: Your ADSBexchange API Key (REQUIRED)
+    ADSBX_API_KEY: Your ADSBexchange API Key (optional - uses synthetic if not set)
     COVERAGE_LAT: Center latitude (default: 47.9377)
     COVERAGE_LON: Center longitude (default: -121.9687)
-    COVERAGE_RADIUS_NM: Coverage radius in nautical miles (default: 25)
-    CACHE_TTL: Seconds to cache API response to save credits (default: 5)
+    COVERAGE_RADIUS_NM: Coverage radius in nautical miles (default: 250)
+    CACHE_TTL: Seconds to cache response (default: 5)
     PORT: Server port (default: 80)
 """
 
@@ -17,7 +19,8 @@ import os
 import json
 import time
 import math
-import traceback
+import random
+import string
 import requests
 from flask import Flask, jsonify
 from threading import Lock
@@ -26,9 +29,7 @@ from typing import List, Dict
 app = Flask(__name__)
 
 # Configuration
-ADSBX_API_KEY = os.getenv("ADSBX_API_KEY")
-if not ADSBX_API_KEY:
-    print("WARNING: ADSBX_API_KEY environment variable not set. API calls will fail.")
+ADSBX_API_KEY = os.getenv("ADSBX_API_KEY", "").strip() or None
 
 COVERAGE_CENTER_LAT = float(os.getenv("COVERAGE_LAT", "47.9377"))
 COVERAGE_CENTER_LON = float(os.getenv("COVERAGE_LON", "-121.9687"))
@@ -43,9 +44,12 @@ CONFLICT_VERTICAL_FT = 1000
 data_lock = Lock()
 cached_aircraft: List[dict] = []
 last_fetch_time = 0
+last_api_error_time = 0  # Track API errors for backoff
+api_backoff_until = 0    # Don't retry API until this time
 message_count = 0
 detected_conflicts: List[dict] = []
 conflict_history: List[dict] = []
+using_synthetic_data = False  # Track if we're using synthetic data
 
 # ============================================================================
 # Math & Logic Helpers (Preserved from original)
@@ -114,6 +118,88 @@ def detect_conflicts(aircraft_list: List[dict]) -> List[dict]:
     return conflicts
 
 # ============================================================================
+# Synthetic Data Generation (fallback when API unavailable)
+# ============================================================================
+
+# Sample airlines and aircraft types for realistic mock data
+MOCK_AIRLINES = [
+    ("AAL", "N", "A321"), ("UAL", "N", "B738"), ("DAL", "N", "A320"),
+    ("SWA", "N", "B737"), ("ASA", "N", "B739"), ("JBU", "N", "A320"),
+    ("SKW", "N", "E75L"), ("ENY", "N", "E145"), ("RPA", "N", "E170"),
+    ("FFT", "N", "A320"), ("NKS", "N", "A320"), ("HAL", "N", "A330"),
+]
+
+def generate_synthetic_aircraft() -> List[dict]:
+    """Generate realistic synthetic aircraft data for testing."""
+    aircraft = []
+    num_aircraft = random.randint(15, 40)
+
+    for i in range(num_aircraft):
+        # Random position within coverage area
+        lat = COVERAGE_CENTER_LAT + random.uniform(-1.5, 1.5)
+        lon = COVERAGE_CENTER_LON + random.uniform(-2.0, 2.0)
+
+        # Pick airline or generate GA registration
+        if random.random() < 0.8:  # 80% commercial
+            airline, reg_prefix, ac_type = random.choice(MOCK_AIRLINES)
+            flight = f"{airline}{random.randint(100, 9999)}"
+            reg = f"{reg_prefix}{random.randint(100, 999)}{random.choice(string.ascii_uppercase)}{random.choice(string.ascii_uppercase)}"
+            alt = random.randint(150, 420) * 100  # FL150-FL420
+            gs = random.randint(380, 520)
+            category = "A3"  # Large aircraft
+        else:  # GA/small aircraft
+            flight = ""
+            reg = f"N{random.randint(1, 9999)}{random.choice(['', 'A', 'B', 'C'])}{random.choice(string.ascii_uppercase)}"
+            ac_type = random.choice(["C172", "C182", "PA28", "BE36", "SR22"])
+            alt = random.randint(20, 120) * 100  # 2000-12000ft
+            gs = random.randint(90, 180)
+            category = "A1"  # Light aircraft
+
+        hex_code = ''.join(random.choices('0123456789abcdef', k=6))
+
+        aircraft.append({
+            "hex": hex_code,
+            "flight": flight,
+            "r": reg,
+            "t": ac_type,
+            "desc": f"{ac_type} aircraft",
+            "lat": round(lat, 6),
+            "lon": round(lon, 6),
+            "alt_baro": alt,
+            "gs": gs,
+            "tas": gs + random.randint(-20, 40),
+            "track": random.randint(0, 359),
+            "track_rate": round(random.uniform(-1, 1), 2),
+            "baro_rate": random.choice([0, 0, 0, random.randint(-2000, 2000)]),
+            "geom_rate": 0,
+            "squawk": f"{random.randint(0,7)}{random.randint(0,7)}{random.randint(0,7)}{random.randint(0,7)}",
+            "category": category,
+            "nav_qnh": 1013.25,
+            "nav_altitude_mcp": alt,
+            "nav_heading": random.randint(0, 359),
+            "nic": 8,
+            "rc": 186,
+            "nac_p": 9,
+            "nac_v": 2,
+            "sil": 3,
+            "sil_type": "perhour",
+            "gva": 2,
+            "sda": 2,
+            "alert": 0,
+            "spi": 0,
+            "rssi": round(random.uniform(-25, -5), 1),
+            "dbFlags": 0,
+            "seen": round(random.uniform(0, 2), 1),
+            "seen_pos": round(random.uniform(0, 2), 1),
+            "messages": random.randint(100, 5000),
+            "mlat": [],
+            "tisb": [],
+        })
+
+    return aircraft
+
+
+# ============================================================================
 # Live Data Fetching
 # ============================================================================
 
@@ -175,21 +261,27 @@ def transform_adsbx_to_readsb(adsbx_ac):
 
 def fetch_live_data():
     """
-    Fetches data from ADSBexchange via RapidAPI.
+    Fetches data from ADSBexchange via RapidAPI, with fallback to synthetic data.
     """
-    global cached_aircraft, last_fetch_time, message_count
+    global cached_aircraft, last_fetch_time, message_count, api_backoff_until, using_synthetic_data
 
     now = time.time()
-    
+
     # Return cache if within TTL
     if now - last_fetch_time < CACHE_TTL:
         return cached_aircraft
 
+    # If no API key, use synthetic data
+    if not ADSBX_API_KEY:
+        return _use_synthetic_data(now)
+
+    # If we're in backoff period, use synthetic data
+    if now < api_backoff_until:
+        return _use_synthetic_data(now)
+
     # CORRECTED URL for RapidAPI
-    # Note: The trailing slash is often required by ADSBx API
     url = f"https://adsbexchange-com1.p.rapidapi.com/v2/lat/{COVERAGE_CENTER_LAT}/lon/{COVERAGE_CENTER_LON}/dist/{COVERAGE_RADIUS_NM}/"
-    
-    # CORRECTED HEADERS for RapidAPI
+
     headers = {
         "X-RapidAPI-Key": ADSBX_API_KEY,
         "X-RapidAPI-Host": "adsbexchange-com1.p.rapidapi.com"
@@ -197,40 +289,78 @@ def fetch_live_data():
 
     try:
         response = requests.get(url, headers=headers, timeout=5)
-        
-        # specific error handling to help debug
-        if response.status_code == 403:
-            print(f"Error 403: Check your ADSBX_API_KEY. It might be invalid or you are not subscribed on RapidAPI.")
-            return cached_aircraft
+
+        # Handle rate limits and auth errors with backoff
+        if response.status_code in (401, 403, 429):
+            # Backoff: 60 seconds for rate limit, longer for auth errors
+            backoff_seconds = 300 if response.status_code in (401, 403) else 60
+            api_backoff_until = now + backoff_seconds
+            if response.status_code == 429:
+                print(f"Rate limited by ADSBx API, backing off for {backoff_seconds}s (using synthetic data)")
+            else:
+                print(f"API auth error ({response.status_code}), backing off for {backoff_seconds}s (using synthetic data)")
+            return _use_synthetic_data(now)
+
         if response.status_code == 404:
             print(f"Error 404: The API path {url} is incorrect.")
-            return cached_aircraft
-            
+            return _use_synthetic_data(now)
+
         response.raise_for_status()
-        
+
         data = response.json()
-        
-        # ADSBx RapidAPI response structure is usually {"ac": [...], "msg": "..."}
         raw_list = data.get("ac", [])
-        
+
         # Transform data to standard readsb format
         processed_list = []
         for ac in raw_list:
             if ac.get("lat") is None or ac.get("lon") is None:
                 continue
             processed_list.append(transform_adsbx_to_readsb(ac))
-            
+
         with data_lock:
             cached_aircraft = processed_list
             last_fetch_time = now
             message_count += len(processed_list) * 2
-            
+            using_synthetic_data = False
+
         return cached_aircraft
 
+    except requests.exceptions.RequestException as e:
+        # Network errors - short backoff
+        api_backoff_until = now + 30
+        print(f"Network error fetching ADSBx data: {e} (using synthetic data)")
+        return _use_synthetic_data(now)
     except Exception as e:
-        traceback.print_exc()
-        print(f"Error fetching ADSBx data: {e}")
-        return cached_aircraft
+        print(f"Unexpected error fetching ADSBx data: {e}")
+        return _use_synthetic_data(now)
+
+
+def _use_synthetic_data(now: float) -> List[dict]:
+    """Fall back to synthetic data generation."""
+    global cached_aircraft, last_fetch_time, message_count, using_synthetic_data
+
+    with data_lock:
+        # Update synthetic aircraft positions slightly for realism
+        if using_synthetic_data and cached_aircraft:
+            # Nudge existing aircraft
+            for ac in cached_aircraft:
+                if ac.get("lat") and ac.get("lon"):
+                    # Move based on track and speed
+                    track_rad = math.radians(ac.get("track", 0))
+                    speed_factor = (ac.get("gs", 300) / 3600) * CACHE_TTL / 60  # degrees per cache period
+                    ac["lat"] = round(ac["lat"] + math.cos(track_rad) * speed_factor * 0.01, 6)
+                    ac["lon"] = round(ac["lon"] + math.sin(track_rad) * speed_factor * 0.01, 6)
+                    ac["seen"] = round(random.uniform(0, 2), 1)
+                    ac["seen_pos"] = round(random.uniform(0, 2), 1)
+        else:
+            # Generate fresh synthetic data
+            cached_aircraft = generate_synthetic_aircraft()
+            using_synthetic_data = True
+
+        last_fetch_time = now
+        message_count += len(cached_aircraft) * 2
+
+    return cached_aircraft
 
 # ============================================================================
 # Endpoints
@@ -284,10 +414,12 @@ def health():
         count = len(cached_aircraft)
     return jsonify({
         "status": "healthy",
-        "mode": "LIVE_PROXY",
+        "mode": "SYNTHETIC" if using_synthetic_data else "LIVE_PROXY",
+        "data_source": "synthetic" if using_synthetic_data else "adsbexchange",
         "uptime": round(uptime, 0),
         "aircraft_tracked": count,
-        "cached_seconds_ago": round(time.time() - last_fetch_time, 1)
+        "cached_seconds_ago": round(time.time() - last_fetch_time, 1),
+        "api_backoff_remaining": max(0, round(api_backoff_until - time.time(), 0)) if api_backoff_until > time.time() else 0
     })
 
 @app.route("/config")
@@ -365,14 +497,19 @@ def index():
 if __name__ == "__main__":
     server_start_time = time.time()
     port = int(os.getenv("PORT", "80"))
-    
+
     print(f"=" * 60)
-    print(f"ADSBx Live Data Proxy")
+    print(f"ADS-B Mock / Live Proxy")
     print(f"=" * 60)
     print(f"Center:       {COVERAGE_CENTER_LAT}, {COVERAGE_CENTER_LON}")
     print(f"Radius:       {COVERAGE_RADIUS_NM} NM")
-    print(f"API Key:      {'*' * 5}{ADSBX_API_KEY[-4:] if ADSBX_API_KEY else 'MISSING'}")
+    if ADSBX_API_KEY:
+        print(f"API Key:      {'*' * 5}{ADSBX_API_KEY[-4:]}")
+        print(f"Mode:         LIVE (with synthetic fallback)")
+    else:
+        print(f"API Key:      NOT SET")
+        print(f"Mode:         SYNTHETIC ONLY")
     print(f"Conflict:     < {CONFLICT_HORIZONTAL_NM}nm / < {CONFLICT_VERTICAL_FT}ft")
     print(f"=" * 60)
-    
+
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)

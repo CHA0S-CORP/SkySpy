@@ -41,7 +41,7 @@ import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Configure logging
 logging.basicConfig(
@@ -74,20 +74,19 @@ class Settings(BaseSettings):
     
     # Relay destination (your service)
     relay_host: str = "api"
-    relay_port: int = 0
+    relay_port: Optional[int] = None
     relay_protocol: str = "udp"  # udp or tcp
-    
+
     # Web interface
     web_port: int = 8080
-    
+
     # Station ID
     station_id: str = "MOCK-STATION"
 
-    # API URL for fetching real callsigns
-    api_url: str = "http://api:5000"
+    # API URL for fetching real callsigns (optional - works without it)
+    api_url: str = "http://api:8000"
 
-    class Config:
-        env_prefix = ""
+    model_config = SettingsConfigDict(env_prefix="")
 
 
 settings = Settings()
@@ -450,9 +449,9 @@ class MockGenerator:
                         ]
                         logger.info(f"Refreshed callsigns: {len(self._callsigns)} aircraft with callsigns")
                 except Exception as e:
-                    logger.warning(f"Failed to fetch callsigns from API: {e}")
+                    logger.debug(f"API not available for callsigns (using random): {e}")
 
-                await asyncio.sleep(10)  # Refresh every 10 seconds
+                await asyncio.sleep(30)  # Refresh every 30 seconds
 
     def generate_registration(self, prefix: str) -> str:
         """Generate a realistic aircraft registration"""

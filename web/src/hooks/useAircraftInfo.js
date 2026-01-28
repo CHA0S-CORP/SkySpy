@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
+// Helper to safely parse JSON from fetch response
+const safeJson = async (res) => {
+  if (!res.ok) return null;
+  const ct = res.headers.get('content-type');
+  if (!ct || !ct.includes('application/json')) return null;
+  try { return await res.json(); } catch { return null; }
+};
+
 /**
  * Robust aircraft info lookup hook with:
  * - Bulk lookups for multiple aircraft (uses backend bulk endpoint)
@@ -7,7 +15,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
  * - Deduplication of concurrent requests
  * - Periodic refresh for visible aircraft
  * - Memory-efficient cache with TTL
- * - Integration with Socket.IO airframe error events
+ * - Integration with WebSocket airframe error events
  *
  * @param {Object} options
  * @param {Function} options.wsRequest - WebSocket request function
@@ -16,7 +24,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
  * @param {number} options.cacheTTL - Cache TTL in ms (default: 30 minutes)
  * @param {number} options.bulkBatchSize - Max aircraft per bulk request (default: 50)
  * @param {number} options.maxRetries - Max retry attempts for failed lookups (default: 3)
- * @param {Function} options.getAirframeError - Function to get airframe error from Socket.IO (optional)
+ * @param {Function} options.getAirframeError - Function to get airframe error from WebSocket (optional)
  * @param {Function} options.clearAirframeError - Function to clear airframe error (optional)
  */
 export function useAircraftInfo({
@@ -36,7 +44,7 @@ export function useAircraftInfo({
   const cacheRef = useRef(cache);
   cacheRef.current = cache;
 
-  // Errors received from Socket.IO: { [icao]: { error_type, error_message, source, timestamp } }
+  // Errors received from WebSocket: { [icao]: { error_type, error_message, source, timestamp } }
   const [errors, setErrors] = useState({});
 
   // Set of ICAOs currently being fetched (deduplication)
@@ -60,7 +68,7 @@ export function useAircraftInfo({
   }, [cacheTTL]);
 
   /**
-   * Get error for an aircraft (from Socket.IO or local state)
+   * Get error for an aircraft (from WebSocket or local state)
    * Returns: { error_type, error_message, source, details?, timestamp } or null
    */
   const getError = useCallback((icao) => {
@@ -72,7 +80,7 @@ export function useAircraftInfo({
       return errors[icao];
     }
 
-    // Check Socket.IO errors if available
+    // Check WebSocket errors if available
     if (getAirframeError) {
       return getAirframeError(icao);
     }
@@ -95,7 +103,7 @@ export function useAircraftInfo({
       return next;
     });
 
-    // Clear from Socket.IO if available
+    // Clear from WebSocket if available
     if (clearAirframeError) {
       clearAirframeError(icao);
     }
@@ -130,7 +138,7 @@ export function useAircraftInfo({
 
   /**
    * Fetch single aircraft info via WebSocket or HTTP
-   * When socket is connected, we only use socket.io to reduce API calls
+   * When socket is connected, we only use WebSocket to reduce API calls
    */
   const fetchSingleInfo = useCallback(async (icao) => {
     icao = icao.toUpperCase();
@@ -166,12 +174,17 @@ export function useAircraftInfo({
       } else {
         // HTTP fallback only when socket is not connected
         try {
-          const res = await fetch(`${apiBaseUrl}/api/v1/aircraft/${icao}/info`);
-          if (res.ok) {
-            data = await res.json();
-          } else if (res.status === 404) {
+          // Try airframes endpoint first (most complete data)
+          let res = await fetch(`${apiBaseUrl}/api/v1/airframes/${icao}/`);
+          if (res.status === 404) {
+            // Try lookup endpoint as fallback
+            res = await fetch(`${apiBaseUrl}/api/v1/lookup/aircraft/${icao}`);
+          }
+          if (res.status === 404) {
             // No info found, cache as empty to avoid re-fetching
             data = { icao_hex: icao, found: false };
+          } else {
+            data = await safeJson(res);
           }
         } catch (err) {
           console.debug('Aircraft info HTTP fetch failed:', icao, err.message);
@@ -208,7 +221,7 @@ export function useAircraftInfo({
 
   /**
    * Fetch bulk aircraft info (cached data only from backend)
-   * Uses socket.io when available to reduce HTTP calls
+   * Uses WebSocket when available to reduce HTTP calls
    */
   const fetchBulkInfo = useCallback(async (icaos) => {
     if (!icaos || icaos.length === 0) return {};
@@ -226,7 +239,7 @@ export function useAircraftInfo({
     try {
       const results = {};
 
-      // Prefer socket.io for bulk lookups when connected
+      // Prefer WebSocket for bulk lookups when connected
       if (wsRequest && wsConnected) {
         // Split into batches
         const batches = [];
@@ -253,17 +266,44 @@ export function useAircraftInfo({
 
         for (const batch of batches) {
           try {
-            const res = await fetch(`${apiBaseUrl}/api/v1/aircraft/info/bulk`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(batch)
-            });
+            // Django API: use /api/v1/airframes/bulk/?icao=A,B,C endpoint
+            const icaoList = batch.join(',');
+            let res = await fetch(`${apiBaseUrl}/api/v1/airframes/bulk/?icao=${icaoList}`);
+            let data = await safeJson(res);
 
-            if (res.ok) {
-              const data = await res.json();
-              if (data.aircraft) {
-                Object.assign(results, data.aircraft);
+            // If that fails, try individual lookups for each ICAO
+            if (!data || res.status === 400 || res.status === 404) {
+              for (const icao of batch) {
+                try {
+                  const singleRes = await fetch(`${apiBaseUrl}/api/v1/airframes/${icao}/`);
+                  const singleData = await safeJson(singleRes);
+                  if (singleData && singleData.icao_hex) {
+                    results[singleData.icao_hex.toUpperCase()] = singleData;
+                  }
+                } catch (e) {
+                  // Individual lookup failed, skip
+                }
               }
+              continue;
+            }
+
+            // Response format: { aircraft: { ICAO: {...}, ... }, found: N, requested: M }
+            if (data?.aircraft && typeof data.aircraft === 'object') {
+              Object.assign(results, data.aircraft);
+            } else if (Array.isArray(data)) {
+              // Fallback: array of airframes
+              data.forEach(af => {
+                if (af?.icao_hex) {
+                  results[af.icao_hex.toUpperCase()] = af;
+                }
+              });
+            } else if (data?.results) {
+              // Fallback: paginated response
+              data.results.forEach(af => {
+                if (af?.icao_hex) {
+                  results[af.icao_hex.toUpperCase()] = af;
+                }
+              });
             }
           } catch (err) {
             console.debug('Bulk aircraft info HTTP fetch failed:', err.message);
@@ -499,7 +539,7 @@ export function useAircraftInfo({
     clearCache,
 
     // Error handling
-    getError,      // Get error for an aircraft (from Socket.IO or local)
+    getError,      // Get error for an aircraft (from WebSocket or local)
     clearError,    // Clear error for an aircraft
     errors,        // All current errors as object { [icao]: errorInfo }
 

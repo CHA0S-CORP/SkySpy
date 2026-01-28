@@ -1,68 +1,49 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   ChevronUp, ChevronDown, Search, Shield, AlertTriangle,
   ArrowUp, ArrowDown, Plane, Radio, Filter, X, ChevronRight
 } from 'lucide-react';
+import { VirtualList } from '../common/VirtualList';
+import { AircraftRow } from '../aircraft-list/AircraftRow';
+import { AircraftCard } from '../aircraft-list/AircraftCard';
+import { ViewToggle } from '../aircraft-list/ViewToggle';
+import { ColumnSelector } from '../aircraft-list/ColumnSelector';
+import { useListPreferences } from '../../hooks/useListPreferences';
 
-// Helper to get cardinal direction from heading
-const getCardinalDirection = (heading) => {
-  if (heading === null || heading === undefined) return null;
-  const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-  const index = Math.round(heading / 45) % 8;
-  return directions[index];
-};
-
-// Signal strength indicator component
-const SignalIndicator = ({ rssi }) => {
-  if (rssi === null || rssi === undefined) return <span className="signal-indicator">--</span>;
-
-  // RSSI typically ranges from about -30 (excellent) to -50 (poor)
-  // Lower absolute value = stronger signal
-  const strength = rssi > -20 ? 4 : rssi > -30 ? 3 : rssi > -40 ? 2 : 1;
-  const strengthClass = strength >= 3 ? 'strong' : strength === 2 ? 'medium' : 'weak';
-
-  return (
-    <span className={`signal-indicator ${strengthClass}`} title={`${rssi.toFixed(1)} dB`}>
-      <Radio size={12} />
-      <span className="signal-bars">
-        {[1, 2, 3, 4].map(i => (
-          <span key={i} className={`bar ${i <= strength ? 'active' : ''}`} />
-        ))}
-      </span>
-    </span>
-  );
-};
-
-// Vertical speed indicator
-const VerticalSpeedIndicator = ({ vr }) => {
-  if (!vr) return <span className="vs-indicator">--</span>;
-
-  const isClimbing = vr > 100;
-  const isDescending = vr < -100;
-  const isFast = Math.abs(vr) > 2000;
-
-  return (
-    <span className={`vs-indicator ${isClimbing ? 'climbing' : ''} ${isDescending ? 'descending' : ''} ${isFast ? 'fast' : ''}`}>
-      {isClimbing && <ArrowUp size={12} />}
-      {isDescending && <ArrowDown size={12} />}
-      {vr > 0 ? '+' : ''}{vr}
-    </span>
-  );
-};
+// Row heights for virtual scrolling
+const ROW_HEIGHT_COMPACT = 32;
+const ROW_HEIGHT_COMFORTABLE = 44;
+const CARD_HEIGHT = 160;
+const CARD_HEIGHT_COMPACT = 100;
 
 export function AircraftList({ aircraft, onSelectAircraft }) {
   const [sortField, setSortField] = useState('distance_nm');
   const [sortAsc, setSortAsc] = useState(true);
   const [searchFilter, setSearchFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const containerRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+
+  // Preferences hook
+  const {
+    viewMode,
+    density,
+    visibleColumns,
+    columns,
+    presets,
+    setViewMode,
+    setDensity,
+    toggleColumn,
+    setColumnPreset,
+  } = useListPreferences();
 
   // Filter states
   const [filters, setFilters] = useState({
-    military: null,      // null = all, true = only military, false = no military
-    emergency: false,    // show only emergency squawks
-    climbing: false,     // show only climbing aircraft
-    descending: false,   // show only descending aircraft
-    onGround: false,     // show only ground aircraft
+    military: null,
+    emergency: false,
+    climbing: false,
+    descending: false,
+    onGround: false,
     minAltitude: '',
     maxAltitude: '',
     minDistance: '',
@@ -83,10 +64,8 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
   const toggleQuickFilter = (filterId, filterValues) => {
     setFilters(prev => {
       const newFilters = { ...prev };
-      // Toggle the filter
       Object.entries(filterValues).forEach(([key, value]) => {
         if (prev[key] === value) {
-          // Turn off - reset to default
           newFilters[key] = key === 'military' ? null : false;
         } else {
           newFilters[key] = value;
@@ -228,12 +207,19 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
     return filtered;
   }, [aircraft, searchFilter, filters, sortField, sortAsc]);
 
+  // Scroll to top when filters change
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [searchFilter, filters, sortField, sortAsc]);
+
   const handleSort = (field) => {
     if (sortField === field) {
       setSortAsc(!sortAsc);
     } else {
       setSortField(field);
-      setSortAsc(field === 'distance_nm'); // Distance sorts ascending by default
+      setSortAsc(field === 'distance_nm');
     }
   };
 
@@ -251,8 +237,34 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
     return { total, military, emergency, climbing, descending };
   }, [aircraft]);
 
+  // Row height based on density
+  const rowHeight = density === 'compact' ? ROW_HEIGHT_COMPACT : ROW_HEIGHT_COMFORTABLE;
+
+  // Render table row for virtual list
+  const renderTableRow = useCallback((ac, index) => (
+    <AircraftRow
+      aircraft={ac}
+      index={index}
+      onSelect={onSelectAircraft}
+      visibleColumns={visibleColumns}
+      density={density}
+    />
+  ), [onSelectAircraft, visibleColumns, density]);
+
+  // Render card for virtual list (used in grid layout)
+  const renderCard = useCallback((ac, index) => (
+    <AircraftCard
+      aircraft={ac}
+      onSelect={onSelectAircraft}
+      compact={window.innerWidth < 480}
+    />
+  ), [onSelectAircraft]);
+
+  // Get visible column headers
+  const visibleColumnHeaders = columns.filter(col => visibleColumns.includes(col.id));
+
   return (
-    <div className="aircraft-list-container">
+    <div className={`aircraft-list-container view-${viewMode}`} ref={containerRef}>
       {/* Main toolbar */}
       <div className="list-toolbar">
         <div className="search-box">
@@ -269,21 +281,42 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
             </button>
           )}
         </div>
-        <button
-          className={`filter-toggle-btn ${showFilters ? 'active' : ''} ${hasActiveFilters ? 'has-filters' : ''}`}
-          onClick={() => setShowFilters(!showFilters)}
-        >
-          <Filter size={16} />
-          Filters
-          {hasActiveFilters && <span className="filter-count">!</span>}
-          <ChevronRight size={14} className={`chevron ${showFilters ? 'rotated' : ''}`} />
-        </button>
-        {hasActiveFilters && (
-          <button className="clear-filters-btn" onClick={clearAllFilters}>
-            <X size={14} />
-            Clear All
+
+        <div className="toolbar-actions">
+          <ViewToggle
+            viewMode={viewMode}
+            density={density}
+            onViewModeChange={setViewMode}
+            onDensityChange={setDensity}
+          />
+
+          {viewMode === 'table' && (
+            <ColumnSelector
+              columns={columns}
+              visibleColumns={visibleColumns}
+              presets={presets}
+              onToggleColumn={toggleColumn}
+              onSetPreset={setColumnPreset}
+            />
+          )}
+
+          <button
+            className={`filter-toggle-btn ${showFilters ? 'active' : ''} ${hasActiveFilters ? 'has-filters' : ''}`}
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            <Filter size={16} />
+            Filters
+            {hasActiveFilters && <span className="filter-count">!</span>}
+            <ChevronRight size={14} className={`chevron ${showFilters ? 'rotated' : ''}`} />
           </button>
-        )}
+
+          {hasActiveFilters && (
+            <button className="clear-filters-btn" onClick={clearAllFilters}>
+              <X size={14} />
+              Clear All
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Quick filter chips */}
@@ -369,88 +402,74 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
         </div>
       )}
 
-      {/* Table */}
-      <div className="aircraft-table-wrapper">
-        <table className="aircraft-table">
-          <thead>
-            <tr>
-              <th onClick={() => handleSort('hex')}>ICAO <SortIcon field="hex" /></th>
-              <th onClick={() => handleSort('flight')}>Callsign <SortIcon field="flight" /></th>
-              <th onClick={() => handleSort('type')}>Type <SortIcon field="type" /></th>
-              <th onClick={() => handleSort('alt')}>Altitude <SortIcon field="alt" /></th>
-              <th onClick={() => handleSort('gs')}>Speed <SortIcon field="gs" /></th>
-              <th onClick={() => handleSort('vr')}>V/S <SortIcon field="vr" /></th>
-              <th onClick={() => handleSort('track')}>Hdg <SortIcon field="track" /></th>
-              <th onClick={() => handleSort('distance_nm')}>Dist <SortIcon field="distance_nm" /></th>
-              <th onClick={() => handleSort('rssi')}>Sig <SortIcon field="rssi" /></th>
-              <th>Squawk</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredAircraft.length === 0 ? (
-              <tr className="empty-row">
-                <td colSpan="10">
-                  <div className="empty-message">
-                    <Plane size={24} />
-                    <span>No aircraft match your filters</span>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              filteredAircraft.map((ac, index) => {
-                const isClimbing = (ac.vr || 0) > 500;
-                const isDescending = (ac.vr || 0) < -500;
-                const isEmergency = ac.emergency || ac.squawk?.match(/^7[567]00$/);
-                const cardinal = getCardinalDirection(ac.track);
-
-                return (
-                  <tr
-                    key={ac.hex || `aircraft-${index}`}
-                    className={`
-                      ${ac.military ? 'military' : ''}
-                      ${isEmergency ? 'emergency' : ''}
-                      ${isClimbing ? 'climbing' : ''}
-                      ${isDescending ? 'descending' : ''}
-                      ${onSelectAircraft ? 'clickable' : ''}
-                    `}
-                    onClick={() => onSelectAircraft?.(ac.hex)}
+      {/* Content Area */}
+      {viewMode === 'table' ? (
+        /* Virtual Scrolling Table */
+        <div className={`aircraft-table-wrapper density-${density}`} ref={scrollContainerRef}>
+          <table className={`aircraft-table al-table density-${density}`}>
+            <thead>
+              <tr>
+                {visibleColumnHeaders.map(col => (
+                  <th
+                    key={col.id}
+                    onClick={col.sortable ? () => handleSort(col.id) : undefined}
+                    className={col.sortable ? 'sortable' : ''}
                   >
-                    <td className="mono icao-cell">
-                      {ac.military && <Shield size={12} className="row-icon military-icon" />}
-                      {isEmergency && <AlertTriangle size={12} className="row-icon emergency-icon" />}
-                      {ac.hex}
-                    </td>
-                    <td className="callsign-cell">{ac.flight || '--'}</td>
-                    <td className="mono type-cell">{ac.type || '--'}</td>
-                    <td className="mono alt-cell">
-                      {ac.alt != null ? ac.alt.toLocaleString() : '--'}
-                    </td>
-                    <td className="mono speed-cell">{ac.gs?.toFixed(0) || '--'}</td>
-                    <td className="mono vs-cell">
-                      <VerticalSpeedIndicator vr={ac.vr} />
-                    </td>
-                    <td className="mono hdg-cell">
-                      {ac.track != null ? (
-                        <span className="heading-value">
-                          {Math.round(ac.track)}°
-                          {cardinal && <span className="cardinal">{cardinal}</span>}
-                        </span>
-                      ) : '--'}
-                    </td>
-                    <td className="mono dist-cell">{ac.distance_nm?.toFixed(1) || '--'}</td>
-                    <td className="sig-cell">
-                      <SignalIndicator rssi={ac.rssi} />
-                    </td>
-                    <td className={`mono squawk-cell ${ac.squawk?.match(/^7[567]00$/) ? 'emergency-squawk' : ''}`}>
-                      {ac.squawk || '--'}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                    {col.label} {col.sortable && <SortIcon field={col.id} />}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+          </table>
+
+          {filteredAircraft.length === 0 ? (
+            <div className="empty-message-container">
+              <div className="empty-message">
+                <Plane size={24} />
+                <span>No aircraft match your filters</span>
+              </div>
+            </div>
+          ) : (
+            <VirtualList
+              items={filteredAircraft}
+              itemHeight={rowHeight}
+              height="auto"
+              overscan={5}
+              className="al-virtual-table-body"
+              getItemKey={(item) => item.hex}
+              renderItem={(ac, index) => (
+                <table className={`aircraft-table al-table density-${density}`}>
+                  <tbody>
+                    {renderTableRow(ac, index)}
+                  </tbody>
+                </table>
+              )}
+            />
+          )}
+        </div>
+      ) : (
+        /* Card Grid View */
+        <div className="al-card-grid-wrapper" ref={scrollContainerRef}>
+          {filteredAircraft.length === 0 ? (
+            <div className="empty-message-container">
+              <div className="empty-message">
+                <Plane size={24} />
+                <span>No aircraft match your filters</span>
+              </div>
+            </div>
+          ) : (
+            <div className="al-card-grid">
+              {filteredAircraft.map((ac, index) => (
+                <AircraftCard
+                  key={ac.hex}
+                  aircraft={ac}
+                  onSelect={onSelectAircraft}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Footer with stats */}
       <div className="list-footer">

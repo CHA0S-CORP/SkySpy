@@ -5,3 +5,4 @@ export * from './constants';
 export * from './decoders';
 export * from './time';
 export * from './alerts';
+export * from './safeFetch';

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Volume2, VolumeX, X, PlayCircle, Plane, Clock, Radio, Wifi, WifiOff } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, X, PlayCircle, Plane, Clock, Radio, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 
 // Import the global audio state from AudioView
-import { getGlobalAudioState, subscribeToAudioStateChanges, clearAutoplayFilter, setAutoplay as setGlobalAutoplay, initAudioSocket } from '../views/AudioView';
+import { getGlobalAudioState, subscribeToAudioStateChanges, clearAutoplayFilter, setAutoplay as setGlobalAutoplay, initAudioSocket, retryAudioSocket } from '../views/AudioView';
 
 export function AudioPlaybackControl() {
   const [playingId, setPlayingId] = useState(null);
@@ -17,6 +17,7 @@ export function AudioPlaybackControl() {
   const [autoplayStartTime, setAutoplayStartTime] = useState(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [socketConnected, setSocketConnected] = useState(false);
+  const [socketReconnectFailed, setSocketReconnectFailed] = useState(false);
   const timerRef = useRef(null);
 
   // Initialize socket when autoplay is enabled
@@ -56,6 +57,7 @@ export function AudioPlaybackControl() {
       }
       if ('autoplayFilter' in updates) setAutoplayFilter(updates.autoplayFilter);
       if ('socketConnected' in updates) setSocketConnected(updates.socketConnected);
+      if ('socketReconnectFailed' in updates) setSocketReconnectFailed(updates.socketReconnectFailed);
     });
 
     // Initialize with current state
@@ -64,6 +66,7 @@ export function AudioPlaybackControl() {
     setAutoplay(audioState.autoplay);
     setCurrentTransmission(audioState.currentTransmission);
     setSocketConnected(audioState.socketConnected);
+    setSocketReconnectFailed(audioState.socketReconnectFailed || false);
     if (audioState.autoplay) {
       setAutoplayStartTime(Date.now());
     }
@@ -203,7 +206,16 @@ export function AudioPlaybackControl() {
             `${formatDuration((progress / 100) * duration)} / ${formatDuration(duration)}`
           ) : autoplay ? (
             <>
-              {socketConnected ? (
+              {socketReconnectFailed ? (
+                <button
+                  className="socket-retry-btn"
+                  onClick={retryAudioSocket}
+                  title="Connection lost. Click to retry."
+                >
+                  <WifiOff size={10} className="socket-failed" />
+                  <RefreshCw size={10} />
+                </button>
+              ) : socketConnected ? (
                 <Wifi size={10} className="socket-connected" />
               ) : (
                 <WifiOff size={10} className="socket-disconnected" />

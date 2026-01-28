@@ -26,27 +26,25 @@ test:
 
 # Start dev servers for dashboard development
 dev:
-	@echo "🛫 Starting mock ADS-B servers..."
+	@echo "🛫 Starting dev services..."
 	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml --profile dev up --build -d
 	@echo ""
 	@echo "✅ Services running:"
 	@echo ""
-	@echo "   ADS-B API:     http://localhost:5000"
-	@echo "   PostgreSQL:    localhost:5432"
-	@echo "   Ultrafeeder:   http://localhost:8080"
-	@echo "   Dump978:       http://localhost:8081"
+	@echo "   Dashboard:     http://localhost:3000"
+	@echo "   Django API:    http://localhost:8000"
+	@echo "   PostgreSQL:    localhost:5432 (via pgbouncer)"
+	@echo "   Redis:         localhost:6379"
+	@echo "   Ultrafeeder:   http://localhost:18080"
+	@echo "   Dump978:       http://localhost:18081"
 	@echo ""
 	@echo "API Endpoints:"
-	@echo "   GET http://localhost:5000/api/v1/aircraft"
-	@echo "   GET http://localhost:5000/api/v1/aircraft/top"
-	@echo "   GET http://localhost:5000/api/v1/aircraft/stats"
-	@echo "   GET http://localhost:5000/api/v1/history/sightings"
-	@echo "   GET http://localhost:5000/api/v1/history/sessions"
-	@echo "   GET http://localhost:5000/api/v1/alerts/rules"
-	@echo "   GET http://localhost:5000/api/v1/health"
-	@echo "   GET http://localhost:5000/api/v1/status"
+	@echo "   GET http://localhost:8000/api/v1/aircraft/"
+	@echo "   GET http://localhost:8000/api/v1/system/status/"
+	@echo "   GET http://localhost:8000/health/"
+	@echo "   WS  ws://localhost:8000/ws/all/"
 	@echo ""
-	@echo "Stop with: make mock-down"
+	@echo "Stop with: make dev-down"
 
 # Stop mock servers
 dev-down:

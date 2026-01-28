@@ -1,0 +1,354 @@
+{
+  "aircraftStats": {
+    "total": 42,
+    "with_position": 38,
+    "military": 3,
+    "messages": 125000,
+    "emergency_squawks": [],
+    "altitude": {
+      "ground": 5,
+      "low": 12,
+      "medium": 18,
+      "high": 7
+    }
+  },
+  "aircraftStatsWithEmergency": {
+    "total": 45,
+    "with_position": 40,
+    "military": 4,
+    "messages": 135000,
+    "emergency_squawks": [
+      { "hex": "ABC123", "squawk": "7700", "flight": "UAL1234" }
+    ],
+    "altitude": {
+      "ground": 6,
+      "low": 14,
+      "medium": 17,
+      "high": 8
+    }
+  },
+  "topAircraft": {
+    "closest": [
+      { "hex": "A1B2C3", "flight": "AAL100", "distance_nm": 2.5, "gs": 280, "alt": 12000 },
+      { "hex": "D4E5F6", "flight": "UAL200", "distance_nm": 5.8, "gs": 320, "alt": 25000 },
+      { "hex": "G7H8I9", "flight": "DAL300", "distance_nm": 12.3, "gs": 450, "alt": 35000 }
+    ],
+    "fastest": [
+      { "hex": "J1K2L3", "flight": "SWA400", "distance_nm": 45.2, "gs": 580, "alt": 37000 },
+      { "hex": "M4N5O6", "flight": "JBU500", "distance_nm": 78.5, "gs": 520, "alt": 36000 },
+      { "hex": "P7Q8R9", "flight": "FFT600", "distance_nm": 32.1, "gs": 485, "alt": 34000 }
+    ],
+    "highest": [
+      { "hex": "S1T2U3", "flight": "BAW700", "distance_nm": 120.5, "gs": 490, "alt": 45000 },
+      { "hex": "V4W5X6", "flight": "DLH800", "distance_nm": 95.3, "gs": 475, "alt": 43000 },
+      { "hex": "Y7Z8A9", "flight": "AFR900", "distance_nm": 88.7, "gs": 460, "alt": 41000 }
+    ]
+  },
+  "historyStats": {
+    "unique_aircraft": 1247,
+    "total_positions": 458923,
+    "total_sessions": 892,
+    "avg_session_duration_min": 32.5,
+    "max_distance_nm": 245.8,
+    "max_altitude_ft": 45000,
+    "max_speed_kts": 612
+  },
+  "safetyStats": {
+    "total_events": 12,
+    "monitoring_enabled": true,
+    "events_by_severity": {
+      "critical": 2,
+      "warning": 5,
+      "low": 5
+    },
+    "events_by_type": {
+      "tcas_ra": 1,
+      "tcas_ta": 3,
+      "extreme_vs": 2,
+      "vs_reversal": 4,
+      "proximity_conflict": 2
+    },
+    "monitor_state": {
+      "tracked_aircraft": 42
+    }
+  },
+  "safetyStatsEmpty": {
+    "total_events": 0,
+    "monitoring_enabled": true,
+    "events_by_severity": {
+      "critical": 0,
+      "warning": 0,
+      "low": 0
+    },
+    "events_by_type": {},
+    "monitor_state": {
+      "tracked_aircraft": 0
+    }
+  },
+  "acarsStats": {
+    "total_messages": 5847,
+    "last_24h": 1256,
+    "last_hour": 52,
+    "service_stats": {
+      "running": true,
+      "uptime_hours": 48.5
+    },
+    "top_labels": [
+      { "label": "_d", "count": 423 },
+      { "label": "H1", "count": 312 },
+      { "label": "H2", "count": 287 },
+      { "label": "10", "count": 156 },
+      { "label": "44", "count": 78 }
+    ]
+  },
+  "systemStatus": {
+    "cpu_percent": 45.2,
+    "memory_percent": 62.8,
+    "sdr_temp": 48,
+    "sdr_gain": 49.6,
+    "disk_percent": 35.4,
+    "uptime_hours": 168
+  },
+  "systemStatusWarning": {
+    "cpu_percent": 78.5,
+    "memory_percent": 88.2,
+    "sdr_temp": 62,
+    "sdr_gain": 49.6,
+    "disk_percent": 75.4,
+    "uptime_hours": 72
+  },
+  "trendsData": {
+    "summary": {
+      "total_unique_aircraft": 1247,
+      "peak_concurrent": 67,
+      "total_intervals": 24
+    },
+    "intervals": [
+      { "timestamp": "2024-01-15T00:00:00Z", "unique_aircraft": 35 },
+      { "timestamp": "2024-01-15T01:00:00Z", "unique_aircraft": 28 },
+      { "timestamp": "2024-01-15T02:00:00Z", "unique_aircraft": 22 },
+      { "timestamp": "2024-01-15T03:00:00Z", "unique_aircraft": 18 },
+      { "timestamp": "2024-01-15T04:00:00Z", "unique_aircraft": 25 },
+      { "timestamp": "2024-01-15T05:00:00Z", "unique_aircraft": 42 },
+      { "timestamp": "2024-01-15T06:00:00Z", "unique_aircraft": 58 },
+      { "timestamp": "2024-01-15T07:00:00Z", "unique_aircraft": 67 }
+    ]
+  },
+  "topPerformersData": {
+    "longest_tracked": [
+      { "icao_hex": "ABC123", "callsign": "UAL1234", "aircraft_type": "B738", "duration_min": 245, "is_military": false },
+      { "icao_hex": "DEF456", "callsign": "DAL5678", "aircraft_type": "A320", "duration_min": 198, "is_military": false },
+      { "icao_hex": "GHI789", "callsign": "EVAC01", "aircraft_type": "C17", "duration_min": 187, "is_military": true }
+    ],
+    "furthest_distance": [
+      { "icao_hex": "JKL012", "callsign": "BAW456", "aircraft_type": "B77W", "max_distance_nm": 245.8, "is_military": false },
+      { "icao_hex": "MNO345", "callsign": "DLH789", "aircraft_type": "A359", "max_distance_nm": 198.5, "is_military": false }
+    ],
+    "highest_altitude": [
+      { "icao_hex": "PQR678", "callsign": "N123AB", "aircraft_type": "GLF6", "max_altitude": 51000, "is_military": false },
+      { "icao_hex": "STU901", "callsign": "REACH01", "aircraft_type": "C5M", "max_altitude": 45000, "is_military": true }
+    ],
+    "closest_approach": [
+      { "icao_hex": "VWX234", "callsign": "N456CD", "aircraft_type": "C172", "min_distance_nm": 0.5, "is_military": false },
+      { "icao_hex": "YZA567", "callsign": "N789EF", "aircraft_type": "PA28", "min_distance_nm": 1.2, "is_military": false }
+    ]
+  },
+  "distanceAnalytics": {
+    "statistics": {
+      "mean_nm": 45.7,
+      "max_nm": 245.8,
+      "min_nm": 0.5,
+      "median_nm": 38.2,
+      "percentile_90": 125.4,
+      "std_dev": 42.3
+    },
+    "distribution": {
+      "0-25 nm": 324,
+      "25-50 nm": 456,
+      "50-100 nm": 312,
+      "100-150 nm": 98,
+      "150-200 nm": 45,
+      "200+ nm": 12
+    }
+  },
+  "speedAnalytics": {
+    "statistics": {
+      "mean_kt": 285,
+      "max_kt": 612,
+      "min_kt": 0,
+      "median_kt": 310,
+      "percentile_90": 485,
+      "std_dev": 125
+    },
+    "fastest_sessions": [
+      { "icao_hex": "ABC123", "callsign": "AAL100", "max_speed": 612 },
+      { "icao_hex": "DEF456", "callsign": "UAL200", "max_speed": 598 },
+      { "icao_hex": "GHI789", "callsign": "DAL300", "max_speed": 575 }
+    ]
+  },
+  "correlationData": {
+    "altitude_vs_speed": [
+      { "altitude_band": "0-10k ft", "avg_speed": 185, "sample_count": 234 },
+      { "altitude_band": "10-20k ft", "avg_speed": 320, "sample_count": 456 },
+      { "altitude_band": "20-30k ft", "avg_speed": 425, "sample_count": 387 },
+      { "altitude_band": "30k+ ft", "avg_speed": 475, "sample_count": 298 }
+    ],
+    "time_of_day_patterns": {
+      "peak_hour": 8,
+      "peak_aircraft_count": 67,
+      "quiet_hour": 3,
+      "quiet_aircraft_count": 12
+    }
+  },
+  "flightPatternsData": {
+    "top_routes": [
+      { "origin": "KJFK", "destination": "KLAX", "count": 45 },
+      { "origin": "KORD", "destination": "KJFK", "count": 38 },
+      { "origin": "KATL", "destination": "KLAX", "count": 32 },
+      { "origin": "KDFW", "destination": "KDEN", "count": 28 }
+    ],
+    "busiest_hours": [
+      { "hour": 8, "count": 67 },
+      { "hour": 9, "count": 62 },
+      { "hour": 17, "count": 58 },
+      { "hour": 18, "count": 55 }
+    ],
+    "aircraft_types": [
+      { "type": "B738", "count": 156 },
+      { "type": "A320", "count": 134 },
+      { "type": "E175", "count": 89 },
+      { "type": "CRJ7", "count": 67 }
+    ],
+    "duration_by_type": [
+      { "type": "B738", "avg_minutes": 145, "min_minutes": 35, "max_minutes": 320 },
+      { "type": "A320", "avg_minutes": 128, "min_minutes": 28, "max_minutes": 285 },
+      { "type": "C172", "avg_minutes": 52, "min_minutes": 15, "max_minutes": 145 }
+    ]
+  },
+  "geographicData": {
+    "countries": [
+      { "country": "United States", "count": 856 },
+      { "country": "Canada", "count": 234 },
+      { "country": "Mexico", "count": 156 },
+      { "country": "United Kingdom", "count": 89 },
+      { "country": "Germany", "count": 67 }
+    ],
+    "airlines": [
+      { "code": "AAL", "name": "American Airlines", "count": 234 },
+      { "code": "UAL", "name": "United Airlines", "count": 198 },
+      { "code": "DAL", "name": "Delta Air Lines", "count": 187 },
+      { "code": "SWA", "name": "Southwest Airlines", "count": 156 }
+    ],
+    "airports": [
+      { "icao": "KJFK", "iata": "JFK", "name": "John F Kennedy Intl", "count": 145 },
+      { "icao": "KLAX", "iata": "LAX", "name": "Los Angeles Intl", "count": 132 },
+      { "icao": "KORD", "iata": "ORD", "name": "Chicago O'Hare Intl", "count": 118 }
+    ],
+    "regions": [
+      { "name": "Northeast", "count": 456 },
+      { "name": "West Coast", "count": 398 },
+      { "name": "Midwest", "count": 287 },
+      { "name": "South", "count": 234 }
+    ]
+  },
+  "trackingQualityData": {
+    "overall_quality": 0.87,
+    "avg_message_rate": 2.4,
+    "position_coverage": 0.92,
+    "sessions_with_full_track": 678,
+    "total_sessions": 892,
+    "quality_by_distance": [
+      { "distance_band": "0-25 nm", "quality": 0.95 },
+      { "distance_band": "25-50 nm", "quality": 0.89 },
+      { "distance_band": "50-100 nm", "quality": 0.78 },
+      { "distance_band": "100+ nm", "quality": 0.62 }
+    ]
+  },
+  "engagementData": {
+    "total_viewing_time_min": 2456,
+    "unique_aircraft_viewed": 345,
+    "favorite_aircraft_count": 23,
+    "alerts_received": 89,
+    "sessions_today": 12,
+    "peak_activity_hour": 14,
+    "daily_trend": [
+      { "date": "2024-01-14", "sessions": 8 },
+      { "date": "2024-01-15", "sessions": 12 }
+    ]
+  },
+  "favoritesData": {
+    "favorites": [
+      { "icao_hex": "ABC123", "callsign": "UAL1234", "sightings": 45, "last_seen": "2024-01-15T14:30:00Z" },
+      { "icao_hex": "DEF456", "callsign": "N12345", "sightings": 38, "last_seen": "2024-01-15T12:15:00Z" }
+    ],
+    "total_favorites": 23,
+    "most_spotted": {
+      "icao_hex": "ABC123",
+      "callsign": "UAL1234",
+      "sightings": 45
+    }
+  },
+  "antennaAnalytics": {
+    "polar": {
+      "bearing_data": [
+        { "bearing_start": 0, "count": 450, "max_distance_nm": 125.5 },
+        { "bearing_start": 10, "count": 520, "max_distance_nm": 145.2 },
+        { "bearing_start": 20, "count": 380, "max_distance_nm": 98.7 },
+        { "bearing_start": 30, "count": 290, "max_distance_nm": 78.3 }
+      ],
+      "summary": {
+        "coverage_pct": 85,
+        "total_sightings": 12456,
+        "sectors_with_data": 32
+      }
+    },
+    "rssi": {
+      "scatter_data": [
+        { "distance_nm": 10.5, "rssi": -8.2 },
+        { "distance_nm": 25.3, "rssi": -12.5 },
+        { "distance_nm": 45.8, "rssi": -18.7 },
+        { "distance_nm": 78.2, "rssi": -24.3 }
+      ],
+      "trend_line": {
+        "slope": -0.15,
+        "intercept": -5.2,
+        "interpretation": "Good signal propagation"
+      },
+      "overall_statistics": {
+        "avg_rssi": -15.4,
+        "min_rssi": -28.5,
+        "max_rssi": -3.2
+      },
+      "band_statistics": [
+        { "band": "0-25 nm", "avg_rssi": -8.5, "sample_count": 456 },
+        { "band": "25-50 nm", "avg_rssi": -14.2, "sample_count": 387 }
+      ]
+    }
+  },
+  "sessionsData": {
+    "sessions": [
+      { "icao_hex": "ABC123", "callsign": "UAL1234", "type": "B738", "is_military": false },
+      { "icao_hex": "DEF456", "callsign": "DAL5678", "type": "A320", "is_military": false },
+      { "icao_hex": "GHI789", "callsign": "EVAC01", "type": "C17", "is_military": true },
+      { "icao_hex": "JKL012", "callsign": "N12345", "type": "C172", "is_military": false }
+    ]
+  },
+  "emptyStats": {
+    "total": 0,
+    "with_position": 0,
+    "military": 0,
+    "messages": 0,
+    "emergency_squawks": [],
+    "altitude": {
+      "ground": 0,
+      "low": 0,
+      "medium": 0,
+      "high": 0
+    }
+  },
+  "emptyTopAircraft": {
+    "closest": [],
+    "fastest": [],
+    "highest": []
+  }
+}

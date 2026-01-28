@@ -1,8 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, Map as MapIcon, Play, Pause, SkipBack, SkipForward, Shield, Search, MessageCircle, ExternalLink, Plane, List, LayoutGrid, X } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, Map as MapIcon, Play, Pause, SkipBack, SkipForward, Shield, Search, MessageCircle, ExternalLink, Plane, List, LayoutGrid, X, Radio } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useSocketApi } from '../../hooks';
+import { useSocketApi, useSortState } from '../../hooks';
+import { TabBar } from '../common/TabBar';
+import { SafetyEventCard } from '../safety/SafetyEventCard';
+import { SortControls } from '../common/SortControls';
+import { SortableTableHeader } from '../common/SortableTableHeader';
+
+// Helper to safely parse JSON from fetch response
+const safeJson = async (res) => {
+  if (!res.ok) return null;
+  const ct = res.headers.get('content-type');
+  if (!ct || !ct.includes('application/json')) return null;
+  try { return await res.json(); } catch { return null; }
+};
 
 const VALID_DATA_TYPES = ['sessions', 'sightings', 'acars', 'safety'];
 
@@ -46,8 +58,91 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
   // Session filters
   const [sessionSearch, setSessionSearch] = useState('');
   const [showMilitaryOnly, setShowMilitaryOnly] = useState(false);
-  const [sortField, setSortField] = useState('last_seen');
-  const [sortAsc, setSortAsc] = useState(false);
+
+  // Session sort configuration (8 fields)
+  const sessionSortConfig = useMemo(() => ({
+    last_seen: { type: 'date', defaultDirection: 'desc' },
+    callsign: { type: 'string', defaultDirection: 'asc' },
+    type: { type: 'string', defaultDirection: 'asc' },
+    duration_min: { type: 'number', defaultDirection: 'desc' },
+    min_distance_nm: { type: 'number', defaultDirection: 'asc' },
+    max_rssi: { type: 'number', defaultDirection: 'desc' },
+    max_alt: { type: 'number', defaultDirection: 'desc' },
+    safety_event_count: { type: 'number', defaultDirection: 'desc' }
+  }), []);
+
+  const sessionSortFields = useMemo(() => [
+    { key: 'last_seen', label: 'Time' },
+    { key: 'callsign', label: 'Callsign' },
+    { key: 'type', label: 'Type' },
+    { key: 'duration_min', label: 'Duration' },
+    { key: 'min_distance_nm', label: 'Distance' },
+    { key: 'max_rssi', label: 'Signal' },
+    { key: 'max_alt', label: 'Altitude' },
+    { key: 'safety_event_count', label: 'Safety' }
+  ], []);
+
+  // Sightings sort configuration (7 fields)
+  const sightingsSortConfig = useMemo(() => ({
+    timestamp: { type: 'date', defaultDirection: 'desc' },
+    icao_hex: { type: 'string', defaultDirection: 'asc' },
+    callsign: { type: 'string', defaultDirection: 'asc' },
+    altitude: { type: 'number', defaultDirection: 'desc' },
+    gs: { type: 'number', defaultDirection: 'desc' },
+    distance_nm: { type: 'number', defaultDirection: 'asc' },
+    rssi: { type: 'number', defaultDirection: 'desc' }
+  }), []);
+
+  const sightingsColumns = useMemo(() => [
+    { key: 'timestamp', label: 'Time' },
+    { key: 'icao_hex', label: 'ICAO' },
+    { key: 'callsign', label: 'Callsign' },
+    { key: 'altitude', label: 'Altitude', align: 'right' },
+    { key: 'gs', label: 'Speed', align: 'right' },
+    { key: 'distance_nm', label: 'Distance', align: 'right' },
+    { key: 'rssi', label: 'Signal', align: 'right' }
+  ], []);
+
+  // Safety Events sort configuration
+  const safetySortConfig = useMemo(() => ({
+    severity: {
+      type: 'custom',
+      defaultDirection: 'desc',
+      comparator: (a, b) => {
+        const severityOrder = { critical: 3, warning: 2, info: 1 };
+        const aVal = severityOrder[a] || 0;
+        const bVal = severityOrder[b] || 0;
+        return aVal - bVal;
+      }
+    },
+    timestamp: { type: 'date', defaultDirection: 'desc' },
+    'details.horizontal_nm': { type: 'number', defaultDirection: 'asc', path: 'details.horizontal_nm' },
+    'details.vertical_ft': { type: 'number', defaultDirection: 'asc', path: 'details.vertical_ft' },
+    event_type: { type: 'string', defaultDirection: 'asc' }
+  }), []);
+
+  const safetySortFields = useMemo(() => [
+    { key: 'severity', label: 'Severity' },
+    { key: 'timestamp', label: 'Time' },
+    { key: 'details.horizontal_nm', label: 'Horiz Distance' },
+    { key: 'details.vertical_ft', label: 'Vert Distance' },
+    { key: 'event_type', label: 'Type' }
+  ], []);
+
+  // ACARS sort configuration
+  const acarsSortConfig = useMemo(() => ({
+    timestamp: { type: 'date', defaultDirection: 'desc' },
+    callsign: { type: 'string', defaultDirection: 'asc' },
+    label: { type: 'string', defaultDirection: 'asc' },
+    source: { type: 'string', defaultDirection: 'asc' }
+  }), []);
+
+  const acarsSortFields = useMemo(() => [
+    { key: 'timestamp', label: 'Time' },
+    { key: 'callsign', label: 'Callsign' },
+    { key: 'label', label: 'Label' },
+    { key: 'source', label: 'Source' }
+  ], []);
 
   // ACARS filters
   const [acarsSearch, setAcarsSearch] = useState('');
@@ -262,21 +357,20 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
             if (wsRequest && wsConnected) {
               // Use WebSocket for fetching sightings
               const result = await wsRequest('sightings', { icao_hex: icao, hours: 2, limit: 500 });
-              if (result && result.sightings) {
+              if (result && (result.sightings || result.results)) {
                 data = result;
               } else {
                 throw new Error('Invalid sightings response');
               }
             } else {
               // Fallback to HTTP if WebSocket unavailable
-              const res = await fetch(`${apiBase}/api/v1/history/sightings/${icao}?hours=2&limit=500`);
-              if (res.ok) {
-                data = await res.json();
-              } else {
-                throw new Error('HTTP request failed');
-              }
+              // Django API uses /api/v1/sightings with query params (was /api/v1/history/sightings/{icao})
+              const res = await fetch(`${apiBase}/api/v1/sightings?icao_hex=${icao}&hours=2&limit=500`);
+              data = await safeJson(res);
+              if (!data) throw new Error('HTTP request failed');
             }
-            setTrackData(prev => ({ ...prev, [icao]: data.sightings || [] }));
+            const sightings = data?.sightings || data?.results || [];
+            setTrackData(prev => ({ ...prev, [icao]: sightings }));
           } catch (err) {
             console.error('Failed to fetch track data:', err);
           }
@@ -838,12 +932,17 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
   }, [expandedMaps]);
 
   const hours = { '1h': 1, '6h': 6, '24h': 24, '48h': 48, '7d': 168 };
+  // Django API endpoints:
+  // - Sessions: /api/v1/sessions (was /api/v1/history/sessions)
+  // - Sightings: /api/v1/sightings (was /api/v1/history/sightings)
+  // - ACARS: /api/v1/acars (was /api/v1/acars/messages)
+  // - History: /api/v1/history (general historical data)
   const endpoint = viewType === 'sessions'
-    ? `/api/v1/history/sessions?hours=${hours[timeRange]}`
+    ? `/api/v1/sessions?hours=${hours[timeRange]}`
     : viewType === 'sightings'
-    ? `/api/v1/history/sightings?hours=${hours[timeRange]}&limit=100`
+    ? `/api/v1/sightings?hours=${hours[timeRange]}&limit=100`
     : viewType === 'acars'
-    ? `/api/v1/acars/messages?hours=${hours[timeRange]}&limit=200`
+    ? `/api/v1/acars?hours=${hours[timeRange]}&limit=200`
     : `/api/v1/safety/events?hours=${hours[timeRange]}&limit=100`;
 
   const { data, refetch } = useSocketApi(endpoint, null, apiBase, { wsRequest, wsConnected });
@@ -858,8 +957,8 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
     const fetchLabels = async () => {
       try {
         const res = await fetch(`${apiBase}/api/v1/acars/labels`);
-        if (res.ok) {
-          const data = await res.json();
+        const data = await safeJson(res);
+        if (data) {
           setLabelReference(data.labels || {});
           labelsFetchedRef.current = true;
         }
@@ -878,7 +977,7 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
     wsConnectedRef.current = wsConnected;
   }, [wsRequest, wsConnected]);
 
-  // Fetch ACARS messages when viewing ACARS tab - prefer socket.io
+  // Fetch ACARS messages when viewing ACARS tab - prefer WebSocket
   useEffect(() => {
     if (viewType !== 'acars') return;
 
@@ -894,7 +993,7 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
 
         let result = null;
 
-        // Prefer socket.io (use refs for current values)
+        // Prefer WebSocket (use refs for current values)
         if (wsRequestRef.current && wsConnectedRef.current) {
           try {
             result = await wsRequestRef.current('acars-messages', queryParams);
@@ -905,6 +1004,7 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
         }
 
         // HTTP fallback only if socket didn't work
+        // Django API uses /api/v1/acars (was /api/v1/acars/messages)
         if (!result) {
           const params = new URLSearchParams();
           params.set('hours', hours[timeRange]);
@@ -913,14 +1013,13 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
           if (acarsAirlineFilter) params.set('airline', acarsAirlineFilter);
           if (acarsSelectedLabels.length > 0) params.set('label', acarsSelectedLabels.join(','));
 
-          const res = await fetch(`${apiBase}/api/v1/acars/messages?${params.toString()}`);
-          if (res.ok) {
-            result = await res.json();
-          }
+          const res = await fetch(`${apiBase}/api/v1/acars?${params.toString()}`);
+          result = await safeJson(res);
         }
 
         if (result) {
-          setAcarsMessages(result.messages || []);
+          // Django API returns messages array directly or in a 'messages' key
+          setAcarsMessages(result.messages || result.results || result || []);
         }
       } catch (err) {
         console.log('ACARS fetch error:', err.message);
@@ -949,6 +1048,7 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
     if (callsignsToLookup.size === 0) return;
 
     // Lookup each callsign from sightings API
+    // Django API uses /api/v1/sightings (was /api/v1/history/sightings)
     const lookupCallsigns = async () => {
       const lookups = Array.from(callsignsToLookup).slice(0, 10);
 
@@ -958,24 +1058,22 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
           if (wsRequest && wsConnected) {
             // Use WebSocket for fetching sightings by callsign
             const result = await wsRequest('sightings', { callsign: callsign, hours: 24, limit: 1 });
-            if (result && result.sightings) {
+            if (result && (result.sightings || result.results)) {
               data = result;
             } else {
               throw new Error('Invalid sightings response');
             }
           } else {
             // Fallback to HTTP if WebSocket unavailable
-            const res = await fetch(`${apiBase}/api/v1/history/sightings?callsign=${encodeURIComponent(callsign)}&hours=24&limit=1`);
-            if (res.ok) {
-              data = await res.json();
-            } else {
-              throw new Error('HTTP request failed');
-            }
+            const res = await fetch(`${apiBase}/api/v1/sightings?callsign=${encodeURIComponent(callsign)}&hours=24&limit=1`);
+            data = await safeJson(res);
+            if (!data) throw new Error('HTTP request failed');
           }
-          if (data.sightings?.length > 0 && data.sightings[0].icao_hex) {
+          const sightings = data?.sightings || data?.results || [];
+          if (sightings.length > 0 && sightings[0].icao_hex) {
             setCallsignHexCache(prev => ({
               ...prev,
-              [callsign]: data.sightings[0].icao_hex
+              [callsign]: sightings[0].icao_hex
             }));
           } else {
             // Cache negative result to avoid repeated lookups
@@ -1010,6 +1108,7 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
     if (regsToLookup.size === 0) return;
 
     // Lookup each registration from sightings API
+    // Django API uses /api/v1/sightings (was /api/v1/history/sightings)
     const lookupRegs = async () => {
       const lookups = Array.from(regsToLookup).slice(0, 10);
 
@@ -1018,23 +1117,21 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
           let data;
           if (wsRequest && wsConnected) {
             const result = await wsRequest('sightings', { registration: reg, hours: 168, limit: 1 });
-            if (result && result.sightings) {
+            if (result && (result.sightings || result.results)) {
               data = result;
             } else {
               throw new Error('Invalid sightings response');
             }
           } else {
-            const res = await fetch(`${apiBase}/api/v1/history/sightings?registration=${encodeURIComponent(reg)}&hours=168&limit=1`);
-            if (res.ok) {
-              data = await res.json();
-            } else {
-              throw new Error('HTTP request failed');
-            }
+            const res = await fetch(`${apiBase}/api/v1/sightings?registration=${encodeURIComponent(reg)}&hours=168&limit=1`);
+            data = await safeJson(res);
+            if (!data) throw new Error('HTTP request failed');
           }
-          if (data.sightings?.length > 0 && data.sightings[0].icao_hex) {
+          const sightings = data?.sightings || data?.results || [];
+          if (sightings.length > 0 && sightings[0].icao_hex) {
             setRegHexCache(prev => ({
               ...prev,
-              [reg]: data.sightings[0].icao_hex
+              [reg]: sightings[0].icao_hex
             }));
           } else {
             setRegHexCache(prev => ({ ...prev, [reg]: null }));
@@ -1239,8 +1336,8 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
     );
   };
 
-  // Filter and sort sessions
-  const filteredSessions = useMemo(() => {
+  // Filter sessions (before sorting)
+  const filteredSessionsUnsorted = useMemo(() => {
     if (!data?.sessions) return [];
 
     let filtered = [...data.sessions];
@@ -1260,84 +1357,91 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
       filtered = filtered.filter(s => s.is_military);
     }
 
-    // Sort
-    filtered.sort((a, b) => {
-      let aVal, bVal;
-      switch (sortField) {
-        case 'last_seen':
-          aVal = new Date(a.last_seen).getTime();
-          bVal = new Date(b.last_seen).getTime();
-          break;
-        case 'duration':
-          aVal = a.duration_min || 0;
-          bVal = b.duration_min || 0;
-          break;
-        case 'distance':
-          aVal = a.min_distance_nm ?? 999999;
-          bVal = b.min_distance_nm ?? 999999;
-          break;
-        case 'altitude':
-          aVal = a.max_alt ?? 0;
-          bVal = b.max_alt ?? 0;
-          break;
-        case 'rssi':
-          aVal = a.max_rssi ?? -999;
-          bVal = b.max_rssi ?? -999;
-          break;
-        default:
-          aVal = a[sortField] ?? '';
-          bVal = b[sortField] ?? '';
-      }
-      if (typeof aVal === 'string') {
-        return sortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-      }
-      return sortAsc ? aVal - bVal : bVal - aVal;
-    });
-
     return filtered;
-  }, [data?.sessions, sessionSearch, showMilitaryOnly, sortField, sortAsc]);
+  }, [data?.sessions, sessionSearch, showMilitaryOnly]);
 
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortAsc(!sortAsc);
-    } else {
-      setSortField(field);
-      setSortAsc(field === 'distance'); // Distance sorts ascending by default (closest first)
-    }
-  };
+  // Sort sessions using useSortState hook
+  const {
+    sortField: sessionSortField,
+    sortDirection: sessionSortDirection,
+    handleSort: handleSessionSort,
+    sortedData: filteredSessions
+  } = useSortState({
+    viewKey: 'history-sessions',
+    defaultField: 'last_seen',
+    defaultDirection: 'desc',
+    data: filteredSessionsUnsorted,
+    sortConfig: sessionSortConfig
+  });
+
+  // Sort sightings using useSortState hook
+  const {
+    sortField: sightingsSortField,
+    sortDirection: sightingsSortDirection,
+    handleSort: handleSightingsSort,
+    sortedData: sortedSightings
+  } = useSortState({
+    viewKey: 'history-sightings',
+    defaultField: 'timestamp',
+    defaultDirection: 'desc',
+    data: data?.sightings || [],
+    sortConfig: sightingsSortConfig
+  });
+
+  // Sort safety events using useSortState hook
+  const {
+    sortField: safetySortField,
+    sortDirection: safetySortDirection,
+    handleSort: handleSafetySort,
+    sortedData: sortedSafetyEvents
+  } = useSortState({
+    viewKey: 'history-safety',
+    defaultField: 'timestamp',
+    defaultDirection: 'desc',
+    data: data?.events || [],
+    sortConfig: safetySortConfig
+  });
+
+  // Sort ACARS using useSortState hook
+  const {
+    sortField: acarsSortField,
+    sortDirection: acarsSortDirection,
+    handleSort: handleAcarsSort,
+    sortedData: sortedAcarsMessages
+  } = useSortState({
+    viewKey: 'history-acars',
+    defaultField: 'timestamp',
+    defaultDirection: 'desc',
+    data: filteredAcarsMessages,
+    sortConfig: acarsSortConfig
+  });
+
+  // Calculate counts for tab badges
+  const sessionCount = data?.sessions?.length || 0;
+  const acarsCount = acarsMessages?.length || 0;
+  const safetyCount = data?.events?.length || 0;
+  const hasCriticalSafety = data?.events?.some(e => e.severity === 'critical');
+
+  // Tab configuration
+  const tabs = [
+    { id: 'sessions', label: 'Sessions', count: sessionCount > 0 ? sessionCount : null },
+    { id: 'sightings', label: 'Sightings' },
+    { id: 'acars', label: 'ACARS', icon: <MessageCircle size={14} />, count: acarsCount > 0 ? acarsCount : null, badgeVariant: 'info' },
+    { id: 'safety', label: 'Safety', icon: <AlertTriangle size={14} />, count: safetyCount > 0 ? safetyCount : null, badgeVariant: safetyCount > 0 ? 'warning' : 'default', alertDot: hasCriticalSafety }
+  ];
+
+  const timeRanges = ['1h', '6h', '24h', '48h', '7d'];
 
   return (
     <div className="history-container">
-      <div className="history-toolbar">
-        <div className="view-toggle">
-          <button className={`time-btn ${viewType === 'sessions' ? 'active' : ''}`} onClick={() => setViewType('sessions')}>
-            Sessions
-          </button>
-          <button className={`time-btn ${viewType === 'sightings' ? 'active' : ''}`} onClick={() => setViewType('sightings')}>
-            Sightings
-          </button>
-          <button className={`time-btn ${viewType === 'acars' ? 'active' : ''}`} onClick={() => setViewType('acars')}>
-            <MessageCircle size={14} style={{ marginRight: 4 }} />
-            ACARS
-          </button>
-          <button className={`time-btn ${viewType === 'safety' ? 'active' : ''}`} onClick={() => setViewType('safety')}>
-            <AlertTriangle size={14} style={{ marginRight: 4 }} />
-            Safety Events
-          </button>
-        </div>
-
-        <div className="time-range-selector">
-          {['1h', '6h', '24h', '48h', '7d'].map(range => (
-            <button
-              key={range}
-              className={`time-btn ${timeRange === range ? 'active' : ''}`}
-              onClick={() => setTimeRange(range)}
-            >
-              {range}
-            </button>
-          ))}
-        </div>
-      </div>
+      <TabBar
+        tabs={tabs}
+        activeTab={viewType}
+        onTabChange={setViewType}
+        timeRanges={timeRanges}
+        activeTimeRange={timeRange}
+        onTimeRangeChange={setTimeRange}
+      />
 
       {viewType === 'sessions' && (
         <>
@@ -1358,21 +1462,12 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
               <Shield size={16} />
               Military
             </button>
-            <div className="sort-controls">
-              <span className="sort-label">Sort:</span>
-              <button className={`sort-btn ${sortField === 'last_seen' ? 'active' : ''}`} onClick={() => handleSort('last_seen')}>
-                Time {sortField === 'last_seen' && (sortAsc ? '↑' : '↓')}
-              </button>
-              <button className={`sort-btn ${sortField === 'distance' ? 'active' : ''}`} onClick={() => handleSort('distance')}>
-                Distance {sortField === 'distance' && (sortAsc ? '↑' : '↓')}
-              </button>
-              <button className={`sort-btn ${sortField === 'duration' ? 'active' : ''}`} onClick={() => handleSort('duration')}>
-                Duration {sortField === 'duration' && (sortAsc ? '↑' : '↓')}
-              </button>
-              <button className={`sort-btn ${sortField === 'rssi' ? 'active' : ''}`} onClick={() => handleSort('rssi')}>
-                Signal {sortField === 'rssi' && (sortAsc ? '↑' : '↓')}
-              </button>
-            </div>
+            <SortControls
+              fields={sessionSortFields}
+              activeField={sessionSortField}
+              direction={sessionSortDirection}
+              onSort={handleSessionSort}
+            />
             <div className="sessions-count">
               {filteredSessions.length} of {data?.sessions?.length || 0} sessions
             </div>
@@ -1496,19 +1591,14 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
       {viewType === 'sightings' && (
         <div className="sightings-table-wrapper">
           <table className="sightings-table">
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>ICAO</th>
-                <th>Callsign</th>
-                <th>Altitude</th>
-                <th>Speed</th>
-                <th>Distance</th>
-                <th>Signal</th>
-              </tr>
-            </thead>
+            <SortableTableHeader
+              columns={sightingsColumns}
+              sortField={sightingsSortField}
+              sortDirection={sightingsSortDirection}
+              onSort={handleSightingsSort}
+            />
             <tbody>
-              {data?.sightings?.map((s, i) => (
+              {sortedSightings.map((s, i) => (
                 <tr key={i}>
                   <td>{new Date(s.timestamp).toLocaleTimeString()}</td>
                   <td className="mono">
@@ -1532,61 +1622,47 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
       )}
 
       {viewType === 'safety' && (
-        <div className="safety-events-grid">
-          {data?.events?.length === 0 && (
-            <div className="no-events-message">No safety events in the selected time range</div>
-          )}
-          {data?.events?.map((event, i) => {
+        <>
+          <div className="safety-events-header">
+            <SortControls
+              fields={safetySortFields}
+              activeField={safetySortField}
+              direction={safetySortDirection}
+              onSort={handleSafetySort}
+            />
+            <div className="safety-events-count">
+              {sortedSafetyEvents.length} event{sortedSafetyEvents.length !== 1 ? 's' : ''}
+            </div>
+          </div>
+          <div className="safety-events-grid">
+            {sortedSafetyEvents.length === 0 && (
+              <div className="no-events-message">
+                <AlertTriangle size={32} />
+                <p>No safety events in the selected time range</p>
+              </div>
+            )}
+            {sortedSafetyEvents.map((event, i) => {
             const eventKey = event.id || i;
             const hasSnapshot = event.aircraft_snapshot || event.aircraft_snapshot_2;
             const isExpanded = expandedSnapshots[eventKey];
             const state = replayState[eventKey];
+            const hasMap = event.aircraft_snapshot?.lat || event.aircraft_snapshot_2?.lat;
 
             return (
               <div
                 key={eventKey}
                 ref={el => eventRefs.current[eventKey] = el}
-                className={`safety-event-item severity-${event.severity}`}
+                className="safety-event-wrapper"
               >
-                <div className="safety-event-header">
-                  <span className={`safety-severity-badge severity-${event.severity}`}>
-                    {event.severity?.toUpperCase()}
-                  </span>
-                  <span className="safety-event-type">
-                    {event.event_type?.replace(/_/g, ' ').toUpperCase()}
-                  </span>
-                  <span className="safety-event-time">
-                    {new Date(event.timestamp).toLocaleString()}
-                  </span>
-                </div>
-                <div className="safety-event-message">{event.message}</div>
-                <div className="safety-event-details">
-                  <span
-                    className="mono safety-aircraft-link"
-                    onClick={() => onSelectAircraft?.(event.icao)}
-                  >
-                    {event.callsign || event.icao}
-                  </span>
-                  {event.icao_2 && (
-                    <>
-                      <span className="safety-event-separator">↔</span>
-                      <span
-                        className="mono safety-aircraft-link"
-                        onClick={() => onSelectAircraft?.(event.icao_2)}
-                      >
-                        {event.callsign_2 || event.icao_2}
-                      </span>
-                    </>
-                  )}
-                  {event.details?.horizontal_nm && (
-                    <span>Sep: {event.details.horizontal_nm.toFixed(1)} nm</span>
-                  )}
-                  {event.details?.vertical_ft && (
-                    <span>Alt diff: {event.details.vertical_ft} ft</span>
-                  )}
-                </div>
+                {/* Use new SafetyEventCard component */}
+                <SafetyEventCard
+                  event={event}
+                  onSelectAircraft={onSelectAircraft}
+                  onViewEvent={onViewEvent}
+                />
 
-                <div className="safety-event-actions">
+                {/* Additional action buttons for expanded features */}
+                <div className="safety-event-expand-actions">
                   {hasSnapshot && (
                     <button
                       className="snapshot-toggle"
@@ -1597,24 +1673,13 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
                     </button>
                   )}
 
-                  {(event.aircraft_snapshot?.lat || event.aircraft_snapshot_2?.lat) && (
+                  {hasMap && (
                     <button
                       className="snapshot-toggle map-toggle"
                       onClick={() => toggleMap(eventKey, event)}
                     >
                       <MapIcon size={14} />
                       {expandedMaps[eventKey] ? 'Hide' : 'Show'} Map
-                    </button>
-                  )}
-
-                  {onViewEvent && event.id && (
-                    <button
-                      className="snapshot-toggle view-details-btn"
-                      onClick={() => onViewEvent(event.id)}
-                      title="View full event details"
-                    >
-                      <ExternalLink size={14} />
-                      View Details
                     </button>
                   )}
                 </div>
@@ -1741,7 +1806,8 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
               </div>
             );
           })}
-        </div>
+          </div>
+        </>
       )}
 
       {viewType === 'acars' && (
@@ -1853,10 +1919,17 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
               {allMessagesExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               {allMessagesExpanded ? 'Collapse' : 'Expand'}
             </button>
+            <SortControls
+              fields={acarsSortFields}
+              activeField={acarsSortField}
+              direction={acarsSortDirection}
+              onSort={handleAcarsSort}
+              compact
+            />
             <div className="acars-history-count">
-              {filteredAcarsMessages.length === acarsMessages.length
+              {sortedAcarsMessages.length === acarsMessages.length
                 ? `${acarsMessages.length} message${acarsMessages.length !== 1 ? 's' : ''}`
-                : `${filteredAcarsMessages.length} of ${acarsMessages.length}`}
+                : `${sortedAcarsMessages.length} of ${acarsMessages.length}`}
             </div>
           </div>
           {/* Quick Filter Chips */}
@@ -1882,13 +1955,13 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
             className={`acars-history-list ${acarsCompactMode ? 'compact' : ''}`}
             onScroll={handleAcarsScroll}
           >
-            {filteredAcarsMessages.length === 0 ? (
+            {sortedAcarsMessages.length === 0 ? (
               <div className="no-events-message">
                 <MessageCircle size={32} />
                 <p>No ACARS messages in the selected time range</p>
               </div>
             ) : (
-              filteredAcarsMessages.slice(0, visibleAcarsCount).map((msg, i) => {
+              sortedAcarsMessages.slice(0, visibleAcarsCount).map((msg, i) => {
                 const timestamp = typeof msg.timestamp === 'number'
                   ? new Date(msg.timestamp * 1000)
                   : new Date(msg.timestamp);
@@ -2065,9 +2138,9 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
                 );
               })
             )}
-            {visibleAcarsCount < filteredAcarsMessages.length && (
+            {visibleAcarsCount < sortedAcarsMessages.length && (
               <div className="acars-load-more">
-                Showing {visibleAcarsCount} of {filteredAcarsMessages.length} — scroll for more
+                Showing {visibleAcarsCount} of {sortedAcarsMessages.length} — scroll for more
               </div>
             )}
           </div>

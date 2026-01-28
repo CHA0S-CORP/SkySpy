@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { Radio, Search, Play, Pause, Volume2, VolumeX, RefreshCw, ChevronDown, AlertCircle, CheckCircle, Clock, Loader2, FileAudio, Mic, PlayCircle, Radar, Plane, Filter, X } from 'lucide-react';
 import { useSocketApi } from '../../hooks';
-import { io } from 'socket.io-client';
+import { getWebSocketUrl, RECONNECT_CONFIG, getReconnectDelay } from '../../utils/websocket';
 
 // Emergency keywords for filtering distress calls
 const EMERGENCY_KEYWORDS = [
@@ -27,6 +27,10 @@ const hasEmergencyKeyword = (transcript) => {
   return EMERGENCY_KEYWORDS.some(keyword => lowerTranscript.includes(keyword));
 };
 
+// Maximum age (in ms) for a transmission to be eligible for autoplay
+// Transmissions older than this are skipped to avoid playing stale audio
+const AUTOPLAY_MAX_AGE_MS = 30000; // 30 seconds
+
 // Global audio state to persist across page navigation
 const globalAudioState = {
   audioRefs: {},
@@ -36,11 +40,13 @@ const globalAudioState = {
   audioDurations: {},
   progressIntervalRef: null,
   autoplay: false,
+  autoplayEnabledAt: null, // Timestamp when autoplay was enabled (only play transmissions after this)
   autoplayFilter: null, // { type: 'airframe', callsign: 'UAL123', hex: 'A12345' } or null for all
   subscribers: [],
-  // Socket.IO connection for real-time audio (shared across components)
+  // WebSocket connection for real-time audio (shared across components)
   socket: null,
   socketConnected: false,
+  socketReconnectFailed: false, // True when max reconnection attempts reached
   autoplayQueue: [],
   recentTransmissions: [], // Last 50 transmissions received via socket
 };
@@ -61,6 +67,18 @@ const notifySubscribers = (updates) => {
 // Set autoplay state
 export const setAutoplay = (enabled) => {
   globalAudioState.autoplay = enabled;
+
+  if (enabled) {
+    // Clear any stale queued transmissions and record when autoplay was enabled
+    // This ensures we only play NEW transmissions going forward
+    globalAudioState.autoplayQueue = [];
+    globalAudioState.autoplayEnabledAt = Date.now();
+  } else {
+    // Clear queue and timestamp when disabled
+    globalAudioState.autoplayQueue = [];
+    globalAudioState.autoplayEnabledAt = null;
+  }
+
   notifySubscribers({ autoplay: enabled });
 };
 
@@ -80,54 +98,146 @@ export const clearAutoplayFilter = () => {
 export const getGlobalAudioState = () => globalAudioState;
 export const subscribeToAudioStateChanges = subscribeToAudioState;
 
-// Initialize socket.io connection for real-time audio
+// Queue management functions for AudioQueue component
+export const removeFromQueue = (index) => {
+  if (index >= 0 && index < globalAudioState.autoplayQueue.length) {
+    globalAudioState.autoplayQueue.splice(index, 1);
+    globalAudioState.autoplayQueue = [...globalAudioState.autoplayQueue];
+    notifySubscribers({ autoplayQueue: globalAudioState.autoplayQueue });
+  }
+};
+
+export const clearQueue = () => {
+  globalAudioState.autoplayQueue = [];
+  notifySubscribers({ autoplayQueue: globalAudioState.autoplayQueue });
+};
+
+export const reorderQueue = (fromIndex, toIndex) => {
+  if (
+    fromIndex >= 0 && fromIndex < globalAudioState.autoplayQueue.length &&
+    toIndex >= 0 && toIndex < globalAudioState.autoplayQueue.length &&
+    fromIndex !== toIndex
+  ) {
+    const queue = [...globalAudioState.autoplayQueue];
+    const [removed] = queue.splice(fromIndex, 1);
+    queue.splice(toIndex, 0, removed);
+    globalAudioState.autoplayQueue = queue;
+    notifySubscribers({ autoplayQueue: globalAudioState.autoplayQueue });
+  }
+};
+
+// Reconnection state for audio socket
+let audioReconnectAttempt = 0;
+let audioReconnectTimeout = null;
+let lastApiBase = '';
+
+// Reset reconnection and try again (for manual retry after failure)
+export const retryAudioSocket = () => {
+  audioReconnectAttempt = 0;
+  globalAudioState.socketReconnectFailed = false;
+  notifySubscribers({ socketReconnectFailed: false });
+
+  // Close existing socket if any
+  if (globalAudioState.socket) {
+    globalAudioState.socket.close(1000, 'Manual retry');
+    globalAudioState.socket = null;
+  }
+
+  // Reinitialize
+  initAudioSocket(lastApiBase);
+};
+
+// Initialize native WebSocket connection for real-time audio
+// Django Channels uses /ws/audio/ endpoint
 export const initAudioSocket = (apiBase = '') => {
+  // Store for retry
+  lastApiBase = apiBase;
+
   // Don't create duplicate connections
-  if (globalAudioState.socket && globalAudioState.socket.connected) {
+  if (globalAudioState.socket && globalAudioState.socket.readyState === WebSocket.OPEN) {
     return globalAudioState.socket;
   }
 
-  let socketUrl;
-  if (apiBase) {
-    try {
-      const url = new URL(apiBase, window.location.origin);
-      socketUrl = `${url.protocol}//${url.host}`;
-    } catch (e) {
-      socketUrl = window.location.origin;
-    }
-  } else {
-    socketUrl = window.location.origin;
+  // Don't create if connecting
+  if (globalAudioState.socket && globalAudioState.socket.readyState === WebSocket.CONNECTING) {
+    return globalAudioState.socket;
   }
 
-  console.log('Initializing global audio socket:', socketUrl);
+  // Django Channels uses /ws/audio/ endpoint (no topic query param needed)
+  const wsUrl = getWebSocketUrl(apiBase, 'audio');
+  console.log('Initializing global audio WebSocket:', wsUrl);
 
-  const socket = io(socketUrl, {
-    path: '/socket.io/socket.io',
-    query: { topics: 'audio' },
-    transports: ['websocket', 'polling'],
-    reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 1000,
-  });
-
+  const socket = new WebSocket(wsUrl);
   globalAudioState.socket = socket;
 
-  socket.on('connect', () => {
-    console.log('Global audio socket connected');
+  socket.onopen = () => {
+    console.log('Global audio WebSocket connected');
     globalAudioState.socketConnected = true;
-    notifySubscribers({ socketConnected: true });
-  });
+    globalAudioState.socketReconnectFailed = false;
+    audioReconnectAttempt = 0;
+    notifySubscribers({ socketConnected: true, socketReconnectFailed: false });
 
-  socket.on('disconnect', () => {
-    console.log('Global audio socket disconnected');
+    // Django Channels AudioConsumer auto-subscribes, no need to send subscribe message
+  };
+
+  socket.onclose = (event) => {
+    console.log('Global audio WebSocket disconnected:', event.code, event.reason);
     globalAudioState.socketConnected = false;
     notifySubscribers({ socketConnected: false });
-  });
 
-  socket.on('audio:transmission', (transmission) => {
-    console.log('New audio transmission via global socket:', transmission);
-    handleNewTransmission(transmission);
-  });
+    // Reconnect if not a clean close (code 1000 or 1001)
+    if (event.code !== 1000 && event.code !== 1001) {
+      const maxAttempts = 10;
+      const delay = getReconnectDelay(audioReconnectAttempt, {
+        ...RECONNECT_CONFIG,
+        maxAttempts,
+      });
+
+      if (audioReconnectAttempt < maxAttempts) {
+        console.log(`Audio WebSocket reconnecting in ${delay}ms (attempt ${audioReconnectAttempt + 1})`);
+        audioReconnectAttempt++;
+
+        audioReconnectTimeout = setTimeout(() => {
+          initAudioSocket(apiBase);
+        }, delay);
+      } else {
+        // Max attempts reached - notify user
+        console.error('Audio WebSocket: Max reconnection attempts reached');
+        globalAudioState.socketReconnectFailed = true;
+        notifySubscribers({ socketReconnectFailed: true });
+      }
+    }
+  };
+
+  socket.onerror = (event) => {
+    console.error('Global audio WebSocket error:', event);
+  };
+
+  socket.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+
+      // Handle pong response (for heartbeat if needed)
+      if (data.type === 'pong') {
+        return;
+      }
+
+      // Handle audio transmission events from Django Channels
+      // Django sends: { type: 'audio.transmission' or 'transmission', ... }
+      if (data.type === 'audio.transmission' || data.type === 'transmission' || data.type === 'audio:transmission') {
+        console.log('New audio transmission via WebSocket:', data.data || data);
+        handleNewTransmission(data.data || data);
+      }
+
+      // Handle transcript updates
+      if (data.type === 'audio.transcript_update' || data.type === 'transcript_update') {
+        console.log('Transcript update via WebSocket:', data.data || data);
+        handleNewTransmission(data.data || data);
+      }
+    } catch (err) {
+      console.error('Audio WebSocket message parse error:', err);
+    }
+  };
 
   return socket;
 };
@@ -166,6 +276,27 @@ const handleNewTransmission = (transmission) => {
 
   // Queue for autoplay if enabled and matches filter
   if (globalAudioState.autoplay && enrichedTransmission.s3_url) {
+    const now = Date.now();
+
+    // Only queue transmissions that arrived AFTER autoplay was enabled
+    // This prevents playing old/stale transmissions when autoplay is toggled on
+    if (globalAudioState.autoplayEnabledAt) {
+      const transmissionTime = new Date(enrichedTransmission.created_at).getTime();
+      const transmissionAge = now - transmissionTime;
+
+      // Skip if transmission is older than max age threshold
+      if (transmissionAge > AUTOPLAY_MAX_AGE_MS) {
+        console.log('Skipping stale transmission for autoplay:', enrichedTransmission.id, `(${Math.round(transmissionAge / 1000)}s old)`);
+        return;
+      }
+
+      // Skip if transmission was created before autoplay was enabled
+      if (transmissionTime < globalAudioState.autoplayEnabledAt) {
+        console.log('Skipping pre-autoplay transmission:', enrichedTransmission.id);
+        return;
+      }
+    }
+
     const filter = globalAudioState.autoplayFilter;
 
     // Check if transmission matches filter (if set)
@@ -206,6 +337,22 @@ const processGlobalAutoplayQueue = () => {
 
   const next = globalAudioState.autoplayQueue.shift();
   if (!next || !next.s3_url) {
+    // Try next item
+    if (globalAudioState.autoplayQueue.length > 0) {
+      processGlobalAutoplayQueue();
+    }
+    return;
+  }
+
+  // Check if the queued transmission is still fresh enough to play
+  // This handles cases where items sat in the queue while other audio was playing
+  const now = Date.now();
+  const transmissionTime = new Date(next.created_at).getTime();
+  const transmissionAge = now - transmissionTime;
+
+  if (transmissionAge > AUTOPLAY_MAX_AGE_MS * 2) {
+    // Skip stale queued items (use 2x threshold since it already passed initial check)
+    console.log('Skipping stale queued transmission:', next.id, `(${Math.round(transmissionAge / 1000)}s old)`);
     // Try next item
     if (globalAudioState.autoplayQueue.length > 0) {
       processGlobalAutoplayQueue();
@@ -306,8 +453,15 @@ const playAudioFromGlobal = (transmission) => {
 
 // Disconnect the global audio socket
 export const disconnectAudioSocket = () => {
+  // Clear any pending reconnection
+  if (audioReconnectTimeout) {
+    clearTimeout(audioReconnectTimeout);
+    audioReconnectTimeout = null;
+  }
+  audioReconnectAttempt = 0;
+
   if (globalAudioState.socket) {
-    globalAudioState.socket.disconnect();
+    globalAudioState.socket.close(1000, 'Client closing');
     globalAudioState.socket = null;
     globalAudioState.socketConnected = false;
   }
@@ -531,16 +685,18 @@ export function AudioView({ apiBase, onSelectAircraft }) {
 
   const hours = { '1h': 1, '6h': 6, '24h': 24, '48h': 48, '7d': 168 };
 
-  // Build endpoint with filters
+  // Build endpoint with filters - Django API uses /api/v1/audio
   const statusParam = statusFilter !== 'all' ? `&status=${statusFilter}` : '';
   const channelParam = channelFilter !== 'all' ? `&channel=${encodeURIComponent(channelFilter)}` : '';
-  const endpoint = `/api/v1/audio/transmissions?hours=${hours[timeRange]}&limit=100${statusParam}${channelParam}`;
+  const endpoint = `/api/v1/audio?hours=${hours[timeRange]}&limit=100${statusParam}${channelParam}`;
 
-  // Note: AudioView has its own socket.io connection for real-time audio,
+  // Note: AudioView has its own WebSocket connection for real-time audio,
   // so we just use HTTP for initial data and let the socket handle updates
   const { data, loading, refetch } = useSocketApi(endpoint, null, apiBase, {});
-  const { data: statsData } = useSocketApi('/api/v1/audio/stats', null, apiBase, {});
-  const { data: statusData } = useSocketApi('/api/v1/audio/status', null, apiBase, {});
+  // Stats endpoint - may be combined in main audio endpoint response
+  const { data: statsData } = useSocketApi('/api/v1/audio?stats=true', null, apiBase, {});
+  // System status for radio state
+  const { data: statusData } = useSocketApi('/api/v1/system/status', null, apiBase, {});
 
   // Extract unique channels from stats
   useEffect(() => {
@@ -690,6 +846,11 @@ export function AudioView({ apiBase, onSelectAircraft }) {
 
       audio.addEventListener('ended', () => {
         cleanup();
+        // Clear progress interval
+        if (globalAudioState.progressIntervalRef) {
+          clearInterval(globalAudioState.progressIntervalRef);
+          globalAudioState.progressIntervalRef = null;
+        }
         globalAudioState.playingId = null;
         globalAudioState.currentTransmission = null;
         globalAudioState.audioProgress[next.id] = 0;
@@ -702,9 +863,17 @@ export function AudioView({ apiBase, onSelectAircraft }) {
 
       audio.addEventListener('error', () => {
         cleanup();
+        // Clear progress interval on error
+        if (globalAudioState.progressIntervalRef) {
+          clearInterval(globalAudioState.progressIntervalRef);
+          globalAudioState.progressIntervalRef = null;
+        }
         console.warn(`Failed to load audio ${next.id}, trying next file...`);
-        // Don't clear playingId here - let autoplay continue
-        // Try next file immediately
+        // Clear state and try next file
+        globalAudioState.playingId = null;
+        globalAudioState.currentTransmission = null;
+        notifySubscribers({ playingId: null, currentTransmission: null });
+        setPlayingId(null);
         processAutoplayQueue();
       });
 
@@ -716,6 +885,12 @@ export function AudioView({ apiBase, onSelectAircraft }) {
         // Don't clear playingId here - let autoplay continue
         processAutoplayQueue();
       }, 10000);
+
+      // Clear any existing progress interval before starting new playback
+      if (globalAudioState.progressIntervalRef) {
+        clearInterval(globalAudioState.progressIntervalRef);
+        globalAudioState.progressIntervalRef = null;
+      }
 
       audio.play().then(() => {
         globalAudioState.playingId = next.id;
@@ -736,7 +911,11 @@ export function AudioView({ apiBase, onSelectAircraft }) {
       }).catch(err => {
         cleanup();
         console.warn(`Autoplay failed for ${next.id}: ${err.message}, trying next file...`);
-        // Don't clear playingId here - let autoplay continue
+        // Clear state on error
+        globalAudioState.playingId = null;
+        globalAudioState.currentTransmission = null;
+        notifySubscribers({ playingId: null, currentTransmission: null });
+        setPlayingId(null);
         // Try next file
         processAutoplayQueue();
       });
@@ -819,26 +998,38 @@ export function AudioView({ apiBase, onSelectAircraft }) {
         setAutoplay(true);
       }
 
-      audio.play().catch(err => {
-        console.error('Failed to play audio:', err);
-      });
-      globalAudioState.playingId = id;
-      globalAudioState.currentTransmission = transmission;
-      notifySubscribers({ playingId: id, currentTransmission: transmission });
-      setPlayingId(id);
+      // Clear any existing progress interval before starting new playback
+      if (globalAudioState.progressIntervalRef) {
+        clearInterval(globalAudioState.progressIntervalRef);
+        globalAudioState.progressIntervalRef = null;
+      }
 
-      // Update progress
-      globalAudioState.progressIntervalRef = setInterval(() => {
-        if (audio && !audio.paused) {
-          const progress = (audio.currentTime / audio.duration) * 100 || 0;
-          globalAudioState.audioProgress[id] = progress;
-          notifySubscribers({ audioProgress: { ...globalAudioState.audioProgress } });
-          setAudioProgress(prev => ({
-            ...prev,
-            [id]: progress
-          }));
-        }
-      }, 100);
+      audio.play().then(() => {
+        globalAudioState.playingId = id;
+        globalAudioState.currentTransmission = transmission;
+        notifySubscribers({ playingId: id, currentTransmission: transmission });
+        setPlayingId(id);
+
+        // Update progress
+        globalAudioState.progressIntervalRef = setInterval(() => {
+          if (audio && !audio.paused) {
+            const progress = (audio.currentTime / audio.duration) * 100 || 0;
+            globalAudioState.audioProgress[id] = progress;
+            notifySubscribers({ audioProgress: { ...globalAudioState.audioProgress } });
+            setAudioProgress(prev => ({
+              ...prev,
+              [id]: progress
+            }));
+          }
+        }, 100);
+      }).catch(err => {
+        console.error('Failed to play audio:', err);
+        // Clean up state on failure
+        globalAudioState.playingId = null;
+        globalAudioState.currentTransmission = null;
+        notifySubscribers({ playingId: null, currentTransmission: null });
+        setPlayingId(null);
+      });
     }
   };
 
@@ -847,8 +1038,13 @@ export function AudioView({ apiBase, onSelectAircraft }) {
     if (!audio) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
-    const percent = (e.clientX - rect.left) / rect.width;
-    audio.currentTime = percent * audio.duration;
+    const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const duration = audio.duration;
+
+    // Validate duration before seeking
+    if (!isFinite(duration) || duration <= 0) return;
+
+    audio.currentTime = percent * duration;
     globalAudioState.audioProgress[id] = percent * 100;
     notifySubscribers({ audioProgress: { ...globalAudioState.audioProgress } });
     setAudioProgress(prev => ({ ...prev, [id]: percent * 100 }));

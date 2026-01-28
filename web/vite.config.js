@@ -2,10 +2,11 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // Use environment variable for API target, default to localhost for local dev
-const apiTarget = process.env.VITE_API_TARGET || 'http://localhost:5000'
+const apiTarget = process.env.VITE_API_TARGET || 'http://localhost:8000'
 
 export default defineConfig({
   plugins: [react()],
+  base: '/static/',
   build: {
     outDir: 'dist',
     sourcemap: false,
@@ -23,14 +24,14 @@ export default defineConfig({
         target: apiTarget,
         changeOrigin: true,
       },
-      '/static': {
-        target: apiTarget,
-        changeOrigin: true,
-      },
-      '/socket.io': {
+      '/ws': {
         target: apiTarget.replace('http', 'ws'),
         ws: true,
-        rewriteWsOrigin: true,
+        changeOrigin: true,
+      },
+      '/health': {
+        target: apiTarget,
+        changeOrigin: true,
       },
     },
     watch: {

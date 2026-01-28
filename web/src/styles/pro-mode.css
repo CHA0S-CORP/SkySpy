@@ -974,6 +974,16 @@
   cursor: pointer;
 }
 
+.overlay-toggle svg {
+  color: rgba(150, 200, 255, 0.7);
+  flex-shrink: 0;
+}
+
+.overlay-toggle span {
+  font-size: 13px;
+  color: rgba(200, 220, 255, 0.85);
+}
+
 .toggle-label {
   font-size: 13px;
   color: rgba(200, 220, 255, 0.85);
@@ -988,10 +998,154 @@
   text-align: center;
 }
 
+.overlay-section {
+  margin-bottom: 12px;
+}
+
+.overlay-section:last-child {
+  margin-bottom: 0;
+}
+
+.overlay-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(150, 200, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(80, 140, 200, 0.15);
+}
+
+.overlay-menu-content {
+  display: flex;
+  flex-direction: column;
+}
+
 /* Traffic Filter Menu Specific Styles */
 .filter-menu {
-  min-width: 200px;
+  position: absolute;
+  top: 60px;
   right: 370px;
+  background: rgba(20, 30, 40, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(80, 140, 200, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 200px;
+  z-index: 1500;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.filter-menu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(80, 140, 200, 0.2);
+}
+
+.filter-menu-header span {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(150, 200, 255, 0.9);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.filter-menu-header svg {
+  color: rgba(150, 200, 255, 0.7);
+}
+
+.filter-close {
+  background: transparent;
+  border: none;
+  color: rgba(150, 200, 255, 0.6);
+  cursor: pointer;
+  padding: 2px;
+}
+
+.filter-close:hover {
+  color: rgba(150, 200, 255, 1);
+}
+
+.filter-menu-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.2s;
+  font-size: 13px;
+  color: rgba(200, 220, 255, 0.85);
+}
+
+.filter-toggle:hover {
+  background: rgba(80, 140, 200, 0.1);
+}
+
+.filter-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #4dabf7;
+  cursor: pointer;
+}
+
+.filter-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+}
+
+.filter-range label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: rgba(150, 200, 255, 0.7);
+}
+
+.filter-range input[type="number"] {
+  width: 70px;
+  padding: 6px 8px;
+  background: rgba(30, 50, 70, 0.8);
+  border: 1px solid rgba(80, 140, 200, 0.3);
+  border-radius: 4px;
+  color: rgba(200, 220, 255, 0.9);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  text-align: center;
+}
+
+.filter-range input[type="number"]:focus {
+  outline: none;
+  border-color: rgba(80, 140, 200, 0.6);
+}
+
+.filter-reset-btn {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(80, 140, 200, 0.15);
+  border: 1px solid rgba(80, 140, 200, 0.3);
+  border-radius: 6px;
+  color: rgba(150, 200, 255, 0.8);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-reset-btn:hover {
+  background: rgba(80, 140, 200, 0.25);
+  border-color: rgba(80, 140, 200, 0.5);
 }
 
 .filter-section {

@@ -40,11 +40,25 @@ export function useSafetyEvents(wsSafetyEvents = [], aircraft = [], wsRequest = 
 
       try {
         const data = await wsRequest('safety-events', { limit: 20 });
-        const events = Array.isArray(data) ? data : (data?.data || data?.events || []);
+        // Handle various Django API response formats
+        let events = [];
+        if (Array.isArray(data)) {
+          events = data;
+        } else if (data?.results && Array.isArray(data.results)) {
+          // Django REST Framework paginated response
+          events = data.results;
+        } else if (data?.data?.events && Array.isArray(data.data.events)) {
+          events = data.data.events;
+        } else if (data?.data && Array.isArray(data.data)) {
+          events = data.data;
+        } else if (data?.events && Array.isArray(data.events)) {
+          events = data.events;
+        }
+
         if (events.length > 0) {
           setSafetyEvents(prev => {
             const existingIds = new Set(prev.map(e => e.id));
-            const newEvents = events.filter(e => !existingIds.has(e.id));
+            const newEvents = events.filter(e => e && !existingIds.has(e.id));
             if (newEvents.length === 0) return prev;
             return [...newEvents, ...prev].slice(0, 50);
           });

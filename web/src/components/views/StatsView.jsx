@@ -1,11 +1,20 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import {
   AlertTriangle, TrendingUp, Radio, Plane, Activity, Filter,
   Clock, Shield, ChevronDown, Award, BarChart3, Zap, Target,
   Cpu, Thermometer, HardDrive, Wifi, CheckCircle, Eye,
-  Signal, ArrowUpCircle, Navigation
+  Signal, ArrowUpCircle, Navigation, Navigation2, Globe, Trophy,
+  Calendar, Layers
 } from 'lucide-react';
 import { useSocketApi } from '../../hooks';
+import {
+  FlightPatternsSection,
+  GeographicSection,
+  SessionAnalyticsSection,
+  TimeComparisonSection,
+  AcarsStatsSection,
+  AchievementsSection
+} from './stats';
 
 // ============================================================================
 // Subcomponents for the Bento Grid Layout
@@ -31,8 +40,8 @@ function KPICard({ title, icon: Icon, metrics, accentColor = 'cyan' }) {
         <span className="kpi-title">{title}</span>
       </div>
       <div className="kpi-metrics">
-        {metrics.map((metric, i) => (
-          <div key={i} className="kpi-metric">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="kpi-metric">
             <span className="kpi-metric-value">{metric.value}</span>
             <span className="kpi-metric-label">{metric.label}</span>
           </div>
@@ -47,16 +56,26 @@ function KPICard({ title, icon: Icon, metrics, accentColor = 'cyan' }) {
  */
 function LeaderboardCard({ title, icon: Icon, items, onSelect, valueFormatter, emptyText = "No data" }) {
   const [pulse, setPulse] = useState(false);
-  const [prevItems, setPrevItems] = useState([]);
+  const prevItemsRef = useRef([]);
 
   useEffect(() => {
-    if (items?.length > 0 && JSON.stringify(items) !== JSON.stringify(prevItems)) {
+    if (!items?.length) return;
+
+    // Efficient comparison: check length first, then compare first item's key properties
+    const prevItems = prevItemsRef.current;
+    const hasChanged = items.length !== prevItems.length ||
+      (items[0]?.hex !== prevItems[0]?.hex) ||
+      (items[0]?.distance !== prevItems[0]?.distance) ||
+      (items[0]?.gs !== prevItems[0]?.gs) ||
+      (items[0]?.alt_baro !== prevItems[0]?.alt_baro);
+
+    if (hasChanged) {
       setPulse(true);
-      setPrevItems(items);
+      prevItemsRef.current = items;
       const timer = setTimeout(() => setPulse(false), 1000);
       return () => clearTimeout(timer);
     }
-  }, [items, prevItems]);
+  }, [items]);
 
   return (
     <div className={`leaderboard-card ${pulse ? 'pulse' : ''}`}>
@@ -880,6 +899,7 @@ export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, a
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [activeAnalyticsTab, setActiveAnalyticsTab] = useState('trends');
   const [topPerformersTab, setTopPerformersTab] = useState('longest');
+  const [activeExtendedSection, setActiveExtendedSection] = useState('patterns');
 
   // Convert time range to hours
   const hours = { '1h': 1, '6h': 6, '24h': 24, '48h': 48, '7d': 168 };
@@ -993,11 +1013,13 @@ export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, a
 
   // Historical data - fetch once, refresh only on filter change (no interval polling)
   const { data: histStats } = useSocketApi(`/api/v1/history/stats?${filterParams}`, null, apiBase, socketOpts);
-  const { data: acarsStats } = useSocketApi(`/api/v1/acars/stats?hours=${selectedHours}`, null, apiBase, socketOpts);
+  const { data: acarsStats, loading: acarsStatsLoading } = useSocketApi(`/api/v1/acars/stats?hours=${selectedHours}`, null, apiBase, socketOpts);
   const { data: safetyStats } = useSocketApi(`/api/v1/safety/stats?hours=${selectedHours}`, null, apiBase, socketOpts);
-  const { data: sessionsData } = useSocketApi(`/api/v1/history/sessions?hours=${selectedHours}&limit=500${showMilitaryOnly ? '&military_only=true' : ''}`, null, apiBase, socketOpts);
+  // Django API uses /api/v1/sessions (was /api/v1/history/sessions)
+  const { data: sessionsData } = useSocketApi(`/api/v1/sessions?hours=${selectedHours}&limit=500${showMilitaryOnly ? '&military_only=true' : ''}`, null, apiBase, socketOpts);
 
-  // System status - very infrequent polling (5 min) or socket request
+  // System status from Django API - very infrequent polling (5 min) or socket request
+  // Django endpoints: /api/v1/system/status, /api/v1/system/health, /api/v1/system/info
   const { data: systemData } = useSocketApi('/api/v1/system/status', wsConnected ? null : 300000, apiBase, socketOpts);
 
   // Analytics endpoints - fetch once, no polling (data doesn't change rapidly)
@@ -1006,6 +1028,20 @@ export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, a
   const { data: distanceAnalytics } = useSocketApi(`/api/v1/history/analytics/distance?${filterParams}`, null, apiBase, socketOpts);
   const { data: speedAnalytics } = useSocketApi(`/api/v1/history/analytics/speed?${filterParams}`, null, apiBase, socketOpts);
   const { data: correlationData } = useSocketApi(`/api/v1/history/analytics/correlation?${filterParams}`, null, apiBase, socketOpts);
+
+  // Extended stats from Django API - new endpoints
+  // Django API endpoints:
+  // - /api/v1/stats/tracking-quality - Tracking quality
+  // - /api/v1/stats/engagement - Engagement stats
+  // - /api/v1/stats/favorites - Favorites
+  // - /api/v1/stats/flight-patterns - Flight patterns
+  // - /api/v1/stats/geographic - Geographic stats
+  // - /api/v1/stats/combined - Combined stats (all in one request)
+  const { data: flightPatternsData, loading: flightPatternsLoading } = useSocketApi(`/api/v1/stats/flight-patterns?${filterParams}`, null, apiBase, socketOpts);
+  const { data: geographicData, loading: geographicLoading } = useSocketApi(`/api/v1/stats/geographic?${filterParams}`, null, apiBase, socketOpts);
+  const { data: trackingQualityData, loading: trackingQualityLoading } = useSocketApi(`/api/v1/stats/tracking-quality?${filterParams}`, null, apiBase, socketOpts);
+  const { data: engagementData, loading: engagementLoading } = useSocketApi(`/api/v1/stats/engagement?${filterParams}`, null, apiBase, socketOpts);
+  const { data: favoritesData, loading: favoritesLoading } = useSocketApi(`/api/v1/stats/favorites?hours=${selectedHours}`, null, apiBase, socketOpts);
 
   // Throughput history for graphs
   const [throughputHistory, setThroughputHistory] = useState([]);
@@ -1710,6 +1746,95 @@ export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, a
                   </div>
                 </div>
               </div>
+            )}
+          </div>
+
+          {/* ============================================================
+              EXTENDED STATS SECTIONS - Using Django API endpoints
+              Django endpoints:
+              - /api/v1/stats/tracking-quality
+              - /api/v1/stats/engagement
+              - /api/v1/stats/favorites
+              - /api/v1/stats/flight-patterns
+              - /api/v1/stats/geographic
+              - /api/v1/stats/combined
+              ============================================================ */}
+          <div className="extended-stats-section">
+            <div className="extended-stats-header">
+              <div className="extended-stats-title">
+                <Layers size={18} />
+                Extended Analytics
+              </div>
+              <div className="extended-stats-tabs">
+                {[
+                  { key: 'patterns', label: 'Flight Patterns', icon: Navigation2 },
+                  { key: 'geographic', label: 'Geographic', icon: Globe },
+                  { key: 'tracking', label: 'Tracking', icon: Activity },
+                  { key: 'engagement', label: 'Engagement', icon: Calendar },
+                  { key: 'acars', label: 'ACARS', icon: Radio },
+                  { key: 'favorites', label: 'Favorites', icon: Trophy }
+                ].map(tab => (
+                  <button
+                    key={tab.key}
+                    className={`extended-tab ${activeExtendedSection === tab.key ? 'active' : ''}`}
+                    onClick={() => setActiveExtendedSection(tab.key)}
+                  >
+                    <tab.icon size={14} />
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Flight Patterns Section */}
+            {activeExtendedSection === 'patterns' && (
+              <FlightPatternsSection
+                data={flightPatternsData}
+                loading={flightPatternsLoading}
+                onSelectAircraft={onSelectAircraft}
+              />
+            )}
+
+            {/* Geographic Section */}
+            {activeExtendedSection === 'geographic' && (
+              <GeographicSection
+                data={geographicData}
+                loading={geographicLoading}
+                onSelectAircraft={onSelectAircraft}
+              />
+            )}
+
+            {/* Tracking Quality Section - from /api/v1/stats/tracking-quality */}
+            {activeExtendedSection === 'tracking' && (
+              <SessionAnalyticsSection
+                data={trackingQualityData}
+                loading={trackingQualityLoading}
+              />
+            )}
+
+            {/* Engagement Section - from /api/v1/stats/engagement */}
+            {activeExtendedSection === 'engagement' && (
+              <TimeComparisonSection
+                data={engagementData}
+                loading={engagementLoading}
+              />
+            )}
+
+            {/* ACARS Stats Section */}
+            {activeExtendedSection === 'acars' && (
+              <AcarsStatsSection
+                data={acarsStats}
+                loading={acarsStatsLoading}
+              />
+            )}
+
+            {/* Favorites Section - from /api/v1/stats/favorites */}
+            {activeExtendedSection === 'favorites' && (
+              <AchievementsSection
+                data={favoritesData}
+                loading={favoritesLoading}
+                onSelectAircraft={onSelectAircraft}
+              />
             )}
           </div>
         </div>

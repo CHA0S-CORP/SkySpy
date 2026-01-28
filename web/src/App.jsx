@@ -6,7 +6,7 @@ import './styles/index.css';
 import { Sidebar, Header, SettingsModal } from './components/layout';
 
 // View components
-import { AircraftList, StatsView, HistoryView, AudioView, AlertsView, SystemView, SafetyEventPage } from './components/views';
+import { AircraftList, StatsView, HistoryView, AudioView, AlertsView, SystemView, SafetyEventPage, NotamsView, ArchiveView, CannonballMode } from './components/views';
 
 // Map components
 import { MapView } from './components/map';
@@ -14,18 +14,30 @@ import { MapView } from './components/map';
 // Aircraft components
 import { AircraftDetailPage } from './components/aircraft/AircraftDetailPage';
 
+// Auth components
+import { LoginPage, ProtectedRoute } from './components/auth';
+import { useAuth } from './contexts/AuthContext';
+
 // Hooks
-import { useWebSocket } from './hooks';
-import { usePositionSocket } from './hooks/usePositionSocket';
+import { useChannelsSocket } from './hooks/useChannelsSocket';
+import { usePositionChannels } from './hooks/usePositionChannels';
 
 // Utils
 import { getConfig } from './utils';
+
+// Helper to safely parse JSON from fetch response
+const safeJson = async (res) => {
+  if (!res.ok) return null;
+  const ct = res.headers.get('content-type');
+  if (!ct || !ct.includes('application/json')) return null;
+  try { return await res.json(); } catch { return null; }
+};
 
 // ============================================================================
 // Hash Routing Utilities
 // ============================================================================
 
-const VALID_TABS = ['map', 'aircraft', 'stats', 'history', 'audio', 'alerts', 'system', 'airframe', 'event'];
+const VALID_TABS = ['map', 'aircraft', 'stats', 'history', 'audio', 'notams', 'archive', 'alerts', 'system', 'airframe', 'event', 'login'];
 
 function parseHash() {
   const hash = window.location.hash.slice(1); // Remove #
@@ -67,9 +79,25 @@ export default function App() {
   const [selectedAircraftHex, setSelectedAircraftHex] = useState(null);
   const [targetSafetyEventId, setTargetSafetyEventId] = useState(null);
   const [tailHexLookup, setTailHexLookup] = useState({}); // Registration → ICAO hex lookup cache
+  const [showCannonball, setShowCannonball] = useState(false);
+
+  // Auth context
+  const {
+    status: authStatus,
+    isAuthenticated,
+    config: authConfig,
+    getAccessToken,
+  } = useAuth();
 
   const activeTab = hashState.tab;
   const hashParams = hashState.params;
+
+  // Redirect to map after successful login
+  useEffect(() => {
+    if (activeTab === 'login' && isAuthenticated) {
+      window.location.hash = '#map';
+    }
+  }, [activeTab, isAuthenticated]);
 
   // Update hash when navigating
   const setActiveTab = useCallback((tab, params = {}) => {
@@ -109,16 +137,16 @@ export default function App() {
     request: wsRequest,
     getAirframeError,
     clearAirframeError,
-  } = useWebSocket(true, config.apiBaseUrl, 'all');
+  } = useChannelsSocket(true, config.apiBaseUrl, 'all');
 
   // High-frequency position updates for smooth map rendering
   // Uses refs instead of state to avoid 60Hz re-renders
   const {
     positionsRef,
     connected: positionSocketConnected,
-  } = usePositionSocket(activeTab === 'map', config.apiBaseUrl, true, 1000);
+  } = usePositionChannels(activeTab === 'map', config.apiBaseUrl, true, 1000);
 
-  // Fetch status via Socket.IO or fallback to HTTP
+  // Fetch status via WebSocket or fallback to HTTP
   useEffect(() => {
     const fetchStatus = async () => {
       if (wsRequest && connected) {
@@ -130,8 +158,9 @@ export default function App() {
         }
       } else {
         try {
-          const res = await fetch(`${config.apiBaseUrl}/api/v1/status`);
-          if (res.ok) setStatus(await res.json());
+          const res = await fetch(`${config.apiBaseUrl}/api/v1/system/status`);
+          const data = await safeJson(res);
+          if (data) setStatus(data);
         } catch (err) {
           console.log('App status HTTP fetch error:', err.message);
         }
@@ -143,10 +172,10 @@ export default function App() {
     return () => clearInterval(interval);
   }, [wsRequest, connected, config.apiBaseUrl]);
 
-  // Fetch online users count via Socket.IO (with HTTP fallback)
+  // Fetch online users count via WebSocket (with HTTP fallback)
   useEffect(() => {
     const fetchOnlineUsers = async () => {
-      // Try Socket.IO first if connected
+      // Try WebSocket first if connected
       if (wsRequest && connected) {
         try {
           const data = await wsRequest('ws-status', {});
@@ -159,13 +188,11 @@ export default function App() {
         }
       }
 
-      // HTTP fallback
+      // HTTP fallback - use system status endpoint
       try {
-        const res = await fetch(`${config.apiBaseUrl}/api/v1/ws/status`);
-        if (res.ok) {
-          const data = await res.json();
-          setOnlineUsers(data.subscribers || data.socketio_connections || 0);
-        }
+        const res = await fetch(`${config.apiBaseUrl}/api/v1/system/status`);
+        const data = await safeJson(res);
+        if (data) setOnlineUsers(data.websocket_connections || data.subscribers || 0);
       } catch (err) {
         // Silently fail
       }
@@ -198,21 +225,20 @@ export default function App() {
         let data;
         if (wsRequest && connected) {
           const result = await wsRequest('sightings', { registration: tail, hours: 168, limit: 1 });
-          if (result && result.sightings) {
+          if (result && (result.sightings || result.results)) {
             data = result;
           } else {
             throw new Error('Invalid sightings response');
           }
         } else {
-          const res = await fetch(`${config.apiBaseUrl}/api/v1/history/sightings?registration=${encodeURIComponent(tail)}&hours=168&limit=1`);
-          if (res.ok) {
-            data = await res.json();
-          } else {
-            throw new Error('HTTP request failed');
-          }
+          // Django API uses /api/v1/sightings (was /api/v1/history/sightings)
+          const res = await fetch(`${config.apiBaseUrl}/api/v1/sightings?registration=${encodeURIComponent(tail)}&hours=168&limit=1`);
+          data = await safeJson(res);
+          if (!data) throw new Error('HTTP request failed');
         }
-        if (data.sightings?.length > 0 && data.sightings[0].icao_hex) {
-          setTailHexLookup(prev => ({ ...prev, [tail]: data.sightings[0].icao_hex }));
+        const sightings = data?.sightings || data?.results || [];
+        if (sightings.length > 0 && sightings[0].icao_hex) {
+          setTailHexLookup(prev => ({ ...prev, [tail]: sightings[0].icao_hex }));
         } else {
           setTailHexLookup(prev => ({ ...prev, [tail]: null }));
         }
@@ -224,7 +250,29 @@ export default function App() {
     lookupTail();
   }, [activeTab, hashParams.tail, aircraft, config.apiBaseUrl, tailHexLookup, wsRequest, connected]);
 
-  return (
+  // Show login page if on login tab
+  if (activeTab === 'login') {
+    return (
+      <div className="app view-login">
+        <LoginPage />
+      </div>
+    );
+  }
+
+  // Show loading while auth is initializing
+  if (authStatus === 'loading') {
+    return (
+      <div className="app view-loading">
+        <div className="auth-loading">
+          <div className="spinner" />
+          <span>Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Wrap main content with ProtectedRoute for auth-required modes
+  const mainContent = (
     <div className={`app ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileMenuOpen ? 'mobile-menu-open' : ''} view-${activeTab}`}>
       <Sidebar
         activeTab={activeTab}
@@ -234,6 +282,7 @@ export default function App() {
         setCollapsed={setSidebarCollapsed}
         stats={stats}
         onOpenSettings={() => setShowSettings(true)}
+        onLaunchCannonball={() => setShowCannonball(true)}
       />
 
       {/* Mobile menu overlay */}
@@ -299,7 +348,9 @@ export default function App() {
             />
           )}
           {activeTab === 'audio' && <AudioView apiBase={config.apiBaseUrl} onSelectAircraft={(hex, callsign) => setActiveTab('airframe', { icao: hex, call: callsign })} />}
-          {activeTab === 'alerts' && <AlertsView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={connected} />}
+          {activeTab === 'notams' && <NotamsView apiBase={config.apiBaseUrl} />}
+          {activeTab === 'archive' && <ArchiveView apiBase={config.apiBaseUrl} hashParams={hashParams} setHashParams={setHashParams} />}
+          {activeTab === 'alerts' && <AlertsView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={connected} aircraft={aircraft} feederLocation={status?.location} onLaunchCannonball={() => setShowCannonball(true)} />}
           {activeTab === 'system' && <SystemView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={connected} />}
           {activeTab === 'airframe' && (hashParams.icao || hashParams.call || hashParams.tail) && (() => {
             // Find aircraft by icao, callsign, or tail number
@@ -407,6 +458,21 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {showCannonball && (
+        <CannonballMode
+          apiBase={config.apiBaseUrl}
+          onExit={() => setShowCannonball(false)}
+          aircraft={aircraft}
+        />
+      )}
     </div>
   );
+
+  // Wrap with ProtectedRoute if auth is enabled
+  if (authConfig.authEnabled && !authConfig.publicMode) {
+    return <ProtectedRoute>{mainContent}</ProtectedRoute>;
+  }
+
+  return mainContent;
 }
