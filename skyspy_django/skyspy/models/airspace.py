@@ -2,6 +2,7 @@
 Airspace models for advisories (G-AIRMETs, SIGMETs) and static boundaries (Class B/C/D).
 """
 from django.db import models
+from django.core.exceptions import ValidationError
 
 
 class AirspaceAdvisory(models.Model):
@@ -64,6 +65,11 @@ class AirspaceAdvisory(models.Model):
     def __str__(self):
         return f"{self.advisory_type} {self.hazard or ''} - {self.advisory_id}"
 
+    def clean(self):
+        if self.lower_alt_ft is not None and self.upper_alt_ft is not None:
+            if self.upper_alt_ft < self.lower_alt_ft:
+                raise ValidationError({'upper_alt_ft': 'Upper altitude must be greater than or equal to lower altitude'})
+
 
 class AirspaceBoundary(models.Model):
     """Static airspace boundary data (Class B/C/D, MOAs, Restricted)."""
@@ -124,3 +130,7 @@ class AirspaceBoundary(models.Model):
 
     def __str__(self):
         return f"{self.airspace_class} - {self.name}"
+
+    def clean(self):
+        if self.ceiling_ft < self.floor_ft:
+            raise ValidationError({'ceiling_ft': 'Ceiling altitude must be greater than or equal to floor altitude'})

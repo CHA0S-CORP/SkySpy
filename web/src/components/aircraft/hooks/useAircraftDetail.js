@@ -410,10 +410,15 @@ export function useAircraftDetail({
         if (wsRequest && wsConnected) {
           try {
             let result = await wsRequest('acars-messages', { icao_hex: hex, hours: acarsHours, limit: 50 });
-            if (result && !result.error) acarsFound = result.messages || [];
+            // Backend returns array directly, or {messages: []} format
+            if (result && !result.error) {
+              acarsFound = Array.isArray(result) ? result : (result.messages || []);
+            }
             if (acarsFound.length === 0 && callsign) {
               result = await wsRequest('acars-messages', { callsign, hours: acarsHours, limit: 50 });
-              if (result && !result.error) acarsFound = result.messages || [];
+              if (result && !result.error) {
+                acarsFound = Array.isArray(result) ? result : (result.messages || []);
+              }
             }
           } catch (err) {
             console.debug('ACARS WS request failed:', err.message);
@@ -462,10 +467,14 @@ export function useAircraftDetail({
         if (wsRequest && wsConnected) {
           try {
             let result = await wsRequest('acars-messages', { icao_hex: hex, hours: acarsHours, limit: 100 });
-            if (result && !result.error) acarsFound = result.messages || [];
+            if (result && !result.error) {
+              acarsFound = Array.isArray(result) ? result : (result.messages || []);
+            }
             if (acarsFound.length === 0 && callsign) {
               result = await wsRequest('acars-messages', { callsign, hours: acarsHours, limit: 100 });
-              if (result && !result.error) acarsFound = result.messages || [];
+              if (result && !result.error) {
+                acarsFound = Array.isArray(result) ? result : (result.messages || []);
+              }
             }
           } catch (err) {
             console.debug('ACARS WS request failed:', err.message);

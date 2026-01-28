@@ -1,9 +1,14 @@
 """
 History API views for sightings, sessions, and analytics.
+
+Includes RPi optimizations:
+- MAX_HISTORY_HOURS: Limits time range for queries (default: 72 hours)
+- MAX_QUERY_RESULTS: Hard cap on result sets (default: 10000)
 """
 import logging
 from datetime import datetime, timedelta
 
+from django.conf import settings
 from django.db.models import Count, Avg, Max, Min, F, Q, Case, When, Value, CharField
 from django.db.models.functions import TruncHour, Floor, ExtractHour
 from django.utils import timezone
@@ -24,6 +29,13 @@ from skyspy.serializers.history import (
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# Query Limits (RPi Optimization)
+# =============================================================================
+# These can be overridden in settings_rpi.py
+MAX_HISTORY_HOURS = getattr(settings, 'MAX_HISTORY_HOURS', 168)  # 7 days default
+MAX_QUERY_RESULTS = getattr(settings, 'MAX_QUERY_RESULTS', 10000)
+
 
 class SightingViewSet(viewsets.ModelViewSet):
     """ViewSet for aircraft sightings."""
@@ -35,15 +47,18 @@ class SightingViewSet(viewsets.ModelViewSet):
     http_method_names = ['get']
 
     def get_queryset(self):
-        """Apply query filters."""
+        """Apply query filters with limits for RPi optimization."""
         queryset = super().get_queryset()
 
-        # Time range filter
+        # Time range filter with hard limit
         hours = self.request.query_params.get('hours', 24)
         try:
             hours = int(hours)
         except ValueError:
             hours = 24
+
+        # Enforce maximum history hours (RPi optimization)
+        hours = min(hours, MAX_HISTORY_HOURS)
 
         cutoff = timezone.now() - timedelta(hours=hours)
         queryset = queryset.filter(timestamp__gte=cutoff)
@@ -123,14 +138,23 @@ class SightingViewSet(viewsets.ModelViewSet):
         limit = request.query_params.get('limit')
         if limit:
             try:
-                queryset = queryset[:int(limit)]
+                # Enforce maximum result limit (RPi optimization)
+                limit = min(int(limit), MAX_QUERY_RESULTS)
+                queryset = queryset[:limit]
                 serializer = self.get_serializer(queryset, many=True)
                 return Response({
                     'results': serializer.data,
-                    'count': len(serializer.data)
+                    'count': len(serializer.data),
+                    'limited': len(serializer.data) >= MAX_QUERY_RESULTS
                 })
             except ValueError:
                 logger.debug(f"Invalid limit parameter: {limit}, using pagination instead")
+
+        # Enforce hard limit on total results (RPi optimization)
+        total_count = queryset.count()
+        if total_count > MAX_QUERY_RESULTS:
+            queryset = queryset[:MAX_QUERY_RESULTS]
+            logger.debug(f"Query results limited from {total_count} to {MAX_QUERY_RESULTS}")
 
         # Use pagination
         page = self.paginate_queryset(queryset)
@@ -141,7 +165,8 @@ class SightingViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response({
             'results': serializer.data,
-            'count': len(serializer.data)
+            'count': len(serializer.data),
+            'limited': total_count > MAX_QUERY_RESULTS
         })
 
 
@@ -155,15 +180,18 @@ class SessionViewSet(viewsets.ModelViewSet):
     http_method_names = ['get']
 
     def get_queryset(self):
-        """Apply query filters."""
+        """Apply query filters with limits for RPi optimization."""
         queryset = super().get_queryset()
 
-        # Time range filter
+        # Time range filter with hard limit
         hours = self.request.query_params.get('hours', 24)
         try:
             hours = int(hours)
         except ValueError:
             hours = 24
+
+        # Enforce maximum history hours (RPi optimization)
+        hours = min(hours, MAX_HISTORY_HOURS)
 
         cutoff = timezone.now() - timedelta(hours=hours)
         queryset = queryset.filter(last_seen__gte=cutoff)
@@ -859,8 +887,8 @@ class HistoryViewSet(viewsets.ViewSet):
             distance_nm__gt=0
         )
 
-        # Get sampled scatter data points
-        scatter_data = list(sightings.order_by('?').values(
+        # Get sampled scatter data points - use deterministic ordering to avoid full table scan
+        scatter_data = list(sightings.order_by('-timestamp').values(
             'distance_nm', 'rssi', 'altitude_baro', 'icao_hex'
         )[:sample_size])
 

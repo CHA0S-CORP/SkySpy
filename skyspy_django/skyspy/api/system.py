@@ -102,6 +102,55 @@ class HealthCheckView(APIView):
         })
 
 
+def _get_cached_table_counts():
+    """
+    Get table counts with caching to reduce database load.
+
+    Caches counts for 60 seconds (RPi optimization).
+    """
+    cache_key = 'system_table_counts'
+    cached = cache.get(cache_key)
+    if cached:
+        return cached
+
+    counts = {
+        'total_sightings': 0,
+        'total_sessions': 0,
+        'active_rules': 0,
+        'alert_history_count': 0,
+        'safety_event_count': 0,
+    }
+
+    try:
+        counts['total_sightings'] = AircraftSighting.objects.count()
+    except Exception:
+        pass
+
+    try:
+        counts['total_sessions'] = AircraftSession.objects.count()
+    except Exception:
+        pass
+
+    try:
+        counts['active_rules'] = AlertRule.objects.filter(enabled=True).count()
+    except Exception:
+        pass
+
+    try:
+        counts['alert_history_count'] = AlertHistory.objects.count()
+    except Exception:
+        pass
+
+    try:
+        counts['safety_event_count'] = SafetyEvent.objects.count()
+    except Exception:
+        pass
+
+    # Cache for 60 seconds
+    cache.set(cache_key, counts, timeout=60)
+    return counts
+
+
 class StatusView(APIView):
     """Comprehensive system status endpoint."""
 
@@ -117,31 +166,13 @@ class StatusView(APIView):
         """Return comprehensive system status."""
         from skyspy import __version__
 
-        # Get counts from database
-        try:
-            total_sightings = AircraftSighting.objects.count()
-        except Exception:
-            total_sightings = 0
-
-        try:
-            total_sessions = AircraftSession.objects.count()
-        except Exception:
-            total_sessions = 0
-
-        try:
-            active_rules = AlertRule.objects.filter(enabled=True).count()
-        except Exception:
-            active_rules = 0
-
-        try:
-            alert_history_count = AlertHistory.objects.count()
-        except Exception:
-            alert_history_count = 0
-
-        try:
-            safety_event_count = SafetyEvent.objects.count()
-        except Exception:
-            safety_event_count = 0
+        # Get cached counts (RPi optimization)
+        counts = _get_cached_table_counts()
+        total_sightings = counts['total_sightings']
+        total_sessions = counts['total_sessions']
+        active_rules = counts['active_rules']
+        alert_history_count = counts['alert_history_count']
+        safety_event_count = counts['safety_event_count']
 
         # Check notification config
         try:

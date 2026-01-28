@@ -147,8 +147,8 @@ def calculate_rssi_data(hours: int = 24, sample_size: int = 500) -> dict:
             'sample_size': 0,
         }
 
-    # Get sampled scatter data points
-    scatter_queryset = base_queryset.order_by('?')[:sample_size]
+    # Get sampled scatter data points - use deterministic ordering to avoid full table scan
+    scatter_queryset = base_queryset.order_by('-timestamp')[:sample_size]
     scatter_data = []
     for row in scatter_queryset.values('distance_nm', 'rssi', 'altitude_baro', 'icao_hex'):
         scatter_data.append({

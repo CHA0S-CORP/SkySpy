@@ -3,6 +3,7 @@ Caching utilities with TTL and rate limiting support.
 
 Provides:
 - In-memory cache with TTL
+- Memory-bounded caches with LRU eviction (RPi optimization)
 - Rate limiting for upstream API calls
 - MD5-based cache key generation
 """
@@ -10,12 +11,146 @@ import hashlib
 import logging
 import threading
 import time
+from collections import OrderedDict
 from typing import Any, Callable, Optional
 
 from django.conf import settings
 from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Bounded Cache (RPi Optimization)
+# =============================================================================
+
+class BoundedCache:
+    """
+    Memory-bounded cache with LRU eviction and TTL support.
+
+    Designed for RPi deployment where memory is limited.
+    When the cache reaches maxsize, the oldest entries are evicted.
+
+    Usage:
+        cache = BoundedCache(maxsize=1000)
+        cache.set('key', value, ttl=60)
+        value = cache.get('key')
+    """
+
+    def __init__(self, maxsize: int = 1000, name: str = 'bounded'):
+        """
+        Initialize bounded cache.
+
+        Args:
+            maxsize: Maximum number of entries (default 1000)
+            name: Cache name for logging
+        """
+        self._cache: OrderedDict = OrderedDict()
+        self._maxsize = maxsize
+        self._name = name
+        self._lock = threading.RLock()
+        self._hits = 0
+        self._misses = 0
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get value from cache, returning default if not found or expired."""
+        with self._lock:
+            if key not in self._cache:
+                self._misses += 1
+                return default
+
+            value, expires_at = self._cache[key]
+            if time.time() >= expires_at:
+                # Expired, remove and return default
+                del self._cache[key]
+                self._misses += 1
+                return default
+
+            # Move to end (most recently used)
+            self._cache.move_to_end(key)
+            self._hits += 1
+            return value
+
+    def set(self, key: str, value: Any, ttl: int = None):
+        """
+        Set value in cache with optional TTL.
+
+        Args:
+            key: Cache key
+            value: Value to store
+            ttl: Time to live in seconds (default from settings)
+        """
+        if ttl is None:
+            ttl = getattr(settings, 'CACHE_TTL', 300)
+
+        expires_at = time.time() + ttl
+
+        with self._lock:
+            # Remove if exists (to update position)
+            if key in self._cache:
+                del self._cache[key]
+
+            # Evict oldest if at capacity
+            while len(self._cache) >= self._maxsize:
+                self._cache.popitem(last=False)
+
+            self._cache[key] = (value, expires_at)
+
+    def delete(self, key: str):
+        """Delete a key from the cache."""
+        with self._lock:
+            self._cache.pop(key, None)
+
+    def clear(self):
+        """Clear all entries from the cache."""
+        with self._lock:
+            self._cache.clear()
+            self._hits = 0
+            self._misses = 0
+
+    def cleanup_expired(self):
+        """Remove all expired entries."""
+        now = time.time()
+        with self._lock:
+            expired_keys = [
+                key for key, (_, expires_at) in self._cache.items()
+                if now >= expires_at
+            ]
+            for key in expired_keys:
+                del self._cache[key]
+        return len(expired_keys)
+
+    def __len__(self):
+        """Return number of entries in cache."""
+        return len(self._cache)
+
+    def __contains__(self, key: str):
+        """Check if key exists and is not expired."""
+        with self._lock:
+            if key not in self._cache:
+                return False
+            _, expires_at = self._cache[key]
+            return time.time() < expires_at
+
+    def get_stats(self) -> dict:
+        """Get cache statistics."""
+        with self._lock:
+            total_requests = self._hits + self._misses
+            hit_rate = (self._hits / total_requests * 100) if total_requests > 0 else 0
+            return {
+                'name': self._name,
+                'size': len(self._cache),
+                'maxsize': self._maxsize,
+                'hits': self._hits,
+                'misses': self._misses,
+                'hit_rate_pct': round(hit_rate, 1),
+            }
+
+
+# Global bounded caches for common use cases
+aircraft_info_cache = BoundedCache(maxsize=5000, name='aircraft_info')
+route_cache = BoundedCache(maxsize=1000, name='routes')
+photo_cache = BoundedCache(maxsize=2000, name='photos')
 
 # In-memory cache for fast access (thread-safe)
 _memory_cache: dict[str, tuple[Any, float]] = {}
@@ -325,6 +460,7 @@ def cleanup_all_caches():
     - Expired memory cache entries
     - Old rate limit timestamps
     - Notification cooldowns
+    - Bounded caches (expired entries)
     """
     # Clean expired memory cache
     cleanup_expired_memory_cache()
@@ -342,6 +478,19 @@ def cleanup_all_caches():
     except Exception as e:
         logger.debug(f"Could not cleanup notification cooldowns: {e}")
 
+    # Clean expired entries from bounded caches
+    try:
+        expired_aircraft = aircraft_info_cache.cleanup_expired()
+        expired_routes = route_cache.cleanup_expired()
+        expired_photos = photo_cache.cleanup_expired()
+        if expired_aircraft + expired_routes + expired_photos > 0:
+            logger.debug(
+                f"Bounded cache cleanup: aircraft_info={expired_aircraft}, "
+                f"routes={expired_routes}, photos={expired_photos}"
+            )
+    except Exception as e:
+        logger.debug(f"Could not cleanup bounded caches: {e}")
+
     logger.debug("Completed comprehensive cache cleanup")
 
 
@@ -356,4 +505,9 @@ def get_cache_stats() -> dict:
     return {
         'memory_cache_entries': memory_cache_size,
         'rate_limit_entries': rate_limit_size,
+        'bounded_caches': {
+            'aircraft_info': aircraft_info_cache.get_stats(),
+            'routes': route_cache.get_stats(),
+            'photos': photo_cache.get_stats(),
+        }
     }

@@ -36,7 +36,13 @@ class PersonalRecord(models.Model):
     value = models.FloatField()
 
     # For session-based records
-    session_id = models.IntegerField(blank=True, null=True)
+    session = models.ForeignKey(
+        'aircraft.AircraftSession',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='personal_records',
+    )
 
     # When the record was set
     achieved_at = models.DateTimeField(db_index=True)
@@ -94,7 +100,13 @@ class RareSighting(models.Model):
 
     # Sighting details
     sighted_at = models.DateTimeField(db_index=True)
-    session_id = models.IntegerField(blank=True, null=True)
+    session = models.ForeignKey(
+        'aircraft.AircraftSession',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rare_sightings',
+    )
 
     # Why it's notable
     description = models.TextField(blank=True, null=True)

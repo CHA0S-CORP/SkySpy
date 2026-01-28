@@ -17,6 +17,32 @@ from skyspy.models import AircraftSighting, AircraftSession, AircraftInfo
 logger = logging.getLogger(__name__)
 
 
+def _parse_int_param(value, default: int, min_val: int = None, max_val: int = None) -> int:
+    """
+    Safely parse an integer parameter with bounds checking.
+
+    Args:
+        value: The value to parse (can be str, int, or None)
+        default: Default value if parsing fails
+        min_val: Minimum allowed value (optional)
+        max_val: Maximum allowed value (optional)
+
+    Returns:
+        Validated integer within bounds
+    """
+    try:
+        result = int(value) if value is not None else default
+    except (ValueError, TypeError):
+        result = default
+
+    if min_val is not None and result < min_val:
+        result = min_val
+    if max_val is not None and result > max_val:
+        result = max_val
+
+    return result
+
+
 class AircraftConsumer(BaseConsumer):
     """
     WebSocket consumer for aircraft position updates.
@@ -25,6 +51,7 @@ class AircraftConsumer(BaseConsumer):
     - aircraft:snapshot - Initial aircraft state on connect
     - aircraft:new - New aircraft detected
     - aircraft:update - Aircraft position/state changed
+    - aircraft:delta - Delta updates with only changed fields
     - aircraft:remove - Aircraft no longer tracked
     - aircraft:heartbeat - Periodic count update
 
@@ -32,14 +59,27 @@ class AircraftConsumer(BaseConsumer):
     - aircraft - All aircraft updates
     - stats - Filtered statistics
     - all - Combined feed
+
+    RPi Optimizations:
+    - Rate limiting enabled to reduce bandwidth
+    - Message batching enabled for high-frequency updates
+    - Delta updates to send only changed fields
     """
 
     group_name_prefix = 'aircraft'
     supported_topics = ['aircraft', 'stats', 'all']
 
+    # Enable RPi optimizations for this high-traffic consumer
+    enable_rate_limiting = True
+    enable_batching = True
+
+    # Fields to track for delta updates
+    DELTA_FIELDS = ['lat', 'lon', 'alt', 'alt_baro', 'track', 'gs', 'vr', 'baro_rate', 'squawk']
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.client_filters = {}
+        self._previous_aircraft_state: dict = {}  # For delta tracking
 
     async def receive_json(self, content):
         """Handle incoming JSON messages with aircraft-specific actions."""
@@ -549,9 +589,9 @@ class AircraftConsumer(BaseConsumer):
     @database_sync_to_async
     def get_sightings(self, params: dict):
         """Get historical sightings."""
-        hours = int(params.get('hours', 24))
-        limit = min(int(params.get('limit', 100)), 500)
-        offset = int(params.get('offset', 0))
+        hours = _parse_int_param(params.get('hours'), 24, min_val=1, max_val=720)
+        limit = _parse_int_param(params.get('limit'), 100, min_val=1, max_val=500)
+        offset = _parse_int_param(params.get('offset'), 0, min_val=0)
         icao_hex = params.get('icao_hex')
         callsign = params.get('callsign')
 
@@ -580,7 +620,7 @@ class AircraftConsumer(BaseConsumer):
     @database_sync_to_async
     def get_history_stats(self, params: dict):
         """Get history statistics."""
-        hours = int(params.get('hours', 24))
+        hours = _parse_int_param(params.get('hours'), 24, min_val=1, max_val=720)
         military_only = params.get('military_only', False)
 
         cutoff = timezone.now() - timedelta(hours=hours)
@@ -607,7 +647,7 @@ class AircraftConsumer(BaseConsumer):
     @database_sync_to_async
     def get_history_trends(self, params: dict):
         """Get traffic trends."""
-        hours = int(params.get('hours', 24))
+        hours = _parse_int_param(params.get('hours'), 24, min_val=1, max_val=720)
         military_only = params.get('military_only', False)
 
         cutoff = timezone.now() - timedelta(hours=hours)
@@ -632,8 +672,8 @@ class AircraftConsumer(BaseConsumer):
     @database_sync_to_async
     def get_history_top(self, params: dict):
         """Get top performers."""
-        hours = int(params.get('hours', 24))
-        limit = min(int(params.get('limit', 10)), 50)
+        hours = _parse_int_param(params.get('hours'), 24, min_val=1, max_val=720)
+        limit = _parse_int_param(params.get('limit'), 10, min_val=1, max_val=50)
 
         cutoff = timezone.now() - timedelta(hours=hours)
         sessions = AircraftSession.objects.filter(last_seen__gte=cutoff)
@@ -661,8 +701,8 @@ class AircraftConsumer(BaseConsumer):
     @database_sync_to_async
     def get_history_sessions(self, params: dict):
         """Get aircraft sessions."""
-        hours = int(params.get('hours', 24))
-        limit = min(int(params.get('limit', 50)), 200)
+        hours = _parse_int_param(params.get('hours'), 24, min_val=1, max_val=720)
+        limit = _parse_int_param(params.get('limit'), 50, min_val=1, max_val=200)
         icao_hex = params.get('icao_hex')
 
         cutoff = timezone.now() - timedelta(hours=hours)
@@ -686,7 +726,7 @@ class AircraftConsumer(BaseConsumer):
     @database_sync_to_async
     def get_distance_analytics(self, params: dict):
         """Get distance analytics."""
-        hours = int(params.get('hours', 24))
+        hours = _parse_int_param(params.get('hours'), 24, min_val=1, max_val=720)
         cutoff = timezone.now() - timedelta(hours=hours)
 
         sessions = AircraftSession.objects.filter(
@@ -723,7 +763,7 @@ class AircraftConsumer(BaseConsumer):
     @database_sync_to_async
     def get_speed_analytics(self, params: dict):
         """Get speed analytics."""
-        hours = int(params.get('hours', 24))
+        hours = _parse_int_param(params.get('hours'), 24, min_val=1, max_val=720)
         cutoff = timezone.now() - timedelta(hours=hours)
 
         sightings = AircraftSighting.objects.filter(
@@ -732,7 +772,8 @@ class AircraftConsumer(BaseConsumer):
             ground_speed__gt=0
         )
 
-        speeds = list(sightings.values_list('ground_speed', flat=True)[:5000])
+        # Limit to 1000 rows to reduce memory usage; add pagination if larger datasets needed
+        speeds = list(sightings.values_list('ground_speed', flat=True)[:1000])
 
         distribution = {
             '0-100kt': sum(1 for s in speeds if s < 100),
@@ -761,7 +802,7 @@ class AircraftConsumer(BaseConsumer):
     @database_sync_to_async
     def get_correlation_analytics(self, params: dict):
         """Get correlation analytics."""
-        hours = int(params.get('hours', 24))
+        hours = _parse_int_param(params.get('hours'), 24, min_val=1, max_val=720)
         cutoff = timezone.now() - timedelta(hours=hours)
 
         sightings = AircraftSighting.objects.filter(timestamp__gte=cutoff)
@@ -809,7 +850,7 @@ class AircraftConsumer(BaseConsumer):
     @database_sync_to_async
     def get_antenna_polar(self, params: dict):
         """Get antenna polar coverage data."""
-        hours = int(params.get('hours', 24))
+        hours = _parse_int_param(params.get('hours'), 24, min_val=1, max_val=720)
         cutoff = timezone.now() - timedelta(hours=hours)
 
         sightings = AircraftSighting.objects.filter(
@@ -847,8 +888,8 @@ class AircraftConsumer(BaseConsumer):
     @database_sync_to_async
     def get_antenna_rssi(self, params: dict):
         """Get RSSI vs distance data."""
-        hours = int(params.get('hours', 24))
-        sample_size = min(int(params.get('sample_size', 500)), 1000)
+        hours = _parse_int_param(params.get('hours'), 24, min_val=1, max_val=720)
+        sample_size = _parse_int_param(params.get('sample_size'), 500, min_val=1, max_val=1000)
         cutoff = timezone.now() - timedelta(hours=hours)
 
         sightings = AircraftSighting.objects.filter(
@@ -858,7 +899,8 @@ class AircraftConsumer(BaseConsumer):
             distance_nm__gt=0
         )
 
-        scatter_data = list(sightings.order_by('?').values(
+        # Use deterministic ordering to avoid full table scan from order_by('?')
+        scatter_data = list(sightings.order_by('-timestamp').values(
             'distance_nm', 'rssi', 'altitude_baro', 'icao_hex'
         )[:sample_size])
 
@@ -878,7 +920,7 @@ class AircraftConsumer(BaseConsumer):
     @database_sync_to_async
     def get_antenna_summary(self, params: dict):
         """Get antenna performance summary."""
-        hours = int(params.get('hours', 24))
+        hours = _parse_int_param(params.get('hours'), 24, min_val=1, max_val=720)
         cutoff = timezone.now() - timedelta(hours=hours)
 
         sightings = AircraftSighting.objects.filter(
@@ -915,15 +957,14 @@ class AircraftConsumer(BaseConsumer):
             'hours': hours
         }
 
-    @database_sync_to_async
-    def get_antenna_analytics(self, params: dict):
+    async def get_antenna_analytics(self, params: dict):
         """Get all antenna analytics combined."""
-        hours = int(params.get('hours', 24))
+        hours = _parse_int_param(params.get('hours'), 24, min_val=1, max_val=720)
 
-        # Get all three in one call
-        polar_data = self._get_polar_sync(hours)
-        rssi_data = self._get_rssi_sync(hours)
-        summary_data = self._get_summary_sync(hours)
+        # Wrap sync DB calls with sync_to_async to avoid blocking async context
+        polar_data = await sync_to_async(self._get_polar_sync)(hours)
+        rssi_data = await sync_to_async(self._get_rssi_sync)(hours)
+        summary_data = await sync_to_async(self._get_summary_sync)(hours)
 
         return {
             'polar': polar_data,
@@ -954,7 +995,8 @@ class AircraftConsumer(BaseConsumer):
             timestamp__gte=cutoff,
             rssi__isnull=False,
             distance_nm__isnull=False
-        ).order_by('?').values('distance_nm', 'rssi')[:200])
+        # Use deterministic ordering to avoid full table scan from order_by('?')
+        ).order_by('-timestamp').values('distance_nm', 'rssi')[:200])
 
     def _get_summary_sync(self, hours):
         """Synchronous summary data fetch."""
@@ -1048,7 +1090,7 @@ class AircraftConsumer(BaseConsumer):
         lat = params.get('lat', settings.FEEDER_LAT)
         lon = params.get('lon', settings.FEEDER_LON)
         radius_nm = params.get('radius', params.get('radius_nm', 50))
-        limit = min(int(params.get('limit', 20)), 100)
+        limit = _parse_int_param(params.get('limit'), 20, min_val=1, max_val=100)
 
         lat_delta = radius_nm / 60
         lon_delta = radius_nm / 60
@@ -1081,7 +1123,7 @@ class AircraftConsumer(BaseConsumer):
         lat = params.get('lat', settings.FEEDER_LAT)
         lon = params.get('lon', settings.FEEDER_LON)
         radius_nm = params.get('radius', params.get('radius_nm', 100))
-        limit = min(int(params.get('limit', 50)), 200)
+        limit = _parse_int_param(params.get('limit'), 50, min_val=1, max_val=200)
 
         lat_delta = radius_nm / 60
         lon_delta = radius_nm / 60
@@ -1146,8 +1188,8 @@ class AircraftConsumer(BaseConsumer):
         """Get recent safety events."""
         from skyspy.models import SafetyEvent
 
-        hours = int(params.get('hours', 24))
-        limit = min(int(params.get('limit', 50)), 200)
+        hours = _parse_int_param(params.get('hours'), 24, min_val=1, max_val=720)
+        limit = _parse_int_param(params.get('limit'), 50, min_val=1, max_val=200)
         cutoff = timezone.now() - timedelta(hours=hours)
 
         events = SafetyEvent.objects.filter(timestamp__gte=cutoff).order_by('-timestamp')[:limit]
@@ -1237,3 +1279,43 @@ class AircraftConsumer(BaseConsumer):
             'type': 'stats:update',
             'data': event['data']
         })
+
+    async def aircraft_delta(self, event):
+        """Handle delta update broadcast (RPi optimization)."""
+        await self.send_json({
+            'type': 'aircraft:delta',
+            'data': event['data']
+        })
+
+    def _compute_delta(self, icao: str, current: dict) -> Optional[dict]:
+        """
+        Compute delta (changed fields only) for an aircraft.
+
+        Returns None if no changes, otherwise returns dict with changed fields.
+        """
+        previous = self._previous_aircraft_state.get(icao)
+
+        if previous is None:
+            # First time seeing this aircraft, store and return None (send full update)
+            self._previous_aircraft_state[icao] = current.copy()
+            return None
+
+        changes = {}
+        for field in self.DELTA_FIELDS:
+            curr_val = current.get(field)
+            prev_val = previous.get(field)
+            if curr_val != prev_val:
+                changes[field] = curr_val
+
+        # Update stored state
+        self._previous_aircraft_state[icao] = current.copy()
+
+        if changes:
+            return {'hex': icao, 'changes': changes}
+        return None
+
+    def _cleanup_delta_state(self, active_icaos: set):
+        """Remove stale aircraft from delta tracking state."""
+        stale = set(self._previous_aircraft_state.keys()) - active_icaos
+        for icao in stale:
+            self._previous_aircraft_state.pop(icao, None)

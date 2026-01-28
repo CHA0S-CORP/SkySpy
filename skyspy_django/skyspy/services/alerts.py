@@ -17,6 +17,9 @@ from datetime import datetime
 from typing import Optional, List
 
 from django.utils import timezone
+
+# Maximum allowed regex pattern length to prevent ReDoS attacks
+MAX_REGEX_PATTERN_LENGTH = 500
 from channels.layers import get_channel_layer
 
 from skyspy.models import AlertRule, AlertHistory, NotificationConfig, NotificationLog, NotificationChannel
@@ -237,9 +240,19 @@ class AlertService:
             elif operator == 'endswith':
                 return str(ac_value).upper().endswith(rule_value.upper())
             elif operator == 'regex':
+                # Validate regex pattern length to prevent ReDoS
+                if len(rule_value) > MAX_REGEX_PATTERN_LENGTH:
+                    logger.warning(f"Regex pattern too long ({len(rule_value)} chars), skipping")
+                    return False
                 if compiled_regex:
                     return bool(compiled_regex.match(str(ac_value)))
-                return bool(re.match(rule_value, str(ac_value), re.IGNORECASE))
+                # Compile with error handling for invalid patterns
+                try:
+                    pattern = re.compile(rule_value, re.IGNORECASE)
+                    return bool(pattern.match(str(ac_value)))
+                except re.error as e:
+                    logger.warning(f"Invalid regex pattern '{rule_value[:50]}...': {e}")
+                    return False
             else:
                 return False
         except (ValueError, TypeError):

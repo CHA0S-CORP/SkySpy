@@ -66,6 +66,8 @@ export default defineConfig({
   outputDir: 'test-results',
 
   // Configure projects for major browsers
+  // Note: Only Chromium is enabled by default. To test other browsers,
+  // install them with: npx playwright install firefox webkit
   projects: [
     {
       name: 'chromium',
@@ -73,35 +75,31 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
       },
     },
-
-    {
-      name: 'firefox',
-      use: {
-        ...devices['Desktop Firefox'],
-      },
-    },
-
-    {
-      name: 'webkit',
-      use: {
-        ...devices['Desktop Safari'],
-      },
-    },
-
-    // Mobile viewports for responsive testing
-    {
-      name: 'mobile-chrome',
-      use: {
-        ...devices['Pixel 5'],
-      },
-    },
-
-    {
-      name: 'mobile-safari',
-      use: {
-        ...devices['iPhone 12'],
-      },
-    },
+    // Uncomment to enable Firefox/WebKit testing (requires: npx playwright install)
+    // {
+    //   name: 'firefox',
+    //   use: {
+    //     ...devices['Desktop Firefox'],
+    //   },
+    // },
+    // {
+    //   name: 'webkit',
+    //   use: {
+    //     ...devices['Desktop Safari'],
+    //   },
+    // },
+    // {
+    //   name: 'mobile-chrome',
+    //   use: {
+    //     ...devices['Pixel 5'],
+    //   },
+    // },
+    // {
+    //   name: 'mobile-safari',
+    //   use: {
+    //     ...devices['iPhone 12'],
+    //   },
+    // },
   ],
 
   // Run your local dev server before starting the tests

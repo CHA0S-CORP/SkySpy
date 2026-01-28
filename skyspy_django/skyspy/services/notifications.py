@@ -7,9 +7,12 @@ Supports:
 - Cooldown tracking to prevent spam
 - Database configuration and logging
 """
+import ipaddress
 import logging
+import threading
 import time
 from typing import Optional
+from urllib.parse import urlparse
 
 import apprise
 from django.conf import settings
@@ -21,6 +24,67 @@ logger = logging.getLogger(__name__)
 
 # Cooldown tracking (in-memory for performance)
 _notification_cooldown: dict[str, float] = {}
+_notification_cooldown_lock = threading.Lock()
+
+# Private/internal IP ranges that should be blocked for SSRF prevention
+_BLOCKED_IP_RANGES = [
+    ipaddress.ip_network('127.0.0.0/8'),      # Loopback
+    ipaddress.ip_network('10.0.0.0/8'),       # Private Class A
+    ipaddress.ip_network('172.16.0.0/12'),    # Private Class B
+    ipaddress.ip_network('192.168.0.0/16'),   # Private Class C
+    ipaddress.ip_network('169.254.0.0/16'),   # Link-local
+    ipaddress.ip_network('::1/128'),          # IPv6 loopback
+    ipaddress.ip_network('fc00::/7'),         # IPv6 private
+    ipaddress.ip_network('fe80::/10'),        # IPv6 link-local
+]
+
+
+def _is_safe_url(url: str) -> bool:
+    """
+    Validate that a URL is safe to use as a webhook destination.
+
+    Checks:
+    - URL scheme is http or https
+    - Host is not a private/internal IP address (SSRF prevention)
+
+    Args:
+        url: The URL to validate
+
+    Returns:
+        True if the URL is safe, False otherwise
+    """
+    try:
+        parsed = urlparse(url)
+
+        # Only allow http and https schemes
+        if parsed.scheme not in ('http', 'https'):
+            logger.warning(f"Blocked URL with invalid scheme: {parsed.scheme}")
+            return False
+
+        # Check if hostname is present
+        if not parsed.hostname:
+            logger.warning("Blocked URL with no hostname")
+            return False
+
+        # Try to parse the hostname as an IP address
+        try:
+            ip = ipaddress.ip_address(parsed.hostname)
+            # Check against blocked ranges
+            for blocked_range in _BLOCKED_IP_RANGES:
+                if ip in blocked_range:
+                    logger.warning(f"Blocked URL targeting private IP: {parsed.hostname}")
+                    return False
+        except ValueError:
+            # Not an IP address, it's a hostname - that's fine
+            # Note: We don't resolve DNS here to avoid blocking,
+            # but this could be enhanced with async DNS resolution
+            pass
+
+        return True
+
+    except Exception as e:
+        logger.warning(f"URL validation error: {e}")
+        return False
 
 
 class NotificationManager:
@@ -66,7 +130,8 @@ class NotificationManager:
             cooldown = getattr(settings, 'NOTIFICATION_COOLDOWN', 300)
 
         now = time.time()
-        last_sent = _notification_cooldown.get(key, 0)
+        with _notification_cooldown_lock:
+            last_sent = _notification_cooldown.get(key, 0)
         return (now - last_sent) > cooldown
 
     def send(
@@ -111,6 +176,10 @@ class NotificationManager:
         # Use per-rule API URL if provided
         notifier = self.apprise
         if api_url:
+            # Validate URL before using it (SSRF prevention)
+            if not _is_safe_url(api_url):
+                logger.warning(f"Blocked unsafe webhook URL: {api_url[:100]}")
+                return False
             notifier = apprise.Apprise()
             notifier.add(api_url)
         elif not self.apprise.servers:
@@ -132,7 +201,8 @@ class NotificationManager:
             result = notifier.notify(title=title, body=body, notify_type=apprise_type)
 
             if result:
-                _notification_cooldown[cooldown_key] = time.time()
+                with _notification_cooldown_lock:
+                    _notification_cooldown[cooldown_key] = time.time()
 
                 # Log notification
                 try:
@@ -173,11 +243,13 @@ class NotificationManager:
             enabled = True
             cooldown = 300
 
+        with _notification_cooldown_lock:
+            active_cooldowns = len(_notification_cooldown)
         return {
             'enabled': enabled,
             'server_count': self.server_count,
             'cooldown_seconds': cooldown,
-            'active_cooldowns': len(_notification_cooldown),
+            'active_cooldowns': active_cooldowns,
         }
 
 
@@ -254,8 +326,9 @@ def cleanup_cooldowns():
     now = time.time()
     # Default cooldown is 5 minutes, keep entries for 2x that
     cutoff = now - 600
-    stale_keys = [k for k, v in _notification_cooldown.items() if v < cutoff]
-    for k in stale_keys:
-        _notification_cooldown.pop(k, None)
+    with _notification_cooldown_lock:
+        stale_keys = [k for k, v in _notification_cooldown.items() if v < cutoff]
+        for k in stale_keys:
+            _notification_cooldown.pop(k, None)
     if stale_keys:
         logger.debug(f"Cleaned up {len(stale_keys)} cooldown entries")

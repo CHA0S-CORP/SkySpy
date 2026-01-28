@@ -16,6 +16,10 @@ Update Intervals:
 - Aircraft stats: Updated from polling loop
 - History stats: 60 seconds
 - Safety stats: 30 seconds
+
+RPi Optimizations:
+- Lite mode: Sample data instead of processing all records
+- Configurable sample size via MAX_STATS_SAMPLE_SIZE setting
 """
 import logging
 from datetime import datetime, timedelta
@@ -29,6 +33,45 @@ from django.db.models.functions import TruncHour, TruncDay, ExtractHour, Extract
 from django.utils import timezone
 
 from skyspy.models import AircraftSighting, AircraftSession, SafetyEvent, AircraftInfo, AircraftFavorite
+
+
+# =============================================================================
+# RPi Optimization: Lite Mode Configuration
+# =============================================================================
+# When RPI_LITE_MODE is enabled, stats calculations will sample data
+# instead of processing all records, reducing CPU and memory usage.
+
+RPI_LITE_MODE = getattr(settings, 'RPI_LITE_MODE', False)
+MAX_STATS_SAMPLE_SIZE = getattr(settings, 'MAX_STATS_SAMPLE_SIZE', 5000)
+
+
+def _apply_lite_mode_sampling(queryset, sample_size: int = None):
+    """
+    Apply sampling to queryset if lite mode is enabled.
+
+    In lite mode, limits the queryset to a sample for faster calculations.
+    Uses timestamp-based ordering for representative sampling.
+
+    Args:
+        queryset: Django QuerySet to sample
+        sample_size: Maximum records to process (default: MAX_STATS_SAMPLE_SIZE)
+
+    Returns:
+        Sampled QuerySet if lite mode enabled, original otherwise
+    """
+    if not RPI_LITE_MODE:
+        return queryset
+
+    size = sample_size or MAX_STATS_SAMPLE_SIZE
+
+    # Use timestamp-based ordering for more representative sampling
+    # (avoids random ordering which is slow on large tables)
+    count = queryset.count()
+    if count <= size:
+        return queryset
+
+    logger.debug(f"Lite mode: sampling {size} from {count} records")
+    return queryset.order_by('-timestamp')[:size]
 
 class ExtractEpoch(Extract):
     lookup_name = "epoch"
@@ -1279,7 +1322,9 @@ def calculate_tracking_quality_stats(hours: int = 24) -> dict:
     quality_grades = {'excellent': 0, 'good': 0, 'fair': 0, 'poor': 0}
     session_details = []
 
-    for session in sessions[:1000]:  # Limit for performance
+    # RPi optimization: Use configurable sample size
+    sample_size = MAX_STATS_SAMPLE_SIZE if RPI_LITE_MODE else 1000
+    for session in sessions[:sample_size]:
         duration_min = session.duration_seconds / 60
         if duration_min > 0:
             rate = session.total_positions / duration_min

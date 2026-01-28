@@ -3,6 +3,7 @@ WebSocket consumer for NOTAM (Notices to Air Missions) updates.
 
 Provides real-time NOTAM and TFR updates to connected clients.
 """
+import asyncio
 import logging
 from datetime import datetime
 from channels.db import database_sync_to_async
@@ -39,10 +40,12 @@ class NotamConsumer(BaseConsumer):
     async def send_initial_state(self):
         """Send current active NOTAMs to newly connected client."""
         try:
-            # Get active NOTAMs from cache or database
-            notams = await self._get_active_notams()
-            tfrs = await self._get_active_tfrs()
-            stats = await self._get_notam_stats()
+            # Fetch notams, tfrs, and stats concurrently
+            notams, tfrs, stats = await asyncio.gather(
+                self._get_active_notams(),
+                self._get_active_tfrs(),
+                self._get_notam_stats()
+            )
 
             await self.send_json({
                 'type': 'notams:snapshot',

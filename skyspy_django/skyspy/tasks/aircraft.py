@@ -1,5 +1,9 @@
 """
 Aircraft polling and session management tasks.
+
+Includes RPi optimizations:
+- Configurable seen aircraft cache size
+- Proactive cleanup when approaching limits
 """
 import logging
 import time
@@ -19,8 +23,9 @@ from skyspy.utils import sync_group_send
 logger = logging.getLogger(__name__)
 
 # Track seen aircraft for queuing new lookups
+# RPi optimization: Reduced from 10000 via settings.MAX_SEEN_AIRCRAFT
 _seen_aircraft: set = set()
-_seen_aircraft_max = 10000  # Max size to prevent memory issues
+_seen_aircraft_max = getattr(settings, 'MAX_SEEN_AIRCRAFT', 10000)
 
 # Track previous aircraft for change detection
 _previous_aircraft: dict = {}  # icao -> aircraft data
@@ -32,10 +37,19 @@ def queue_new_aircraft_for_lookup(aircraft_list: list):
     Check for new aircraft and queue them for background info lookup.
 
     Maintains a set of seen aircraft to avoid redundant lookups.
+    RPi optimization: Proactively clears at 80% capacity to avoid sudden memory spikes.
     """
     global _seen_aircraft
 
-    # Clear if too large
+    # Proactive cleanup at 80% capacity (RPi optimization)
+    if len(_seen_aircraft) > _seen_aircraft_max * 0.8:
+        # Remove random 50% to maintain some history
+        items_to_keep = list(_seen_aircraft)[:len(_seen_aircraft) // 2]
+        _seen_aircraft.clear()
+        _seen_aircraft.update(items_to_keep)
+        logger.info(f"Proactively trimmed seen aircraft cache to {len(_seen_aircraft)} entries")
+
+    # Hard clear if still too large
     if len(_seen_aircraft) > _seen_aircraft_max:
         _seen_aircraft.clear()
         logger.info("Cleared seen aircraft cache")

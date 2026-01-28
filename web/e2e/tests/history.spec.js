@@ -20,7 +20,7 @@ test.describe('History View', () => {
   test.describe('Basic Rendering', () => {
     test('history view loads successfully', async ({ page }) => {
       await page.goto('/#history');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       const hash = await page.evaluate(() => window.location.hash);
       expect(hash).toBe('#history');
@@ -30,7 +30,7 @@ test.describe('History View', () => {
 
     test('sidebar is visible', async ({ page }) => {
       await page.goto('/#history');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       await expect(page.locator('.sidebar')).toBeVisible({ timeout: 10000 });
     });
@@ -39,7 +39,8 @@ test.describe('History View', () => {
   test.describe('Navigation', () => {
     test('can navigate to map view', async ({ page }) => {
       await page.goto('/#history');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.sidebar')).toBeVisible({ timeout: 10000 });
 
       await page.click('.nav-item:has-text("Live Map")');
       await page.waitForURL(/#map/);
@@ -50,7 +51,8 @@ test.describe('History View', () => {
 
     test('can navigate to aircraft list', async ({ page }) => {
       await page.goto('/#history');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.sidebar')).toBeVisible({ timeout: 10000 });
 
       await page.click('.nav-item:has-text("Aircraft List")');
       await page.waitForURL(/#aircraft/);
@@ -64,7 +66,7 @@ test.describe('History View', () => {
     test('renders correctly on mobile viewport', async ({ page }) => {
       await page.setViewportSize({ width: 375, height: 667 });
       await page.goto('/#history');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
     });

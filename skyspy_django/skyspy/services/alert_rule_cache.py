@@ -123,11 +123,13 @@ class CompiledRule:
     @classmethod
     def from_db_rule(cls, rule) -> 'CompiledRule':
         """Create a CompiledRule from a database AlertRule instance."""
-        # Determine optimization hints
-        requires_military = False
-        requires_position = False
-        requires_altitude = False
-        requires_speed = False
+        # Determine optimization hints using mutable dict
+        flags = {
+            'military': False,
+            'position': False,
+            'altitude': False,
+            'speed': False,
+        }
         target_icao = None
         target_callsign_prefix = None
         target_squawk = None
@@ -136,13 +138,13 @@ class CompiledRule:
         # Analyze simple rule type
         if rule.rule_type:
             if rule.rule_type == 'military':
-                requires_military = True
+                flags['military'] = True
             elif rule.rule_type == 'distance':
-                requires_position = True
+                flags['position'] = True
             elif rule.rule_type == 'altitude':
-                requires_altitude = True
+                flags['altitude'] = True
             elif rule.rule_type in ('speed', 'vertical_rate'):
-                requires_speed = True
+                flags['speed'] = True
             elif rule.rule_type == 'icao' and rule.operator == 'eq':
                 target_icao = (rule.value or '').upper()
             elif rule.rule_type == 'squawk' and rule.operator == 'eq':
@@ -160,11 +162,7 @@ class CompiledRule:
 
         # Analyze complex conditions
         if rule.conditions:
-            cls._analyze_conditions(
-                rule.conditions,
-                requires_military, requires_position,
-                requires_altitude, requires_speed
-            )
+            cls._analyze_conditions(rule.conditions, flags)
 
         # Get visibility with fallback for old rules
         visibility = getattr(rule, 'visibility', 'private')
@@ -185,10 +183,10 @@ class CompiledRule:
             is_system=is_system,
             starts_at=rule.starts_at,
             expires_at=rule.expires_at,
-            requires_military=requires_military,
-            requires_position=requires_position,
-            requires_altitude=requires_altitude,
-            requires_speed=requires_speed,
+            requires_military=flags['military'],
+            requires_position=flags['position'],
+            requires_altitude=flags['altitude'],
+            requires_speed=flags['speed'],
             target_icao=target_icao,
             target_callsign_prefix=target_callsign_prefix,
             target_squawk=target_squawk,
@@ -196,7 +194,7 @@ class CompiledRule:
         )
 
     @staticmethod
-    def _analyze_conditions(conditions: dict, *flags) -> None:
+    def _analyze_conditions(conditions: dict, flags: Dict[str, bool]) -> None:
         """Analyze complex conditions for optimization hints."""
         # This is a simplified analysis - full implementation would
         # recursively check all nested conditions
@@ -205,13 +203,13 @@ class CompiledRule:
             for cond in group.get('conditions', []):
                 cond_type = cond.get('type')
                 if cond_type == 'military':
-                    flags[0] = True  # requires_military
+                    flags['military'] = True
                 elif cond_type == 'distance':
-                    flags[1] = True  # requires_position
+                    flags['position'] = True
                 elif cond_type == 'altitude':
-                    flags[2] = True  # requires_altitude
+                    flags['altitude'] = True
                 elif cond_type in ('speed', 'vertical_rate'):
-                    flags[3] = True  # requires_speed
+                    flags['speed'] = True
 
 
 class AlertRuleCache:

@@ -256,18 +256,21 @@ class GamificationService:
     ) -> Optional[dict]:
         """Check if value beats existing record and update if so."""
         try:
-            existing = PersonalRecord.objects.filter(record_type=record_type).first()
+            with transaction.atomic():
+                # Lock the row during check-then-act to prevent race conditions
+                existing = PersonalRecord.objects.select_for_update().filter(
+                    record_type=record_type
+                ).first()
 
-            is_new_record = False
-            if existing is None:
-                is_new_record = True
-            elif lower_is_better:
-                is_new_record = value < existing.value
-            else:
-                is_new_record = value > existing.value
+                is_new_record = False
+                if existing is None:
+                    is_new_record = True
+                elif lower_is_better:
+                    is_new_record = value < existing.value
+                else:
+                    is_new_record = value > existing.value
 
-            if is_new_record:
-                with transaction.atomic():
+                if is_new_record:
                     if existing:
                         # Store previous record info
                         previous_value = existing.value
@@ -545,31 +548,34 @@ class GamificationService:
         try:
             # Check if we've already recorded this exact sighting type for this aircraft recently
             recent_cutoff = timezone.now() - timedelta(hours=24)
-            existing = RareSighting.objects.filter(
-                icao_hex=session.icao_hex,
-                rarity_type=rarity_type,
-                sighted_at__gte=recent_cutoff
-            ).first()
 
-            if existing:
-                # Update times_seen and last_seen
-                existing.times_seen += 1
-                existing.last_seen = timezone.now()
-                existing.save()
-                return None
+            with transaction.atomic():
+                # Lock the row during check-then-act to prevent race conditions
+                existing = RareSighting.objects.select_for_update().filter(
+                    icao_hex=session.icao_hex,
+                    rarity_type=rarity_type,
+                    sighted_at__gte=recent_cutoff
+                ).first()
 
-            sighting = RareSighting.objects.create(
-                rarity_type=rarity_type,
-                icao_hex=session.icao_hex,
-                callsign=session.callsign,
-                registration=aircraft_info.registration if aircraft_info else None,
-                aircraft_type=session.aircraft_type or (aircraft_info.type_code if aircraft_info else None),
-                operator=aircraft_info.operator if aircraft_info else None,
-                sighted_at=timezone.now(),
-                session_id=session.id,
-                description=description,
-                rarity_score=rarity_score,
-            )
+                if existing:
+                    # Update times_seen and last_seen
+                    existing.times_seen += 1
+                    existing.last_seen = timezone.now()
+                    existing.save()
+                    return None
+
+                sighting = RareSighting.objects.create(
+                    rarity_type=rarity_type,
+                    icao_hex=session.icao_hex,
+                    callsign=session.callsign,
+                    registration=aircraft_info.registration if aircraft_info else None,
+                    aircraft_type=session.aircraft_type or (aircraft_info.type_code if aircraft_info else None),
+                    operator=aircraft_info.operator if aircraft_info else None,
+                    sighted_at=timezone.now(),
+                    session_id=session.id,
+                    description=description,
+                    rarity_score=rarity_score,
+                )
 
             return {
                 'id': sighting.id,
@@ -1040,14 +1046,18 @@ class GamificationService:
             total_sessions = sessions.count()
             total_positions = sessions.aggregate(total=Sum('total_positions'))['total'] or 0
 
-            # Count new aircraft (first ever seen)
+            # Count new aircraft (first ever seen) - batch query to avoid N+1
             day_hexes = list(sessions.values_list('icao_hex', flat=True).distinct())
-            new_aircraft = 0
-            for hex_code in day_hexes:
-                # Check if this hex was first seen on this day
-                spotted = SpottedAircraft.objects.filter(icao_hex=hex_code).first()
-                if spotted and spotted.first_seen and spotted.first_seen.date() == for_date:
-                    new_aircraft += 1
+            # Batch fetch all SpottedAircraft records for these hexes
+            spotted_map = {
+                s.icao_hex: s.first_seen
+                for s in SpottedAircraft.objects.filter(icao_hex__in=day_hexes)
+                if s.first_seen
+            }
+            new_aircraft = sum(
+                1 for hex_code in day_hexes
+                if hex_code in spotted_map and spotted_map[hex_code].date() == for_date
+            )
 
             # Get maximums
             max_distance = sessions.aggregate(max=Max('max_distance_nm'))['max']
@@ -1068,16 +1078,20 @@ class GamificationService:
             ).order_by('-count')[:20]
             aircraft_types = {t['aircraft_type']: t['count'] for t in type_counts}
 
-            # Operator counts (from aircraft info)
+            # Operator counts (from aircraft info) - batch query to avoid N+1
+            session_icaos = list(sessions.values_list('icao_hex', flat=True))
+            # Batch fetch all AircraftInfo records for these ICAOs
+            info_map = {
+                info.icao_hex: info.operator
+                for info in AircraftInfo.objects.filter(icao_hex__in=session_icaos)
+                if info.operator
+            }
+            # Count operators using the pre-fetched data
             operator_counts = {}
-            for session in sessions:
-                try:
-                    info = AircraftInfo.objects.get(icao_hex=session.icao_hex)
-                    if info.operator:
-                        operator_counts[info.operator] = operator_counts.get(info.operator, 0) + 1
-                except AircraftInfo.DoesNotExist:
-                    # Expected for aircraft without cached info
-                    continue
+            for icao in session_icaos:
+                operator = info_map.get(icao)
+                if operator:
+                    operator_counts[operator] = operator_counts.get(operator, 0) + 1
 
             # Sort and limit operators
             operators = dict(sorted(operator_counts.items(), key=lambda x: x[1], reverse=True)[:20])

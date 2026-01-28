@@ -19,7 +19,7 @@ test.describe('Map View', () => {
   test.describe('Basic Rendering', () => {
     test('map view loads successfully', async ({ page }) => {
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       // Verify we're on the map view
       const hash = await page.evaluate(() => window.location.hash);
@@ -31,7 +31,7 @@ test.describe('Map View', () => {
 
     test('sidebar navigation is visible', async ({ page }) => {
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       // Sidebar should be visible
       const sidebar = page.locator('.sidebar');
@@ -40,7 +40,7 @@ test.describe('Map View', () => {
 
     test('header is displayed', async ({ page }) => {
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       // Header should be visible
       const header = page.locator('.header');
@@ -51,7 +51,8 @@ test.describe('Map View', () => {
   test.describe('Navigation', () => {
     test('can navigate to aircraft list', async ({ page, helpers }) => {
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.sidebar')).toBeVisible({ timeout: 10000 });
 
       // Click on Aircraft tab in sidebar
       await page.click('.nav-item:has-text("Aircraft List")');
@@ -64,7 +65,8 @@ test.describe('Map View', () => {
 
     test('can navigate to alerts', async ({ page }) => {
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.sidebar')).toBeVisible({ timeout: 10000 });
 
       // Click on Alerts tab in sidebar
       await page.click('.nav-item:has-text("Alerts")');
@@ -77,7 +79,8 @@ test.describe('Map View', () => {
 
     test('can navigate to stats', async ({ page }) => {
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.sidebar')).toBeVisible({ timeout: 10000 });
 
       // Click on Stats tab in sidebar
       await page.click('.nav-item:has-text("Statistics")');
@@ -92,7 +95,8 @@ test.describe('Map View', () => {
   test.describe('Settings Modal', () => {
     test('settings modal can be opened and closed', async ({ page }) => {
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
       // Click settings button (usually in header or sidebar)
       const settingsBtn = page.locator('button:has-text("Settings"), .settings-btn, [aria-label="Settings"]').first();
@@ -117,7 +121,8 @@ test.describe('Map View', () => {
     test('mobile menu toggle appears on small screens', async ({ page }) => {
       await page.setViewportSize({ width: 375, height: 667 });
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
       // Mobile menu toggle should be visible
       const mobileToggle = page.locator('.mobile-menu-toggle');

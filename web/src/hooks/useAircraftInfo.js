@@ -158,8 +158,12 @@ export function useAircraftInfo({
       if (wsRequest && wsConnected) {
         try {
           data = await wsRequest('aircraft-info', { icao });
-          if (data?.error) {
-            // Cache error state to avoid repeated lookups
+          // Backend returns null when not found, or {error: ...} on error
+          if (!data) {
+            // Not found in database - cache as empty to avoid re-fetching
+            data = { icao_hex: icao, found: false };
+          } else if (data?.error) {
+            // Explicit error response
             if (data.error === 'not_found' || data.error_type === 'not_found') {
               data = { icao_hex: icao, found: false };
             } else {

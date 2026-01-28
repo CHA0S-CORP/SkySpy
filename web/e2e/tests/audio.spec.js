@@ -18,7 +18,7 @@ test.describe('Audio View', () => {
   test.describe('Basic Rendering', () => {
     test('audio view loads successfully', async ({ page }) => {
       await page.goto('/#audio');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       const hash = await page.evaluate(() => window.location.hash);
       expect(hash).toBe('#audio');
@@ -28,7 +28,7 @@ test.describe('Audio View', () => {
 
     test('sidebar is visible', async ({ page }) => {
       await page.goto('/#audio');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       await expect(page.locator('.sidebar')).toBeVisible({ timeout: 10000 });
     });
@@ -37,7 +37,8 @@ test.describe('Audio View', () => {
   test.describe('Navigation', () => {
     test('can navigate to map view', async ({ page }) => {
       await page.goto('/#audio');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.sidebar')).toBeVisible({ timeout: 10000 });
 
       await page.click('.nav-item:has-text("Live Map")');
       await page.waitForURL(/#map/);
@@ -48,7 +49,8 @@ test.describe('Audio View', () => {
 
     test('can navigate to aircraft list', async ({ page }) => {
       await page.goto('/#audio');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.sidebar')).toBeVisible({ timeout: 10000 });
 
       await page.click('.nav-item:has-text("Aircraft List")');
       await page.waitForURL(/#aircraft/);
@@ -62,7 +64,7 @@ test.describe('Audio View', () => {
     test('renders correctly on mobile viewport', async ({ page }) => {
       await page.setViewportSize({ width: 375, height: 667 });
       await page.goto('/#audio');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
     });

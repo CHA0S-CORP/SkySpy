@@ -30,11 +30,20 @@ BUILD_MODE = get_env('BUILD_MODE', 'False', bool)
 DEBUG = get_env('DEBUG', 'True', bool)
 
 # SECURITY WARNING: keep the secret key used in production secret!
-_DEFAULT_SECRET_KEY = 'django-insecure-skyspy-development-key-change-in-production'
-SECRET_KEY = get_env('DJANGO_SECRET_KEY', _DEFAULT_SECRET_KEY)
-
-# Fail if using default secret key in non-DEBUG mode
-if not DEBUG and SECRET_KEY == _DEFAULT_SECRET_KEY:
+_env_secret_key = get_env('DJANGO_SECRET_KEY')
+if _env_secret_key:
+    SECRET_KEY = _env_secret_key
+elif DEBUG:
+    # Only generate a random key in DEBUG mode for development convenience
+    from django.core.management.utils import get_random_secret_key
+    SECRET_KEY = get_random_secret_key()
+    warnings.warn(
+        'DJANGO_SECRET_KEY not set - using randomly generated key. '
+        'This is only acceptable in DEBUG mode.',
+        UserWarning
+    )
+else:
+    # Production mode requires an explicit secret key
     raise ImproperlyConfigured(
         'DJANGO_SECRET_KEY must be set in production (DEBUG=False). '
         'Generate a secure key with: python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"'
@@ -352,6 +361,12 @@ CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins_raw.split(',') if o.str
 # Security Headers (conditional on production mode)
 # =============================================================================
 SECURE_BROWSER_XSS_FILTER = True
+
+# Cookie security flags - always set these for protection against XSS and CSRF
+CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SAMESITE = 'Lax'
 
 if not DEBUG:
     CSRF_COOKIE_SECURE = True

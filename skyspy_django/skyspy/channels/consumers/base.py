@@ -1,9 +1,17 @@
 """
 Base WebSocket consumer with common functionality.
+
+Includes RPi optimizations:
+- Message batching: Collects messages and sends in batches
+- Rate limiting: Per-topic rate limits to reduce bandwidth
+- Delta updates: Only send changed fields (in subclasses)
 """
+import asyncio
 import json
 import logging
 import os
+import time
+from collections import deque
 from datetime import datetime
 from typing import Optional
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
@@ -15,6 +23,137 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# Rate Limiting Configuration
+# =============================================================================
+
+def _get_rate_limits():
+    """Get rate limits from settings or use defaults."""
+    return getattr(settings, 'WS_RATE_LIMITS', {
+        'aircraft:update': 10,  # Max 10 Hz
+        'aircraft:position': 5,  # Max 5 Hz
+        'aircraft:delta': 10,  # Max 10 Hz
+        'stats:update': 0.5,  # Max 0.5 Hz (2 second minimum)
+        'default': 5,  # Default rate limit
+    })
+
+
+def _get_batch_config():
+    """Get batching configuration from settings or use defaults."""
+    return {
+        'window_ms': getattr(settings, 'WS_BATCH_WINDOW_MS', 200),
+        'max_size': getattr(settings, 'WS_MAX_BATCH_SIZE', 50),
+        'immediate_types': getattr(settings, 'WS_IMMEDIATE_TYPES', ['alert', 'safety', 'emergency']),
+    }
+
+
+class RateLimiter:
+    """Per-topic rate limiter for WebSocket messages."""
+
+    def __init__(self):
+        self._last_send: dict[str, float] = {}
+        self._rate_limits = _get_rate_limits()
+
+    def can_send(self, topic: str) -> bool:
+        """Check if a message for this topic can be sent."""
+        now = time.time()
+        rate_limit = self._rate_limits.get(topic, self._rate_limits.get('default', 5))
+
+        if rate_limit <= 0:
+            return True  # No limit
+
+        min_interval = 1.0 / rate_limit
+        last_send = self._last_send.get(topic, 0)
+
+        if now - last_send >= min_interval:
+            self._last_send[topic] = now
+            return True
+        return False
+
+    def get_wait_time(self, topic: str) -> float:
+        """Get time to wait before next send is allowed."""
+        now = time.time()
+        rate_limit = self._rate_limits.get(topic, self._rate_limits.get('default', 5))
+
+        if rate_limit <= 0:
+            return 0
+
+        min_interval = 1.0 / rate_limit
+        last_send = self._last_send.get(topic, 0)
+        wait = min_interval - (now - last_send)
+        return max(0, wait)
+
+
+class MessageBatcher:
+    """Batches messages for efficient sending."""
+
+    def __init__(self, send_callback):
+        self._batch: deque = deque()
+        self._send_callback = send_callback
+        self._batch_task: Optional[asyncio.Task] = None
+        self._config = _get_batch_config()
+        self._lock = asyncio.Lock()
+
+    async def add(self, message: dict):
+        """Add a message to the batch."""
+        msg_type = message.get('type', '')
+
+        # Check if this message type should be sent immediately
+        for immediate_type in self._config['immediate_types']:
+            if immediate_type in msg_type:
+                await self._send_callback(message)
+                return
+
+        async with self._lock:
+            self._batch.append(message)
+
+            # Start batch timer if not running
+            if self._batch_task is None or self._batch_task.done():
+                self._batch_task = asyncio.create_task(self._flush_after_delay())
+
+            # Flush immediately if batch is full
+            if len(self._batch) >= self._config['max_size']:
+                if self._batch_task and not self._batch_task.done():
+                    self._batch_task.cancel()
+                await self._flush()
+
+    async def _flush_after_delay(self):
+        """Wait for batch window then flush."""
+        try:
+            await asyncio.sleep(self._config['window_ms'] / 1000.0)
+            await self._flush()
+        except asyncio.CancelledError:
+            pass
+
+    async def _flush(self):
+        """Send all batched messages."""
+        async with self._lock:
+            if not self._batch:
+                return
+
+            # Group messages by type for combined sending
+            messages = list(self._batch)
+            self._batch.clear()
+
+        if len(messages) == 1:
+            # Single message, send directly
+            await self._send_callback(messages[0])
+        else:
+            # Multiple messages, send as batch
+            await self._send_callback({
+                'type': 'batch',
+                'messages': messages,
+                'count': len(messages),
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            })
+
+    async def flush_now(self):
+        """Force flush any pending messages."""
+        if self._batch_task and not self._batch_task.done():
+            self._batch_task.cancel()
+        await self._flush()
+
+
 class BaseConsumer(AsyncJsonWebsocketConsumer):
     """
     Base WebSocket consumer providing common functionality.
@@ -24,16 +163,33 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
     - JSON message format
     - Ping/pong heartbeat
     - Error handling
+    - Rate limiting (RPi optimization)
+    - Message batching (RPi optimization)
     """
 
     # Override in subclasses
     group_name_prefix = 'base'
     supported_topics = ['all']
 
+    # Rate limiting and batching (set to True to enable)
+    enable_rate_limiting = True
+    enable_batching = False  # Disabled by default, enable in high-traffic consumers
+
     async def connect(self):
         """Handle WebSocket connection."""
         # Accept the connection
         await self.accept()
+
+        # Initialize rate limiter and batcher (RPi optimizations)
+        if self.enable_rate_limiting:
+            self._rate_limiter = RateLimiter()
+        else:
+            self._rate_limiter = None
+
+        if self.enable_batching:
+            self._message_batcher = MessageBatcher(self._send_json_direct)
+        else:
+            self._message_batcher = None
 
         # Parse query parameters for initial topics
         query_string = self.scope.get('query_string', b'').decode()
@@ -55,10 +211,20 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
 
     async def disconnect(self, close_code):
         """Handle WebSocket disconnection."""
-        # Leave all groups
-        for topic in getattr(self, 'subscribed_topics', []):
+        # Flush any pending batched messages
+        if hasattr(self, '_message_batcher') and self._message_batcher:
+            try:
+                await self._message_batcher.flush_now()
+            except Exception as e:
+                logger.debug(f"Error flushing message batch: {e}")
+
+        # Leave all groups - copy the set to avoid modification during iteration
+        for topic in list(getattr(self, 'subscribed_topics', [])):
             group_name = f"{self.group_name_prefix}_{topic}"
-            await self.channel_layer.group_discard(group_name, self.channel_name)
+            try:
+                await self.channel_layer.group_discard(group_name, self.channel_name)
+            except Exception as e:
+                logger.warning(f"Error leaving group {group_name}: {e}")
 
         logger.info(f"WebSocket disconnected: {self.channel_name}, code: {close_code}")
 
@@ -355,10 +521,13 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
         cutoff = timezone.now() - timedelta(hours=24)
         recent = SafetyEvent.objects.filter(timestamp__gte=cutoff)
 
-        by_type = {}
-        for event in recent.values('event_type').distinct():
-            et = event['event_type']
-            by_type[et] = recent.filter(event_type=et).count()
+        # Use single aggregation query instead of N+1 queries
+        from django.db.models import Count
+        by_type = dict(
+            recent.values('event_type')
+            .annotate(count=Count('id'))
+            .values_list('event_type', 'count')
+        )
 
         active = SafetyEvent.objects.filter(
             timestamp__gte=timezone.now() - timedelta(minutes=5),
@@ -517,6 +686,43 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
             await self.channel_layer.group_discard(group_name, self.channel_name)
             self.subscribed_topics.discard(topic)
             logger.debug(f"Left group: {group_name}")
+
+    # ==========================================================================
+    # Rate-Limited and Batched Send Methods
+    # ==========================================================================
+
+    async def _send_json_direct(self, content: dict):
+        """Send JSON directly without rate limiting or batching."""
+        await super().send_json(content)
+
+    async def send_json(self, content: dict, close: bool = False):
+        """
+        Send JSON with optional rate limiting and batching.
+
+        Rate limiting: Drops messages that exceed the rate limit for their topic.
+        Batching: Collects messages and sends them in batches for efficiency.
+        """
+        # Extract message type for rate limiting
+        msg_type = content.get('type', 'default')
+
+        # Check rate limit if enabled
+        if self._rate_limiter and not self._rate_limiter.can_send(msg_type):
+            # Message rate limited, skip
+            logger.debug(f"Rate limited message: {msg_type}")
+            return
+
+        # Use batcher if enabled
+        if self._message_batcher:
+            await self._message_batcher.add(content)
+        else:
+            await self._send_json_direct(content)
+
+        if close:
+            await self.close()
+
+    async def send_json_immediate(self, content: dict):
+        """Send JSON immediately, bypassing rate limiting and batching."""
+        await self._send_json_direct(content)
 
     # Group message handlers - called when messages are sent to groups
 

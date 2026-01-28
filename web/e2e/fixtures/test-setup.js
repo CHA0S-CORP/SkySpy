@@ -422,7 +422,7 @@ export const test = base.extend({
        */
       async navigateTo(route) {
         await page.goto(`/#${route}`);
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
       },
 
       /**

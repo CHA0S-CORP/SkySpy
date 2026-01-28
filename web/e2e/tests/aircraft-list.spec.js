@@ -18,7 +18,7 @@ test.describe('Aircraft List View', () => {
   test.describe('Basic Rendering', () => {
     test('aircraft list view loads successfully', async ({ page }) => {
       await page.goto('/#aircraft');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       const hash = await page.evaluate(() => window.location.hash);
       expect(hash).toBe('#aircraft');
@@ -28,7 +28,7 @@ test.describe('Aircraft List View', () => {
 
     test('sidebar shows aircraft tab as active', async ({ page }) => {
       await page.goto('/#aircraft');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       // The active nav item should indicate aircraft
       const sidebar = page.locator('.sidebar');
@@ -39,7 +39,8 @@ test.describe('Aircraft List View', () => {
   test.describe('Search and Filter', () => {
     test('search input is present', async ({ page }) => {
       await page.goto('/#aircraft');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
       // Look for search input with various possible selectors
       const searchInput = page.locator('input[type="search"], input[type="text"][placeholder*="Search"], .search-input, .search-box input').first();
@@ -51,7 +52,8 @@ test.describe('Aircraft List View', () => {
 
     test('can type in search field', async ({ page }) => {
       await page.goto('/#aircraft');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
       const searchInput = page.locator('input[type="search"], input[type="text"][placeholder*="Search"], .search-input, .search-box input').first();
       const isVisible = await searchInput.isVisible({ timeout: 3000 }).catch(() => false);
@@ -67,7 +69,8 @@ test.describe('Aircraft List View', () => {
   test.describe('Navigation', () => {
     test('can navigate to map view', async ({ page }) => {
       await page.goto('/#aircraft');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.sidebar')).toBeVisible({ timeout: 10000 });
 
       await page.click('.nav-item:has-text("Live Map")');
       await page.waitForURL(/#map/);
@@ -78,7 +81,8 @@ test.describe('Aircraft List View', () => {
 
     test('can navigate to stats view', async ({ page }) => {
       await page.goto('/#aircraft');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.sidebar')).toBeVisible({ timeout: 10000 });
 
       await page.click('.nav-item:has-text("Statistics")');
       await page.waitForURL(/#stats/);
@@ -93,7 +97,7 @@ test.describe('Aircraft List View', () => {
       await mockApi.mockAircraftList([]);
 
       await page.goto('/#aircraft');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       // Page should still render without errors
       await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
@@ -104,7 +108,7 @@ test.describe('Aircraft List View', () => {
     test('renders correctly on mobile viewport', async ({ page }) => {
       await page.setViewportSize({ width: 375, height: 667 });
       await page.goto('/#aircraft');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
     });
@@ -112,7 +116,7 @@ test.describe('Aircraft List View', () => {
     test('renders correctly on tablet viewport', async ({ page }) => {
       await page.setViewportSize({ width: 768, height: 1024 });
       await page.goto('/#aircraft');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
     });

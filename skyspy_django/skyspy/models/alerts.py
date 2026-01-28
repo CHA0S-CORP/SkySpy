@@ -3,6 +3,7 @@ Alert-related models for user-defined rules, subscriptions, and history.
 """
 from django.db import models, transaction
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 
 
 class AlertRule(models.Model):
@@ -67,6 +68,7 @@ class AlertRule(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
+        db_index=True,
         related_name='alert_rules',
         help_text='Owner of this alert rule'
     )
@@ -110,6 +112,10 @@ class AlertRule(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.rule_type})"
+
+    def clean(self):
+        if self.starts_at and self.expires_at and self.expires_at <= self.starts_at:
+            raise ValidationError({'expires_at': 'Expiration must be after start time'})
 
     def is_in_suppression_window(self) -> bool:
         """Check if current time is within a suppression window."""

@@ -47,6 +47,11 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'skyspy.settings')
 
 app = Celery('skyspy')
 
+# Check if running with RPi settings
+def _is_rpi_mode():
+    """Check if using RPi-optimized settings."""
+    return 'settings_rpi' in os.environ.get('DJANGO_SETTINGS_MODULE', '')
+
 # Using a string here means the worker doesn't have to serialize
 # the configuration object to child processes.
 app.config_from_object('django.conf:settings', namespace='CELERY')
@@ -270,18 +275,78 @@ app.conf.beat_schedule = {
         'task': 'skyspy.tasks.analytics.cleanup_memory_cache',
         'schedule': 300.0,  # 5 minutes
     },
+
+    # Notification cooldown cleanup - every 30 minutes
+    'cleanup-notification-cooldowns-every-30m': {
+        'task': 'skyspy.tasks.notifications.cleanup_notification_cooldowns',
+        'schedule': crontab(minute='*/30'),
+    },
+
+    # ==========================================================================
+    # Data Retention Cleanup Tasks
+    # ==========================================================================
+
+    # Daily cleanup of all old data - runs at 3 AM
+    'cleanup-all-old-data-daily': {
+        'task': 'skyspy.tasks.cleanup.run_all_cleanup_tasks',
+        'schedule': crontab(hour=3, minute=0),
+    },
+
+    # Weekly vacuum analyze - runs at 4 AM on Sundays
+    'vacuum-analyze-weekly': {
+        'task': 'skyspy.tasks.cleanup.vacuum_analyze_tables',
+        'schedule': crontab(hour=4, minute=0, day_of_week=0),
+    },
 }
+
+
+# =============================================================================
+# RPi-Optimized Schedule Overrides
+# =============================================================================
+# When using settings_rpi, reduce frequency of expensive tasks
+if _is_rpi_mode():
+    from django.conf import settings as django_settings
+
+    # Get RPi task intervals if defined
+    rpi_intervals = getattr(django_settings, 'RPI_TASK_INTERVALS', {})
+
+    # Override polling interval
+    polling_interval = getattr(django_settings, 'POLLING_INTERVAL', 2)
+    app.conf.beat_schedule['poll-aircraft-every-2s']['schedule'] = float(polling_interval)
+    app.conf.beat_schedule['poll-aircraft-every-2s']['options']['expires'] = float(polling_interval)
+
+    # Override stats task frequencies (staggered to avoid concurrent execution)
+    app.conf.beat_schedule['update-stats-cache-every-60s']['schedule'] = rpi_intervals.get('stats_cache', 90.0)
+    app.conf.beat_schedule['update-safety-stats-every-30s']['schedule'] = rpi_intervals.get('safety_stats', 60.0)
+    app.conf.beat_schedule['update-acars-stats-every-60s']['schedule'] = rpi_intervals.get('acars_stats', 120.0)
+
+    # Override expensive analytics tasks with staggered schedules
+    app.conf.beat_schedule['update-flight-pattern-geographic-stats-every-2m']['schedule'] = crontab(minute='*/10', second=0)
+    app.conf.beat_schedule['update-tracking-quality-stats-every-2m']['schedule'] = crontab(minute='*/10', second=20)
+    app.conf.beat_schedule['update-engagement-stats-every-2m']['schedule'] = crontab(minute='*/10', second=40)
+    app.conf.beat_schedule['update-time-comparison-stats-every-5m']['schedule'] = crontab(minute='*/15')
+    app.conf.beat_schedule['update-antenna-analytics-every-5m']['schedule'] = crontab(minute='*/10', second=30)
 
 
 # Task routing
 app.conf.task_routes = {
-    # High-priority aircraft polling
+    # High-priority aircraft polling (time-sensitive)
     'skyspy.tasks.aircraft.poll_aircraft': {'queue': 'polling'},
     'skyspy.tasks.aircraft.update_stats_cache': {'queue': 'polling'},
     'skyspy.tasks.aircraft.update_safety_stats': {'queue': 'polling'},
 
     # Antenna analytics (runs frequently, should be quick)
     'skyspy.tasks.analytics.update_antenna_analytics': {'queue': 'polling'},
+    'skyspy.tasks.analytics.refresh_acars_stats': {'queue': 'polling'},
+
+    # Low-priority expensive analytics tasks (RPi optimization)
+    'skyspy.tasks.analytics.refresh_time_comparison_stats': {'queue': 'low_priority'},
+    'skyspy.tasks.analytics.refresh_tracking_quality_stats': {'queue': 'low_priority'},
+    'skyspy.tasks.analytics.refresh_engagement_stats': {'queue': 'low_priority'},
+    'skyspy.tasks.analytics.refresh_flight_pattern_geographic_stats': {'queue': 'low_priority'},
+    'skyspy.tasks.analytics.calculate_daily_stats': {'queue': 'low_priority'},
+    'skyspy.tasks.analytics.aggregate_hourly_antenna_analytics': {'queue': 'low_priority'},
+    'skyspy.tasks.analytics.cleanup_antenna_analytics_snapshots': {'queue': 'low_priority'},
 
     # Background database operations
     'skyspy.tasks.external_db.*': {'queue': 'database'},
@@ -289,15 +354,11 @@ app.conf.task_routes = {
     'skyspy.tasks.notams.*': {'queue': 'database'},
     'skyspy.tasks.openaip.*': {'queue': 'database'},
     'skyspy.tasks.aircraft.cleanup_sessions': {'queue': 'database'},
-    'skyspy.tasks.analytics.cleanup_antenna_analytics_snapshots': {'queue': 'database'},
-    'skyspy.tasks.analytics.aggregate_hourly_antenna_analytics': {'queue': 'database'},
-    'skyspy.tasks.analytics.refresh_time_comparison_stats': {'queue': 'database'},
-    'skyspy.tasks.analytics.refresh_tracking_quality_stats': {'queue': 'database'},
-    'skyspy.tasks.analytics.refresh_engagement_stats': {'queue': 'database'},
     'skyspy.tasks.analytics.update_favorite_tracking': {'queue': 'database'},
-    'skyspy.tasks.analytics.refresh_flight_pattern_geographic_stats': {'queue': 'database'},
-    'skyspy.tasks.analytics.calculate_daily_stats': {'queue': 'database'},
     'skyspy.tasks.analytics.cleanup_memory_cache': {'queue': 'default'},
+
+    # Cleanup tasks (low-priority, can run slowly)
+    'skyspy.tasks.cleanup.*': {'queue': 'low_priority'},
 
     # Long-running transcription tasks
     'skyspy.tasks.transcription.*': {'queue': 'transcription'},
@@ -305,6 +366,7 @@ app.conf.task_routes = {
     # Notification tasks
     'skyspy.tasks.notifications.send_notification_task': {'queue': 'notifications'},
     'skyspy.tasks.notifications.process_notification_queue': {'queue': 'notifications'},
+    'skyspy.tasks.notifications.cleanup_notification_cooldowns': {'queue': 'notifications'},
     'skyspy.tasks.notifications.*': {'queue': 'notifications'},
 
     # Default queue for everything else

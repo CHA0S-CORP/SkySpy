@@ -25,6 +25,8 @@ from skyspy.serializers.alerts import (
 )
 from skyspy.services.alerts import alert_service
 from skyspy.services.alert_metrics import alert_metrics
+from skyspy.auth.authentication import OptionalJWTAuthentication, APIKeyAuthentication
+from skyspy.auth.permissions import CanAccessAlert, IsOwnerOrAdmin
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +34,8 @@ logger = logging.getLogger(__name__)
 class AlertRuleViewSet(viewsets.ModelViewSet):
     """ViewSet for alert rule management."""
 
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [CanAccessAlert, IsOwnerOrAdmin]
 
     queryset = AlertRule.objects.all()
     filter_backends = [DjangoFilterBackend]
@@ -707,8 +709,8 @@ class AlertSubscriptionViewSet(viewsets.ModelViewSet):
 class AlertHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for alert history."""
 
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [CanAccessAlert]
 
     queryset = AlertHistory.objects.all()
     serializer_class = AlertHistorySerializer

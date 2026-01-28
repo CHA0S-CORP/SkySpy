@@ -292,3 +292,26 @@ def send_bulk_notifications(
             time.sleep(delay_between_ms / 1000)
 
     return {'queued': len([r for r in results if 'task_id' in r]), 'results': results}
+
+
+@shared_task
+def cleanup_notification_cooldowns():
+    """
+    Clean up old notification cooldown entries to prevent memory growth.
+
+    This task runs every 30 minutes (configured in celery.py beat_schedule)
+    and removes cooldown entries older than 10 minutes (2x the default cooldown).
+
+    RPi Optimization: Prevents unbounded memory growth from cooldown tracking.
+    """
+    try:
+        from skyspy.services.notifications import cleanup_cooldowns
+        cleanup_cooldowns()
+        logger.debug("Notification cooldowns cleaned up")
+        return {'status': 'success'}
+    except ImportError:
+        logger.debug("Notifications service not available")
+        return {'status': 'skipped', 'reason': 'module not available'}
+    except Exception as e:
+        logger.warning(f"Failed to cleanup notification cooldowns: {e}")
+        return {'status': 'error', 'error': str(e)}

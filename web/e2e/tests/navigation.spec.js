@@ -18,7 +18,7 @@ test.describe('Navigation', () => {
   test.describe('App Initialization', () => {
     test('loads with default map view', async ({ page }) => {
       await page.goto('/');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       // Should redirect to #map by default (may have query params)
       await page.waitForFunction(() => window.location.hash.startsWith('#map') || window.location.hash === '');
@@ -28,7 +28,7 @@ test.describe('Navigation', () => {
 
     test('app container is rendered', async ({ page }) => {
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
     });
@@ -37,14 +37,15 @@ test.describe('Navigation', () => {
   test.describe('Sidebar Navigation', () => {
     test('sidebar is visible', async ({ page }) => {
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       await expect(page.locator('.sidebar')).toBeVisible({ timeout: 10000 });
     });
 
     test('can navigate to aircraft view', async ({ page }) => {
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.sidebar')).toBeVisible({ timeout: 10000 });
 
       await page.click('.nav-item:has-text("Aircraft List")');
       await page.waitForURL(/#aircraft/);
@@ -55,7 +56,8 @@ test.describe('Navigation', () => {
 
     test('can navigate to stats view', async ({ page }) => {
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.sidebar')).toBeVisible({ timeout: 10000 });
 
       await page.click('.nav-item:has-text("Statistics")');
       await page.waitForURL(/#stats/);
@@ -66,7 +68,8 @@ test.describe('Navigation', () => {
 
     test('can navigate to alerts view', async ({ page }) => {
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.sidebar')).toBeVisible({ timeout: 10000 });
 
       await page.click('.nav-item:has-text("Alerts")');
       await page.waitForURL(/#alerts/);
@@ -77,7 +80,8 @@ test.describe('Navigation', () => {
 
     test('can navigate to history view', async ({ page }) => {
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.sidebar')).toBeVisible({ timeout: 10000 });
 
       await page.click('.nav-item:has-text("History")');
       await page.waitForURL(/#history/);
@@ -88,7 +92,8 @@ test.describe('Navigation', () => {
 
     test('can navigate to system view', async ({ page }) => {
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.sidebar')).toBeVisible({ timeout: 10000 });
 
       await page.click('.nav-item:has-text("System")');
       await page.waitForURL(/#system/);
@@ -101,7 +106,8 @@ test.describe('Navigation', () => {
   test.describe('Direct URL Navigation', () => {
     test('can load map view directly', async ({ page }) => {
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
       const hash = await page.evaluate(() => window.location.hash);
       expect(hash).toContain('#map');
@@ -109,7 +115,8 @@ test.describe('Navigation', () => {
 
     test('can load aircraft view directly', async ({ page }) => {
       await page.goto('/#aircraft');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
       const hash = await page.evaluate(() => window.location.hash);
       expect(hash).toBe('#aircraft');
@@ -117,7 +124,8 @@ test.describe('Navigation', () => {
 
     test('can load alerts view directly', async ({ page }) => {
       await page.goto('/#alerts');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
       const hash = await page.evaluate(() => window.location.hash);
       expect(hash).toBe('#alerts');
@@ -125,7 +133,8 @@ test.describe('Navigation', () => {
 
     test('invalid hash redirects to map', async ({ page }) => {
       await page.goto('/#invalid-route');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
       // Should redirect to map for invalid routes (may have query params)
       await page.waitForFunction(() =>
@@ -137,7 +146,8 @@ test.describe('Navigation', () => {
   test.describe('Browser History', () => {
     test('back button works', async ({ page }) => {
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.sidebar')).toBeVisible({ timeout: 10000 });
 
       // Navigate to aircraft
       await page.click('.nav-item:has-text("Aircraft List")');
@@ -155,7 +165,7 @@ test.describe('Navigation', () => {
   test.describe('Header', () => {
     test('header is visible', async ({ page }) => {
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       await expect(page.locator('.header')).toBeVisible({ timeout: 10000 });
     });
@@ -165,7 +175,8 @@ test.describe('Navigation', () => {
     test('mobile menu toggle appears on small screens', async ({ page }) => {
       await page.setViewportSize({ width: 375, height: 667 });
       await page.goto('/#map');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
       const mobileToggle = page.locator('.mobile-menu-toggle');
       await expect(mobileToggle).toBeVisible({ timeout: 10000 });
