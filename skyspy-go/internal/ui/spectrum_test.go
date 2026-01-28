@@ -3,9 +3,15 @@ package ui
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/skyspy/skyspy-go/internal/theme"
 )
+
+// runeLen returns the number of runes in a string (not bytes)
+func runeLen(s string) int {
+	return utf8.RuneCountInString(s)
+}
 
 func TestSpectrum_New(t *testing.T) {
 	th := theme.Get("classic")
@@ -189,8 +195,8 @@ func TestSpectrum_Render(t *testing.T) {
 	// Each line should have content
 	for i, line := range lines {
 		plain := stripANSI(line)
-		if len(plain) != 10 {
-			t.Errorf("line %d: expected 10 chars, got %d", i, len(plain))
+		if runeLen(plain) != 10 {
+			t.Errorf("line %d: expected 10 chars, got %d", i, runeLen(plain))
 		}
 	}
 }
@@ -243,8 +249,8 @@ func TestSpectrum_RenderCompact(t *testing.T) {
 	output := spec.RenderCompact()
 	plain := stripANSI(output)
 
-	if len(plain) != 10 {
-		t.Errorf("expected compact output length 10, got %d", len(plain))
+	if runeLen(plain) != 10 {
+		t.Errorf("expected compact output length 10, got %d", runeLen(plain))
 	}
 }
 
@@ -263,8 +269,8 @@ func TestSpectrum_RenderCompact_Characters(t *testing.T) {
 	// > 0.5: ▄
 	// > 0.2: ▁
 	// else: ▁ (dim)
-	if len(plain) != 4 {
-		t.Errorf("expected 4 chars, got %d", len(plain))
+	if runeLen(plain) != 4 {
+		t.Errorf("expected 4 chars, got %d", runeLen(plain))
 	}
 }
 
@@ -388,7 +394,9 @@ func TestWaterfall_AddRow_Scrolling(t *testing.T) {
 	// History[2] should be row 5 (0.5)
 	expectedValues := []float64{0.3, 0.4, 0.5}
 	for i, expected := range expectedValues {
-		if wf.History[i][0] != expected {
+		// Use approximate comparison for floating point
+		diff := wf.History[i][0] - expected
+		if diff < -0.001 || diff > 0.001 {
 			t.Errorf("after scrolling, history[%d][0]: expected %f, got %f", i, expected, wf.History[i][0])
 		}
 	}
@@ -440,8 +448,8 @@ func TestWaterfall_Render(t *testing.T) {
 
 	for i, line := range lines {
 		plain := stripANSI(line)
-		if len(plain) != 10 {
-			t.Errorf("line %d: expected 10 chars, got %d", i, len(plain))
+		if runeLen(plain) != 10 {
+			t.Errorf("line %d: expected 10 chars, got %d", i, runeLen(plain))
 		}
 	}
 }
@@ -457,13 +465,17 @@ func TestWaterfall_Render_Characters(t *testing.T) {
 
 	lines := wf.Render()
 	plain := stripANSI(lines[0])
+	runes := []rune(plain) // Convert to runes for unicode character access
 
 	// Check characters based on intensity levels
 	expectedChars := []rune{' ', '░', '▒', '▓', '█'}
+	if len(runes) != 5 {
+		t.Fatalf("expected 5 runes, got %d", len(runes))
+	}
 	for i, expected := range expectedChars {
-		if rune(plain[i]) != expected {
+		if runes[i] != expected {
 			t.Errorf("position %d: expected '%c' for value %f, got '%c'",
-				i, expected, values[i], plain[i])
+				i, expected, values[i], runes[i])
 		}
 	}
 }
@@ -692,5 +704,190 @@ func BenchmarkFrequencyDisplay_Render(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		fd.Advance()
 		fd.Render()
+	}
+}
+
+// ============================================================================
+// Additional Coverage Tests
+// ============================================================================
+
+func TestWaterfall_Render_NegativeColorIdx(t *testing.T) {
+	th := theme.Get("classic")
+	wf := NewWaterfall(th, 5, 1)
+
+	// Push negative values (should be clamped to colorIdx 0)
+	values := []float64{-0.5, -1.0, -0.1, 0, 0.05}
+	wf.Push(values)
+
+	lines := wf.Render()
+
+	// Should render without panic
+	if len(lines) != 1 {
+		t.Errorf("expected 1 line, got %d", len(lines))
+	}
+}
+
+func TestWaterfall_Render_HighColorIdx(t *testing.T) {
+	th := theme.Get("classic")
+	wf := NewWaterfall(th, 5, 1)
+
+	// Push values > 1.0 (should be clamped to max color index)
+	values := []float64{1.5, 2.0, 10.0, 1.0, 0.99}
+	wf.Push(values)
+
+	lines := wf.Render()
+
+	// Should render without panic
+	if len(lines) != 1 {
+		t.Errorf("expected 1 line, got %d", len(lines))
+	}
+
+	plain := stripANSI(lines[0])
+	if runeLen(plain) != 5 {
+		t.Errorf("expected 5 chars, got %d", runeLen(plain))
+	}
+}
+
+func TestFrequencyDisplay_Render_DefaultLabel(t *testing.T) {
+	th := theme.Get("classic")
+	fd := NewFrequencyDisplay(th)
+
+	// Set frequencies with unknown labels
+	fd.SetFrequencies([]FrequencyInfo{
+		{Freq: "100.000", Label: "UNKNOWN1", Active: true},
+		{Freq: "200.000", Label: "CUSTOM", Active: false},
+	})
+
+	output := fd.Render()
+
+	// Should render without panic and contain the frequencies
+	if !strings.Contains(output, "100.000") {
+		t.Error("expected output to contain frequency 100.000")
+	}
+	if !strings.Contains(output, "200.000") {
+		t.Error("expected output to contain frequency 200.000")
+	}
+}
+
+func TestFrequencyDisplay_RenderList_DefaultLabel(t *testing.T) {
+	th := theme.Get("classic")
+	fd := NewFrequencyDisplay(th)
+
+	// Set frequencies with unknown labels to trigger default style
+	fd.SetFrequencies([]FrequencyInfo{
+		{Freq: "100.000", Label: "CUSTOM1", Active: true},
+		{Freq: "200.000", Label: "CUSTOM2", Active: false},
+	})
+
+	lines := fd.RenderList(true)
+
+	if len(lines) != 2 {
+		t.Errorf("expected 2 lines, got %d", len(lines))
+	}
+
+	// Lines should contain the custom labels
+	if !strings.Contains(lines[0], "CUSTOM1") {
+		t.Error("expected first line to contain CUSTOM1")
+	}
+	if !strings.Contains(lines[1], "CUSTOM2") {
+		t.Error("expected second line to contain CUSTOM2")
+	}
+}
+
+func TestFrequencyDisplay_RenderList_InactiveWithBlink(t *testing.T) {
+	th := theme.Get("classic")
+	fd := NewFrequencyDisplay(th)
+
+	// Set frequencies with some inactive
+	fd.SetFrequencies([]FrequencyInfo{
+		{Freq: "100.000", Label: "ADS-B", Active: false}, // Inactive
+		{Freq: "200.000", Label: "ACARS", Active: true},  // Active
+	})
+
+	// With blink=true, active should show filled indicator
+	linesBlinkOn := fd.RenderList(true)
+	linesBlinkOff := fd.RenderList(false)
+
+	// Both should have same number of lines
+	if len(linesBlinkOn) != len(linesBlinkOff) {
+		t.Error("blink state should not change number of lines")
+	}
+}
+
+func TestFrequencyDisplay_Advance_EmptyFrequencies(t *testing.T) {
+	th := theme.Get("classic")
+	fd := NewFrequencyDisplay(th)
+
+	// Set empty frequencies
+	fd.SetFrequencies([]FrequencyInfo{})
+
+	// Advance should not panic with empty list
+	fd.Advance()
+
+	// Position should remain 0
+	if fd.ScanPos != 0 {
+		t.Errorf("expected ScanPos 0 for empty list, got %d", fd.ScanPos)
+	}
+}
+
+func TestSpectrum_Update_ShorterValues(t *testing.T) {
+	th := theme.Get("classic")
+	spec := NewSpectrum(th, 10, 5)
+
+	// Update with fewer values than width
+	values := []float64{0.5, 0.6, 0.7}
+	spec.Update(values, 0.0)
+
+	// First 3 values should be set
+	for i := 0; i < 3; i++ {
+		if spec.Data[i] != values[i] {
+			t.Errorf("data[%d]: expected %f, got %f", i, values[i], spec.Data[i])
+		}
+	}
+
+	// Remaining values should still be 0
+	for i := 3; i < 10; i++ {
+		if spec.Data[i] != 0 {
+			t.Errorf("data[%d]: expected 0, got %f", i, spec.Data[i])
+		}
+	}
+}
+
+func TestSpectrum_Render_DataShorterThanWidth(t *testing.T) {
+	th := theme.Get("classic")
+	spec := NewSpectrum(th, 10, 5)
+
+	// Artificially shorten data
+	spec.Data = []float64{0.5, 0.6, 0.7}
+
+	lines := spec.Render()
+
+	// Should handle gracefully
+	if len(lines) != 5 {
+		t.Errorf("expected 5 lines, got %d", len(lines))
+	}
+
+	// Each line should have 10 characters (including default for missing data)
+	for i, line := range lines {
+		plain := stripANSI(line)
+		if runeLen(plain) != 10 {
+			t.Errorf("line %d: expected 10 chars, got %d", i, runeLen(plain))
+		}
+	}
+}
+
+func TestSpectrum_RenderCompact_DataShorterThanWidth(t *testing.T) {
+	th := theme.Get("classic")
+	spec := NewSpectrum(th, 10, 5)
+
+	// Artificially shorten data
+	spec.Data = []float64{0.5, 0.6}
+
+	output := spec.RenderCompact()
+	plain := stripANSI(output)
+
+	// Should render full width even with shorter data
+	if runeLen(plain) != 10 {
+		t.Errorf("expected 10 chars, got %d", runeLen(plain))
 	}
 }

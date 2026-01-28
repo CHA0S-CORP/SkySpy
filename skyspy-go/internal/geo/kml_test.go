@@ -541,3 +541,261 @@ func TestParseKMLInvalidXML(t *testing.T) {
 		t.Error("Expected error for invalid XML")
 	}
 }
+
+func TestParseKMLTildePath(t *testing.T) {
+	// Test that tilde expansion doesn't panic (file won't exist)
+	_, err := ParseKML("~/nonexistent_kml_test_file.kml")
+	if err == nil {
+		t.Error("Expected error for nonexistent file with tilde path")
+	}
+}
+
+func TestParseKMZTildePath(t *testing.T) {
+	// Test that tilde expansion doesn't panic (file won't exist)
+	_, err := ParseKMZ("~/nonexistent_kmz_test_file.kmz")
+	if err == nil {
+		t.Error("Expected error for nonexistent file with tilde path")
+	}
+}
+
+func TestParseKMZWithNonDocKML(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "kmz_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	kmlContent := `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Non-doc KMZ Test</name>
+    <Placemark>
+      <name>Test Point</name>
+      <Point>
+        <coordinates>-122.4,37.7,0</coordinates>
+      </Point>
+    </Placemark>
+  </Document>
+</kml>`
+
+	kmzPath := filepath.Join(tmpDir, "test.kmz")
+
+	// Create KMZ (zip) file with a non-doc.kml file
+	zipFile, err := os.Create(kmzPath)
+	if err != nil {
+		t.Fatalf("Failed to create KMZ file: %v", err)
+	}
+
+	w := zip.NewWriter(zipFile)
+
+	// Add other.kml to the archive (not doc.kml)
+	f, err := w.Create("other.kml")
+	if err != nil {
+		zipFile.Close()
+		t.Fatalf("Failed to create other.kml in archive: %v", err)
+	}
+	_, err = f.Write([]byte(kmlContent))
+	if err != nil {
+		zipFile.Close()
+		t.Fatalf("Failed to write other.kml: %v", err)
+	}
+
+	if err := w.Close(); err != nil {
+		zipFile.Close()
+		t.Fatalf("Failed to close zip writer: %v", err)
+	}
+	zipFile.Close()
+
+	// Parse the KMZ - should find other.kml
+	overlay, err := ParseKMZ(kmzPath)
+	if err != nil {
+		t.Fatalf("Failed to parse KMZ: %v", err)
+	}
+
+	if overlay.Name != "Non-doc KMZ Test" {
+		t.Errorf("Expected name 'Non-doc KMZ Test', got '%s'", overlay.Name)
+	}
+}
+
+func TestParseKMLMultiGeometryWithPolygon(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "kml_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// MultiGeometry with polygon
+	kmlContent := `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <Placemark>
+      <name>Multi with Polygon</name>
+      <MultiGeometry>
+        <Polygon>
+          <outerBoundaryIs>
+            <LinearRing>
+              <coordinates>
+                -122.5,37.5,0
+                -122.5,37.7,0
+                -122.3,37.7,0
+                -122.3,37.5,0
+                -122.5,37.5,0
+              </coordinates>
+            </LinearRing>
+          </outerBoundaryIs>
+        </Polygon>
+      </MultiGeometry>
+    </Placemark>
+  </Document>
+</kml>`
+
+	kmlPath := filepath.Join(tmpDir, "test_multi_poly.kml")
+	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0644); err != nil {
+		t.Fatalf("Failed to write KML file: %v", err)
+	}
+
+	overlay, err := ParseKML(kmlPath)
+	if err != nil {
+		t.Fatalf("Failed to parse KML: %v", err)
+	}
+
+	if len(overlay.Features) != 1 {
+		t.Errorf("Expected 1 feature from MultiGeometry, got %d", len(overlay.Features))
+	}
+
+	if len(overlay.Features) > 0 && overlay.Features[0].Type != OverlayPolygon {
+		t.Errorf("Expected polygon type, got %d", overlay.Features[0].Type)
+	}
+}
+
+func TestParseKMLEmptyGeometries(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "kml_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Test empty coordinates
+	kmlContent := `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <Placemark>
+      <name>Empty Point</name>
+      <Point>
+        <coordinates></coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>Empty Line</name>
+      <LineString>
+        <coordinates></coordinates>
+      </LineString>
+    </Placemark>
+    <Placemark>
+      <name>Empty Polygon</name>
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates></coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+  </Document>
+</kml>`
+
+	kmlPath := filepath.Join(tmpDir, "test_empty.kml")
+	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0644); err != nil {
+		t.Fatalf("Failed to write KML file: %v", err)
+	}
+
+	overlay, err := ParseKML(kmlPath)
+	if err != nil {
+		t.Fatalf("Failed to parse KML: %v", err)
+	}
+
+	// All empty geometries should result in no features
+	if len(overlay.Features) != 0 {
+		t.Errorf("Expected 0 features from empty geometries, got %d", len(overlay.Features))
+	}
+}
+
+func TestParseKMLEmptyMultiGeometry(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "kml_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// MultiGeometry with empty elements
+	kmlContent := `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <Placemark>
+      <name>Empty Multi</name>
+      <MultiGeometry>
+        <Point>
+          <coordinates></coordinates>
+        </Point>
+        <LineString>
+          <coordinates></coordinates>
+        </LineString>
+        <Polygon>
+          <outerBoundaryIs>
+            <LinearRing>
+              <coordinates></coordinates>
+            </LinearRing>
+          </outerBoundaryIs>
+        </Polygon>
+      </MultiGeometry>
+    </Placemark>
+  </Document>
+</kml>`
+
+	kmlPath := filepath.Join(tmpDir, "test_empty_multi.kml")
+	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0644); err != nil {
+		t.Fatalf("Failed to write KML file: %v", err)
+	}
+
+	overlay, err := ParseKML(kmlPath)
+	if err != nil {
+		t.Fatalf("Failed to parse KML: %v", err)
+	}
+
+	// All empty geometries should result in no features
+	if len(overlay.Features) != 0 {
+		t.Errorf("Expected 0 features from empty multi-geometry, got %d", len(overlay.Features))
+	}
+}
+
+func TestParseKMLCoordinatesWithTab(t *testing.T) {
+	// Test coordinates with tab separators
+	coords := parseKMLCoordinates("-122.4,37.7,0\t-122.5,37.8,0")
+	if len(coords) != 2 {
+		t.Errorf("Expected 2 coordinates with tab separator, got %d", len(coords))
+	}
+}
+
+func TestParseKMLCoordinatesInvalidLon(t *testing.T) {
+	// Test with invalid longitude
+	coords := parseKMLCoordinates("invalid,37.7,0")
+	if len(coords) != 0 {
+		t.Errorf("Expected 0 coordinates with invalid lon, got %d", len(coords))
+	}
+}
+
+func TestParseKMLCoordinatesInvalidLat(t *testing.T) {
+	// Test with invalid latitude
+	coords := parseKMLCoordinates("-122.4,invalid,0")
+	if len(coords) != 0 {
+		t.Errorf("Expected 0 coordinates with invalid lat, got %d", len(coords))
+	}
+}
+
+func TestParseKMLCoordinatesSinglePart(t *testing.T) {
+	// Test with only one part (no comma)
+	coords := parseKMLCoordinates("-122.4")
+	if len(coords) != 0 {
+		t.Errorf("Expected 0 coordinates with single part, got %d", len(coords))
+	}
+}

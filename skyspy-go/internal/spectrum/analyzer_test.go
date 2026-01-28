@@ -983,3 +983,369 @@ func TestAnalyzer_MathStability(t *testing.T) {
 		}
 	}
 }
+
+// ============================================================================
+// Additional Coverage Tests
+// ============================================================================
+
+func TestAnalyzer_AddSample_NegativeDistance(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	// Negative distance should return -1 from findBand and be ignored
+	sample := Sample{
+		RSSI:       -10,
+		Distance:   -5, // Negative distance
+		AircraftID: "NEG001",
+	}
+
+	analyzer.AddSample(sample)
+
+	// No band should have this sample
+	for i, band := range analyzer.bands {
+		if band.SampleCount != 0 {
+			t.Errorf("band %d: expected sample count 0 for negative distance, got %d", i, band.SampleCount)
+		}
+	}
+}
+
+func TestAnalyzer_FindBand_NegativeDistance(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	result := analyzer.findBand(-10)
+	if result != -1 {
+		t.Errorf("expected -1 for negative distance, got %d", result)
+	}
+}
+
+func TestAnalyzer_Decay_NegativePeakValues(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	// Set a small peak value that will decay to negative territory
+	analyzer.peakValues[0] = 0.001
+
+	// Apply many decay cycles
+	for i := 0; i < 1000; i++ {
+		analyzer.Decay()
+	}
+
+	// Peak values should be clamped to 0, not negative
+	for i, v := range analyzer.peakValues {
+		if v < 0 {
+			t.Errorf("peakValues[%d] should not be negative, got %f", i, v)
+		}
+	}
+}
+
+func TestAnalyzer_GetSpectrumSmoothed_ResizePrevSpectrum(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	// Add some samples
+	analyzer.AddSampleSimple(-10, 50)
+
+	// Get smoothed spectrum with different bin count to trigger resize
+	spectrum1 := analyzer.GetSpectrumSmoothed(5)
+	if len(spectrum1) != 5 {
+		t.Errorf("expected 5 bins, got %d", len(spectrum1))
+	}
+
+	// Check that prevSpectrum was resized
+	if len(analyzer.prevSpectrum) != 5 {
+		t.Errorf("prevSpectrum should be resized to 5, got %d", len(analyzer.prevSpectrum))
+	}
+
+	// Now get with different size to trigger another resize
+	spectrum2 := analyzer.GetSpectrumSmoothed(15)
+	if len(spectrum2) != 15 {
+		t.Errorf("expected 15 bins, got %d", len(spectrum2))
+	}
+
+	if len(analyzer.prevSpectrum) != 15 {
+		t.Errorf("prevSpectrum should be resized to 15, got %d", len(analyzer.prevSpectrum))
+	}
+}
+
+func TestAnalyzer_GetSpectrumSmoothed_ResizePeakValues(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	// Get smoothed spectrum with different bin count to trigger peakValues resize
+	analyzer.GetSpectrumSmoothed(7)
+
+	if len(analyzer.peakValues) != 7 {
+		t.Errorf("peakValues should be resized to 7, got %d", len(analyzer.peakValues))
+	}
+}
+
+func TestAnalyzer_GetSpectrumSmoothed_Interpolation(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	// Add samples to different bands to create variation
+	analyzer.AddSampleSimple(-5, 5)   // Close band
+	analyzer.AddSampleSimple(-20, 100) // Far band
+
+	// Get smoothed spectrum with different number of bins than bands
+	// This triggers the interpolation code path
+	spectrum := analyzer.GetSpectrumSmoothed(15)
+
+	if len(spectrum) != 15 {
+		t.Errorf("expected 15 bins, got %d", len(spectrum))
+	}
+
+	// Values should be interpolated between bands
+	// At least some values should be non-zero
+	hasNonZero := false
+	for _, v := range spectrum {
+		if v > 0 {
+			hasNonZero = true
+			break
+		}
+	}
+	if !hasNonZero {
+		t.Error("expected some non-zero values after interpolation")
+	}
+}
+
+func TestAnalyzer_NormalizeRSSI_OnlyAircraftCount(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	// Add aircraft but with no RSSI samples (only aircraft count)
+	bandIdx := analyzer.findBand(50)
+	band := &analyzer.bands[bandIdx]
+
+	// Manually set only aircraft count without samples
+	band.aircraftSet["AC1"] = true
+	band.AircraftCount = 1
+	// SampleCount remains 0
+
+	// Get spectrum to test normalization
+	spectrum := analyzer.GetSpectrum(0)
+
+	// The band should have a non-zero value due to activity normalization
+	if spectrum[bandIdx] == 0 {
+		t.Error("expected non-zero value for band with only aircraft count")
+	}
+
+	// Value should be lower (weighted 0.5) since there are no RSSI samples
+	if spectrum[bandIdx] > 0.5 {
+		t.Errorf("expected lower weight for aircraft-only band, got %f", spectrum[bandIdx])
+	}
+}
+
+func TestAnalyzer_Decay_MaxRSSIDecay(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	// Add a sample with high RSSI
+	analyzer.AddSampleSimple(-5, 50)
+
+	bandIdx := analyzer.findBand(50)
+	initialMaxRSSI := analyzer.bands[bandIdx].MaxRSSI
+
+	// Apply decay
+	analyzer.Decay()
+
+	// MaxRSSI should have decreased
+	if analyzer.bands[bandIdx].MaxRSSI >= initialMaxRSSI {
+		t.Error("MaxRSSI should decrease after decay")
+	}
+
+	// Apply many decays - MaxRSSI should eventually reach -30
+	for i := 0; i < 100; i++ {
+		analyzer.Decay()
+	}
+
+	if analyzer.bands[bandIdx].MaxRSSI < -30 {
+		t.Errorf("MaxRSSI should not go below -30, got %f", analyzer.bands[bandIdx].MaxRSSI)
+	}
+}
+
+func TestAnalyzer_Decay_TotalRSSIDecay(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	// Add samples with negative RSSI (typical values)
+	analyzer.AddSampleSimple(-10, 50)
+	analyzer.AddSampleSimple(-10, 50)
+
+	bandIdx := analyzer.findBand(50)
+	initialTotalRSSI := analyzer.bands[bandIdx].TotalRSSI
+
+	// Apply decay
+	analyzer.Decay()
+
+	// TotalRSSI is negative, so decay should make it closer to 0 (increase)
+	// The formula is: TotalRSSI *= (1.0 - decayRate)
+	// For negative value, this moves towards 0
+	// So abs(TotalRSSI) should decrease
+	if abs(analyzer.bands[bandIdx].TotalRSSI) >= abs(initialTotalRSSI) {
+		t.Errorf("TotalRSSI magnitude should decrease after decay: %f -> %f", initialTotalRSSI, analyzer.bands[bandIdx].TotalRSSI)
+	}
+}
+
+func abs(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+func TestAnalyzer_Decay_SampleCountNonNegative(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	// Add sample
+	analyzer.AddSampleSimple(-10, 50)
+
+	// Apply many decays
+	for i := 0; i < 100; i++ {
+		analyzer.Decay()
+	}
+
+	// Sample count should never go negative
+	for i, band := range analyzer.bands {
+		if band.SampleCount < 0 {
+			t.Errorf("band %d: SampleCount should not be negative, got %d", i, band.SampleCount)
+		}
+	}
+}
+
+func TestAnalyzer_GetSpectrum_SingleBin(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	// Add samples
+	analyzer.AddSampleSimple(-10, 50)
+
+	// Get spectrum with just 1 bin
+	spectrum := analyzer.GetSpectrum(1)
+
+	if len(spectrum) != 1 {
+		t.Errorf("expected 1 bin, got %d", len(spectrum))
+	}
+}
+
+func TestAnalyzer_GetPeaks_DefaultBins(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	// Get peaks with 0 bins (should use default)
+	peaks := analyzer.GetPeaks(0)
+
+	if len(peaks) != len(analyzer.peakValues) {
+		t.Errorf("expected %d peaks, got %d", len(analyzer.peakValues), len(peaks))
+	}
+}
+
+func TestAnalyzer_GetPeaks_MatchingBins(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	// Set some peak values
+	for i := range analyzer.peakValues {
+		analyzer.peakValues[i] = float64(i) * 0.1
+	}
+
+	// Get peaks with exact matching bin count
+	peaks := analyzer.GetPeaks(len(analyzer.peakValues))
+
+	// Should return a copy of peak values
+	for i, p := range peaks {
+		if p != analyzer.peakValues[i] {
+			t.Errorf("peaks[%d]: expected %f, got %f", i, analyzer.peakValues[i], p)
+		}
+	}
+
+	// Modifying returned peaks should not affect original
+	peaks[0] = 999
+	if analyzer.peakValues[0] == 999 {
+		t.Error("returned peaks should be a copy, not reference")
+	}
+}
+
+func TestFormatDistanceLabel_EdgeCases(t *testing.T) {
+	// Test min less than 1
+	result := formatDistanceLabel(0.5, 2)
+	if result != "<1" {
+		t.Errorf("expected '<1', got %s", result)
+	}
+
+	// Test max >= 1000
+	result = formatDistanceLabel(900, 1000)
+	if result != "1k+" {
+		t.Errorf("expected '1k+', got %s", result)
+	}
+
+	result = formatDistanceLabel(500, 1500)
+	if result != "1k+" {
+		t.Errorf("expected '1k+' for max > 1000, got %s", result)
+	}
+}
+
+func TestAnalyzer_AddSample_EmptyAircraftID(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	// Add sample with empty aircraft ID
+	sample := Sample{
+		RSSI:       -10,
+		Distance:   50,
+		AircraftID: "", // Empty
+	}
+
+	analyzer.AddSample(sample)
+
+	bandIdx := analyzer.findBand(50)
+	band := analyzer.bands[bandIdx]
+
+	// Sample count should increase
+	if band.SampleCount != 1 {
+		t.Errorf("expected sample count 1, got %d", band.SampleCount)
+	}
+
+	// Aircraft count should remain 0 for empty ID
+	if band.AircraftCount != 0 {
+		t.Errorf("expected aircraft count 0 for empty ID, got %d", band.AircraftCount)
+	}
+}
+
+func TestAnalyzer_GetStats_EmptyBands(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	// Get stats without adding any samples
+	stats := analyzer.GetStats()
+
+	if stats.TotalSamples != 0 {
+		t.Errorf("expected 0 total samples, got %d", stats.TotalSamples)
+	}
+
+	if stats.TotalAircraft != 0 {
+		t.Errorf("expected 0 total aircraft, got %d", stats.TotalAircraft)
+	}
+
+	// Check that band stats have default values
+	for i, bs := range stats.BandStats {
+		if bs.SampleCount != 0 {
+			t.Errorf("band %d: expected 0 samples, got %d", i, bs.SampleCount)
+		}
+		if bs.AvgRSSI != -30 {
+			t.Errorf("band %d: expected default AvgRSSI -30, got %f", i, bs.AvgRSSI)
+		}
+	}
+}
+
+func TestAnalyzer_GetSpectrumSmoothed_ZeroBins(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	// Add some samples
+	analyzer.AddSampleSimple(-10, 50)
+
+	// Get smoothed spectrum with 0 bins (should use default band count)
+	spectrum := analyzer.GetSpectrumSmoothed(0)
+
+	if len(spectrum) != len(DefaultDistanceBands) {
+		t.Errorf("expected %d bins for 0 input, got %d", len(DefaultDistanceBands), len(spectrum))
+	}
+}
+
+func TestAnalyzer_GetSpectrumSmoothed_NegativeBins(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	// Get smoothed spectrum with negative bins (should use default)
+	spectrum := analyzer.GetSpectrumSmoothed(-5)
+
+	if len(spectrum) != len(DefaultDistanceBands) {
+		t.Errorf("expected %d bins for negative input, got %d", len(DefaultDistanceBands), len(spectrum))
+	}
+}

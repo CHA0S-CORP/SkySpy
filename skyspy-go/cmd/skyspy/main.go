@@ -77,6 +77,7 @@ func init() {
 	rootCmd.AddCommand(authCmd)
 	rootCmd.AddCommand(radioCmd)
 	rootCmd.AddCommand(radioProCmd)
+	rootCmd.AddCommand(configureCmd)
 }
 
 func main() {

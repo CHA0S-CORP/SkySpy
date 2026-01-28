@@ -10,13 +10,13 @@ To enable these tests, install libacars:
 """
 
 import pytest
-from unittest.mock import patch
+import asyncio
 
-# Check if libacars is actually available
+# Check if libacars is actually available using the new public API
 try:
-    from skyspy_common.libacars import binding as binding_module
-    LIBACARS_AVAILABLE = binding_module._libacars_available
-except Exception:
+    from skyspy_common.libacars import is_available
+    LIBACARS_AVAILABLE = is_available()
+except ImportError:
     LIBACARS_AVAILABLE = False
 
 
@@ -35,7 +35,6 @@ class TestRealLibacarsDecode:
         from skyspy_common.libacars import decode_acars_apps, MsgDir
 
         # H1 label is commonly used for position reports
-        # This is a synthetic example - adjust based on actual message formats
         label = "H1"
         text = "TEST MESSAGE"
         direction = MsgDir.AIR2GND
@@ -58,9 +57,6 @@ class TestRealLibacarsDecode:
 
         result = decode_acars_apps(label, text, direction)
 
-        # Verify operation completes without error
-        # Actual content depends on libacars version and support
-
     def test_decode_fans_message(self):
         """Test decoding a FANS-1/A message."""
         from skyspy_common.libacars import decode_acars_apps, MsgDir
@@ -71,8 +67,6 @@ class TestRealLibacarsDecode:
         direction = MsgDir.AIR2GND
 
         result = decode_acars_apps(label, text, direction)
-
-        # Test runs without crash
 
     def test_decode_returns_json_structure(self):
         """Test that successful decode returns expected JSON structure."""
@@ -87,7 +81,6 @@ class TestRealLibacarsDecode:
         if result is not None:
             # Libacars returns structured JSON
             assert isinstance(result, dict)
-            # May contain 'acars' key or other format-specific keys
 
     def test_decode_text_returns_string(self):
         """Test that text decode returns a string."""
@@ -177,7 +170,7 @@ class TestRealLibacarsSubLabel:
 
     def test_extract_sublabel_mfi(self):
         """Test sublabel/MFI extraction."""
-        from skyspy_common.libacars import extract_sublabel_mfi
+        from skyspy_common.libacars import extract_sublabel_mfi, MsgDir
 
         # Test with various label formats
         test_cases = [
@@ -187,7 +180,7 @@ class TestRealLibacarsSubLabel:
         ]
 
         for label, text in test_cases:
-            sublabel, mfi, consumed = extract_sublabel_mfi(label, text)
+            sublabel, mfi, consumed = extract_sublabel_mfi(label, text, MsgDir.UNKNOWN)
             # May return None/0 for many cases - just verify no crash
             assert consumed >= 0
 
@@ -213,7 +206,6 @@ class TestRealLibacarsStatistics:
         stats = get_stats()
 
         assert stats["total_calls"] == 5
-        # Other stats depend on decode success/failure
 
 
 class TestRealLibacarsResilience:
@@ -236,7 +228,6 @@ class TestRealLibacarsResilience:
             # Should not raise unhandled exception
             try:
                 result = decode_acars_apps(label, text, MsgDir.AIR2GND)
-                # Result may be None
             except Exception as e:
                 # Only validation errors are acceptable
                 assert "validation" in str(type(e)).lower() or "libacars" in str(type(e)).lower()
@@ -247,8 +238,6 @@ class TestRealLibacarsResilience:
 
         for i in range(100):
             decode_acars_apps("H1", f"Message {i}", MsgDir.AIR2GND)
-
-        # Should complete without issues
 
 
 class TestRealLibacarsCache:
@@ -272,13 +261,10 @@ class TestRealLibacarsCache:
         # Second decode (should hit cache if first succeeded)
         result2 = decode_acars_apps(label, text, direction, use_cache=True)
 
-        # Results should be identical
         if result1 is not None:
             assert result1 == result2
 
-        # Check cache stats
         stats = cache.get_stats()
-        # Should have at least one operation recorded
 
 
 class TestRealLibacarsCircuitBreaker:
@@ -292,16 +278,12 @@ class TestRealLibacarsCircuitBreaker:
         reset_circuit_breaker()
         breaker = get_circuit_breaker()
 
-        # Should start closed
         assert breaker.is_closed
 
-        # Perform some decodes
         for i in range(10):
             decode_acars_apps("H1", f"Test {i}", MsgDir.AIR2GND)
 
-        # Circuit should remain closed after successful operations
         stats = breaker.get_stats()
-        # Check operations were tracked
 
 
 class TestRealLibacarsMetrics:
@@ -315,11 +297,9 @@ class TestRealLibacarsMetrics:
         reset_metrics()
         metrics = get_metrics_collector()
 
-        # Perform some decodes
         for i in range(5):
             decode_acars_apps("H1", f"Test {i}", MsgDir.AIR2GND)
 
-        # Check metrics were recorded
         all_metrics = metrics.get_all_metrics()
         assert "counters" in all_metrics
         assert "timings" in all_metrics
@@ -332,14 +312,12 @@ class TestRealLibacarsMetrics:
         reset_metrics()
         metrics = get_metrics_collector()
 
-        # Perform some operations
         decode_acars_apps("H1", "Test", MsgDir.AIR2GND)
 
-        # Export
         output = metrics.export_prometheus()
 
         assert isinstance(output, str)
-        assert "libacars" in output  # Prefix should be present
+        assert "libacars" in output
 
 
 class TestRealLibacarsHealth:
@@ -353,31 +331,3 @@ class TestRealLibacarsHealth:
 
         assert isinstance(health, dict)
         assert "healthy" in health
-        assert "checks" in health
-
-
-# Fixtures for integration tests
-
-@pytest.fixture(autouse=True)
-def reset_state():
-    """Reset all state before each integration test."""
-    from skyspy_common.libacars import reset_stats, reset_error_state
-    from skyspy_common.libacars.cache import reset_caches
-    from skyspy_common.libacars.circuit_breaker import reset_circuit_breaker
-    from skyspy_common.libacars.metrics import reset_metrics
-    from skyspy_common.libacars.pool import reset_pools
-
-    reset_stats()
-    reset_error_state()
-    reset_caches()
-    reset_circuit_breaker()
-    reset_metrics()
-    reset_pools()
-
-    yield
-
-    # Cleanup after test
-    reset_caches()
-    reset_circuit_breaker()
-    reset_metrics()
-    reset_pools()

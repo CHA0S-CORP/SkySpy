@@ -725,3 +725,48 @@ func TestCallbackServer_ErrorPage(t *testing.T) {
 		t.Error("expected error description in page")
 	}
 }
+
+func TestCallbackServer_AllPortsExhausted(t *testing.T) {
+	// Occupy all ports in the range 8400-8500 to test port exhaustion
+	var listeners []net.Listener
+	defer func() {
+		for _, l := range listeners {
+			l.Close()
+		}
+	}()
+
+	// Occupy all ports
+	for p := 8400; p <= 8500; p++ {
+		l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p))
+		if err == nil {
+			listeners = append(listeners, l)
+		}
+	}
+
+	// If we couldn't occupy all ports, skip this test
+	if len(listeners) < 50 {
+		t.Skip("could not occupy enough ports to test exhaustion")
+	}
+
+	// Now try to create a callback server - should fail
+	_, err := NewCallbackServer()
+	if err == nil {
+		t.Error("expected error when all ports are exhausted")
+	}
+	if err != nil && !strings.Contains(err.Error(), "could not find available port") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestCallbackServer_StopWithNilServer(t *testing.T) {
+	// Test stopping a server that was never started
+	server := &CallbackServer{
+		shutdownCh: make(chan struct{}),
+	}
+
+	// This should not panic
+	err := server.Stop()
+	if err != nil {
+		t.Errorf("unexpected error stopping nil server: %v", err)
+	}
+}

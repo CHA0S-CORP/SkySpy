@@ -67,7 +67,7 @@ services:
         echo 'Running database migrations...' &&
         python manage.py migrate --noinput &&
         echo 'Running tests...' &&
-        pytest -v --tb=short --junitxml=/app/test-results/results.xml
+        COVERAGE_FILE=/app/test-results/.coverage pytest -v --tb=short --junitxml=/app/test-results/results.xml --cov=skyspy --cov-report=xml:/app/test-results/coverage.xml --cov-report=html:/app/test-results/coverage --cov-report=term-missing --cov-fail-under=40
       "
 
   # Django API Development server

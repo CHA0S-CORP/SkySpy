@@ -567,3 +567,138 @@ func TestFeatureAccess_Fields(t *testing.T) {
 		t.Error("expected IsEnabled to be true")
 	}
 }
+
+func TestGetOIDCAuthorizationURL_NoRedirectURI(t *testing.T) {
+	expectedURL := "https://auth.example.com/authorize?client_id=skyspy"
+	expectedState := "random-state-123"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/auth/oidc/authorize" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+
+		// Check that redirect_uri is NOT present
+		redirectURI := r.URL.Query().Get("redirect_uri")
+		if redirectURI != "" {
+			t.Errorf("expected no redirect_uri, got '%s'", redirectURI)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(OIDCAuthorizeResponse{
+			AuthorizationURL: expectedURL,
+			State:            expectedState,
+		})
+	}))
+	defer server.Close()
+
+	// Call without redirect URI
+	resp, err := GetOIDCAuthorizationURL(server.URL, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if resp.AuthorizationURL != expectedURL {
+		t.Errorf("expected AuthorizationURL '%s', got '%s'", expectedURL, resp.AuthorizationURL)
+	}
+}
+
+func TestGetOIDCAuthorizationURL_InvalidJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("not valid json"))
+	}))
+	defer server.Close()
+
+	_, err := GetOIDCAuthorizationURL(server.URL, "http://localhost:8400/callback")
+	if err == nil {
+		t.Error("expected error for invalid JSON response")
+	}
+}
+
+func TestGetOIDCAuthorizationURL_ConnectionError(t *testing.T) {
+	_, err := GetOIDCAuthorizationURL("http://127.0.0.1:59999", "http://localhost:8400/callback")
+	if err == nil {
+		t.Error("expected error for connection failure")
+	}
+}
+
+func TestRefreshAccessToken_InvalidJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("not valid json"))
+	}))
+	defer server.Close()
+
+	_, err := RefreshAccessToken(server.URL, "test-refresh-token")
+	if err == nil {
+		t.Error("expected error for invalid JSON response")
+	}
+}
+
+func TestRefreshAccessToken_ConnectionError(t *testing.T) {
+	_, err := RefreshAccessToken("http://127.0.0.1:59999", "test-refresh-token")
+	if err == nil {
+		t.Error("expected error for connection failure")
+	}
+}
+
+func TestFetchUserProfile_InvalidJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("not valid json"))
+	}))
+	defer server.Close()
+
+	_, err := FetchUserProfile(server.URL, "test-access-token")
+	if err == nil {
+		t.Error("expected error for invalid JSON response")
+	}
+}
+
+func TestFetchUserProfile_ConnectionError(t *testing.T) {
+	_, err := FetchUserProfile("http://127.0.0.1:59999", "test-access-token")
+	if err == nil {
+		t.Error("expected error for connection failure")
+	}
+}
+
+func TestOIDCAuthorizeResponse_Fields(t *testing.T) {
+	jsonData := `{
+		"authorization_url": "https://auth.example.com/authorize",
+		"state": "random-state"
+	}`
+
+	var resp OIDCAuthorizeResponse
+	err := json.Unmarshal([]byte(jsonData), &resp)
+	if err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	if resp.AuthorizationURL != "https://auth.example.com/authorize" {
+		t.Errorf("unexpected AuthorizationURL: %s", resp.AuthorizationURL)
+	}
+
+	if resp.State != "random-state" {
+		t.Errorf("unexpected State: %s", resp.State)
+	}
+}
+
+func TestRefreshAccessToken_NewRequestError(t *testing.T) {
+	// Test with invalid URL to trigger http.NewRequest error
+	// Note: http.NewRequest only fails with invalid method or malformed URL
+	// A URL like "://" should cause a parse error
+	_, err := RefreshAccessToken("://invalid-url", "test-token")
+	if err == nil {
+		t.Error("expected error for invalid URL")
+	}
+}
+
+func TestFetchUserProfile_NewRequestError(t *testing.T) {
+	// Test with invalid URL to trigger http.NewRequest error
+	_, err := FetchUserProfile("://invalid-url", "test-token")
+	if err == nil {
+		t.Error("expected error for invalid URL")
+	}
+}

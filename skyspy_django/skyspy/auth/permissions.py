@@ -262,11 +262,27 @@ class HasPermission(permissions.BasePermission):
 
     required_permissions = []
 
+    # Permissions that should always be enforced regardless of AUTH_MODE
+    # (admin/user management permissions)
+    ALWAYS_ENFORCE_PERMISSIONS = {
+        'users.view', 'users.create', 'users.edit', 'users.delete',
+        'roles.view', 'roles.create', 'roles.edit', 'roles.delete',
+    }
+
     def has_permission(self, request, view):
         """Check if user has required permissions."""
-        # Check auth mode
+        # Get required permissions from view or class
+        required = getattr(view, 'required_permissions', None) or self.required_permissions
+
+        # Check if any required permissions are admin-related (always enforce)
+        always_enforce = any(
+            perm in self.ALWAYS_ENFORCE_PERMISSIONS
+            for perm in required
+        ) if required else False
+
+        # Check auth mode - only bypass for non-admin permissions
         auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
-        if auth_mode == 'public':
+        if auth_mode == 'public' and not always_enforce:
             return True
 
         user = request.user
@@ -276,8 +292,6 @@ class HasPermission(permissions.BasePermission):
         if user.is_superuser:
             return True
 
-        # Get required permissions from view or class
-        required = getattr(view, 'required_permissions', None) or self.required_permissions
         if not required:
             return True
 
@@ -308,10 +322,24 @@ class HasAnyPermission(permissions.BasePermission):
 
     required_permissions = []
 
+    # Permissions that should always be enforced regardless of AUTH_MODE
+    # (admin/user management permissions)
+    ALWAYS_ENFORCE_PERMISSIONS = HasPermission.ALWAYS_ENFORCE_PERMISSIONS
+
     def has_permission(self, request, view):
         """Check if user has any of the required permissions."""
+        # Get required permissions from view or class
+        required = getattr(view, 'required_permissions', None) or self.required_permissions
+
+        # Check if any required permissions are admin-related (always enforce)
+        always_enforce = any(
+            perm in self.ALWAYS_ENFORCE_PERMISSIONS
+            for perm in required
+        ) if required else False
+
+        # Check auth mode - only bypass for non-admin permissions
         auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
-        if auth_mode == 'public':
+        if auth_mode == 'public' and not always_enforce:
             return True
 
         user = request.user
@@ -321,7 +349,6 @@ class HasAnyPermission(permissions.BasePermission):
         if user.is_superuser:
             return True
 
-        required = getattr(view, 'required_permissions', None) or self.required_permissions
         if not required:
             return True
 
@@ -442,6 +469,11 @@ class CanAccessAlert(permissions.BasePermission):
         return self._has_perm(user, required_perm) if required_perm else False
 
     def has_object_permission(self, request, view, obj):
+        # Check auth mode - public mode allows all access
+        auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
+        if auth_mode == 'public':
+            return True
+
         user = request.user
         if not user or not user.is_authenticated:
             return False

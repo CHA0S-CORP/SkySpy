@@ -37,7 +37,7 @@ class PersonalRecord(models.Model):
 
     # For session-based records
     session = models.ForeignKey(
-        'aircraft.AircraftSession',
+        'skyspy.AircraftSession',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -101,7 +101,7 @@ class RareSighting(models.Model):
     # Sighting details
     sighted_at = models.DateTimeField(db_index=True)
     session = models.ForeignKey(
-        'aircraft.AircraftSession',
+        'skyspy.AircraftSession',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

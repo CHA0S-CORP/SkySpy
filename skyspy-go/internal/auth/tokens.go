@@ -157,12 +157,10 @@ func (s *FileTokenStore) List() ([]string, error) {
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
 			// Convert filename back to host
+			// Filename format: host_port.json (underscore separates host from port)
 			name := strings.TrimSuffix(entry.Name(), ".json")
-			host := strings.ReplaceAll(name, "_", ":")
-			// Only replace first underscore with colon (for port)
-			if idx := strings.LastIndex(host, ":"); idx > 0 {
-				host = name[:idx] + ":" + name[idx+1:len(name)-5]
-			}
+			// Replace underscore with colon for host:port format
+			host := strings.Replace(name, "_", ":", 1) // Only replace first underscore
 			hosts = append(hosts, host)
 		}
 	}

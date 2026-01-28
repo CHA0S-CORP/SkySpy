@@ -53,8 +53,8 @@ class AlertRuleListViewTests(APITestCase):
 
     def test_list_with_rules(self):
         """Test list response with existing rules."""
-        AlertRule.objects.create(name='Rule 1', rule_type='icao', value='ABC123')
-        AlertRule.objects.create(name='Rule 2', rule_type='callsign', value='UAL*')
+        AlertRule.objects.create(name='Rule 1', rule_type='icao', value='ABC123', visibility='public')
+        AlertRule.objects.create(name='Rule 2', rule_type='callsign', value='UAL*', visibility='public')
 
         response = self.client.get('/api/v1/alerts/rules/')
         data = response.json()
@@ -72,6 +72,7 @@ class AlertRuleListViewTests(APITestCase):
             description='Test description',
             enabled=True,
             priority='warning',
+            visibility='public',
         )
 
         response = self.client.get('/api/v1/alerts/rules/')
@@ -87,8 +88,8 @@ class AlertRuleListViewTests(APITestCase):
 
     def test_list_filter_by_enabled(self):
         """Test filtering rules by enabled status."""
-        AlertRule.objects.create(name='Enabled', enabled=True)
-        AlertRule.objects.create(name='Disabled', enabled=False)
+        AlertRule.objects.create(name='Enabled', enabled=True, visibility='public')
+        AlertRule.objects.create(name='Disabled', enabled=False, visibility='public')
 
         response = self.client.get('/api/v1/alerts/rules/?enabled=true')
         data = response.json()
@@ -98,9 +99,9 @@ class AlertRuleListViewTests(APITestCase):
 
     def test_list_filter_by_priority(self):
         """Test filtering rules by priority."""
-        AlertRule.objects.create(name='Info', priority='info')
-        AlertRule.objects.create(name='Warning', priority='warning')
-        AlertRule.objects.create(name='Critical', priority='critical')
+        AlertRule.objects.create(name='Info', priority='info', visibility='public')
+        AlertRule.objects.create(name='Warning', priority='warning', visibility='public')
+        AlertRule.objects.create(name='Critical', priority='critical', visibility='public')
 
         response = self.client.get('/api/v1/alerts/rules/?priority=critical')
         data = response.json()
@@ -110,8 +111,8 @@ class AlertRuleListViewTests(APITestCase):
 
     def test_list_filter_by_rule_type(self):
         """Test filtering rules by type."""
-        AlertRule.objects.create(name='ICAO Rule', rule_type='icao')
-        AlertRule.objects.create(name='Callsign Rule', rule_type='callsign')
+        AlertRule.objects.create(name='ICAO Rule', rule_type='icao', visibility='public')
+        AlertRule.objects.create(name='Callsign Rule', rule_type='callsign', visibility='public')
 
         response = self.client.get('/api/v1/alerts/rules/?rule_type=icao')
         data = response.json()
@@ -263,6 +264,7 @@ class AlertRuleRetrieveViewTests(APITestCase):
             rule_type='icao',
             value='ABC123',
             priority='warning',
+            visibility='public',
         )
 
     def tearDown(self):
@@ -302,6 +304,7 @@ class AlertRuleUpdateViewTests(APITestCase):
             value='ABC123',
             priority='info',
             enabled=True,
+            visibility='public',
         )
 
     def tearDown(self):
@@ -401,7 +404,7 @@ class AlertRuleDeleteViewTests(APITestCase):
         """Set up test fixtures."""
         self.client = APIClient()
         AlertRule.objects.all().delete()
-        self.rule = AlertRule.objects.create(name='To Delete')
+        self.rule = AlertRule.objects.create(name='To Delete', visibility='public')
 
     def tearDown(self):
         """Clean up after tests."""
@@ -438,7 +441,7 @@ class AlertRuleToggleViewTests(APITestCase):
         """Set up test fixtures."""
         self.client = APIClient()
         AlertRule.objects.all().delete()
-        self.rule = AlertRule.objects.create(name='Toggle Test', enabled=True)
+        self.rule = AlertRule.objects.create(name='Toggle Test', enabled=True, visibility='public')
 
     def tearDown(self):
         """Clean up after tests."""
@@ -519,7 +522,7 @@ class AlertHistoryListViewTests(APITestCase):
 
     def test_list_with_history(self):
         """Test list with existing history entries."""
-        rule = AlertRule.objects.create(name='Test Rule')
+        rule = AlertRule.objects.create(name='Test Rule', visibility='public')
         AlertHistory.objects.create(
             rule=rule,
             rule_name='Test Rule',
@@ -535,7 +538,7 @@ class AlertHistoryListViewTests(APITestCase):
 
     def test_list_time_filter(self):
         """Test filtering by time range."""
-        rule = AlertRule.objects.create(name='Test Rule')
+        rule = AlertRule.objects.create(name='Test Rule', visibility='public')
 
         # Create entry outside time range
         old_entry = AlertHistory.objects.create(
@@ -562,7 +565,7 @@ class AlertHistoryListViewTests(APITestCase):
 
     def test_list_filter_by_icao(self):
         """Test filtering history by ICAO hex."""
-        rule = AlertRule.objects.create(name='Test')
+        rule = AlertRule.objects.create(name='Test', visibility='public')
         AlertHistory.objects.create(rule=rule, icao_hex='ABC123')
         AlertHistory.objects.create(rule=rule, icao_hex='DEF456')
 
@@ -574,7 +577,7 @@ class AlertHistoryListViewTests(APITestCase):
 
     def test_list_filter_by_priority(self):
         """Test filtering history by priority."""
-        rule = AlertRule.objects.create(name='Test')
+        rule = AlertRule.objects.create(name='Test', visibility='public')
         AlertHistory.objects.create(rule=rule, icao_hex='A', priority='info')
         AlertHistory.objects.create(rule=rule, icao_hex='B', priority='critical')
 
@@ -586,7 +589,7 @@ class AlertHistoryListViewTests(APITestCase):
 
     def test_list_ordered_by_time(self):
         """Test that history is ordered by triggered time descending."""
-        rule = AlertRule.objects.create(name='Test')
+        rule = AlertRule.objects.create(name='Test', visibility='public')
         AlertHistory.objects.create(rule=rule, icao_hex='FIRST')
         AlertHistory.objects.create(rule=rule, icao_hex='SECOND')
 
@@ -605,9 +608,21 @@ class AlertHistoryClearViewTests(APITestCase):
         self.client = APIClient()
         AlertHistory.objects.all().delete()
         AlertRule.objects.all().delete()
+        # Create a superuser for authenticated requests
+        from django.contrib.auth import get_user_model
+        import uuid
+        User = get_user_model()
+        username = f'admin_{uuid.uuid4().hex[:8]}'
+        self.user = User.objects.create_superuser(
+            username=username,
+            email=f'{username}@test.com',
+            password='testpass123'
+        )
+        self.client.force_authenticate(user=self.user)
 
     def tearDown(self):
         """Clean up after tests."""
+        self.client.force_authenticate(user=None)
         AlertHistory.objects.all().delete()
         AlertRule.objects.all().delete()
 
@@ -664,11 +679,22 @@ class AlertsIntegrationTests(APITestCase):
         self.client = APIClient()
         AlertRule.objects.all().delete()
         AlertHistory.objects.all().delete()
+        # Create a superuser for authenticated requests
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        self.user = User.objects.create_superuser(
+            username='admin',
+            email='admin@test.com',
+            password='testpass123'
+        )
+        self.client.force_authenticate(user=self.user)
 
     def tearDown(self):
         """Clean up after tests."""
         AlertRule.objects.all().delete()
         AlertHistory.objects.all().delete()
+        from django.contrib.auth import get_user_model
+        get_user_model().objects.all().delete()
 
     def test_crud_workflow(self):
         """Test complete CRUD workflow."""
@@ -705,8 +731,8 @@ class AlertsIntegrationTests(APITestCase):
 
     def test_history_linked_to_rule(self):
         """Test that history entries are linked to rules."""
-        # Create rule
-        rule = AlertRule.objects.create(name='History Test')
+        # Create rule - must be public for anonymous access or owned by authenticated user
+        rule = AlertRule.objects.create(name='History Test', visibility='public')
 
         # Create history entry linked to rule
         AlertHistory.objects.create(
@@ -724,7 +750,7 @@ class AlertsIntegrationTests(APITestCase):
 
     def test_all_endpoints_return_json(self):
         """Test that all endpoints return JSON."""
-        rule = AlertRule.objects.create(name='JSON Test')
+        rule = AlertRule.objects.create(name='JSON Test', visibility='public')
 
         endpoints = [
             ('/api/v1/alerts/rules/', 'GET'),

@@ -956,3 +956,232 @@ func TestEmergencySquawks(t *testing.T) {
 		}
 	}
 }
+
+// ============================================================================
+// Additional Coverage Tests
+// ============================================================================
+
+func TestParseQuery_AltitudeInvalidFormat(t *testing.T) {
+	// Test altitude with invalid number format
+	filter := ParseQuery("alt:>abc")
+
+	// Should not set MinAltitude due to parse error
+	if filter.MinAltitude != 0 {
+		t.Errorf("expected MinAltitude 0 for invalid format, got %d", filter.MinAltitude)
+	}
+
+	// Test altitude range with invalid numbers
+	filter = ParseQuery("alt:abc-def")
+	if filter.MinAltitude != 0 || filter.MaxAltitude != 0 {
+		t.Error("expected no altitude values for invalid range format")
+	}
+
+	// Test altitude below with invalid number
+	filter = ParseQuery("alt:<xyz")
+	if filter.MaxAltitude != 0 {
+		t.Errorf("expected MaxAltitude 0 for invalid format, got %d", filter.MaxAltitude)
+	}
+
+	// Test altitude exact value with invalid number
+	filter = ParseQuery("alt:notanumber")
+	if filter.MinAltitude != 0 {
+		t.Errorf("expected MinAltitude 0 for invalid exact value, got %d", filter.MinAltitude)
+	}
+}
+
+func TestParseQuery_DistanceInvalidFormat(t *testing.T) {
+	// Test distance with invalid number format
+	filter := ParseQuery("dist:>abc")
+
+	// Should not set MinDistance due to parse error
+	if filter.MinDistance != 0 {
+		t.Errorf("expected MinDistance 0 for invalid format, got %f", filter.MinDistance)
+	}
+
+	// Test distance range with invalid numbers
+	filter = ParseQuery("dist:abc-def")
+	if filter.MinDistance != 0 || filter.MaxDistance != 0 {
+		t.Error("expected no distance values for invalid range format")
+	}
+
+	// Test distance below with invalid number
+	filter = ParseQuery("dist:<xyz")
+	if filter.MaxDistance != 0 {
+		t.Errorf("expected MaxDistance 0 for invalid format, got %f", filter.MaxDistance)
+	}
+
+	// Test distance exact value with invalid number
+	filter = ParseQuery("dist:notanumber")
+	if filter.MaxDistance != 0 {
+		t.Errorf("expected MaxDistance 0 for invalid exact value, got %f", filter.MaxDistance)
+	}
+}
+
+func TestParseQuery_AltitudeExactValue(t *testing.T) {
+	// Exact value should be treated as minimum
+	filter := ParseQuery("alt:15000")
+
+	if filter.MinAltitude != 15000 {
+		t.Errorf("expected MinAltitude 15000, got %d", filter.MinAltitude)
+	}
+	if filter.MaxAltitude != 0 {
+		t.Errorf("expected MaxAltitude 0, got %d", filter.MaxAltitude)
+	}
+}
+
+func TestParseQuery_DistanceExactValue(t *testing.T) {
+	// Exact value should be treated as maximum
+	filter := ParseQuery("dist:50")
+
+	if filter.MaxDistance != 50.0 {
+		t.Errorf("expected MaxDistance 50.0, got %f", filter.MaxDistance)
+	}
+	if filter.MinDistance != 0 {
+		t.Errorf("expected MinDistance 0, got %f", filter.MinDistance)
+	}
+}
+
+func TestParseQuery_EmptyAltitudeFilter(t *testing.T) {
+	filter := ParseQuery("alt:")
+
+	if filter.MinAltitude != 0 || filter.MaxAltitude != 0 {
+		t.Error("expected no altitude values for empty filter")
+	}
+}
+
+func TestParseQuery_EmptyDistanceFilter(t *testing.T) {
+	filter := ParseQuery("dist:")
+
+	if filter.MinDistance != 0 || filter.MaxDistance != 0 {
+		t.Error("expected no distance values for empty filter")
+	}
+}
+
+func TestParseQuery_AltitudeRangePartialInvalid(t *testing.T) {
+	// Valid min, invalid max
+	filter := ParseQuery("alt:1000-abc")
+	if filter.MinAltitude != 1000 {
+		t.Errorf("expected MinAltitude 1000, got %d", filter.MinAltitude)
+	}
+	if filter.MaxAltitude != 0 {
+		t.Errorf("expected MaxAltitude 0 for invalid max, got %d", filter.MaxAltitude)
+	}
+
+	// Invalid min, valid max
+	filter = ParseQuery("alt:abc-5000")
+	if filter.MinAltitude != 0 {
+		t.Errorf("expected MinAltitude 0 for invalid min, got %d", filter.MinAltitude)
+	}
+	if filter.MaxAltitude != 5000 {
+		t.Errorf("expected MaxAltitude 5000, got %d", filter.MaxAltitude)
+	}
+}
+
+func TestParseQuery_DistanceRangePartialInvalid(t *testing.T) {
+	// Valid min, invalid max
+	filter := ParseQuery("dist:10-abc")
+	if filter.MinDistance != 10 {
+		t.Errorf("expected MinDistance 10, got %f", filter.MinDistance)
+	}
+	if filter.MaxDistance != 0 {
+		t.Errorf("expected MaxDistance 0 for invalid max, got %f", filter.MaxDistance)
+	}
+
+	// Invalid min, valid max
+	filter = ParseQuery("dist:abc-50")
+	if filter.MinDistance != 0 {
+		t.Errorf("expected MinDistance 0 for invalid min, got %f", filter.MinDistance)
+	}
+	if filter.MaxDistance != 50 {
+		t.Errorf("expected MaxDistance 50, got %f", filter.MaxDistance)
+	}
+}
+
+func TestFilter_Description_AllCombinations(t *testing.T) {
+	// Test distance above only
+	filter := &Filter{MinDistance: 10.0}
+	desc := filter.Description()
+	if desc != "DST>10" {
+		t.Errorf("expected 'DST>10', got %q", desc)
+	}
+
+	// Test distance below only
+	filter = &Filter{MaxDistance: 50.0}
+	desc = filter.Description()
+	if desc != "DST<50" {
+		t.Errorf("expected 'DST<50', got %q", desc)
+	}
+
+	// Test distance range
+	filter = &Filter{MinDistance: 10.0, MaxDistance: 50.0}
+	desc = filter.Description()
+	if desc != "DST:10-50" {
+		t.Errorf("expected 'DST:10-50', got %q", desc)
+	}
+
+	// Test with text query
+	filter = &Filter{textQuery: "UAL"}
+	desc = filter.Description()
+	if desc != "\"UAL\"" {
+		t.Errorf("expected '\"UAL\"', got %q", desc)
+	}
+
+	// Test full combination
+	filter = &Filter{
+		textQuery:    "UAL",
+		MilitaryOnly: true,
+		SquawkCodes:  []string{"7700"},
+		MinAltitude:  10000,
+		MaxAltitude:  30000,
+		MinDistance:  5,
+		MaxDistance:  100,
+	}
+	desc = filter.Description()
+	// Should contain all parts
+	if len(desc) == 0 {
+		t.Error("expected non-empty description for full filter")
+	}
+}
+
+func TestFilter_HighlightMatch_NilFilter(t *testing.T) {
+	var filter *Filter
+	before, match, after := filter.HighlightMatch("test")
+
+	if before != "test" || match != "" || after != "" {
+		t.Errorf("nil filter should return text unchanged, got before=%q match=%q after=%q",
+			before, match, after)
+	}
+}
+
+func TestParseQuery_SquawkWithSpaces(t *testing.T) {
+	// Squawk code with trailing comma (edge case)
+	filter := ParseQuery("sq:7700,")
+
+	// Should have one squawk code (empty string after comma is trimmed)
+	if len(filter.SquawkCodes) != 1 {
+		t.Errorf("expected 1 squawk code, got %d", len(filter.SquawkCodes))
+	}
+	if filter.SquawkCodes[0] != "7700" {
+		t.Errorf("expected '7700', got %q", filter.SquawkCodes[0])
+	}
+}
+
+func TestParseQuery_NegativeAltitude(t *testing.T) {
+	// Negative value starting with - should not be treated as range
+	filter := ParseQuery("alt:-500")
+
+	// This should be parsed as exact value (treated as min)
+	if filter.MinAltitude != -500 {
+		t.Errorf("expected MinAltitude -500, got %d", filter.MinAltitude)
+	}
+}
+
+func TestParseQuery_NegativeDistance(t *testing.T) {
+	// Negative value starting with - should not be treated as range
+	filter := ParseQuery("dist:-10")
+
+	// This should be parsed as exact value (treated as max)
+	if filter.MaxDistance != -10 {
+		t.Errorf("expected MaxDistance -10, got %f", filter.MaxDistance)
+	}
+}

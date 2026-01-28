@@ -98,6 +98,10 @@ SIMPLE_JWT = {
 # Enable API key authentication
 API_KEY_ENABLED = True
 
+# Auth mode for tests - 'public' allows all access without authentication
+# This is appropriate for tests that aren't specifically testing authentication
+AUTH_MODE = 'public'
+
 # =============================================================================
 # Test Environment Configuration
 # =============================================================================

@@ -142,6 +142,27 @@ class UserCreateSerializer(serializers.ModelSerializer):
             validate_password(value)
         return value
 
+    def _can_assign_role(self, role):
+        """Check if the requesting user can assign this role."""
+        request = self.context.get('request')
+        if not request or not request.user:
+            return False
+
+        # Superusers can assign any role
+        if request.user.is_superuser:
+            return True
+
+        # Non-superusers cannot assign the superadmin role
+        if role.name == 'superadmin':
+            return False
+
+        # Check if the requesting user has the users.create permission
+        try:
+            profile = request.user.skyspy_profile
+            return profile.has_permission('users.create')
+        except Exception:
+            return False
+
     def create(self, validated_data):
         import secrets
 
@@ -169,7 +190,9 @@ class UserCreateSerializer(serializers.ModelSerializer):
         for role_name in roles:
             try:
                 role = Role.objects.get(name=role_name)
-                UserRole.objects.create(user=user, role=role)
+                # Check if the requesting user can assign this role
+                if self._can_assign_role(role):
+                    UserRole.objects.create(user=user, role=role)
             except Role.DoesNotExist:
                 pass
 
@@ -177,9 +200,11 @@ class UserCreateSerializer(serializers.ModelSerializer):
         for role_id in role_ids:
             try:
                 role = Role.objects.get(id=role_id)
-                # Check if this role assignment already exists (to avoid duplicates)
-                if not UserRole.objects.filter(user=user, role=role).exists():
-                    UserRole.objects.create(user=user, role=role)
+                # Check if the requesting user can assign this role
+                if self._can_assign_role(role):
+                    # Check if this role assignment already exists (to avoid duplicates)
+                    if not UserRole.objects.filter(user=user, role=role).exists():
+                        UserRole.objects.create(user=user, role=role)
             except Role.DoesNotExist:
                 pass
 

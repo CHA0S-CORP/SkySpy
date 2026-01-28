@@ -1,0 +1,1273 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>auth: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/skyspy/skyspy-go/internal/auth/auth.go (96.7%)</option>
+				
+				<option value="file1">github.com/skyspy/skyspy-go/internal/auth/browser.go (22.2%)</option>
+				
+				<option value="file2">github.com/skyspy/skyspy-go/internal/auth/callback.go (100.0%)</option>
+				
+				<option value="file3">github.com/skyspy/skyspy-go/internal/auth/config.go (96.4%)</option>
+				
+				<option value="file4">github.com/skyspy/skyspy-go/internal/auth/tokens.go (87.8%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package auth
+
+import (
+        "context"
+        "encoding/json"
+        "fmt"
+        "io"
+        "net/http"
+        "net/url"
+        "strings"
+        "sync"
+        "time"
+)
+
+// Manager handles authentication for the CLI
+type Manager struct {
+        baseURL    string
+        host       string
+        config     *AuthConfig
+        tokenStore TokenStore
+        tokens     *TokenSet
+        apiKey     string
+        mu         sync.RWMutex
+}
+
+// NewManager creates a new authentication manager
+func NewManager(host string, port int) (*Manager, error) <span class="cov8" title="1">{
+        baseURL := fmt.Sprintf("http://%s:%d", host, port)
+        hostKey := fmt.Sprintf("%s:%d", host, port)
+
+        // Fetch auth configuration
+        config, err := FetchAuthConfig(baseURL)
+        if err != nil </span><span class="cov8" title="1">{
+                // If we can't fetch config, assume public mode
+                config = &amp;AuthConfig{
+                        AuthMode:    "public",
+                        AuthEnabled: false,
+                }
+        }</span>
+
+        // Initialize token store
+        <span class="cov8" title="1">tokenStore, err := NewFileTokenStore()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to initialize token store: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">m := &amp;Manager{
+                baseURL:    baseURL,
+                host:       hostKey,
+                config:     config,
+                tokenStore: tokenStore,
+        }
+
+        // Load existing tokens
+        tokens, err := tokenStore.Load(hostKey)
+        if err == nil &amp;&amp; tokens != nil </span><span class="cov8" title="1">{
+                m.tokens = tokens
+        }</span>
+
+        <span class="cov8" title="1">return m, nil</span>
+}
+
+// SetAPIKey sets an API key for authentication
+func (m *Manager) SetAPIKey(key string) <span class="cov8" title="1">{
+        m.mu.Lock()
+        defer m.mu.Unlock()
+        m.apiKey = key
+}</span>
+
+// RequiresAuth returns true if authentication is required
+func (m *Manager) RequiresAuth() bool <span class="cov8" title="1">{
+        return m.config.AuthEnabled &amp;&amp; m.config.AuthMode != "public"
+}</span>
+
+// IsAuthenticated returns true if we have valid credentials
+func (m *Manager) IsAuthenticated() bool <span class="cov8" title="1">{
+        m.mu.RLock()
+        defer m.mu.RUnlock()
+
+        // API key takes precedence
+        if m.apiKey != "" </span><span class="cov8" title="1">{
+                return true
+        }</span>
+
+        // Check tokens
+        <span class="cov8" title="1">if m.tokens == nil </span><span class="cov8" title="1">{
+                return false
+        }</span>
+
+        // If token is expired but we have refresh token, we can refresh
+        <span class="cov8" title="1">if m.tokens.RefreshToken != "" </span><span class="cov8" title="1">{
+                return true
+        }</span>
+
+        <span class="cov8" title="1">return !m.tokens.IsExpired()</span>
+}
+
+// GetAuthConfig returns the auth configuration
+func (m *Manager) GetAuthConfig() *AuthConfig <span class="cov8" title="1">{
+        return m.config
+}</span>
+
+// GetUsername returns the authenticated user's username
+func (m *Manager) GetUsername() string <span class="cov8" title="1">{
+        m.mu.RLock()
+        defer m.mu.RUnlock()
+        if m.tokens != nil </span><span class="cov8" title="1">{
+                return m.tokens.Username
+        }</span>
+        <span class="cov8" title="1">return ""</span>
+}
+
+// Login initiates the login flow
+func (m *Manager) Login(ctx context.Context) error <span class="cov8" title="1">{
+        if !m.config.AuthEnabled </span><span class="cov8" title="1">{
+                return fmt.Errorf("server does not require authentication")
+        }</span>
+
+        <span class="cov8" title="1">if m.config.OIDCEnabled </span><span class="cov8" title="1">{
+                return m.loginOIDC(ctx)
+        }</span>
+
+        <span class="cov8" title="1">if m.config.LocalAuthEnabled </span><span class="cov8" title="1">{
+                return fmt.Errorf("local authentication not supported in CLI - use OIDC or API key")
+        }</span>
+
+        <span class="cov8" title="1">return fmt.Errorf("no supported authentication method available")</span>
+}
+
+// loginOIDC performs OIDC authentication flow
+func (m *Manager) loginOIDC(ctx context.Context) error <span class="cov8" title="1">{
+        // Start callback server
+        callbackServer, err := NewCallbackServer()
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to start callback server: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer callbackServer.Stop()
+
+        if err := callbackServer.Start(); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to start callback server: %w", err)
+        }</span>
+
+        // Get OIDC authorization URL
+        <span class="cov8" title="1">redirectURI := callbackServer.RedirectURI()
+        authResp, err := GetOIDCAuthorizationURL(m.baseURL, redirectURI)
+        if err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("failed to get authorization URL: %w", err)
+        }</span>
+
+        // Open browser
+        <span class="cov8" title="1">fmt.Printf("Opening browser for authentication...\n")
+        if CanOpenBrowser() </span><span class="cov8" title="1">{
+                if err := OpenBrowser(authResp.AuthorizationURL); err != nil </span><span class="cov0" title="0">{
+                        fmt.Printf("Could not open browser automatically.\n")
+                        fmt.Printf("Please open this URL in your browser:\n\n%s\n\n", authResp.AuthorizationURL)
+                }</span>
+        } else<span class="cov0" title="0"> {
+                fmt.Printf("Please open this URL in your browser:\n\n%s\n\n", authResp.AuthorizationURL)
+        }</span>
+
+        // Wait for callback
+        <span class="cov8" title="1">fmt.Printf("Waiting for authentication (timeout: 5 minutes)...\n")
+        result, err := callbackServer.WaitForCallback(ctx, 5*time.Minute)
+        if err != nil </span><span class="cov8" title="1">{
+                return err
+        }</span>
+
+        // Exchange code for tokens via the API callback endpoint
+        <span class="cov8" title="1">tokens, err := m.exchangeCodeForTokens(result.Code, result.State, redirectURI)
+        if err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("failed to exchange code for tokens: %w", err)
+        }</span>
+
+        // Store tokens
+        <span class="cov8" title="1">m.mu.Lock()
+        m.tokens = tokens
+        m.mu.Unlock()
+
+        if err := m.tokenStore.Save(m.host, tokens); err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("failed to save tokens: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// exchangeCodeForTokens exchanges the authorization code for tokens
+func (m *Manager) exchangeCodeForTokens(code, state, redirectURI string) (*TokenSet, error) <span class="cov8" title="1">{
+        // Call the API's callback endpoint to exchange the code
+        // The API handles the actual token exchange with the OIDC provider
+        callbackURL := fmt.Sprintf("%s/api/v1/auth/oidc/callback?code=%s&amp;state=%s&amp;redirect_uri=%s&amp;cli=true",
+                m.baseURL,
+                url.QueryEscape(code),
+                url.QueryEscape(state),
+                url.QueryEscape(redirectURI))
+
+        client := &amp;http.Client{
+                Timeout: 30 * time.Second,
+                CheckRedirect: func(req *http.Request, via []*http.Request) error </span><span class="cov8" title="1">{
+                        // Don't follow redirects - we want the JSON response
+                        return http.ErrUseLastResponse
+                }</span>,
+        }
+
+        <span class="cov8" title="1">resp, err := client.Get(callbackURL)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">defer resp.Body.Close()
+
+        // The API might return tokens directly or in a different format
+        // Try to parse the response
+        if resp.StatusCode == http.StatusOK </span><span class="cov8" title="1">{
+                var tokenResp struct {
+                        AccessToken  string `json:"access_token"`
+                        RefreshToken string `json:"refresh_token"`
+                        ExpiresIn    int    `json:"expires_in"`
+                        TokenType    string `json:"token_type"`
+                }
+
+                if err := decodeJSON(resp.Body, &amp;tokenResp); err != nil </span><span class="cov8" title="1">{
+                        return nil, fmt.Errorf("failed to parse token response: %w", err)
+                }</span>
+
+                <span class="cov8" title="1">expiresAt := time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+                if tokenResp.ExpiresIn == 0 </span><span class="cov8" title="1">{
+                        expiresAt = time.Now().Add(60 * time.Minute) // Default 60 min
+                }</span>
+
+                <span class="cov8" title="1">tokens := &amp;TokenSet{
+                        AccessToken:  tokenResp.AccessToken,
+                        RefreshToken: tokenResp.RefreshToken,
+                        ExpiresAt:    expiresAt,
+                        TokenType:    tokenResp.TokenType,
+                        Host:         m.host,
+                }
+
+                // Fetch user profile to get username
+                if profile, err := FetchUserProfile(m.baseURL, tokens.AccessToken); err == nil </span><span class="cov8" title="1">{
+                        tokens.Username = profile.Username
+                        if tokens.Username == "" </span><span class="cov8" title="1">{
+                                tokens.Username = profile.Email
+                        }</span>
+                }
+
+                <span class="cov8" title="1">return tokens, nil</span>
+        }
+
+        // Handle redirect response (API might redirect with tokens in URL)
+        <span class="cov8" title="1">if resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusTemporaryRedirect </span><span class="cov8" title="1">{
+                location := resp.Header.Get("Location")
+                if location != "" </span><span class="cov8" title="1">{
+                        // Parse tokens from redirect URL
+                        return m.parseTokensFromRedirect(location)
+                }</span>
+        }
+
+        <span class="cov8" title="1">return nil, fmt.Errorf("unexpected response status: %d", resp.StatusCode)</span>
+}
+
+// parseTokensFromRedirect extracts tokens from a redirect URL
+func (m *Manager) parseTokensFromRedirect(redirectURL string) (*TokenSet, error) <span class="cov8" title="1">{
+        parsed, err := url.Parse(redirectURL)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        // Check fragment (for implicit flow) or query params
+        <span class="cov8" title="1">values := parsed.Query()
+        if parsed.Fragment != "" </span><span class="cov8" title="1">{
+                fragmentValues, err := url.ParseQuery(parsed.Fragment)
+                if err == nil </span><span class="cov8" title="1">{
+                        for k, v := range fragmentValues </span><span class="cov8" title="1">{
+                                values[k] = v
+                        }</span>
+                }
+        }
+
+        <span class="cov8" title="1">accessToken := values.Get("access_token")
+        if accessToken == "" </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("no access token in redirect")
+        }</span>
+
+        <span class="cov8" title="1">refreshToken := values.Get("refresh_token")
+        expiresIn := 3600 // Default 1 hour
+        if exp := values.Get("expires_in"); exp != "" </span><span class="cov8" title="1">{
+                fmt.Sscanf(exp, "%d", &amp;expiresIn)
+        }</span>
+
+        <span class="cov8" title="1">tokens := &amp;TokenSet{
+                AccessToken:  accessToken,
+                RefreshToken: refreshToken,
+                ExpiresAt:    time.Now().Add(time.Duration(expiresIn) * time.Second),
+                TokenType:    values.Get("token_type"),
+                Host:         m.host,
+        }
+
+        // Fetch user profile
+        if profile, err := FetchUserProfile(m.baseURL, tokens.AccessToken); err == nil </span><span class="cov8" title="1">{
+                tokens.Username = profile.Username
+                if tokens.Username == "" </span><span class="cov8" title="1">{
+                        tokens.Username = profile.Email
+                }</span>
+        }
+
+        <span class="cov8" title="1">return tokens, nil</span>
+}
+
+// GetAccessToken returns a valid access token, refreshing if needed
+func (m *Manager) GetAccessToken() (string, error) <span class="cov8" title="1">{
+        m.mu.Lock()
+        defer m.mu.Unlock()
+
+        // API key takes precedence
+        if m.apiKey != "" </span><span class="cov8" title="1">{
+                return m.apiKey, nil
+        }</span>
+
+        <span class="cov8" title="1">if m.tokens == nil </span><span class="cov8" title="1">{
+                return "", fmt.Errorf("not authenticated")
+        }</span>
+
+        // Check if refresh is needed
+        <span class="cov8" title="1">if m.tokens.NeedsRefresh() &amp;&amp; m.tokens.RefreshToken != "" </span><span class="cov8" title="1">{
+                if err := m.refreshTokenLocked(); err != nil </span><span class="cov8" title="1">{
+                        // If refresh fails and token is expired, return error
+                        if m.tokens.IsExpired() </span><span class="cov8" title="1">{
+                                return "", fmt.Errorf("token expired and refresh failed: %w", err)
+                        }</span>
+                        // Token not yet expired, use existing one
+                }
+        }
+
+        <span class="cov8" title="1">if m.tokens.IsExpired() </span><span class="cov8" title="1">{
+                return "", fmt.Errorf("token expired")
+        }</span>
+
+        <span class="cov8" title="1">return m.tokens.AccessToken, nil</span>
+}
+
+// GetAuthHeader returns the appropriate authorization header value
+func (m *Manager) GetAuthHeader() (string, error) <span class="cov8" title="1">{
+        m.mu.RLock()
+        apiKey := m.apiKey
+        m.mu.RUnlock()
+
+        if apiKey != "" </span><span class="cov8" title="1">{
+                // Check if it's an API key format
+                if strings.HasPrefix(apiKey, "sk_") </span><span class="cov8" title="1">{
+                        return "ApiKey " + apiKey, nil
+                }</span>
+                <span class="cov8" title="1">return "Bearer " + apiKey, nil</span>
+        }
+
+        <span class="cov8" title="1">token, err := m.GetAccessToken()
+        if err != nil </span><span class="cov8" title="1">{
+                return "", err
+        }</span>
+
+        <span class="cov8" title="1">return "Bearer " + token, nil</span>
+}
+
+// refreshTokenLocked refreshes the access token (must be called with lock held)
+func (m *Manager) refreshTokenLocked() error <span class="cov8" title="1">{
+        tokenResp, err := RefreshAccessToken(m.baseURL, m.tokens.RefreshToken)
+        if err != nil </span><span class="cov8" title="1">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">m.tokens.AccessToken = tokenResp.AccessToken
+        if tokenResp.RefreshToken != "" </span><span class="cov8" title="1">{
+                m.tokens.RefreshToken = tokenResp.RefreshToken
+        }</span>
+
+        <span class="cov8" title="1">expiresAt := time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+        if tokenResp.ExpiresIn == 0 </span><span class="cov8" title="1">{
+                expiresAt = time.Now().Add(60 * time.Minute)
+        }</span>
+        <span class="cov8" title="1">m.tokens.ExpiresAt = expiresAt
+
+        // Save updated tokens
+        if err := m.tokenStore.Save(m.host, m.tokens); err != nil </span><span class="cov8" title="1">{
+                // Log but don't fail
+                fmt.Printf("Warning: failed to save refreshed tokens: %v\n", err)
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// Logout clears stored credentials
+func (m *Manager) Logout() error <span class="cov8" title="1">{
+        m.mu.Lock()
+        defer m.mu.Unlock()
+
+        m.tokens = nil
+        m.apiKey = ""
+
+        return m.tokenStore.Delete(m.host)
+}</span>
+
+// GetTokenInfo returns information about the current token (for debugging)
+func (m *Manager) GetTokenInfo() map[string]interface{} <span class="cov8" title="1">{
+        m.mu.RLock()
+        defer m.mu.RUnlock()
+
+        info := make(map[string]interface{})
+        info["host"] = m.host
+        info["auth_enabled"] = m.config.AuthEnabled
+        info["auth_mode"] = m.config.AuthMode
+        info["oidc_enabled"] = m.config.OIDCEnabled
+        info["oidc_provider"] = m.config.OIDCProviderName
+
+        if m.apiKey != "" </span><span class="cov8" title="1">{
+                info["auth_type"] = "api_key"
+                info["api_key_prefix"] = m.apiKey[:min(10, len(m.apiKey))] + "..."
+        }</span> else<span class="cov8" title="1"> if m.tokens != nil </span><span class="cov8" title="1">{
+                info["auth_type"] = "oidc"
+                info["username"] = m.tokens.Username
+                info["expires_at"] = m.tokens.ExpiresAt.Format(time.RFC3339)
+                info["expired"] = m.tokens.IsExpired()
+                info["has_refresh_token"] = m.tokens.RefreshToken != ""
+        }</span> else<span class="cov8" title="1"> {
+                info["auth_type"] = "none"
+        }</span>
+
+        <span class="cov8" title="1">return info</span>
+}
+
+// Helper to decode JSON
+func decodeJSON(r io.Reader, v interface{}) error <span class="cov8" title="1">{
+        return json.NewDecoder(r).Decode(v)
+}</span>
+
+func min(a, b int) int <span class="cov8" title="1">{
+        if a &lt; b </span><span class="cov8" title="1">{
+                return a
+        }</span>
+        <span class="cov8" title="1">return b</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package auth
+
+import (
+        "fmt"
+        "os/exec"
+        "runtime"
+)
+
+// OpenBrowser opens the default web browser to the specified URL
+func OpenBrowser(url string) error <span class="cov8" title="1">{
+        var cmd *exec.Cmd
+
+        switch runtime.GOOS </span>{
+        case "darwin":<span class="cov8" title="1">
+                cmd = exec.Command("open", url)</span>
+        case "linux":<span class="cov0" title="0">
+                // Try xdg-open first, then common browsers
+                if _, err := exec.LookPath("xdg-open"); err == nil </span><span class="cov0" title="0">{
+                        cmd = exec.Command("xdg-open", url)
+                }</span> else<span class="cov0" title="0"> if _, err := exec.LookPath("x-www-browser"); err == nil </span><span class="cov0" title="0">{
+                        cmd = exec.Command("x-www-browser", url)
+                }</span> else<span class="cov0" title="0"> if _, err := exec.LookPath("sensible-browser"); err == nil </span><span class="cov0" title="0">{
+                        cmd = exec.Command("sensible-browser", url)
+                }</span> else<span class="cov0" title="0"> if _, err := exec.LookPath("firefox"); err == nil </span><span class="cov0" title="0">{
+                        cmd = exec.Command("firefox", url)
+                }</span> else<span class="cov0" title="0"> if _, err := exec.LookPath("chromium-browser"); err == nil </span><span class="cov0" title="0">{
+                        cmd = exec.Command("chromium-browser", url)
+                }</span> else<span class="cov0" title="0"> if _, err := exec.LookPath("google-chrome"); err == nil </span><span class="cov0" title="0">{
+                        cmd = exec.Command("google-chrome", url)
+                }</span> else<span class="cov0" title="0"> {
+                        return fmt.Errorf("no browser found - please open this URL manually:\n%s", url)
+                }</span>
+        case "windows":<span class="cov0" title="0">
+                cmd = exec.Command("cmd", "/c", "start", url)</span>
+        default:<span class="cov0" title="0">
+                return fmt.Errorf("unsupported platform - please open this URL manually:\n%s", url)</span>
+        }
+
+        <span class="cov8" title="1">return cmd.Start()</span>
+}
+
+// CanOpenBrowser returns true if we can open a browser on this system
+func CanOpenBrowser() bool <span class="cov8" title="1">{
+        switch runtime.GOOS </span>{
+        case "darwin", "windows":<span class="cov8" title="1">
+                return true</span>
+        case "linux":<span class="cov0" title="0">
+                browsers := []string{"xdg-open", "x-www-browser", "sensible-browser", "firefox", "chromium-browser", "google-chrome"}
+                for _, browser := range browsers </span><span class="cov0" title="0">{
+                        if _, err := exec.LookPath(browser); err == nil </span><span class="cov0" title="0">{
+                                return true
+                        }</span>
+                }
+                <span class="cov0" title="0">return false</span>
+        default:<span class="cov0" title="0">
+                return false</span>
+        }
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package auth
+
+import (
+        "context"
+        "fmt"
+        "net"
+        "net/http"
+        "sync"
+        "time"
+)
+
+// CallbackServer is a local HTTP server that handles OIDC callbacks
+type CallbackServer struct {
+        port       int
+        server     *http.Server
+        listener   net.Listener
+        resultCh   chan CallbackResult
+        shutdownCh chan struct{}
+        wg         sync.WaitGroup
+}
+
+// CallbackResult contains the result of an OIDC callback
+type CallbackResult struct {
+        Code  string
+        State string
+        Error string
+}
+
+// NewCallbackServer creates a new callback server
+func NewCallbackServer() (*CallbackServer, error) <span class="cov8" title="1">{
+        // Find an available port in the range 8400-8500
+        var listener net.Listener
+        var err error
+        var port int
+
+        for p := 8400; p &lt;= 8500; p++ </span><span class="cov8" title="1">{
+                listener, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p))
+                if err == nil </span><span class="cov8" title="1">{
+                        port = p
+                        break</span>
+                }
+        }
+
+        <span class="cov8" title="1">if listener == nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("could not find available port in range 8400-8500")
+        }</span>
+
+        <span class="cov8" title="1">return &amp;CallbackServer{
+                port:       port,
+                listener:   listener,
+                resultCh:   make(chan CallbackResult, 1),
+                shutdownCh: make(chan struct{}),
+        }, nil</span>
+}
+
+// Port returns the port the server is listening on
+func (s *CallbackServer) Port() int <span class="cov8" title="1">{
+        return s.port
+}</span>
+
+// RedirectURI returns the full redirect URI for OIDC
+func (s *CallbackServer) RedirectURI() string <span class="cov8" title="1">{
+        return fmt.Sprintf("http://127.0.0.1:%d/callback", s.port)
+}</span>
+
+// Start starts the callback server
+func (s *CallbackServer) Start() error <span class="cov8" title="1">{
+        mux := http.NewServeMux()
+        mux.HandleFunc("/callback", s.handleCallback)
+        mux.HandleFunc("/", s.handleRoot)
+
+        s.server = &amp;http.Server{
+                Handler:      mux,
+                ReadTimeout:  30 * time.Second,
+                WriteTimeout: 30 * time.Second,
+        }
+
+        s.wg.Add(1)
+        go func() </span><span class="cov8" title="1">{
+                defer s.wg.Done()
+                if err := s.server.Serve(s.listener); err != http.ErrServerClosed </span>{<span class="cov0" title="0">
+                        // Log error but don't fail - server might be intentionally closed
+                }</span>
+        }()
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// WaitForCallback waits for the OIDC callback with a timeout
+func (s *CallbackServer) WaitForCallback(ctx context.Context, timeout time.Duration) (*CallbackResult, error) <span class="cov8" title="1">{
+        ctx, cancel := context.WithTimeout(ctx, timeout)
+        defer cancel()
+
+        select </span>{
+        case result := &lt;-s.resultCh:<span class="cov8" title="1">
+                if result.Error != "" </span><span class="cov8" title="1">{
+                        return nil, fmt.Errorf("authentication error: %s", result.Error)
+                }</span>
+                <span class="cov8" title="1">return &amp;result, nil</span>
+        case &lt;-ctx.Done():<span class="cov8" title="1">
+                return nil, fmt.Errorf("authentication timed out")</span>
+        case &lt;-s.shutdownCh:<span class="cov8" title="1">
+                return nil, fmt.Errorf("server shutdown")</span>
+        }
+}
+
+// Stop stops the callback server
+func (s *CallbackServer) Stop() error <span class="cov8" title="1">{
+        close(s.shutdownCh)
+        if s.server != nil </span><span class="cov8" title="1">{
+                ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+                defer cancel()
+                if err := s.server.Shutdown(ctx); err != nil </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+        }
+        <span class="cov8" title="1">s.wg.Wait()
+        return nil</span>
+}
+
+func (s *CallbackServer) handleCallback(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        query := r.URL.Query()
+
+        // Check for error response
+        if errMsg := query.Get("error"); errMsg != "" </span><span class="cov8" title="1">{
+                errDesc := query.Get("error_description")
+                if errDesc != "" </span><span class="cov8" title="1">{
+                        errMsg = errMsg + ": " + errDesc
+                }</span>
+                <span class="cov8" title="1">s.resultCh &lt;- CallbackResult{Error: errMsg}
+                s.renderError(w, errMsg)
+                return</span>
+        }
+
+        <span class="cov8" title="1">code := query.Get("code")
+        state := query.Get("state")
+
+        if code == "" </span><span class="cov8" title="1">{
+                s.resultCh &lt;- CallbackResult{Error: "no authorization code received"}
+                s.renderError(w, "No authorization code received")
+                return
+        }</span>
+
+        <span class="cov8" title="1">s.resultCh &lt;- CallbackResult{
+                Code:  code,
+                State: state,
+        }
+
+        s.renderSuccess(w)</span>
+}
+
+func (s *CallbackServer) handleRoot(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        w.Header().Set("Content-Type", "text/html")
+        w.WriteHeader(http.StatusOK)
+        fmt.Fprint(w, `&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+    &lt;title&gt;SkySpy Authentication&lt;/title&gt;
+    &lt;style&gt;
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+        }
+        .container { text-align: center; }
+        h1 { color: #00d4aa; }
+    &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;div class="container"&gt;
+        &lt;h1&gt;SkySpy Authentication Server&lt;/h1&gt;
+        &lt;p&gt;Waiting for authentication callback...&lt;/p&gt;
+    &lt;/div&gt;
+&lt;/body&gt;
+&lt;/html&gt;`)
+}</span>
+
+func (s *CallbackServer) renderSuccess(w http.ResponseWriter) <span class="cov8" title="1">{
+        w.Header().Set("Content-Type", "text/html")
+        w.WriteHeader(http.StatusOK)
+        fmt.Fprint(w, `&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+    &lt;title&gt;SkySpy - Authentication Successful&lt;/title&gt;
+    &lt;style&gt;
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+        }
+        .container { text-align: center; padding: 40px; }
+        .icon {
+            font-size: 72px;
+            margin-bottom: 20px;
+            animation: pulse 1s ease-in-out;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        h1 { color: #00ff88; margin-bottom: 10px; }
+        p { color: #8892b0; font-size: 16px; }
+        .hint {
+            margin-top: 30px;
+            padding: 15px 25px;
+            background: rgba(0, 255, 136, 0.1);
+            border-radius: 8px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+    &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;div class="container"&gt;
+        &lt;div class="icon"&gt;✓&lt;/div&gt;
+        &lt;h1&gt;Authentication Successful&lt;/h1&gt;
+        &lt;p&gt;You have been successfully authenticated.&lt;/p&gt;
+        &lt;div class="hint"&gt;
+            &lt;p&gt;You can close this window and return to the terminal.&lt;/p&gt;
+        &lt;/div&gt;
+    &lt;/div&gt;
+    &lt;script&gt;
+        // Auto-close after 3 seconds
+        setTimeout(function() {
+            window.close();
+        }, 3000);
+    &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;`)
+}</span>
+
+func (s *CallbackServer) renderError(w http.ResponseWriter, errorMsg string) <span class="cov8" title="1">{
+        w.Header().Set("Content-Type", "text/html")
+        w.WriteHeader(http.StatusBadRequest)
+        fmt.Fprintf(w, `&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+    &lt;title&gt;SkySpy - Authentication Failed&lt;/title&gt;
+    &lt;style&gt;
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #1a1a2e 0%%, #16213e 100%%);
+            color: #fff;
+        }
+        .container { text-align: center; padding: 40px; }
+        .icon { font-size: 72px; margin-bottom: 20px; }
+        h1 { color: #ff4444; margin-bottom: 10px; }
+        p { color: #8892b0; font-size: 16px; }
+        .error {
+            margin-top: 20px;
+            padding: 15px 25px;
+            background: rgba(255, 68, 68, 0.1);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 68, 68, 0.3);
+            color: #ff6b6b;
+        }
+    &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;div class="container"&gt;
+        &lt;div class="icon"&gt;✗&lt;/div&gt;
+        &lt;h1&gt;Authentication Failed&lt;/h1&gt;
+        &lt;p&gt;An error occurred during authentication.&lt;/p&gt;
+        &lt;div class="error"&gt;
+            &lt;p&gt;%s&lt;/p&gt;
+        &lt;/div&gt;
+        &lt;p style="margin-top: 20px;"&gt;Please close this window and try again.&lt;/p&gt;
+    &lt;/div&gt;
+&lt;/body&gt;
+&lt;/html&gt;`, errorMsg)
+}</span>
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">// Package auth provides authentication functionality for SkySpy CLI
+package auth
+
+import (
+        "encoding/json"
+        "fmt"
+        "net/http"
+        "time"
+)
+
+// AuthConfig represents the authentication configuration from the API
+type AuthConfig struct {
+        AuthMode         string                    `json:"auth_mode"`
+        AuthEnabled      bool                      `json:"auth_enabled"`
+        OIDCEnabled      bool                      `json:"oidc_enabled"`
+        OIDCProviderName string                    `json:"oidc_provider_name"`
+        LocalAuthEnabled bool                      `json:"local_auth_enabled"`
+        APIKeyEnabled    bool                      `json:"api_key_enabled"`
+        Features         map[string]FeatureAccess  `json:"features,omitempty"`
+}
+
+// FeatureAccess represents access configuration for a feature
+type FeatureAccess struct {
+        ReadAccess  string `json:"read_access"`
+        WriteAccess string `json:"write_access"`
+        IsEnabled   bool   `json:"is_enabled"`
+}
+
+// OIDCAuthorizeResponse is the response from the OIDC authorize endpoint
+type OIDCAuthorizeResponse struct {
+        AuthorizationURL string `json:"authorization_url"`
+        State            string `json:"state,omitempty"`
+}
+
+// TokenResponse represents tokens received from the API
+type TokenResponse struct {
+        AccessToken  string `json:"access_token"`
+        RefreshToken string `json:"refresh_token"`
+        TokenType    string `json:"token_type"`
+        ExpiresIn    int    `json:"expires_in"`
+}
+
+// UserProfile represents the authenticated user
+type UserProfile struct {
+        ID          int      `json:"id"`
+        Username    string   `json:"username"`
+        Email       string   `json:"email"`
+        DisplayName string   `json:"display_name"`
+        Roles       []string `json:"roles"`
+}
+
+// FetchAuthConfig retrieves authentication configuration from the API
+func FetchAuthConfig(baseURL string) (*AuthConfig, error) <span class="cov8" title="1">{
+        client := &amp;http.Client{Timeout: 10 * time.Second}
+
+        resp, err := client.Get(baseURL + "/api/v1/auth/config")
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to fetch auth config: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer resp.Body.Close()
+
+        if resp.StatusCode != http.StatusOK </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("auth config returned status %d", resp.StatusCode)
+        }</span>
+
+        <span class="cov8" title="1">var config AuthConfig
+        if err := json.NewDecoder(resp.Body).Decode(&amp;config); err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to decode auth config: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return &amp;config, nil</span>
+}
+
+// GetOIDCAuthorizationURL gets the OIDC authorization URL from the API
+func GetOIDCAuthorizationURL(baseURL, redirectURI string) (*OIDCAuthorizeResponse, error) <span class="cov8" title="1">{
+        client := &amp;http.Client{Timeout: 10 * time.Second}
+
+        url := baseURL + "/api/v1/auth/oidc/authorize"
+        if redirectURI != "" </span><span class="cov8" title="1">{
+                url += "?redirect_uri=" + redirectURI
+        }</span>
+
+        <span class="cov8" title="1">resp, err := client.Get(url)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to get OIDC auth URL: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer resp.Body.Close()
+
+        if resp.StatusCode != http.StatusOK </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("OIDC authorize returned status %d", resp.StatusCode)
+        }</span>
+
+        <span class="cov8" title="1">var authResp OIDCAuthorizeResponse
+        if err := json.NewDecoder(resp.Body).Decode(&amp;authResp); err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to decode OIDC auth response: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return &amp;authResp, nil</span>
+}
+
+// RefreshAccessToken refreshes the access token using the refresh token
+func RefreshAccessToken(baseURL, refreshToken string) (*TokenResponse, error) <span class="cov8" title="1">{
+        client := &amp;http.Client{Timeout: 10 * time.Second}
+
+        req, err := http.NewRequest("POST", baseURL+"/api/v1/auth/refresh", nil)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">req.Header.Set("Authorization", "Bearer "+refreshToken)
+        req.Header.Set("Content-Type", "application/json")
+
+        resp, err := client.Do(req)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to refresh token: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer resp.Body.Close()
+
+        if resp.StatusCode != http.StatusOK </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("token refresh returned status %d", resp.StatusCode)
+        }</span>
+
+        <span class="cov8" title="1">var tokenResp TokenResponse
+        if err := json.NewDecoder(resp.Body).Decode(&amp;tokenResp); err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to decode token response: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return &amp;tokenResp, nil</span>
+}
+
+// FetchUserProfile retrieves the current user's profile
+func FetchUserProfile(baseURL, accessToken string) (*UserProfile, error) <span class="cov8" title="1">{
+        client := &amp;http.Client{Timeout: 10 * time.Second}
+
+        req, err := http.NewRequest("GET", baseURL+"/api/v1/auth/profile", nil)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">req.Header.Set("Authorization", "Bearer "+accessToken)
+
+        resp, err := client.Do(req)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to fetch profile: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer resp.Body.Close()
+
+        if resp.StatusCode != http.StatusOK </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("profile request returned status %d", resp.StatusCode)
+        }</span>
+
+        <span class="cov8" title="1">var profile UserProfile
+        if err := json.NewDecoder(resp.Body).Decode(&amp;profile); err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to decode profile: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return &amp;profile, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package auth
+
+import (
+        "crypto/aes"
+        "crypto/cipher"
+        "crypto/rand"
+        "crypto/sha256"
+        "encoding/base64"
+        "encoding/json"
+        "fmt"
+        "io"
+        "os"
+        "path/filepath"
+        "strings"
+        "time"
+)
+
+// TokenSet represents a complete set of authentication tokens
+type TokenSet struct {
+        AccessToken  string    `json:"access_token"`
+        RefreshToken string    `json:"refresh_token"`
+        ExpiresAt    time.Time `json:"expires_at"`
+        TokenType    string    `json:"token_type"`
+        Host         string    `json:"host"`
+        Username     string    `json:"username,omitempty"`
+}
+
+// IsExpired returns true if the access token is expired
+func (t *TokenSet) IsExpired() bool <span class="cov8" title="1">{
+        return time.Now().After(t.ExpiresAt)
+}</span>
+
+// NeedsRefresh returns true if the token should be refreshed (5 min before expiry)
+func (t *TokenSet) NeedsRefresh() bool <span class="cov8" title="1">{
+        return time.Now().After(t.ExpiresAt.Add(-5 * time.Minute))
+}</span>
+
+// TokenStore defines the interface for token storage
+type TokenStore interface {
+        Save(host string, tokens *TokenSet) error
+        Load(host string) (*TokenSet, error)
+        Delete(host string) error
+        List() ([]string, error)
+}
+
+// FileTokenStore stores tokens in encrypted files
+type FileTokenStore struct {
+        dir string
+        key []byte
+}
+
+// NewFileTokenStore creates a new file-based token store
+func NewFileTokenStore() (*FileTokenStore, error) <span class="cov8" title="1">{
+        homeDir, err := os.UserHomeDir()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">dir := filepath.Join(homeDir, ".config", "skyspy", "credentials")
+        if err := os.MkdirAll(dir, 0700); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        // Generate or load encryption key based on machine-specific data
+        <span class="cov8" title="1">key := generateMachineKey()
+
+        return &amp;FileTokenStore{
+                dir: dir,
+                key: key,
+        }, nil</span>
+}
+
+// generateMachineKey generates a key based on machine-specific data
+func generateMachineKey() []byte <span class="cov8" title="1">{
+        // Use a combination of user home dir and a fixed salt
+        // This provides basic obfuscation - not meant to be highly secure
+        // For production, use OS keychain (see keyring.go)
+        homeDir, _ := os.UserHomeDir()
+        data := homeDir + ":skyspy-cli-v1"
+        hash := sha256.Sum256([]byte(data))
+        return hash[:]
+}</span>
+
+// hostToFilename converts a host string to a safe filename
+func hostToFilename(host string) string <span class="cov8" title="1">{
+        // Replace unsafe characters
+        safe := strings.ReplaceAll(host, ":", "_")
+        safe = strings.ReplaceAll(safe, "/", "_")
+        safe = strings.ReplaceAll(safe, "\\", "_")
+        return safe + ".json"
+}</span>
+
+// Save stores tokens for a host
+func (s *FileTokenStore) Save(host string, tokens *TokenSet) error <span class="cov8" title="1">{
+        tokens.Host = host
+
+        data, err := json.Marshal(tokens)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">encrypted, err := s.encrypt(data)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">filename := filepath.Join(s.dir, hostToFilename(host))
+        return os.WriteFile(filename, encrypted, 0600)</span>
+}
+
+// Load retrieves tokens for a host
+func (s *FileTokenStore) Load(host string) (*TokenSet, error) <span class="cov8" title="1">{
+        filename := filepath.Join(s.dir, hostToFilename(host))
+
+        encrypted, err := os.ReadFile(filename)
+        if err != nil </span><span class="cov8" title="1">{
+                if os.IsNotExist(err) </span><span class="cov8" title="1">{
+                        return nil, nil // No tokens stored
+                }</span>
+                <span class="cov8" title="1">return nil, err</span>
+        }
+
+        <span class="cov8" title="1">data, err := s.decrypt(encrypted)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">var tokens TokenSet
+        if err := json.Unmarshal(data, &amp;tokens); err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">return &amp;tokens, nil</span>
+}
+
+// Delete removes tokens for a host
+func (s *FileTokenStore) Delete(host string) error <span class="cov8" title="1">{
+        filename := filepath.Join(s.dir, hostToFilename(host))
+        err := os.Remove(filename)
+        if os.IsNotExist(err) </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+        <span class="cov8" title="1">return err</span>
+}
+
+// List returns all hosts with stored tokens
+func (s *FileTokenStore) List() ([]string, error) <span class="cov8" title="1">{
+        entries, err := os.ReadDir(s.dir)
+        if err != nil </span><span class="cov8" title="1">{
+                if os.IsNotExist(err) </span><span class="cov8" title="1">{
+                        return []string{}, nil
+                }</span>
+                <span class="cov0" title="0">return nil, err</span>
+        }
+
+        <span class="cov8" title="1">var hosts []string
+        for _, entry := range entries </span><span class="cov8" title="1">{
+                if !entry.IsDir() &amp;&amp; strings.HasSuffix(entry.Name(), ".json") </span><span class="cov8" title="1">{
+                        // Convert filename back to host
+                        // Filename format: host_port.json (underscore separates host from port)
+                        name := strings.TrimSuffix(entry.Name(), ".json")
+                        // Replace underscore with colon for host:port format
+                        host := strings.Replace(name, "_", ":", 1) // Only replace first underscore
+                        hosts = append(hosts, host)
+                }</span>
+        }
+
+        <span class="cov8" title="1">return hosts, nil</span>
+}
+
+// encrypt encrypts data using AES-GCM
+func (s *FileTokenStore) encrypt(plaintext []byte) ([]byte, error) <span class="cov8" title="1">{
+        block, err := aes.NewCipher(s.key)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">gcm, err := cipher.NewGCM(block)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">nonce := make([]byte, gcm.NonceSize())
+        if _, err := io.ReadFull(rand.Reader, nonce); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
+        return []byte(base64.StdEncoding.EncodeToString(ciphertext)), nil</span>
+}
+
+// decrypt decrypts data using AES-GCM
+func (s *FileTokenStore) decrypt(data []byte) ([]byte, error) <span class="cov8" title="1">{
+        ciphertext, err := base64.StdEncoding.DecodeString(string(data))
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">block, err := aes.NewCipher(s.key)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">gcm, err := cipher.NewGCM(block)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">nonceSize := gcm.NonceSize()
+        if len(ciphertext) &lt; nonceSize </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("ciphertext too short")
+        }</span>
+
+        <span class="cov8" title="1">nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+        return gcm.Open(nil, nonce, ciphertext, nil)</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

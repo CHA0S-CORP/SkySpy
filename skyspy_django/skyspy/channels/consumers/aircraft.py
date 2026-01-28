@@ -4,6 +4,7 @@ Aircraft WebSocket consumer for real-time position updates.
 import logging
 import statistics as stats_lib
 from datetime import datetime, timedelta
+from typing import Optional
 from channels.db import database_sync_to_async
 from asgiref.sync import sync_to_async
 from django.core.cache import cache

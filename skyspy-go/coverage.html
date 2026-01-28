@@ -1,0 +1,2964 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>app: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/skyspy/skyspy-go/internal/app/alert_rules_view.go (100.0%)</option>
+				
+				<option value="file1">github.com/skyspy/skyspy-go/internal/app/alerts.go (100.0%)</option>
+				
+				<option value="file2">github.com/skyspy/skyspy-go/internal/app/app.go (96.7%)</option>
+				
+				<option value="file3">github.com/skyspy/skyspy-go/internal/app/view.go (97.2%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">// Package app provides alert rules view for SkySpy radar
+package app
+
+import (
+        "github.com/skyspy/skyspy-go/internal/alerts"
+)
+
+// handleAlertRulesKey handles keyboard input in alert rules view
+func (m *Model) handleAlertRulesKey(key string) <span class="cov8" title="1">{
+        rules := m.GetAlertRules()
+        ruleCount := len(rules)
+
+        switch key </span>{
+        case "esc", "R":<span class="cov8" title="1">
+                m.viewMode = ViewRadar</span>
+        case "up", "k":<span class="cov8" title="1">
+                if ruleCount &gt; 0 </span><span class="cov8" title="1">{
+                        m.alertRuleCursor = (m.alertRuleCursor - 1 + ruleCount) % ruleCount
+                }</span>
+        case "down", "j":<span class="cov8" title="1">
+                if ruleCount &gt; 0 </span><span class="cov8" title="1">{
+                        m.alertRuleCursor = (m.alertRuleCursor + 1) % ruleCount
+                }</span>
+        case "enter", " ":<span class="cov8" title="1">
+                if ruleCount &gt; 0 &amp;&amp; m.alertState != nil </span><span class="cov8" title="1">{
+                        rule := rules[m.alertRuleCursor]
+                        enabled := m.alertState.ToggleRule(rule.ID)
+                        if enabled </span><span class="cov8" title="1">{
+                                m.notify("Rule enabled: " + rule.Name)
+                        }</span> else<span class="cov8" title="1"> {
+                                m.notify("Rule disabled: " + rule.Name)
+                        }</span>
+                }
+        case "a", "A":<span class="cov8" title="1">
+                if m.alertState != nil </span><span class="cov8" title="1">{
+                        m.alertState.AlertsEnabled = !m.alertState.AlertsEnabled
+                        if m.alertState.AlertsEnabled </span><span class="cov8" title="1">{
+                                m.notify("Alerts: ON")
+                        }</span> else<span class="cov8" title="1"> {
+                                m.notify("Alerts: OFF")
+                        }</span>
+                }
+        }
+}
+
+// GetAlertRules returns all alert rules
+func (m *Model) GetAlertRules() []*alerts.AlertRule <span class="cov8" title="1">{
+        if m.alertState == nil </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+        <span class="cov8" title="1">return m.alertState.GetRules()</span>
+}
+
+// GetAlertRuleCursor returns the current alert rule cursor position
+func (m *Model) GetAlertRuleCursor() int <span class="cov8" title="1">{
+        return m.alertRuleCursor
+}</span>
+
+// IsAlertHighlighted checks if an aircraft should be highlighted due to alert
+func (m *Model) IsAlertHighlighted(hex string) bool <span class="cov8" title="1">{
+        if m.alertState == nil </span><span class="cov8" title="1">{
+                return false
+        }</span>
+        <span class="cov8" title="1">return m.alertState.IsHighlighted(hex)</span>
+}
+
+// GetRecentAlerts returns recent triggered alerts
+func (m *Model) GetRecentAlerts() []alerts.TriggeredAlert <span class="cov8" title="1">{
+        if m.alertState == nil </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+        <span class="cov8" title="1">return m.alertState.RecentAlerts</span>
+}
+
+// IsAlertsEnabled returns whether alerts are enabled
+func (m *Model) IsAlertsEnabled() bool <span class="cov8" title="1">{
+        if m.alertState == nil </span><span class="cov8" title="1">{
+                return false
+        }</span>
+        <span class="cov8" title="1">return m.alertState.AlertsEnabled</span>
+}
+
+// GetAlertStats returns alert statistics
+func (m *Model) GetAlertStats() alerts.AlertStats <span class="cov8" title="1">{
+        if m.alertState == nil </span><span class="cov8" title="1">{
+                return alerts.AlertStats{}
+        }</span>
+        <span class="cov8" title="1">return m.alertState.GetStats()</span>
+}
+
+// openAlertRulesView opens the alert rules panel
+func (m *Model) openAlertRulesView() <span class="cov8" title="1">{
+        m.viewMode = ViewAlertRules
+        m.alertRuleCursor = 0
+}</span>
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">// Package app provides alert integration for the SkySpy radar
+package app
+
+import (
+        "time"
+
+        "github.com/skyspy/skyspy-go/internal/alerts"
+        "github.com/skyspy/skyspy-go/internal/config"
+        "github.com/skyspy/skyspy-go/internal/radar"
+)
+
+// AlertState holds alert-related state for the application
+type AlertState struct {
+        Engine        *alerts.AlertEngine
+        RuleCursor    int
+        RecentAlerts  []alerts.TriggeredAlert
+        AlertsEnabled bool
+}
+
+// NewAlertState creates a new alert state with default rules
+func NewAlertState(cfg *config.Config) *AlertState <span class="cov8" title="1">{
+        engine := alerts.NewAlertEngine()
+
+        // Load rules from config or use defaults
+        if len(cfg.Alerts.Rules) &gt; 0 </span><span class="cov8" title="1">{
+                for _, ruleCfg := range cfg.Alerts.Rules </span><span class="cov8" title="1">{
+                        rule := configToAlertRule(ruleCfg)
+                        engine.AddRule(rule)
+                }</span>
+        } else<span class="cov8" title="1"> {
+                // Add default rules
+                for _, rule := range alerts.DefaultAlertRules() </span><span class="cov8" title="1">{
+                        engine.AddRule(rule)
+                }</span>
+        }
+
+        // Load geofences from config
+        <span class="cov8" title="1">for _, gfCfg := range cfg.Alerts.Geofences </span><span class="cov8" title="1">{
+                gf := configToGeofence(gfCfg)
+                engine.AddGeofence(gf)
+        }</span>
+
+        <span class="cov8" title="1">return &amp;AlertState{
+                Engine:        engine,
+                RuleCursor:    0,
+                RecentAlerts:  []alerts.TriggeredAlert{},
+                AlertsEnabled: cfg.Alerts.Enabled,
+        }</span>
+}
+
+// CheckAircraft checks an aircraft against alert rules and returns any triggered alerts
+func (a *AlertState) CheckAircraft(target *radar.Target, prevTarget *radar.Target) []alerts.TriggeredAlert <span class="cov8" title="1">{
+        if !a.AlertsEnabled || a.Engine == nil </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+
+        <span class="cov8" title="1">state := targetToAlertState(target)
+        var prevState *alerts.AircraftState
+        if prevTarget != nil </span><span class="cov8" title="1">{
+                prevState = targetToAlertState(prevTarget)
+        }</span>
+
+        <span class="cov8" title="1">triggered := a.Engine.CheckAircraft(state, prevState)
+
+        // Add to recent alerts
+        if len(triggered) &gt; 0 </span><span class="cov8" title="1">{
+                a.RecentAlerts = append(a.RecentAlerts, triggered...)
+                // Keep only last 20 alerts
+                if len(a.RecentAlerts) &gt; 20 </span><span class="cov8" title="1">{
+                        a.RecentAlerts = a.RecentAlerts[len(a.RecentAlerts)-20:]
+                }</span>
+        }
+
+        <span class="cov8" title="1">return triggered</span>
+}
+
+// GetRules returns all alert rules
+func (a *AlertState) GetRules() []*alerts.AlertRule <span class="cov8" title="1">{
+        if a.Engine == nil </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+        <span class="cov8" title="1">return a.Engine.GetRuleSet().GetRules()</span>
+}
+
+// ToggleRule toggles a rule's enabled state
+func (a *AlertState) ToggleRule(id string) bool <span class="cov8" title="1">{
+        if a.Engine == nil </span><span class="cov8" title="1">{
+                return false
+        }</span>
+        <span class="cov8" title="1">return a.Engine.GetRuleSet().ToggleRule(id)</span>
+}
+
+// IsHighlighted checks if an aircraft should be highlighted due to an alert
+func (a *AlertState) IsHighlighted(hex string) bool <span class="cov8" title="1">{
+        if a.Engine == nil </span><span class="cov8" title="1">{
+                return false
+        }</span>
+        <span class="cov8" title="1">return a.Engine.IsHighlighted(hex)</span>
+}
+
+// GetStats returns alert statistics
+func (a *AlertState) GetStats() alerts.AlertStats <span class="cov8" title="1">{
+        if a.Engine == nil </span><span class="cov8" title="1">{
+                return alerts.AlertStats{}
+        }</span>
+        <span class="cov8" title="1">return a.Engine.GetStats()</span>
+}
+
+// Cleanup removes old alert data
+func (a *AlertState) Cleanup() <span class="cov8" title="1">{
+        if a.Engine != nil </span><span class="cov8" title="1">{
+                a.Engine.CleanupOldData()
+        }</span>
+}
+
+// SaveToConfig saves alert configuration
+func (a *AlertState) SaveToConfig(cfg *config.Config) <span class="cov8" title="1">{
+        cfg.Alerts.Enabled = a.AlertsEnabled
+
+        // Save rules
+        rules := a.GetRules()
+        cfg.Alerts.Rules = make([]config.AlertRuleConfig, len(rules))
+        for i, rule := range rules </span><span class="cov8" title="1">{
+                cfg.Alerts.Rules[i] = alertRuleToConfig(rule)
+        }</span>
+
+        // Save geofences
+        <span class="cov8" title="1">if a.Engine != nil </span><span class="cov8" title="1">{
+                geofences := a.Engine.GetGeofenceManager().GetAllGeofences()
+                cfg.Alerts.Geofences = make([]config.GeofenceConfig, len(geofences))
+                for i, gf := range geofences </span><span class="cov8" title="1">{
+                        cfg.Alerts.Geofences[i] = geofenceToConfig(gf)
+                }</span>
+        }
+}
+
+// Helper functions
+
+func targetToAlertState(t *radar.Target) *alerts.AircraftState <span class="cov8" title="1">{
+        if t == nil </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+        <span class="cov8" title="1">return &amp;alerts.AircraftState{
+                Hex:      t.Hex,
+                Callsign: t.Callsign,
+                Squawk:   t.Squawk,
+                Lat:      t.Lat,
+                Lon:      t.Lon,
+                Altitude: t.Altitude,
+                Speed:    t.Speed,
+                Distance: t.Distance,
+                Military: t.Military,
+                HasLat:   t.HasLat,
+                HasLon:   t.HasLon,
+                HasAlt:   t.HasAlt,
+                HasSpeed: t.HasSpeed,
+        }</span>
+}
+
+func configToAlertRule(cfg config.AlertRuleConfig) *alerts.AlertRule <span class="cov8" title="1">{
+        rule := alerts.NewAlertRule(cfg.ID, cfg.Name)
+        rule.Description = cfg.Description
+        rule.Enabled = cfg.Enabled
+        rule.Priority = cfg.Priority
+
+        if cfg.CooldownSec &gt; 0 </span><span class="cov8" title="1">{
+                rule.Cooldown = time.Duration(cfg.CooldownSec) * time.Second
+        }</span>
+
+        <span class="cov8" title="1">for _, cond := range cfg.Conditions </span><span class="cov8" title="1">{
+                rule.AddCondition(alerts.ConditionType(cond.Type), cond.Value)
+        }</span>
+
+        <span class="cov8" title="1">for _, act := range cfg.Actions </span><span class="cov8" title="1">{
+                action := alerts.Action{
+                        Type:    alerts.ActionType(act.Type),
+                        Message: act.Message,
+                        Sound:   act.Sound,
+                }
+                rule.Actions = append(rule.Actions, action)
+        }</span>
+
+        <span class="cov8" title="1">return rule</span>
+}
+
+func alertRuleToConfig(rule *alerts.AlertRule) config.AlertRuleConfig <span class="cov8" title="1">{
+        cfg := config.AlertRuleConfig{
+                ID:          rule.ID,
+                Name:        rule.Name,
+                Description: rule.Description,
+                Enabled:     rule.Enabled,
+                Priority:    rule.Priority,
+                CooldownSec: int(rule.Cooldown.Seconds()),
+        }
+
+        cfg.Conditions = make([]config.ConditionConfig, len(rule.Conditions))
+        for i, cond := range rule.Conditions </span><span class="cov8" title="1">{
+                cfg.Conditions[i] = config.ConditionConfig{
+                        Type:  string(cond.Type),
+                        Value: cond.Value,
+                }
+        }</span>
+
+        <span class="cov8" title="1">cfg.Actions = make([]config.ActionConfig, len(rule.Actions))
+        for i, act := range rule.Actions </span><span class="cov8" title="1">{
+                cfg.Actions[i] = config.ActionConfig{
+                        Type:    string(act.Type),
+                        Message: act.Message,
+                        Sound:   act.Sound,
+                }
+        }</span>
+
+        <span class="cov8" title="1">return cfg</span>
+}
+
+func configToGeofence(cfg config.GeofenceConfig) *alerts.Geofence <span class="cov8" title="1">{
+        gf := &amp;alerts.Geofence{
+                ID:          cfg.ID,
+                Name:        cfg.Name,
+                Type:        alerts.GeofenceType(cfg.Type),
+                Enabled:     cfg.Enabled,
+                Description: cfg.Description,
+        }
+
+        if cfg.Type == "circle" </span><span class="cov8" title="1">{
+                gf.Center = &amp;alerts.GeofencePoint{
+                        Lat: cfg.CenterLat,
+                        Lon: cfg.CenterLon,
+                }
+                gf.RadiusNM = cfg.RadiusNM
+        }</span> else<span class="cov8" title="1"> {
+                gf.Points = make([]alerts.GeofencePoint, len(cfg.Points))
+                for i, p := range cfg.Points </span><span class="cov8" title="1">{
+                        gf.Points[i] = alerts.GeofencePoint{
+                                Lat: p.Lat,
+                                Lon: p.Lon,
+                        }
+                }</span>
+        }
+
+        <span class="cov8" title="1">return gf</span>
+}
+
+func geofenceToConfig(gf *alerts.Geofence) config.GeofenceConfig <span class="cov8" title="1">{
+        cfg := config.GeofenceConfig{
+                ID:          gf.ID,
+                Name:        gf.Name,
+                Type:        string(gf.Type),
+                Enabled:     gf.Enabled,
+                Description: gf.Description,
+        }
+
+        if gf.Type == alerts.GeofenceCircle &amp;&amp; gf.Center != nil </span><span class="cov8" title="1">{
+                cfg.CenterLat = gf.Center.Lat
+                cfg.CenterLon = gf.Center.Lon
+                cfg.RadiusNM = gf.RadiusNM
+        }</span> else<span class="cov8" title="1"> {
+                cfg.Points = make([]config.GeofencePointConfig, len(gf.Points))
+                for i, p := range gf.Points </span><span class="cov8" title="1">{
+                        cfg.Points[i] = config.GeofencePointConfig{
+                                Lat: p.Lat,
+                                Lon: p.Lon,
+                        }
+                }</span>
+        }
+
+        <span class="cov8" title="1">return cfg</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">// Package app provides the Bubble Tea application model for SkySpy radar
+package app
+
+import (
+        "path/filepath"
+        "strings"
+        "time"
+
+        tea "github.com/charmbracelet/bubbletea"
+        "github.com/skyspy/skyspy-go/internal/audio"
+        "github.com/skyspy/skyspy-go/internal/auth"
+        "github.com/skyspy/skyspy-go/internal/config"
+        "github.com/skyspy/skyspy-go/internal/export"
+        "github.com/skyspy/skyspy-go/internal/geo"
+        "github.com/skyspy/skyspy-go/internal/radar"
+        "github.com/skyspy/skyspy-go/internal/search"
+        "github.com/skyspy/skyspy-go/internal/spectrum"
+        "github.com/skyspy/skyspy-go/internal/theme"
+        "github.com/skyspy/skyspy-go/internal/trails"
+        "github.com/skyspy/skyspy-go/internal/ws"
+)
+
+// ViewMode represents the current view
+type ViewMode int
+
+const (
+        ViewRadar ViewMode = iota
+        ViewSettings
+        ViewHelp
+        ViewOverlays
+        ViewSearch
+        ViewAlertRules
+)
+
+// ACARSMessage represents an ACARS message
+type ACARSMessage struct {
+        Callsign string
+        Flight   string
+        Label    string
+        Text     string
+}
+
+// Model is the main application model
+type Model struct {
+        // Data
+        aircraft      map[string]*radar.Target
+        sortedTargets []string
+        acarsMessages []ACARSMessage
+
+        // Selection and navigation
+        selectedHex     string
+        rangeIdx        int
+        rangeOptions    []int
+        maxRange        float64
+        settingsCursor  int
+        overlayCursor   int
+
+        // Animation state
+        sweepAngle float64
+        blink      bool
+        frame      int
+        spinners   []string
+
+        // VU meters and spectrum (pro features)
+        vuLeft           float64
+        vuRight          float64
+        spectrum         []float64
+        spectrumPeaks    []float64
+        spectrumAnalyzer *spectrum.Analyzer
+
+        // Statistics
+        peakAircraft    int
+        sessionMessages int
+        militaryCount   int
+        emergencyCount  int
+
+        // UI state
+        viewMode         ViewMode
+        notification     string
+        notificationTime float64
+        width, height    int
+        lastRenderedView string
+
+        // Search state
+        searchQuery   string
+        searchFilter  *search.Filter
+        searchResults []string
+        searchCursor  int
+
+        // Configuration
+        config         *config.Config
+        theme          *theme.Theme
+        overlayManager *geo.OverlayManager
+
+        // Trail tracking
+        trailTracker *trails.TrailTracker
+
+        // Audio alerts
+        alertPlayer     *audio.AlertPlayer
+        alertedAircraft map[string]bool
+
+        // Alert rules
+        alertState      *AlertState
+        alertRuleCursor int
+
+        // WebSocket client
+        wsClient *ws.Client
+}
+
+// NewModel creates a new application model
+func NewModel(cfg *config.Config) *Model <span class="cov8" title="1">{
+        t := theme.Get(cfg.Display.Theme)
+
+        // Initialize overlay manager and load configured overlays
+        overlayMgr := geo.NewOverlayManager()
+        for _, ov := range cfg.Overlays.Overlays </span><span class="cov8" title="1">{
+                if ov.Path != "" </span><span class="cov8" title="1">{
+                        if overlay, err := geo.LoadOverlay(ov.Path); err == nil </span><span class="cov8" title="1">{
+                                overlay.Enabled = ov.Enabled
+                                if ov.Color != nil </span><span class="cov8" title="1">{
+                                        overlay.Color = *ov.Color
+                                }</span>
+                                <span class="cov8" title="1">overlayMgr.AddOverlay(overlay, ov.Key)</span>
+                        }
+                }
+        }
+
+        <span class="cov8" title="1">rangeOptions := []int{25, 50, 100, 200, 400}
+        rangeIdx := 2 // Default to 100nm
+        maxRange := float64(cfg.Radar.DefaultRange)
+        for i, r := range rangeOptions </span><span class="cov8" title="1">{
+                if r &gt;= cfg.Radar.DefaultRange </span><span class="cov8" title="1">{
+                        rangeIdx = i
+                        maxRange = float64(r)
+                        break</span>
+                }
+        }
+
+        <span class="cov8" title="1">spectrumBins := 24
+        analyzer := spectrum.NewAnalyzer()
+
+        return &amp;Model{
+                aircraft:         make(map[string]*radar.Target),
+                sortedTargets:    []string{},
+                acarsMessages:    make([]ACARSMessage, 0, 100),
+                rangeIdx:         rangeIdx,
+                rangeOptions:     rangeOptions,
+                maxRange:         maxRange,
+                sweepAngle:       0,
+                blink:            false,
+                frame:            0,
+                spinners:         []string{"◐", "◓", "◑", "◒"},
+                vuLeft:           0,
+                vuRight:          0,
+                spectrum:         make([]float64, spectrumBins),
+                spectrumPeaks:    make([]float64, spectrumBins),
+                spectrumAnalyzer: analyzer,
+                viewMode:         ViewRadar,
+                config:           cfg,
+                theme:            t,
+                overlayManager:   overlayMgr,
+                trailTracker:     trails.NewTrailTracker(),
+                alertPlayer:      audio.NewAlertPlayer(&amp;cfg.Audio),
+                alertedAircraft:  make(map[string]bool),
+                alertState:       NewAlertState(cfg),
+                wsClient:         ws.NewClient(cfg.Connection.Host, cfg.Connection.Port, cfg.Connection.ReconnectDelay),
+        }</span>
+}
+
+// NewModelWithAuth creates a new application model with authentication support
+func NewModelWithAuth(cfg *config.Config, authMgr *auth.Manager) *Model <span class="cov8" title="1">{
+        t := theme.Get(cfg.Display.Theme)
+
+        // Initialize overlay manager and load configured overlays
+        overlayMgr := geo.NewOverlayManager()
+        for _, ov := range cfg.Overlays.Overlays </span><span class="cov8" title="1">{
+                if ov.Path != "" </span><span class="cov8" title="1">{
+                        if overlay, err := geo.LoadOverlay(ov.Path); err == nil </span><span class="cov8" title="1">{
+                                overlay.Enabled = ov.Enabled
+                                if ov.Color != nil </span><span class="cov8" title="1">{
+                                        overlay.Color = *ov.Color
+                                }</span>
+                                <span class="cov8" title="1">overlayMgr.AddOverlay(overlay, ov.Key)</span>
+                        }
+                }
+        }
+
+        <span class="cov8" title="1">rangeOptions := []int{25, 50, 100, 200, 400}
+        rangeIdx := 2 // Default to 100nm
+        maxRange := float64(cfg.Radar.DefaultRange)
+        for i, r := range rangeOptions </span><span class="cov8" title="1">{
+                if r &gt;= cfg.Radar.DefaultRange </span><span class="cov8" title="1">{
+                        rangeIdx = i
+                        maxRange = float64(r)
+                        break</span>
+                }
+        }
+
+        // Create WebSocket client with auth provider if available
+        <span class="cov8" title="1">var wsClient *ws.Client
+        if authMgr != nil &amp;&amp; authMgr.IsAuthenticated() </span><span class="cov0" title="0">{
+                wsClient = ws.NewClientWithAuth(
+                        cfg.Connection.Host,
+                        cfg.Connection.Port,
+                        cfg.Connection.ReconnectDelay,
+                        authMgr.GetAuthHeader,
+                )
+        }</span> else<span class="cov8" title="1"> {
+                wsClient = ws.NewClient(cfg.Connection.Host, cfg.Connection.Port, cfg.Connection.ReconnectDelay)
+        }</span>
+
+        <span class="cov8" title="1">spectrumBins := 24
+        analyzer := spectrum.NewAnalyzer()
+
+        return &amp;Model{
+                aircraft:         make(map[string]*radar.Target),
+                sortedTargets:    []string{},
+                acarsMessages:    make([]ACARSMessage, 0, 100),
+                rangeIdx:         rangeIdx,
+                rangeOptions:     rangeOptions,
+                maxRange:         maxRange,
+                sweepAngle:       0,
+                blink:            false,
+                frame:            0,
+                spinners:         []string{"◐", "◓", "◑", "◒"},
+                vuLeft:           0,
+                vuRight:          0,
+                spectrum:         make([]float64, spectrumBins),
+                spectrumPeaks:    make([]float64, spectrumBins),
+                spectrumAnalyzer: analyzer,
+                viewMode:         ViewRadar,
+                config:           cfg,
+                theme:            t,
+                overlayManager:   overlayMgr,
+                trailTracker:     trails.NewTrailTracker(),
+                alertPlayer:      audio.NewAlertPlayer(&amp;cfg.Audio),
+                alertedAircraft:  make(map[string]bool),
+                alertState:       NewAlertState(cfg),
+                wsClient:         wsClient,
+        }</span>
+}
+
+// SetAudioEnabled enables or disables audio alerts
+func (m *Model) SetAudioEnabled(enabled bool) <span class="cov8" title="1">{
+        if m.alertPlayer != nil </span><span class="cov8" title="1">{
+                m.alertPlayer.SetEnabled(enabled)
+        }</span>
+}
+
+// Init initializes the application
+func (m *Model) Init() tea.Cmd <span class="cov8" title="1">{
+        // Start WebSocket client
+        m.wsClient.Start()
+
+        return tea.Batch(
+                tickCmd(),
+                aircraftMsgCmd(m.wsClient),
+                acarsMsgCmd(m.wsClient),
+        )
+}</span>
+
+// tickMsg is sent on each animation tick
+type tickMsg time.Time
+
+// aircraftMsg contains aircraft data
+type aircraftMsg ws.Message
+
+// acarsMsg contains ACARS data
+type acarsMsg ws.Message
+
+func tickCmd() tea.Cmd <span class="cov8" title="1">{
+        return tea.Tick(150*time.Millisecond, func(t time.Time) tea.Msg </span><span class="cov0" title="0">{
+                return tickMsg(t)
+        }</span>)
+}
+
+func aircraftMsgCmd(client *ws.Client) tea.Cmd <span class="cov8" title="1">{
+        return func() tea.Msg </span><span class="cov0" title="0">{
+                msg := &lt;-client.AircraftMessages()
+                return aircraftMsg(msg)
+        }</span>
+}
+
+func acarsMsgCmd(client *ws.Client) tea.Cmd <span class="cov8" title="1">{
+        return func() tea.Msg </span><span class="cov0" title="0">{
+                msg := &lt;-client.ACARSMessages()
+                return acarsMsg(msg)
+        }</span>
+}
+
+// Update handles messages and updates state
+func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) <span class="cov8" title="1">{
+        switch msg := msg.(type) </span>{
+        case tea.WindowSizeMsg:<span class="cov8" title="1">
+                m.width = msg.Width
+                m.height = msg.Height
+                return m, nil</span>
+
+        case tea.KeyMsg:<span class="cov8" title="1">
+                return m.handleKey(msg)</span>
+
+        case tickMsg:<span class="cov8" title="1">
+                return m.handleTick()</span>
+
+        case aircraftMsg:<span class="cov8" title="1">
+                m.handleAircraftMsg(ws.Message(msg))
+                return m, aircraftMsgCmd(m.wsClient)</span>
+
+        case acarsMsg:<span class="cov8" title="1">
+                m.handleACARSMsg(ws.Message(msg))
+                return m, acarsMsgCmd(m.wsClient)</span>
+        }
+
+        <span class="cov8" title="1">return m, nil</span>
+}
+
+func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) <span class="cov8" title="1">{
+        key := msg.String()
+
+        // Global quit (only when not in search mode)
+        if m.viewMode != ViewSearch &amp;&amp; (key == "q" || key == "Q" || key == "ctrl+c") </span><span class="cov8" title="1">{
+                m.wsClient.Stop()
+                _ = config.Save(m.config)
+                return m, tea.Quit
+        }</span>
+
+        // Handle ctrl+c in search mode
+        <span class="cov8" title="1">if m.viewMode == ViewSearch &amp;&amp; key == "ctrl+c" </span><span class="cov8" title="1">{
+                m.wsClient.Stop()
+                _ = config.Save(m.config)
+                return m, tea.Quit
+        }</span>
+
+        <span class="cov8" title="1">switch m.viewMode </span>{
+        case ViewSettings:<span class="cov8" title="1">
+                return m.handleSettingsKey(key)</span>
+        case ViewHelp:<span class="cov8" title="1">
+                m.viewMode = ViewRadar
+                return m, nil</span>
+        case ViewOverlays:<span class="cov8" title="1">
+                return m.handleOverlaysKey(key)</span>
+        case ViewSearch:<span class="cov8" title="1">
+                return m.handleSearchKey(msg)</span>
+        case ViewAlertRules:<span class="cov8" title="1">
+                m.handleAlertRulesKey(key)
+                return m, nil</span>
+        default:<span class="cov8" title="1">
+                return m.handleRadarKey(key)</span>
+        }
+}
+
+func (m *Model) handleRadarKey(key string) (tea.Model, tea.Cmd) <span class="cov8" title="1">{
+        switch key </span>{
+        case "up", "k":<span class="cov8" title="1">
+                m.selectPrev()</span>
+        case "down", "j":<span class="cov0" title="0">
+                m.selectNext()</span>
+        case "+", "=":<span class="cov8" title="1">
+                m.zoomOut()</span>
+        case "-", "_":<span class="cov8" title="1">
+                m.zoomIn()</span>
+        case "l", "L":<span class="cov8" title="1">
+                m.config.Display.ShowLabels = !m.config.Display.ShowLabels
+                if m.config.Display.ShowLabels </span><span class="cov8" title="1">{
+                        m.notify("Labels: ON")
+                }</span> else<span class="cov8" title="1"> {
+                        m.notify("Labels: OFF")
+                }</span>
+        case "m", "M":<span class="cov8" title="1">
+                m.config.Filters.MilitaryOnly = !m.config.Filters.MilitaryOnly
+                if m.config.Filters.MilitaryOnly </span><span class="cov8" title="1">{
+                        m.notify("Military: ON")
+                }</span> else<span class="cov8" title="1"> {
+                        m.notify("Military: OFF")
+                }</span>
+        case "g", "G":<span class="cov8" title="1">
+                m.config.Filters.HideGround = !m.config.Filters.HideGround
+                if m.config.Filters.HideGround </span><span class="cov8" title="1">{
+                        m.notify("Ground: HIDE")
+                }</span> else<span class="cov8" title="1"> {
+                        m.notify("Ground: SHOW")
+                }</span>
+        case "a", "A":<span class="cov8" title="1">
+                m.config.Display.ShowACARS = !m.config.Display.ShowACARS</span>
+        case "v", "V":<span class="cov8" title="1">
+                m.config.Display.ShowVUMeters = !m.config.Display.ShowVUMeters</span>
+        case "s", "S":<span class="cov8" title="1">
+                m.config.Display.ShowSpectrum = !m.config.Display.ShowSpectrum</span>
+        case "b", "B":<span class="cov8" title="1">
+                m.config.Display.ShowTrails = !m.config.Display.ShowTrails
+                if m.config.Display.ShowTrails </span><span class="cov8" title="1">{
+                        m.notify("Trails: ON")
+                }</span> else<span class="cov8" title="1"> {
+                        m.notify("Trails: OFF")
+                }</span>
+        case "r", "R":<span class="cov8" title="1">
+                m.openAlertRulesView()</span>
+        case "t", "T":<span class="cov8" title="1">
+                m.viewMode = ViewSettings
+                m.settingsCursor = 0</span>
+        case "o", "O":<span class="cov8" title="1">
+                m.viewMode = ViewOverlays
+                m.overlayCursor = 0</span>
+        case "?", "h", "H":<span class="cov8" title="1">
+                m.viewMode = ViewHelp</span>
+        case "/":<span class="cov8" title="1">
+                m.enterSearchMode()</span>
+        case "f1":<span class="cov8" title="1">
+                m.applyFilterPreset(search.PresetAllAircraft())
+                m.notify("Filter: ALL")</span>
+        case "f2":<span class="cov8" title="1">
+                m.applyFilterPreset(search.PresetMilitaryOnly())
+                m.notify("Filter: MILITARY")</span>
+        case "f3":<span class="cov8" title="1">
+                m.applyFilterPreset(search.PresetEmergencies())
+                m.notify("Filter: EMERGENCY")</span>
+        case "f4":<span class="cov8" title="1">
+                m.applyFilterPreset(search.PresetLowAltitude())
+                m.notify("Filter: LOW ALT")</span>
+        case "p", "P":<span class="cov8" title="1">
+                m.exportScreenshot()</span>
+        case "e", "E":<span class="cov8" title="1">
+                m.exportAircraftCSV()</span>
+        case "ctrl+e":<span class="cov8" title="1">
+                m.exportAircraftJSON()</span>
+        }
+        <span class="cov8" title="1">return m, nil</span>
+}
+
+func (m *Model) handleSettingsKey(key string) (tea.Model, tea.Cmd) <span class="cov8" title="1">{
+        themes := theme.List()
+
+        switch key </span>{
+        case "t", "T", "esc":<span class="cov8" title="1">
+                m.viewMode = ViewRadar</span>
+        case "up", "k":<span class="cov8" title="1">
+                m.settingsCursor = (m.settingsCursor - 1 + len(themes)) % len(themes)</span>
+        case "down", "j":<span class="cov8" title="1">
+                m.settingsCursor = (m.settingsCursor + 1) % len(themes)</span>
+        case "enter", " ":<span class="cov8" title="1">
+                m.setTheme(themes[m.settingsCursor])</span>
+        }
+        <span class="cov8" title="1">return m, nil</span>
+}
+
+func (m *Model) handleOverlaysKey(key string) (tea.Model, tea.Cmd) <span class="cov8" title="1">{
+        overlays := m.overlayManager.GetOverlayList()
+
+        switch key </span>{
+        case "o", "O", "esc":<span class="cov8" title="1">
+                m.viewMode = ViewRadar</span>
+        case "up", "k":<span class="cov8" title="1">
+                if len(overlays) &gt; 0 </span><span class="cov8" title="1">{
+                        m.overlayCursor = (m.overlayCursor - 1 + len(overlays)) % len(overlays)
+                }</span>
+        case "down", "j":<span class="cov8" title="1">
+                if len(overlays) &gt; 0 </span><span class="cov8" title="1">{
+                        m.overlayCursor = (m.overlayCursor + 1) % len(overlays)
+                }</span>
+        case "enter", " ":<span class="cov8" title="1">
+                if len(overlays) &gt; 0 </span><span class="cov8" title="1">{
+                        enabled := m.overlayManager.ToggleOverlay(overlays[m.overlayCursor].Key)
+                        if enabled </span><span class="cov0" title="0">{
+                                m.notify("Overlay: ON")
+                        }</span> else<span class="cov8" title="1"> {
+                                m.notify("Overlay: OFF")
+                        }</span>
+                        <span class="cov8" title="1">m.saveOverlays()</span>
+                }
+        case "d", "D":<span class="cov8" title="1">
+                if len(overlays) &gt; 0 </span><span class="cov8" title="1">{
+                        m.overlayManager.RemoveOverlay(overlays[m.overlayCursor].Key)
+                        if m.overlayCursor &gt;= len(overlays)-1 &amp;&amp; m.overlayCursor &gt; 0 </span><span class="cov0" title="0">{
+                                m.overlayCursor--
+                        }</span>
+                        <span class="cov8" title="1">m.notify("Overlay removed")
+                        m.saveOverlays()</span>
+                }
+        }
+        <span class="cov8" title="1">return m, nil</span>
+}
+
+func (m *Model) handleTick() (tea.Model, tea.Cmd) <span class="cov8" title="1">{
+        // Update sweep angle
+        m.sweepAngle = float64(int(m.sweepAngle+float64(m.config.Radar.SweepSpeed)) % 360)
+        m.blink = !m.blink
+        m.frame++
+
+        // Update VU meters based on real signal activity
+        m.updateVUMeters()
+
+        // Update spectrum from real aircraft data
+        m.updateSpectrum()
+
+        // Update stats
+        m.updateStats()
+
+        // Cleanup stale trails periodically (every ~30 seconds, 200 frames at 150ms)
+        if m.frame%200 == 0 </span><span class="cov8" title="1">{
+                m.trailTracker.Cleanup()
+                if m.alertState != nil </span><span class="cov8" title="1">{
+                        m.alertState.Cleanup()
+                }</span>
+        }
+
+        // Notification timer
+        <span class="cov8" title="1">if m.notificationTime &gt; 0 </span><span class="cov8" title="1">{
+                m.notificationTime -= 0.15
+                if m.notificationTime &lt;= 0 </span><span class="cov8" title="1">{
+                        m.notification = ""
+                }</span>
+        }
+
+        <span class="cov8" title="1">return m, tickCmd()</span>
+}
+
+func (m *Model) handleAircraftMsg(msg ws.Message) <span class="cov8" title="1">{
+        switch msg.Type </span>{
+        case string(ws.AircraftSnapshot):<span class="cov8" title="1">
+                aircraft, err := ws.ParseAircraftSnapshot(msg.Data)
+                if err == nil </span><span class="cov8" title="1">{
+                        for _, ac := range aircraft </span><span class="cov8" title="1">{
+                                m.updateTarget(&amp;ac, false)
+                        }</span>
+                }
+        case string(ws.AircraftNew):<span class="cov8" title="1">
+                ac, err := ws.ParseAircraft(msg.Data)
+                if err == nil </span><span class="cov8" title="1">{
+                        m.updateTarget(ac, true)
+                        m.sessionMessages++
+                }</span>
+        case string(ws.AircraftUpdate):<span class="cov8" title="1">
+                ac, err := ws.ParseAircraft(msg.Data)
+                if err == nil </span><span class="cov8" title="1">{
+                        m.updateTarget(ac, false)
+                        m.sessionMessages++
+                }</span>
+        case string(ws.AircraftRemove):<span class="cov8" title="1">
+                ac, err := ws.ParseAircraft(msg.Data)
+                if err == nil &amp;&amp; ac.Hex != "" </span><span class="cov8" title="1">{
+                        delete(m.aircraft, ac.Hex)
+                        delete(m.alertedAircraft, ac.Hex)
+                }</span>
+        }
+}
+
+func (m *Model) handleACARSMsg(msg ws.Message) <span class="cov8" title="1">{
+        switch msg.Type </span>{
+        case string(ws.ACARSMessage), string(ws.ACARSSnapshot):<span class="cov8" title="1">
+                acarsData, err := ws.ParseACARSData(msg.Data)
+                if err == nil </span><span class="cov8" title="1">{
+                        for _, data := range acarsData </span><span class="cov8" title="1">{
+                                acars := ACARSMessage{
+                                        Callsign: data.Callsign,
+                                        Flight:   data.Flight,
+                                        Label:    data.Label,
+                                        Text:     data.Text,
+                                }
+                                m.acarsMessages = append(m.acarsMessages, acars)
+                                if len(m.acarsMessages) &gt; 100 </span><span class="cov8" title="1">{
+                                        m.acarsMessages = m.acarsMessages[1:]
+                                }</span>
+                        }
+                }
+        }
+}
+
+func (m *Model) updateTarget(ac *ws.Aircraft, isNew bool) <span class="cov8" title="1">{
+        if ac.Hex == "" </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">target := &amp;radar.Target{
+                Hex:      ac.Hex,
+                Callsign: strings.TrimSpace(ac.Flight),
+                Squawk:   ac.Squawk,
+                ACType:   ac.Type,
+                Military: ac.Military,
+        }
+
+        if ac.Lat != nil </span><span class="cov8" title="1">{
+                target.Lat = *ac.Lat
+                target.HasLat = true
+        }</span>
+        <span class="cov8" title="1">if ac.Lon != nil </span><span class="cov8" title="1">{
+                target.Lon = *ac.Lon
+                target.HasLon = true
+        }</span>
+        <span class="cov8" title="1">if ac.AltBaro != nil </span><span class="cov8" title="1">{
+                target.Altitude = *ac.AltBaro
+                target.HasAlt = true
+        }</span> else<span class="cov8" title="1"> if ac.Alt != nil </span><span class="cov8" title="1">{
+                target.Altitude = *ac.Alt
+                target.HasAlt = true
+        }</span>
+        <span class="cov8" title="1">if ac.GS != nil </span><span class="cov8" title="1">{
+                target.Speed = *ac.GS
+                target.HasSpeed = true
+        }</span>
+        <span class="cov8" title="1">if ac.Track != nil </span><span class="cov8" title="1">{
+                target.Track = *ac.Track
+                target.HasTrack = true
+        }</span>
+        <span class="cov8" title="1">if ac.BaroRate != nil </span><span class="cov8" title="1">{
+                target.Vertical = *ac.BaroRate
+                target.HasVS = true
+        }</span> else<span class="cov8" title="1"> if ac.VR != nil </span><span class="cov8" title="1">{
+                target.Vertical = *ac.VR
+                target.HasVS = true
+        }</span>
+        <span class="cov8" title="1">if ac.RSSI != nil </span><span class="cov8" title="1">{
+                target.RSSI = *ac.RSSI
+                target.HasRSSI = true
+        }</span>
+
+        // Calculate distance and bearing if we have position
+        <span class="cov8" title="1">if target.HasLat &amp;&amp; target.HasLon &amp;&amp; (m.config.Connection.ReceiverLat != 0 || m.config.Connection.ReceiverLon != 0) </span><span class="cov8" title="1">{
+                target.Distance, target.Bearing = radar.HaversineBearing(
+                        m.config.Connection.ReceiverLat, m.config.Connection.ReceiverLon,
+                        target.Lat, target.Lon,
+                )
+        }</span> else<span class="cov8" title="1"> if ac.Distance != nil </span><span class="cov8" title="1">{
+                target.Distance = *ac.Distance
+        }</span>
+        <span class="cov8" title="1">if ac.Bearing != nil </span><span class="cov8" title="1">{
+                target.Bearing = *ac.Bearing
+        }</span>
+
+        <span class="cov8" title="1">m.aircraft[ac.Hex] = target
+
+        // Update trail tracker if we have a valid position
+        if target.HasLat &amp;&amp; target.HasLon </span><span class="cov8" title="1">{
+                m.trailTracker.AddPosition(ac.Hex, target.Lat, target.Lon)
+        }</span>
+
+        // Trigger audio alerts
+        <span class="cov8" title="1">m.triggerAudioAlerts(target, isNew)</span>
+}
+
+// triggerAudioAlerts checks if audio alerts should be triggered for this aircraft
+func (m *Model) triggerAudioAlerts(target *radar.Target, isNew bool) <span class="cov8" title="1">{
+        if m.alertPlayer == nil </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        // Play new aircraft sound for genuinely new aircraft
+        <span class="cov8" title="1">if isNew &amp;&amp; !m.alertedAircraft[target.Hex] </span><span class="cov8" title="1">{
+                m.alertPlayer.PlayNewAircraft()
+        }</span>
+
+        // Check for emergency squawk
+        <span class="cov8" title="1">if target.IsEmergency() </span><span class="cov8" title="1">{
+                m.alertPlayer.PlayEmergency()
+        }</span>
+
+        // Check for military aircraft (first time seen)
+        <span class="cov8" title="1">if target.Military &amp;&amp; !m.alertedAircraft[target.Hex] </span><span class="cov8" title="1">{
+                m.alertPlayer.PlayMilitary()
+        }</span>
+
+        // Mark this aircraft as alerted
+        <span class="cov8" title="1">m.alertedAircraft[target.Hex] = true
+
+        // Check custom alert rules
+        m.checkAlertRules(target)</span>
+}
+
+// checkAlertRules checks custom alert rules for this aircraft
+func (m *Model) checkAlertRules(target *radar.Target) <span class="cov8" title="1">{
+        if m.alertState == nil </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        // Get previous state for comparison (for geofence entry detection)
+        <span class="cov8" title="1">prevTarget, exists := m.aircraft[target.Hex]
+        var prev *radar.Target
+        if exists </span><span class="cov8" title="1">{
+                prev = prevTarget
+        }</span>
+
+        // Check alert rules
+        <span class="cov8" title="1">triggered := m.alertState.CheckAircraft(target, prev)
+
+        // Display notifications for triggered alerts
+        for _, alert := range triggered </span><span class="cov8" title="1">{
+                // Show notification
+                m.notify(alert.Message)
+
+                // Play sound if action specifies
+                for _, action := range alert.Actions </span><span class="cov8" title="1">{
+                        if action.Type == "sound" &amp;&amp; m.alertPlayer != nil </span><span class="cov8" title="1">{
+                                m.alertPlayer.PlayEmergency()
+                        }</span>
+                }
+        }
+}
+
+// updateVUMeters updates VU meter values based on aircraft signal data
+func (m *Model) updateVUMeters() <span class="cov8" title="1">{
+        // Calculate average RSSI from all aircraft with signal data
+        var totalRSSI float64
+        var rssiCount int
+        var maxRSSI float64 = -50
+
+        for _, t := range m.aircraft </span><span class="cov8" title="1">{
+                if t.HasRSSI </span><span class="cov8" title="1">{
+                        totalRSSI += t.RSSI
+                        rssiCount++
+                        if t.RSSI &gt; maxRSSI </span><span class="cov8" title="1">{
+                                maxRSSI = t.RSSI
+                        }</span>
+                }
+        }
+
+        // Normalize RSSI to 0-1 range (typical RSSI: -30 to 0 dBm)
+        <span class="cov8" title="1">var leftTarget, rightTarget float64
+        if rssiCount &gt; 0 </span><span class="cov8" title="1">{
+                avgRSSI := totalRSSI / float64(rssiCount)
+                // Normalize: -30 dBm = 0.0, 0 dBm = 1.0
+                leftTarget = (avgRSSI + 30) / 30.0
+                rightTarget = (maxRSSI + 30) / 30.0
+        }</span>
+
+        // Clamp values
+        <span class="cov8" title="1">if leftTarget &lt; 0 </span><span class="cov0" title="0">{
+                leftTarget = 0
+        }</span>
+        <span class="cov8" title="1">if leftTarget &gt; 1 </span><span class="cov0" title="0">{
+                leftTarget = 1
+        }</span>
+        <span class="cov8" title="1">if rightTarget &lt; 0 </span><span class="cov0" title="0">{
+                rightTarget = 0
+        }</span>
+        <span class="cov8" title="1">if rightTarget &gt; 1 </span><span class="cov8" title="1">{
+                rightTarget = 1
+        }</span>
+
+        // Smooth the VU meter movement (exponential decay)
+        <span class="cov8" title="1">m.vuLeft = m.vuLeft*0.7 + leftTarget*0.3
+        m.vuRight = m.vuRight*0.7 + rightTarget*0.3</span>
+}
+
+// updateSpectrum updates the spectrum display from aircraft RSSI data by distance band
+func (m *Model) updateSpectrum() <span class="cov8" title="1">{
+        // Reset analyzer and feed current aircraft data
+        m.spectrumAnalyzer.Reset()
+
+        // Add all aircraft with RSSI and distance data
+        for hex, t := range m.aircraft </span><span class="cov8" title="1">{
+                if t.Distance &gt; 0 </span><span class="cov8" title="1">{
+                        rssi := float64(-20) // Default RSSI if not available
+                        if t.HasRSSI </span><span class="cov8" title="1">{
+                                rssi = t.RSSI
+                        }</span>
+                        <span class="cov8" title="1">m.spectrumAnalyzer.AddAircraft(hex, rssi, t.Distance)</span>
+                }
+        }
+
+        // Get smoothed spectrum values
+        <span class="cov8" title="1">newSpectrum := m.spectrumAnalyzer.GetSpectrumSmoothed(len(m.spectrum))
+        peaks := m.spectrumAnalyzer.GetPeaks(len(m.spectrum))
+
+        // Apply exponential smoothing to the display values
+        for i := range m.spectrum </span><span class="cov8" title="1">{
+                m.spectrum[i] = m.spectrum[i]*0.6 + newSpectrum[i]*0.4
+                // Update peak with slow decay
+                if peaks[i] &gt; m.spectrumPeaks[i] </span><span class="cov8" title="1">{
+                        m.spectrumPeaks[i] = peaks[i]
+                }</span> else<span class="cov8" title="1"> {
+                        m.spectrumPeaks[i] *= 0.98 // Slow peak decay
+                }</span>
+        }
+}
+
+func (m *Model) updateStats() <span class="cov8" title="1">{
+        if len(m.aircraft) &gt; m.peakAircraft </span><span class="cov8" title="1">{
+                m.peakAircraft = len(m.aircraft)
+        }</span>
+
+        <span class="cov8" title="1">m.militaryCount = 0
+        m.emergencyCount = 0
+        for _, t := range m.aircraft </span><span class="cov8" title="1">{
+                if t.Military </span><span class="cov8" title="1">{
+                        m.militaryCount++
+                }</span>
+                <span class="cov8" title="1">if t.IsEmergency() </span><span class="cov8" title="1">{
+                        m.emergencyCount++
+                }</span>
+        }
+}
+
+func (m *Model) selectNext() <span class="cov8" title="1">{
+        if len(m.sortedTargets) == 0 </span><span class="cov8" title="1">{
+                return
+        }</span>
+        <span class="cov8" title="1">if m.selectedHex == "" </span><span class="cov8" title="1">{
+                m.selectedHex = m.sortedTargets[0]
+                return
+        }</span>
+        <span class="cov8" title="1">for i, hex := range m.sortedTargets </span><span class="cov8" title="1">{
+                if hex == m.selectedHex </span><span class="cov8" title="1">{
+                        m.selectedHex = m.sortedTargets[(i+1)%len(m.sortedTargets)]
+                        return
+                }</span>
+        }
+        <span class="cov8" title="1">m.selectedHex = m.sortedTargets[0]</span>
+}
+
+func (m *Model) selectPrev() <span class="cov8" title="1">{
+        if len(m.sortedTargets) == 0 </span><span class="cov8" title="1">{
+                return
+        }</span>
+        <span class="cov8" title="1">if m.selectedHex == "" </span><span class="cov8" title="1">{
+                m.selectedHex = m.sortedTargets[len(m.sortedTargets)-1]
+                return
+        }</span>
+        <span class="cov8" title="1">for i, hex := range m.sortedTargets </span><span class="cov8" title="1">{
+                if hex == m.selectedHex </span><span class="cov8" title="1">{
+                        m.selectedHex = m.sortedTargets[(i-1+len(m.sortedTargets))%len(m.sortedTargets)]
+                        return
+                }</span>
+        }
+        <span class="cov8" title="1">m.selectedHex = m.sortedTargets[len(m.sortedTargets)-1]</span>
+}
+
+func (m *Model) zoomIn() <span class="cov8" title="1">{
+        if m.rangeIdx &gt; 0 </span><span class="cov8" title="1">{
+                m.rangeIdx--
+                m.maxRange = float64(m.rangeOptions[m.rangeIdx])
+                m.notify("Range: " + itoa(int(m.maxRange)) + "nm")
+        }</span>
+}
+
+func (m *Model) zoomOut() <span class="cov8" title="1">{
+        if m.rangeIdx &lt; len(m.rangeOptions)-1 </span><span class="cov8" title="1">{
+                m.rangeIdx++
+                m.maxRange = float64(m.rangeOptions[m.rangeIdx])
+                m.notify("Range: " + itoa(int(m.maxRange)) + "nm")
+        }</span>
+}
+
+func (m *Model) setTheme(name string) <span class="cov8" title="1">{
+        m.theme = theme.Get(name)
+        m.config.Display.Theme = name
+        _ = config.Save(m.config)
+        m.notify("Theme: " + m.theme.Name)
+}</span>
+
+func (m *Model) notify(message string) <span class="cov8" title="1">{
+        m.notification = message
+        m.notificationTime = 3.0
+}</span>
+
+func (m *Model) saveOverlays() <span class="cov8" title="1">{
+        overlayConfigs := m.overlayManager.ToConfig()
+        m.config.Overlays.Overlays = make([]config.OverlayConfig, len(overlayConfigs))
+        for i, ov := range overlayConfigs </span><span class="cov8" title="1">{
+                m.config.Overlays.Overlays[i] = config.OverlayConfig{
+                        Path:    ov["source_file"].(string),
+                        Enabled: ov["enabled"].(bool),
+                        Key:     ov["key"].(string),
+                }
+                if color, ok := ov["color"].(string); ok &amp;&amp; color != "" </span><span class="cov8" title="1">{
+                        m.config.Overlays.Overlays[i].Color = &amp;color
+                }</span>
+        }
+        <span class="cov8" title="1">_ = config.Save(m.config)</span>
+}
+
+// IsConnected returns true if connected to server
+func (m *Model) IsConnected() bool <span class="cov8" title="1">{
+        return m.wsClient.IsConnected()
+}</span>
+
+// SetLastRenderedView stores the last rendered view for screenshot exports
+func (m *Model) SetLastRenderedView(view string) <span class="cov8" title="1">{
+        m.lastRenderedView = view
+}</span>
+
+// GetExportDirectory returns the configured export directory or current directory
+func (m *Model) GetExportDirectory() string <span class="cov8" title="1">{
+        if m.config.Export.Directory != "" </span><span class="cov8" title="1">{
+                return m.config.Export.Directory
+        }</span>
+        <span class="cov8" title="1">return ""</span>
+}
+
+// exportScreenshot saves the current view as HTML
+func (m *Model) exportScreenshot() <span class="cov8" title="1">{
+        if m.lastRenderedView == "" </span><span class="cov8" title="1">{
+                m.notify("No view to export")
+                return
+        }</span>
+
+        <span class="cov8" title="1">filename, err := export.CaptureScreen(m.lastRenderedView, m.GetExportDirectory())
+        if err != nil </span><span class="cov8" title="1">{
+                m.notify("Export failed: " + err.Error())
+                return
+        }</span>
+
+        <span class="cov8" title="1">m.notify("Screenshot: " + filepath.Base(filename))</span>
+}
+
+// exportAircraftCSV exports aircraft data to CSV
+func (m *Model) exportAircraftCSV() <span class="cov8" title="1">{
+        if len(m.aircraft) == 0 </span><span class="cov8" title="1">{
+                m.notify("No aircraft to export")
+                return
+        }</span>
+
+        <span class="cov8" title="1">filename, err := export.ExportAircraft(m.aircraft, m.GetExportDirectory())
+        if err != nil </span><span class="cov8" title="1">{
+                m.notify("Export failed: " + err.Error())
+                return
+        }</span>
+
+        <span class="cov8" title="1">m.notify("CSV: " + filepath.Base(filename))</span>
+}
+
+// exportAircraftJSON exports aircraft data to JSON
+func (m *Model) exportAircraftJSON() <span class="cov8" title="1">{
+        if len(m.aircraft) == 0 </span><span class="cov8" title="1">{
+                m.notify("No aircraft to export")
+                return
+        }</span>
+
+        <span class="cov8" title="1">filename, err := export.ExportAircraftJSON(m.aircraft, m.GetExportDirectory())
+        if err != nil </span><span class="cov8" title="1">{
+                m.notify("Export failed: " + err.Error())
+                return
+        }</span>
+
+        <span class="cov8" title="1">m.notify("JSON: " + filepath.Base(filename))</span>
+}
+
+// ExportACARSCSV exports ACARS messages to CSV (can be called externally)
+func (m *Model) ExportACARSCSV() (string, error) <span class="cov8" title="1">{
+        messages := make([]export.ACARSMessage, len(m.acarsMessages))
+        for i, msg := range m.acarsMessages </span><span class="cov8" title="1">{
+                messages[i] = export.ACARSMessage{
+                        Callsign: msg.Callsign,
+                        Flight:   msg.Flight,
+                        Label:    msg.Label,
+                        Text:     msg.Text,
+                }
+        }</span>
+        <span class="cov8" title="1">return export.ExportACARSMessages(messages, m.GetExportDirectory())</span>
+}
+
+// ExportACARSJSON exports ACARS messages to JSON (can be called externally)
+func (m *Model) ExportACARSJSON() (string, error) <span class="cov8" title="1">{
+        messages := make([]export.ACARSMessage, len(m.acarsMessages))
+        for i, msg := range m.acarsMessages </span><span class="cov8" title="1">{
+                messages[i] = export.ACARSMessage{
+                        Callsign: msg.Callsign,
+                        Flight:   msg.Flight,
+                        Label:    msg.Label,
+                        Text:     msg.Text,
+                }
+        }</span>
+        <span class="cov8" title="1">return export.ExportACARSJSON(messages, m.GetExportDirectory())</span>
+}
+
+// GetTrailsForRadar returns trail data in the format expected by the radar scope
+func (m *Model) GetTrailsForRadar() map[string][]radar.TrailPoint <span class="cov8" title="1">{
+        allTrails := m.trailTracker.GetAllTrails()
+        result := make(map[string][]radar.TrailPoint, len(allTrails))
+
+        for hex, trail := range allTrails </span><span class="cov8" title="1">{
+                points := make([]radar.TrailPoint, len(trail))
+                for i, pos := range trail </span><span class="cov8" title="1">{
+                        points[i] = radar.TrailPoint{
+                                Lat: pos.Lat,
+                                Lon: pos.Lon,
+                        }
+                }</span>
+                <span class="cov8" title="1">result[hex] = points</span>
+        }
+
+        <span class="cov8" title="1">return result</span>
+}
+
+// GetSpectrumPeaks returns the current spectrum peak values for rendering
+func (m *Model) GetSpectrumPeaks() []float64 <span class="cov8" title="1">{
+        return m.spectrumPeaks
+}</span>
+
+// GetSpectrumLabels returns labels for spectrum bands
+func (m *Model) GetSpectrumLabels() []string <span class="cov8" title="1">{
+        return m.spectrumAnalyzer.GetBandLabels()
+}</span>
+
+func max(a, b float64) float64 <span class="cov8" title="1">{
+        if a &gt; b </span><span class="cov8" title="1">{
+                return a
+        }</span>
+        <span class="cov8" title="1">return b</span>
+}
+
+func itoa(i int) string <span class="cov8" title="1">{
+        if i == 0 </span><span class="cov8" title="1">{
+                return "0"
+        }</span>
+        <span class="cov8" title="1">neg := i &lt; 0
+        if neg </span><span class="cov8" title="1">{
+                i = -i
+        }</span>
+        <span class="cov8" title="1">var b [20]byte
+        n := len(b) - 1
+        for i &gt; 0 </span><span class="cov8" title="1">{
+                b[n] = byte('0' + i%10)
+                i /= 10
+                n--
+        }</span>
+        <span class="cov8" title="1">if neg </span><span class="cov8" title="1">{
+                b[n] = '-'
+                n--
+        }</span>
+        <span class="cov8" title="1">return string(b[n+1:])</span>
+}
+
+// Search mode methods
+
+func (m *Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) <span class="cov8" title="1">{
+        key := msg.String()
+
+        switch key </span>{
+        case "esc":<span class="cov8" title="1">
+                m.viewMode = ViewRadar
+                m.searchQuery = ""
+                m.searchFilter = nil
+                m.searchResults = nil
+                return m, nil</span>
+        case "enter":<span class="cov8" title="1">
+                m.applySearchFilter()
+                m.viewMode = ViewRadar
+                return m, nil</span>
+        case "backspace":<span class="cov8" title="1">
+                if len(m.searchQuery) &gt; 0 </span><span class="cov8" title="1">{
+                        m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+                        m.updateSearchResults()
+                }</span>
+                <span class="cov8" title="1">return m, nil</span>
+        case "up":<span class="cov8" title="1">
+                if len(m.searchResults) &gt; 0 </span><span class="cov8" title="1">{
+                        m.searchCursor = (m.searchCursor - 1 + len(m.searchResults)) % len(m.searchResults)
+                }</span>
+                <span class="cov8" title="1">return m, nil</span>
+        case "down":<span class="cov8" title="1">
+                if len(m.searchResults) &gt; 0 </span><span class="cov8" title="1">{
+                        m.searchCursor = (m.searchCursor + 1) % len(m.searchResults)
+                }</span>
+                <span class="cov8" title="1">return m, nil</span>
+        default:<span class="cov8" title="1">
+                // Handle printable characters
+                if len(key) == 1 </span><span class="cov8" title="1">{
+                        r := rune(key[0])
+                        if r &gt;= 32 &amp;&amp; r &lt; 127 </span><span class="cov8" title="1">{
+                                m.searchQuery += key
+                                m.updateSearchResults()
+                                m.searchCursor = 0
+                        }</span>
+                } else<span class="cov8" title="1"> if key == "space" </span><span class="cov0" title="0">{
+                        m.searchQuery += " "
+                        m.updateSearchResults()
+                        m.searchCursor = 0
+                }</span>
+                <span class="cov8" title="1">return m, nil</span>
+        }
+}
+
+func (m *Model) enterSearchMode() <span class="cov8" title="1">{
+        m.viewMode = ViewSearch
+        m.searchQuery = ""
+        m.searchCursor = 0
+        m.searchResults = []string{}
+}</span>
+
+func (m *Model) applyFilterPreset(filter *search.Filter) <span class="cov8" title="1">{
+        m.searchFilter = filter
+}</span>
+
+func (m *Model) applySearchFilter() <span class="cov8" title="1">{
+        if m.searchQuery == "" </span><span class="cov8" title="1">{
+                m.searchFilter = nil
+                return
+        }</span>
+        <span class="cov8" title="1">m.searchFilter = search.ParseQuery(m.searchQuery)</span>
+}
+
+func (m *Model) updateSearchResults() <span class="cov8" title="1">{
+        if m.searchQuery == "" </span><span class="cov8" title="1">{
+                m.searchResults = nil
+                return
+        }</span>
+        <span class="cov8" title="1">filter := search.ParseQuery(m.searchQuery)
+        m.searchResults = search.FilterAircraft(m.aircraft, filter)</span>
+}
+
+// GetSearchFilter returns the current active search filter
+func (m *Model) GetSearchFilter() *search.Filter <span class="cov8" title="1">{
+        return m.searchFilter
+}</span>
+
+// GetSearchQuery returns the current search query
+func (m *Model) GetSearchQuery() string <span class="cov8" title="1">{
+        return m.searchQuery
+}</span>
+
+// GetSearchResults returns the current search results
+func (m *Model) GetSearchResults() []string <span class="cov8" title="1">{
+        return m.searchResults
+}</span>
+
+// GetSearchCursor returns the current search cursor position
+func (m *Model) GetSearchCursor() int <span class="cov8" title="1">{
+        return m.searchCursor
+}</span>
+
+// IsFilterActive returns true if a search filter is active
+func (m *Model) IsFilterActive() bool <span class="cov8" title="1">{
+        return m.searchFilter != nil &amp;&amp; m.searchFilter.IsActive()
+}</span>
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package app
+
+import (
+        "fmt"
+        "strings"
+        "time"
+
+        "github.com/charmbracelet/lipgloss"
+        "github.com/skyspy/skyspy-go/internal/radar"
+        "github.com/skyspy/skyspy-go/internal/theme"
+)
+
+// View renders the application
+func (m *Model) View() string <span class="cov8" title="1">{
+        var sb strings.Builder
+
+        // Header
+        sb.WriteString(m.renderHeader())
+        sb.WriteString("\n")
+
+        // Main content area
+        radarView := m.renderRadar()
+        var sidebarView string
+
+        switch m.viewMode </span>{
+        case ViewSettings:<span class="cov8" title="1">
+                sidebarView = m.renderSettingsPanel()</span>
+        case ViewHelp:<span class="cov8" title="1">
+                sidebarView = m.renderHelpPanel()</span>
+        case ViewOverlays:<span class="cov8" title="1">
+                sidebarView = m.renderOverlayPanel()</span>
+        case ViewSearch:<span class="cov8" title="1">
+                sidebarView = m.renderSearchPanel()</span>
+        case ViewAlertRules:<span class="cov8" title="1">
+                sidebarView = m.renderAlertRulesPanel()</span>
+        default:<span class="cov8" title="1">
+                sidebarView = m.renderSidebar()</span>
+        }
+
+        // Side by side layout
+        <span class="cov8" title="1">radarLines := strings.Split(radarView, "\n")
+        sidebarLines := strings.Split(sidebarView, "\n")
+
+        maxLines := len(radarLines)
+        if len(sidebarLines) &gt; maxLines </span><span class="cov8" title="1">{
+                maxLines = len(sidebarLines)
+        }</span>
+
+        <span class="cov8" title="1">for i := 0; i &lt; maxLines; i++ </span><span class="cov8" title="1">{
+                radarLine := ""
+                if i &lt; len(radarLines) </span><span class="cov8" title="1">{
+                        radarLine = radarLines[i]
+                }</span>
+                <span class="cov8" title="1">sidebarLine := ""
+                if i &lt; len(sidebarLines) </span><span class="cov8" title="1">{
+                        sidebarLine = sidebarLines[i]
+                }</span>
+                <span class="cov8" title="1">sb.WriteString(radarLine)
+                sb.WriteString(" ")
+                sb.WriteString(sidebarLine)
+                sb.WriteString("\n")</span>
+        }
+
+        // ACARS panel if enabled
+        <span class="cov8" title="1">if m.config.Display.ShowACARS &amp;&amp; m.viewMode == ViewRadar </span><span class="cov8" title="1">{
+                sb.WriteString(m.renderACARSPanel())
+                sb.WriteString("\n")
+        }</span>
+
+        // Status bar
+        <span class="cov8" title="1">sb.WriteString(m.renderStatusBar())
+        sb.WriteString("\n")
+
+        // Footer
+        sb.WriteString(m.renderFooter())
+
+        result := sb.String()
+
+        // Store last rendered view for screenshot exports
+        m.lastRenderedView = result
+
+        return result</span>
+}
+
+func (m *Model) renderHeader() string <span class="cov8" title="1">{
+        borderStyle := lipgloss.NewStyle().Foreground(m.theme.Border)
+        primaryBright := lipgloss.NewStyle().Foreground(m.theme.PrimaryBright).Bold(true).Reverse(true)
+        secondaryBright := lipgloss.NewStyle().Foreground(m.theme.SecondaryBright).Bold(true)
+        infoStyle := lipgloss.NewStyle().Foreground(m.theme.Info)
+        textDim := lipgloss.NewStyle().Foreground(m.theme.TextDim)
+
+        var sb strings.Builder
+        sb.WriteString(borderStyle.Render("╔" + strings.Repeat("═", 98) + "╗"))
+        sb.WriteString("\n")
+
+        sb.WriteString(borderStyle.Render("║ "))
+        sb.WriteString(textDim.Render("░░ "))
+        sb.WriteString(primaryBright.Render("SKYSPY RADAR PRO"))
+        sb.WriteString(textDim.Render(" ░░ "))
+        sb.WriteString(borderStyle.Render(strings.Repeat("═", 18)))
+        sb.WriteString(secondaryBright.Render(" ADS-B TACTICAL DISPLAY "))
+        sb.WriteString(borderStyle.Render(strings.Repeat("═", 18)))
+
+        spin := m.spinners[m.frame%4]
+        sb.WriteString(infoStyle.Render(" " + spin + " "))
+        sb.WriteString(infoStyle.Bold(true).Render("LIVE"))
+        sb.WriteString(infoStyle.Render(" " + spin + "  "))
+        sb.WriteString(borderStyle.Render("║"))
+        sb.WriteString("\n")
+        sb.WriteString(borderStyle.Render("╠" + strings.Repeat("═", 98) + "╣"))
+
+        return sb.String()
+}</span>
+
+func (m *Model) renderRadar() string <span class="cov8" title="1">{
+        scope := radar.NewScope(m.theme, m.maxRange, m.config.Radar.RangeRings, m.config.Radar.ShowCompass)
+        scope.Clear()
+        scope.DrawRangeRings()
+        scope.DrawCompass()
+
+        // Draw overlays
+        if m.config.Radar.ShowOverlays </span><span class="cov8" title="1">{
+                scope.DrawOverlays(
+                        m.overlayManager.GetEnabledOverlays(),
+                        m.config.Connection.ReceiverLat,
+                        m.config.Connection.ReceiverLon,
+                        m.config.Radar.OverlayColor,
+                )
+        }</span>
+
+        // Draw trails before targets so targets are rendered on top
+        <span class="cov8" title="1">if m.config.Display.ShowTrails </span><span class="cov8" title="1">{
+                scope.DrawTrails(
+                        m.GetTrailsForRadar(),
+                        m.config.Connection.ReceiverLat,
+                        m.config.Connection.ReceiverLon,
+                )
+        }</span>
+
+        <span class="cov8" title="1">scope.DrawSweep(m.sweepAngle)
+
+        // Draw targets and update sorted list
+        m.sortedTargets = scope.DrawTargets(
+                m.aircraft,
+                m.selectedHex,
+                m.config.Filters.MilitaryOnly,
+                m.config.Filters.HideGround,
+                m.config.Display.ShowLabels,
+                m.blink,
+        )
+
+        return scope.Render()</span>
+}
+
+func (m *Model) renderSidebar() string <span class="cov8" title="1">{
+        var sb strings.Builder
+
+        // Target panel
+        sb.WriteString(m.renderTargetPanel())
+        sb.WriteString("\n")
+
+        // Stats panel
+        if m.config.Display.ShowStatsPanel </span><span class="cov8" title="1">{
+                sb.WriteString(m.renderStatsPanel())
+                sb.WriteString("\n")
+        }</span>
+
+        // Target list
+        <span class="cov8" title="1">if m.config.Display.ShowTargetList </span><span class="cov8" title="1">{
+                sb.WriteString(m.renderTargetList())
+                sb.WriteString("\n")
+        }</span>
+
+        // Frequency panel
+        <span class="cov8" title="1">if m.config.Display.ShowFrequencies </span><span class="cov8" title="1">{
+                sb.WriteString(m.renderFreqPanel())
+        }</span>
+
+        <span class="cov8" title="1">return sb.String()</span>
+}
+
+func (m *Model) renderTargetPanel() string <span class="cov8" title="1">{
+        borderStyle := lipgloss.NewStyle().Foreground(m.theme.Border)
+        titleStyle := lipgloss.NewStyle().Foreground(m.theme.PrimaryBright)
+        textDim := lipgloss.NewStyle().Foreground(m.theme.TextDim)
+        selectedStyle := lipgloss.NewStyle().Foreground(m.theme.Selected).Bold(true)
+        secondaryBright := lipgloss.NewStyle().Foreground(m.theme.SecondaryBright)
+        primaryBright := lipgloss.NewStyle().Foreground(m.theme.PrimaryBright)
+        militaryStyle := lipgloss.NewStyle().Foreground(m.theme.Military).Bold(true)
+        successStyle := lipgloss.NewStyle().Foreground(m.theme.Success)
+        errorStyle := lipgloss.NewStyle().Foreground(m.theme.Error)
+        emergencyStyle := lipgloss.NewStyle().Foreground(m.theme.Emergency)
+
+        var sb strings.Builder
+
+        sb.WriteString(borderStyle.Render("╭─") + titleStyle.Render("◄ TARGET ►") + borderStyle.Render("─────────────────╮"))
+        sb.WriteString("\n")
+
+        target, exists := m.aircraft[m.selectedHex]
+        if !exists || m.selectedHex == "" </span><span class="cov8" title="1">{
+                sb.WriteString(borderStyle.Render("│") + textDim.Render("  No target selected           ") + borderStyle.Render("│"))
+                sb.WriteString("\n")
+                sb.WriteString(borderStyle.Render("│") + textDim.Render("                               ") + borderStyle.Render("│"))
+                sb.WriteString("\n")
+                sb.WriteString(borderStyle.Render("│") + textDim.Render("  [↑↓] Select  [+-] Range      ") + borderStyle.Render("│"))
+                sb.WriteString("\n")
+                sb.WriteString(borderStyle.Render("│") + textDim.Render("  [T] Themes   [O] Overlays    ") + borderStyle.Render("│"))
+                sb.WriteString("\n")
+                sb.WriteString(borderStyle.Render("│") + textDim.Render("  [?] Help     [Q] Quit        ") + borderStyle.Render("│"))
+                sb.WriteString("\n")
+                sb.WriteString(borderStyle.Render("╰───────────────────────────────╯"))
+                return sb.String()
+        }</span>
+
+        <span class="cov8" title="1">cs := target.Callsign
+        if cs == "" </span><span class="cov8" title="1">{
+                cs = "-------"
+        }</span>
+
+        // Callsign and hex
+        <span class="cov8" title="1">sb.WriteString(borderStyle.Render("│") + selectedStyle.Render(fmt.Sprintf("  %-28s", cs)) + borderStyle.Render("│"))
+        sb.WriteString("\n")
+
+        hexLine := secondaryBright.Render("  " + strings.ToUpper(target.Hex))
+        if target.Military </span><span class="cov8" title="1">{
+                hexLine += militaryStyle.Render(" MIL")
+        }</span>
+        <span class="cov8" title="1">sb.WriteString(borderStyle.Render("│") + fmt.Sprintf("%-31s", hexLine) + borderStyle.Render("│"))
+        sb.WriteString("\n")
+
+        sb.WriteString(borderStyle.Render("│") + "                               " + borderStyle.Render("│"))
+        sb.WriteString("\n")
+
+        // Data rows
+        rows := []struct {
+                label string
+                value string
+                style lipgloss.Style
+        }{
+                {"TYPE", target.ACType, primaryBright},
+                {"ALT", m.formatAlt(target), primaryBright},
+                {"GS", m.formatSpeed(target), primaryBright},
+                {"VS", m.formatVS(target), m.getVSStyle(target)},
+                {"HDG", m.formatTrack(target), primaryBright},
+                {"DST", m.formatDistance(target), secondaryBright},
+                {"BRG", m.formatBearing(target), secondaryBright},
+                {"SQ", m.formatSquawk(target), m.getSquawkStyle(target)},
+        }
+
+        for _, row := range rows </span><span class="cov8" title="1">{
+                if row.value == "" </span><span class="cov8" title="1">{
+                        row.value = "----"
+                }</span>
+                <span class="cov8" title="1">sb.WriteString(borderStyle.Render("│") + textDim.Render(fmt.Sprintf("  %-4s ", row.label)) + row.style.Render(fmt.Sprintf("%-23s", row.value)) + borderStyle.Render("│"))
+                sb.WriteString("\n")</span>
+        }
+
+        // Signal strength
+        <span class="cov8" title="1">sb.WriteString(borderStyle.Render("│") + textDim.Render("  SIG  ") + m.renderSignalBars(target) + strings.Repeat(" ", 18) + borderStyle.Render("│"))
+        sb.WriteString("\n")
+
+        sb.WriteString(borderStyle.Render("╰───────────────────────────────╯"))
+
+        _ = successStyle
+        _ = errorStyle
+        _ = emergencyStyle
+
+        return sb.String()</span>
+}
+
+func (m *Model) renderStatsPanel() string <span class="cov8" title="1">{
+        borderStyle := lipgloss.NewStyle().Foreground(m.theme.Border)
+        titleStyle := lipgloss.NewStyle().Foreground(m.theme.PrimaryBright)
+        textDim := lipgloss.NewStyle().Foreground(m.theme.TextDim)
+        successStyle := lipgloss.NewStyle().Foreground(m.theme.Success)
+        errorStyle := lipgloss.NewStyle().Foreground(m.theme.Error)
+        secondaryBright := lipgloss.NewStyle().Foreground(m.theme.SecondaryBright)
+        warningStyle := lipgloss.NewStyle().Foreground(m.theme.Warning)
+        militaryStyle := lipgloss.NewStyle().Foreground(m.theme.Military)
+        infoStyle := lipgloss.NewStyle().Foreground(m.theme.Info)
+        emergencyStyle := lipgloss.NewStyle().Foreground(m.theme.Emergency)
+
+        var sb strings.Builder
+
+        sb.WriteString(borderStyle.Render("╭─") + titleStyle.Render("STATUS") + borderStyle.Render("─────────────────────╮"))
+        sb.WriteString("\n")
+
+        // Connection status
+        if m.IsConnected() </span><span class="cov0" title="0">{
+                ind := "◉"
+                if !m.blink </span><span class="cov0" title="0">{
+                        ind = "○"
+                }</span>
+                <span class="cov0" title="0">sb.WriteString(borderStyle.Render("│") + successStyle.Render("  "+ind+" ") + successStyle.Bold(true).Render("RECEIVING") + strings.Repeat(" ", 16) + borderStyle.Render("│"))</span>
+        } else<span class="cov8" title="1"> {
+                sb.WriteString(borderStyle.Render("│") + errorStyle.Render("  ○ ") + errorStyle.Bold(true).Render("OFFLINE") + strings.Repeat(" ", 18) + borderStyle.Render("│"))
+        }</span>
+        <span class="cov8" title="1">sb.WriteString("\n")
+        sb.WriteString(borderStyle.Render("│") + "                               " + borderStyle.Render("│"))
+        sb.WriteString("\n")
+
+        // Stats
+        stats := []struct {
+                label string
+                value string
+                style lipgloss.Style
+        }{
+                {"TGT", fmt.Sprintf("%3d", len(m.aircraft)), secondaryBright},
+                {"PEAK", fmt.Sprintf("%3d", m.peakAircraft), warningStyle},
+                {"MIL", fmt.Sprintf("%3d", m.militaryCount), militaryStyle},
+                {"EMRG", fmt.Sprintf("%3d", m.emergencyCount), emergencyStyle},
+                {"MSG", fmt.Sprintf("%d", m.sessionMessages), infoStyle},
+        }
+
+        for _, stat := range stats </span><span class="cov8" title="1">{
+                sb.WriteString(borderStyle.Render("│") + textDim.Render(fmt.Sprintf("  %-4s ", stat.label)) + stat.style.Render(fmt.Sprintf("%-23s", stat.value)) + borderStyle.Render("│"))
+                sb.WriteString("\n")
+        }</span>
+
+        // VU Meters
+        <span class="cov8" title="1">if m.config.Display.ShowVUMeters </span><span class="cov8" title="1">{
+                sb.WriteString(borderStyle.Render("│") + "                               " + borderStyle.Render("│"))
+                sb.WriteString("\n")
+                sb.WriteString(borderStyle.Render("│") + textDim.Render("  VU L ") + m.renderVUMeter(m.vuLeft, 10) + strings.Repeat(" ", 13) + borderStyle.Render("│"))
+                sb.WriteString("\n")
+                sb.WriteString(borderStyle.Render("│") + textDim.Render("  VU R ") + m.renderVUMeter(m.vuRight, 10) + strings.Repeat(" ", 13) + borderStyle.Render("│"))
+                sb.WriteString("\n")
+        }</span>
+
+        // Spectrum Analyzer
+        <span class="cov8" title="1">if m.config.Display.ShowSpectrum </span><span class="cov8" title="1">{
+                sb.WriteString(borderStyle.Render("│") + "                               " + borderStyle.Render("│"))
+                sb.WriteString("\n")
+                sb.WriteString(borderStyle.Render("│") + textDim.Render(" SPECTRUM (RSSI by Distance)   ") + borderStyle.Render("│"))
+                sb.WriteString("\n")
+                sb.WriteString(borderStyle.Render("│") + m.renderSpectrumBar() + borderStyle.Render("│"))
+                sb.WriteString("\n")
+                sb.WriteString(borderStyle.Render("│") + textDim.Render("  0    50   100   200   400+ nm") + borderStyle.Render("│"))
+                sb.WriteString("\n")
+        }</span>
+
+        <span class="cov8" title="1">sb.WriteString(borderStyle.Render("╰───────────────────────────────╯"))
+
+        return sb.String()</span>
+}
+
+func (m *Model) renderTargetList() string <span class="cov8" title="1">{
+        borderStyle := lipgloss.NewStyle().Foreground(m.theme.Border)
+        titleStyle := lipgloss.NewStyle().Foreground(m.theme.PrimaryBright)
+        textDim := lipgloss.NewStyle().Foreground(m.theme.TextDim)
+        selectedStyle := lipgloss.NewStyle().Foreground(m.theme.Selected).Bold(true)
+        secondaryStyle := lipgloss.NewStyle().Foreground(m.theme.Secondary)
+        primaryStyle := lipgloss.NewStyle().Foreground(m.theme.Primary).Bold(true)
+
+        var sb strings.Builder
+
+        sb.WriteString(borderStyle.Render("╭─") + titleStyle.Render(fmt.Sprintf("LIST (%d)", len(m.aircraft))) + borderStyle.Render("─────────────────╮"))
+        sb.WriteString("\n")
+
+        // Header
+        sb.WriteString(borderStyle.Render("│") + primaryStyle.Render("   CALL     ALT    D") + strings.Repeat(" ", 10) + borderStyle.Render("│"))
+        sb.WriteString("\n")
+
+        // List up to 8 targets
+        count := 0
+        for _, hex := range m.sortedTargets </span><span class="cov8" title="1">{
+                if count &gt;= 8 </span><span class="cov8" title="1">{
+                        break</span>
+                }
+                <span class="cov8" title="1">target, exists := m.aircraft[hex]
+                if !exists </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov8" title="1">isSelected := hex == m.selectedHex
+                marker := " "
+                if isSelected </span><span class="cov8" title="1">{
+                        marker = "▶"
+                }</span>
+
+                <span class="cov8" title="1">cs := target.Callsign
+                if cs == "" </span><span class="cov8" title="1">{
+                        cs = target.Hex
+                }</span>
+                <span class="cov8" title="1">if len(cs) &gt; 6 </span><span class="cov8" title="1">{
+                        cs = cs[:6]
+                }</span>
+
+                <span class="cov8" title="1">alt := "---"
+                if target.HasAlt </span><span class="cov8" title="1">{
+                        if target.Altitude &gt;= 1000 </span><span class="cov8" title="1">{
+                                alt = fmt.Sprintf("%d", target.Altitude/100)
+                        }</span> else<span class="cov0" title="0"> if target.Altitude == 0 </span><span class="cov0" title="0">{
+                                alt = "GND"
+                        }</span>
+                }
+
+                <span class="cov8" title="1">dist := "-"
+                if target.Distance &gt; 0 </span><span class="cov8" title="1">{
+                        dist = fmt.Sprintf("%.0f", target.Distance)
+                }</span>
+
+                <span class="cov8" title="1">var lineStyle lipgloss.Style
+                if isSelected </span><span class="cov8" title="1">{
+                        lineStyle = selectedStyle
+                }</span> else<span class="cov8" title="1"> {
+                        lineStyle = secondaryStyle
+                }</span>
+
+                <span class="cov8" title="1">line := fmt.Sprintf("%s %-6s  %4s  %3s", marker, cs, alt, dist)
+                sb.WriteString(borderStyle.Render("│") + lineStyle.Render(fmt.Sprintf(" %-29s", line)) + borderStyle.Render("│"))
+                sb.WriteString("\n")
+                count++</span>
+        }
+
+        // Fill remaining rows if needed
+        <span class="cov8" title="1">for count &lt; 8 </span><span class="cov8" title="1">{
+                sb.WriteString(borderStyle.Render("│") + textDim.Render(strings.Repeat(" ", 31)) + borderStyle.Render("│"))
+                sb.WriteString("\n")
+                count++
+        }</span>
+
+        <span class="cov8" title="1">sb.WriteString(borderStyle.Render("╰───────────────────────────────╯"))
+
+        return sb.String()</span>
+}
+
+func (m *Model) renderFreqPanel() string <span class="cov8" title="1">{
+        borderStyle := lipgloss.NewStyle().Foreground(m.theme.Border)
+        titleStyle := lipgloss.NewStyle().Foreground(m.theme.PrimaryBright)
+        textDim := lipgloss.NewStyle().Foreground(m.theme.TextDim)
+        successStyle := lipgloss.NewStyle().Foreground(m.theme.Success)
+        infoStyle := lipgloss.NewStyle().Foreground(m.theme.Info)
+        secondaryBright := lipgloss.NewStyle().Foreground(m.theme.SecondaryBright)
+        errorStyle := lipgloss.NewStyle().Foreground(m.theme.Error)
+
+        var sb strings.Builder
+
+        sb.WriteString(borderStyle.Render("╭─") + titleStyle.Render("FREQ") + borderStyle.Render("───────────────────────╮"))
+        sb.WriteString("\n")
+
+        freqs := []struct {
+                freq   string
+                label  string
+                style  lipgloss.Style
+        }{
+                {"1090.000", "ADS-B", successStyle},
+                {"136.900", "ACARS", infoStyle},
+                {"136.725", "VDL2", secondaryBright},
+                {"121.500", "GUARD", errorStyle},
+        }
+
+        for _, f := range freqs </span><span class="cov8" title="1">{
+                ind := "○"
+                indStyle := textDim
+                // Simulate random activity
+                if m.blink &amp;&amp; m.frame%7 &lt; 3 </span><span class="cov8" title="1">{
+                        ind = "●"
+                        indStyle = f.style
+                }</span>
+                <span class="cov8" title="1">sb.WriteString(borderStyle.Render("│") + "  " + indStyle.Render(ind) + " " + f.style.Render(f.freq) + " " + textDim.Render(fmt.Sprintf("[%-5s]", f.label)) + strings.Repeat(" ", 8) + borderStyle.Render("│"))
+                sb.WriteString("\n")</span>
+        }
+
+        <span class="cov8" title="1">sb.WriteString(borderStyle.Render("╰───────────────────────────────╯"))
+
+        return sb.String()</span>
+}
+
+func (m *Model) renderACARSPanel() string <span class="cov8" title="1">{
+        borderStyle := lipgloss.NewStyle().Foreground(m.theme.Border)
+        infoStyle := lipgloss.NewStyle().Foreground(m.theme.Info)
+        secondaryBright := lipgloss.NewStyle().Foreground(m.theme.SecondaryBright)
+        primaryStyle := lipgloss.NewStyle().Foreground(m.theme.Primary)
+        textDim := lipgloss.NewStyle().Foreground(m.theme.TextDim)
+
+        var sb strings.Builder
+
+        sb.WriteString(borderStyle.Render("╭─") + infoStyle.Render("ACARS") + borderStyle.Render(strings.Repeat("─", 87) + "╮"))
+        sb.WriteString("\n")
+
+        // Show last 3 messages
+        start := len(m.acarsMessages) - 3
+        if start &lt; 0 </span><span class="cov8" title="1">{
+                start = 0
+        }</span>
+
+        <span class="cov8" title="1">count := 0
+        for i := start; i &lt; len(m.acarsMessages); i++ </span><span class="cov8" title="1">{
+                msg := m.acarsMessages[i]
+                cs := msg.Callsign
+                if cs == "" </span><span class="cov8" title="1">{
+                        cs = msg.Flight
+                }</span>
+                <span class="cov8" title="1">if len(cs) &gt; 6 </span><span class="cov8" title="1">{
+                        cs = cs[:6]
+                }</span>
+                <span class="cov8" title="1">label := msg.Label
+                if len(label) &gt; 2 </span><span class="cov8" title="1">{
+                        label = label[:2]
+                }</span>
+                <span class="cov8" title="1">text := msg.Text
+                if len(text) &gt; 70 </span><span class="cov8" title="1">{
+                        text = text[:70]
+                }</span>
+
+                <span class="cov8" title="1">line := secondaryBright.Render(fmt.Sprintf("%-6s ", cs)) +
+                        primaryStyle.Render(fmt.Sprintf("%2s ", label)) +
+                        textDim.Render(text)
+                sb.WriteString(borderStyle.Render("│ ") + fmt.Sprintf("%-91s", line) + borderStyle.Render("│"))
+                sb.WriteString("\n")
+                count++</span>
+        }
+
+        // Fill remaining rows
+        <span class="cov8" title="1">for count &lt; 3 </span><span class="cov8" title="1">{
+                if count == 0 </span><span class="cov8" title="1">{
+                        sb.WriteString(borderStyle.Render("│") + textDim.Render("  Awaiting ACARS...") + strings.Repeat(" ", 73) + borderStyle.Render("│"))
+                }</span> else<span class="cov8" title="1"> {
+                        sb.WriteString(borderStyle.Render("│") + strings.Repeat(" ", 92) + borderStyle.Render("│"))
+                }</span>
+                <span class="cov8" title="1">sb.WriteString("\n")
+                count++</span>
+        }
+
+        <span class="cov8" title="1">sb.WriteString(borderStyle.Render("╰" + strings.Repeat("─", 92) + "╯"))
+
+        return sb.String()</span>
+}
+
+func (m *Model) renderStatusBar() string <span class="cov8" title="1">{
+        borderStyle := lipgloss.NewStyle().Foreground(m.theme.Border)
+        borderDim := lipgloss.NewStyle().Foreground(m.theme.BorderDim)
+        successStyle := lipgloss.NewStyle().Foreground(m.theme.Success).Bold(true)
+        errorStyle := lipgloss.NewStyle().Foreground(m.theme.Error).Bold(true)
+        secondaryBright := lipgloss.NewStyle().Foreground(m.theme.SecondaryBright)
+        primaryBright := lipgloss.NewStyle().Foreground(m.theme.PrimaryBright)
+        warningStyle := lipgloss.NewStyle().Foreground(m.theme.Warning)
+        infoStyle := lipgloss.NewStyle().Foreground(m.theme.Info)
+        textDim := lipgloss.NewStyle().Foreground(m.theme.TextDim)
+
+        var sb strings.Builder
+
+        sb.WriteString(borderStyle.Render("╟"))
+        sb.WriteString(borderStyle.Render(strings.Repeat("─", 98)))
+        sb.WriteString(borderStyle.Render("╢"))
+        sb.WriteString("\n")
+
+        sb.WriteString(borderStyle.Render("║ "))
+
+        // Connection indicator
+        if m.IsConnected() </span><span class="cov0" title="0">{
+                ind := "◉"
+                if !m.blink </span><span class="cov0" title="0">{
+                        ind = "○"
+                }</span>
+                <span class="cov0" title="0">sb.WriteString(successStyle.Render(ind + " ON "))</span>
+        } else<span class="cov8" title="1"> {
+                sb.WriteString(errorStyle.Render("○ OFF "))
+        }</span>
+
+        <span class="cov8" title="1">sb.WriteString(borderDim.Render("│"))
+        sb.WriteString(secondaryBright.Render(fmt.Sprintf(" %3d ", len(m.aircraft))))
+        sb.WriteString(borderDim.Render("│"))
+        sb.WriteString(primaryBright.Render(fmt.Sprintf(" %dnm ", int(m.maxRange))))
+        sb.WriteString(borderDim.Render("│"))
+
+        // Active filters
+        var filters []string
+        if m.config.Filters.MilitaryOnly </span><span class="cov8" title="1">{
+                filters = append(filters, "MIL")
+        }</span>
+        <span class="cov8" title="1">if m.config.Filters.HideGround </span><span class="cov8" title="1">{
+                filters = append(filters, "AIR")
+        }</span>
+        <span class="cov8" title="1">if m.IsFilterActive() </span><span class="cov8" title="1">{
+                filterDesc := m.searchFilter.Description()
+                if len(filterDesc) &gt; 15 </span><span class="cov8" title="1">{
+                        filterDesc = filterDesc[:15] + "..."
+                }</span>
+                <span class="cov8" title="1">filters = append(filters, filterDesc)</span>
+        }
+        <span class="cov8" title="1">if len(filters) &gt; 0 </span><span class="cov8" title="1">{
+                sb.WriteString(warningStyle.Render(" " + strings.Join(filters, "/") + " "))
+                sb.WriteString(borderDim.Render("│"))
+        }</span>
+
+        // Overlays
+        <span class="cov8" title="1">enabledOverlays := 0
+        for _, ov := range m.overlayManager.GetOverlayList() </span><span class="cov8" title="1">{
+                if ov.Enabled </span><span class="cov8" title="1">{
+                        enabledOverlays++
+                }</span>
+        }
+        <span class="cov8" title="1">if enabledOverlays &gt; 0 </span><span class="cov8" title="1">{
+                sb.WriteString(infoStyle.Render(fmt.Sprintf(" OVL:%d ", enabledOverlays)))
+                sb.WriteString(borderDim.Render("│"))
+        }</span>
+
+        // Theme name
+        <span class="cov8" title="1">themeName := m.theme.Name
+        if len(themeName) &gt; 12 </span><span class="cov8" title="1">{
+                themeName = themeName[:12]
+        }</span>
+        <span class="cov8" title="1">sb.WriteString(textDim.Render(" " + themeName + " "))
+        sb.WriteString(borderDim.Render("│"))
+
+        // Time
+        sb.WriteString(secondaryBright.Render(" " + time.Now().Format("15:04:05") + " "))
+
+        // Notification
+        if m.notification != "" &amp;&amp; m.notificationTime &gt; 0 </span><span class="cov8" title="1">{
+                sb.WriteString(borderDim.Render("│"))
+                sb.WriteString(infoStyle.Bold(true).Render(" " + m.notification + " "))
+        }</span>
+
+        // Pad to width
+        <span class="cov8" title="1">remaining := 98 - lipgloss.Width(sb.String()) + 3 // Account for borders
+        if remaining &gt; 0 </span><span class="cov8" title="1">{
+                sb.WriteString(strings.Repeat(" ", remaining))
+        }</span>
+
+        <span class="cov8" title="1">sb.WriteString(borderStyle.Render("║"))
+
+        return sb.String()</span>
+}
+
+func (m *Model) renderFooter() string <span class="cov8" title="1">{
+        borderStyle := lipgloss.NewStyle().Foreground(m.theme.Border)
+        return borderStyle.Render("╚" + strings.Repeat("═", 98) + "╝")
+}</span>
+
+func (m *Model) renderSettingsPanel() string <span class="cov8" title="1">{
+        borderStyle := lipgloss.NewStyle().Foreground(m.theme.Border)
+        titleStyle := lipgloss.NewStyle().Foreground(m.theme.PrimaryBright).Bold(true)
+        secondaryBright := lipgloss.NewStyle().Foreground(m.theme.SecondaryBright).Bold(true)
+        borderDim := lipgloss.NewStyle().Foreground(m.theme.BorderDim)
+        textDim := lipgloss.NewStyle().Foreground(m.theme.TextDim)
+        selectedStyle := lipgloss.NewStyle().Foreground(m.theme.Selected).Bold(true)
+        textStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
+        successStyle := lipgloss.NewStyle().Foreground(m.theme.Success)
+
+        var sb strings.Builder
+
+        sb.WriteString(borderStyle.Render("╔══════════════════════════════════╗"))
+        sb.WriteString("\n")
+        sb.WriteString(borderStyle.Render("║") + titleStyle.Render("         SETTINGS &amp; THEMES        ") + borderStyle.Render("║"))
+        sb.WriteString("\n")
+        sb.WriteString(borderStyle.Render("╚══════════════════════════════════╝"))
+        sb.WriteString("\n\n")
+
+        sb.WriteString(secondaryBright.Render("  THEMES"))
+        sb.WriteString("\n")
+        sb.WriteString(borderDim.Render("  " + strings.Repeat("─", 34)))
+        sb.WriteString("\n")
+
+        themes := theme.GetInfo()
+        for i, t := range themes </span><span class="cov8" title="1">{
+                isCurrent := t.Key == m.config.Display.Theme
+                isCursor := i == m.settingsCursor
+
+                prefix := "  "
+                if isCursor </span><span class="cov8" title="1">{
+                        prefix = "▶ "
+                }</span>
+                <span class="cov8" title="1">marker := "○"
+                if isCurrent </span><span class="cov8" title="1">{
+                        marker = "●"
+                }</span>
+
+                <span class="cov8" title="1">var style, markerStyle lipgloss.Style
+                if isCursor </span><span class="cov8" title="1">{
+                        style = selectedStyle
+                }</span> else<span class="cov8" title="1"> {
+                        style = textStyle
+                }</span>
+                <span class="cov8" title="1">if isCurrent </span><span class="cov8" title="1">{
+                        markerStyle = successStyle
+                }</span> else<span class="cov8" title="1"> {
+                        markerStyle = textDim
+                }</span>
+
+                <span class="cov8" title="1">name := t.Name
+                if len(name) &gt; 14 </span><span class="cov8" title="1">{
+                        name = name[:14]
+                }</span>
+                <span class="cov8" title="1">desc := t.Description
+                if len(desc) &gt; 16 </span><span class="cov8" title="1">{
+                        desc = desc[:16]
+                }</span>
+
+                <span class="cov8" title="1">sb.WriteString("  " + style.Render(prefix) + markerStyle.Render(marker+" ") + style.Render(fmt.Sprintf("%-14s", name)) + textDim.Render(" "+desc))
+                sb.WriteString("\n")</span>
+        }
+
+        <span class="cov8" title="1">sb.WriteString("\n")
+        sb.WriteString(borderDim.Render("  " + strings.Repeat("─", 34)))
+        sb.WriteString("\n")
+        sb.WriteString(textDim.Render("  [↑/↓] Navigate  [Enter] Apply"))
+        sb.WriteString("\n")
+        sb.WriteString(textDim.Render("  [T/Esc] Close"))
+
+        return sb.String()</span>
+}
+
+func (m *Model) renderOverlayPanel() string <span class="cov8" title="1">{
+        borderStyle := lipgloss.NewStyle().Foreground(m.theme.Border)
+        titleStyle := lipgloss.NewStyle().Foreground(m.theme.PrimaryBright).Bold(true)
+        secondaryBright := lipgloss.NewStyle().Foreground(m.theme.SecondaryBright).Bold(true)
+        borderDim := lipgloss.NewStyle().Foreground(m.theme.BorderDim)
+        textDim := lipgloss.NewStyle().Foreground(m.theme.TextDim)
+        selectedStyle := lipgloss.NewStyle().Foreground(m.theme.Selected).Bold(true)
+        textStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
+        successStyle := lipgloss.NewStyle().Foreground(m.theme.Success)
+        infoStyle := lipgloss.NewStyle().Foreground(m.theme.Info)
+
+        var sb strings.Builder
+
+        sb.WriteString(borderStyle.Render("╔══════════════════════════════════╗"))
+        sb.WriteString("\n")
+        sb.WriteString(borderStyle.Render("║") + titleStyle.Render("         OVERLAY MANAGER          ") + borderStyle.Render("║"))
+        sb.WriteString("\n")
+        sb.WriteString(borderStyle.Render("╚══════════════════════════════════╝"))
+        sb.WriteString("\n\n")
+
+        overlays := m.overlayManager.GetOverlayList()
+
+        if len(overlays) &gt; 0 </span><span class="cov8" title="1">{
+                sb.WriteString(secondaryBright.Render("  LOADED OVERLAYS"))
+                sb.WriteString("\n")
+                sb.WriteString(borderDim.Render("  " + strings.Repeat("─", 34)))
+                sb.WriteString("\n")
+
+                for i, ov := range overlays </span><span class="cov8" title="1">{
+                        isCursor := i == m.overlayCursor
+
+                        prefix := "  "
+                        if isCursor </span><span class="cov8" title="1">{
+                                prefix = "▶ "
+                        }</span>
+                        <span class="cov8" title="1">marker := "○"
+                        if ov.Enabled </span><span class="cov8" title="1">{
+                                marker = "●"
+                        }</span>
+
+                        <span class="cov8" title="1">var style, markerStyle lipgloss.Style
+                        if isCursor </span><span class="cov8" title="1">{
+                                style = selectedStyle
+                        }</span> else<span class="cov8" title="1"> {
+                                style = textStyle
+                        }</span>
+                        <span class="cov8" title="1">if ov.Enabled </span><span class="cov8" title="1">{
+                                markerStyle = successStyle
+                        }</span> else<span class="cov8" title="1"> {
+                                markerStyle = textDim
+                        }</span>
+
+                        <span class="cov8" title="1">name := ov.Name
+                        if len(name) &gt; 25 </span><span class="cov8" title="1">{
+                                name = name[:25]
+                        }</span>
+
+                        <span class="cov8" title="1">sb.WriteString("  " + style.Render(prefix) + markerStyle.Render(marker+" ") + style.Render(name))
+                        sb.WriteString("\n")</span>
+                }
+        } else<span class="cov8" title="1"> {
+                sb.WriteString(textDim.Render("  No overlays loaded"))
+                sb.WriteString("\n")
+        }</span>
+
+        <span class="cov8" title="1">sb.WriteString("\n")
+        sb.WriteString(borderDim.Render("  " + strings.Repeat("─", 34)))
+        sb.WriteString("\n")
+        sb.WriteString(textDim.Render("  [↑/↓] Navigate  [Enter] Toggle"))
+        sb.WriteString("\n")
+        sb.WriteString(textDim.Render("  [D] Delete  [O/Esc] Close"))
+        sb.WriteString("\n\n")
+        sb.WriteString(textDim.Render("  Add overlays:"))
+        sb.WriteString("\n")
+        sb.WriteString(infoStyle.Render("  --overlay /path/to/file.geojson"))
+
+        return sb.String()</span>
+}
+
+func (m *Model) renderSearchPanel() string <span class="cov8" title="1">{
+        borderStyle := lipgloss.NewStyle().Foreground(m.theme.Border)
+        titleStyle := lipgloss.NewStyle().Foreground(m.theme.PrimaryBright).Bold(true)
+        secondaryBright := lipgloss.NewStyle().Foreground(m.theme.SecondaryBright).Bold(true)
+        borderDim := lipgloss.NewStyle().Foreground(m.theme.BorderDim)
+        textDim := lipgloss.NewStyle().Foreground(m.theme.TextDim)
+        selectedStyle := lipgloss.NewStyle().Foreground(m.theme.Selected).Bold(true)
+        textStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
+        infoStyle := lipgloss.NewStyle().Foreground(m.theme.Info)
+        warningStyle := lipgloss.NewStyle().Foreground(m.theme.Warning)
+        primaryBright := lipgloss.NewStyle().Foreground(m.theme.PrimaryBright)
+
+        var sb strings.Builder
+
+        sb.WriteString(borderStyle.Render("╔══════════════════════════════════╗"))
+        sb.WriteString("\n")
+        sb.WriteString(borderStyle.Render("║") + titleStyle.Render("        SEARCH &amp; FILTER           ") + borderStyle.Render("║"))
+        sb.WriteString("\n")
+        sb.WriteString(borderStyle.Render("╚══════════════════════════════════╝"))
+        sb.WriteString("\n\n")
+
+        // Search input box
+        sb.WriteString(secondaryBright.Render("  SEARCH"))
+        sb.WriteString("\n")
+        sb.WriteString(borderDim.Render("  " + strings.Repeat("─", 34)))
+        sb.WriteString("\n")
+
+        // Input field with cursor
+        query := m.searchQuery
+        if len(query) &gt; 28 </span><span class="cov8" title="1">{
+                query = query[len(query)-28:]
+        }</span>
+        <span class="cov8" title="1">cursor := ""
+        if m.blink </span><span class="cov0" title="0">{
+                cursor = "_"
+        }</span>
+        <span class="cov8" title="1">inputLine := query + cursor
+        sb.WriteString("  " + borderStyle.Render("[") + primaryBright.Render(fmt.Sprintf("%-28s", inputLine)) + borderStyle.Render("]"))
+        sb.WriteString("\n\n")
+
+        // Results count
+        resultCount := len(m.searchResults)
+        totalCount := len(m.aircraft)
+        if m.searchQuery != "" </span><span class="cov8" title="1">{
+                sb.WriteString("  " + infoStyle.Render(fmt.Sprintf("Matches: %d/%d", resultCount, totalCount)))
+        }</span> else<span class="cov8" title="1"> {
+                sb.WriteString("  " + textDim.Render(fmt.Sprintf("Total: %d aircraft", totalCount)))
+        }</span>
+        <span class="cov8" title="1">sb.WriteString("\n\n")
+
+        // Results list
+        sb.WriteString(secondaryBright.Render("  RESULTS"))
+        sb.WriteString("\n")
+        sb.WriteString(borderDim.Render("  " + strings.Repeat("─", 34)))
+        sb.WriteString("\n")
+
+        if len(m.searchResults) &gt; 0 </span><span class="cov8" title="1">{
+                // Show up to 8 results
+                displayCount := 8
+                if len(m.searchResults) &lt; displayCount </span><span class="cov8" title="1">{
+                        displayCount = len(m.searchResults)
+                }</span>
+
+                <span class="cov8" title="1">startIdx := 0
+                if m.searchCursor &gt;= displayCount </span><span class="cov8" title="1">{
+                        startIdx = m.searchCursor - displayCount + 1
+                }</span>
+
+                <span class="cov8" title="1">for i := startIdx; i &lt; startIdx+displayCount &amp;&amp; i &lt; len(m.searchResults); i++ </span><span class="cov8" title="1">{
+                        hex := m.searchResults[i]
+                        target, exists := m.aircraft[hex]
+                        if !exists </span><span class="cov0" title="0">{
+                                continue</span>
+                        }
+
+                        <span class="cov8" title="1">isCursor := i == m.searchCursor
+                        prefix := "  "
+                        if isCursor </span><span class="cov8" title="1">{
+                                prefix = "▶ "
+                        }</span>
+
+                        // Format callsign/hex with highlighting
+                        <span class="cov8" title="1">cs := target.Callsign
+                        if cs == "" </span><span class="cov0" title="0">{
+                                cs = target.Hex
+                        }</span>
+                        <span class="cov8" title="1">if len(cs) &gt; 8 </span><span class="cov8" title="1">{
+                                cs = cs[:8]
+                        }</span>
+
+                        // Highlight matching text
+                        <span class="cov8" title="1">var csDisplay string
+                        if m.searchFilter != nil </span><span class="cov8" title="1">{
+                                before, match, after := m.searchFilter.HighlightMatch(cs)
+                                if match != "" </span><span class="cov8" title="1">{
+                                        csDisplay = textStyle.Render(before) + warningStyle.Bold(true).Render(match) + textStyle.Render(after)
+                                }</span> else<span class="cov0" title="0"> {
+                                        csDisplay = textStyle.Render(cs)
+                                }</span>
+                        } else<span class="cov8" title="1"> {
+                                csDisplay = textStyle.Render(cs)
+                        }</span>
+
+                        <span class="cov8" title="1">var lineStyle lipgloss.Style
+                        if isCursor </span><span class="cov8" title="1">{
+                                lineStyle = selectedStyle
+                        }</span> else<span class="cov8" title="1"> {
+                                lineStyle = textStyle
+                        }</span>
+
+                        // Add altitude/distance info
+                        <span class="cov8" title="1">alt := "---"
+                        if target.HasAlt </span><span class="cov8" title="1">{
+                                if target.Altitude &gt;= 1000 </span><span class="cov8" title="1">{
+                                        alt = fmt.Sprintf("%d", target.Altitude/100)
+                                }</span> else<span class="cov8" title="1"> {
+                                        alt = "GND"
+                                }</span>
+                        }
+
+                        <span class="cov8" title="1">line := fmt.Sprintf("%s%-8s %4s", prefix, "", alt)
+                        sb.WriteString("  " + lineStyle.Render(prefix) + csDisplay + textDim.Render(fmt.Sprintf(" %4s", alt)))
+                        sb.WriteString("\n")
+
+                        _ = line</span>
+                }
+
+                // Fill remaining rows
+                <span class="cov8" title="1">for i := displayCount; i &lt; 8; i++ </span><span class="cov8" title="1">{
+                        sb.WriteString("  " + textDim.Render(strings.Repeat(" ", 30)))
+                        sb.WriteString("\n")
+                }</span>
+        } else<span class="cov8" title="1"> if m.searchQuery != "" </span><span class="cov8" title="1">{
+                sb.WriteString("  " + textDim.Render("No matches found"))
+                sb.WriteString("\n")
+                for i := 0; i &lt; 7; i++ </span><span class="cov8" title="1">{
+                        sb.WriteString("  " + textDim.Render(strings.Repeat(" ", 30)))
+                        sb.WriteString("\n")
+                }</span>
+        } else<span class="cov0" title="0"> {
+                sb.WriteString("  " + textDim.Render("Type to search..."))
+                sb.WriteString("\n")
+                for i := 0; i &lt; 7; i++ </span><span class="cov0" title="0">{
+                        sb.WriteString("  " + textDim.Render(strings.Repeat(" ", 30)))
+                        sb.WriteString("\n")
+                }</span>
+        }
+
+        <span class="cov8" title="1">sb.WriteString("\n")
+        sb.WriteString(borderDim.Render("  " + strings.Repeat("─", 34)))
+        sb.WriteString("\n")
+        sb.WriteString(secondaryBright.Render("  SYNTAX"))
+        sb.WriteString("\n")
+        sb.WriteString(textDim.Render("  text     Callsign/hex"))
+        sb.WriteString("\n")
+        sb.WriteString(textDim.Render("  sq:7700  Squawk code"))
+        sb.WriteString("\n")
+        sb.WriteString(textDim.Render("  alt:&gt;10000  Altitude filter"))
+        sb.WriteString("\n")
+        sb.WriteString(textDim.Render("  dist:&lt;50    Distance filter"))
+        sb.WriteString("\n")
+        sb.WriteString(textDim.Render("  mil      Military only"))
+        sb.WriteString("\n\n")
+
+        sb.WriteString(borderDim.Render("  " + strings.Repeat("─", 34)))
+        sb.WriteString("\n")
+        sb.WriteString(secondaryBright.Render("  PRESETS"))
+        sb.WriteString("\n")
+        sb.WriteString(textDim.Render("  [F1] All  [F2] Military"))
+        sb.WriteString("\n")
+        sb.WriteString(textDim.Render("  [F3] Emergency  [F4] Low Alt"))
+        sb.WriteString("\n\n")
+
+        sb.WriteString(borderDim.Render("  " + strings.Repeat("─", 34)))
+        sb.WriteString("\n")
+        sb.WriteString(textDim.Render("  [Enter] Apply  [Esc] Cancel"))
+
+        return sb.String()</span>
+}
+
+func (m *Model) renderHelpPanel() string <span class="cov8" title="1">{
+        borderStyle := lipgloss.NewStyle().Foreground(m.theme.Border)
+        titleStyle := lipgloss.NewStyle().Foreground(m.theme.PrimaryBright).Bold(true)
+        secondaryBright := lipgloss.NewStyle().Foreground(m.theme.SecondaryBright).Bold(true)
+        borderDim := lipgloss.NewStyle().Foreground(m.theme.BorderDim)
+        textDim := lipgloss.NewStyle().Foreground(m.theme.TextDim)
+        primaryBright := lipgloss.NewStyle().Foreground(m.theme.PrimaryBright)
+        textStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
+
+        var sb strings.Builder
+
+        sb.WriteString(borderStyle.Render("╔══════════════════════════════════════════╗"))
+        sb.WriteString("\n")
+        sb.WriteString(borderStyle.Render("║") + titleStyle.Render("           SKYSPY RADAR HELP              ") + borderStyle.Render("║"))
+        sb.WriteString("\n")
+        sb.WriteString(borderStyle.Render("╚══════════════════════════════════════════╝"))
+        sb.WriteString("\n\n")
+
+        sections := []struct {
+                title string
+                items [][]string
+        }{
+                {"NAVIGATION", [][]string{{"↑/↓ j/k", "Select target"}, {"+/-", "Zoom range"}, {"/", "Search"}}},
+                {"DISPLAY", [][]string{{"L", "Labels"}, {"B", "Trails"}, {"M", "Military only"}, {"G", "Ground filter"}, {"A", "ACARS"}, {"V", "VU meters"}}},
+                {"EXPORT", [][]string{{"P", "Screenshot (HTML)"}, {"E", "Export CSV"}, {"Ctrl+E", "Export JSON"}}},
+                {"PANELS", [][]string{{"T", "Themes"}, {"O", "Overlays"}, {"R", "Alert Rules"}, {"?", "Help"}, {"Q", "Quit"}}},
+                {"SYMBOLS", [][]string{{"✦", "Aircraft"}, {"◉", "Selected"}, {"◆", "Military"}, {"!", "Emergency"}}},
+        }
+
+        for _, section := range sections </span><span class="cov8" title="1">{
+                sb.WriteString(secondaryBright.Render("  " + section.title))
+                sb.WriteString("\n")
+                sb.WriteString(borderDim.Render("  " + strings.Repeat("─", 40)))
+                sb.WriteString("\n")
+                for _, item := range section.items </span><span class="cov8" title="1">{
+                        sb.WriteString("   " + primaryBright.Render(fmt.Sprintf("[%7s]", item[0])) + " " + textStyle.Render(item[1]))
+                        sb.WriteString("\n")
+                }</span>
+                <span class="cov8" title="1">sb.WriteString("\n")</span>
+        }
+
+        <span class="cov8" title="1">sb.WriteString(textDim.Render("  Press any key to close"))
+
+        return sb.String()</span>
+}
+
+// Helper methods
+
+func (m *Model) formatAlt(t *radar.Target) string <span class="cov8" title="1">{
+        if !t.HasAlt </span><span class="cov8" title="1">{
+                return "----"
+        }</span>
+        <span class="cov8" title="1">if t.Altitude &gt;= 18000 </span><span class="cov8" title="1">{
+                return fmt.Sprintf("FL%03d", t.Altitude/100)
+        }</span>
+        <span class="cov8" title="1">return fmt.Sprintf("%d'", t.Altitude)</span>
+}
+
+func (m *Model) formatSpeed(t *radar.Target) string <span class="cov8" title="1">{
+        if !t.HasSpeed </span><span class="cov8" title="1">{
+                return "---"
+        }</span>
+        <span class="cov8" title="1">return fmt.Sprintf("%d kt", int(t.Speed))</span>
+}
+
+func (m *Model) formatVS(t *radar.Target) string <span class="cov8" title="1">{
+        if !t.HasVS </span><span class="cov8" title="1">{
+                return "---"
+        }</span>
+        <span class="cov8" title="1">if t.Vertical &gt; 0 </span><span class="cov8" title="1">{
+                return fmt.Sprintf("+%d", int(t.Vertical))
+        }</span>
+        <span class="cov8" title="1">return fmt.Sprintf("%d", int(t.Vertical))</span>
+}
+
+func (m *Model) formatTrack(t *radar.Target) string <span class="cov8" title="1">{
+        if !t.HasTrack </span><span class="cov8" title="1">{
+                return "---"
+        }</span>
+        <span class="cov8" title="1">return fmt.Sprintf("%03d°", int(t.Track))</span>
+}
+
+func (m *Model) formatDistance(t *radar.Target) string <span class="cov8" title="1">{
+        if t.Distance &lt;= 0 </span><span class="cov8" title="1">{
+                return "---"
+        }</span>
+        <span class="cov8" title="1">return fmt.Sprintf("%.1fnm", t.Distance)</span>
+}
+
+func (m *Model) formatBearing(t *radar.Target) string <span class="cov8" title="1">{
+        if t.Bearing &lt;= 0 </span><span class="cov8" title="1">{
+                return "---"
+        }</span>
+        <span class="cov8" title="1">return fmt.Sprintf("%03d°", int(t.Bearing))</span>
+}
+
+func (m *Model) formatSquawk(t *radar.Target) string <span class="cov8" title="1">{
+        if t.Squawk == "" </span><span class="cov8" title="1">{
+                return "----"
+        }</span>
+        <span class="cov8" title="1">return t.Squawk</span>
+}
+
+func (m *Model) getVSStyle(t *radar.Target) lipgloss.Style <span class="cov8" title="1">{
+        if !t.HasVS </span><span class="cov8" title="1">{
+                return lipgloss.NewStyle().Foreground(m.theme.TextDim)
+        }</span>
+        <span class="cov8" title="1">if t.Vertical &gt; 0 </span><span class="cov8" title="1">{
+                return lipgloss.NewStyle().Foreground(m.theme.Success)
+        }</span>
+        <span class="cov8" title="1">return lipgloss.NewStyle().Foreground(m.theme.Error)</span>
+}
+
+func (m *Model) getSquawkStyle(t *radar.Target) lipgloss.Style <span class="cov8" title="1">{
+        if t.IsEmergency() </span><span class="cov8" title="1">{
+                return lipgloss.NewStyle().Foreground(m.theme.Emergency)
+        }</span>
+        <span class="cov8" title="1">return lipgloss.NewStyle().Foreground(m.theme.PrimaryBright)</span>
+}
+
+func (m *Model) renderSignalBars(t *radar.Target) string <span class="cov8" title="1">{
+        successStyle := lipgloss.NewStyle().Foreground(m.theme.Success)
+        warningStyle := lipgloss.NewStyle().Foreground(m.theme.Warning)
+        textDim := lipgloss.NewStyle().Foreground(m.theme.TextDim)
+
+        if !t.HasRSSI </span><span class="cov8" title="1">{
+                return textDim.Render("░░░░░")
+        }</span>
+
+        <span class="cov8" title="1">bars := int((t.RSSI + 30) / 6)
+        if bars &lt; 0 </span><span class="cov8" title="1">{
+                bars = 0
+        }</span>
+        <span class="cov8" title="1">if bars &gt; 5 </span><span class="cov0" title="0">{
+                bars = 5
+        }</span>
+
+        <span class="cov8" title="1">var sb strings.Builder
+        for i := 0; i &lt; 5; i++ </span><span class="cov8" title="1">{
+                if i &lt; bars </span><span class="cov8" title="1">{
+                        if bars &gt; 2 </span><span class="cov8" title="1">{
+                                sb.WriteString(successStyle.Render("█"))
+                        }</span> else<span class="cov8" title="1"> {
+                                sb.WriteString(warningStyle.Render("█"))
+                        }</span>
+                } else<span class="cov8" title="1"> {
+                        sb.WriteString(textDim.Render("░"))
+                }</span>
+        }
+        <span class="cov8" title="1">return sb.String()</span>
+}
+
+func (m *Model) renderVUMeter(level float64, width int) string <span class="cov8" title="1">{
+        successStyle := lipgloss.NewStyle().Foreground(m.theme.Success)
+        warningStyle := lipgloss.NewStyle().Foreground(m.theme.Warning)
+        errorStyle := lipgloss.NewStyle().Foreground(m.theme.Error)
+        textDim := lipgloss.NewStyle().Foreground(m.theme.TextDim)
+
+        filled := int(level * float64(width))
+        var sb strings.Builder
+
+        for i := 0; i &lt; width; i++ </span><span class="cov8" title="1">{
+                if i &lt; filled </span><span class="cov8" title="1">{
+                        if float64(i) &lt; float64(width)*0.6 </span><span class="cov8" title="1">{
+                                sb.WriteString(successStyle.Render("█"))
+                        }</span> else<span class="cov8" title="1"> if float64(i) &lt; float64(width)*0.8 </span><span class="cov8" title="1">{
+                                sb.WriteString(warningStyle.Render("█"))
+                        }</span> else<span class="cov8" title="1"> {
+                                sb.WriteString(errorStyle.Render("█"))
+                        }</span>
+                } else<span class="cov8" title="1"> {
+                        sb.WriteString(textDim.Render("░"))
+                }</span>
+        }
+        <span class="cov8" title="1">return sb.String()</span>
+}
+
+// renderSpectrumBar renders a spectrum analyzer bar showing RSSI by distance band
+func (m *Model) renderSpectrumBar() string <span class="cov8" title="1">{
+        successStyle := lipgloss.NewStyle().Foreground(m.theme.Success)
+        warningStyle := lipgloss.NewStyle().Foreground(m.theme.Warning)
+        errorStyle := lipgloss.NewStyle().Foreground(m.theme.Error)
+        textDim := lipgloss.NewStyle().Foreground(m.theme.TextDim)
+        primaryBright := lipgloss.NewStyle().Foreground(m.theme.PrimaryBright)
+
+        var sb strings.Builder
+        sb.WriteString(" ")
+
+        // Spectrum bars - we have up to 24 bins but display 29 chars wide
+        displayBins := 29
+        if len(m.spectrum) &lt; displayBins </span><span class="cov8" title="1">{
+                displayBins = len(m.spectrum)
+        }</span>
+
+        <span class="cov8" title="1">peaks := m.GetSpectrumPeaks()
+
+        for i := 0; i &lt; displayBins; i++ </span><span class="cov8" title="1">{
+                var level float64
+                if i &lt; len(m.spectrum) </span><span class="cov8" title="1">{
+                        level = m.spectrum[i]
+                }</span>
+
+                <span class="cov8" title="1">var peakLevel float64
+                if i &lt; len(peaks) </span><span class="cov8" title="1">{
+                        peakLevel = peaks[i]
+                }</span>
+
+                // Get bar character based on level (0.0 to 1.0)
+                // Use different characters for different heights
+                <span class="cov8" title="1">barChar := "░"
+                var style lipgloss.Style
+
+                if level &gt; 0.05 </span><span class="cov8" title="1">{
+                        // Determine color based on level
+                        if level &lt; 0.3 </span><span class="cov8" title="1">{
+                                style = successStyle
+                        }</span> else<span class="cov8" title="1"> if level &lt; 0.6 </span><span class="cov8" title="1">{
+                                style = warningStyle
+                        }</span> else<span class="cov8" title="1"> {
+                                style = errorStyle
+                        }</span>
+
+                        // Choose bar character based on height
+                        <span class="cov8" title="1">if level &lt; 0.15 </span><span class="cov8" title="1">{
+                                barChar = "▁"
+                        }</span> else<span class="cov8" title="1"> if level &lt; 0.3 </span><span class="cov8" title="1">{
+                                barChar = "▂"
+                        }</span> else<span class="cov8" title="1"> if level &lt; 0.45 </span><span class="cov8" title="1">{
+                                barChar = "▃"
+                        }</span> else<span class="cov8" title="1"> if level &lt; 0.6 </span><span class="cov8" title="1">{
+                                barChar = "▄"
+                        }</span> else<span class="cov8" title="1"> if level &lt; 0.75 </span><span class="cov8" title="1">{
+                                barChar = "▅"
+                        }</span> else<span class="cov8" title="1"> if level &lt; 0.9 </span><span class="cov8" title="1">{
+                                barChar = "▆"
+                        }</span> else<span class="cov8" title="1"> {
+                                barChar = "▇"
+                        }</span>
+
+                        // Show peak indicator if peak is higher than current
+                        <span class="cov8" title="1">if peakLevel &gt; level+0.1 &amp;&amp; peakLevel &gt; 0.3 </span><span class="cov8" title="1">{
+                                barChar = "▇"
+                                style = primaryBright
+                        }</span>
+
+                        <span class="cov8" title="1">sb.WriteString(style.Render(barChar))</span>
+                } else<span class="cov8" title="1"> {
+                        sb.WriteString(textDim.Render(barChar))
+                }</span>
+        }
+
+        // Pad remaining space
+        <span class="cov8" title="1">remaining := 30 - displayBins - 1
+        for i := 0; i &lt; remaining; i++ </span><span class="cov8" title="1">{
+                sb.WriteString(textDim.Render("░"))
+        }</span>
+
+        <span class="cov8" title="1">return sb.String()</span>
+}
+
+func (m *Model) renderAlertRulesPanel() string <span class="cov8" title="1">{
+        borderStyle := lipgloss.NewStyle().Foreground(m.theme.Border)
+        titleStyle := lipgloss.NewStyle().Foreground(m.theme.PrimaryBright).Bold(true)
+        secondaryBright := lipgloss.NewStyle().Foreground(m.theme.SecondaryBright).Bold(true)
+        borderDim := lipgloss.NewStyle().Foreground(m.theme.BorderDim)
+        textDim := lipgloss.NewStyle().Foreground(m.theme.TextDim)
+        selectedStyle := lipgloss.NewStyle().Foreground(m.theme.Selected).Bold(true)
+        textStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
+        successStyle := lipgloss.NewStyle().Foreground(m.theme.Success)
+        errorStyle := lipgloss.NewStyle().Foreground(m.theme.Error)
+        warningStyle := lipgloss.NewStyle().Foreground(m.theme.Warning)
+
+        var sb strings.Builder
+
+        sb.WriteString(borderStyle.Render("╔══════════════════════════════════════════╗"))
+        sb.WriteString("\n")
+        sb.WriteString(borderStyle.Render("║") + titleStyle.Render("            ALERT RULES                   ") + borderStyle.Render("║"))
+        sb.WriteString("\n")
+        sb.WriteString(borderStyle.Render("╚══════════════════════════════════════════╝"))
+        sb.WriteString("\n\n")
+
+        alertsEnabled := m.IsAlertsEnabled()
+        enabledText := "DISABLED"
+        enabledStyle := errorStyle
+        if alertsEnabled </span><span class="cov8" title="1">{
+                enabledText = "ENABLED"
+                enabledStyle = successStyle
+        }</span>
+        <span class="cov8" title="1">sb.WriteString("  Alerts: " + enabledStyle.Render(enabledText) + " " + textDim.Render("[A] toggle"))
+        sb.WriteString("\n\n")
+
+        sb.WriteString(secondaryBright.Render("  RULES"))
+        sb.WriteString("\n")
+        sb.WriteString(borderDim.Render("  " + strings.Repeat("─", 40)))
+        sb.WriteString("\n")
+
+        rules := m.GetAlertRules()
+        if len(rules) == 0 </span><span class="cov0" title="0">{
+                sb.WriteString("  " + textDim.Render("No alert rules configured"))
+                sb.WriteString("\n")
+        }</span> else<span class="cov8" title="1"> {
+                for i, rule := range rules </span><span class="cov8" title="1">{
+                        isCursor := i == m.alertRuleCursor
+
+                        prefix := "  "
+                        if isCursor </span><span class="cov8" title="1">{
+                                prefix = "▶ "
+                        }</span>
+
+                        <span class="cov8" title="1">marker := "○"
+                        markerStyle := textDim
+                        if rule.Enabled </span><span class="cov8" title="1">{
+                                marker = "●"
+                                markerStyle = successStyle
+                        }</span>
+
+                        <span class="cov8" title="1">var style lipgloss.Style
+                        if isCursor </span><span class="cov8" title="1">{
+                                style = selectedStyle
+                        }</span> else<span class="cov8" title="1"> {
+                                style = textStyle
+                        }</span>
+
+                        <span class="cov8" title="1">name := rule.Name
+                        if len(name) &gt; 25 </span><span class="cov8" title="1">{
+                                name = name[:22] + "..."
+                        }</span>
+
+                        <span class="cov8" title="1">priorityStyle := textDim
+                        if rule.Priority &gt;= 80 </span><span class="cov8" title="1">{
+                                priorityStyle = errorStyle
+                        }</span> else<span class="cov8" title="1"> if rule.Priority &gt;= 40 </span><span class="cov8" title="1">{
+                                priorityStyle = warningStyle
+                        }</span>
+
+                        <span class="cov8" title="1">sb.WriteString(fmt.Sprintf("%s%s %s %s\n",
+                                prefix,
+                                markerStyle.Render(marker),
+                                style.Render(fmt.Sprintf("%-25s", name)),
+                                priorityStyle.Render(fmt.Sprintf("P%d", rule.Priority)),
+                        ))</span>
+                }
+        }
+
+        <span class="cov8" title="1">sb.WriteString("\n")
+        sb.WriteString(borderDim.Render("  " + strings.Repeat("─", 40)))
+        sb.WriteString("\n")
+
+        sb.WriteString(secondaryBright.Render("  RECENT ALERTS"))
+        sb.WriteString("\n")
+        sb.WriteString(borderDim.Render("  " + strings.Repeat("─", 40)))
+        sb.WriteString("\n")
+
+        recentAlerts := m.GetRecentAlerts()
+        if len(recentAlerts) == 0 </span><span class="cov8" title="1">{
+                sb.WriteString("  " + textDim.Render("No recent alerts"))
+                sb.WriteString("\n")
+        }</span> else<span class="cov8" title="1"> {
+                start := 0
+                if len(recentAlerts) &gt; 5 </span><span class="cov8" title="1">{
+                        start = len(recentAlerts) - 5
+                }</span>
+                <span class="cov8" title="1">for i := start; i &lt; len(recentAlerts); i++ </span><span class="cov8" title="1">{
+                        alert := recentAlerts[i]
+                        ago := time.Since(alert.Timestamp)
+                        agoStr := fmt.Sprintf("%ds", int(ago.Seconds()))
+                        if ago &gt; time.Minute </span><span class="cov8" title="1">{
+                                agoStr = fmt.Sprintf("%dm", int(ago.Minutes()))
+                        }</span>
+
+                        <span class="cov8" title="1">msg := alert.Message
+                        if len(msg) &gt; 28 </span><span class="cov8" title="1">{
+                                msg = msg[:25] + "..."
+                        }</span>
+
+                        <span class="cov8" title="1">sb.WriteString(fmt.Sprintf("  %s %s\n",
+                                textDim.Render(fmt.Sprintf("[%4s]", agoStr)),
+                                warningStyle.Render(msg),
+                        ))</span>
+                }
+        }
+
+        <span class="cov8" title="1">sb.WriteString("\n")
+        sb.WriteString(borderDim.Render("  " + strings.Repeat("─", 40)))
+        sb.WriteString("\n")
+
+        stats := m.GetAlertStats()
+        sb.WriteString(fmt.Sprintf("  Rules: %d enabled / %d total\n", stats.EnabledRules, stats.TotalRules))
+        sb.WriteString(fmt.Sprintf("  Geofences: %d  Highlighted: %d\n", stats.TotalGeofences, stats.Highlighted))
+
+        sb.WriteString("\n")
+        sb.WriteString(borderDim.Render("  " + strings.Repeat("─", 40)))
+        sb.WriteString("\n")
+        sb.WriteString(textDim.Render("  [Space/Enter] Toggle rule"))
+        sb.WriteString("\n")
+        sb.WriteString(textDim.Render("  [A] Toggle alerts  [R/Esc] Close"))
+
+        return sb.String()</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

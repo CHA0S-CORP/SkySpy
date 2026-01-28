@@ -137,6 +137,10 @@ def parse_database_url(url):
             'HOST': match.group('host'),
             'PORT': match.group('port'),
             'CONN_MAX_AGE': 60,
+            'ATOMIC_REQUESTS': False,
+            'AUTOCOMMIT': True,
+            'CONN_HEALTH_CHECKS': False,
+            'TIME_ZONE': None,
             'OPTIONS': {
                 'connect_timeout': 10,
             },
@@ -144,6 +148,12 @@ def parse_database_url(url):
     return {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        'ATOMIC_REQUESTS': False,
+        'AUTOCOMMIT': True,
+        'CONN_MAX_AGE': 0,
+        'CONN_HEALTH_CHECKS': False,
+        'TIME_ZONE': None,
+        'OPTIONS': {},
     }
 
 
@@ -153,6 +163,12 @@ if BUILD_MODE:
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'build.sqlite3',
+            'ATOMIC_REQUESTS': False,
+            'AUTOCOMMIT': True,
+            'CONN_MAX_AGE': 0,
+            'CONN_HEALTH_CHECKS': False,
+            'TIME_ZONE': None,
+            'OPTIONS': {},
         }
     }
 else:

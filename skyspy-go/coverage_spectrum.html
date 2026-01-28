@@ -1,0 +1,634 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>spectrum: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/skyspy/skyspy-go/internal/spectrum/analyzer.go (98.5%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">// Package spectrum provides signal spectrum analysis and visualization
+package spectrum
+
+import (
+        "math"
+        "sync"
+)
+
+// FrequencyRange defines the frequency range for spectrum analysis
+type FrequencyRange struct {
+        Min float64 // Minimum frequency in MHz
+        Max float64 // Maximum frequency in MHz
+}
+
+// DefaultADSBRange is the typical ADS-B frequency range
+var DefaultADSBRange = FrequencyRange{Min: 1090.0, Max: 1090.0}
+
+// DistanceBand represents a distance-based signal band
+type DistanceBand struct {
+        MinDistance float64 // Minimum distance in nm
+        MaxDistance float64 // Maximum distance in nm
+        Label       string  // Label for display
+}
+
+// DefaultDistanceBands defines standard distance bands for spectrum visualization
+var DefaultDistanceBands = []DistanceBand{
+        {MinDistance: 0, MaxDistance: 10, Label: "0-10"},
+        {MinDistance: 10, MaxDistance: 25, Label: "10-25"},
+        {MinDistance: 25, MaxDistance: 50, Label: "25-50"},
+        {MinDistance: 50, MaxDistance: 75, Label: "50-75"},
+        {MinDistance: 75, MaxDistance: 100, Label: "75-100"},
+        {MinDistance: 100, MaxDistance: 150, Label: "100-150"},
+        {MinDistance: 150, MaxDistance: 200, Label: "150-200"},
+        {MinDistance: 200, MaxDistance: 300, Label: "200-300"},
+        {MinDistance: 300, MaxDistance: 400, Label: "300-400"},
+        {MinDistance: 400, MaxDistance: 600, Label: "400+"},
+}
+
+// Sample represents a signal sample with RSSI and metadata
+type Sample struct {
+        RSSI       float64 // Signal strength in dBm (typically -30 to 0)
+        Distance   float64 // Distance from receiver in nm
+        Frequency  float64 // Frequency in MHz (optional)
+        Timestamp  int64   // Unix timestamp in milliseconds
+        AircraftID string  // Hex ID of the aircraft
+}
+
+// BandData holds aggregated data for a single band
+type BandData struct {
+        SampleCount   int
+        TotalRSSI     float64
+        MaxRSSI       float64
+        MinRSSI       float64
+        AircraftCount int
+        aircraftSet   map[string]bool
+}
+
+// Analyzer aggregates signal data and produces spectrum visualizations
+type Analyzer struct {
+        mu            sync.RWMutex
+        bands         []BandData
+        distanceBands []DistanceBand
+        decayRate     float64    // Rate at which old data fades (0.0 to 1.0)
+        smoothing     float64    // Smoothing factor for display (0.0 to 1.0)
+        prevSpectrum  []float64  // Previous spectrum values for smoothing
+        peakValues    []float64  // Peak hold values
+        peakDecay     float64    // Rate at which peaks decay
+}
+
+// NewAnalyzer creates a new spectrum analyzer
+func NewAnalyzer() *Analyzer <span class="cov8" title="1">{
+        bands := make([]BandData, len(DefaultDistanceBands))
+        for i := range bands </span><span class="cov8" title="1">{
+                bands[i] = BandData{
+                        MaxRSSI:     -100,
+                        MinRSSI:     0,
+                        aircraftSet: make(map[string]bool),
+                }
+        }</span>
+
+        <span class="cov8" title="1">return &amp;Analyzer{
+                bands:         bands,
+                distanceBands: DefaultDistanceBands,
+                decayRate:     0.15,   // 15% decay per update cycle
+                smoothing:     0.3,    // 30% new value, 70% old value
+                prevSpectrum:  make([]float64, len(DefaultDistanceBands)),
+                peakValues:    make([]float64, len(DefaultDistanceBands)),
+                peakDecay:     0.02,   // Peaks decay slowly
+        }</span>
+}
+
+// NewAnalyzerWithBands creates an analyzer with custom distance bands
+func NewAnalyzerWithBands(bands []DistanceBand) *Analyzer <span class="cov8" title="1">{
+        bandData := make([]BandData, len(bands))
+        for i := range bandData </span><span class="cov8" title="1">{
+                bandData[i] = BandData{
+                        MaxRSSI:     -100,
+                        MinRSSI:     0,
+                        aircraftSet: make(map[string]bool),
+                }
+        }</span>
+
+        <span class="cov8" title="1">return &amp;Analyzer{
+                bands:         bandData,
+                distanceBands: bands,
+                decayRate:     0.15,
+                smoothing:     0.3,
+                prevSpectrum:  make([]float64, len(bands)),
+                peakValues:    make([]float64, len(bands)),
+                peakDecay:     0.02,
+        }</span>
+}
+
+// SetDecayRate sets the decay rate for old samples (0.0 to 1.0)
+func (a *Analyzer) SetDecayRate(rate float64) <span class="cov8" title="1">{
+        a.mu.Lock()
+        defer a.mu.Unlock()
+        a.decayRate = clamp(rate, 0.0, 1.0)
+}</span>
+
+// SetSmoothing sets the smoothing factor (0.0 = no smoothing, 1.0 = max smoothing)
+func (a *Analyzer) SetSmoothing(factor float64) <span class="cov8" title="1">{
+        a.mu.Lock()
+        defer a.mu.Unlock()
+        a.smoothing = clamp(factor, 0.0, 1.0)
+}</span>
+
+// AddSample adds a signal sample to the analyzer
+func (a *Analyzer) AddSample(sample Sample) <span class="cov8" title="1">{
+        a.mu.Lock()
+        defer a.mu.Unlock()
+
+        bandIdx := a.findBand(sample.Distance)
+        if bandIdx &lt; 0 </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">band := &amp;a.bands[bandIdx]
+        band.SampleCount++
+        band.TotalRSSI += sample.RSSI
+
+        if sample.RSSI &gt; band.MaxRSSI </span><span class="cov8" title="1">{
+                band.MaxRSSI = sample.RSSI
+        }</span>
+        <span class="cov8" title="1">if sample.RSSI &lt; band.MinRSSI </span><span class="cov8" title="1">{
+                band.MinRSSI = sample.RSSI
+        }</span>
+
+        <span class="cov8" title="1">if sample.AircraftID != "" &amp;&amp; !band.aircraftSet[sample.AircraftID] </span><span class="cov8" title="1">{
+                band.aircraftSet[sample.AircraftID] = true
+                band.AircraftCount++
+        }</span>
+}
+
+// AddSampleSimple adds a sample with just RSSI and distance
+func (a *Analyzer) AddSampleSimple(rssi, distance float64) <span class="cov8" title="1">{
+        a.AddSample(Sample{
+                RSSI:     rssi,
+                Distance: distance,
+        })
+}</span>
+
+// AddAircraft adds aircraft data directly to the analyzer
+func (a *Analyzer) AddAircraft(aircraftID string, rssi, distance float64) <span class="cov8" title="1">{
+        a.AddSample(Sample{
+                RSSI:       rssi,
+                Distance:   distance,
+                AircraftID: aircraftID,
+        })
+}</span>
+
+// findBand returns the index of the band for a given distance
+func (a *Analyzer) findBand(distance float64) int <span class="cov8" title="1">{
+        for i, band := range a.distanceBands </span><span class="cov8" title="1">{
+                if distance &gt;= band.MinDistance &amp;&amp; distance &lt; band.MaxDistance </span><span class="cov8" title="1">{
+                        return i
+                }</span>
+        }
+        // If distance exceeds all bands, put in last band
+        <span class="cov8" title="1">if distance &gt;= a.distanceBands[len(a.distanceBands)-1].MinDistance </span><span class="cov8" title="1">{
+                return len(a.distanceBands) - 1
+        }</span>
+        <span class="cov8" title="1">return -1</span>
+}
+
+// Decay applies decay to all band data, reducing old values over time
+func (a *Analyzer) Decay() <span class="cov8" title="1">{
+        a.mu.Lock()
+        defer a.mu.Unlock()
+
+        for i := range a.bands </span><span class="cov8" title="1">{
+                band := &amp;a.bands[i]
+
+                // Decay sample count
+                band.SampleCount = int(float64(band.SampleCount) * (1.0 - a.decayRate))
+                if band.SampleCount &lt; 0 </span><span class="cov0" title="0">{
+                        band.SampleCount = 0
+                }</span>
+
+                // Decay total RSSI proportionally
+                <span class="cov8" title="1">band.TotalRSSI *= (1.0 - a.decayRate)
+
+                // Decay max RSSI towards minimum
+                band.MaxRSSI = band.MaxRSSI - (band.MaxRSSI+30)*a.decayRate*0.5
+                if band.MaxRSSI &lt; -30 </span><span class="cov8" title="1">{
+                        band.MaxRSSI = -30
+                }</span>
+
+                // Clear aircraft set on full decay
+                <span class="cov8" title="1">if band.SampleCount == 0 </span><span class="cov8" title="1">{
+                        band.aircraftSet = make(map[string]bool)
+                        band.AircraftCount = 0
+                }</span>
+        }
+
+        // Decay peak values
+        <span class="cov8" title="1">for i := range a.peakValues </span><span class="cov8" title="1">{
+                a.peakValues[i] *= (1.0 - a.peakDecay)
+                if a.peakValues[i] &lt; 0 </span><span class="cov0" title="0">{
+                        a.peakValues[i] = 0
+                }</span>
+        }
+}
+
+// Reset clears all accumulated data
+func (a *Analyzer) Reset() <span class="cov8" title="1">{
+        a.mu.Lock()
+        defer a.mu.Unlock()
+
+        for i := range a.bands </span><span class="cov8" title="1">{
+                a.bands[i] = BandData{
+                        MaxRSSI:     -100,
+                        MinRSSI:     0,
+                        aircraftSet: make(map[string]bool),
+                }
+        }</span>
+        <span class="cov8" title="1">for i := range a.prevSpectrum </span><span class="cov8" title="1">{
+                a.prevSpectrum[i] = 0
+        }</span>
+        <span class="cov8" title="1">for i := range a.peakValues </span><span class="cov8" title="1">{
+                a.peakValues[i] = 0
+        }</span>
+}
+
+// GetSpectrum returns normalized spectrum values (0.0 to 1.0)
+// The bins parameter specifies how many output bins to produce
+func (a *Analyzer) GetSpectrum(bins int) []float64 <span class="cov8" title="1">{
+        a.mu.RLock()
+        defer a.mu.RUnlock()
+
+        if bins &lt;= 0 </span><span class="cov8" title="1">{
+                bins = len(a.bands)
+        }</span>
+
+        <span class="cov8" title="1">spectrum := make([]float64, bins)
+
+        // If bins match bands, direct mapping
+        if bins == len(a.bands) </span><span class="cov8" title="1">{
+                for i, band := range a.bands </span><span class="cov8" title="1">{
+                        spectrum[i] = a.normalizeRSSI(band)
+                }</span>
+        } else<span class="cov8" title="1"> {
+                // Interpolate/decimate to match requested bins
+                bandSpectrum := make([]float64, len(a.bands))
+                for i, band := range a.bands </span><span class="cov8" title="1">{
+                        bandSpectrum[i] = a.normalizeRSSI(band)
+                }</span>
+
+                <span class="cov8" title="1">for i := 0; i &lt; bins; i++ </span><span class="cov8" title="1">{
+                        // Map output bin to input band
+                        bandIdx := float64(i) * float64(len(a.bands)-1) / float64(bins-1)
+                        lowIdx := int(bandIdx)
+                        highIdx := lowIdx + 1
+                        if highIdx &gt;= len(a.bands) </span><span class="cov8" title="1">{
+                                highIdx = len(a.bands) - 1
+                        }</span>
+                        <span class="cov8" title="1">frac := bandIdx - float64(lowIdx)
+                        spectrum[i] = bandSpectrum[lowIdx]*(1-frac) + bandSpectrum[highIdx]*frac</span>
+                }
+        }
+
+        <span class="cov8" title="1">return spectrum</span>
+}
+
+// GetSpectrumSmoothed returns smoothed spectrum values with peak hold
+func (a *Analyzer) GetSpectrumSmoothed(bins int) []float64 <span class="cov8" title="1">{
+        a.mu.Lock()
+        defer a.mu.Unlock()
+
+        if bins &lt;= 0 </span><span class="cov0" title="0">{
+                bins = len(a.bands)
+        }</span>
+
+        // Ensure prevSpectrum and peakValues are correct size
+        <span class="cov8" title="1">if len(a.prevSpectrum) != bins </span><span class="cov8" title="1">{
+                a.prevSpectrum = make([]float64, bins)
+        }</span>
+        <span class="cov8" title="1">if len(a.peakValues) != bins </span><span class="cov8" title="1">{
+                a.peakValues = make([]float64, bins)
+        }</span>
+
+        <span class="cov8" title="1">spectrum := make([]float64, bins)
+
+        // Calculate raw spectrum values
+        rawSpectrum := make([]float64, len(a.bands))
+        for i, band := range a.bands </span><span class="cov8" title="1">{
+                rawSpectrum[i] = a.normalizeRSSI(band)
+        }</span>
+
+        // Map to output bins
+        <span class="cov8" title="1">for i := 0; i &lt; bins; i++ </span><span class="cov8" title="1">{
+                var raw float64
+                if bins == len(a.bands) </span><span class="cov8" title="1">{
+                        raw = rawSpectrum[i]
+                }</span> else<span class="cov8" title="1"> {
+                        bandIdx := float64(i) * float64(len(a.bands)-1) / float64(bins-1)
+                        lowIdx := int(bandIdx)
+                        highIdx := lowIdx + 1
+                        if highIdx &gt;= len(a.bands) </span><span class="cov8" title="1">{
+                                highIdx = len(a.bands) - 1
+                        }</span>
+                        <span class="cov8" title="1">frac := bandIdx - float64(lowIdx)
+                        raw = rawSpectrum[lowIdx]*(1-frac) + rawSpectrum[highIdx]*frac</span>
+                }
+
+                // Apply smoothing
+                <span class="cov8" title="1">smoothed := a.prevSpectrum[i]*(1-a.smoothing) + raw*a.smoothing
+                spectrum[i] = smoothed
+                a.prevSpectrum[i] = smoothed
+
+                // Update peaks
+                if smoothed &gt; a.peakValues[i] </span><span class="cov8" title="1">{
+                        a.peakValues[i] = smoothed
+                }</span>
+        }
+
+        <span class="cov8" title="1">return spectrum</span>
+}
+
+// GetPeaks returns the current peak values
+func (a *Analyzer) GetPeaks(bins int) []float64 <span class="cov8" title="1">{
+        a.mu.RLock()
+        defer a.mu.RUnlock()
+
+        if bins &lt;= 0 || bins == len(a.peakValues) </span><span class="cov8" title="1">{
+                result := make([]float64, len(a.peakValues))
+                copy(result, a.peakValues)
+                return result
+        }</span>
+
+        // Interpolate peaks to match bins
+        <span class="cov8" title="1">peaks := make([]float64, bins)
+        for i := 0; i &lt; bins; i++ </span><span class="cov8" title="1">{
+                peakIdx := float64(i) * float64(len(a.peakValues)-1) / float64(bins-1)
+                lowIdx := int(peakIdx)
+                highIdx := lowIdx + 1
+                if highIdx &gt;= len(a.peakValues) </span><span class="cov8" title="1">{
+                        highIdx = len(a.peakValues) - 1
+                }</span>
+                <span class="cov8" title="1">frac := peakIdx - float64(lowIdx)
+                peaks[i] = a.peakValues[lowIdx]*(1-frac) + a.peakValues[highIdx]*frac</span>
+        }
+        <span class="cov8" title="1">return peaks</span>
+}
+
+// GetBandLabels returns labels for each band
+func (a *Analyzer) GetBandLabels() []string <span class="cov8" title="1">{
+        a.mu.RLock()
+        defer a.mu.RUnlock()
+
+        labels := make([]string, len(a.distanceBands))
+        for i, band := range a.distanceBands </span><span class="cov8" title="1">{
+                labels[i] = band.Label
+        }</span>
+        <span class="cov8" title="1">return labels</span>
+}
+
+// GetStats returns current statistics
+func (a *Analyzer) GetStats() SpectrumStats <span class="cov8" title="1">{
+        a.mu.RLock()
+        defer a.mu.RUnlock()
+
+        stats := SpectrumStats{
+                BandCount:   len(a.bands),
+                BandStats:   make([]BandStats, len(a.bands)),
+        }
+
+        for i, band := range a.bands </span><span class="cov8" title="1">{
+                avgRSSI := float64(-30)
+                if band.SampleCount &gt; 0 </span><span class="cov8" title="1">{
+                        avgRSSI = band.TotalRSSI / float64(band.SampleCount)
+                }</span>
+                <span class="cov8" title="1">stats.BandStats[i] = BandStats{
+                        Label:         a.distanceBands[i].Label,
+                        SampleCount:   band.SampleCount,
+                        AircraftCount: band.AircraftCount,
+                        AvgRSSI:       avgRSSI,
+                        MaxRSSI:       band.MaxRSSI,
+                }
+                stats.TotalSamples += band.SampleCount
+                stats.TotalAircraft += band.AircraftCount</span>
+        }
+
+        <span class="cov8" title="1">return stats</span>
+}
+
+// normalizeRSSI converts band data to a 0.0-1.0 value
+// RSSI typically ranges from -30 (strong) to 0 (weak) in our system
+// We also factor in aircraft count for activity visualization
+func (a *Analyzer) normalizeRSSI(band BandData) float64 <span class="cov8" title="1">{
+        if band.SampleCount == 0 &amp;&amp; band.AircraftCount == 0 </span><span class="cov8" title="1">{
+                return 0.0
+        }</span>
+
+        // Calculate average RSSI
+        <span class="cov8" title="1">avgRSSI := float64(-30)
+        if band.SampleCount &gt; 0 </span><span class="cov8" title="1">{
+                avgRSSI = band.TotalRSSI / float64(band.SampleCount)
+        }</span>
+
+        // Normalize RSSI: -30 dBm = 0.0, 0 dBm = 1.0
+        // Most signals are between -30 and -5 dBm
+        <span class="cov8" title="1">rssiNorm := (avgRSSI + 30) / 30.0
+        rssiNorm = clamp(rssiNorm, 0.0, 1.0)
+
+        // Factor in aircraft count for activity (capped at 10 aircraft per band)
+        activityNorm := float64(band.AircraftCount) / 10.0
+        activityNorm = clamp(activityNorm, 0.0, 1.0)
+
+        // Combine RSSI and activity: weight RSSI more when we have samples
+        if band.SampleCount &gt; 0 </span><span class="cov8" title="1">{
+                return rssiNorm*0.7 + activityNorm*0.3
+        }</span>
+        <span class="cov8" title="1">return activityNorm * 0.5</span> // Lower weight when we only have aircraft count
+}
+
+// SpectrumStats contains analyzer statistics
+type SpectrumStats struct {
+        BandCount     int
+        TotalSamples  int
+        TotalAircraft int
+        BandStats     []BandStats
+}
+
+// BandStats contains statistics for a single band
+type BandStats struct {
+        Label         string
+        SampleCount   int
+        AircraftCount int
+        AvgRSSI       float64
+        MaxRSSI       float64
+}
+
+// clamp restricts a value to a range
+func clamp(value, min, max float64) float64 <span class="cov8" title="1">{
+        if value &lt; min </span><span class="cov8" title="1">{
+                return min
+        }</span>
+        <span class="cov8" title="1">if value &gt; max </span><span class="cov8" title="1">{
+                return max
+        }</span>
+        <span class="cov8" title="1">return value</span>
+}
+
+// Utility functions for creating spectrum from aircraft data
+
+// CalculateDistanceBands creates optimal distance bands based on max range
+func CalculateDistanceBands(maxRange float64, numBands int) []DistanceBand <span class="cov8" title="1">{
+        if numBands &lt;= 0 </span><span class="cov8" title="1">{
+                numBands = 10
+        }</span>
+
+        <span class="cov8" title="1">bands := make([]DistanceBand, numBands)
+
+        // Use logarithmic spacing for better resolution at closer ranges
+        for i := 0; i &lt; numBands; i++ </span><span class="cov8" title="1">{
+                // Logarithmic distribution gives more bins for close range
+                t := float64(i) / float64(numBands)
+                minDist := maxRange * math.Pow(t, 1.5)
+
+                t2 := float64(i+1) / float64(numBands)
+                maxDist := maxRange * math.Pow(t2, 1.5)
+
+                bands[i] = DistanceBand{
+                        MinDistance: minDist,
+                        MaxDistance: maxDist,
+                        Label:       formatDistanceLabel(minDist, maxDist),
+                }
+        }</span>
+
+        <span class="cov8" title="1">return bands</span>
+}
+
+// formatDistanceLabel creates a readable label for a distance range
+func formatDistanceLabel(min, max float64) string <span class="cov8" title="1">{
+        if min &lt; 1 </span><span class="cov8" title="1">{
+                return "&lt;1"
+        }</span>
+        <span class="cov8" title="1">if max &gt;= 1000 </span><span class="cov8" title="1">{
+                return "1k+"
+        }</span>
+        <span class="cov8" title="1">minInt := int(min)
+        maxInt := int(max)
+        if minInt == maxInt </span><span class="cov8" title="1">{
+                return itoa(minInt)
+        }</span>
+        <span class="cov8" title="1">return itoa(minInt) + "-" + itoa(maxInt)</span>
+}
+
+// itoa converts an integer to string without importing strconv
+func itoa(i int) string <span class="cov8" title="1">{
+        if i == 0 </span><span class="cov8" title="1">{
+                return "0"
+        }</span>
+        <span class="cov8" title="1">neg := i &lt; 0
+        if neg </span><span class="cov8" title="1">{
+                i = -i
+        }</span>
+        <span class="cov8" title="1">var b [20]byte
+        n := len(b) - 1
+        for i &gt; 0 </span><span class="cov8" title="1">{
+                b[n] = byte('0' + i%10)
+                i /= 10
+                n--
+        }</span>
+        <span class="cov8" title="1">if neg </span><span class="cov8" title="1">{
+                b[n] = '-'
+                n--
+        }</span>
+        <span class="cov8" title="1">return string(b[n+1:])</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

@@ -436,8 +436,17 @@ def decode_message_text(text: str, label: str = None, libacars_data: dict = None
         return decoded
 
     # Generic airport extraction - ICAO codes are 4 letters
-    # Valid ICAO region prefixes: A-Z (all letters are valid region codes)
-    # Filter out common English words that match 4-letter pattern
+    # Valid ICAO region prefixes (first letter determines region):
+    # B: Iceland/Greenland, C: Canada, D: West Africa, E: Northern Europe,
+    # F: Central/Southern Africa, G: West Africa, H: East Africa,
+    # K: Continental USA, L: Southern Europe, M: Central America/Mexico/Caribbean,
+    # N: South Pacific, O: Middle East, P: Pacific (Hawaii/Alaska/Guam),
+    # R: Far East (Japan/Korea), S: South America, T: Caribbean,
+    # U: Russia, V: South/Southeast Asia, W: Indonesia/Malaysia,
+    # Y: Australia, Z: China/Mongolia
+    # Note: 'A' and 'X' are NOT valid ICAO first-letter prefixes
+    valid_icao_prefixes = set('BCDEFGHKLMNOPRSTUVWYZ')
+
     airport_pattern = r'\b([A-Z]{4})\b'
     airports = re.findall(airport_pattern, text_stripped)
     if airports:
@@ -459,7 +468,11 @@ def decode_message_text(text: str, label: str = None, libacars_data: dict = None
             'WAIT', 'WARM', 'WARN', 'WEST', 'WHEN', 'WITH', 'WORK', 'ZONE',
             'FROM', 'METAR', 'PROG', 'VERY', 'ACARS', 'FANS', 'CPDLC',
         }
-        valid_airports = [a for a in airports if a not in excluded_words]
+        # Filter: must start with valid ICAO prefix AND not be an excluded word
+        valid_airports = [
+            a for a in airports
+            if a[0] in valid_icao_prefixes and a not in excluded_words
+        ]
         if valid_airports:
             decoded["airports_mentioned"] = list(set(valid_airports))[:5]
 

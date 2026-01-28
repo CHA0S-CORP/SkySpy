@@ -106,9 +106,10 @@ class DecodeCache:
         """
         Create a cache key from message components.
 
-        Uses MD5 hash of text to keep keys short while maintaining uniqueness.
+        Uses SHA-256 hash of text (first 32 chars = 128 bits) for collision resistance.
+        MD5 with 12 chars (48 bits) had too high collision probability for high-volume use.
         """
-        text_hash = hashlib.md5(text.encode("utf-8", errors="replace")).hexdigest()[:12]
+        text_hash = hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()[:32]
         return f"{label}:{text_hash}:{direction}"
 
     @staticmethod

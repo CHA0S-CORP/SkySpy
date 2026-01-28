@@ -77,6 +77,12 @@ def django_db_setup():
     settings.DATABASES['default'] = {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': ':memory:',
+        'TIME_ZONE': 'UTC',
+        'ATOMIC_REQUESTS': False,
+        'AUTOCOMMIT': True,
+        'CONN_MAX_AGE': 0,
+        'CONN_HEALTH_CHECKS': False,
+        'OPTIONS': {},
         'TEST': {'NAME': ':memory:'},
     }
 

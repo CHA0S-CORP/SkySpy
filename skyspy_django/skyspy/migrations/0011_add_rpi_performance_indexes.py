@@ -11,6 +11,8 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
+    # Required for CREATE INDEX CONCURRENTLY - cannot run inside a transaction
+    atomic = False
 
     dependencies = [
         ('skyspy', '0010_airframe_source_data'),
@@ -22,7 +24,7 @@ class Migration(migrations.Migration):
         migrations.RunSQL(
             sql="""
                 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sighting_timestamp_desc
-                ON skyspy_aircraftsighting(timestamp DESC);
+                ON aircraft_sightings(timestamp DESC);
             """,
             reverse_sql="""
                 DROP INDEX CONCURRENTLY IF EXISTS idx_sighting_timestamp_desc;
@@ -33,7 +35,7 @@ class Migration(migrations.Migration):
         migrations.RunSQL(
             sql="""
                 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sighting_distance
-                ON skyspy_aircraftsighting(distance_nm)
+                ON aircraft_sightings(distance_nm)
                 WHERE distance_nm IS NOT NULL;
             """,
             reverse_sql="""
@@ -41,16 +43,15 @@ class Migration(migrations.Migration):
             """,
         ),
 
-        # Partial index for active sessions (last 24 hours)
-        # Dramatically improves queries for "currently active" sessions
+        # Note: Partial index with NOW() not possible (requires IMMUTABLE predicate)
+        # Instead, create a simple index on last_seen for session queries
         migrations.RunSQL(
             sql="""
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_session_active_recent
-                ON skyspy_aircraftsession(last_seen DESC)
-                WHERE last_seen > NOW() - INTERVAL '1 day';
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_session_last_seen
+                ON aircraft_sessions(last_seen DESC);
             """,
             reverse_sql="""
-                DROP INDEX CONCURRENTLY IF EXISTS idx_session_active_recent;
+                DROP INDEX CONCURRENTLY IF EXISTS idx_session_last_seen;
             """,
         ),
 
@@ -58,7 +59,7 @@ class Migration(migrations.Migration):
         migrations.RunSQL(
             sql="""
                 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_spotted_first_seen
-                ON skyspy_spottedaircraft(first_seen DESC);
+                ON spotted_aircraft(first_seen DESC);
             """,
             reverse_sql="""
                 DROP INDEX CONCURRENTLY IF EXISTS idx_spotted_first_seen;
@@ -69,7 +70,7 @@ class Migration(migrations.Migration):
         migrations.RunSQL(
             sql="""
                 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sighting_icao_timestamp
-                ON skyspy_aircraftsighting(icao_hex, timestamp DESC);
+                ON aircraft_sightings(icao_hex, timestamp DESC);
             """,
             reverse_sql="""
                 DROP INDEX CONCURRENTLY IF EXISTS idx_sighting_icao_timestamp;
@@ -80,7 +81,7 @@ class Migration(migrations.Migration):
         migrations.RunSQL(
             sql="""
                 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_session_icao_lastseen
-                ON skyspy_aircraftsession(icao_hex, last_seen DESC);
+                ON aircraft_sessions(icao_hex, last_seen DESC);
             """,
             reverse_sql="""
                 DROP INDEX CONCURRENTLY IF EXISTS idx_session_icao_lastseen;
@@ -91,7 +92,7 @@ class Migration(migrations.Migration):
         migrations.RunSQL(
             sql="""
                 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sighting_military
-                ON skyspy_aircraftsighting(is_military)
+                ON aircraft_sightings(is_military)
                 WHERE is_military = TRUE;
             """,
             reverse_sql="""
@@ -103,7 +104,7 @@ class Migration(migrations.Migration):
         migrations.RunSQL(
             sql="""
                 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_safety_event_timestamp
-                ON skyspy_safetyevent(timestamp DESC);
+                ON safety_events(timestamp DESC);
             """,
             reverse_sql="""
                 DROP INDEX CONCURRENTLY IF EXISTS idx_safety_event_timestamp;
@@ -114,7 +115,7 @@ class Migration(migrations.Migration):
         migrations.RunSQL(
             sql="""
                 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_alert_history_triggered
-                ON skyspy_alerthistory(triggered_at DESC);
+                ON alert_history(triggered_at DESC);
             """,
             reverse_sql="""
                 DROP INDEX CONCURRENTLY IF EXISTS idx_alert_history_triggered;
@@ -125,7 +126,7 @@ class Migration(migrations.Migration):
         migrations.RunSQL(
             sql="""
                 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sighting_rssi
-                ON skyspy_aircraftsighting(rssi)
+                ON aircraft_sightings(rssi)
                 WHERE rssi IS NOT NULL;
             """,
             reverse_sql="""
@@ -137,7 +138,7 @@ class Migration(migrations.Migration):
         migrations.RunSQL(
             sql="""
                 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sighting_track
-                ON skyspy_aircraftsighting(track)
+                ON aircraft_sightings(track)
                 WHERE track IS NOT NULL;
             """,
             reverse_sql="""

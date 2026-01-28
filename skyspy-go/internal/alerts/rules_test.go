@@ -154,3 +154,194 @@ func TestActionTypes(t *testing.T) {
 		}
 	}
 }
+
+func TestClearOldTriggers(t *testing.T) {
+	rule := NewAlertRule("test", "Test Rule")
+	rule.SetCooldown(time.Millisecond * 10)
+
+	// Record some triggers
+	rule.RecordTrigger("ABC123")
+	rule.RecordTrigger("DEF456")
+
+	// Wait for triggers to become old (more than 2x cooldown)
+	time.Sleep(time.Millisecond * 30)
+
+	// Clear old triggers
+	rule.ClearOldTriggers()
+
+	// Triggers should be cleared
+	if !rule.CanTrigger("ABC123") {
+		t.Error("After clearing, should be able to trigger again")
+	}
+}
+
+func TestGetRules(t *testing.T) {
+	rs := NewRuleSet()
+
+	r1 := NewAlertRule("rule1", "Rule 1")
+	r2 := NewAlertRule("rule2", "Rule 2")
+
+	rs.AddRule(r1)
+	rs.AddRule(r2)
+
+	rules := rs.GetRules()
+	if len(rules) != 2 {
+		t.Errorf("GetRules count = %d, want 2", len(rules))
+	}
+
+	// Test that we get a copy (not the original slice)
+	rules[0] = nil
+	originalRules := rs.GetRules()
+	if originalRules[0] == nil {
+		t.Error("GetRules should return a copy")
+	}
+}
+
+func TestGetRuleByID(t *testing.T) {
+	rs := NewRuleSet()
+
+	r1 := NewAlertRule("rule1", "Rule 1")
+	r2 := NewAlertRule("rule2", "Rule 2")
+
+	rs.AddRule(r1)
+	rs.AddRule(r2)
+
+	// Test finding existing rule
+	found := rs.GetRuleByID("rule1")
+	if found == nil {
+		t.Error("GetRuleByID should find existing rule")
+	}
+	if found.Name != "Rule 1" {
+		t.Error("GetRuleByID returned wrong rule")
+	}
+
+	// Test finding non-existent rule
+	notFound := rs.GetRuleByID("nonexistent")
+	if notFound != nil {
+		t.Error("GetRuleByID should return nil for non-existent rule")
+	}
+}
+
+func TestParseFloat(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected float64
+	}{
+		{"123", 123.0},
+		{"123.456", 123.456},
+		{"-123", -123.0},
+		{"-123.456", -123.456},
+		{"0", 0.0},
+		{"0.5", 0.5},
+		{"", 0.0},
+		{"abc", 0.0},
+		{"12abc", 12.0},
+		{"12.34.56", 12.34},
+		{"-", 0.0},
+		{"-.5", -0.5},
+		{"123abc456", 123.0},
+		{"12.abc", 12.0},
+	}
+
+	for _, tc := range tests {
+		result := ParseFloat(tc.input)
+		if result != tc.expected {
+			t.Errorf("ParseFloat(%q) = %f, want %f", tc.input, result, tc.expected)
+		}
+	}
+}
+
+func TestParseInt(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int
+	}{
+		{"123", 123},
+		{"-123", -123},
+		{"0", 0},
+		{"", 0},
+		{"abc", 0},
+		{"12abc", 12},
+		{"-12abc", -12},
+		{"-", 0},
+		{"--12", 0}, // Second - is not valid
+	}
+
+	for _, tc := range tests {
+		result := ParseInt(tc.input)
+		if result != tc.expected {
+			t.Errorf("ParseInt(%q) = %d, want %d", tc.input, result, tc.expected)
+		}
+	}
+}
+
+func TestToggleRuleNotFound(t *testing.T) {
+	rs := NewRuleSet()
+
+	r1 := NewAlertRule("rule1", "Rule 1")
+	r1.Enabled = true
+	rs.AddRule(r1)
+
+	// Toggle non-existent rule should return false
+	result := rs.ToggleRule("nonexistent")
+	if result != false {
+		t.Error("ToggleRule for non-existent rule should return false")
+	}
+}
+
+func TestRecordTriggerNilMap(t *testing.T) {
+	// Create a rule with nil lastTriggered map
+	rule := &AlertRule{
+		ID:            "test",
+		Name:          "Test",
+		Cooldown:      time.Minute,
+		lastTriggered: nil, // Explicitly nil
+	}
+
+	// Should not panic and should create the map
+	rule.RecordTrigger("ABC123")
+
+	// Should be able to check trigger now
+	if rule.CanTrigger("ABC123") {
+		t.Error("Should not be able to trigger immediately after recording")
+	}
+}
+
+func TestMatchesWildcardCaseInsensitive(t *testing.T) {
+	// Test case insensitivity
+	if !MatchesWildcard("call*", "CALLSIGN") {
+		t.Error("Pattern should match case-insensitively")
+	}
+	if !MatchesWildcard("CALL*", "callsign") {
+		t.Error("Pattern should match case-insensitively")
+	}
+}
+
+func TestClearAllOldTriggers(t *testing.T) {
+	rs := NewRuleSet()
+
+	r1 := NewAlertRule("rule1", "Rule 1")
+	r1.SetCooldown(time.Millisecond * 10)
+	r1.RecordTrigger("ABC123")
+
+	r2 := NewAlertRule("rule2", "Rule 2")
+	r2.SetCooldown(time.Millisecond * 10)
+	r2.RecordTrigger("DEF456")
+
+	rs.AddRule(r1)
+	rs.AddRule(r2)
+
+	// Wait for triggers to become old
+	time.Sleep(time.Millisecond * 30)
+
+	// Clear all old triggers
+	rs.ClearAllOldTriggers()
+
+	// Both rules should be able to trigger again
+	if !r1.CanTrigger("ABC123") {
+		t.Error("Rule 1 should be able to trigger after clearing")
+	}
+	if !r2.CanTrigger("DEF456") {
+		t.Error("Rule 2 should be able to trigger after clearing")
+	}
+}

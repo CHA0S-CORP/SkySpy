@@ -12,7 +12,28 @@ from django.test import TestCase
 from django.utils import timezone
 
 from skyspy.services.alerts import AlertService
+from skyspy.services.alert_rule_cache import CompiledRule
 from skyspy.models import AlertRule, AlertHistory, NotificationConfig, NotificationLog
+
+
+def create_compiled_rule(rule: AlertRule) -> CompiledRule:
+    """Create a CompiledRule from an AlertRule model instance."""
+    return CompiledRule(
+        id=rule.id,
+        name=rule.name,
+        rule_type=rule.rule_type,
+        operator=rule.operator,
+        value=rule.value,
+        conditions=rule.conditions,
+        priority=rule.priority,
+        cooldown_seconds=rule.cooldown_minutes * 60 if rule.cooldown_minutes else 300,
+        api_url=rule.api_url,
+        owner_id=rule.owner_id if hasattr(rule, 'owner_id') else None,
+        visibility=getattr(rule, 'visibility', 'private'),
+        is_system=getattr(rule, 'is_system', False),
+        starts_at=rule.starts_at,
+        expires_at=rule.expires_at,
+    )
 
 
 class AlertServiceOperatorTests(TestCase):
@@ -497,7 +518,7 @@ class AlertServiceRuleEvaluationTests(TestCase):
         """Set up test fixtures."""
         self.service = AlertService()
         # Clear cooldowns
-        self.service._cooldowns = {}
+        self.service._legacy_cooldowns = {}
 
     def tearDown(self):
         """Clean up after tests."""
@@ -506,12 +527,13 @@ class AlertServiceRuleEvaluationTests(TestCase):
 
     def test_check_rule_simple_match(self):
         """Test checking a simple rule that matches."""
-        rule = AlertRule.objects.create(
+        db_rule = AlertRule.objects.create(
             name='Test ICAO Rule',
             rule_type='icao',
             operator='eq',
             value='ABC123',
         )
+        rule = create_compiled_rule(db_rule)
         aircraft = {'hex': 'ABC123', 'flight': 'UAL456'}
 
         result = self.service._check_rule(rule, aircraft)
@@ -520,12 +542,13 @@ class AlertServiceRuleEvaluationTests(TestCase):
 
     def test_check_rule_simple_no_match(self):
         """Test checking a simple rule that does not match."""
-        rule = AlertRule.objects.create(
+        db_rule = AlertRule.objects.create(
             name='Test ICAO Rule',
             rule_type='icao',
             operator='eq',
             value='ABC123',
         )
+        rule = create_compiled_rule(db_rule)
         aircraft = {'hex': 'DEF456', 'flight': 'DAL789'}
 
         result = self.service._check_rule(rule, aircraft)
@@ -534,7 +557,7 @@ class AlertServiceRuleEvaluationTests(TestCase):
 
     def test_check_rule_with_complex_conditions(self):
         """Test checking a rule with complex conditions."""
-        rule = AlertRule.objects.create(
+        db_rule = AlertRule.objects.create(
             name='Complex Rule',
             conditions={
                 'logic': 'AND',
@@ -549,6 +572,7 @@ class AlertServiceRuleEvaluationTests(TestCase):
                 ]
             }
         )
+        rule = create_compiled_rule(db_rule)
         aircraft = {'hex': 'ABC123', 'flight': 'UAL456', 'alt': 40000}
 
         result = self.service._check_rule(rule, aircraft)
@@ -557,7 +581,7 @@ class AlertServiceRuleEvaluationTests(TestCase):
 
     def test_check_rule_both_simple_and_complex(self):
         """Test rule with both simple and complex conditions (AND)."""
-        rule = AlertRule.objects.create(
+        db_rule = AlertRule.objects.create(
             name='Combined Rule',
             rule_type='icao',
             operator='eq',
@@ -574,6 +598,7 @@ class AlertServiceRuleEvaluationTests(TestCase):
                 ]
             }
         )
+        rule = create_compiled_rule(db_rule)
         # Aircraft matches ICAO but not altitude
         aircraft = {'hex': 'ABC123', 'alt': 20000}
 
@@ -589,7 +614,7 @@ class AlertServiceTriggerTests(TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.service = AlertService()
-        self.service._cooldowns = {}
+        self.service._legacy_cooldowns = {}
 
     def tearDown(self):
         """Clean up after tests."""
@@ -604,13 +629,14 @@ class AlertServiceTriggerTests(TestCase):
         mock_channel.return_value = MagicMock()
         mock_async.return_value = MagicMock()
 
-        rule = AlertRule.objects.create(
+        db_rule = AlertRule.objects.create(
             name='Test Rule',
             rule_type='icao',
             operator='eq',
             value='ABC123',
             priority='warning',
         )
+        rule = create_compiled_rule(db_rule)
         aircraft = {'hex': 'ABC123', 'flight': 'UAL456', 'alt': 35000}
 
         alert_data = self.service._trigger_alert(rule, aircraft)
@@ -634,12 +660,13 @@ class AlertServiceTriggerTests(TestCase):
         mock_group_send = MagicMock()
         mock_async.return_value = mock_group_send
 
-        rule = AlertRule.objects.create(
+        db_rule = AlertRule.objects.create(
             name='Broadcast Test',
             rule_type='icao',
             operator='eq',
             value='ABC123',
         )
+        rule = create_compiled_rule(db_rule)
         aircraft = {'hex': 'ABC123', 'flight': 'UAL456'}
 
         self.service._trigger_alert(rule, aircraft)
@@ -649,12 +676,13 @@ class AlertServiceTriggerTests(TestCase):
 
     def test_trigger_alert_cooldown(self):
         """Test that alerts respect cooldown period."""
-        rule = AlertRule.objects.create(
+        db_rule = AlertRule.objects.create(
             name='Cooldown Test',
             rule_type='icao',
             operator='eq',
             value='ABC123',
         )
+        rule = create_compiled_rule(db_rule)
         aircraft = {'hex': 'ABC123', 'flight': 'UAL456'}
 
         with patch('skyspy.services.alerts.get_channel_layer') as mock_channel:

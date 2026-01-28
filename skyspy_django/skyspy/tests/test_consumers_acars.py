@@ -13,6 +13,7 @@ from unittest.mock import patch, AsyncMock, MagicMock
 from datetime import datetime, timedelta
 from channels.testing import WebsocketCommunicator
 from channels.layers import get_channel_layer
+from asgiref.sync import sync_to_async
 from django.test import override_settings
 from django.utils import timezone
 
@@ -22,9 +23,8 @@ from skyspy.models import AcarsMessage
 
 @pytest.fixture
 def channel_layer():
-    """Create an in-memory channel layer for testing."""
-    from channels.layers import InMemoryChannelLayer
-    return InMemoryChannelLayer()
+    """Get the configured channel layer for testing."""
+    return get_channel_layer()
 
 
 @pytest.fixture
@@ -86,99 +86,94 @@ class TestAcarsConsumerConnection:
 
     async def test_connect_accepts_websocket(self, channel_layer):
         """Test that WebSocket connection is accepted."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/'
-            )
-            connected, _ = await communicator.connect()
-            assert connected is True
-            await communicator.disconnect()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/'
+        )
+        connected, _ = await communicator.connect()
+        assert connected is True
+        await communicator.disconnect()
 
     async def test_connect_sends_initial_snapshot(self, channel_layer, sample_acars_messages):
         """Test that initial ACARS messages snapshot is sent on connect."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/'
-            )
-            await communicator.connect()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/'
+        )
+        await communicator.connect()
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'acars:snapshot'
-            assert 'data' in response
-            assert 'messages' in response['data']
-            assert 'count' in response['data']
-            assert 'timestamp' in response['data']
-            assert response['data']['count'] >= 1
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'acars:snapshot'
+        assert 'data' in response
+        assert 'messages' in response['data']
+        assert 'count' in response['data']
+        assert 'timestamp' in response['data']
+        assert response['data']['count'] >= 1
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_connect_joins_default_all_topic(self, channel_layer):
         """Test that connection joins 'all' topic by default."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()  # Discard snapshot
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()  # Discard snapshot
 
-            # Should be in messages group (expanded from 'all')
-            await channel_layer.group_send(
-                'acars_messages',
-                {'type': 'acars_message', 'data': {'test': True}}
-            )
+        # Should be in messages group (expanded from 'all')
+        await channel_layer.group_send(
+            'acars_messages',
+            {'type': 'acars_message', 'data': {'test': True}}
+        )
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'acars:message'
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'acars:message'
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_connect_with_specific_topics(self, channel_layer):
         """Test connection with specific topics in query string."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/?topics=messages,vdlm2'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/?topics=messages,vdlm2'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
 
-            # Should be in messages group
-            await channel_layer.group_send(
-                'acars_messages',
-                {'type': 'acars_message', 'data': {'group': 'messages'}}
-            )
-            response = await communicator.receive_json_from()
-            assert response['data']['group'] == 'messages'
+        # Should be in messages group
+        await channel_layer.group_send(
+            'acars_messages',
+            {'type': 'acars_message', 'data': {'group': 'messages'}}
+        )
+        response = await communicator.receive_json_from()
+        assert response['data']['group'] == 'messages'
 
-            # Should be in vdlm2 group
-            await channel_layer.group_send(
-                'acars_vdlm2',
-                {'type': 'acars_message', 'data': {'group': 'vdlm2'}}
-            )
-            response = await communicator.receive_json_from()
-            assert response['data']['group'] == 'vdlm2'
+        # Should be in vdlm2 group
+        await channel_layer.group_send(
+            'acars_vdlm2',
+            {'type': 'acars_message', 'data': {'group': 'vdlm2'}}
+        )
+        response = await communicator.receive_json_from()
+        assert response['data']['group'] == 'vdlm2'
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_disconnect_leaves_groups(self, channel_layer):
         """Test that disconnect properly leaves all groups."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/?topics=messages'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()
-            await communicator.disconnect()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/?topics=messages'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
+        await communicator.disconnect()
 
-            # Sending to the group should not cause any issues
-            await channel_layer.group_send(
-                'acars_messages',
-                {'type': 'acars_message', 'data': {'test': True}}
-            )
+        # Sending to the group should not cause any issues
+        await channel_layer.group_send(
+            'acars_messages',
+            {'type': 'acars_message', 'data': {'test': True}}
+        )
 
 
 @pytest.mark.asyncio
@@ -188,71 +183,68 @@ class TestAcarsConsumerSubscription:
 
     async def test_subscribe_to_topics(self, channel_layer):
         """Test subscribing to additional topics."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/?topics=messages'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/?topics=messages'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
 
-            # Subscribe to vdlm2 topic
-            await communicator.send_json_to({
-                'action': 'subscribe',
-                'topics': ['vdlm2']
-            })
+        # Subscribe to vdlm2 topic
+        await communicator.send_json_to({
+            'action': 'subscribe',
+            'topics': ['vdlm2']
+        })
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'subscribed'
-            assert 'vdlm2' in response['topics']
-            assert 'messages' in response['topics']
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'subscribed'
+        assert 'vdlm2' in response['topics']
+        assert 'messages' in response['topics']
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_unsubscribe_from_topics(self, channel_layer):
         """Test unsubscribing from topics."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/?topics=messages,vdlm2'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/?topics=messages,vdlm2'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
 
-            # Unsubscribe from vdlm2
-            await communicator.send_json_to({
-                'action': 'unsubscribe',
-                'topics': ['vdlm2']
-            })
+        # Unsubscribe from vdlm2
+        await communicator.send_json_to({
+            'action': 'unsubscribe',
+            'topics': ['vdlm2']
+        })
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'unsubscribed'
-            assert 'vdlm2' in response['topics']
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'unsubscribed'
+        assert 'vdlm2' in response['topics']
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_subscribe_all_supported_topics(self, channel_layer):
         """Test subscribing to all supported ACARS topics."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
 
-            # Subscribe to all topics
-            await communicator.send_json_to({
-                'action': 'subscribe',
-                'topics': ['messages', 'vdlm2', 'all']
-            })
+        # Subscribe to all topics
+        await communicator.send_json_to({
+            'action': 'subscribe',
+            'topics': ['messages', 'vdlm2', 'all']
+        })
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'subscribed'
-            assert 'messages' in response['topics']
-            assert 'vdlm2' in response['topics']
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'subscribed'
+        assert 'messages' in response['topics']
+        assert 'vdlm2' in response['topics']
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
 
 @pytest.mark.asyncio
@@ -262,116 +254,112 @@ class TestAcarsConsumerBroadcast:
 
     async def test_acars_message_broadcast(self, channel_layer):
         """Test that ACARS messages are broadcast correctly."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/?topics=messages'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/?topics=messages'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
 
-            message_data = {
-                'id': 1,
-                'source': 'acars',
-                'icao_hex': 'ABC123',
-                'callsign': 'UAL123',
-                'label': 'H1',
-                'text': 'POSITION REPORT',
-            }
-            await channel_layer.group_send(
-                'acars_messages',
-                {'type': 'acars_message', 'data': message_data}
-            )
+        message_data = {
+            'id': 1,
+            'source': 'acars',
+            'icao_hex': 'ABC123',
+            'callsign': 'UAL123',
+            'label': 'H1',
+            'text': 'POSITION REPORT',
+        }
+        await channel_layer.group_send(
+            'acars_messages',
+            {'type': 'acars_message', 'data': message_data}
+        )
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'acars:message'
-            assert response['data'] == message_data
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'acars:message'
+        assert response['data'] == message_data
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_acars_snapshot_broadcast(self, channel_layer):
         """Test that snapshot messages are broadcast correctly."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/?topics=messages'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/?topics=messages'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
 
-            snapshot_data = {
-                'messages': [{'id': 1}, {'id': 2}],
-                'count': 2,
-            }
-            await channel_layer.group_send(
-                'acars_messages',
-                {'type': 'acars_snapshot', 'data': snapshot_data}
-            )
+        snapshot_data = {
+            'messages': [{'id': 1}, {'id': 2}],
+            'count': 2,
+        }
+        await channel_layer.group_send(
+            'acars_messages',
+            {'type': 'acars_snapshot', 'data': snapshot_data}
+        )
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'acars:snapshot'
-            assert response['data'] == snapshot_data
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'acars:snapshot'
+        assert response['data'] == snapshot_data
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_vdlm2_specific_topic_broadcast(self, channel_layer):
         """Test that VDL2-specific topic receives VDL2 messages."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/?topics=vdlm2'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/?topics=vdlm2'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
 
-            vdlm2_message = {
-                'source': 'vdlm2',
-                'icao_hex': 'DEF456',
-                'label': 'Q0',
-            }
-            await channel_layer.group_send(
-                'acars_vdlm2',
-                {'type': 'acars_message', 'data': vdlm2_message}
-            )
+        vdlm2_message = {
+            'source': 'vdlm2',
+            'icao_hex': 'DEF456',
+            'label': 'Q0',
+        }
+        await channel_layer.group_send(
+            'acars_vdlm2',
+            {'type': 'acars_message', 'data': vdlm2_message}
+        )
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'acars:message'
-            assert response['data']['source'] == 'vdlm2'
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'acars:message'
+        assert response['data']['source'] == 'vdlm2'
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_multiple_consumers_receive_broadcast(self, channel_layer):
         """Test that multiple consumers in same group receive broadcasts."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator1 = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/?topics=messages'
-            )
-            communicator2 = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/?topics=messages'
-            )
+        communicator1 = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/?topics=messages'
+        )
+        communicator2 = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/?topics=messages'
+        )
 
-            await communicator1.connect()
-            await communicator2.connect()
-            await communicator1.receive_json_from()
-            await communicator2.receive_json_from()
+        await communicator1.connect()
+        await communicator2.connect()
+        await communicator1.receive_json_from()
+        await communicator2.receive_json_from()
 
-            message_data = {'id': 1, 'source': 'acars'}
-            await channel_layer.group_send(
-                'acars_messages',
-                {'type': 'acars_message', 'data': message_data}
-            )
+        message_data = {'id': 1, 'source': 'acars'}
+        await channel_layer.group_send(
+            'acars_messages',
+            {'type': 'acars_message', 'data': message_data}
+        )
 
-            response1 = await communicator1.receive_json_from()
-            response2 = await communicator2.receive_json_from()
+        response1 = await communicator1.receive_json_from()
+        response2 = await communicator2.receive_json_from()
 
-            assert response1['type'] == 'acars:message'
-            assert response2['type'] == 'acars:message'
-            assert response1['data'] == response2['data']
+        assert response1['type'] == 'acars:message'
+        assert response2['type'] == 'acars:message'
+        assert response1['data'] == response2['data']
 
-            await communicator1.disconnect()
-            await communicator2.disconnect()
+        await communicator1.disconnect()
+        await communicator2.disconnect()
 
 
 @pytest.mark.asyncio
@@ -381,177 +369,170 @@ class TestAcarsConsumerRequests:
 
     async def test_request_messages(self, channel_layer, sample_acars_messages):
         """Test requesting ACARS messages."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
 
-            await communicator.send_json_to({
-                'action': 'request',
-                'type': 'messages',
-                'request_id': 'req-001',
-                'params': {}
-            })
+        await communicator.send_json_to({
+            'action': 'request',
+            'type': 'messages',
+            'request_id': 'req-001',
+            'params': {}
+        })
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'response'
-            assert response['request_id'] == 'req-001'
-            assert response['request_type'] == 'messages'
-            assert isinstance(response['data'], list)
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'response'
+        assert response['request_id'] == 'req-001'
+        assert response['request_type'] == 'messages'
+        assert isinstance(response['data'], list)
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_request_messages_by_icao(self, channel_layer, sample_acars_messages):
         """Test requesting messages filtered by ICAO."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
 
-            await communicator.send_json_to({
-                'action': 'request',
-                'type': 'messages',
-                'request_id': 'req-002',
-                'params': {'icao': 'ABC123'}
-            })
+        await communicator.send_json_to({
+            'action': 'request',
+            'type': 'messages',
+            'request_id': 'req-002',
+            'params': {'icao': 'ABC123'}
+        })
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'response'
-            for msg in response['data']:
-                assert msg['icao_hex'] == 'ABC123'
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'response'
+        for msg in response['data']:
+            assert msg['icao_hex'] == 'ABC123'
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_request_messages_by_callsign(self, channel_layer, sample_acars_messages):
         """Test requesting messages filtered by callsign."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
 
-            await communicator.send_json_to({
-                'action': 'request',
-                'type': 'messages',
-                'request_id': 'req-003',
-                'params': {'callsign': 'UAL'}
-            })
+        await communicator.send_json_to({
+            'action': 'request',
+            'type': 'messages',
+            'request_id': 'req-003',
+            'params': {'callsign': 'UAL'}
+        })
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'response'
-            for msg in response['data']:
-                assert 'UAL' in msg['callsign'].upper()
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'response'
+        for msg in response['data']:
+            assert 'UAL' in msg['callsign'].upper()
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_request_messages_by_label(self, channel_layer, sample_acars_messages):
         """Test requesting messages filtered by label."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
 
-            await communicator.send_json_to({
-                'action': 'request',
-                'type': 'messages',
-                'request_id': 'req-004',
-                'params': {'label': 'H1'}
-            })
+        await communicator.send_json_to({
+            'action': 'request',
+            'type': 'messages',
+            'request_id': 'req-004',
+            'params': {'label': 'H1'}
+        })
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'response'
-            for msg in response['data']:
-                assert msg['label'] == 'H1'
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'response'
+        for msg in response['data']:
+            assert msg['label'] == 'H1'
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_request_messages_by_source(self, channel_layer, sample_acars_messages):
         """Test requesting messages filtered by source."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
 
-            await communicator.send_json_to({
-                'action': 'request',
-                'type': 'messages',
-                'request_id': 'req-005',
-                'params': {'source': 'vdlm2'}
-            })
+        await communicator.send_json_to({
+            'action': 'request',
+            'type': 'messages',
+            'request_id': 'req-005',
+            'params': {'source': 'vdlm2'}
+        })
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'response'
-            for msg in response['data']:
-                assert msg['source'] == 'vdlm2'
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'response'
+        for msg in response['data']:
+            assert msg['source'] == 'vdlm2'
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_request_messages_with_limit(self, channel_layer, sample_acars_messages):
         """Test requesting messages with limit."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
 
-            await communicator.send_json_to({
-                'action': 'request',
-                'type': 'messages',
-                'request_id': 'req-006',
-                'params': {'limit': 2}
-            })
+        await communicator.send_json_to({
+            'action': 'request',
+            'type': 'messages',
+            'request_id': 'req-006',
+            'params': {'limit': 2}
+        })
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'response'
-            assert len(response['data']) <= 2
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'response'
+        assert len(response['data']) <= 2
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_request_stats(self, channel_layer, sample_acars_messages):
         """Test requesting ACARS statistics."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
 
-            await communicator.send_json_to({
-                'action': 'request',
-                'type': 'stats',
-                'request_id': 'req-007',
-                'params': {}
-            })
+        await communicator.send_json_to({
+            'action': 'request',
+            'type': 'stats',
+            'request_id': 'req-007',
+            'params': {}
+        })
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'response'
-            assert response['request_id'] == 'req-007'
-            assert response['request_type'] == 'stats'
-            assert 'total_messages' in response['data']
-            assert 'last_hour' in response['data']
-            assert 'last_24h' in response['data']
-            assert 'by_source' in response['data']
-            assert 'top_labels' in response['data']
-            assert 'timestamp' in response['data']
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'response'
+        assert response['request_id'] == 'req-007'
+        assert response['request_type'] == 'stats'
+        assert 'total_messages' in response['data']
+        assert 'last_hour' in response['data']
+        assert 'last_24h' in response['data']
+        assert 'by_source' in response['data']
+        assert 'top_labels' in response['data']
+        assert 'timestamp' in response['data']
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_request_labels(self, channel_layer):
         """Test requesting ACARS label reference data."""
@@ -562,33 +543,6 @@ class TestAcarsConsumerRequests:
             'SA': 'Weather Request',
         }
         with patch.dict('sys.modules', {'skyspy.data.message_labels': MagicMock(ACARS_LABELS=mock_labels)}):
-            with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-                communicator = WebsocketCommunicator(
-                    AcarsConsumer.as_asgi(),
-                    '/ws/acars/'
-                )
-                await communicator.connect()
-                await communicator.receive_json_from()
-
-                await communicator.send_json_to({
-                    'action': 'request',
-                    'type': 'labels',
-                    'request_id': 'req-008',
-                    'params': {}
-                })
-
-                response = await communicator.receive_json_from()
-                assert response['type'] == 'response'
-                assert response['request_id'] == 'req-008'
-                assert response['request_type'] == 'labels'
-                # Data should be the ACARS_LABELS dictionary
-                assert isinstance(response['data'], dict)
-
-                await communicator.disconnect()
-
-    async def test_request_unknown_type(self, channel_layer):
-        """Test error response for unknown request type."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
             communicator = WebsocketCommunicator(
                 AcarsConsumer.as_asgi(),
                 '/ws/acars/'
@@ -598,16 +552,41 @@ class TestAcarsConsumerRequests:
 
             await communicator.send_json_to({
                 'action': 'request',
-                'type': 'unknown_type',
-                'request_id': 'req-009',
+                'type': 'labels',
+                'request_id': 'req-008',
                 'params': {}
             })
 
             response = await communicator.receive_json_from()
-            assert response['type'] == 'error'
-            assert 'Unknown request type' in response['message']
+            assert response['type'] == 'response'
+            assert response['request_id'] == 'req-008'
+            assert response['request_type'] == 'labels'
+            # Data should be the ACARS_LABELS dictionary
+            assert isinstance(response['data'], dict)
 
             await communicator.disconnect()
+
+    async def test_request_unknown_type(self, channel_layer):
+        """Test error response for unknown request type."""
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
+
+        await communicator.send_json_to({
+            'action': 'request',
+            'type': 'unknown_type',
+            'request_id': 'req-009',
+            'params': {}
+        })
+
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'error'
+        assert 'Unknown request type' in response['message']
+
+        await communicator.disconnect()
 
 
 @pytest.mark.asyncio
@@ -617,105 +596,100 @@ class TestAcarsConsumerErrorHandling:
 
     async def test_unknown_action_returns_error(self, channel_layer):
         """Test that unknown action returns error message."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
 
-            await communicator.send_json_to({
-                'action': 'invalid_action'
-            })
+        await communicator.send_json_to({
+            'action': 'invalid_action'
+        })
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'error'
-            assert 'Unknown action' in response['message']
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'error'
+        assert 'Unknown action' in response['message']
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_ping_pong(self, channel_layer):
         """Test ping/pong heartbeat functionality."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
 
-            await communicator.send_json_to({'action': 'ping'})
+        await communicator.send_json_to({'action': 'ping'})
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'pong'
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'pong'
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_empty_database_returns_empty_snapshot(self, channel_layer, db):
         """Test that empty database returns empty messages snapshot."""
         # Ensure no ACARS messages exist
-        AcarsMessage.objects.all().delete()
+        await sync_to_async(AcarsMessage.objects.all().delete)()
 
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/'
-            )
-            await communicator.connect()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/'
+        )
+        await communicator.connect()
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'acars:snapshot'
-            assert response['data']['messages'] == []
-            assert response['data']['count'] == 0
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'acars:snapshot'
+        assert response['data']['messages'] == []
+        assert response['data']['count'] == 0
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_message_serialization(self, channel_layer, sample_acars_messages):
         """Test that ACARS messages are properly serialized in snapshot."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/'
-            )
-            await communicator.connect()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/'
+        )
+        await communicator.connect()
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'acars:snapshot'
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'acars:snapshot'
 
-            # Check that messages have all expected fields
-            if response['data']['messages']:
-                msg = response['data']['messages'][0]
-                expected_fields = [
-                    'id', 'timestamp', 'source', 'channel', 'frequency',
-                    'icao_hex', 'registration', 'callsign', 'label',
-                    'block_id', 'msg_num', 'ack', 'mode', 'text',
-                    'decoded', 'signal_level', 'error_count', 'station_id'
-                ]
-                for field in expected_fields:
-                    assert field in msg, f"Missing field: {field}"
+        # Check that messages have all expected fields
+        if response['data']['messages']:
+            msg = response['data']['messages'][0]
+            expected_fields = [
+                'id', 'timestamp', 'source', 'channel', 'frequency',
+                'icao_hex', 'registration', 'callsign', 'label',
+                'block_id', 'msg_num', 'ack', 'mode', 'text',
+                'decoded', 'signal_level', 'error_count', 'station_id'
+            ]
+            for field in expected_fields:
+                assert field in msg, f"Missing field: {field}"
 
-            await communicator.disconnect()
+        await communicator.disconnect()
 
     async def test_subscribe_unsupported_topic_ignored(self, channel_layer):
         """Test that unsupported topics are ignored during subscription."""
-        with patch.object(AcarsConsumer, 'channel_layer', channel_layer):
-            communicator = WebsocketCommunicator(
-                AcarsConsumer.as_asgi(),
-                '/ws/acars/'
-            )
-            await communicator.connect()
-            await communicator.receive_json_from()
+        communicator = WebsocketCommunicator(
+            AcarsConsumer.as_asgi(),
+            '/ws/acars/'
+        )
+        await communicator.connect()
+        await communicator.receive_json_from()
 
-            # Try to subscribe to unsupported topic
-            await communicator.send_json_to({
-                'action': 'subscribe',
-                'topics': ['nonexistent_topic', 'messages']
-            })
+        # Try to subscribe to unsupported topic
+        await communicator.send_json_to({
+            'action': 'subscribe',
+            'topics': ['nonexistent_topic', 'messages']
+        })
 
-            response = await communicator.receive_json_from()
-            assert response['type'] == 'subscribed'
-            # Only 'messages' should be in the list
-            assert 'messages' in response['topics']
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'subscribed'
+        # Only 'messages' should be in the list
+        assert 'messages' in response['topics']
 
-            await communicator.disconnect()
+        await communicator.disconnect()

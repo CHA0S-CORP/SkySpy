@@ -665,3 +665,630 @@ func findSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+func TestNewFileTokenStore(t *testing.T) {
+	// Test that NewFileTokenStore creates the directory and returns a valid store
+	store, err := NewFileTokenStore()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if store == nil {
+		t.Fatal("expected non-nil store")
+	}
+
+	if store.dir == "" {
+		t.Error("expected non-empty dir")
+	}
+
+	if len(store.key) != 32 {
+		t.Errorf("expected 32-byte key, got %d bytes", len(store.key))
+	}
+
+	// Verify the directory exists
+	info, err := os.Stat(store.dir)
+	if err != nil {
+		t.Fatalf("failed to stat store directory: %v", err)
+	}
+
+	if !info.IsDir() {
+		t.Error("expected store.dir to be a directory")
+	}
+
+	// Verify directory permissions (should be 0700)
+	mode := info.Mode().Perm()
+	if mode != 0700 {
+		t.Errorf("expected directory permissions 0700, got %o", mode)
+	}
+}
+
+func TestFileTokenStore_List_NonExistentDirectory(t *testing.T) {
+	store := &FileTokenStore{
+		dir: "/nonexistent/path/that/does/not/exist",
+		key: generateMachineKey(),
+	}
+
+	hosts, err := store.List()
+	if err != nil {
+		t.Errorf("expected no error for non-existent directory, got: %v", err)
+	}
+
+	if len(hosts) != 0 {
+		t.Errorf("expected empty list for non-existent directory, got %d hosts", len(hosts))
+	}
+}
+
+func TestFileTokenStore_List_DirectoryWithNonJsonFiles(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "skyspy-tokens-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := &FileTokenStore{
+		dir: tempDir,
+		key: generateMachineKey(),
+	}
+
+	// Create some non-JSON files that should be ignored
+	os.WriteFile(filepath.Join(tempDir, "readme.txt"), []byte("test"), 0600)
+	os.WriteFile(filepath.Join(tempDir, "config.yaml"), []byte("test"), 0600)
+	os.Mkdir(filepath.Join(tempDir, "subdir"), 0700)
+
+	// Create a valid JSON file
+	testTokens := &TokenSet{
+		AccessToken: "test",
+		ExpiresAt:   time.Now().Add(1 * time.Hour),
+	}
+	store.Save("test:8080", testTokens)
+
+	hosts, err := store.List()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should only contain the JSON file we created
+	if len(hosts) != 1 {
+		t.Errorf("expected 1 host, got %d", len(hosts))
+	}
+
+	if len(hosts) > 0 && hosts[0] != "test:8080" {
+		t.Errorf("expected host 'test:8080', got '%s'", hosts[0])
+	}
+}
+
+func TestFileTokenStore_Load_ReadError(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "skyspy-tokens-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := &FileTokenStore{
+		dir: tempDir,
+		key: generateMachineKey(),
+	}
+
+	// Create a file that exists but is a directory (to cause read error)
+	filename := filepath.Join(tempDir, "directory_8080.json")
+	err = os.Mkdir(filename, 0700)
+	if err != nil {
+		t.Fatalf("failed to create test directory: %v", err)
+	}
+
+	_, err = store.Load("directory:8080")
+	if err == nil {
+		t.Error("expected error when loading a directory as file")
+	}
+}
+
+func TestFileTokenStore_Load_DecryptError(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "skyspy-tokens-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := &FileTokenStore{
+		dir: tempDir,
+		key: generateMachineKey(),
+	}
+
+	// Create a file with valid base64 but invalid encrypted content
+	filename := filepath.Join(tempDir, "decrypt-error_8080.json")
+	// Valid base64 but too short to be valid AES-GCM ciphertext
+	err = os.WriteFile(filename, []byte(base64.StdEncoding.EncodeToString([]byte("short"))), 0600)
+	if err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	_, err = store.Load("decrypt-error:8080")
+	if err == nil {
+		t.Error("expected error for invalid ciphertext")
+	}
+}
+
+func TestFileTokenStore_Load_InvalidBase64(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "skyspy-tokens-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := &FileTokenStore{
+		dir: tempDir,
+		key: generateMachineKey(),
+	}
+
+	// Create a file with invalid base64 content
+	filename := filepath.Join(tempDir, "invalid-base64_8080.json")
+	err = os.WriteFile(filename, []byte("!!!not base64!!!"), 0600)
+	if err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	_, err = store.Load("invalid-base64:8080")
+	if err == nil {
+		t.Error("expected error for invalid base64")
+	}
+}
+
+func TestFileTokenStore_Load_InvalidJSON(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "skyspy-tokens-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := &FileTokenStore{
+		dir: tempDir,
+		key: generateMachineKey(),
+	}
+
+	// Save encrypted content that is valid but not valid JSON when decrypted
+	// We'll encrypt "not json" and save it
+	encrypted, err := store.encrypt([]byte("not valid json at all"))
+	if err != nil {
+		t.Fatalf("failed to encrypt: %v", err)
+	}
+
+	filename := filepath.Join(tempDir, "invalid-json_8080.json")
+	err = os.WriteFile(filename, encrypted, 0600)
+	if err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	_, err = store.Load("invalid-json:8080")
+	if err == nil {
+		t.Error("expected error for invalid JSON after decryption")
+	}
+}
+
+func TestFileTokenStore_Delete_ReadOnlyDirectory(t *testing.T) {
+	// This test is platform-specific and might not work in all environments
+	if os.Getuid() == 0 {
+		t.Skip("skipping test when running as root")
+	}
+
+	tempDir, err := os.MkdirTemp("", "skyspy-tokens-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() {
+		// Restore permissions before cleanup
+		os.Chmod(tempDir, 0700)
+		os.RemoveAll(tempDir)
+	}()
+
+	store := &FileTokenStore{
+		dir: tempDir,
+		key: generateMachineKey(),
+	}
+
+	// Save a token first
+	testTokens := &TokenSet{
+		AccessToken: "test",
+		ExpiresAt:   time.Now().Add(1 * time.Hour),
+	}
+	err = store.Save("readonly-test:8080", testTokens)
+	if err != nil {
+		t.Fatalf("failed to save: %v", err)
+	}
+
+	// Make directory read-only
+	os.Chmod(tempDir, 0500)
+
+	// Try to delete - should fail
+	err = store.Delete("readonly-test:8080")
+	if err == nil {
+		t.Error("expected error when deleting from read-only directory")
+	}
+}
+
+func TestHostToFilename_SpecialCharacters(t *testing.T) {
+	testCases := []struct {
+		host     string
+		expected string
+	}{
+		{"host/path:8080", "host_path_8080.json"},
+		{"host\\path:8080", "host_path_8080.json"},
+		{"simple:80", "simple_80.json"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.host, func(t *testing.T) {
+			result := hostToFilename(tc.host)
+			if result != tc.expected {
+				t.Errorf("hostToFilename(%q) = %q, expected %q", tc.host, result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestFileTokenStore_Encrypt_Decrypt_Roundtrip(t *testing.T) {
+	store := &FileTokenStore{
+		key: generateMachineKey(),
+	}
+
+	testData := []byte("test data to encrypt and decrypt")
+
+	encrypted, err := store.encrypt(testData)
+	if err != nil {
+		t.Fatalf("failed to encrypt: %v", err)
+	}
+
+	decrypted, err := store.decrypt(encrypted)
+	if err != nil {
+		t.Fatalf("failed to decrypt: %v", err)
+	}
+
+	if string(decrypted) != string(testData) {
+		t.Errorf("roundtrip failed: expected %q, got %q", testData, decrypted)
+	}
+}
+
+func TestFileTokenStore_Decrypt_TooShort(t *testing.T) {
+	store := &FileTokenStore{
+		key: generateMachineKey(),
+	}
+
+	// Create valid base64 of data that's too short (less than nonce size)
+	shortData := base64.StdEncoding.EncodeToString([]byte("abc"))
+
+	_, err := store.decrypt([]byte(shortData))
+	if err == nil {
+		t.Error("expected error for ciphertext too short")
+	}
+}
+
+func TestFileTokenStore_Decrypt_InvalidCiphertext(t *testing.T) {
+	store := &FileTokenStore{
+		key: generateMachineKey(),
+	}
+
+	// Create valid base64 of random data (enough length but invalid ciphertext)
+	randomData := make([]byte, 32)
+	for i := range randomData {
+		randomData[i] = byte(i)
+	}
+	invalidCiphertext := base64.StdEncoding.EncodeToString(randomData)
+
+	_, err := store.decrypt([]byte(invalidCiphertext))
+	if err == nil {
+		t.Error("expected error for invalid ciphertext")
+	}
+}
+
+func TestTokenSet_Fields(t *testing.T) {
+	// Test that all fields are properly accessible
+	now := time.Now()
+	tokens := TokenSet{
+		AccessToken:  "access",
+		RefreshToken: "refresh",
+		ExpiresAt:    now,
+		TokenType:    "Bearer",
+		Host:         "test:8080",
+		Username:     "user",
+	}
+
+	if tokens.AccessToken != "access" {
+		t.Error("AccessToken field incorrect")
+	}
+	if tokens.RefreshToken != "refresh" {
+		t.Error("RefreshToken field incorrect")
+	}
+	if !tokens.ExpiresAt.Equal(now) {
+		t.Error("ExpiresAt field incorrect")
+	}
+	if tokens.TokenType != "Bearer" {
+		t.Error("TokenType field incorrect")
+	}
+	if tokens.Host != "test:8080" {
+		t.Error("Host field incorrect")
+	}
+	if tokens.Username != "user" {
+		t.Error("Username field incorrect")
+	}
+}
+
+func TestFileTokenStore_Save_MarshalError(t *testing.T) {
+	// This tests the JSON marshal error path - though TokenSet doesn't have
+	// fields that would fail to marshal, we can test a successful save
+	tempDir, err := os.MkdirTemp("", "skyspy-tokens-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := &FileTokenStore{
+		dir: tempDir,
+		key: generateMachineKey(),
+	}
+
+	testTokens := &TokenSet{
+		AccessToken: "test-token",
+		ExpiresAt:   time.Now().Add(1 * time.Hour),
+	}
+
+	err = store.Save("test:8080", testTokens)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify token was saved
+	loaded, err := store.Load("test:8080")
+	if err != nil {
+		t.Fatalf("failed to load: %v", err)
+	}
+	if loaded.AccessToken != "test-token" {
+		t.Errorf("expected 'test-token', got '%s'", loaded.AccessToken)
+	}
+}
+
+func TestFileTokenStore_Save_WriteError(t *testing.T) {
+	// Skip on root user as permissions don't apply
+	if os.Getuid() == 0 {
+		t.Skip("skipping test when running as root")
+	}
+
+	tempDir, err := os.MkdirTemp("", "skyspy-tokens-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() {
+		os.Chmod(tempDir, 0700)
+		os.RemoveAll(tempDir)
+	}()
+
+	store := &FileTokenStore{
+		dir: tempDir,
+		key: generateMachineKey(),
+	}
+
+	testTokens := &TokenSet{
+		AccessToken: "test-token",
+		ExpiresAt:   time.Now().Add(1 * time.Hour),
+	}
+
+	// Make directory read-only to cause write error
+	os.Chmod(tempDir, 0500)
+
+	err = store.Save("write-error:8080", testTokens)
+	if err == nil {
+		t.Error("expected error when writing to read-only directory")
+	}
+}
+
+func TestFileTokenStore_Encrypt_LargeData(t *testing.T) {
+	store := &FileTokenStore{
+		key: generateMachineKey(),
+	}
+
+	// Test with large data
+	largeData := make([]byte, 10000)
+	for i := range largeData {
+		largeData[i] = byte(i % 256)
+	}
+
+	encrypted, err := store.encrypt(largeData)
+	if err != nil {
+		t.Fatalf("failed to encrypt large data: %v", err)
+	}
+
+	decrypted, err := store.decrypt(encrypted)
+	if err != nil {
+		t.Fatalf("failed to decrypt large data: %v", err)
+	}
+
+	if len(decrypted) != len(largeData) {
+		t.Errorf("decrypted data length mismatch: expected %d, got %d", len(largeData), len(decrypted))
+	}
+
+	for i := range largeData {
+		if decrypted[i] != largeData[i] {
+			t.Errorf("decrypted data mismatch at index %d", i)
+			break
+		}
+	}
+}
+
+func TestFileTokenStore_List_IgnoresDirectories(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "skyspy-tokens-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := &FileTokenStore{
+		dir: tempDir,
+		key: generateMachineKey(),
+	}
+
+	// Create a subdirectory with .json extension (should be ignored)
+	os.Mkdir(filepath.Join(tempDir, "subdir.json"), 0700)
+
+	// Create a valid token file
+	testTokens := &TokenSet{
+		AccessToken: "test",
+		ExpiresAt:   time.Now().Add(1 * time.Hour),
+	}
+	store.Save("valid:8080", testTokens)
+
+	hosts, err := store.List()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should only have the valid token file, not the directory
+	if len(hosts) != 1 {
+		t.Errorf("expected 1 host, got %d", len(hosts))
+	}
+
+	if len(hosts) > 0 && hosts[0] != "valid:8080" {
+		t.Errorf("expected 'valid:8080', got '%s'", hosts[0])
+	}
+}
+
+func TestNewFileTokenStore_DirectoryCreation(t *testing.T) {
+	// Test that the directory is created if it doesn't exist
+	store, err := NewFileTokenStore()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify the directory was created
+	info, err := os.Stat(store.dir)
+	if err != nil {
+		t.Fatalf("failed to stat directory: %v", err)
+	}
+
+	if !info.IsDir() {
+		t.Error("expected directory")
+	}
+}
+
+func TestFileTokenStore_Encrypt_InvalidKeyLength(t *testing.T) {
+	// Test encrypt with invalid key length (not 16, 24, or 32 bytes)
+	store := &FileTokenStore{
+		key: []byte("invalid"), // Only 7 bytes, not valid for AES
+	}
+
+	_, err := store.encrypt([]byte("test data"))
+	if err == nil {
+		t.Error("expected error for invalid key length")
+	}
+}
+
+func TestFileTokenStore_Decrypt_InvalidKeyLength(t *testing.T) {
+	// Test decrypt with invalid key length (not 16, 24, or 32 bytes)
+	store := &FileTokenStore{
+		key: []byte("invalid"), // Only 7 bytes, not valid for AES
+	}
+
+	// Create some valid-looking base64 data
+	validBase64 := base64.StdEncoding.EncodeToString(make([]byte, 32))
+
+	_, err := store.decrypt([]byte(validBase64))
+	if err == nil {
+		t.Error("expected error for invalid key length")
+	}
+}
+
+func TestFileTokenStore_Save_EncryptError(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "skyspy-tokens-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Store with invalid key
+	store := &FileTokenStore{
+		dir: tempDir,
+		key: []byte("invalid"), // Invalid key length
+	}
+
+	testTokens := &TokenSet{
+		AccessToken: "test",
+		ExpiresAt:   time.Now().Add(1 * time.Hour),
+	}
+
+	err = store.Save("test:8080", testTokens)
+	if err == nil {
+		t.Error("expected error when encryption fails")
+	}
+}
+
+func TestFileTokenStore_List_ReadDirError(t *testing.T) {
+	// Test List when directory exists but can't be read
+	// Skip on root user as permissions don't apply
+	if os.Getuid() == 0 {
+		t.Skip("skipping test when running as root")
+	}
+
+	tempDir, err := os.MkdirTemp("", "skyspy-tokens-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() {
+		os.Chmod(tempDir, 0700)
+		os.RemoveAll(tempDir)
+	}()
+
+	store := &FileTokenStore{
+		dir: tempDir,
+		key: generateMachineKey(),
+	}
+
+	// Make directory unreadable
+	os.Chmod(tempDir, 0000)
+
+	_, err = store.List()
+	if err == nil {
+		t.Error("expected error when directory is unreadable")
+	}
+}
+
+func TestFileTokenStore_Save_OverwriteExisting(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "skyspy-tokens-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := &FileTokenStore{
+		dir: tempDir,
+		key: generateMachineKey(),
+	}
+
+	// Save initial token
+	tokens1 := &TokenSet{
+		AccessToken: "first-token",
+		ExpiresAt:   time.Now().Add(1 * time.Hour),
+	}
+	err = store.Save("test:8080", tokens1)
+	if err != nil {
+		t.Fatalf("failed to save first token: %v", err)
+	}
+
+	// Verify first token
+	loaded1, _ := store.Load("test:8080")
+	if loaded1.AccessToken != "first-token" {
+		t.Errorf("expected 'first-token', got '%s'", loaded1.AccessToken)
+	}
+
+	// Save second token (overwrite)
+	tokens2 := &TokenSet{
+		AccessToken: "second-token",
+		ExpiresAt:   time.Now().Add(2 * time.Hour),
+	}
+	err = store.Save("test:8080", tokens2)
+	if err != nil {
+		t.Fatalf("failed to save second token: %v", err)
+	}
+
+	// Verify second token replaced first
+	loaded2, _ := store.Load("test:8080")
+	if loaded2.AccessToken != "second-token" {
+		t.Errorf("expected 'second-token', got '%s'", loaded2.AccessToken)
+	}
+}
