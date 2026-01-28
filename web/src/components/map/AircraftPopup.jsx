@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import {
   Plane, X, ArrowUp, ArrowDown, Navigation,
   AlertTriangle, ExternalLink, Info, Crosshair,
@@ -84,6 +84,27 @@ export function AircraftPopup({
   const { position, isDragging, handleMouseDown } = useDraggable({ x: 100, y: 100 });
   const prevDistanceRef = useRef(null);
   const distanceTrendRef = useRef(null); // 'approaching', 'receding', or 'stable'
+  const popupRef = useRef(null);
+  const titleId = `aircraft-popup-title-${aircraft?.hex || 'unknown'}`;
+
+  // Handle Escape key to close popup
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Escape') {
+      onClose?.();
+    }
+  }, [onClose]);
+
+  // Add Escape key listener and auto-focus on open
+  useEffect(() => {
+    if (aircraft && popupRef.current) {
+      popupRef.current.focus();
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [aircraft, handleKeyDown]);
 
   if (!aircraft) return null;
 
@@ -123,19 +144,24 @@ export function AircraftPopup({
   };
 
   return (
-    <div 
+    <div
+      ref={popupRef}
       className={`aircraft-popup ${mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''} ${isEmergency ? 'emergency' : ''}`}
       style={popupStyle}
       onMouseDown={handleMouseDown}
       onTouchStart={handleMouseDown}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      tabIndex={-1}
     >
-      <button className="popup-close no-drag" onClick={onClose}>
+      <button className="popup-close no-drag" onClick={onClose} aria-label="Close popup">
         <X size={16} />
       </button>
-      
+
       <div className="popup-header">
-        <Plane size={20} />
-        <span className="popup-callsign">
+        <Plane size={20} aria-hidden="true" />
+        <span id={titleId} className="popup-callsign">
           {aircraft.flight?.trim() || aircraft.hex}
         </span>
         {(aircraftInfo?.typeLong || aircraft.type) && (

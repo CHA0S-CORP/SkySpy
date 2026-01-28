@@ -55,6 +55,11 @@ from skyspy.api.flight_pattern_stats import (
 from skyspy.api.notams import NotamViewSet
 from skyspy.api.archive import ArchiveViewSet
 from skyspy.api.mobile import MobileViewSet
+from skyspy.api.cannonball import (
+    CannonballThreatsView, CannonballLocationView, CannonballActivateView,
+    CannonballSessionViewSet, CannonballPatternViewSet, CannonballAlertViewSet,
+    CannonballKnownAircraftViewSet, CannonballStatsViewSet,
+)
 from skyspy.api.system import (
     HealthCheckView, StatusView, SystemInfoView, MetricsView,
     ExternalDatabaseStatsView, OpenSkyLookupView, AircraftLookupView,
@@ -99,6 +104,11 @@ router.register(r'stats/combined', CombinedStatsViewSet, basename='combined-stat
 router.register(r'notams', NotamViewSet, basename='notams')
 router.register(r'archive', ArchiveViewSet, basename='archive')
 router.register(r'mobile', MobileViewSet, basename='mobile')
+router.register(r'cannonball/sessions', CannonballSessionViewSet, basename='cannonball-sessions')
+router.register(r'cannonball/patterns', CannonballPatternViewSet, basename='cannonball-patterns')
+router.register(r'cannonball/alerts', CannonballAlertViewSet, basename='cannonball-alerts')
+router.register(r'cannonball/known-aircraft', CannonballKnownAircraftViewSet, basename='cannonball-known-aircraft')
+router.register(r'cannonball/stats', CannonballStatsViewSet, basename='cannonball-stats')
 
 # Admin management router
 admin_router = DefaultRouter()
@@ -180,6 +190,14 @@ urlpatterns = [
         # UAT aircraft (separate endpoint)
         path('uat/aircraft', AircraftViewSet.as_view({'get': 'uat_list'}), name='uat-aircraft'),
         path('uat/aircraft/', AircraftViewSet.as_view({'get': 'uat_list'}), name='uat-aircraft-slash'),
+
+        # Cannonball Mode endpoints
+        path('cannonball/threats', CannonballThreatsView.as_view(), name='cannonball-threats'),
+        path('cannonball/threats/', CannonballThreatsView.as_view(), name='cannonball-threats-slash'),
+        path('cannonball/location', CannonballLocationView.as_view(), name='cannonball-location'),
+        path('cannonball/location/', CannonballLocationView.as_view(), name='cannonball-location-slash'),
+        path('cannonball/activate', CannonballActivateView.as_view(), name='cannonball-activate'),
+        path('cannonball/activate/', CannonballActivateView.as_view(), name='cannonball-activate-slash'),
 
         # Photo serving endpoints
         path('photos/<str:icao_hex>', PhotoServeView.as_view(), name='photo-serve'),

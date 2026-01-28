@@ -111,6 +111,176 @@ const mockData = {
       })),
     };
   },
+
+  /**
+   * Generate mock Cannonball threats (law enforcement/helicopter aircraft)
+   * @param {number} count - Number of threats to generate
+   * @param {Object} userPosition - User's position {lat, lon}
+   * @returns {Array} Array of threat objects
+   */
+  generateCannonballThreats(count = 3, userPosition = { lat: 37.7749, lon: -122.4194 }) {
+    const categories = ['Law Enforcement', 'State Police', 'Sheriff', 'Police Helicopter', 'News Helicopter'];
+    const threatLevels = ['critical', 'warning', 'info'];
+    const agencies = ['LAPD Air Support', 'CHP', 'SFPD', 'Sheriff Aviation', null];
+    const patterns = [
+      [{ type: 'circling', confidence_score: 0.85 }],
+      [{ type: 'loitering', confidence_score: 0.72 }],
+      [{ type: 'grid_search', confidence_score: 0.65 }],
+      [],
+    ];
+
+    return Array.from({ length: count }, (_, i) => {
+      const distanceNm = 2 + i * 3 + Math.random() * 2;
+      const bearing = (i * 90 + Math.random() * 45) % 360;
+      const threatLevel = threatLevels[Math.min(i, threatLevels.length - 1)];
+
+      // Calculate position based on distance and bearing from user
+      const latOffset = (distanceNm / 60) * Math.cos(bearing * Math.PI / 180);
+      const lonOffset = (distanceNm / 60) * Math.sin(bearing * Math.PI / 180) / Math.cos(userPosition.lat * Math.PI / 180);
+
+      return {
+        icao_hex: `A${String(i + 1).padStart(5, '0')}`,
+        hex: `A${String(i + 1).padStart(5, '0')}`,
+        callsign: i % 2 === 0 ? `N${900 + i}PD` : `LAPD${i + 1}`,
+        category: categories[i % categories.length],
+        description: `${categories[i % categories.length]} aircraft`,
+        distance_nm: parseFloat(distanceNm.toFixed(2)),
+        bearing: parseFloat(bearing.toFixed(1)),
+        direction: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.floor(bearing / 45) % 8],
+        altitude: 1500 + i * 500,
+        ground_speed: 80 + i * 20,
+        track: (bearing + 180) % 360,
+        trend: ['approaching', 'holding', 'departing'][i % 3],
+        threat_level: threatLevel,
+        is_law_enforcement: i < 2,
+        is_helicopter: i % 2 === 0,
+        is_known_le: i === 0,
+        known_le: i === 0,
+        lat: userPosition.lat + latOffset,
+        lon: userPosition.lon + lonOffset,
+        closing_speed: i === 0 ? 45 : i === 1 ? 20 : -10,
+        urgency_score: Math.max(0, 80 - i * 25),
+        patterns: patterns[i % patterns.length],
+        agency_name: agencies[i % agencies.length],
+        agency_type: i < 2 ? 'local' : null,
+        operator_name: agencies[i % agencies.length],
+      };
+    });
+  },
+
+  /**
+   * Generate mock Cannonball sessions
+   * @param {number} count - Number of sessions to generate
+   * @returns {Array} Array of session objects
+   */
+  generateCannonballSessions(count = 2) {
+    return Array.from({ length: count }, (_, i) => ({
+      id: i + 1,
+      icao_hex: `A${String(i + 1).padStart(5, '0')}`,
+      callsign: `N${900 + i}PD`,
+      is_active: i === 0,
+      threat_level: i === 0 ? 'warning' : 'info',
+      urgency_score: 60 - i * 20,
+      distance_nm: 5 + i * 3,
+      bearing: 45 + i * 90,
+      closing_speed_kts: i === 0 ? 30 : -15,
+      last_seen: new Date(Date.now() - i * 60000).toISOString(),
+      pattern_count: 2 - i,
+      alert_count: 3 - i,
+      identification_method: 'callsign',
+      identification_reason: 'Matches law enforcement callsign pattern',
+      operator_name: i === 0 ? 'LAPD Air Support' : null,
+    }));
+  },
+
+  /**
+   * Generate mock Cannonball patterns
+   * @param {number} count - Number of patterns to generate
+   * @returns {Array} Array of pattern objects
+   */
+  generateCannonballPatterns(count = 3) {
+    const patternTypes = ['circling', 'loitering', 'grid_search', 'speed_trap'];
+    const confidenceLevels = ['high', 'medium', 'low'];
+
+    return Array.from({ length: count }, (_, i) => ({
+      id: i + 1,
+      icao_hex: `A${String(i + 1).padStart(5, '0')}`,
+      callsign: `N${900 + i}PD`,
+      pattern_type: patternTypes[i % patternTypes.length],
+      confidence: confidenceLevels[i % confidenceLevels.length],
+      confidence_score: 0.9 - i * 0.15,
+      detected_at: new Date(Date.now() - i * 300000).toISOString(),
+      duration_seconds: 300 + i * 120,
+      center_lat: 37.7749 + i * 0.01,
+      center_lon: -122.4194 + i * 0.01,
+    }));
+  },
+
+  /**
+   * Generate mock Cannonball alerts
+   * @param {number} count - Number of alerts to generate
+   * @returns {Array} Array of alert objects
+   */
+  generateCannonballAlerts(count = 3) {
+    const alertTypes = ['le_detected', 'pattern_detected', 'closing_fast', 'overhead'];
+    const priorities = ['critical', 'warning', 'info'];
+
+    return Array.from({ length: count }, (_, i) => ({
+      id: i + 1,
+      session_icao: `A${String(i + 1).padStart(5, '0')}`,
+      alert_type: alertTypes[i % alertTypes.length],
+      priority: priorities[i % priorities.length],
+      title: `Alert ${i + 1}: ${alertTypes[i % alertTypes.length].replace('_', ' ')}`,
+      distance_nm: 3 + i * 2,
+      acknowledged: i > 0,
+      created_at: new Date(Date.now() - i * 120000).toISOString(),
+    }));
+  },
+
+  /**
+   * Generate mock Cannonball stats
+   * @returns {Object} Stats summary object
+   */
+  generateCannonballStats() {
+    return {
+      current: {
+        active_sessions: 2,
+        threats: 3,
+      },
+      today: {
+        alerts: 12,
+        patterns: 8,
+      },
+      week: {
+        sessions: 45,
+        alerts: 67,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  },
+
+  /**
+   * Generate mock known LE aircraft
+   * @param {number} count - Number of known aircraft to generate
+   * @returns {Array} Array of known aircraft objects
+   */
+  generateCannonballKnownAircraft(count = 3) {
+    const agencies = ['LAPD Air Support', 'CHP', 'LA County Sheriff'];
+    const agencyTypes = ['local', 'state', 'local'];
+
+    return Array.from({ length: count }, (_, i) => ({
+      id: i + 1,
+      icao_hex: `A${String(i + 1).padStart(5, '0')}`,
+      registration: `N${900 + i}PD`,
+      aircraft_type: i % 2 === 0 ? 'AS350' : 'Bell 206',
+      agency_name: agencies[i % agencies.length],
+      agency_type: agencyTypes[i % agencyTypes.length],
+      agency_state: 'CA',
+      verified: i < 2,
+      times_detected: 15 - i * 5,
+      last_detected: new Date(Date.now() - i * 86400000).toISOString(),
+    }));
+  },
 };
 
 /**
@@ -252,6 +422,54 @@ class WebSocketMock {
   }
 
   /**
+   * Send Cannonball session started message
+   * @param {string} sessionId - Session ID
+   */
+  async sendCannonballSessionStarted(sessionId = 'test-session-123') {
+    await this.sendMessage({
+      type: 'session_started',
+      session_id: sessionId,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  /**
+   * Send Cannonball threats update via WebSocket
+   * @param {Array} threats - Array of threat objects
+   */
+  async sendCannonballThreats(threats) {
+    await this.sendMessage({
+      type: 'threats',
+      data: threats,
+      count: threats.length,
+      position: { lat: 37.7749, lon: -122.4194 },
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  /**
+   * Send Cannonball radius updated confirmation
+   * @param {number} radiusNm - New radius in nautical miles
+   */
+  async sendCannonballRadiusUpdated(radiusNm) {
+    await this.sendMessage({
+      type: 'radius_updated',
+      radius_nm: radiusNm,
+    });
+  }
+
+  /**
+   * Send Cannonball error message
+   * @param {string} message - Error message
+   */
+  async sendCannonballError(message) {
+    await this.sendMessage({
+      type: 'error',
+      message,
+    });
+  }
+
+  /**
    * Get all messages sent by the client
    * @returns {Promise<Array>} Array of sent messages
    */
@@ -388,6 +606,112 @@ export const test = base.extend({
        */
       async mockError(path, status = 500, message = 'Internal Server Error') {
         await this.mock(path, { error: message }, { status });
+      },
+
+      /**
+       * Mock the Cannonball threats endpoint
+       * @param {Array} threats - Threat data to return
+       */
+      async mockCannonballThreats(threats = mockData.generateCannonballThreats()) {
+        await this.mock('/cannonball/threats', {
+          threats,
+          count: threats.length,
+          total_detected: threats.length,
+          timestamp: new Date().toISOString(),
+        });
+      },
+
+      /**
+       * Mock the Cannonball location endpoint
+       */
+      async mockCannonballLocation() {
+        await this.mock('/cannonball/location', {
+          status: 'ok',
+          location: { lat: 37.7749, lon: -122.4194 },
+        }, { method: 'POST' });
+      },
+
+      /**
+       * Mock the Cannonball activate endpoint
+       */
+      async mockCannonballActivate() {
+        await this.mock('/cannonball/activate', {
+          status: 'activated',
+          user_id: 'test-user',
+        }, { method: 'POST' });
+      },
+
+      /**
+       * Mock the Cannonball sessions endpoint
+       * @param {Array} sessions - Session data to return
+       */
+      async mockCannonballSessions(sessions = mockData.generateCannonballSessions()) {
+        await this.mock('/cannonball/sessions', {
+          sessions,
+          count: sessions.length,
+          active_count: sessions.filter(s => s.is_active).length,
+        });
+      },
+
+      /**
+       * Mock the Cannonball patterns endpoint
+       * @param {Array} patterns - Pattern data to return
+       */
+      async mockCannonballPatterns(patterns = mockData.generateCannonballPatterns()) {
+        await this.mock('/cannonball/patterns', {
+          patterns,
+          count: patterns.length,
+          by_type: {
+            circling: patterns.filter(p => p.pattern_type === 'circling').length,
+            loitering: patterns.filter(p => p.pattern_type === 'loitering').length,
+          },
+        });
+      },
+
+      /**
+       * Mock the Cannonball alerts endpoint
+       * @param {Array} alerts - Alert data to return
+       */
+      async mockCannonballAlerts(alerts = mockData.generateCannonballAlerts()) {
+        await this.mock('/cannonball/alerts', {
+          alerts,
+          count: alerts.length,
+          unacknowledged: alerts.filter(a => !a.acknowledged).length,
+        });
+      },
+
+      /**
+       * Mock the Cannonball stats endpoint
+       * @param {Object} stats - Stats data to return
+       */
+      async mockCannonballStats(stats = mockData.generateCannonballStats()) {
+        await this.mock('/cannonball/stats/summary', stats);
+      },
+
+      /**
+       * Mock the Cannonball known aircraft endpoint
+       * @param {Array} aircraft - Known aircraft data to return
+       */
+      async mockCannonballKnownAircraft(aircraft = mockData.generateCannonballKnownAircraft()) {
+        await this.mock('/cannonball/known-aircraft', {
+          aircraft,
+          count: aircraft.length,
+          verified_count: aircraft.filter(a => a.verified).length,
+        });
+      },
+
+      /**
+       * Mock all Cannonball endpoints with default data
+       */
+      async mockAllCannonball() {
+        await this.mockCannonballThreats();
+        await this.mockCannonballLocation();
+        await this.mockCannonballActivate();
+        await this.mockCannonballSessions();
+        await this.mockCannonballPatterns();
+        await this.mockCannonballAlerts();
+        await this.mockCannonballStats();
+        await this.mockCannonballKnownAircraft();
       },
 
       /**

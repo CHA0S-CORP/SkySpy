@@ -28,6 +28,10 @@ from skyspy.models.stats import (
     PersonalRecord, RareSighting, SpottedCount, SpottedAircraft,
     SightingStreak, DailyStats, NotableRegistration, NotableCallsign, RareAircraftType,
 )
+from skyspy.models.cannonball import (
+    CannonballPattern, CannonballSession, CannonballAlert,
+    CannonballKnownAircraft, CannonballStats,
+)
 
 __all__ = [
     # Aircraft
@@ -89,4 +93,10 @@ __all__ = [
     'NotableRegistration',
     'NotableCallsign',
     'RareAircraftType',
+    # Cannonball
+    'CannonballPattern',
+    'CannonballSession',
+    'CannonballAlert',
+    'CannonballKnownAircraft',
+    'CannonballStats',
 ]

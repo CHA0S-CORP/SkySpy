@@ -25,16 +25,16 @@ export function useSocketApi(endpoint, interval = null, apiBase = '', options = 
   const lastFetchRef = useRef(0);
 
   // Store options in refs to avoid triggering re-fetches when they change
+  // Update refs synchronously to avoid stale values in callbacks
   const wsRequestRef = useRef(wsRequest);
   const wsConnectedRef = useRef(wsConnected);
   const socketParamsRef = useRef(socketParams);
 
-  // Update refs when values change (without triggering re-render)
-  useEffect(() => {
-    wsRequestRef.current = wsRequest;
-    wsConnectedRef.current = wsConnected;
-    socketParamsRef.current = socketParams;
-  }, [wsRequest, wsConnected, socketParams]);
+  // Update refs synchronously on each render to ensure callbacks always have current values
+  // This avoids the race condition where fetchData runs before the effect updates refs
+  wsRequestRef.current = wsRequest;
+  wsConnectedRef.current = wsConnected;
+  socketParamsRef.current = socketParams;
 
   // Derive socket event from endpoint if not provided
   // e.g., '/api/v1/aircraft/stats' -> 'aircraft-stats'

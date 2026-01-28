@@ -2,13 +2,14 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   Plus, Eye, EyeOff, Settings, Trash2, Download, Upload, X, ChevronDown, FileJson,
   AlertTriangle, CheckCircle, Info, AlertCircle, Search, Copy, Clock, Zap, Filter,
-  ArrowUpAZ, ArrowDownAZ, Calendar, Activity, TestTube2, Plane
+  ArrowUpAZ, ArrowDownAZ, Calendar, Activity, TestTube2, Plane, Bell, Undo2
 } from 'lucide-react';
 import { useSocketApi } from '../../hooks';
 import { useNativeWebSocket } from '../../hooks/useNativeWebSocket';
 import { AlertHistory } from './AlertHistory';
 import { RuleForm } from './RuleForm';
 import { NotificationChannelsManager } from './NotificationChannelsManager';
+import { ConfirmModal } from '../common/ConfirmModal';
 import {
   exportAllRules,
   exportSingleRule,
@@ -20,6 +21,9 @@ import {
   convertToApiFormat,
 } from '../../utils/ruleImportExport';
 import { findMatchingAircraft, getRelevantValues } from '../../utils/alertEvaluator';
+
+// Undo grace period in milliseconds
+const UNDO_GRACE_PERIOD = 5000;
 
 // Test Rule Modal - shows matching aircraft for a rule
 function TestRuleModal({ rule, aircraft, feederLocation, onClose }) {
@@ -135,8 +139,8 @@ const PRIORITY_CONFIG = {
   },
   emergency: {
     label: 'Emergency',
-    color: 'var(--accent-red)',
-    bgColor: 'rgba(248, 81, 73, 0.15)',
+    color: '#dc2626',
+    bgColor: 'rgba(220, 38, 38, 0.15)',
     Icon: AlertCircle
   }
 };
@@ -147,13 +151,16 @@ function formatCondition(condition) {
   const operatorMap = {
     'eq': '=',
     'ne': '!=',
+    'neq': '!=',
     'gt': '>',
     'lt': '<',
     'gte': '>=',
     'lte': '<=',
     'contains': 'contains',
     'starts_with': 'starts with',
+    'startswith': 'starts with',
     'ends_with': 'ends with',
+    'endswith': 'ends with',
     'in': 'in',
     'not_in': 'not in',
     'regex': 'matches'
@@ -187,14 +194,24 @@ function formatRelativeTime(dateString) {
   return 'Just now';
 }
 
-export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], feederLocation = null }) {
+export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], feederLocation = null, onToast }) {
   const [activeTab, setActiveTab] = useState('rules');
   const { data: rulesData, refetch } = useSocketApi('/api/v1/alerts/rules', null, apiBase, { wsRequest, wsConnected });
   const [showForm, setShowForm] = useState(false);
   const [editRule, setEditRule] = useState(null);
   const [prefillAircraft, setPrefillAircraft] = useState(null);
   const [testRule, setTestRule] = useState(null);
+
+  // Real-time alerts from WebSocket
   const [realtimeAlerts, setRealtimeAlerts] = useState([]);
+
+  // Delete confirmation state
+  const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, rule: null });
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Undo delete state
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const undoTimeoutRef = useRef(null);
 
   // Normalize rules data from Django API (may be array, or {results: [...]} or {rules: [...]})
   const data = useMemo(() => {
@@ -218,6 +235,13 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
   const [importing, setImporting] = useState(false);
   const [exportDropdown, setExportDropdown] = useState(null); // rule id for dropdown
   const fileInputRef = useRef(null);
+
+  // Toast helper
+  const showToast = useCallback((message, type = 'info') => {
+    if (onToast) {
+      onToast(message, type);
+    }
+  }, [onToast]);
 
   // WebSocket for real-time alert notifications
   const { subscribe: alertsSubscribe } = useNativeWebSocket({
@@ -247,19 +271,80 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
     return () => window.removeEventListener('createAlertFromAircraft', handleCreateAlert);
   }, []);
 
-  const handleDelete = async (id) => {
-    if (!confirm('Delete this rule?')) return;
-    await fetch(`${apiBase}/api/v1/alerts/rules/${id}`, { method: 'DELETE' });
-    refetch();
+  // Cleanup undo timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (undoTimeoutRef.current) {
+        clearTimeout(undoTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Handle delete with undo support
+  const handleDelete = async (rule) => {
+    setDeleteConfirm({ isOpen: false, rule: null });
+
+    // Set up pending delete with undo capability
+    setPendingDelete({
+      rule,
+      timestamp: Date.now(),
+    });
+
+    // Clear any existing timeout
+    if (undoTimeoutRef.current) {
+      clearTimeout(undoTimeoutRef.current);
+    }
+
+    // Show undo toast
+    showToast(`Rule "${rule.name}" deleted. Click Undo to restore.`, 'warning');
+
+    // Set timeout to actually delete
+    undoTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/v1/alerts/rules/${rule.id}`, { method: 'DELETE' });
+        if (!res.ok) {
+          throw new Error('Failed to delete rule');
+        }
+        showToast(`Rule "${rule.name}" permanently deleted`, 'success');
+        refetch();
+      } catch (err) {
+        console.error('Failed to delete rule:', err);
+        showToast('Failed to delete rule', 'error');
+      } finally {
+        setPendingDelete(null);
+      }
+    }, UNDO_GRACE_PERIOD);
   };
 
+  // Handle undo delete
+  const handleUndoDelete = useCallback(() => {
+    if (undoTimeoutRef.current) {
+      clearTimeout(undoTimeoutRef.current);
+      undoTimeoutRef.current = null;
+    }
+    const ruleName = pendingDelete?.rule?.name || 'Rule';
+    setPendingDelete(null);
+    showToast(`"${ruleName}" restored`, 'success');
+  }, [pendingDelete, showToast]);
+
   const handleToggle = async (rule) => {
-    await fetch(`${apiBase}/api/v1/alerts/rules/${rule.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: !rule.enabled })
-    });
-    refetch();
+    try {
+      const res = await fetch(`${apiBase}/api/v1/alerts/rules/${rule.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !rule.enabled })
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to toggle rule');
+      }
+
+      showToast(`Rule "${rule.name}" ${rule.enabled ? 'disabled' : 'enabled'}`, 'success');
+      refetch();
+    } catch (err) {
+      console.error('Failed to toggle rule:', err);
+      showToast('Failed to update rule', 'error');
+    }
   };
 
   const handleDuplicate = (rule) => {
@@ -279,6 +364,7 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
     if (!data?.rules?.length) return;
     const exportData = exportAllRules(data.rules);
     downloadAsJson(exportData, generateFilename());
+    showToast('All rules exported', 'success');
   };
 
   // Export all rules as CSV
@@ -286,6 +372,7 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
     if (!data?.rules?.length) return;
     const date = new Date().toISOString().split('T')[0];
     downloadAsCsv(data.rules, `alert-rules-${date}.csv`);
+    showToast('Rules exported as CSV', 'success');
   };
 
   // Export single rule
@@ -293,6 +380,7 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
     const exportData = exportSingleRule(rule);
     downloadAsJson(exportData, generateFilename(rule.name));
     setExportDropdown(null);
+    showToast(`Rule "${rule.name}" exported`, 'success');
   };
 
   // Handle file selection for import
@@ -320,31 +408,42 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
     const { duplicates, unique } = findDuplicates(importData.rules, existingRules);
 
     let rulesToImport = unique;
+    let importCount = 0;
 
-    if (importOption === 'replace' && duplicates.length > 0) {
-      // Delete existing duplicates first
-      for (const dup of duplicates) {
-        const existing = existingRules.find(r => r.name.toLowerCase() === dup.name.toLowerCase());
-        if (existing) {
-          await fetch(`${apiBase}/api/v1/alerts/rules/${existing.id}`, { method: 'DELETE' });
+    try {
+      if (importOption === 'replace' && duplicates.length > 0) {
+        // Delete existing duplicates first
+        for (const dup of duplicates) {
+          const existing = existingRules.find(r => r.name.toLowerCase() === dup.name.toLowerCase());
+          if (existing) {
+            await fetch(`${apiBase}/api/v1/alerts/rules/${existing.id}`, { method: 'DELETE' });
+          }
+        }
+        rulesToImport = [...unique, ...duplicates];
+      }
+
+      // Create new rules
+      for (const rule of rulesToImport) {
+        const res = await fetch(`${apiBase}/api/v1/alerts/rules`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(convertToApiFormat(rule))
+        });
+        if (res.ok) {
+          importCount++;
         }
       }
-      rulesToImport = [...unique, ...duplicates];
-    }
 
-    // Create new rules
-    for (const rule of rulesToImport) {
-      await fetch(`${apiBase}/api/v1/alerts/rules`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(convertToApiFormat(rule))
-      });
+      showToast(`${importCount} rule${importCount !== 1 ? 's' : ''} imported`, 'success');
+      refetch();
+    } catch (err) {
+      console.error('Import failed:', err);
+      showToast('Import failed', 'error');
+    } finally {
+      setImporting(false);
+      setShowImportModal(false);
+      setImportData(null);
     }
-
-    setImporting(false);
-    setShowImportModal(false);
-    setImportData(null);
-    refetch();
   };
 
   // Close dropdown when clicking outside
@@ -355,11 +454,16 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
     return () => document.removeEventListener('click', handleClick);
   }, [exportDropdown]);
 
-  // Filter and sort rules
+  // Filter and sort rules (excluding pending delete)
   const filteredRules = useMemo(() => {
     if (!data?.rules) return [];
 
     let rules = [...data.rules];
+
+    // Exclude rule pending deletion
+    if (pendingDelete?.rule) {
+      rules = rules.filter(r => r.id !== pendingDelete.rule.id);
+    }
 
     // Search filter
     if (searchQuery.trim()) {
@@ -389,8 +493,8 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
         case 'name-desc':
           return (b.name || '').localeCompare(a.name || '');
         case 'priority':
-          const priorityOrder = { critical: 0, emergency: 0, warning: 1, info: 2 };
-          return (priorityOrder[a.priority] || 2) - (priorityOrder[b.priority] || 2);
+          const priorityOrder = { critical: 0, emergency: 1, warning: 2, info: 3 };
+          return (priorityOrder[a.priority] ?? 3) - (priorityOrder[b.priority] ?? 3);
         case 'created':
           return new Date(b.created_at || 0) - new Date(a.created_at || 0);
         default:
@@ -399,7 +503,7 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
     });
 
     return rules;
-  }, [data?.rules, searchQuery, priorityFilter, statusFilter, sortBy]);
+  }, [data?.rules, searchQuery, priorityFilter, statusFilter, sortBy, pendingDelete]);
 
   return (
     <div className="alerts-container" role="region" aria-label="Alert Management">
@@ -424,6 +528,9 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
             id="history-tab"
           >
             History
+            {realtimeAlerts.length > 0 && (
+              <span className="alert-tab-badge">{realtimeAlerts.length}</span>
+            )}
           </button>
           <button
             className={`alert-tab ${activeTab === 'notifications' ? 'active' : ''}`}
@@ -472,8 +579,25 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
         )}
       </div>
 
+      {/* Undo Delete Banner */}
+      {pendingDelete && (
+        <div className="undo-delete-banner" role="alert" aria-live="assertive">
+          <span>Rule "{pendingDelete.rule.name}" will be deleted</span>
+          <button
+            className="btn-secondary btn-sm"
+            onClick={handleUndoDelete}
+          >
+            <Undo2 size={14} /> Undo
+          </button>
+          <div
+            className="undo-progress"
+            style={{ animationDuration: `${UNDO_GRACE_PERIOD}ms` }}
+          />
+        </div>
+      )}
+
       {activeTab === 'rules' ? (
-        <>
+        <div role="tabpanel" id="rules-panel" aria-labelledby="rules-tab">
           {/* Search & Filter Toolbar */}
           <div className="rules-toolbar">
             <div className="rules-search">
@@ -499,6 +623,7 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
                   <option value="info">Info</option>
                   <option value="warning">Warning</option>
                   <option value="critical">Critical</option>
+                  <option value="emergency">Emergency</option>
                 </select>
                 <ChevronDown size={14} className="select-arrow" aria-hidden="true" />
               </div>
@@ -717,7 +842,7 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
                       </div>
                       <button
                         className="action-btn delete"
-                        onClick={() => handleDelete(rule.id)}
+                        onClick={() => setDeleteConfirm({ isOpen: true, rule })}
                         title="Delete rule"
                         aria-label={`Delete ${rule.name}`}
                       >
@@ -730,10 +855,15 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
               })
             )}
           </div>
-        </>
+        </div>
       ) : activeTab === 'history' ? (
         <div role="tabpanel" id="history-panel" aria-labelledby="history-tab">
-          <AlertHistory apiBase={apiBase} wsRequest={wsRequest} wsConnected={wsConnected} />
+          <AlertHistory
+            apiBase={apiBase}
+            wsRequest={wsRequest}
+            wsConnected={wsConnected}
+            onToast={showToast}
+          />
         </div>
       ) : (
         <div role="tabpanel" id="notifications-panel" aria-labelledby="notifications-tab">
@@ -746,8 +876,11 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
           editRule={editRule}
           prefillAircraft={prefillAircraft}
           apiBase={apiBase}
+          aircraft={aircraft}
+          feederLocation={feederLocation}
           onClose={() => { setShowForm(false); setPrefillAircraft(null); }}
           onSave={() => { setShowForm(false); setPrefillAircraft(null); refetch(); }}
+          onToast={showToast}
         />
       )}
 
@@ -760,6 +893,18 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
           onClose={() => setTestRule(null)}
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteConfirm.isOpen}
+        onConfirm={() => handleDelete(deleteConfirm.rule)}
+        onCancel={() => setDeleteConfirm({ isOpen: false, rule: null })}
+        title="Delete Rule"
+        message={`Are you sure you want to delete "${deleteConfirm.rule?.name}"? You'll have ${UNDO_GRACE_PERIOD / 1000} seconds to undo this action.`}
+        confirmText="Delete"
+        variant="danger"
+        loading={deleteLoading}
+      />
 
       {/* Import Modal */}
       {showImportModal && (

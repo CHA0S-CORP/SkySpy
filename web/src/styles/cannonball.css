@@ -93,14 +93,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  min-height: 56px;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.6);
   cursor: pointer;
   transition: all 0.2s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .status-btn:hover {
@@ -180,6 +184,72 @@
   font-weight: 500;
   opacity: 0.7;
   font-family: 'SF Mono', 'Menlo', monospace;
+}
+
+.threat-agency {
+  font-size: 14px;
+  color: #f59e0b;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.known-le-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  background: #ef4444;
+  color: white;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  animation: pulse-badge 2s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.pattern-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.pattern-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pattern-badge.circling {
+  background: rgba(139, 92, 246, 0.3);
+  color: #a78bfa;
+  border: 1px solid rgba(139, 92, 246, 0.5);
+}
+
+.pattern-badge.loitering {
+  background: rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+}
+
+.pattern-badge.grid-search {
+  background: rgba(236, 72, 153, 0.3);
+  color: #f472b6;
+  border: 1px solid rgba(236, 72, 153, 0.5);
+}
+
+.pattern-badge.speed-trap {
+  background: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.5);
 }
 
 .threat-main {
@@ -394,15 +464,18 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px;
+  padding: 14px 20px;
+  min-height: 64px;
   background: rgba(255, 255, 255, 0.05);
   border: 2px solid currentColor;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: 12px;
+  font-size: 16px;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
   transition: all 0.2s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .threat-item:hover {
@@ -485,13 +558,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .history-actions .clear-btn:hover {
@@ -785,13 +862,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .settings-header .close-btn:hover {
@@ -816,16 +897,21 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 12px 8px;
+  padding: 14px 12px;
+  min-height: 64px;
+  min-width: 64px;
   background: rgba(255, 255, 255, 0.05);
   border: 2px solid transparent;
   border-radius: 12px;
   color: rgba(255, 255, 255, 0.5);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .settings-toggle:hover {
@@ -927,16 +1013,20 @@
 .button-group button {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  min-height: 44px;
   background: rgba(255, 255, 255, 0.1);
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   color: rgba(255, 255, 255, 0.6);
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
   text-transform: capitalize;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .button-group button:hover {
@@ -969,6 +1059,22 @@
   height: 18px;
   accent-color: #22c55e;
   cursor: pointer;
+}
+
+.settings-toggle-row input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Settings Info Text */
+.settings-info {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  margin: 8px 0;
+  line-height: 1.4;
 }
 
 /* Settings Footer */
@@ -1257,4 +1363,921 @@
 
 .cannonball-btn svg {
   color: #ef4444;
+}
+
+/* ============================================================================
+   GPS Permission Modal
+   ============================================================================ */
+
+.gps-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-cannonball-modal, 8300);
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: modal-overlay-enter 0.2s ease-out;
+}
+
+@keyframes modal-overlay-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.gps-modal {
+  width: 100%;
+  max-width: 400px;
+  background: #1a1a1a;
+  border-radius: 20px;
+  overflow: hidden;
+  animation: modal-enter 0.3s ease-out;
+}
+
+@keyframes modal-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.gps-modal-content {
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.gps-modal-icon {
+  width: 100px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  margin-bottom: 24px;
+}
+
+.gps-modal-icon-request {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.gps-modal-icon-denied {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.gps-modal-icon-requesting {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+}
+
+.gps-modal-icon-unavailable {
+  background: rgba(107, 114, 128, 0.15);
+  color: #6b7280;
+}
+
+.gps-modal-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(59, 130, 246, 0.2);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: modal-spin 1s linear infinite;
+}
+
+@keyframes modal-spin {
+  to { transform: rotate(360deg); }
+}
+
+.gps-modal-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+  color: #fff;
+}
+
+.gps-modal-description {
+  font-size: 16px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0 0 24px 0;
+}
+
+.gps-modal-features {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.gps-feature {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.gps-feature svg {
+  color: #22c55e;
+  flex-shrink: 0;
+}
+
+.gps-modal-privacy {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.gps-modal-instructions {
+  width: 100%;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.gps-modal-instructions h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.gps-modal-instructions ol {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.8;
+}
+
+.gps-instructions-note {
+  margin: 12px 0 0 0;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+}
+
+.gps-modal-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 8px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.gps-modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.gps-modal-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 16px 24px;
+  border: none;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.gps-modal-btn-primary {
+  background: #22c55e;
+  color: #000;
+}
+
+.gps-modal-btn-primary:hover {
+  background: #16a34a;
+}
+
+.gps-modal-btn-primary:active {
+  transform: scale(0.98);
+}
+
+.gps-modal-btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.gps-modal-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* ============================================================================
+   GPS-less Mode Indicator
+   ============================================================================ */
+
+.gps-disabled-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(245, 158, 11, 0.15);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.gps-disabled-banner button {
+  padding: 6px 12px;
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 6px;
+  color: #f59e0b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: 8px;
+  transition: all 0.2s;
+}
+
+.gps-disabled-banner button:hover {
+  background: rgba(245, 158, 11, 0.3);
+}
+
+/* ============================================================================
+   Heads-Up Display Mode
+   ============================================================================ */
+
+.heads-up-display {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+  padding: 20px;
+  transition: background-color 0.3s ease;
+}
+
+.heads-up-display.threat-level-critical {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.heads-up-display.threat-level-warning {
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.heads-up-display.threat-level-info {
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.heads-up-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  transition: transform 0.3s ease-out, color 0.3s ease;
+}
+
+.heads-up-arrow svg {
+  width: 150px;
+  height: 150px;
+  filter: drop-shadow(0 0 20px currentColor);
+}
+
+.heads-up-arrow.threat-critical {
+  color: #ef4444;
+  animation: heads-up-pulse-critical 0.8s ease-in-out infinite;
+}
+
+.heads-up-arrow.threat-warning {
+  color: #f59e0b;
+  animation: heads-up-pulse-warning 1.2s ease-in-out infinite;
+}
+
+.heads-up-arrow.threat-info {
+  color: #22c55e;
+}
+
+@keyframes heads-up-pulse-critical {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 20px currentColor); }
+  50% { transform: scale(1.08); filter: drop-shadow(0 0 40px currentColor); }
+}
+
+@keyframes heads-up-pulse-warning {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
+.heads-up-distance {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  font-size: 32px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.heads-up-count {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 20px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.heads-up-all-clear {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.heads-up-all-clear-icon {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  border: 8px solid #22c55e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: all-clear-glow 2s ease-in-out infinite;
+}
+
+@keyframes all-clear-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.3); }
+  50% { box-shadow: 0 0 40px rgba(34, 197, 94, 0.5); }
+}
+
+.heads-up-all-clear-text {
+  font-size: 28px;
+  font-weight: 800;
+  color: #22c55e;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+}
+
+/* ============================================================================
+   Visual Threat Indicators (Screen Edge Glow)
+   ============================================================================ */
+
+.cannonball-mode.threat-glow-critical::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  box-shadow: inset 0 0 100px 20px rgba(239, 68, 68, 0.4);
+  animation: threat-glow-pulse 1s ease-in-out infinite;
+}
+
+.cannonball-mode.threat-glow-warning::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  box-shadow: inset 0 0 60px 10px rgba(245, 158, 11, 0.3);
+}
+
+@keyframes threat-glow-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Peripheral edge indicators */
+.edge-indicators {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.edge-indicator {
+  position: absolute;
+  background: linear-gradient(to var(--direction), transparent, var(--color));
+  opacity: var(--intensity, 0.5);
+  animation: edge-pulse 1.5s ease-in-out infinite;
+}
+
+.edge-indicator.top {
+  --direction: bottom;
+  top: 0;
+  left: 10%;
+  right: 10%;
+  height: 60px;
+}
+
+.edge-indicator.bottom {
+  --direction: top;
+  bottom: 0;
+  left: 10%;
+  right: 10%;
+  height: 60px;
+}
+
+.edge-indicator.left {
+  --direction: right;
+  left: 0;
+  top: 10%;
+  bottom: 10%;
+  width: 60px;
+}
+
+.edge-indicator.right {
+  --direction: left;
+  right: 0;
+  top: 10%;
+  bottom: 10%;
+  width: 60px;
+}
+
+@keyframes edge-pulse {
+  0%, 100% { opacity: var(--intensity, 0.5); }
+  50% { opacity: calc(var(--intensity, 0.5) * 0.6); }
+}
+
+/* ============================================================================
+   Urgency Score Badge
+   ============================================================================ */
+
+.urgency-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.urgency-badge.urgency-high {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.urgency-badge.urgency-medium {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.urgency-badge.urgency-low {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+/* ============================================================================
+   New Themes
+   ============================================================================ */
+
+/* AMOLED Black Theme - True #000000 for battery savings */
+.cannonball-mode.theme-amoled {
+  background: #000000;
+}
+
+.cannonball-mode.theme-amoled .cannonball-status-bar {
+  background: #000000;
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.cannonball-mode.theme-amoled .threat-list {
+  background: #000000;
+}
+
+.cannonball-mode.theme-amoled .status-btn {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.cannonball-mode.theme-amoled .threat-item {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cannonball-mode.theme-amoled .clear-circle {
+  border-color: #22c55e;
+}
+
+.cannonball-mode.theme-amoled .clear-text {
+  color: #22c55e;
+}
+
+/* Daylight Theme - Maximum contrast for outdoor visibility */
+.cannonball-mode.theme-daylight {
+  background: #ffffff;
+  color: #000000;
+}
+
+.cannonball-mode.theme-daylight .cannonball-status-bar {
+  background: #f0f0f0;
+  border-bottom: 2px solid #000;
+}
+
+.cannonball-mode.theme-daylight .status-indicator {
+  font-weight: 700;
+}
+
+.cannonball-mode.theme-daylight .status-indicator.active {
+  background: #000;
+  color: #00ff00;
+}
+
+.cannonball-mode.theme-daylight .status-indicator.inactive {
+  background: #ff0000;
+  color: #fff;
+}
+
+.cannonball-mode.theme-daylight .status-btn {
+  background: #e0e0e0;
+  color: #000;
+}
+
+.cannonball-mode.theme-daylight .status-btn.active {
+  background: #000;
+  color: #00ff00;
+}
+
+.cannonball-mode.theme-daylight .threat-badge {
+  background: #ff0000;
+  color: #fff;
+}
+
+.cannonball-mode.theme-daylight .threat-display {
+  color: #000;
+}
+
+.cannonball-mode.theme-daylight .threat-critical,
+.cannonball-mode.theme-daylight .threat-display.threat-critical {
+  color: #cc0000;
+}
+
+.cannonball-mode.theme-daylight .threat-warning,
+.cannonball-mode.theme-daylight .threat-display.threat-warning {
+  color: #cc6600;
+}
+
+.cannonball-mode.theme-daylight .threat-info,
+.cannonball-mode.theme-daylight .threat-display.threat-info {
+  color: #006600;
+}
+
+.cannonball-mode.theme-daylight .distance-value {
+  font-weight: 900;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1);
+}
+
+.cannonball-mode.theme-daylight .direction-arrow {
+  border-width: 4px;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.cannonball-mode.theme-daylight .clear-circle {
+  border-color: #006600;
+  border-width: 10px;
+}
+
+.cannonball-mode.theme-daylight .clear-text {
+  color: #006600;
+  font-weight: 900;
+}
+
+.cannonball-mode.theme-daylight .clear-subtext {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.cannonball-mode.theme-daylight .threat-list {
+  background: #f0f0f0;
+  border-top: 2px solid #000;
+}
+
+.cannonball-mode.theme-daylight .threat-item {
+  background: #fff;
+  border-width: 3px;
+}
+
+.cannonball-mode.theme-daylight .trend-indicator.approaching {
+  background: rgba(204, 0, 0, 0.2);
+  color: #cc0000;
+}
+
+.cannonball-mode.theme-daylight .trend-indicator.departing {
+  background: rgba(0, 102, 0, 0.2);
+  color: #006600;
+}
+
+/* ============================================================================
+   Gesture Hint Overlay
+   ============================================================================ */
+
+.gesture-hint {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 16px 32px;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 16px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  z-index: 100;
+  animation: gesture-hint-fade 1s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes gesture-hint-fade {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+}
+
+/* ============================================================================
+   Predictive Alerts UI
+   ============================================================================ */
+
+.prediction-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ef4444;
+  animation: prediction-pulse 2s ease-in-out infinite;
+}
+
+.prediction-badge.closing-fast {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.prediction-badge.circling {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+}
+
+.prediction-badge.loitering {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #3b82f6;
+}
+
+@keyframes prediction-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.intercept-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(239, 68, 68, 0.25);
+  border: 2px solid #ef4444;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #ef4444;
+  animation: intercept-flash 0.5s ease-in-out infinite;
+}
+
+@keyframes intercept-flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* ============================================================================
+   Landscape Mode Improvements
+   ============================================================================ */
+
+@media (orientation: landscape) {
+  .cannonball-status-bar {
+    padding: 8px 20px;
+  }
+
+  .status-btn {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+  }
+
+  .heads-up-arrow {
+    width: 150px;
+    height: 150px;
+  }
+
+  .heads-up-arrow svg {
+    width: 100px;
+    height: 100px;
+  }
+}
+
+/* ============================================================================
+   Voice Control Indicator
+   ============================================================================ */
+
+.voice-listening-indicator {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  background: rgba(59, 130, 246, 0.9);
+  border-radius: 24px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  z-index: 100;
+  animation: voice-pulse 1.5s ease-in-out infinite;
+}
+
+.voice-listening-indicator .voice-waves {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.voice-listening-indicator .voice-wave {
+  width: 4px;
+  height: 16px;
+  background: #fff;
+  border-radius: 2px;
+  animation: voice-wave 0.5s ease-in-out infinite;
+}
+
+.voice-listening-indicator .voice-wave:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.voice-listening-indicator .voice-wave:nth-child(3) {
+  animation-delay: 0.2s;
+}
+
+@keyframes voice-wave {
+  0%, 100% { transform: scaleY(0.5); }
+  50% { transform: scaleY(1); }
+}
+
+@keyframes voice-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+  50% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+}
+
+/* ============================================================================
+   Canvas Radar
+   ============================================================================ */
+
+.canvas-radar {
+  position: relative;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.canvas-radar.expanded {
+  border-radius: 12px;
+}
+
+.canvas-radar canvas {
+  display: block;
+  cursor: pointer;
+}
+
+/* ============================================================================
+   Speed-Based UI Adaptation
+   ============================================================================ */
+
+/* Simplified mode when user is at high speed */
+.cannonball-mode.speed-simplified .threat-details,
+.cannonball-mode.speed-simplified .threat-callsign,
+.cannonball-mode.speed-simplified .mini-radar-overlay,
+.cannonball-mode.speed-simplified .threat-predictions {
+  display: none;
+}
+
+.cannonball-mode.speed-simplified .distance-value {
+  font-size: 120px;
+}
+
+.cannonball-mode.speed-simplified .direction-arrow {
+  width: 120px;
+  height: 120px;
+}
+
+.cannonball-mode.speed-simplified .threat-category {
+  font-size: 28px;
+}
+
+/* ============================================================================
+   Behavior Filter Badges
+   ============================================================================ */
+
+.behavior-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.behavior-badge.circling {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.behavior-badge.loitering {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+}
+
+.behavior-badge.approaching-fast {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  animation: badge-pulse 1s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* ============================================================================
+   Adaptive Power Mode Indicator
+   ============================================================================ */
+
+.power-mode-indicator {
+  position: absolute;
+  top: 60px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 12px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.power-mode-indicator.low-power {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+/* ============================================================================
+   Print Styles (disabled)
+   ============================================================================ */
+
+@media print {
+  .cannonball-mode {
+    display: none;
+  }
 }

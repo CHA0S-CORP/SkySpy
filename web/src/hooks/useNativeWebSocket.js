@@ -396,8 +396,10 @@ export function useNativeWebSocket({
     }
 
     return () => {
-      mountedRef.current = false;
+      // Clear reconnect timeout FIRST to prevent race condition where
+      // reconnect fires after mountedRef is set to false but before cleanup completes
       clearTimers();
+      mountedRef.current = false;
       if (wsRef.current) {
         wsRef.current.close(1000, 'Component unmounting');
         wsRef.current = null;

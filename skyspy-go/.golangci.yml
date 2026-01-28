@@ -1,0 +1,293 @@
+# golangci-lint configuration for SkySpy CLI
+# https://golangci-lint.run/usage/configuration/
+
+run:
+  # Timeout for analysis
+  timeout: 5m
+
+  # Include test files
+  tests: true
+
+  # Which dirs to skip
+  skip-dirs:
+    - vendor
+    - third_party
+    - testdata
+    - examples
+    - bin
+
+  # Which files to skip
+  skip-files:
+    - ".*\\.pb\\.go$"
+    - ".*_generated\\.go$"
+
+  # Number of CPUs to use
+  concurrency: 4
+
+# Output configuration
+output:
+  # Format: colored-line-number|line-number|json|tab|checkstyle|code-climate|junit-xml|github-actions
+  formats:
+    - format: colored-line-number
+      path: stdout
+
+  # Print lines of code with issue
+  print-issued-lines: true
+
+  # Print linter name in the end of issue text
+  print-linter-name: true
+
+  # Make issues output unique by line
+  uniq-by-line: true
+
+  # Sort results by: filepath, line and column
+  sort-results: true
+
+# Linters configuration
+linters:
+  # Disable all linters, then enable specific ones
+  disable-all: true
+
+  enable:
+    # Default linters
+    - errcheck       # Check for unchecked errors
+    - gosimple       # Simplify code
+    - govet          # Report suspicious constructs
+    - ineffassign    # Detect ineffectual assignments
+    - staticcheck    # Static analysis checks
+    - unused         # Check for unused code
+
+    # Additional useful linters
+    - bodyclose      # Check HTTP response body is closed
+    - dogsled        # Check for too many blank identifiers in assignments
+    - dupl           # Check for duplicated code
+    - exportloopref  # Check for pointers to loop variables
+    - gochecknoinits # Check that no init functions are present
+    - goconst        # Find repeated strings that could be constants
+    - gocritic       # Comprehensive Go linter
+    - gocyclo        # Check cyclomatic complexity
+    - gofmt          # Check if code is formatted
+    - goimports      # Check import statements are formatted
+    - goprintffuncname # Check that printf-like functions are named with f at the end
+    - gosec          # Security-oriented linter
+    - misspell       # Find commonly misspelled English words
+    - nakedret       # Find naked returns in functions
+    - nilerr         # Find code that returns nil even if it checks that the error is not nil
+    - nolintlint     # Reports ill-formed or insufficient nolint directives
+    - prealloc       # Find slice declarations that could be preallocated
+    - revive         # Fast, configurable, extensible linter for Go
+    - stylecheck     # Stylecheck is a replacement for golint
+    - unconvert      # Remove unnecessary type conversions
+    - unparam        # Report unused function parameters
+    - whitespace     # Check for unnecessary whitespace
+
+linters-settings:
+  errcheck:
+    # Report about not checking of errors in type assertions
+    check-type-assertions: true
+    # Report about assignment of errors to blank identifier
+    check-blank: false
+    # List of functions to exclude from checking
+    exclude-functions:
+      - io.Copy
+      - io.WriterTo.WriteTo
+      - (io.Closer).Close
+      - (net/http.ResponseWriter).Write
+
+  govet:
+    # Report about shadowed variables
+    check-shadowing: true
+    # Enable all analyzers
+    enable-all: true
+    disable:
+      - fieldalignment # Too strict for this project
+
+  gocyclo:
+    # Minimal code complexity to report
+    min-complexity: 20
+
+  dupl:
+    # Tokens count to trigger issue
+    threshold: 150
+
+  goconst:
+    # Minimal length of string constant
+    min-len: 3
+    # Minimum occurrences of constant string count to trigger issue
+    min-occurrences: 3
+
+  misspell:
+    # Correct spellings using locale preferences for US or UK
+    locale: US
+
+  gocritic:
+    # Which checks should be enabled
+    enabled-tags:
+      - diagnostic
+      - performance
+      - style
+    disabled-checks:
+      - hugeParam
+      - rangeValCopy
+      - unnamedResult
+
+  revive:
+    # Maximum number of open files at the same time
+    max-open-files: 2048
+    # When set to false, ignores files with "GENERATED" header
+    ignore-generated-header: true
+    # Sets the default severity
+    severity: warning
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unreachable-code
+
+  gosec:
+    # Select a subset of rules to run
+    includes:
+      - G101 # Look for hardcoded credentials
+      - G102 # Bind to all interfaces
+      - G103 # Audit the use of unsafe block
+      - G104 # Audit errors not checked
+      - G106 # Audit the use of ssh.InsecureIgnoreHostKey
+      - G107 # URL provided to HTTP request as taint input
+      - G108 # Profiling endpoint automatically exposed
+      - G109 # Potential Integer overflow
+      - G110 # Potential DoS vulnerability via decompression bomb
+      - G201 # SQL query construction using format string
+      - G202 # SQL query construction using string concatenation
+      - G203 # Use of unescaped data in HTML templates
+      - G204 # Audit use of command execution
+      - G301 # Poor file permissions used when creating a directory
+      - G302 # Poor file permissions used with chmod
+      - G303 # Creating tempfile using a predictable path
+      - G304 # File path provided as taint input
+      - G305 # File traversal when extracting zip archive
+      - G306 # Poor file permissions used when writing to a new file
+      - G307 # Deferring a method which returns an error
+      - G401 # Detect the usage of DES, RC4, MD5 or SHA1
+      - G402 # Look for bad TLS connection settings
+      - G403 # Ensure minimum RSA key length of 2048 bits
+      - G404 # Insecure random number source
+      - G501 # Import blocklist: crypto/md5
+      - G502 # Import blocklist: crypto/des
+      - G503 # Import blocklist: crypto/rc4
+      - G504 # Import blocklist: net/http/cgi
+      - G505 # Import blocklist: crypto/sha1
+
+  nakedret:
+    # Make an issue if func has more lines of code than this setting
+    max-func-lines: 30
+
+  prealloc:
+    # Report preallocation suggestions only on simple loops
+    simple: true
+    range-loops: true
+    for-loops: false
+
+  nolintlint:
+    # Enable to ensure that nolint directives are all used
+    allow-unused: false
+    # Enable to require an explanation of nonzero length after each nolint directive
+    require-explanation: true
+    # Enable to require nolint directives to mention the specific linter being suppressed
+    require-specific: true
+
+  stylecheck:
+    # Select the Go version to target
+    go: "1.21"
+    # Checks to enable
+    checks:
+      - "all"
+      - "-ST1000" # Package comments
+      - "-ST1003" # Naming conventions (handled by revive)
+
+  unparam:
+    # Inspect exported functions
+    check-exported: false
+
+# Issues configuration
+issues:
+  # List of regexps of issue texts to exclude
+  exclude:
+    # False positives for table-driven tests
+    - "G404: Use of weak random number generator"
+
+  # Excluding configuration per-path, per-linter, per-text and per-source
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - dupl
+        - gosec
+        - goconst
+        - gocyclo
+        - errcheck
+        - gocritic
+
+    # Exclude linters from generated files
+    - path: ".*\\.gen\\.go"
+      linters:
+        - all
+
+    # Allow dot imports in test files
+    - path: _test\.go
+      text: "dot-imports"
+
+    # Allow longer functions in main package
+    - path: cmd/
+      linters:
+        - gocyclo
+
+  # Maximum issues count per one linter
+  max-issues-per-linter: 50
+
+  # Maximum count of issues with the same text
+  max-same-issues: 3
+
+  # Show only new issues
+  new: false
+
+  # Fix found issues (if supported by linter)
+  fix: false
+
+# Severity configuration
+severity:
+  # Default value is empty string
+  default-severity: warning
+
+  # If set to true, severity-rules regular expressions become case sensitive
+  case-sensitive: false
+
+  rules:
+    - linters:
+        - govet
+        - errcheck
+        - staticcheck
+      severity: error
+
+    - linters:
+        - gosimple
+        - ineffassign
+        - unused
+      severity: warning

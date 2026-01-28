@@ -1,19 +1,202 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { X, Plus, ChevronDown, ChevronUp, Plane, Eye } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import {
+  X, Plus, ChevronDown, ChevronUp, Plane, Eye, Save, Trash2, Info,
+  AlertTriangle, AlertCircle, Bell, Check, Zap, FileText
+} from 'lucide-react';
 import { findMatchingAircraft, getRelevantValues } from '../../utils/alertEvaluator';
+import { useNotificationChannels } from '../../hooks/useNotificationChannels';
 
-export function RuleForm({ rule, editRule, prefillAircraft, apiBase, aircraft = [], feederLocation = null, onClose, onSave }) {
-  // Support both 'rule' and 'editRule' props for backwards compatibility
+// Severity configuration
+const SEVERITY_CONFIG = {
+  info: { label: 'Info', Icon: Info, color: '#3b82f6' },
+  warning: { label: 'Warning', Icon: AlertTriangle, color: '#f59e0b' },
+  critical: { label: 'Critical', Icon: AlertCircle, color: '#ef4444' },
+  emergency: { label: 'Emergency', Icon: AlertCircle, color: '#dc2626' },
+};
+
+// All available condition types (unified from both forms)
+const CONDITION_TYPES = [
+  { value: 'icao', label: 'ICAO Hex', placeholder: 'e.g., A12345' },
+  { value: 'callsign', label: 'Callsign', placeholder: 'e.g., UAL123' },
+  { value: 'squawk', label: 'Squawk Code', placeholder: 'e.g., 7700', validation: /^\d{4}$/ },
+  { value: 'altitude_above', label: 'Altitude Above (ft)', placeholder: 'e.g., 10000', type: 'number' },
+  { value: 'altitude_below', label: 'Altitude Below (ft)', placeholder: 'e.g., 5000', type: 'number' },
+  { value: 'speed_above', label: 'Speed Above (kts)', placeholder: 'e.g., 300', type: 'number' },
+  { value: 'speed_below', label: 'Speed Below (kts)', placeholder: 'e.g., 100', type: 'number' },
+  { value: 'vertical_rate', label: 'Vertical Rate (ft/min)', placeholder: 'e.g., -2000', type: 'number' },
+  { value: 'distance_within', label: 'Distance Within (nm)', placeholder: 'e.g., 10', type: 'number' },
+  { value: 'distance_from_mobile', label: 'Distance From Mobile (nm)', placeholder: 'e.g., 5', type: 'number' },
+  { value: 'military', label: 'Military Aircraft', isBoolean: true },
+  { value: 'emergency', label: 'Emergency', isBoolean: true },
+  { value: 'law_enforcement', label: 'Law Enforcement', isBoolean: true },
+  { value: 'helicopter', label: 'Helicopter', isBoolean: true },
+  { value: 'type', label: 'Aircraft Type', placeholder: 'e.g., B738' },
+  { value: 'registration', label: 'Registration', placeholder: 'e.g., N12345' },
+  { value: 'category', label: 'Category', placeholder: 'e.g., A3' },
+];
+
+// Operators for different condition types
+const STRING_OPERATORS = [
+  { value: 'eq', label: 'equals' },
+  { value: 'neq', label: 'not equals' },
+  { value: 'contains', label: 'contains' },
+  { value: 'startswith', label: 'starts with' },
+  { value: 'endswith', label: 'ends with' },
+];
+
+const NUMERIC_OPERATORS = [
+  { value: 'eq', label: '=' },
+  { value: 'lt', label: '<' },
+  { value: 'gt', label: '>' },
+  { value: 'lte', label: '<=' },
+  { value: 'gte', label: '>=' },
+];
+
+// Rule templates for quick setup
+const RULE_TEMPLATES = [
+  {
+    id: 'military',
+    name: 'Military Aircraft',
+    icon: '🎖️',
+    description: 'Alert when military aircraft are detected',
+    rule: {
+      name: 'Military Aircraft Alert',
+      priority: 'warning',
+      conditions: { logic: 'AND', groups: [{ logic: 'AND', conditions: [{ type: 'military', operator: 'eq', value: 'true' }] }] },
+      cooldown: 300,
+    },
+  },
+  {
+    id: 'emergency',
+    name: 'Emergency Squawk',
+    icon: '🚨',
+    description: 'Alert on emergency squawk codes (7500, 7600, 7700)',
+    rule: {
+      name: 'Emergency Alert',
+      priority: 'critical',
+      conditions: { logic: 'AND', groups: [{ logic: 'AND', conditions: [{ type: 'emergency', operator: 'eq', value: 'true' }] }] },
+      cooldown: 60,
+    },
+  },
+  {
+    id: 'low_flying',
+    name: 'Low Flying Aircraft',
+    icon: '📉',
+    description: 'Alert when aircraft fly below a certain altitude',
+    rule: {
+      name: 'Low Flying Aircraft',
+      priority: 'info',
+      conditions: { logic: 'AND', groups: [{ logic: 'AND', conditions: [{ type: 'altitude_below', operator: 'lt', value: '2000' }] }] },
+      cooldown: 300,
+    },
+  },
+  {
+    id: 'nearby',
+    name: 'Nearby Aircraft',
+    icon: '📍',
+    description: 'Alert when aircraft come within range',
+    rule: {
+      name: 'Nearby Aircraft Alert',
+      priority: 'info',
+      conditions: { logic: 'AND', groups: [{ logic: 'AND', conditions: [{ type: 'distance_within', operator: 'lte', value: '5' }] }] },
+      cooldown: 300,
+    },
+  },
+  {
+    id: 'helicopter',
+    name: 'Helicopter Activity',
+    icon: '🚁',
+    description: 'Alert when helicopters are detected',
+    rule: {
+      name: 'Helicopter Alert',
+      priority: 'info',
+      conditions: { logic: 'AND', groups: [{ logic: 'AND', conditions: [{ type: 'helicopter', operator: 'eq', value: 'true' }] }] },
+      cooldown: 300,
+    },
+  },
+  {
+    id: 'law_enforcement',
+    name: 'Law Enforcement',
+    icon: '🚔',
+    description: 'Alert when law enforcement aircraft are detected',
+    rule: {
+      name: 'Law Enforcement Alert',
+      priority: 'warning',
+      conditions: { logic: 'AND', groups: [{ logic: 'AND', conditions: [{ type: 'law_enforcement', operator: 'eq', value: 'true' }] }] },
+      cooldown: 300,
+    },
+  },
+];
+
+// Channel type display info
+const CHANNEL_TYPE_INFO = {
+  discord: { label: 'Discord', icon: '💬', color: '#5865F2' },
+  slack: { label: 'Slack', icon: '💼', color: '#4A154B' },
+  telegram: { label: 'Telegram', icon: '✈️', color: '#0088cc' },
+  pushover: { label: 'Pushover', icon: '📱', color: '#249DF1' },
+  email: { label: 'Email', icon: '📧', color: '#EA4335' },
+  webhook: { label: 'Webhook', icon: '🔗', color: '#6366f1' },
+  ntfy: { label: 'ntfy', icon: '🔔', color: '#57A773' },
+  gotify: { label: 'Gotify', icon: '📣', color: '#1e88e5' },
+  home_assistant: { label: 'Home Assistant', icon: '🏠', color: '#41BDF5' },
+  twilio: { label: 'Twilio SMS', icon: '📲', color: '#F22F46' },
+  custom: { label: 'Custom', icon: '⚙️', color: '#6b7280' },
+};
+
+/**
+ * Consolidated RuleForm component with:
+ * - Live preview of matching aircraft
+ * - Notification channel selection
+ * - Rule templates
+ * - Input validation
+ * - Full accessibility support
+ */
+export function RuleForm({
+  editRule = null,
+  rule = null,  // Alias for editRule for backwards compatibility
+  prefillAircraft = null,
+  apiBase = '',
+  aircraft = [],
+  feederLocation = null,
+  onClose,
+  onSave,
+  onToast,
+}) {
+  // Support both 'rule' and 'editRule' props
   const ruleToEdit = editRule || rule;
+
+  // Default structures
   const defaultCondition = { type: 'icao', operator: 'eq', value: '' };
   const defaultGroup = { logic: 'AND', conditions: [{ ...defaultCondition }] };
 
-  const [form, setForm] = useState(() => {
+  // Form state
+  const [form, setForm] = useState(() => initializeForm(ruleToEdit, prefillAircraft, defaultGroup));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [validationErrors, setValidationErrors] = useState({});
+  const [showTemplates, setShowTemplates] = useState(!ruleToEdit && !prefillAircraft);
+
+  // Notification channels
+  const [selectedChannelIds, setSelectedChannelIds] = useState(ruleToEdit?.notification_channel_ids || []);
+  const [useGlobalNotifications, setUseGlobalNotifications] = useState(ruleToEdit?.use_global_notifications !== false);
+  const { channels, loading: channelsLoading } = useNotificationChannels(apiBase);
+
+  // Live preview state
+  const [previewExpanded, setPreviewExpanded] = useState(true);
+  const [debouncedForm, setDebouncedForm] = useState(form);
+  const debounceTimeoutRef = useRef(null);
+
+  // Focus management
+  const modalRef = useRef(null);
+  const firstInputRef = useRef(null);
+  const previousActiveElement = useRef(null);
+  const errorRef = useRef(null);
+
+  // Initialize form based on edit rule or prefill
+  function initializeForm(ruleToEdit, prefillAircraft, defaultGroup) {
     if (ruleToEdit) {
-      // Normalize conditions from Django API format
       let conditions = ruleToEdit.conditions;
       if (!conditions || (typeof conditions === 'object' && !conditions.groups)) {
-        // Convert legacy format or empty conditions
         conditions = {
           logic: 'AND',
           groups: [{
@@ -22,12 +205,9 @@ export function RuleForm({ rule, editRule, prefillAircraft, apiBase, aircraft = 
           }]
         };
       }
-      return {
-        ...ruleToEdit,
-        conditions
-      };
+      return { ...ruleToEdit, conditions };
     }
-    // Pre-fill from aircraft if provided
+
     if (prefillAircraft) {
       const aircraftName = prefillAircraft.flight?.trim() || prefillAircraft.hex;
       return {
@@ -37,7 +217,6 @@ export function RuleForm({ rule, editRule, prefillAircraft, apiBase, aircraft = 
         enabled: true,
         starts_at: '',
         expires_at: '',
-        api_url: '',
         cooldown: 300,
         conditions: {
           logic: 'AND',
@@ -51,6 +230,7 @@ export function RuleForm({ rule, editRule, prefillAircraft, apiBase, aircraft = 
         }
       };
     }
+
     return {
       name: '',
       description: '',
@@ -58,19 +238,26 @@ export function RuleForm({ rule, editRule, prefillAircraft, apiBase, aircraft = 
       enabled: true,
       starts_at: '',
       expires_at: '',
-      api_url: '',
       cooldown: 300,
-      conditions: {
-        logic: 'AND',
-        groups: [{ ...defaultGroup }]
-      }
+      conditions: { logic: 'AND', groups: [{ ...defaultGroup }] }
     };
-  });
+  }
 
-  // Live preview state
-  const [previewExpanded, setPreviewExpanded] = useState(true);
-  const [debouncedForm, setDebouncedForm] = useState(form);
-  const debounceTimeoutRef = useRef(null);
+  // Store previous focus and focus first input on mount
+  useEffect(() => {
+    previousActiveElement.current = document.activeElement;
+    const timer = setTimeout(() => {
+      firstInputRef.current?.focus();
+    }, 50);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Focus error message when it appears
+  useEffect(() => {
+    if (error && errorRef.current) {
+      errorRef.current.focus();
+    }
+  }, [error]);
 
   // Debounce form changes for preview
   useEffect(() => {
@@ -87,46 +274,123 @@ export function RuleForm({ rule, editRule, prefillAircraft, apiBase, aircraft = 
     };
   }, [form]);
 
-  // Calculate matching aircraft (debounced)
+  // Calculate matching aircraft
   const matchingAircraft = useMemo(() => {
     if (!aircraft || aircraft.length === 0) return [];
-    // Build a temporary rule object for evaluation
-    const tempRule = {
-      conditions: debouncedForm.conditions
-    };
+    const tempRule = { conditions: debouncedForm.conditions };
     return findMatchingAircraft(tempRule, aircraft, feederLocation);
   }, [debouncedForm.conditions, aircraft, feederLocation]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // Close handler with focus restoration
+  const handleClose = useCallback(() => {
+    previousActiveElement.current?.focus();
+    onClose?.();
+  }, [onClose]);
 
-    const firstCond = form.conditions?.groups?.[0]?.conditions?.[0];
-    const payload = {
-      name: form.name,
-      description: form.description,
-      priority: form.priority,
-      enabled: form.enabled,
-      conditions: form.conditions,
-      cooldown: form.cooldown || 300,
-      starts_at: form.starts_at || null,
-      expires_at: form.expires_at || null,
-      api_url: form.api_url || null,
-      // Include legacy fields for backwards compatibility
-      type: firstCond?.type,
-      operator: firstCond?.operator,
-      value: firstCond?.value
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleClose();
+        return;
+      }
+
+      // Focus trap
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusableElements = modalRef.current.querySelectorAll(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
+      }
     };
 
-    const isEdit = ruleToEdit?.id;
-    const url = isEdit
-      ? `${apiBase}/api/v1/alerts/rules/${ruleToEdit.id}`
-      : `${apiBase}/api/v1/alerts/rules`;
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleClose]);
+
+  // Validate form
+  const validateForm = () => {
+    const errors = {};
+
+    if (!form.name?.trim()) {
+      errors.name = 'Rule name is required';
+    }
+
+    // Validate conditions
+    const groups = form.conditions?.groups || [];
+    if (groups.length === 0) {
+      errors.conditions = 'At least one condition is required';
+    } else {
+      groups.forEach((group, gi) => {
+        group.conditions?.forEach((cond, ci) => {
+          const condType = CONDITION_TYPES.find(t => t.value === cond.type);
+          if (condType && !condType.isBoolean && !cond.value?.trim()) {
+            errors[`cond_${gi}_${ci}`] = 'Value is required';
+          }
+          if (condType?.validation && cond.value && !condType.validation.test(cond.value)) {
+            errors[`cond_${gi}_${ci}`] = `Invalid format for ${condType.label}`;
+          }
+        });
+      });
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Submit handler
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!validateForm()) {
+      return;
+    }
+
+    setSaving(true);
 
     try {
+      const firstCond = form.conditions?.groups?.[0]?.conditions?.[0];
+      const payload = {
+        name: form.name.trim(),
+        description: form.description?.trim() || '',
+        priority: form.priority,
+        enabled: form.enabled,
+        conditions: form.conditions,
+        cooldown: form.cooldown || 300,
+        starts_at: form.starts_at || null,
+        expires_at: form.expires_at || null,
+        notification_channel_ids: selectedChannelIds,
+        use_global_notifications: useGlobalNotifications,
+        // Legacy fields for backwards compatibility
+        type: firstCond?.type,
+        operator: firstCond?.operator,
+        value: firstCond?.value,
+      };
+
+      const isEdit = ruleToEdit?.id;
+      const url = isEdit
+        ? `${apiBase}/api/v1/alerts/rules/${ruleToEdit.id}`
+        : `${apiBase}/api/v1/alerts/rules`;
+
       const res = await fetch(url, {
         method: isEdit ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -141,13 +405,28 @@ export function RuleForm({ rule, editRule, prefillAircraft, apiBase, aircraft = 
         throw new Error(errorMsg);
       }
 
-      onSave();
+      onToast?.(isEdit ? 'Rule updated' : 'Rule created', 'success');
+      onSave?.();
+      handleClose();
     } catch (err) {
       console.error('Failed to save rule:', err);
-      alert(err.message || 'Failed to save rule');
+      setError(err.message || 'Failed to save rule');
+    } finally {
+      setSaving(false);
     }
   };
 
+  // Apply template
+  const applyTemplate = (template) => {
+    setForm({
+      ...form,
+      ...template.rule,
+      enabled: true,
+    });
+    setShowTemplates(false);
+  };
+
+  // Condition management
   const updateGroupLogic = (groupIndex, logic) => {
     const newGroups = [...(form.conditions?.groups || [])];
     newGroups[groupIndex] = { ...newGroups[groupIndex], logic };
@@ -160,6 +439,13 @@ export function RuleForm({ rule, editRule, prefillAircraft, apiBase, aircraft = 
     newConditions[condIndex] = { ...newConditions[condIndex], [field]: value };
     newGroups[groupIndex] = { ...newGroups[groupIndex], conditions: newConditions };
     setForm({ ...form, conditions: { ...form.conditions, groups: newGroups } });
+
+    // Clear validation error for this field
+    setValidationErrors(prev => {
+      const next = { ...prev };
+      delete next[`cond_${groupIndex}_${condIndex}`];
+      return next;
+    });
   };
 
   const addCondition = (groupIndex) => {
@@ -196,70 +482,162 @@ export function RuleForm({ rule, editRule, prefillAircraft, apiBase, aircraft = 
     });
   };
 
-  const conditionTypes = [
-    { value: 'icao', label: 'ICAO Hex' },
-    { value: 'callsign', label: 'Callsign' },
-    { value: 'squawk', label: 'Squawk' },
-    { value: 'altitude_above', label: 'Altitude Above' },
-    { value: 'altitude_below', label: 'Altitude Below' },
-    { value: 'speed_above', label: 'Speed Above' },
-    { value: 'speed_below', label: 'Speed Below' },
-    { value: 'vertical_rate', label: 'Vertical Rate' },
-    { value: 'distance_within', label: 'Distance Within' },
-    { value: 'military', label: 'Military' },
-    { value: 'emergency', label: 'Emergency' },
-    { value: 'type', label: 'Aircraft Type' },
-    { value: 'registration', label: 'Registration' },
-    { value: 'category', label: 'Category' }
-  ];
-
-  const operators = [
-    { value: 'eq', label: '=' },
-    { value: 'neq', label: '!=' },
-    { value: 'contains', label: 'contains' },
-    { value: 'startswith', label: 'starts with' },
-    { value: 'lt', label: '<' },
-    { value: 'gt', label: '>' },
-    { value: 'lte', label: '<=' },
-    { value: 'gte', label: '>=' }
-  ];
-
-  // Get appropriate operators for condition type
+  // Get operators for condition type
   const getOperatorsForType = (type) => {
-    const booleanTypes = ['military', 'emergency'];
-    const numericTypes = ['altitude_above', 'altitude_below', 'speed_above', 'speed_below', 'vertical_rate', 'distance_within'];
-
-    if (booleanTypes.includes(type)) {
+    const condType = CONDITION_TYPES.find(t => t.value === type);
+    if (condType?.isBoolean) {
       return [{ value: 'eq', label: 'is' }];
     }
-    if (numericTypes.includes(type)) {
-      return operators.filter(o => ['eq', 'lt', 'gt', 'lte', 'gte'].includes(o.value));
+    if (condType?.type === 'number') {
+      return NUMERIC_OPERATORS;
     }
-    return operators;
+    return STRING_OPERATORS;
+  };
+
+  // Toggle channel selection
+  const toggleChannelSelection = (channelId) => {
+    setSelectedChannelIds(prev =>
+      prev.includes(channelId)
+        ? prev.filter(id => id !== channelId)
+        : [...prev, channelId]
+    );
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="rule-form-title">
-      <div className="modal modal-large" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3 id="rule-form-title">{ruleToEdit ? 'Edit Rule' : 'New Alert Rule'}</h3>
-          <button onClick={onClose} aria-label="Close"><X size={20} /></button>
+    <div
+      className="modal-overlay rule-form-overlay"
+      onClick={handleClose}
+      role="presentation"
+    >
+      <div
+        className="modal modal-large rule-form"
+        ref={modalRef}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rule-form-title"
+      >
+        <div className="modal-header rule-form-header">
+          <h3 id="rule-form-title">
+            {ruleToEdit ? 'Edit Alert Rule' : 'Create Alert Rule'}
+          </h3>
+          <button
+            className="close-btn"
+            onClick={handleClose}
+            aria-label="Close form (Escape)"
+            type="button"
+          >
+            <X size={20} />
+          </button>
         </div>
+
+        {/* Keyboard hints */}
+        <div className="keyboard-hints" aria-hidden="true">
+          <span><kbd>Esc</kbd> Close</span>
+          <span><kbd>Tab</kbd> Next field</span>
+        </div>
+
+        {/* Templates section */}
+        {showTemplates && !ruleToEdit && (
+          <div className="rule-templates-section">
+            <div className="templates-header">
+              <FileText size={16} />
+              <span>Quick Start Templates</span>
+              <button
+                type="button"
+                className="templates-toggle"
+                onClick={() => setShowTemplates(false)}
+              >
+                <X size={14} /> Skip
+              </button>
+            </div>
+            <div className="templates-grid">
+              {RULE_TEMPLATES.map(template => (
+                <button
+                  key={template.id}
+                  type="button"
+                  className="template-card"
+                  onClick={() => applyTemplate(template)}
+                >
+                  <span className="template-icon">{template.icon}</span>
+                  <span className="template-name">{template.name}</span>
+                  <span className="template-desc">{template.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="modal-content">
+          {error && (
+            <div
+              className="rule-form-error"
+              role="alert"
+              aria-live="assertive"
+              ref={errorRef}
+              tabIndex="-1"
+            >
+              <AlertCircle size={16} aria-hidden="true" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Rule Name */}
           <div className="form-group">
-            <label htmlFor="rule-name">Rule Name</label>
+            <label htmlFor="rule-name">Rule Name *</label>
             <input
               id="rule-name"
+              ref={firstInputRef}
               type="text"
               value={form.name || ''}
-              onChange={e => setForm({ ...form, name: e.target.value })}
+              onChange={e => {
+                setForm({ ...form, name: e.target.value });
+                setValidationErrors(prev => ({ ...prev, name: undefined }));
+              }}
               placeholder="e.g., Military Aircraft Alert"
               required
+              aria-required="true"
+              aria-invalid={!!validationErrors.name}
+              aria-describedby={validationErrors.name ? 'name-error' : undefined}
             />
+            {validationErrors.name && (
+              <span id="name-error" className="field-error">{validationErrors.name}</span>
+            )}
           </div>
 
+          {/* Priority/Severity */}
           <div className="form-group">
-            <label>Conditions</label>
+            <label id="severity-label">Priority</label>
+            <div className="severity-options" role="radiogroup" aria-labelledby="severity-label">
+              {Object.entries(SEVERITY_CONFIG).map(([value, config]) => {
+                const { label, Icon, color } = config;
+                return (
+                  <label
+                    key={value}
+                    className={`severity-option ${form.priority === value ? 'selected' : ''}`}
+                    style={{ '--severity-color': color }}
+                  >
+                    <input
+                      type="radio"
+                      name="priority"
+                      value={value}
+                      checked={form.priority === value}
+                      onChange={(e) => setForm({ ...form, priority: e.target.value })}
+                    />
+                    <Icon size={14} aria-hidden="true" className="severity-icon" />
+                    <span>{label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Conditions Builder */}
+          <div className="form-group">
+            <label>Conditions *</label>
+            {validationErrors.conditions && (
+              <span className="field-error">{validationErrors.conditions}</span>
+            )}
             <div className="conditions-builder">
               <div className="condition-groups">
                 {form.conditions?.groups?.map((group, gi) => (
@@ -291,45 +669,59 @@ export function RuleForm({ rule, editRule, prefillAircraft, apiBase, aircraft = 
                     </div>
 
                     <div className="condition-rows">
-                      {group.conditions.map((cond, ci) => (
-                        <div key={ci} className="condition-row">
-                          <select
-                            value={cond.type}
-                            onChange={e => updateCondition(gi, ci, 'type', e.target.value)}
-                            aria-label="Condition type"
-                          >
-                            {conditionTypes.map(t => (
-                              <option key={t.value} value={t.value}>{t.label}</option>
-                            ))}
-                          </select>
-                          <select
-                            value={cond.operator}
-                            onChange={e => updateCondition(gi, ci, 'operator', e.target.value)}
-                            aria-label="Operator"
-                          >
-                            {getOperatorsForType(cond.type).map(o => (
-                              <option key={o.value} value={o.value}>{o.label}</option>
-                            ))}
-                          </select>
-                          {!['military', 'emergency'].includes(cond.type) && (
-                            <input
-                              type="text"
-                              value={cond.value}
-                              onChange={e => updateCondition(gi, ci, 'value', e.target.value)}
-                              placeholder="Value"
-                              aria-label="Value"
-                            />
-                          )}
-                          <button
-                            type="button"
-                            className="remove-condition-btn"
-                            onClick={() => removeCondition(gi, ci)}
-                            aria-label="Remove condition"
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      ))}
+                      {group.conditions.map((cond, ci) => {
+                        const condType = CONDITION_TYPES.find(t => t.value === cond.type);
+                        const operators = getOperatorsForType(cond.type);
+                        const hasError = validationErrors[`cond_${gi}_${ci}`];
+
+                        return (
+                          <div key={ci} className={`condition-row ${hasError ? 'has-error' : ''}`}>
+                            <select
+                              value={cond.type}
+                              onChange={e => updateCondition(gi, ci, 'type', e.target.value)}
+                              aria-label="Condition type"
+                            >
+                              {CONDITION_TYPES.map(t => (
+                                <option key={t.value} value={t.value}>{t.label}</option>
+                              ))}
+                            </select>
+
+                            <select
+                              value={cond.operator}
+                              onChange={e => updateCondition(gi, ci, 'operator', e.target.value)}
+                              aria-label="Operator"
+                            >
+                              {operators.map(o => (
+                                <option key={o.value} value={o.value}>{o.label}</option>
+                              ))}
+                            </select>
+
+                            {!condType?.isBoolean && (
+                              <input
+                                type={condType?.type === 'number' ? 'number' : 'text'}
+                                value={cond.value || ''}
+                                onChange={e => updateCondition(gi, ci, 'value', e.target.value)}
+                                placeholder={condType?.placeholder || 'Value'}
+                                aria-label="Value"
+                                aria-invalid={!!hasError}
+                              />
+                            )}
+
+                            <button
+                              type="button"
+                              className="remove-condition-btn"
+                              onClick={() => removeCondition(gi, ci)}
+                              aria-label="Remove condition"
+                            >
+                              <X size={16} />
+                            </button>
+
+                            {hasError && (
+                              <span className="condition-error">{hasError}</span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
 
                     <button type="button" className="add-condition-btn" onClick={() => addCondition(gi)}>
@@ -345,7 +737,7 @@ export function RuleForm({ rule, editRule, prefillAircraft, apiBase, aircraft = 
             </div>
           </div>
 
-          {/* Live Preview Panel */}
+          {/* Live Preview */}
           {aircraft && aircraft.length > 0 && (
             <div className="live-preview-panel">
               <button
@@ -365,7 +757,7 @@ export function RuleForm({ rule, editRule, prefillAircraft, apiBase, aircraft = 
               {previewExpanded && (
                 <div id="preview-content" className="preview-content">
                   {matchingAircraft.length > 0 ? (
-                    <div className="preview-aircraft-list" role="list" aria-label="Matching aircraft preview">
+                    <div className="preview-aircraft-list" role="list">
                       {matchingAircraft.slice(0, 5).map(ac => {
                         const values = getRelevantValues({ conditions: form.conditions }, ac);
                         return (
@@ -387,18 +779,6 @@ export function RuleForm({ rule, editRule, prefillAircraft, apiBase, aircraft = 
                                   Dist: {(values.distance ?? ac.calculatedDistance ?? 0).toFixed(1)}nm
                                 </span>
                               )}
-                              {values.squawk && (
-                                <span className="preview-value">Sqwk: {values.squawk}</span>
-                              )}
-                              {values.type && (
-                                <span className="preview-value">Type: {values.type}</span>
-                              )}
-                              {values.military && (
-                                <span className="preview-value military">Military</span>
-                              )}
-                              {values.emergency && (
-                                <span className="preview-value emergency">Emergency</span>
-                              )}
                             </div>
                           </div>
                         );
@@ -419,32 +799,34 @@ export function RuleForm({ rule, editRule, prefillAircraft, apiBase, aircraft = 
             </div>
           )}
 
+          {/* Cooldown */}
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="rule-priority">Priority</label>
-              <select
-                id="rule-priority"
-                value={form.priority || 'info'}
-                onChange={e => setForm({ ...form, priority: e.target.value })}
-              >
-                <option value="info">Info</option>
-                <option value="warning">Warning</option>
-                <option value="critical">Critical</option>
-                <option value="emergency">Emergency</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label htmlFor="rule-api-url">API URL Override</label>
+              <label htmlFor="cooldown">Cooldown (seconds)</label>
               <input
-                id="rule-api-url"
-                type="text"
-                value={form.api_url || ''}
-                onChange={e => setForm({ ...form, api_url: e.target.value })}
-                placeholder="Optional: custom notification URL"
+                id="cooldown"
+                type="number"
+                value={form.cooldown || 300}
+                onChange={(e) => setForm({ ...form, cooldown: parseInt(e.target.value) || 0 })}
+                min={0}
+                max={86400}
               />
+              <span className="form-hint">Time between repeated alerts for same aircraft</span>
+            </div>
+
+            <div className="form-group">
+              <label className="checkbox-label" style={{ marginTop: '24px' }}>
+                <input
+                  type="checkbox"
+                  checked={form.enabled !== false}
+                  onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
+                />
+                <span>Enabled</span>
+              </label>
             </div>
           </div>
 
+          {/* Schedule */}
           <div className="form-row">
             <div className="form-group">
               <label htmlFor="rule-starts-at">Starts At (Optional)</label>
@@ -466,8 +848,62 @@ export function RuleForm({ rule, editRule, prefillAircraft, apiBase, aircraft = 
             </div>
           </div>
 
+          {/* Notification Channels */}
+          <fieldset className="form-group notification-channels-fieldset">
+            <legend>
+              <Bell size={16} aria-hidden="true" />
+              Notification Channels
+            </legend>
+
+            <div className="form-row">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={useGlobalNotifications}
+                  onChange={(e) => setUseGlobalNotifications(e.target.checked)}
+                />
+                <span>Use global notifications (from server config)</span>
+              </label>
+            </div>
+
+            {channels.length > 0 ? (
+              <div className="notification-channels-list" role="group" aria-label="Select notification channels">
+                {channels.filter(c => c.enabled).map(channel => {
+                  const typeInfo = CHANNEL_TYPE_INFO[channel.channel_type] || CHANNEL_TYPE_INFO.custom;
+                  const isSelected = selectedChannelIds.includes(channel.id);
+
+                  return (
+                    <button
+                      key={channel.id}
+                      type="button"
+                      className={`channel-select-btn ${isSelected ? 'selected' : ''}`}
+                      onClick={() => toggleChannelSelection(channel.id)}
+                      aria-pressed={isSelected}
+                      style={{ '--channel-color': typeInfo.color }}
+                    >
+                      <span className="channel-icon">{typeInfo.icon}</span>
+                      <span className="channel-name">{channel.name}</span>
+                      {isSelected && <Check size={14} className="check-icon" />}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="no-channels-hint">
+                {channelsLoading ? 'Loading channels...' : 'No notification channels configured. Add channels in the Notifications tab.'}
+              </p>
+            )}
+
+            {selectedChannelIds.length > 0 && (
+              <span className="channels-selected-count">
+                {selectedChannelIds.length} channel{selectedChannelIds.length !== 1 ? 's' : ''} selected
+              </span>
+            )}
+          </fieldset>
+
+          {/* Description */}
           <div className="form-group">
-            <label htmlFor="rule-description">Description</label>
+            <label htmlFor="rule-description">Description (Optional)</label>
             <textarea
               id="rule-description"
               value={form.description || ''}
@@ -477,12 +913,25 @@ export function RuleForm({ rule, editRule, prefillAircraft, apiBase, aircraft = 
             />
           </div>
 
+          {/* Actions */}
           <div className="form-actions">
-            <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn-primary">Save Rule</button>
+            <button type="button" className="btn-secondary" onClick={handleClose}>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={saving}
+              aria-busy={saving}
+            >
+              <Save size={16} aria-hidden="true" />
+              {saving ? 'Saving...' : 'Save Rule'}
+            </button>
           </div>
         </form>
       </div>
     </div>
   );
 }
+
+export default RuleForm;

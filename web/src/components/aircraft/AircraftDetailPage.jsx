@@ -1,10 +1,11 @@
 import React, { Suspense, lazy } from 'react';
-import { Radar } from 'lucide-react';
+import { Radar, AlertTriangle, RefreshCw } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 
 import { useAircraftDetail } from './hooks/useAircraftDetail';
 import { AircraftHeader, AircraftPhotoHero, TabNavigation, ExternalLinks } from './components';
 import { InfoTabSkeleton, LiveTabSkeleton, MapTabSkeleton } from './skeletons';
+import { ErrorBoundary } from '../common/ErrorBoundary';
 
 // Lazy load tab components for better performance
 const InfoTab = lazy(() => import('./tabs/InfoTab').then(m => ({ default: m.InfoTab })));
@@ -65,6 +66,8 @@ export function AircraftDetailPage({
     // Core
     info,
     loading,
+    error,
+    retry,
     activeTab,
     setActiveTab,
     tailInfo,
@@ -372,7 +375,27 @@ export function AircraftDetailPage({
 
       {/* Tab Content */}
       <main className="detail-content detail-tab-content">
-        {renderTabContent()}
+        {error ? (
+          <div className="error-state-container" role="alert">
+            <div className="error-state-content">
+              <AlertTriangle size={48} className="error-state-icon" aria-hidden="true" />
+              <h2 className="error-state-title">Failed to Load</h2>
+              <p className="error-state-message">{error.message}</p>
+              <button
+                className="error-state-retry-btn"
+                onClick={retry}
+                type="button"
+              >
+                <RefreshCw size={16} aria-hidden="true" />
+                Retry
+              </button>
+            </div>
+          </div>
+        ) : (
+          <ErrorBoundary onRetry={retry}>
+            {renderTabContent()}
+          </ErrorBoundary>
+        )}
       </main>
 
       {/* External Links */}

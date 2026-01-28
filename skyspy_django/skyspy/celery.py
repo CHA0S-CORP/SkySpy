@@ -283,6 +283,35 @@ app.conf.beat_schedule = {
     },
 
     # ==========================================================================
+    # Cannonball Mode Tasks
+    # ==========================================================================
+
+    # Cannonball pattern analysis - every 5 seconds
+    'analyze-aircraft-patterns-every-5s': {
+        'task': 'skyspy.tasks.cannonball.analyze_aircraft_patterns',
+        'schedule': 5.0,
+        'options': {'expires': 5.0},
+    },
+
+    # Cannonball session cleanup - every 5 minutes
+    'cleanup-cannonball-sessions-every-5m': {
+        'task': 'skyspy.tasks.cannonball.cleanup_cannonball_sessions',
+        'schedule': 300.0,
+    },
+
+    # Cannonball pattern cleanup - daily at 3:45 AM UTC
+    'cleanup-cannonball-patterns-daily': {
+        'task': 'skyspy.tasks.cannonball.cleanup_old_patterns',
+        'schedule': crontab(hour=3, minute=45),
+    },
+
+    # Cannonball stats aggregation - hourly
+    'aggregate-cannonball-stats-hourly': {
+        'task': 'skyspy.tasks.cannonball.aggregate_cannonball_stats',
+        'schedule': crontab(minute=10),  # 10 minutes past each hour
+    },
+
+    # ==========================================================================
     # Data Retention Cleanup Tasks
     # ==========================================================================
 
@@ -368,6 +397,13 @@ app.conf.task_routes = {
     'skyspy.tasks.notifications.process_notification_queue': {'queue': 'notifications'},
     'skyspy.tasks.notifications.cleanup_notification_cooldowns': {'queue': 'notifications'},
     'skyspy.tasks.notifications.*': {'queue': 'notifications'},
+
+    # Cannonball tasks (pattern analysis is time-sensitive)
+    'skyspy.tasks.cannonball.analyze_aircraft_patterns': {'queue': 'polling'},
+    'skyspy.tasks.cannonball.cleanup_cannonball_sessions': {'queue': 'database'},
+    'skyspy.tasks.cannonball.cleanup_old_patterns': {'queue': 'low_priority'},
+    'skyspy.tasks.cannonball.aggregate_cannonball_stats': {'queue': 'low_priority'},
+    'skyspy.tasks.cannonball.*': {'queue': 'default'},
 
     # Default queue for everything else
     'skyspy.tasks.*': {'queue': 'default'},

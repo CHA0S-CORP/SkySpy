@@ -122,6 +122,8 @@ export function AuthProvider({ children }) {
   const refreshTimeoutRef = useRef(null);
   const refreshInProgressRef = useRef(false); // Prevent race conditions
   const refreshPromiseRef = useRef(null); // Share refresh promise across concurrent calls
+  const oidcPopupRef = useRef(null); // Track OIDC popup window
+  const oidcCleanupRef = useRef(null); // Store OIDC cleanup function for unmount
   const apiBaseUrl = getConfig().apiBaseUrl;
 
   /**
@@ -383,21 +385,42 @@ export function AuthProvider({ children }) {
         'width=500,height=600,menubar=no,toolbar=no'
       );
 
+      // Store popup reference for unmount cleanup
+      oidcPopupRef.current = popup;
+
       // Listen for message from popup
       return new Promise((resolve, reject) => {
         let timeoutId = null;
         let popupCheckInterval = null;
-        let isResolved = false;
+        let isCleanedUp = false;
 
         const cleanup = () => {
+          // Prevent double cleanup
+          if (isCleanedUp) return;
+          isCleanedUp = true;
+
           window.removeEventListener('message', handleMessage);
-          if (timeoutId) clearTimeout(timeoutId);
-          if (popupCheckInterval) clearInterval(popupCheckInterval);
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
+          if (popupCheckInterval) {
+            clearInterval(popupCheckInterval);
+            popupCheckInterval = null;
+          }
+          // Clear refs
+          oidcCleanupRef.current = null;
+          oidcPopupRef.current = null;
         };
 
+        // Store cleanup function in ref for component unmount
+        oidcCleanupRef.current = cleanup;
+
         const handleMessage = (event) => {
+          // Ignore messages after cleanup
+          if (isCleanedUp) return;
+
           if (event.data && event.data.type === 'oidc_callback') {
-            isResolved = true;
             cleanup();
 
             if (event.data.access) {
@@ -426,8 +449,10 @@ export function AuthProvider({ children }) {
 
         // Check if popup is closed by user
         popupCheckInterval = setInterval(() => {
-          if (popup && popup.closed && !isResolved) {
-            isResolved = true;
+          // Stop checking after cleanup
+          if (isCleanedUp) return;
+
+          if (popup && popup.closed) {
             cleanup();
             reject(new Error('OIDC login cancelled'));
           }
@@ -435,14 +460,14 @@ export function AuthProvider({ children }) {
 
         // Timeout after 5 minutes
         timeoutId = setTimeout(() => {
-          if (!isResolved) {
-            isResolved = true;
-            cleanup();
-            if (popup && !popup.closed) {
-              popup.close();
-            }
-            reject(new Error('OIDC login timed out'));
+          // Ignore timeout after cleanup
+          if (isCleanedUp) return;
+
+          cleanup();
+          if (popup && !popup.closed) {
+            popup.close();
           }
+          reject(new Error('OIDC login timed out'));
         }, 300000);
       });
     } catch (err) {
@@ -603,6 +628,14 @@ export function AuthProvider({ children }) {
     return () => {
       if (refreshTimeoutRef.current) {
         clearTimeout(refreshTimeoutRef.current);
+      }
+      // Cleanup OIDC flow if in progress
+      if (oidcCleanupRef.current) {
+        oidcCleanupRef.current();
+      }
+      // Close OIDC popup if still open
+      if (oidcPopupRef.current && !oidcPopupRef.current.closed) {
+        oidcPopupRef.current.close();
       }
     };
   }, [fetchAuthConfig, fetchProfile, refreshAccessToken, scheduleTokenRefresh]);

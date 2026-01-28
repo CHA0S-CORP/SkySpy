@@ -1,6 +1,38 @@
 import React, { useState } from 'react';
 import { Info, Plane, Building2, Hash, Camera, Database, ChevronDown, ChevronRight } from 'lucide-react';
 
+// Safe date formatting - handles invalid dates gracefully
+const formatDate = (dateString, options = {}) => {
+  if (!dateString) return 'Unknown';
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Unknown';
+    return options.dateOnly
+      ? date.toLocaleDateString()
+      : date.toLocaleString();
+  } catch {
+    return 'Unknown';
+  }
+};
+
+// Safe JSON stringify - handles circular references
+const safeJsonStringify = (obj, indent = 2) => {
+  try {
+    const seen = new WeakSet();
+    return JSON.stringify(obj, (key, value) => {
+      if (typeof value === 'object' && value !== null) {
+        if (seen.has(value)) {
+          return '[Circular Reference]';
+        }
+        seen.add(value);
+      }
+      return value;
+    }, indent);
+  } catch {
+    return '[Unable to display data]';
+  }
+};
+
 // Human-readable source names
 const SOURCE_LABELS = {
   faa: 'FAA Registry',
@@ -63,7 +95,14 @@ export function InfoTab({ info, hex, photoInfo }) {
     model: info.model || info.modelName,
     serial_number: info.serial_number || info.serialNumber || info.manufacturerSerial,
     year_built: info.year_built || info.yearBuilt || info.built,
-    age_years: info.age_years || info.ageYears || (info.year_built ? new Date().getFullYear() - info.year_built : null),
+    age_years: info.age_years ?? info.ageYears ?? (() => {
+      const year = info.year_built || info.yearBuilt || info.built;
+      const yearNum = Number(year);
+      if (!year || isNaN(yearNum) || yearNum < 1900 || yearNum > new Date().getFullYear()) {
+        return null;
+      }
+      return new Date().getFullYear() - yearNum;
+    })(),
 
     // Operator fields
     operator: info.operator || info.operatorName || info.owner_operator,
@@ -182,7 +221,7 @@ export function InfoTab({ info, hex, photoInfo }) {
           )}
           <div className="info-row">
             <span>ICAO Hex</span>
-            <span>{hex?.toUpperCase()}</span>
+            <span>{hex?.toUpperCase() || 'N/A'}</span>
           </div>
           {normalized.is_military && (
             <div className="info-row">
@@ -229,6 +268,13 @@ export function InfoTab({ info, hex, photoInfo }) {
             id="sources-heading"
             className="sources-header clickable"
             onClick={() => setShowSourceComparison(!showSourceComparison)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setShowSourceComparison(!showSourceComparison);
+              }
+            }}
+            tabIndex={0}
             role="button"
             aria-expanded={showSourceComparison}
           >
@@ -241,11 +287,11 @@ export function InfoTab({ info, hex, photoInfo }) {
             <div className="source-comparison">
               {/* Source badges */}
               <div className="source-badges">
-                {sourceData.map(src => (
+                {sourceData.map((src, index) => (
                   <span
-                    key={src.source}
+                    key={src.source || `source-${index}`}
                     className={`source-badge source-badge-${src.source}`}
-                    title={`Last updated: ${src.updated_at ? new Date(src.updated_at).toLocaleString() : 'Unknown'}`}
+                    title={`Last updated: ${formatDate(src.updated_at)}`}
                   >
                     {SOURCE_LABELS[src.source] || src.source}
                   </span>
@@ -258,8 +304,8 @@ export function InfoTab({ info, hex, photoInfo }) {
                   <thead>
                     <tr>
                       <th>Field</th>
-                      {sourceData.map(src => (
-                        <th key={src.source}>{SOURCE_LABELS[src.source] || src.source}</th>
+                      {sourceData.map((src, index) => (
+                        <th key={src.source || `source-header-${index}`}>{SOURCE_LABELS[src.source] || src.source}</th>
                       ))}
                     </tr>
                   </thead>
@@ -274,10 +320,10 @@ export function InfoTab({ info, hex, photoInfo }) {
                       return (
                         <tr key={field.key} className={!allSame ? 'source-row-diff' : ''}>
                           <td className="source-field-label">{field.label}</td>
-                          {sourceData.map(src => {
+                          {sourceData.map((src, index) => {
                             const value = src[field.key] || src.raw_data?.[field.key];
                             return (
-                              <td key={src.source} className={value ? '' : 'source-empty'}>
+                              <td key={src.source || `source-cell-${index}`} className={value ? '' : 'source-empty'}>
                                 {value ?? '—'}
                               </td>
                             );
@@ -291,26 +337,27 @@ export function InfoTab({ info, hex, photoInfo }) {
 
               {/* Individual source details */}
               <div className="source-details">
-                {sourceData.map(src => (
-                  <div key={src.source} className="source-detail-card">
+                {sourceData.map((src, index) => (
+                  <div key={src.source || `source-detail-${index}`} className="source-detail-card">
                     <button
                       className="source-detail-header"
                       onClick={() => toggleSource(src.source)}
                       aria-expanded={expandedSources[src.source]}
+                      aria-label={`Toggle ${SOURCE_LABELS[src.source] || src.source} details`}
                     >
                       {expandedSources[src.source] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                       <span className={`source-badge source-badge-${src.source}`}>
                         {SOURCE_LABELS[src.source] || src.source}
                       </span>
                       <span className="source-detail-meta">
-                        {src.updated_at && `Updated ${new Date(src.updated_at).toLocaleDateString()}`}
+                        {src.updated_at && `Updated ${formatDate(src.updated_at, { dateOnly: true })}`}
                       </span>
                     </button>
 
                     {expandedSources[src.source] && (
                       <div className="source-detail-content">
                         <pre className="source-raw-data">
-                          {JSON.stringify(src.raw_data || src, null, 2)}
+                          {safeJsonStringify(src.raw_data || src)}
                         </pre>
                       </div>
                     )}

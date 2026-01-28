@@ -2737,3 +2737,180 @@
   background: var(--bg-dark);
   border-radius: 6px;
 }
+
+/* ============================================================================
+   Confirm Modal
+   ============================================================================ */
+
+.confirm-modal-overlay {
+  z-index: var(--z-modal-confirm, 1100);
+}
+
+.confirm-modal {
+  max-width: 420px;
+  animation: modal-scale-in 0.2s ease-out;
+}
+
+@keyframes modal-scale-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.confirm-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.confirm-modal-header h3 {
+  flex: 1;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.confirm-modal-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.confirm-modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.confirm-modal-close:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.confirm-modal-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.confirm-modal-content {
+  padding: 24px;
+}
+
+.confirm-modal-content p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 0 0 16px 16px;
+}
+
+/* Danger Button */
+.btn-danger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent-red);
+  color: white;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #dc2626;
+  filter: brightness(1.1);
+}
+
+.btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Warning Button */
+.btn-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent-yellow);
+  color: var(--bg-dark);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-warning:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.btn-warning:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Undo Toast Styles
+   ============================================================================ */
+
+.toast-undo {
+  border-color: rgba(163, 113, 247, 0.4);
+  background: linear-gradient(135deg, rgba(163, 113, 247, 0.1), var(--bg-card));
+}
+
+.toast-undo::before {
+  background: var(--accent-purple);
+}
+
+.toast-undo .toast-icon {
+  color: var(--accent-purple);
+}
+
+.undo-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--accent-purple);
+  border-radius: 0 0 0 10px;
+  animation: undo-countdown linear forwards;
+}
+
+@keyframes undo-countdown {
+  0% { width: 100%; }
+  100% { width: 0%; }
+}

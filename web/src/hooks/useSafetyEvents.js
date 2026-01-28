@@ -1,5 +1,20 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
+// Default timeout for requests in milliseconds
+const REQUEST_TIMEOUT_MS = 15000;
+
+/**
+ * Create a promise that rejects after a timeout
+ */
+function withTimeout(promise, timeoutMs, message = 'Request timeout') {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(message)), timeoutMs)
+    )
+  ]);
+}
+
 /**
  * Hook for managing safety events (proximity conflicts, TCAS alerts, emergencies)
  * Uses WebSocket for both real-time events and on-demand fetching
@@ -15,6 +30,7 @@ export function useSafetyEvents(wsSafetyEvents = [], aircraft = [], wsRequest = 
   const [proximityConflicts, setProximityConflicts] = useState([]);
   const [acknowledgedConflicts, setAcknowledgedConflicts] = useState(new Set());
   const lastFetchRef = useRef(0);
+  const mountedRef = useRef(true);
 
   // Merge WebSocket safety events with local state
   useEffect(() => {
@@ -28,9 +44,20 @@ export function useSafetyEvents(wsSafetyEvents = [], aircraft = [], wsRequest = 
     }
   }, [wsSafetyEvents]);
 
+  // Set mounted ref on mount/unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   // Fetch safety events via WebSocket on initial connect
   useEffect(() => {
     if (!wsRequest || !wsConnected) return;
+
+    // AbortController for cancelling pending requests on cleanup
+    const abortController = new AbortController();
 
     const fetchSafetyEvents = async () => {
       // Debounce
@@ -38,8 +65,20 @@ export function useSafetyEvents(wsSafetyEvents = [], aircraft = [], wsRequest = 
       if (now - lastFetchRef.current < 10000) return;
       lastFetchRef.current = now;
 
+      // Don't fetch if aborted or unmounted
+      if (abortController.signal.aborted || !mountedRef.current) return;
+
       try {
-        const data = await wsRequest('safety-events', { limit: 20 });
+        // Wrap request with timeout to prevent hung requests
+        const data = await withTimeout(
+          wsRequest('safety-events', { limit: 20 }),
+          REQUEST_TIMEOUT_MS,
+          'Safety events request timeout'
+        );
+
+        // Check if aborted or unmounted before updating state
+        if (abortController.signal.aborted || !mountedRef.current) return;
+
         // Handle various Django API response formats
         let events = [];
         if (Array.isArray(data)) {
@@ -55,7 +94,7 @@ export function useSafetyEvents(wsSafetyEvents = [], aircraft = [], wsRequest = 
           events = data.events;
         }
 
-        if (events.length > 0) {
+        if (events.length > 0 && mountedRef.current) {
           setSafetyEvents(prev => {
             const existingIds = new Set(prev.map(e => e.id));
             const newEvents = events.filter(e => e && !existingIds.has(e.id));
@@ -65,8 +104,11 @@ export function useSafetyEvents(wsSafetyEvents = [], aircraft = [], wsRequest = 
         }
       } catch (err) {
         // Silent fail - real-time WebSocket push is primary
-        // Only log if it's not a connection/timeout error
-        if (!err.message?.includes('timeout') && !err.message?.includes('not connected')) {
+        // Only log if it's not a connection/timeout/abort error
+        if (!err.message?.includes('timeout') &&
+            !err.message?.includes('not connected') &&
+            !err.message?.includes('abort') &&
+            err.name !== 'AbortError') {
           console.debug('Safety events fetch failed:', err.message);
         }
       }
@@ -78,6 +120,7 @@ export function useSafetyEvents(wsSafetyEvents = [], aircraft = [], wsRequest = 
     // Refresh every 30 seconds (less frequent since we have real-time push)
     const interval = setInterval(fetchSafetyEvents, 30000);
     return () => {
+      abortController.abort();
       clearTimeout(timeout);
       clearInterval(interval);
     };

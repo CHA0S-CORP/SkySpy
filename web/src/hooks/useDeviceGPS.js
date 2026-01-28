@@ -3,8 +3,29 @@
  *
  * Provides real-time GPS position tracking for mobile devices
  * with support for heading and accuracy information.
+ * Includes permission state machine for proper UX flow.
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
+
+/**
+ * Permission states for GPS access
+ * - unknown: Initial state, haven't checked yet
+ * - checking: Currently checking permission status
+ * - prompt: Permission will be requested (user hasn't decided)
+ * - requesting: Actively requesting permission
+ * - granted: Permission granted
+ * - denied: Permission denied
+ * - unavailable: Geolocation not supported
+ */
+export const GPS_PERMISSION_STATES = {
+  UNKNOWN: 'unknown',
+  CHECKING: 'checking',
+  PROMPT: 'prompt',
+  REQUESTING: 'requesting',
+  GRANTED: 'granted',
+  DENIED: 'denied',
+  UNAVAILABLE: 'unavailable',
+};
 
 /**
  * GPS position tracking hook
@@ -13,12 +34,14 @@ import { useState, useEffect, useCallback, useRef } from 'react';
  * @param {boolean} options.enabled Whether GPS tracking is enabled
  * @param {number} options.interval Update interval in milliseconds (for maximumAge)
  * @param {boolean} options.highAccuracy Request high accuracy positioning
+ * @param {boolean} options.autoRequest Automatically request permission when enabled
  * @returns {Object} GPS state and controls
  */
 export function useDeviceGPS({
   enabled = false,
   interval = 5000,
   highAccuracy = true,
+  autoRequest = false,
 } = {}) {
   const [position, setPosition] = useState(null);
   const [heading, setHeading] = useState(null);
@@ -27,12 +50,61 @@ export function useDeviceGPS({
   const [error, setError] = useState(null);
   const [isTracking, setIsTracking] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [permissionState, setPermissionState] = useState(GPS_PERMISSION_STATES.UNKNOWN);
 
   const watchIdRef = useRef(null);
   const orientationRef = useRef(null);
+  const permissionCheckedRef = useRef(false);
 
   // Check if geolocation is supported
   const isSupported = typeof navigator !== 'undefined' && 'geolocation' in navigator;
+
+  // Check current permission status without triggering request
+  const checkPermission = useCallback(async () => {
+    if (!isSupported) {
+      setPermissionState(GPS_PERMISSION_STATES.UNAVAILABLE);
+      return GPS_PERMISSION_STATES.UNAVAILABLE;
+    }
+
+    setPermissionState(GPS_PERMISSION_STATES.CHECKING);
+
+    // Use Permissions API if available
+    if ('permissions' in navigator) {
+      try {
+        const result = await navigator.permissions.query({ name: 'geolocation' });
+        const state = result.state === 'granted' ? GPS_PERMISSION_STATES.GRANTED
+          : result.state === 'denied' ? GPS_PERMISSION_STATES.DENIED
+          : GPS_PERMISSION_STATES.PROMPT;
+        setPermissionState(state);
+
+        // Listen for permission changes
+        result.onchange = () => {
+          const newState = result.state === 'granted' ? GPS_PERMISSION_STATES.GRANTED
+            : result.state === 'denied' ? GPS_PERMISSION_STATES.DENIED
+            : GPS_PERMISSION_STATES.PROMPT;
+          setPermissionState(newState);
+        };
+
+        return state;
+      } catch (err) {
+        // Permissions API not supported for geolocation, assume prompt
+        setPermissionState(GPS_PERMISSION_STATES.PROMPT);
+        return GPS_PERMISSION_STATES.PROMPT;
+      }
+    }
+
+    // Fallback: assume prompt state
+    setPermissionState(GPS_PERMISSION_STATES.PROMPT);
+    return GPS_PERMISSION_STATES.PROMPT;
+  }, [isSupported]);
+
+  // Check permission on mount
+  useEffect(() => {
+    if (!permissionCheckedRef.current) {
+      permissionCheckedRef.current = true;
+      checkPermission();
+    }
+  }, [checkPermission]);
 
   // Handle position update
   const handlePositionUpdate = useCallback((pos) => {
@@ -91,11 +163,62 @@ export function useDeviceGPS({
     }
   }, []);
 
+  // Request permission explicitly (for use with permission UI)
+  const requestPermission = useCallback(async () => {
+    if (!isSupported) {
+      setPermissionState(GPS_PERMISSION_STATES.UNAVAILABLE);
+      setError('Geolocation not supported');
+      return false;
+    }
+
+    setPermissionState(GPS_PERMISSION_STATES.REQUESTING);
+    setError(null);
+
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setPermissionState(GPS_PERMISSION_STATES.GRANTED);
+          handlePositionUpdate(pos);
+          resolve(true);
+        },
+        (err) => {
+          if (err.code === err.PERMISSION_DENIED) {
+            setPermissionState(GPS_PERMISSION_STATES.DENIED);
+            setError('Location permission denied');
+          } else {
+            setPermissionState(GPS_PERMISSION_STATES.GRANTED); // Permission granted but location error
+            handlePositionError(err);
+          }
+          resolve(false);
+        },
+        {
+          enableHighAccuracy: highAccuracy,
+          timeout: 30000,
+          maximumAge: 0,
+        }
+      );
+    });
+  }, [isSupported, highAccuracy, handlePositionUpdate, handlePositionError]);
+
   // Start tracking
-  const startTracking = useCallback(() => {
+  const startTracking = useCallback(async () => {
     if (!isSupported) {
       setError('Geolocation not supported');
+      setPermissionState(GPS_PERMISSION_STATES.UNAVAILABLE);
       return;
+    }
+
+    // If permission is denied, don't try to track
+    if (permissionState === GPS_PERMISSION_STATES.DENIED) {
+      setError('Location permission denied');
+      return;
+    }
+
+    // If permission state is unknown or prompt, request it first
+    if (permissionState === GPS_PERMISSION_STATES.PROMPT ||
+        permissionState === GPS_PERMISSION_STATES.UNKNOWN) {
+      const granted = await requestPermission();
+      if (!granted) return;
     }
 
     setIsTracking(true);
@@ -117,8 +240,8 @@ export function useDeviceGPS({
       // Check if we need to request permission (iOS 13+)
       if (typeof DeviceOrientationEvent.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission()
-          .then((permissionState) => {
-            if (permissionState === 'granted') {
+          .then((orientationPermState) => {
+            if (orientationPermState === 'granted') {
               window.addEventListener('deviceorientationabsolute', handleOrientation, true);
               window.addEventListener('deviceorientation', handleOrientation, true);
               orientationRef.current = true;
@@ -131,7 +254,7 @@ export function useDeviceGPS({
         orientationRef.current = true;
       }
     }
-  }, [isSupported, highAccuracy, interval, handlePositionUpdate, handlePositionError, handleOrientation]);
+  }, [isSupported, highAccuracy, interval, permissionState, requestPermission, handlePositionUpdate, handlePositionError, handleOrientation]);
 
   // Stop tracking
   const stopTracking = useCallback(() => {
@@ -180,7 +303,12 @@ export function useDeviceGPS({
 
   // Auto-start/stop based on enabled prop
   useEffect(() => {
-    if (enabled && !isTracking) {
+    // Only auto-start if autoRequest is true or permission is already granted
+    const shouldAutoStart = enabled &&
+      !isTracking &&
+      (autoRequest || permissionState === GPS_PERMISSION_STATES.GRANTED);
+
+    if (shouldAutoStart) {
       startTracking();
     } else if (!enabled && isTracking) {
       stopTracking();
@@ -196,7 +324,14 @@ export function useDeviceGPS({
         window.removeEventListener('deviceorientation', handleOrientation, true);
       }
     };
-  }, [enabled, isTracking, startTracking, stopTracking, handleOrientation]);
+  }, [enabled, isTracking, autoRequest, permissionState, startTracking, stopTracking, handleOrientation]);
+
+  // Retry tracking after permission change
+  useEffect(() => {
+    if (enabled && !isTracking && permissionState === GPS_PERMISSION_STATES.GRANTED) {
+      startTracking();
+    }
+  }, [enabled, isTracking, permissionState, startTracking]);
 
   return {
     // Position data
@@ -210,6 +345,11 @@ export function useDeviceGPS({
     isTracking,
     error,
     lastUpdate,
+
+    // Permission
+    permissionState,
+    checkPermission,
+    requestPermission,
 
     // Controls
     startTracking,

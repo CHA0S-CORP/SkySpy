@@ -99,6 +99,7 @@ export function useAircraftDetail({
   const [loading, setLoading] = useState(true);
   const [loadedTabs, setLoadedTabs] = useState({});
   const [shareSuccess, setShareSuccess] = useState(false);
+  const [error, setError] = useState(null);
   const [activeTab, setActiveTabState] = useState(() =>
     VALID_DETAIL_TABS.includes(initialTab) ? initialTab : 'info'
   );
@@ -110,6 +111,10 @@ export function useAircraftDetail({
   const [useThumbnail, setUseThumbnail] = useState(false);
   const [photoStatus, setPhotoStatus] = useState(null);
   const retryPhotoRef = useRef(null);
+  const photoPollingRef = useRef(null);
+
+  // Track all intervals for cleanup
+  const intervalsRef = useRef(new Set());
 
   // ACARS state
   const [acarsMessages, setAcarsMessages] = useState([]);
@@ -263,10 +268,16 @@ export function useAircraftDetail({
   }, [useThumbnail]);
 
   const retryPhoto = useCallback(async () => {
+    // Guard: prevent multiple simultaneous intervals
     if (retryPhotoRef.current) {
       clearInterval(retryPhotoRef.current);
+      intervalsRef.current.delete(retryPhotoRef.current);
       retryPhotoRef.current = null;
     }
+
+    const abortController = new AbortController();
+    const currentHex = hex;
+
     setPhotoState('loading');
     setUseThumbnail(false);
     setPhotoRetryCount(c => c + 1);
@@ -274,26 +285,37 @@ export function useAircraftDetail({
 
     // Trigger photo fetch with force=true to re-fetch from sources
     try {
-      await fetch(`${baseUrl}/api/v1/airframes/${hex}/photos/fetch/?force=true`, { method: 'POST' });
-    } catch {}
+      await fetch(`${baseUrl}/api/v1/airframes/${hex}/photos/fetch/?force=true`, {
+        method: 'POST',
+        signal: abortController.signal
+      });
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+    }
 
     // Poll for result using main airframes endpoint (has consistent field names)
     let attempts = 0;
-    retryPhotoRef.current = setInterval(async () => {
+    const intervalId = setInterval(async () => {
       attempts++;
-      if (attempts > 10) {
-        clearInterval(retryPhotoRef.current);
+      if (attempts > 10 || abortController.signal.aborted) {
+        clearInterval(intervalId);
+        intervalsRef.current.delete(intervalId);
         retryPhotoRef.current = null;
-        setPhotoState('error');
-        setPhotoStatus({ message: 'Photo not available', type: 'error' });
+        if (!abortController.signal.aborted) {
+          setPhotoState('error');
+          setPhotoStatus({ message: 'Photo not available', type: 'error' });
+        }
         return;
       }
       setPhotoStatus({ message: `Fetching photo... (${30 - attempts * 3}s)`, type: 'info' });
       try {
-        const res = await fetch(`${baseUrl}/api/v1/airframes/${hex}/`);
+        const res = await fetch(`${baseUrl}/api/v1/airframes/${currentHex}/`, {
+          signal: abortController.signal
+        });
         const data = await safeJson(res);
         if (data?.photo_url) {
-          clearInterval(retryPhotoRef.current);
+          clearInterval(intervalId);
+          intervalsRef.current.delete(intervalId);
           retryPhotoRef.current = null;
           setPhotoInfo({
             photo_url: data.photo_url,
@@ -304,49 +326,88 @@ export function useAircraftDetail({
           setPhotoState('loaded');
           setPhotoStatus(null);
         }
-      } catch {}
+      } catch (e) {
+        if (e.name === 'AbortError') {
+          clearInterval(intervalId);
+          intervalsRef.current.delete(intervalId);
+          retryPhotoRef.current = null;
+        }
+      }
     }, 3000);
+
+    retryPhotoRef.current = intervalId;
+    intervalsRef.current.add(intervalId);
   }, [hex, baseUrl]);
 
-  // Cleanup retry interval
+  // Cleanup retry and photo polling intervals when hex changes or on unmount
   useEffect(() => {
     return () => {
       if (retryPhotoRef.current) {
         clearInterval(retryPhotoRef.current);
+        intervalsRef.current.delete(retryPhotoRef.current);
         retryPhotoRef.current = null;
+      }
+      if (photoPollingRef.current) {
+        clearInterval(photoPollingRef.current);
+        intervalsRef.current.delete(photoPollingRef.current);
+        photoPollingRef.current = null;
       }
     };
   }, [hex]);
 
+  // Global cleanup for all intervals on unmount
+  useEffect(() => {
+    return () => {
+      intervalsRef.current.forEach(intervalId => {
+        clearInterval(intervalId);
+      });
+      intervalsRef.current.clear();
+    };
+  }, []);
+
   // Load info and photo on mount
   useEffect(() => {
+    const abortController = new AbortController();
+    const currentHex = hex;
+
     const fetchInfoAndPhoto = async () => {
       setLoading(true);
+      setError(null);
       try {
         if (!info) {
           let infoData = null;
           // Try airframes endpoint first (includes photo data)
-          let infoRes = await fetch(`${baseUrl}/api/v1/airframes/${hex}/`);
+          let infoRes = await fetch(`${baseUrl}/api/v1/airframes/${hex}/`, {
+            signal: abortController.signal
+          });
           infoData = await safeJson(infoRes);
 
           // If airframes not found, try lookup endpoint
           if (!infoData || infoData.error || infoRes.status === 404) {
-            infoRes = await fetch(`${baseUrl}/api/v1/lookup/aircraft/${hex}`);
+            infoRes = await fetch(`${baseUrl}/api/v1/lookup/aircraft/${hex}`, {
+              signal: abortController.signal
+            });
             infoData = await safeJson(infoRes);
           }
 
           // Also try OpenSky lookup for additional data
           if (!infoData || !infoData.registration) {
             try {
-              const openskRes = await fetch(`${baseUrl}/api/v1/lookup/opensky/${hex}`);
+              const openskRes = await fetch(`${baseUrl}/api/v1/lookup/opensky/${hex}`, {
+                signal: abortController.signal
+              });
               const openskyData = await safeJson(openskRes);
               if (openskyData && !openskyData.error) {
                 infoData = { ...openskyData, ...infoData };
               }
             } catch (e) {
+              if (e.name === 'AbortError') return;
               // OpenSky lookup failed, continue with what we have
             }
           }
+
+          // Check if aborted before setting state
+          if (abortController.signal.aborted) return;
 
           if (infoData && !infoData.error) {
             setInfo(infoData);
@@ -362,47 +423,87 @@ export function useAircraftDetail({
             } else {
               // No photo - trigger fetch in background
               setPhotoState('loading');
-              fetch(`${baseUrl}/api/v1/airframes/${hex}/photos/fetch/`, { method: 'POST' }).catch(() => {});
+              fetch(`${baseUrl}/api/v1/airframes/${hex}/photos/fetch/`, {
+                method: 'POST',
+                signal: abortController.signal
+              }).catch(() => {});
+
+              // Clear any existing photo polling interval
+              if (photoPollingRef.current) {
+                clearInterval(photoPollingRef.current);
+                intervalsRef.current.delete(photoPollingRef.current);
+                photoPollingRef.current = null;
+              }
+
               // Poll for photo
               let attempts = 0;
               const pollInterval = setInterval(async () => {
                 attempts++;
-                if (attempts > 5) {
+                if (attempts > 5 || abortController.signal.aborted) {
                   clearInterval(pollInterval);
-                  setPhotoState('error');
+                  intervalsRef.current.delete(pollInterval);
+                  photoPollingRef.current = null;
+                  if (!abortController.signal.aborted) {
+                    setPhotoState('error');
+                  }
                   return;
                 }
                 try {
-                  const retryRes = await fetch(`${baseUrl}/api/v1/airframes/${hex}/`);
+                  const retryRes = await fetch(`${baseUrl}/api/v1/airframes/${currentHex}/`, {
+                    signal: abortController.signal
+                  });
                   const retryData = await safeJson(retryRes);
                   if (retryData?.photo_url) {
                     clearInterval(pollInterval);
+                    intervalsRef.current.delete(pollInterval);
+                    photoPollingRef.current = null;
                     setPhotoInfo({
                       photo_url: retryData.photo_url,
                       thumbnail_url: retryData.photo_thumbnail_url,
                     });
                     setPhotoState('loaded');
                   }
-                } catch {}
+                } catch (e) {
+                  if (e.name === 'AbortError') {
+                    clearInterval(pollInterval);
+                    intervalsRef.current.delete(pollInterval);
+                    photoPollingRef.current = null;
+                  }
+                }
               }, 3000);
+
+              photoPollingRef.current = pollInterval;
+              intervalsRef.current.add(pollInterval);
             }
           } else {
             setPhotoState('error');
           }
         }
       } catch (err) {
-        console.log('Aircraft detail fetch error:', err.message);
+        if (err.name === 'AbortError') return;
+        console.error('Aircraft detail fetch error:', err);
+        setError({ message: 'Failed to load aircraft details. Please try again.', originalError: err });
       }
-      setLoading(false);
-      setLoadedTabs(prev => ({ ...prev, info: true }));
+      if (!abortController.signal.aborted) {
+        setLoading(false);
+        setLoadedTabs(prev => ({ ...prev, info: true }));
+      }
     };
     fetchInfoAndPhoto();
+
+    return () => {
+      abortController.abort();
+    };
   }, [hex, baseUrl, info, wsRequest, wsConnected]);
 
   // Lazy load ACARS data
   const prevAcarsHoursRef = useRef(acarsHours);
   useEffect(() => {
     if (activeTab !== 'acars' || loadedTabs.acars) return;
+
+    const abortController = new AbortController();
+    const currentHex = hex;
+
     const fetchAcarsData = async () => {
       try {
         let acarsFound = [];
@@ -424,33 +525,52 @@ export function useAircraftDetail({
             console.debug('ACARS WS request failed:', err.message);
           }
         }
+
+        // Check if aborted or hex changed before continuing
+        if (abortController.signal.aborted) return;
+
         // Django API uses /api/v1/acars (was /api/v1/acars/messages)
         if (acarsFound.length === 0) {
-          const acarsRes = await fetch(`${baseUrl}/api/v1/acars?icao_hex=${hex}&hours=${acarsHours}&limit=50`);
+          const acarsRes = await fetch(`${baseUrl}/api/v1/acars?icao_hex=${hex}&hours=${acarsHours}&limit=50`, {
+            signal: abortController.signal
+          });
           const acarsData = await safeJson(acarsRes);
           if (acarsData) acarsFound = acarsData.messages || acarsData.results || (Array.isArray(acarsData) ? acarsData : []);
           if (acarsFound.length === 0 && callsign) {
-            const callsignRes = await fetch(`${baseUrl}/api/v1/acars?callsign=${encodeURIComponent(callsign)}&hours=${acarsHours}&limit=50`);
+            const callsignRes = await fetch(`${baseUrl}/api/v1/acars?callsign=${encodeURIComponent(callsign)}&hours=${acarsHours}&limit=50`, {
+              signal: abortController.signal
+            });
             const callsignData = await safeJson(callsignRes);
             if (callsignData) acarsFound = callsignData.messages || callsignData.results || (Array.isArray(callsignData) ? callsignData : []);
           }
           if (acarsFound.length === 0) {
-            const recentRes = await fetch(`${baseUrl}/api/v1/acars?limit=100`);
+            const recentRes = await fetch(`${baseUrl}/api/v1/acars?limit=100`, {
+              signal: abortController.signal
+            });
             const recentData = await safeJson(recentRes);
             const allRecent = recentData?.messages || recentData?.results || (Array.isArray(recentData) ? recentData : []);
             acarsFound = allRecent.filter(msg =>
-              (msg.icao_hex && msg.icao_hex.toUpperCase() === hex.toUpperCase()) ||
+              (msg.icao_hex && msg.icao_hex.toUpperCase() === currentHex.toUpperCase()) ||
               callsignsMatch(msg.callsign, callsign)
             );
           }
         }
-        setAcarsMessages(acarsFound);
-        setLoadedTabs(prev => ({ ...prev, acars: true }));
+
+        // Check if still mounted and hex hasn't changed before setting state
+        if (!abortController.signal.aborted) {
+          setAcarsMessages(acarsFound);
+          setLoadedTabs(prev => ({ ...prev, acars: true }));
+        }
       } catch (err) {
+        if (err.name === 'AbortError') return;
         console.log('ACARS fetch error:', err.message);
       }
     };
     fetchAcarsData();
+
+    return () => {
+      abortController.abort();
+    };
   }, [activeTab, loadedTabs.acars, hex, baseUrl, acarsHours, aircraft?.flight, wsRequest, wsConnected]);
 
   // Refetch ACARS when hours change
@@ -460,6 +580,10 @@ export function useAircraftDetail({
       return;
     }
     prevAcarsHoursRef.current = acarsHours;
+
+    const abortController = new AbortController();
+    const currentHex = hex;
+
     const fetchAcarsMessages = async () => {
       try {
         let acarsFound = [];
@@ -480,39 +604,61 @@ export function useAircraftDetail({
             console.debug('ACARS WS request failed:', err.message);
           }
         }
+
+        // Check if aborted before continuing
+        if (abortController.signal.aborted) return;
+
         // Django API uses /api/v1/acars (was /api/v1/acars/messages)
         if (acarsFound.length === 0) {
-          const acarsRes = await fetch(`${baseUrl}/api/v1/acars?icao_hex=${hex}&hours=${acarsHours}&limit=100`);
+          const acarsRes = await fetch(`${baseUrl}/api/v1/acars?icao_hex=${hex}&hours=${acarsHours}&limit=100`, {
+            signal: abortController.signal
+          });
           const acarsData = await safeJson(acarsRes);
           if (acarsData) acarsFound = acarsData.messages || acarsData.results || (Array.isArray(acarsData) ? acarsData : []);
           if (acarsFound.length === 0 && callsign) {
-            const callsignRes = await fetch(`${baseUrl}/api/v1/acars?callsign=${encodeURIComponent(callsign)}&hours=${acarsHours}&limit=100`);
+            const callsignRes = await fetch(`${baseUrl}/api/v1/acars?callsign=${encodeURIComponent(callsign)}&hours=${acarsHours}&limit=100`, {
+              signal: abortController.signal
+            });
             const callsignData = await safeJson(callsignRes);
             if (callsignData) acarsFound = callsignData.messages || callsignData.results || (Array.isArray(callsignData) ? callsignData : []);
           }
           if (acarsFound.length === 0) {
-            const recentRes = await fetch(`${baseUrl}/api/v1/acars?limit=100`);
+            const recentRes = await fetch(`${baseUrl}/api/v1/acars?limit=100`, {
+              signal: abortController.signal
+            });
             const recentData = await safeJson(recentRes);
             const allRecent = recentData?.messages || recentData?.results || (Array.isArray(recentData) ? recentData : []);
             const cutoffTime = Date.now() - (acarsHours * 60 * 60 * 1000);
             acarsFound = allRecent.filter(msg => {
               const msgTime = typeof msg.timestamp === 'number' ? msg.timestamp * 1000 : new Date(msg.timestamp).getTime();
-              const matchesAircraft = (msg.icao_hex && msg.icao_hex.toUpperCase() === hex.toUpperCase()) || callsignsMatch(msg.callsign, callsign);
+              const matchesAircraft = (msg.icao_hex && msg.icao_hex.toUpperCase() === currentHex.toUpperCase()) || callsignsMatch(msg.callsign, callsign);
               return matchesAircraft && msgTime >= cutoffTime;
             });
           }
         }
-        setAcarsMessages(acarsFound);
+
+        // Check if still valid before setting state
+        if (!abortController.signal.aborted) {
+          setAcarsMessages(acarsFound);
+        }
       } catch (err) {
+        if (err.name === 'AbortError') return;
         console.log('ACARS messages fetch error:', err.message);
       }
     };
     fetchAcarsMessages();
+
+    return () => {
+      abortController.abort();
+    };
   }, [acarsHours, loadedTabs.acars, hex, baseUrl, aircraft?.flight, wsRequest, wsConnected]);
 
   // Lazy load sightings
   useEffect(() => {
     if ((activeTab !== 'track' && activeTab !== 'history') || loadedTabs.sightings) return;
+
+    const abortController = new AbortController();
+
     const fetchSightingsData = async () => {
       try {
         let sightingsData;
@@ -524,24 +670,40 @@ export function useAircraftDetail({
             console.debug('Sightings WS request failed:', err.message);
           }
         }
+
+        if (abortController.signal.aborted) return;
+
         // Django API uses /api/v1/sightings with query params (was /api/v1/history/sightings/{hex})
         if (!sightingsData) {
-          const sightingsRes = await fetch(`${baseUrl}/api/v1/sightings?icao_hex=${hex}&hours=24&limit=100`);
+          const sightingsRes = await fetch(`${baseUrl}/api/v1/sightings?icao_hex=${hex}&hours=24&limit=100`, {
+            signal: abortController.signal
+          });
           sightingsData = await safeJson(sightingsRes);
         }
-        if (sightingsData) setSightings(sightingsData.sightings || sightingsData.results || []);
-        setLoadedTabs(prev => ({ ...prev, sightings: true }));
+
+        if (!abortController.signal.aborted) {
+          if (sightingsData) setSightings(sightingsData.sightings || sightingsData.results || []);
+          setLoadedTabs(prev => ({ ...prev, sightings: true }));
+        }
       } catch (err) {
+        if (err.name === 'AbortError') return;
         console.log('Sightings fetch error:', err.message);
       }
     };
     fetchSightingsData();
+
+    return () => {
+      abortController.abort();
+    };
   }, [activeTab, loadedTabs.sightings, hex, baseUrl, wsRequest, wsConnected]);
 
   // Lazy load safety events
   const prevSafetyHoursRef = useRef(safetyHours);
   useEffect(() => {
     if (activeTab !== 'safety' || loadedTabs.safety) return;
+
+    const abortController = new AbortController();
+
     const fetchSafetyData = async () => {
       try {
         let safetyData = null;
@@ -553,17 +715,30 @@ export function useAircraftDetail({
             console.debug('Safety events WS request failed:', err.message);
           }
         }
+
+        if (abortController.signal.aborted) return;
+
         if (!safetyData) {
-          const safetyRes = await fetch(`${baseUrl}/api/v1/safety/events?icao_hex=${hex}&hours=${safetyHours}&limit=100`);
+          const safetyRes = await fetch(`${baseUrl}/api/v1/safety/events?icao_hex=${hex}&hours=${safetyHours}&limit=100`, {
+            signal: abortController.signal
+          });
           safetyData = await safeJson(safetyRes);
         }
-        if (safetyData) setSafetyEvents(safetyData.events || []);
-        setLoadedTabs(prev => ({ ...prev, safety: true }));
+
+        if (!abortController.signal.aborted) {
+          if (safetyData) setSafetyEvents(safetyData.events || []);
+          setLoadedTabs(prev => ({ ...prev, safety: true }));
+        }
       } catch (err) {
+        if (err.name === 'AbortError') return;
         console.log('Safety events fetch error:', err.message);
       }
     };
     fetchSafetyData();
+
+    return () => {
+      abortController.abort();
+    };
   }, [activeTab, loadedTabs.safety, hex, baseUrl, safetyHours, wsRequest, wsConnected]);
 
   // Refetch safety events when hours change
@@ -573,6 +748,9 @@ export function useAircraftDetail({
       return;
     }
     prevSafetyHoursRef.current = safetyHours;
+
+    const abortController = new AbortController();
+
     const fetchSafetyEvents = async () => {
       try {
         let safetyData = null;
@@ -584,22 +762,38 @@ export function useAircraftDetail({
             console.debug('Safety events WS request failed:', err.message);
           }
         }
+
+        if (abortController.signal.aborted) return;
+
         if (!safetyData) {
-          const safetyRes = await fetch(`${baseUrl}/api/v1/safety/events?icao_hex=${hex}&hours=${safetyHours}&limit=100`);
+          const safetyRes = await fetch(`${baseUrl}/api/v1/safety/events?icao_hex=${hex}&hours=${safetyHours}&limit=100`, {
+            signal: abortController.signal
+          });
           safetyData = await safeJson(safetyRes);
         }
-        if (safetyData) setSafetyEvents(safetyData.events || []);
+
+        if (!abortController.signal.aborted && safetyData) {
+          setSafetyEvents(safetyData.events || []);
+        }
       } catch (err) {
+        if (err.name === 'AbortError') return;
         console.log('Safety events fetch error:', err.message);
       }
     };
     fetchSafetyEvents();
+
+    return () => {
+      abortController.abort();
+    };
   }, [safetyHours, loadedTabs.safety, hex, baseUrl, wsRequest, wsConnected]);
 
   // Lazy load radio transmissions
   const prevRadioHoursRef = useRef(radioHours);
   useEffect(() => {
     if (activeTab !== 'radio' || loadedTabs.radio) return;
+
+    const abortController = new AbortController();
+
     const fetchRadioTransmissions = async () => {
       setRadioLoading(true);
       try {
@@ -615,6 +809,9 @@ export function useAircraftDetail({
             console.debug('Radio transmissions WS request failed:', err.message);
           }
         }
+
+        if (abortController.signal.aborted) return;
+
         if (!radioData) {
           const params = new URLSearchParams({
             include_radio_calls: 'true',
@@ -622,17 +819,30 @@ export function useAircraftDetail({
             radio_limit: '50',
           });
           if (callsign) params.append('callsign', callsign);
-          const res = await fetch(`${baseUrl}/api/v1/audio/matched/?${params}`);
+          const res = await fetch(`${baseUrl}/api/v1/audio/matched/?${params}`, {
+            signal: abortController.signal
+          });
           radioData = await safeJson(res);
         }
-        if (radioData) setRadioTransmissions(radioData.matched_calls || []);
-        setLoadedTabs(prev => ({ ...prev, radio: true }));
+
+        if (!abortController.signal.aborted) {
+          if (radioData) setRadioTransmissions(radioData.matched_calls || []);
+          setLoadedTabs(prev => ({ ...prev, radio: true }));
+          setRadioLoading(false);
+        }
       } catch (err) {
+        if (err.name === 'AbortError') return;
         console.log('Radio transmissions fetch error:', err.message);
+        if (!abortController.signal.aborted) {
+          setRadioLoading(false);
+        }
       }
-      setRadioLoading(false);
     };
     fetchRadioTransmissions();
+
+    return () => {
+      abortController.abort();
+    };
   }, [activeTab, loadedTabs.radio, hex, baseUrl, radioHours, aircraft?.flight, wsRequest, wsConnected]);
 
   // Refetch radio transmissions when hours change
@@ -642,6 +852,9 @@ export function useAircraftDetail({
       return;
     }
     prevRadioHoursRef.current = radioHours;
+
+    const abortController = new AbortController();
+
     const fetchRadioTransmissions = async () => {
       setRadioLoading(true);
       try {
@@ -657,6 +870,9 @@ export function useAircraftDetail({
             console.debug('Radio transmissions WS request failed:', err.message);
           }
         }
+
+        if (abortController.signal.aborted) return;
+
         if (!radioData) {
           const params = new URLSearchParams({
             include_radio_calls: 'true',
@@ -664,16 +880,29 @@ export function useAircraftDetail({
             radio_limit: '50',
           });
           if (callsign) params.append('callsign', callsign);
-          const res = await fetch(`${baseUrl}/api/v1/audio/matched/?${params}`);
+          const res = await fetch(`${baseUrl}/api/v1/audio/matched/?${params}`, {
+            signal: abortController.signal
+          });
           radioData = await safeJson(res);
         }
-        if (radioData) setRadioTransmissions(radioData.matched_calls || []);
+
+        if (!abortController.signal.aborted) {
+          if (radioData) setRadioTransmissions(radioData.matched_calls || []);
+          setRadioLoading(false);
+        }
       } catch (err) {
+        if (err.name === 'AbortError') return;
         console.log('Radio transmissions fetch error:', err.message);
+        if (!abortController.signal.aborted) {
+          setRadioLoading(false);
+        }
       }
-      setRadioLoading(false);
     };
     fetchRadioTransmissions();
+
+    return () => {
+      abortController.abort();
+    };
   }, [radioHours, loadedTabs.radio, hex, baseUrl, aircraft?.flight, wsRequest, wsConnected]);
 
   // Subscribe to global audio state
@@ -695,7 +924,11 @@ export function useAircraftDetail({
   // Periodically refresh sightings in live mode on Track tab
   useEffect(() => {
     if (activeTab !== 'track' || !trackLiveMode) return;
+
+    const abortController = new AbortController();
+
     const refreshSightings = async () => {
+      if (abortController.signal.aborted) return;
       try {
         let data;
         if (wsRequest && wsConnected) {
@@ -704,17 +937,29 @@ export function useAircraftDetail({
           else throw new Error('Invalid sightings response');
         } else {
           // Django API uses /api/v1/sightings with query params (was /api/v1/history/sightings/{hex})
-          const res = await fetch(`${baseUrl}/api/v1/sightings?icao_hex=${hex}&hours=24&limit=100`);
+          const res = await fetch(`${baseUrl}/api/v1/sightings?icao_hex=${hex}&hours=24&limit=100`, {
+            signal: abortController.signal
+          });
           data = await safeJson(res);
           if (!data) throw new Error('HTTP request failed');
         }
-        if (data) setSightings(data.sightings || data.results || []);
+        if (!abortController.signal.aborted && data) {
+          setSightings(data.sightings || data.results || []);
+        }
       } catch (err) {
+        if (err.name === 'AbortError') return;
         console.log('Sightings refresh error:', err.message);
       }
     };
+
     const interval = setInterval(refreshSightings, 30000);
-    return () => clearInterval(interval);
+    intervalsRef.current.add(interval);
+
+    return () => {
+      abortController.abort();
+      clearInterval(interval);
+      intervalsRef.current.delete(interval);
+    };
   }, [activeTab, trackLiveMode, hex, baseUrl, wsRequest, wsConnected]);
 
   // Filter radio transmissions
@@ -832,11 +1077,20 @@ export function useAircraftDetail({
     }
   }, [hex, aircraft?.flight, radioAutoplay, handleRadioPlay, filteredRadioTransmissions]);
 
+  // Retry function to clear error and refetch data
+  const retry = useCallback(() => {
+    setError(null);
+    setInfo(null);
+    setLoadedTabs({});
+  }, []);
+
   return {
     // Core
     hex,
     info,
     loading,
+    error,
+    retry,
     loadedTabs,
     activeTab,
     setActiveTab,

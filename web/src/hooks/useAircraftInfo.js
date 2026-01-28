@@ -44,6 +44,13 @@ export function useAircraftInfo({
   const cacheRef = useRef(cache);
   cacheRef.current = cache;
 
+  // Ref to hold latest cacheTTL for use in async callbacks (avoids stale closures)
+  const cacheTTLRef = useRef(cacheTTL);
+  cacheTTLRef.current = cacheTTL;
+
+  // Max cache size for LRU eviction
+  const MAX_CACHE_SIZE = 1000;
+
   // Errors received from WebSocket: { [icao]: { error_type, error_message, source, timestamp } }
   const [errors, setErrors] = useState({});
 
@@ -57,6 +64,25 @@ export function useAircraftInfo({
   // Retry queue with backoff info
   const retryQueue = useRef(new Map()); // icao -> { retryCount, nextRetryAt }
   const retryTimeoutRef = useRef(null);
+
+  /**
+   * Enforce max cache size with LRU eviction
+   * Returns a new cache object with oldest entries removed if over limit
+   */
+  const enforceMaxCacheSize = useCallback((cacheObj) => {
+    const entries = Object.entries(cacheObj);
+    if (entries.length <= MAX_CACHE_SIZE) {
+      return cacheObj;
+    }
+    // Sort by fetchedAt (oldest first) and keep only the most recent MAX_CACHE_SIZE entries
+    entries.sort((a, b) => a[1].fetchedAt - b[1].fetchedAt);
+    const toKeep = entries.slice(entries.length - MAX_CACHE_SIZE);
+    const result = {};
+    for (const [icao, entry] of toKeep) {
+      result[icao] = entry;
+    }
+    return result;
+  }, []);
 
   /**
    * Check if cached data is still valid
@@ -197,12 +223,14 @@ export function useAircraftInfo({
       }
 
       if (data) {
-        setCache(prev => ({
+        setCache(prev => enforceMaxCacheSize({
           ...prev,
           [icao]: { data, fetchedAt: Date.now() }
         }));
         // Clear from retry queue on success
         retryQueue.current.delete(icao);
+        // Clear any previous error state on success
+        clearError(icao);
       }
 
       return data;
@@ -216,12 +244,26 @@ export function useAircraftInfo({
           nextRetryAt: Date.now() + delay
         });
         scheduleRetryProcessing();
+      } else {
+        // Max retries exhausted - clear cache entry so it can be retried fresh later
+        // and record the error for visibility
+        setCache(prev => {
+          const next = { ...prev };
+          delete next[icao];
+          return next;
+        });
+        retryQueue.current.delete(icao);
+        recordError(icao, {
+          error_type: 'fetch_failed',
+          error_message: `Failed to fetch aircraft info after ${maxRetries} retries`,
+          source: 'useAircraftInfo',
+        });
       }
       return null;
     } finally {
       pendingFetches.current.delete(icao);
     }
-  }, [wsRequest, wsConnected, apiBaseUrl, maxRetries]);
+  }, [wsRequest, wsConnected, apiBaseUrl, maxRetries, recordError, clearError, enforceMaxCacheSize]);
 
   /**
    * Fetch bulk aircraft info (cached data only from backend)
@@ -315,15 +357,20 @@ export function useAircraftInfo({
         }
       }
 
-      // Update cache with results
+      // Update cache with results (with LRU eviction if needed)
       const now = Date.now();
       setCache(prev => {
         const updates = {};
         for (const [icao, data] of Object.entries(results)) {
           updates[icao.toUpperCase()] = { data, fetchedAt: now };
         }
-        return { ...prev, ...updates };
+        return enforceMaxCacheSize({ ...prev, ...updates });
       });
+
+      // Clear any previous error state on success (outside state setter to avoid side effects)
+      for (const icao of Object.keys(results)) {
+        clearError(icao.toUpperCase());
+      }
 
       // Queue individual lookups for aircraft not in bulk results (will trigger backend fetch)
       const notFound = toFetch.filter(icao => !results[icao]);
@@ -333,7 +380,7 @@ export function useAircraftInfo({
     } finally {
       toFetch.forEach(icao => pendingFetches.current.delete(icao));
     }
-  }, [apiBaseUrl, bulkBatchSize, getCached, wsRequest, wsConnected]);
+  }, [apiBaseUrl, bulkBatchSize, getCached, wsRequest, wsConnected, clearError, enforceMaxCacheSize]);
 
   /**
    * Queue an aircraft for deferred bulk lookup
@@ -354,16 +401,18 @@ export function useAircraftInfo({
 
   /**
    * Check if icao is in cache using ref (for use in async callbacks to avoid stale closures)
+   * Uses cacheTTLRef to always access current cacheTTL value
    */
   const isInCacheRef = (icao) => {
     const entry = cacheRef.current[icao?.toUpperCase()];
     if (!entry || !entry.fetchedAt) return false;
     if (entry.error) return false;
-    return Date.now() - entry.fetchedAt < cacheTTL;
+    return Date.now() - entry.fetchedAt < cacheTTLRef.current;
   };
 
   /**
    * Process the bulk queue
+   * Uses refs (cacheRef, cacheTTLRef) to avoid stale closure issues in setTimeout callbacks
    */
   const processBulkQueue = useCallback(async () => {
     if (bulkQueue.current.size === 0) return;
@@ -382,6 +431,7 @@ export function useAircraftInfo({
     for (let i = 0; i < stillMissing.length; i++) {
       const icao = stillMissing[i];
       // Use setTimeout to spread out requests
+      // isInCacheRef uses refs internally, so no stale closure issues
       setTimeout(() => {
         // Use isInCacheRef for latest cache state inside timeout callback
         if (!isInCacheRef(icao) && !pendingFetches.current.has(icao)) {
@@ -389,7 +439,7 @@ export function useAircraftInfo({
         }
       }, i * 50); // 50ms between requests
     }
-  }, [fetchBulkInfo, fetchSingleInfo, cacheTTL]);
+  }, [fetchBulkInfo, fetchSingleInfo]);
 
   /**
    * Schedule retry processing
@@ -504,24 +554,37 @@ export function useAircraftInfo({
     };
   }, []);
 
-  // Periodic cache cleanup (remove expired entries)
+  // Periodic cache cleanup (remove expired entries and enforce max size with LRU eviction)
   useEffect(() => {
     const cleanup = setInterval(() => {
       setCache(prev => {
         const now = Date.now();
+        const entries = Object.entries(prev);
+
+        // First pass: remove expired entries
+        let validEntries = entries.filter(([, entry]) =>
+          now - entry.fetchedAt < cacheTTLRef.current * 2
+        );
+
+        // Second pass: LRU eviction if still over max size
+        if (validEntries.length > MAX_CACHE_SIZE) {
+          // Sort by fetchedAt (oldest first) for LRU eviction
+          validEntries.sort((a, b) => a[1].fetchedAt - b[1].fetchedAt);
+          // Keep only the most recent MAX_CACHE_SIZE entries
+          validEntries = validEntries.slice(validEntries.length - MAX_CACHE_SIZE);
+        }
+
+        // Convert back to object
         const next = {};
-        for (const [icao, entry] of Object.entries(prev)) {
-          // Keep entries that are still valid or have recent errors (for retry)
-          if (now - entry.fetchedAt < cacheTTL * 2) {
-            next[icao] = entry;
-          }
+        for (const [icao, entry] of validEntries) {
+          next[icao] = entry;
         }
         return next;
       });
     }, 5 * 60 * 1000); // Cleanup every 5 minutes
 
     return () => clearInterval(cleanup);
-  }, [cacheTTL]);
+  }, []); // No dependencies needed - uses refs for current values
 
   return {
     // Get info for single aircraft

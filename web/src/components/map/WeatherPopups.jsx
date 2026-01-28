@@ -1,10 +1,36 @@
-import React from 'react';
-import { 
-  X, Cloud, Wind, Thermometer, Eye, Navigation, 
+import React, { useRef, useEffect, useCallback } from 'react';
+import {
+  X, Cloud, Wind, Thermometer, Eye, Navigation,
   Radio, Plane, ExternalLink, AlertTriangle, Snowflake
 } from 'lucide-react';
 import { useDraggable } from '../../hooks/useDraggable';
 import { decodeMetar, decodePirep } from '../../utils/decoders';
+
+/**
+ * Custom hook for popup accessibility (Escape key and auto-focus)
+ */
+function usePopupAccessibility(isOpen, onClose) {
+  const popupRef = useRef(null);
+
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Escape') {
+      onClose?.();
+    }
+  }, [onClose]);
+
+  useEffect(() => {
+    if (isOpen && popupRef.current) {
+      popupRef.current.focus();
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, handleKeyDown]);
+
+  return popupRef;
+}
 
 // Helper to convert wind direction to cardinal
 const windDirToCardinal = (deg) => {
@@ -18,23 +44,30 @@ const windDirToCardinal = (deg) => {
  */
 export function MetarPopup({ metar, onClose, mapMode, getDistanceNm, getBearing }) {
   const { position, isDragging, handleMouseDown } = useDraggable({ x: 100, y: 100 });
-  
+  const popupRef = usePopupAccessibility(!!metar, onClose);
+  const titleId = `metar-popup-title-${metar?.icaoId || metar?.stationId || 'unknown'}`;
+
   if (!metar) return null;
-  
+
   const decoded = decodeMetar(metar);
 
   return (
-    <div 
+    <div
+      ref={popupRef}
       className={`weather-popup metar-popup ${mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''}`}
       style={{ left: position.x, top: position.y }}
       onMouseDown={handleMouseDown}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      tabIndex={-1}
     >
-      <button className="popup-close no-drag" onClick={onClose}>
+      <button className="popup-close no-drag" onClick={onClose} aria-label="Close METAR popup">
         <X size={16} />
       </button>
       <div className="popup-header">
-        <Cloud size={20} />
-        <span className="popup-callsign">{metar.icaoId || metar.stationId || 'METAR'}</span>
+        <Cloud size={20} aria-hidden="true" />
+        <span id={titleId} className="popup-callsign">{metar.icaoId || metar.stationId || 'METAR'}</span>
         {decoded.flightCategory && (
           <span className={`flight-cat-badge ${decoded.flightCategory.toLowerCase()}`}>
             {decoded.flightCategory}
@@ -125,11 +158,13 @@ export function MetarPopup({ metar, onClose, mapMode, getDistanceNm, getBearing 
  */
 export function PirepPopup({ pirep, onClose, mapMode, getDistanceNm, getBearing }) {
   const { position, isDragging, handleMouseDown } = useDraggable({ x: 100, y: 100 });
-  
+  const popupRef = usePopupAccessibility(!!pirep, onClose);
+  const titleId = `pirep-popup-title-${pirep?.icaoId || 'unknown'}`;
+
   if (!pirep) return null;
-  
+
   const decoded = decodePirep(pirep);
-  
+
   // Determine severity based on content
   const hasTurbulence = decoded?.turbulence?.level >= 2;
   const hasIcing = decoded?.icing?.level >= 2;
@@ -137,17 +172,22 @@ export function PirepPopup({ pirep, onClose, mapMode, getDistanceNm, getBearing 
   const isUrgent = decoded?.isUrgent || hasTurbulence || hasIcing || hasWindshear;
 
   return (
-    <div 
+    <div
+      ref={popupRef}
       className={`weather-popup pirep-popup ${mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''} ${isUrgent ? 'urgent' : ''}`}
       style={{ left: position.x, top: position.y }}
       onMouseDown={handleMouseDown}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      tabIndex={-1}
     >
-      <button className="popup-close no-drag" onClick={onClose}>
+      <button className="popup-close no-drag" onClick={onClose} aria-label="Close PIREP popup">
         <X size={16} />
       </button>
       <div className="popup-header">
-        <AlertTriangle size={20} />
-        <span className="popup-callsign">{decoded?.location || pirep.icaoId || 'PIREP'}</span>
+        <AlertTriangle size={20} aria-hidden="true" />
+        <span id={titleId} className="popup-callsign">{decoded?.location || pirep.icaoId || 'PIREP'}</span>
         <span className={`pirep-type-badge ${pirep.pirepType?.toLowerCase() || 'ua'}`}>
           {pirep.pirepType || 'UA'}
         </span>
@@ -249,21 +289,28 @@ export function PirepPopup({ pirep, onClose, mapMode, getDistanceNm, getBearing 
  */
 export function NavaidPopup({ navaid, onClose, mapMode, getDistanceNm, getBearing }) {
   const { position, isDragging, handleMouseDown } = useDraggable({ x: 100, y: 100 });
-  
+  const popupRef = usePopupAccessibility(!!navaid, onClose);
+  const titleId = `navaid-popup-title-${navaid?.id || 'unknown'}`;
+
   if (!navaid) return null;
 
   return (
-    <div 
+    <div
+      ref={popupRef}
       className={`weather-popup navaid-popup ${mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''}`}
       style={{ left: position.x, top: position.y }}
       onMouseDown={handleMouseDown}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      tabIndex={-1}
     >
-      <button className="popup-close no-drag" onClick={onClose}>
+      <button className="popup-close no-drag" onClick={onClose} aria-label="Close navaid popup">
         <X size={16} />
       </button>
       <div className="popup-header">
-        <Radio size={20} />
-        <span className="popup-callsign">{navaid.id}</span>
+        <Radio size={20} aria-hidden="true" />
+        <span id={titleId} className="popup-callsign">{navaid.id}</span>
         <span className="navaid-type-badge">{navaid.type || 'NAV'}</span>
       </div>
       
@@ -328,23 +375,29 @@ export function NavaidPopup({ navaid, onClose, mapMode, getDistanceNm, getBearin
  */
 export function AirportPopup({ airport, onClose, mapMode, getDistanceNm, getBearing }) {
   const { position, isDragging, handleMouseDown } = useDraggable({ x: 100, y: 100 });
-  
+  const popupRef = usePopupAccessibility(!!airport, onClose);
+  const icao = airport?.icao || airport?.icaoId || airport?.faaId || airport?.id || 'APT';
+  const titleId = `airport-popup-title-${icao}`;
+
   if (!airport) return null;
-  
-  const icao = airport.icao || airport.icaoId || airport.faaId || airport.id || 'APT';
 
   return (
-    <div 
+    <div
+      ref={popupRef}
       className={`weather-popup airport-popup ${mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''}`}
       style={{ left: position.x, top: position.y }}
       onMouseDown={handleMouseDown}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      tabIndex={-1}
     >
-      <button className="popup-close no-drag" onClick={onClose}>
+      <button className="popup-close no-drag" onClick={onClose} aria-label="Close airport popup">
         <X size={16} />
       </button>
       <div className="popup-header">
-        <Plane size={20} />
-        <span className="popup-callsign">{icao}</span>
+        <Plane size={20} aria-hidden="true" />
+        <span id={titleId} className="popup-callsign">{icao}</span>
         {airport.class && (
           <span className={`airport-class-badge class-${airport.class.toLowerCase()}`}>
             Class {airport.class}

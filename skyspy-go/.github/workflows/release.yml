@@ -1,0 +1,192 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Test before release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Run tests
+        run: go test -v -race ./...
+
+  release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Get version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Build binaries
+        run: |
+          mkdir -p dist
+          VERSION=${{ steps.version.outputs.version }}
+          COMMIT=$(git rev-parse --short HEAD)
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          LDFLAGS="-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME}"
+
+          # Linux AMD64
+          echo "Building linux/amd64..."
+          GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/skyspy-linux-amd64 ./cmd/skyspy
+
+          # Linux ARM64
+          echo "Building linux/arm64..."
+          GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/skyspy-linux-arm64 ./cmd/skyspy
+
+          # macOS AMD64
+          echo "Building darwin/amd64..."
+          GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/skyspy-darwin-amd64 ./cmd/skyspy
+
+          # macOS ARM64 (Apple Silicon)
+          echo "Building darwin/arm64..."
+          GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/skyspy-darwin-arm64 ./cmd/skyspy
+
+          # Windows AMD64
+          echo "Building windows/amd64..."
+          GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/skyspy-windows-amd64.exe ./cmd/skyspy
+
+          # Windows ARM64
+          echo "Building windows/arm64..."
+          GOOS=windows GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/skyspy-windows-arm64.exe ./cmd/skyspy
+
+          ls -la dist/
+
+      - name: Create checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+          cat checksums.txt
+
+      - name: Create archives
+        run: |
+          cd dist
+          VERSION=${{ steps.version.outputs.version }}
+
+          # Create tar.gz for Linux and macOS
+          for binary in skyspy-linux-amd64 skyspy-linux-arm64 skyspy-darwin-amd64 skyspy-darwin-arm64; do
+            tar -czvf "${binary}-${VERSION}.tar.gz" "$binary"
+          done
+
+          # Create zip for Windows
+          for binary in skyspy-windows-amd64.exe skyspy-windows-arm64.exe; do
+            zip "${binary%.exe}-${VERSION}.zip" "$binary"
+          done
+
+          ls -la
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$PREVIOUS_TAG" ]; then
+            # First release - get all commits
+            echo "## Changes" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" >> CHANGELOG.md
+          else
+            # Get commits since previous tag
+            echo "## Changes since $PREVIOUS_TAG" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" ${PREVIOUS_TAG}..HEAD >> CHANGELOG.md
+          fi
+
+          echo "" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "## Checksums" >> CHANGELOG.md
+          echo '```' >> CHANGELOG.md
+          cat dist/checksums.txt >> CHANGELOG.md
+          echo '```' >> CHANGELOG.md
+
+          cat CHANGELOG.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: SkySpy CLI ${{ steps.version.outputs.version }}
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+          files: |
+            dist/skyspy-linux-amd64-${{ steps.version.outputs.version }}.tar.gz
+            dist/skyspy-linux-arm64-${{ steps.version.outputs.version }}.tar.gz
+            dist/skyspy-darwin-amd64-${{ steps.version.outputs.version }}.tar.gz
+            dist/skyspy-darwin-arm64-${{ steps.version.outputs.version }}.tar.gz
+            dist/skyspy-windows-amd64-${{ steps.version.outputs.version }}.zip
+            dist/skyspy-windows-arm64-${{ steps.version.outputs.version }}.zip
+            dist/checksums.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: ${{ !contains(github.ref, '-') }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}

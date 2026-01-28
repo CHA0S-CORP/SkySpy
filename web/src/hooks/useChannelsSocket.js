@@ -384,12 +384,16 @@ export function useChannelsSocket(enabled, apiBase, topics = 'all') {
       setAircraft({});
       setStats({ count: 0 });
     }
-    // Clear pending requests
-    pendingRequests.current.forEach(({ reject, timeoutId }) => {
-      clearTimeout(timeoutId);
-      reject(new Error('WebSocket disconnected'));
-    });
+    // Clear pending requests - store entries to process, then clear map first
+    // to prevent double-rejection if timeout fires during iteration
+    const pendingEntries = Array.from(pendingRequests.current.entries());
     pendingRequests.current.clear();
+    pendingEntries.forEach(([, { reject, timeoutId }]) => {
+      clearTimeout(timeoutId);
+      if (mountedRef.current) {
+        reject(new Error('WebSocket disconnected'));
+      }
+    });
   }, []);
 
   // Use native WebSocket
@@ -419,11 +423,14 @@ export function useChannelsSocket(enabled, apiBase, topics = 'all') {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      pendingRequests.current.forEach(({ reject, timeoutId }) => {
-        clearTimeout(timeoutId);
-        reject(new Error('Component unmounting'));
-      });
+      // Clear pending requests - store entries to process, then clear map first
+      // to prevent double-rejection if timeout fires during iteration
+      const pendingEntries = Array.from(pendingRequests.current.entries());
       pendingRequests.current.clear();
+      pendingEntries.forEach(([, { timeoutId }]) => {
+        clearTimeout(timeoutId);
+        // Don't reject on unmount - component is gone, no one to handle the rejection
+      });
       // Clean up demo interval
       if (demoIntervalRef.current) {
         clearInterval(demoIntervalRef.current);
@@ -507,7 +514,10 @@ export function useChannelsSocket(enabled, apiBase, topics = 'all') {
       const timeoutId = setTimeout(() => {
         if (pendingRequests.current.has(requestId)) {
           pendingRequests.current.delete(requestId);
-          reject(new Error(`Request timeout: ${type}`));
+          // Only reject if component is still mounted to avoid React warnings
+          if (mountedRef.current) {
+            reject(new Error(`Request timeout: ${type}`));
+          }
         }
       }, timeoutMs);
 

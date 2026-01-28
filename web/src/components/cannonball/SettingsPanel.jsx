@@ -13,7 +13,7 @@ import {
   X, Volume2, VolumeX, Smartphone, Eye, EyeOff,
   Bell, BellOff, Radar, Filter, Moon, Sun,
   ChevronDown, ChevronUp, Vibrate,
-  Plane, Shield, AlertTriangle, Navigation
+  Plane, Shield, AlertTriangle, Navigation, Server, Cpu
 } from 'lucide-react';
 
 // Default settings
@@ -27,10 +27,11 @@ export const DEFAULT_SETTINGS = {
   hapticIntensity: 'normal', // gentle, normal, strong
 
   // Display
-  theme: 'dark', // dark, red, highContrast
-  displayMode: 'single', // single, grid, radar
+  theme: 'dark', // dark, red, highContrast, amoled, daylight
+  displayMode: 'single', // single, grid, radar, headsUp
   showEta: true,
   showMiniRadar: true,
+  showUrgencyScore: true,
   autoBrightness: true,
 
   // Filtering
@@ -50,6 +51,11 @@ export const DEFAULT_SETTINGS = {
   detectCircling: true,
   detectLoitering: true,
   loiterThreshold: 10, // minutes
+
+  // Backend integration
+  useBackend: true, // Use server-side pattern detection
+  showPatternDetails: true, // Show detailed pattern info
+  showAgencyInfo: true, // Show agency name when known
 };
 
 function ToggleButton({ active, onToggle, icon: Icon, activeIcon: ActiveIcon, label }) {
@@ -208,6 +214,23 @@ export function SettingsPanel({ settings, onChange, onClose }) {
                     <Moon size={14} /> Dark
                   </button>
                   <button
+                    className={settings.theme === 'amoled' ? 'active' : ''}
+                    onClick={() => updateSetting('theme', 'amoled')}
+                  >
+                    AMOLED
+                  </button>
+                  <button
+                    className={settings.theme === 'daylight' ? 'active' : ''}
+                    onClick={() => updateSetting('theme', 'daylight')}
+                  >
+                    <Sun size={14} /> Day
+                  </button>
+                </div>
+              </div>
+              <div className="settings-row">
+                <span>More Themes</span>
+                <div className="button-group">
+                  <button
                     className={settings.theme === 'red' ? 'active' : ''}
                     onClick={() => updateSetting('theme', 'red')}
                   >
@@ -217,7 +240,7 @@ export function SettingsPanel({ settings, onChange, onClose }) {
                     className={settings.theme === 'highContrast' ? 'active' : ''}
                     onClick={() => updateSetting('theme', 'highContrast')}
                   >
-                    High
+                    High Contrast
                   </button>
                 </div>
               </div>
@@ -229,6 +252,12 @@ export function SettingsPanel({ settings, onChange, onClose }) {
                     onClick={() => updateSetting('displayMode', 'single')}
                   >
                     Single
+                  </button>
+                  <button
+                    className={settings.displayMode === 'headsUp' ? 'active' : ''}
+                    onClick={() => updateSetting('displayMode', 'headsUp')}
+                  >
+                    <Navigation size={14} /> HUD
                   </button>
                   <button
                     className={settings.displayMode === 'grid' ? 'active' : ''}
@@ -258,6 +287,14 @@ export function SettingsPanel({ settings, onChange, onClose }) {
                   type="checkbox"
                   checked={settings.showMiniRadar}
                   onChange={(e) => updateSetting('showMiniRadar', e.target.checked)}
+                />
+              </div>
+              <div className="settings-toggle-row">
+                <span>Show Urgency Score</span>
+                <input
+                  type="checkbox"
+                  checked={settings.showUrgencyScore}
+                  onChange={(e) => updateSetting('showUrgencyScore', e.target.checked)}
                 />
               </div>
             </div>
@@ -342,6 +379,50 @@ export function SettingsPanel({ settings, onChange, onClose }) {
                 max={30}
                 unit=" min"
               />
+            </div>
+          )}
+        </div>
+
+        {/* Backend/Advanced Section */}
+        <div className="settings-section">
+          <SectionHeader
+            title="Advanced"
+            expanded={expandedSection === 'advanced'}
+            onToggle={() => toggleSection('advanced')}
+          />
+          {expandedSection === 'advanced' && (
+            <div className="section-content">
+              <div className="settings-toggle-row">
+                <span><Server size={14} /> Use Server Analysis</span>
+                <input
+                  type="checkbox"
+                  checked={settings.useBackend !== false}
+                  onChange={(e) => updateSetting('useBackend', e.target.checked)}
+                />
+              </div>
+              <div className="settings-info">
+                {settings.useBackend !== false
+                  ? 'Using server-side LE database and pattern detection for enhanced accuracy.'
+                  : 'Using local analysis only. Enable server analysis for better LE identification.'}
+              </div>
+              <div className="settings-toggle-row">
+                <span>Show Pattern Details</span>
+                <input
+                  type="checkbox"
+                  checked={settings.showPatternDetails}
+                  onChange={(e) => updateSetting('showPatternDetails', e.target.checked)}
+                  disabled={!settings.useBackend}
+                />
+              </div>
+              <div className="settings-toggle-row">
+                <span>Show Agency Info</span>
+                <input
+                  type="checkbox"
+                  checked={settings.showAgencyInfo}
+                  onChange={(e) => updateSetting('showAgencyInfo', e.target.checked)}
+                  disabled={!settings.useBackend}
+                />
+              </div>
             </div>
           )}
         </div>
