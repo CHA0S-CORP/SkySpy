@@ -1,0 +1,113 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e6]:
+      - img "SkySpy" [ref=e7]
+      - generic [ref=e8]:
+        - generic [ref=e9]: Sky
+        - generic [ref=e10]: Spy
+    - button "Collapse sidebar" [ref=e11] [cursor=pointer]:
+      - img [ref=e12]
+    - navigation [ref=e14]:
+      - button "Live Map" [ref=e15] [cursor=pointer]:
+        - img [ref=e16]
+        - generic [ref=e23]: Live Map
+      - button "Aircraft List" [ref=e24] [cursor=pointer]:
+        - img [ref=e25]
+        - generic [ref=e27]: Aircraft List
+      - button "Statistics" [ref=e28] [cursor=pointer]:
+        - img [ref=e29]
+        - generic [ref=e31]: Statistics
+      - button "History" [ref=e32] [cursor=pointer]:
+        - img [ref=e33]
+        - generic [ref=e37]: History
+      - button "Radio" [ref=e38] [cursor=pointer]:
+        - img [ref=e39]
+        - generic [ref=e45]: Radio
+      - button "NOTAMs" [ref=e46] [cursor=pointer]:
+        - img [ref=e47]
+        - generic [ref=e49]: NOTAMs
+      - button "Archive" [ref=e50] [cursor=pointer]:
+        - img [ref=e51]
+        - generic [ref=e54]: Archive
+      - button "Alerts" [ref=e55] [cursor=pointer]:
+        - img [ref=e56]
+        - generic [ref=e59]: Alerts
+      - button "System" [ref=e60] [cursor=pointer]:
+        - img [ref=e61]
+        - generic [ref=e63]: System
+      - button "Cannonball" [ref=e64] [cursor=pointer]:
+        - img [ref=e65]
+        - generic [ref=e67]: Cannonball
+      - button "Services" [ref=e69] [cursor=pointer]:
+        - img [ref=e70]
+        - generic [ref=e74]: Services
+        - img [ref=e75]
+    - generic [ref=e77]:
+      - generic [ref=e80]: OFFLINE
+      - generic [ref=e81]:
+        - generic [ref=e82]: v2.5.0
+        - generic [ref=e83]: © CHAOS.CORP
+  - generic [ref=e84]:
+    - banner [ref=e85]:
+      - generic [ref=e86]:
+        - generic [ref=e87]:
+          - img [ref=e88]
+          - generic [ref=e90]: "8"
+          - generic [ref=e91]: Aircraft
+        - generic [ref=e92]:
+          - img [ref=e93]
+          - generic [ref=e96]: "--"
+          - generic [ref=e97]: Lat
+        - generic [ref=e98]:
+          - img [ref=e99]
+          - generic [ref=e102]: "--"
+          - generic [ref=e103]: Lon
+        - generic [ref=e104]:
+          - img [ref=e105]
+          - generic [ref=e110]: "0"
+          - generic [ref=e111]: Online
+      - generic [ref=e112]:
+        - button "Enable browser notifications" [ref=e113] [cursor=pointer]:
+          - img [ref=e114]
+        - button [ref=e119] [cursor=pointer]:
+          - img [ref=e120]
+        - generic [ref=e123]:
+          - img [ref=e124]
+          - generic [ref=e127]: 16:47:26 UTC
+    - generic [ref=e129]:
+      - generic [ref=e130]:
+        - generic:
+          - generic: RNG
+          - button "10"
+          - button "25"
+          - button "50"
+          - button "100"
+          - button "200"
+      - generic [ref=e132]:
+        - img [ref=e133]
+        - textbox "Search callsign, squawk, or ICAO..." [ref=e136]
+        - generic [ref=e137]:
+          - generic [ref=e138]:
+            - img [ref=e139]
+            - generic [ref=e142]: 16:47:26 Z
+          - button "Mute" [ref=e143] [cursor=pointer]:
+            - img [ref=e144]
+          - button "ACARS Messages" [ref=e147] [cursor=pointer]:
+            - img [ref=e148]
+          - button "Traffic Filters" [ref=e150] [cursor=pointer]:
+            - img [ref=e151]
+          - button "Map Layers" [ref=e153] [cursor=pointer]:
+            - img [ref=e154]
+          - button "Show short tracks (ATC trails)" [ref=e158] [cursor=pointer]:
+            - img [ref=e159]
+          - button "Show flight track" [disabled] [ref=e161] [cursor=pointer]:
+            - img [ref=e162]
+          - button "Re-center view (middle-click + drag to pan)" [ref=e164] [cursor=pointer]:
+            - img [ref=e165]
+          - button "Fullscreen" [ref=e167] [cursor=pointer]:
+            - img [ref=e168]
+      - status [ref=e173]: 8 aircraft in view.
+```
