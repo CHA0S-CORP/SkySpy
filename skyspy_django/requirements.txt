@@ -64,3 +64,6 @@ pytest-django>=4.7
 pytest-asyncio>=0.23
 pytest-cov>=4.1
 factory-boy>=3.3
+
+# Analytics
+numpy>=1.26

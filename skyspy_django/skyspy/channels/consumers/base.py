@@ -175,6 +175,13 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
     enable_rate_limiting = True
     enable_batching = False  # Disabled by default, enable in high-traffic consumers
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Initialize rate limiter and batcher to None (set up in connect)
+        self._rate_limiter = None
+        self._message_batcher = None
+        self.subscribed_topics = set()
+
     async def connect(self):
         """Handle WebSocket connection."""
         # Accept the connection

@@ -103,7 +103,8 @@ class AlertService:
                 elif rule.requires_position:
                     candidates = [ac for ac in aircraft_list if ac.get('distance_nm') is not None]
                 elif rule.requires_altitude:
-                    candidates = [ac for ac in aircraft_list if ac.get('alt') is not None]
+                    # Check both 'alt' and 'alt_baro' since ADS-B data uses alt_baro
+                    candidates = [ac for ac in aircraft_list if ac.get('alt') is not None or ac.get('alt_baro') is not None]
                 elif rule.requires_speed:
                     candidates = [ac for ac in aircraft_list if ac.get('gs') is not None]
                 else:

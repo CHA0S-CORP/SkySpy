@@ -103,6 +103,14 @@ class StatsConsumer(BaseConsumer):
         """Handle WebSocket connection."""
         await self.accept()
 
+        # Initialize rate limiter from base class
+        from skyspy.channels.consumers.base import RateLimiter
+        if self.enable_rate_limiting:
+            self._rate_limiter = RateLimiter()
+        else:
+            self._rate_limiter = None
+        self._message_batcher = None
+
         # Parse query parameters for initial stat types
         query_string = self.scope.get('query_string', b'').decode()
         stat_types = self._parse_stat_types(query_string)

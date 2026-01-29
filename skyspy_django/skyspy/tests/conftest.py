@@ -73,18 +73,27 @@ from skyspy.channels.consumers.audio import AudioConsumer
 
 @pytest.fixture(scope='session')
 def django_db_setup():
-    """Set up test database."""
-    settings.DATABASES['default'] = {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': ':memory:',
-        'TIME_ZONE': 'UTC',
-        'ATOMIC_REQUESTS': False,
-        'AUTOCOMMIT': True,
-        'CONN_MAX_AGE': 0,
-        'CONN_HEALTH_CHECKS': False,
-        'OPTIONS': {},
-        'TEST': {'NAME': ':memory:'},
-    }
+    """
+    Set up test database.
+
+    When DATABASE_URL is set (e.g., in Docker), use the configured PostgreSQL database.
+    Otherwise, fall back to SQLite in-memory for local testing.
+    """
+    import os
+    if not os.environ.get('DATABASE_URL'):
+        # Only use SQLite for local testing without DATABASE_URL
+        settings.DATABASES['default'] = {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': ':memory:',
+            'TIME_ZONE': 'UTC',
+            'ATOMIC_REQUESTS': False,
+            'AUTOCOMMIT': True,
+            'CONN_MAX_AGE': 0,
+            'CONN_HEALTH_CHECKS': False,
+            'OPTIONS': {},
+            'TEST': {'NAME': ':memory:'},
+        }
+    # When DATABASE_URL is set, test_settings.py already configures the database
 
 
 @pytest.fixture(autouse=True)

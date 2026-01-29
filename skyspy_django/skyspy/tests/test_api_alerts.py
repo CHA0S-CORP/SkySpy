@@ -681,20 +681,21 @@ class AlertsIntegrationTests(APITestCase):
         AlertHistory.objects.all().delete()
         # Create a superuser for authenticated requests
         from django.contrib.auth import get_user_model
+        import uuid
         User = get_user_model()
+        username = f'admin_{uuid.uuid4().hex[:8]}'
         self.user = User.objects.create_superuser(
-            username='admin',
-            email='admin@test.com',
+            username=username,
+            email=f'{username}@test.com',
             password='testpass123'
         )
         self.client.force_authenticate(user=self.user)
 
     def tearDown(self):
         """Clean up after tests."""
+        self.client.force_authenticate(user=None)
         AlertRule.objects.all().delete()
         AlertHistory.objects.all().delete()
-        from django.contrib.auth import get_user_model
-        get_user_model().objects.all().delete()
 
     def test_crud_workflow(self):
         """Test complete CRUD workflow."""

@@ -140,6 +140,11 @@ class FeatureBasedPermission(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
         """Check object-level permissions (e.g., ownership)."""
+        # Check auth mode - public mode allows all access
+        auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
+        if auth_mode == 'public':
+            return True
+
         # For write operations, check ownership
         if request.method not in permissions.SAFE_METHODS:
             return self._check_ownership(request, view, obj)
@@ -410,6 +415,11 @@ class IsOwnerOrAdmin(permissions.BasePermission):
     """
 
     def has_object_permission(self, request, view, obj):
+        # Check auth mode - public mode allows all access
+        auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
+        if auth_mode == 'public':
+            return True
+
         user = request.user
         if not user or not user.is_authenticated:
             return False
