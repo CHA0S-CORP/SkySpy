@@ -6,11 +6,11 @@ const MAX_STREAMING_ITEMS = 500;
 /**
  * useHistoryStream - Hook for real-time streaming of history data
  *
- * Subscribes to native WebSocket messages for live ACARS messages,
+ * Subscribes to Socket.IO messages for live ACARS messages,
  * safety events, etc.
  *
  * @param {Object} options
- * @param {Function} options.subscribeMessages - Message subscriber function from useNativeWebSocket
+ * @param {Function} options.subscribeMessages - Message subscriber function from Socket.IO hook
  * @param {boolean} options.enabled - Whether streaming is enabled
  * @param {string} options.type - Stream type: 'acars' | 'safety' | 'sightings' | 'all'
  * @param {Array} options.initialData - Initial data array

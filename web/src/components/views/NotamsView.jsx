@@ -3,7 +3,7 @@ import {
   AlertTriangle, FileWarning, Search, RefreshCw, X,
   Plane, Shield, Loader2
 } from 'lucide-react';
-import { useNativeWebSocket } from '../../hooks/useNativeWebSocket';
+import { useSocketIO } from '../../hooks/socket';
 import { NotamCard, TfrCard, NotamStats, AirportSearch, NOTAM_TYPES } from '../notams';
 
 // Main NotamsView component
@@ -129,13 +129,19 @@ export function NotamsView({ apiBase }) {
     }
   }, []);
 
-  // WebSocket connection
-  const { connected, send, reconnect } = useNativeWebSocket({
+  // Socket.IO connection using main namespace with notams topic subscription
+  // Note: Backend handles notams via main namespace '/' topics, not a separate namespace
+  const { connected, emit, reconnect, on } = useSocketIO({
     enabled: true,
     apiBase,
-    path: 'notams',
-    onMessage: handleMessage,
-    onConnect: () => { setLoading(true); setError(null); },
+    namespace: '/',
+    path: '/socket.io',
+    onConnect: () => {
+      setLoading(true);
+      setError(null);
+      // Subscribe to notams topic on the main namespace
+      emit('subscribe', { topics: ['notams'] });
+    },
     onDisconnect: () => {
       if (notams.length === 0 && !httpFallbackAttempted) fetchNotamsHttp();
     },
@@ -144,6 +150,42 @@ export function NotamsView({ apiBase }) {
       if (!httpFallbackAttempted) fetchNotamsHttp();
     },
   });
+
+  // Set up message event listeners
+  useEffect(() => {
+    if (!connected) return;
+
+    const eventTypes = [
+      'notams:snapshot',
+      'notams:new',
+      'notams:update',
+      'notams:expired',
+      'notams:tfr_expired',
+      'notams:tfr_new',
+      'notams:stats',
+      'response',
+      'error',
+    ];
+
+    const unsubscribers = eventTypes.map(eventType => {
+      return on(eventType, (data) => {
+        handleMessage({ type: eventType, data });
+      });
+    });
+
+    return () => {
+      unsubscribers.forEach(unsub => unsub && unsub());
+    };
+  }, [connected, on, handleMessage]);
+
+  // Send helper that wraps emit for compatibility
+  const send = useCallback((data) => {
+    if (data.action === 'request') {
+      emit('request', { type: data.type, request_id: data.request_id, params: data.params });
+    } else {
+      emit(data.action || 'message', data);
+    }
+  }, [emit]);
 
   // If WebSocket connected but no data after 5 seconds, try HTTP fallback
   useEffect(() => {

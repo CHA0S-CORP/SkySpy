@@ -1,0 +1,59 @@
+# ReadMe.io Configuration
+# https://docs.readme.com/main/docs/rdme
+
+# Sync documentation using:
+# npx rdme docs ./docs --key=<your-api-key>
+
+rdme: "9.0"
+
+# Documentation sync settings
+sync:
+  # Base directory for documentation
+  root: ./docs
+
+  # Supported file extensions
+  extensions:
+    - .md
+    - .mdx
+
+  # Ignore patterns
+  ignore:
+    - "*.json"
+    - ".DS_Store"
+    - "screenshots/**"
+    - "logo.png"
+
+# Category mappings
+categories:
+  getting-started:
+    title: "Getting Started"
+    description: "Quick start guides and setup instructions"
+
+  core-features:
+    title: "Core Features"
+    description: "Authentication, database, and core functionality"
+
+  api-reference:
+    title: "API Reference"
+    description: "REST and WebSocket API documentation"
+
+  components:
+    title: "Components"
+    description: "System components and architecture"
+
+  features:
+    title: "Features"
+    description: "Platform features and capabilities"
+
+  operations:
+    title: "Operations"
+    description: "Deployment and testing guides"
+
+  development:
+    title: "Development"
+    description: "Contributing and troubleshooting"
+
+# OpenAPI specification (if applicable)
+# openapi:
+#   source: ./openapi.yaml
+#   id: <spec-id>

@@ -17,11 +17,9 @@ from typing import Optional, Dict, List, Set
 import httpx
 from django.conf import settings
 from django.core.cache import cache
-from channels.layers import get_channel_layer
 
 from skyspy.models import AircraftInfo
 from skyspy.services import external_db
-from skyspy.utils import sync_group_send
 
 logger = logging.getLogger(__name__)
 
@@ -533,19 +531,13 @@ def _save_to_database(icao: str, info: dict):
 
 def broadcast_aircraft_info(icao_hex: str, info: dict):
     """Broadcast aircraft info update to WebSocket clients."""
+    from skyspy.socketio.utils import sync_emit
+
     try:
-        channel_layer = get_channel_layer()
-        sync_group_send(
-            channel_layer,
-            'aircraft_aircraft',
-            {
-                'type': 'aircraft_info_update',
-                'data': {
-                    'icao': icao_hex,
-                    'info': info,
-                    'timestamp': datetime.utcnow().isoformat() + 'Z'
-                }
-            }
-        )
+        sync_emit('aircraft:update', {
+            'icao': icao_hex,
+            'info': info,
+            'timestamp': datetime.utcnow().isoformat() + 'Z'
+        }, room='topic_aircraft')
     except Exception as e:
         logger.warning(f"Failed to broadcast aircraft info: {e}")

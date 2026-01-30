@@ -216,5 +216,7 @@ urlpatterns = [
 
     # Frontend SPA - serve index.html for root and all unmatched routes
     path('', serve_frontend, name='frontend-root'),
+    path('cannonball', serve_frontend, name='cannonball'),
+    path('cannonball/', serve_frontend, name='cannonball-slash'),
     re_path(r'^(?!api/|admin/|health|metrics|events/|static/).*$', serve_frontend, name='frontend-catchall'),
 ]

@@ -22,8 +22,7 @@ def refresh_all_geodata(self):
     Runs daily at 3 AM.
     """
     from datetime import datetime
-    from channels.layers import get_channel_layer
-    from skyspy.utils import sync_group_send
+    from skyspy.socketio.utils import sync_emit
 
     logger.info("Starting geographic data refresh")
 
@@ -33,23 +32,18 @@ def refresh_all_geodata(self):
         results = geodata.refresh_all_geodata()
         logger.info(f"Geographic data refresh complete: {results}")
 
-        # Broadcast update to WebSocket clients
+        # Broadcast update to WebSocket clients via Socket.IO
         try:
-            channel_layer = get_channel_layer()
-            if channel_layer:
-                sync_group_send(
-                    channel_layer,
-                    'airspace_all',
-                    {
-                        'type': 'geodata_refresh',
-                        'data': {
-                            'airports': results.get('airports', 0),
-                            'navaids': results.get('navaids', 0),
-                            'geojson': results.get('geojson', 0),
-                            'timestamp': datetime.utcnow().isoformat() + 'Z'
-                        }
-                    }
-                )
+            sync_emit(
+                'geodata:refresh',
+                {
+                    'airports': results.get('airports', 0),
+                    'navaids': results.get('navaids', 0),
+                    'geojson': results.get('geojson', 0),
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                },
+                room='topic_aircraft'
+            )
         except Exception as e:
             logger.warning(f"Failed to broadcast geodata refresh: {e}")
 
@@ -179,8 +173,7 @@ def refresh_pireps(self, bbox: str = "24,-130,50,-60", hours: int = 6):
     Runs every 10 minutes.
     """
     from datetime import datetime
-    from channels.layers import get_channel_layer
-    from skyspy.utils import sync_group_send
+    from skyspy.socketio.utils import sync_emit
 
     logger.info("Fetching PIREPs from Aviation Weather Center")
 
@@ -190,22 +183,17 @@ def refresh_pireps(self, bbox: str = "24,-130,50,-60", hours: int = 6):
         stored = weather_cache.fetch_and_store_pireps(bbox=bbox, hours=hours)
         logger.info(f"Stored {stored} new PIREPs")
 
-        # Broadcast update to WebSocket clients
+        # Broadcast update to WebSocket clients via Socket.IO
         if stored > 0:
             try:
-                channel_layer = get_channel_layer()
-                if channel_layer:
-                    sync_group_send(
-                        channel_layer,
-                        'aviation_data',
-                        {
-                            'type': 'pirep_update',
-                            'data': {
-                                'new_count': stored,
-                                'timestamp': datetime.utcnow().isoformat() + 'Z'
-                            }
-                        }
-                    )
+                sync_emit(
+                    'pirep:update',
+                    {
+                        'new_count': stored,
+                        'timestamp': datetime.utcnow().isoformat() + 'Z'
+                    },
+                    room='topic_aircraft'
+                )
             except Exception as e:
                 logger.warning(f"Failed to broadcast PIREP update: {e}")
 
@@ -224,8 +212,7 @@ def refresh_metars(self, bbox: str = "24,-130,50,-60", hours: int = 2):
     Runs every 10 minutes.
     """
     from datetime import datetime
-    from channels.layers import get_channel_layer
-    from skyspy.utils import sync_group_send
+    from skyspy.socketio.utils import sync_emit
 
     logger.info("Fetching METARs from Aviation Weather Center")
 
@@ -236,22 +223,17 @@ def refresh_metars(self, bbox: str = "24,-130,50,-60", hours: int = 2):
         count = len(metars)
         logger.info(f"Fetched and cached {count} METARs")
 
-        # Broadcast update to WebSocket clients
+        # Broadcast update to WebSocket clients via Socket.IO
         if count > 0:
             try:
-                channel_layer = get_channel_layer()
-                if channel_layer:
-                    sync_group_send(
-                        channel_layer,
-                        'aviation_data',
-                        {
-                            'type': 'metar_update',
-                            'data': {
-                                'count': count,
-                                'timestamp': datetime.utcnow().isoformat() + 'Z'
-                            }
-                        }
-                    )
+                sync_emit(
+                    'metar:update',
+                    {
+                        'count': count,
+                        'timestamp': datetime.utcnow().isoformat() + 'Z'
+                    },
+                    room='topic_aircraft'
+                )
             except Exception as e:
                 logger.warning(f"Failed to broadcast METAR update: {e}")
 

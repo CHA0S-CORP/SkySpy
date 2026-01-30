@@ -374,24 +374,17 @@ def refresh_cache(hours: int = 24) -> dict:
 
 def broadcast_antenna_update(data: dict = None):
     """Broadcast antenna analytics update via WebSocket."""
-    from channels.layers import get_channel_layer
-    from skyspy.utils import sync_group_send
+    from skyspy.socketio.utils import sync_emit
 
     try:
         if data is None:
             data = get_cached_data()
 
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            sync_group_send(
-                channel_layer,
-                'aircraft_all',
-                {
-                    'type': 'antenna_analytics_update',
-                    'data': data
-                }
-            )
-            logger.debug("Antenna analytics broadcast sent")
+        sync_emit('stats:update', {
+            'stat_type': 'antenna_analytics',
+            'stats': data
+        }, room='topic_stats')
+        logger.debug("Antenna analytics broadcast sent")
     except Exception as e:
         logger.error(f"Error broadcasting antenna analytics: {e}")
 

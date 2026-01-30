@@ -2,13 +2,13 @@
  * useCannonballAPI - Hook for Cannonball Mode backend integration
  *
  * Provides:
- * - WebSocket connection for real-time threat updates
+ * - Socket.IO connection for real-time threat updates
  * - REST API calls for session management
  * - Location update sending
  * - Pattern/alert fetching
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getWebSocketUrl, getReconnectDelay, RECONNECT_CONFIG } from '../utils/websocket';
+import { useSocketIOCannonball } from './socket';
 import { safeFetchJson } from '../utils/safeFetch';
 
 // API endpoints
@@ -56,7 +56,7 @@ async function deleteRequest(url, apiBase = '', timeout = API_TIMEOUT_MS) {
  * @param {Object} options - Configuration options
  * @param {string} options.apiBase - API base URL
  * @param {boolean} options.enabled - Whether to enable the connection
- * @param {boolean} options.useWebSocket - Use WebSocket for real-time updates (default: true)
+ * @param {boolean} options.useSocketIO - Use Socket.IO for real-time updates (default: true)
  * @param {number} options.pollingInterval - Fallback polling interval in ms (default: 5000)
  * @param {number} options.threatRadius - Maximum threat radius in NM (default: 25)
  * @returns {Object} API state and methods
@@ -64,18 +64,10 @@ async function deleteRequest(url, apiBase = '', timeout = API_TIMEOUT_MS) {
 export function useCannonballAPI({
   apiBase = '',
   enabled = true,
-  useWebSocket = true,
+  useSocketIO = true,
   pollingInterval = 5000,
   threatRadius = 25,
 } = {}) {
-  // State
-  const [threats, setThreats] = useState([]);
-  const [threatCount, setThreatCount] = useState(0);
-  const [connected, setConnected] = useState(false);
-  const [sessionId, setSessionId] = useState(null);
-  const [error, setError] = useState(null);
-  const [lastUpdate, setLastUpdate] = useState(null);
-
   // Pattern and session data (fetched on demand)
   const [sessions, setSessions] = useState([]);
   const [patterns, setPatterns] = useState([]);
@@ -83,29 +75,36 @@ export function useCannonballAPI({
   const [stats, setStats] = useState(null);
 
   // Refs
-  const wsRef = useRef(null);
-  const reconnectAttemptRef = useRef(0);
-  const reconnectTimeoutRef = useRef(null);
   const pollingIntervalRef = useRef(null);
   const userPositionRef = useRef(null);
 
-  // Clean up function
+  // Use Socket.IO hook for real-time threat updates
+  const {
+    threats,
+    threatCount,
+    connected,
+    sessionId,
+    error,
+    lastUpdate,
+    updatePosition: socketUpdatePosition,
+    setThreatRadius: socketSetThreatRadius,
+    requestThreats: socketRequestThreats,
+    reconnect,
+  } = useSocketIOCannonball({
+    enabled: enabled && useSocketIO,
+    apiBase,
+    threatRadius,
+  });
+
+  // Clean up function for polling
   const cleanup = useCallback(() => {
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
     }
   }, []);
 
-  // Fetch threats via REST API
+  // Fetch threats via REST API (fallback when not using Socket.IO)
   const fetchThreats = useCallback(async () => {
     const params = new URLSearchParams();
     if (threatRadius) {
@@ -113,37 +112,20 @@ export function useCannonballAPI({
     }
 
     const url = `${CANNONBALL_ENDPOINTS.threats}?${params}`;
-    const { data, error: fetchError, ok } = await safeFetchJson(`${apiBase}${url}`, {
+    const { data, ok } = await safeFetchJson(`${apiBase}${url}`, {
       timeout: API_TIMEOUT_MS,
     });
 
-    if (ok && data) {
-      setThreats(data.threats || []);
-      setThreatCount(data.count || 0);
-      setLastUpdate(data.timestamp || new Date().toISOString());
-      setConnected(true);
-      setError(null);
-    } else if (fetchError) {
-      setError(fetchError);
-    }
-
-    return data;
+    return ok ? data : null;
   }, [apiBase, threatRadius]);
 
-  // Send location update
+  // Send location update - prefer Socket.IO, fallback to REST
   const updateLocation = useCallback(async (lat, lon, heading = null, speed = null) => {
     userPositionRef.current = { lat, lon };
 
-    // If WebSocket is connected, send via WebSocket
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'position_update',
-        lat,
-        lon,
-        heading,
-        speed,
-      }));
-      return { ok: true };
+    // If Socket.IO is connected, use it
+    if (connected && useSocketIO) {
+      return socketUpdatePosition(lat, lon, heading, speed);
     }
 
     // Otherwise, send via REST API
@@ -153,14 +135,10 @@ export function useCannonballAPI({
       apiBase
     );
 
-    if (postError) {
-      setError(postError);
-    }
-
     return { ok, error: postError };
-  }, [apiBase]);
+  }, [apiBase, connected, useSocketIO, socketUpdatePosition]);
 
-  // Activate Cannonball mode
+  // Activate Cannonball mode via REST API
   const activate = useCallback(async () => {
     const { data, error: postError, ok } = await postJson(
       CANNONBALL_ENDPOINTS.activate,
@@ -168,51 +146,34 @@ export function useCannonballAPI({
       apiBase
     );
 
-    if (ok && data) {
-      setSessionId(data.user_id || 'anonymous');
-    } else if (postError) {
-      setError(postError);
-    }
-
     return { ok, data, error: postError };
   }, [apiBase]);
 
-  // Deactivate Cannonball mode
+  // Deactivate Cannonball mode via REST API
   const deactivate = useCallback(async () => {
     const { ok, error: deleteError } = await deleteRequest(
       CANNONBALL_ENDPOINTS.activate,
       apiBase
     );
 
-    if (ok) {
-      setSessionId(null);
-    } else if (deleteError) {
-      setError(deleteError);
-    }
-
     return { ok, error: deleteError };
   }, [apiBase]);
 
-  // Set threat radius
+  // Set threat radius - prefer Socket.IO
   const setThreatRadius = useCallback((radius) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'set_radius',
-        radius_nm: radius,
-      }));
+    if (connected && useSocketIO) {
+      socketSetThreatRadius(radius);
     }
-  }, []);
+  }, [connected, useSocketIO, socketSetThreatRadius]);
 
-  // Request current threats (via WebSocket)
+  // Request current threats - prefer Socket.IO, fallback to REST
   const requestThreats = useCallback(() => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'get_threats',
-      }));
+    if (connected && useSocketIO) {
+      socketRequestThreats();
     } else {
       fetchThreats();
     }
-  }, [fetchThreats]);
+  }, [connected, useSocketIO, socketRequestThreats, fetchThreats]);
 
   // Fetch sessions from API
   const fetchSessions = useCallback(async (activeOnly = true) => {
@@ -324,121 +285,19 @@ export function useCannonballAPI({
     return ok ? data : null;
   }, [apiBase]);
 
-  // WebSocket connection management
+  // Polling fallback when Socket.IO is disabled
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || useSocketIO) {
       cleanup();
       return;
     }
 
-    if (!useWebSocket) {
-      // Use polling instead
-      fetchThreats();
-      pollingIntervalRef.current = setInterval(fetchThreats, pollingInterval);
-      setConnected(true);
-      return () => {
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-        }
-      };
-    }
-
-    // WebSocket connection
-    const connect = () => {
-      const wsUrl = getWebSocketUrl(apiBase, 'cannonball');
-
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        console.log('[Cannonball WS] Connected');
-        setConnected(true);
-        setError(null);
-        reconnectAttemptRef.current = 0;
-
-        // Set initial radius
-        ws.send(JSON.stringify({
-          type: 'set_radius',
-          radius_nm: threatRadius,
-        }));
-
-        // Send initial position if available
-        if (userPositionRef.current) {
-          ws.send(JSON.stringify({
-            type: 'position_update',
-            lat: userPositionRef.current.lat,
-            lon: userPositionRef.current.lon,
-          }));
-        }
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-
-          switch (message.type) {
-            case 'session_started':
-              setSessionId(message.session_id);
-              break;
-
-            case 'threats':
-              setThreats(message.data || []);
-              setThreatCount(message.count || 0);
-              setLastUpdate(message.timestamp || new Date().toISOString());
-              break;
-
-            case 'radius_updated':
-              console.log('[Cannonball WS] Radius updated:', message.radius_nm);
-              break;
-
-            case 'error':
-              console.error('[Cannonball WS] Error:', message.message);
-              setError(message.message);
-              break;
-
-            case 'response':
-              // Handle request/response pattern
-              if (message.request_type === 'threats') {
-                setThreats(message.data?.threats || []);
-                setThreatCount(message.data?.count || 0);
-              }
-              break;
-
-            default:
-              console.log('[Cannonball WS] Unknown message type:', message.type);
-          }
-        } catch (err) {
-          console.error('[Cannonball WS] Parse error:', err);
-        }
-      };
-
-      ws.onclose = (event) => {
-        console.log('[Cannonball WS] Disconnected:', event.code, event.reason);
-        setConnected(false);
-        wsRef.current = null;
-
-        // Attempt reconnection if not intentionally closed
-        if (enabled && event.code !== 1000) {
-          const delay = getReconnectDelay(reconnectAttemptRef.current, RECONNECT_CONFIG);
-          console.log(`[Cannonball WS] Reconnecting in ${delay}ms (attempt ${reconnectAttemptRef.current + 1})`);
-
-          reconnectTimeoutRef.current = setTimeout(() => {
-            reconnectAttemptRef.current++;
-            connect();
-          }, delay);
-        }
-      };
-
-      ws.onerror = (event) => {
-        console.error('[Cannonball WS] Error:', event);
-        setError('WebSocket connection error');
-      };
-    };
-
-    connect();
+    // Use polling when Socket.IO is disabled
+    fetchThreats();
+    pollingIntervalRef.current = setInterval(fetchThreats, pollingInterval);
 
     return cleanup;
-  }, [enabled, useWebSocket, apiBase, threatRadius, pollingInterval, fetchThreats, cleanup]);
+  }, [enabled, useSocketIO, pollingInterval, fetchThreats, cleanup]);
 
   // Activate session on mount
   useEffect(() => {
@@ -454,7 +313,7 @@ export function useCannonballAPI({
   }, [enabled, activate, deactivate]);
 
   return {
-    // Real-time threat data
+    // Real-time threat data (from Socket.IO hook)
     threats,
     threatCount,
     connected,
@@ -462,7 +321,7 @@ export function useCannonballAPI({
     error,
     lastUpdate,
 
-    // Fetched data
+    // Fetched data (from REST API)
     sessions,
     patterns,
     alerts,
@@ -482,6 +341,7 @@ export function useCannonballAPI({
     checkKnownAircraft,
     activate,
     deactivate,
+    reconnect,
   };
 }
 

@@ -51,9 +51,8 @@ def update_antenna_analytics():
     logger.debug("Updating antenna analytics")
 
     from django.conf import settings
-    from channels.layers import get_channel_layer
     from skyspy.models import AntennaAnalyticsSnapshot
-    from skyspy.utils import sync_group_send
+    from skyspy.socketio.utils import sync_emit
     import math
     import numpy as np
 
@@ -233,19 +232,14 @@ def update_antenna_analytics():
         except Exception as sentry_err:
             logger.debug(f"Could not report to Sentry: {sentry_err}")
 
-    # Broadcast via WebSocket
+    # Broadcast via Socket.IO
     try:
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            sync_group_send(
-                channel_layer,
-                'aircraft_all',
-                {
-                    'type': 'antenna_analytics_update',
-                    'data': analytics
-                }
-            )
-            logger.debug("Broadcast antenna analytics update")
+        sync_emit(
+            'antenna:analytics_update',
+            analytics,
+            room='topic_aircraft'
+        )
+        logger.debug("Broadcast antenna analytics update")
     except Exception as e:
         logger.warning(f"Failed to broadcast antenna analytics: {e}")
 

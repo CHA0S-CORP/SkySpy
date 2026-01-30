@@ -12,7 +12,6 @@ from datetime import datetime
 from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
-from channels.layers import get_channel_layer
 
 from skyspy.models import AudioTransmission
 from skyspy.services.audio import (
@@ -20,7 +19,7 @@ from skyspy.services.audio import (
     identify_airframes_from_transcript,
     get_audio_url,
 )
-from skyspy.utils import sync_group_send
+from skyspy.socketio.utils import sync_emit
 
 logger = logging.getLogger(__name__)
 
@@ -102,33 +101,30 @@ def transcribe_audio(self, transmission_id: int):
 
 def _broadcast_transcription_update(transmission, status: str):
     """
-    Broadcast transcription status update to WebSocket clients.
+    Broadcast transcription status update to WebSocket clients via Socket.IO.
     """
     try:
-        channel_layer = get_channel_layer()
-        event_type = f'audio_transcription_{status}'
+        event_type = f'audio:transcription_{status}'
 
         # Get audio URL for completed transcriptions
         audio_url = None
         if status == 'completed':
             audio_url = get_audio_url(transmission, signed=True)
 
-        sync_group_send(
-            channel_layer,
-            'audio_transcriptions',
+        sync_emit(
+            event_type,
             {
-                'type': event_type,
-                'data': {
-                    'id': transmission.id,
-                    'filename': transmission.filename,
-                    'audio_url': audio_url,
-                    'status': transmission.transcription_status,
-                    'transcript': transmission.transcript if status == 'completed' else None,
-                    'identified_airframes': transmission.identified_airframes if status == 'completed' else None,
-                    'error': transmission.transcription_error if status == 'failed' else None,
-                    'timestamp': datetime.utcnow().isoformat() + 'Z'
-                }
-            }
+                'id': transmission.id,
+                'filename': transmission.filename,
+                'audio_url': audio_url,
+                'status': transmission.transcription_status,
+                'transcript': transmission.transcript if status == 'completed' else None,
+                'identified_airframes': transmission.identified_airframes if status == 'completed' else None,
+                'error': transmission.transcription_error if status == 'failed' else None,
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            },
+            room='audio_transmissions',
+            namespace='/audio'
         )
     except Exception as e:
         logger.warning(f"Failed to broadcast transcription update: {e}")

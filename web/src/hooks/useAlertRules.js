@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSocketApi } from './index';
-import { useNativeWebSocket } from './useNativeWebSocket';
+import { useSocketIO } from './socket';
 import {
   exportAllRules,
   exportSingleRule,
@@ -52,19 +52,34 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
     return { rules: [] };
   }, [rulesData]);
 
-  // WebSocket for real-time alert notifications
-  useNativeWebSocket({
+  // Socket.IO for real-time alert notifications
+  const { connected: alertsConnected, on: onAlertEvent } = useSocketIO({
     enabled: true,
     apiBase,
-    path: 'alerts',
-    onMessage: useCallback((message) => {
-      if (message.type === 'alert:triggered') {
-        setRealtimeAlerts(prev => [message.data, ...prev].slice(0, 50));
-      } else if (message.type === 'alert:snapshot') {
-        setRealtimeAlerts(message.data?.alerts || []);
-      }
-    }, []),
+    namespace: '/alerts',
+    path: '/socket.io',
   });
+
+  // Set up alert event listeners
+  useEffect(() => {
+    if (!alertsConnected) return;
+
+    const handleAlertTriggered = (data) => {
+      setRealtimeAlerts(prev => [data, ...prev].slice(0, 50));
+    };
+
+    const handleAlertSnapshot = (data) => {
+      setRealtimeAlerts(data?.alerts || []);
+    };
+
+    const unsubTriggered = onAlertEvent('alert:triggered', handleAlertTriggered);
+    const unsubSnapshot = onAlertEvent('alert:snapshot', handleAlertSnapshot);
+
+    return () => {
+      unsubTriggered?.();
+      unsubSnapshot?.();
+    };
+  }, [alertsConnected, onAlertEvent]);
 
   // Cleanup undo timeout on unmount
   useEffect(() => {

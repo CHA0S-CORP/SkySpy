@@ -16,9 +16,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from asgiref.sync import sync_to_async
-from channels.db import database_sync_to_async
-from channels.layers import get_channel_layer
-from channels.testing import WebsocketCommunicator
 from django.core.cache import cache
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
@@ -502,8 +499,9 @@ class TestAcarsFlow:
 
         await acars_service._store_message(normalized)
 
-        message = await database_sync_to_async(
-            AcarsMessage.objects.filter(icao_hex='A12345').first
+        message = await sync_to_async(
+            AcarsMessage.objects.filter(icao_hex='A12345').first,
+            thread_sensitive=True
         )()
         assert message is not None
         assert message.callsign == 'UAL123'
@@ -681,113 +679,23 @@ class TestTranscriptionFlow:
 # WebSocket Integration Tests
 # =============================================================================
 
+@pytest.mark.skip(reason="Django Channels replaced with Socket.IO")
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 class TestWebSocketIntegration:
-    """Test WebSocket connections and broadcasts."""
+    """Test WebSocket connections and broadcasts.
 
-    async def test_aircraft_consumer_connect(self, db):
-        """Test connecting to aircraft WebSocket."""
-        from skyspy.asgi import application
+    NOTE: These tests are skipped because Django Channels has been replaced
+    with Socket.IO. The WebsocketCommunicator from channels.testing no longer
+    works with the Socket.IO-based implementation.
 
-        communicator = WebsocketCommunicator(application, '/ws/aircraft/')
-        connected, _ = await communicator.connect()
+    Socket.IO WebSocket tests should use python-socketio's test client instead.
+    See skyspy/tests/test_socketio_namespaces.py for Socket.IO tests.
+    """
 
-        assert connected
-
-        # Should receive initial snapshot
-        response = await asyncio.wait_for(
-            communicator.receive_json_from(),
-            timeout=2.0
-        )
-        assert response['type'] == 'aircraft:snapshot'
-
-        await communicator.disconnect()
-
-    async def test_aircraft_consumer_with_cached_data(self, db, cached_aircraft):
-        """Test aircraft consumer returns cached data."""
-        from skyspy.asgi import application
-
-        communicator = WebsocketCommunicator(application, '/ws/aircraft/')
-        connected, _ = await communicator.connect()
-
-        response = await asyncio.wait_for(
-            communicator.receive_json_from(),
-            timeout=2.0
-        )
-
-        assert response['type'] == 'aircraft:snapshot'
-        assert len(response['data']['aircraft']) == len(cached_aircraft)
-
-        await communicator.disconnect()
-
-    async def test_safety_consumer_connect(self, db):
-        """Test connecting to safety WebSocket."""
-        from skyspy.asgi import application
-
-        communicator = WebsocketCommunicator(application, '/ws/safety/')
-        connected, _ = await communicator.connect()
-
-        assert connected
-
-        await communicator.disconnect()
-
-    async def test_acars_consumer_connect(self, db):
-        """Test connecting to ACARS WebSocket."""
-        from skyspy.asgi import application
-
-        communicator = WebsocketCommunicator(application, '/ws/acars/')
-        connected, _ = await communicator.connect()
-
-        assert connected
-
-        await communicator.disconnect()
-
-    async def test_ping_pong(self, db):
-        """Test WebSocket ping/pong heartbeat."""
-        from skyspy.asgi import application
-
-        communicator = WebsocketCommunicator(application, '/ws/aircraft/')
-        connected, _ = await communicator.connect()
-
-        # Consume initial snapshot
-        await communicator.receive_json_from()
-
-        # Send ping
-        await communicator.send_json_to({'action': 'ping'})
-
-        response = await asyncio.wait_for(
-            communicator.receive_json_from(),
-            timeout=1.0
-        )
-        assert response['type'] == 'pong'
-
-        await communicator.disconnect()
-
-    async def test_subscribe_topics(self, db):
-        """Test subscribing to specific topics."""
-        from skyspy.asgi import application
-
-        communicator = WebsocketCommunicator(application, '/ws/aircraft/')
-        connected, _ = await communicator.connect()
-
-        # Consume initial snapshot
-        await communicator.receive_json_from()
-
-        # Subscribe to stats
-        await communicator.send_json_to({
-            'action': 'subscribe',
-            'topics': ['stats']
-        })
-
-        response = await asyncio.wait_for(
-            communicator.receive_json_from(),
-            timeout=1.0
-        )
-        assert response['type'] == 'subscribed'
-        assert 'stats' in response['topics']
-
-        await communicator.disconnect()
+    async def test_placeholder(self, db):
+        """Placeholder test - Socket.IO tests are in test_socketio_namespaces.py."""
+        pytest.skip("Django Channels replaced with Socket.IO")
 
 
 # =============================================================================

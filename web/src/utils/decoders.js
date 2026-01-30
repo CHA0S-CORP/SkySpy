@@ -152,8 +152,9 @@ export const decodeMetar = (metar) => {
 // PIREP Decoder
 export const decodePirep = (pirep) => {
   if (!pirep) return null;
-  
-  const raw = pirep.rawOb || '';
+
+  // Normalize field names (backend uses snake_case, legacy uses camelCase)
+  const raw = pirep.raw_text || pirep.rawOb || '';
   
   // Parse raw PIREP string
   const parseRawPirep = (rawStr) => {
@@ -209,23 +210,26 @@ export const decodePirep = (pirep) => {
   let timeStr = null;
   if (rawParsed.timeStr) {
     timeStr = utcToLocalTime(rawParsed.timeStr) || rawParsed.timeStr;
-  } else if (pirep.obsTime) {
-    timeStr = utcToLocal(pirep.obsTime);
+  } else if (pirep.observation_time || pirep.obsTime) {
+    timeStr = utcToLocal(pirep.observation_time || pirep.obsTime);
   }
-  
-  const turbStr = pirep.turbulence || rawParsed.turbulence;
-  const iceStr = pirep.icing || rawParsed.icing;
-  const tempVal = (pirep.temp !== undefined && pirep.temp !== null && !isNaN(pirep.temp)) ? pirep.temp : rawParsed.temp;
-  const wdirVal = (pirep.wdir !== undefined && pirep.wdir !== null && !isNaN(pirep.wdir)) ? pirep.wdir : rawParsed.wdir;
-  const wspdVal = (pirep.wspd !== undefined && pirep.wspd !== null && !isNaN(pirep.wspd)) ? pirep.wspd : rawParsed.wspd;
+
+  // Normalize field values (backend uses snake_case, legacy uses camelCase)
+  const turbStr = pirep.turbulence_type || pirep.turbulence || rawParsed.turbulence;
+  const iceStr = pirep.icing_type || pirep.icing || rawParsed.icing;
+  const tempVal = (pirep.temperature_c ?? pirep.temp) ?? rawParsed.temp;
+  const wdirVal = (pirep.wind_dir ?? pirep.wdir) ?? rawParsed.wdir;
+  const wspdVal = (pirep.wind_speed_kt ?? pirep.wspd) ?? rawParsed.wspd;
   const windshearStr = rawParsed.windshear || (turbStr && turbStr.toUpperCase().includes('LLWS') ? turbStr : null);
-  
+  const reportType = pirep.report_type || pirep.pirepType || (raw.includes(' UUA ') ? 'UUA' : 'UA');
+  const aircraftType = pirep.aircraft_type || pirep.acType || null;
+
   const decoded = {
     raw: raw,
-    type: pirep.pirepType || (raw.includes(' UUA ') ? 'UUA' : 'UA'),
-    typeDesc: (pirep.pirepType === 'UUA' || raw.includes(' UUA ')) ? 'URGENT Pilot Report' : 'Routine Pilot Report',
+    type: reportType,
+    typeDesc: (reportType === 'UUA' || raw.includes(' UUA ')) ? 'URGENT Pilot Report' : 'Routine Pilot Report',
     time: timeStr,
-    aircraft: pirep.acType || null,
+    aircraft: aircraftType,
     altitude: null,
     location: rawParsed.location || null,
     sky: null,
@@ -238,13 +242,21 @@ export const decodePirep = (pirep) => {
     remarks: rawParsed.remarks || null
   };
   
-  // Altitude/Flight Level
-  if (pirep.fltLvl !== undefined && pirep.fltLvl !== null && !isNaN(pirep.fltLvl)) {
-    const altFt = pirep.fltLvl * 100;
+  // Altitude/Flight Level (backend uses flight_level/altitude_ft, legacy uses fltLvl)
+  const flightLevel = pirep.flight_level ?? pirep.fltLvl;
+  const altitudeFt = pirep.altitude_ft;
+  if (flightLevel != null && !isNaN(flightLevel)) {
+    const altFt = altitudeFt ?? flightLevel * 100;
     decoded.altitude = {
-      flightLevel: pirep.fltLvl,
+      flightLevel: flightLevel,
       feet: altFt,
-      text: `FL${pirep.fltLvl} (${altFt.toLocaleString()}ft)`
+      text: `FL${flightLevel} (${altFt.toLocaleString()}ft)`
+    };
+  } else if (altitudeFt != null && !isNaN(altitudeFt)) {
+    decoded.altitude = {
+      flightLevel: Math.round(altitudeFt / 100),
+      feet: altitudeFt,
+      text: `${altitudeFt.toLocaleString()}ft`
     };
   }
   
@@ -379,8 +391,9 @@ export const decodePirep = (pirep) => {
   }
   
   // Weather conditions
-  if (pirep.wxString) {
-    decoded.weather = { raw: pirep.wxString, description: pirep.wxString };
+  const wxStr = pirep.weather || pirep.wxString;
+  if (wxStr) {
+    decoded.weather = { raw: wxStr, description: wxStr };
   }
   
   // Temperature at altitude
@@ -388,7 +401,7 @@ export const decodePirep = (pirep) => {
     decoded.temperature = {
       celsius: tempVal,
       fahrenheit: Math.round(tempVal * 9/5 + 32),
-      isaDeviation: pirep.fltLvl ? Math.round(tempVal - (15 - (pirep.fltLvl * 100 * 0.00198))) : null
+      isaDeviation: flightLevel ? Math.round(tempVal - (15 - (flightLevel * 100 * 0.00198))) : null
     };
   }
   

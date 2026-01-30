@@ -11,31 +11,25 @@ from datetime import datetime
 
 from celery import shared_task
 from django.conf import settings
-from channels.layers import get_channel_layer
 
-from skyspy.utils import sync_group_send
+from skyspy.socketio.utils import sync_emit
 
 logger = logging.getLogger(__name__)
 
 
 def broadcast_airframe_error(icao: str, error_message: str, sources_tried: list = None):
-    """Broadcast an airframe lookup error to WebSocket clients."""
+    """Broadcast an airframe lookup error to WebSocket clients via Socket.IO."""
     try:
-        channel_layer = get_channel_layer()
-        if channel_layer is None:
-            return
-
-        message = {
-            'type': 'airframe_error',
-            'data': {
+        sync_emit(
+            'airframe:error',
+            {
                 'icao': icao,
                 'error': error_message,
                 'sources_tried': sources_tried or [],
                 'timestamp': datetime.utcnow().isoformat() + 'Z'
-            }
-        }
-
-        sync_group_send(channel_layer, 'aircraft_aircraft', message)
+            },
+            room='topic_aircraft'
+        )
     except Exception as e:
         logger.warning(f"Failed to broadcast airframe error: {e}")
 

@@ -17,10 +17,8 @@ from typing import Optional, Dict, List, Set
 
 from django.conf import settings
 from django.utils import timezone
-from channels.layers import get_channel_layer
 
 from skyspy.models import SafetyEvent
-from skyspy.utils import sync_group_send
 
 logger = logging.getLogger(__name__)
 
@@ -816,19 +814,14 @@ class SafetyMonitor:
 
     def _broadcast_event(self, event_type: str, event: dict):
         """Broadcast event to WebSocket clients."""
+        from skyspy.socketio.utils import sync_emit
+
         try:
-            channel_layer = get_channel_layer()
-            sync_group_send(
-                channel_layer,
-                'safety_events',
-                {
-                    'type': event_type,
-                    'data': {
-                        **event,
-                        'timestamp': timezone.now().isoformat().replace('+00:00', 'Z')
-                    }
-                }
-            )
+            sync_emit('safety:event', {
+                **event,
+                'event_action': event_type,
+                'timestamp': timezone.now().isoformat().replace('+00:00', 'Z')
+            }, room='topic_safety')
         except Exception as e:
             logger.warning(f"Failed to broadcast {event_type}: {e}")
 

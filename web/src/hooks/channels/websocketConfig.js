@@ -1,12 +1,23 @@
 /**
  * WebSocket configuration constants and utilities
+ *
+ * Note: Most socket functionality now uses Socket.IO hooks (from hooks/socket).
+ * This module provides shared config that's re-exported from utils/websocket.js.
  */
 
-// Reconnection settings
-export const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000];
-export const MAX_RECONNECT_ATTEMPTS = 10;
+import {
+  RECONNECT_CONFIG,
+  getWebSocketUrl,
+  getReconnectDelay as getReconnectDelayWithBackoff,
+} from '../../utils/websocket';
 
-// Heartbeat settings
+// Re-export the unified reconnection config
+export { RECONNECT_CONFIG };
+
+// Legacy exports for backward compatibility
+export const MAX_RECONNECT_ATTEMPTS = RECONNECT_CONFIG.maxAttempts;
+
+// Heartbeat settings (Socket.IO handles these automatically, but kept for native WS)
 export const HEARTBEAT_INTERVAL = 30000;
 export const HEARTBEAT_TIMEOUT = 10000;
 
@@ -15,6 +26,7 @@ export const DEFAULT_REQUEST_TIMEOUT = 30000;
 
 /**
  * Build WebSocket URL from base URL and path
+ * Re-exports from utils/websocket.js for consistency
  */
 export function buildWebSocketUrl(apiBase, path = 'ws/channels') {
   if (!apiBase) return null;
@@ -30,9 +42,9 @@ export function buildWebSocketUrl(apiBase, path = 'ws/channels') {
 }
 
 /**
- * Calculate reconnection delay based on attempt number
+ * Calculate reconnection delay based on attempt number.
+ * Uses exponential backoff with jitter from the unified config.
  */
 export function getReconnectDelay(attempt) {
-  const index = Math.min(attempt, RECONNECT_DELAYS.length - 1);
-  return RECONNECT_DELAYS[index];
+  return getReconnectDelayWithBackoff(attempt, RECONNECT_CONFIG);
 }

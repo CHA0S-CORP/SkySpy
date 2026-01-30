@@ -25,8 +25,6 @@ if not settings.configured:
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'skyspy.tests.test_settings')
     django.setup()
 
-from channels.layers import get_channel_layer
-from channels.testing import WebsocketCommunicator
 from django.core.cache import cache
 from django.test import Client, override_settings
 from django.utils import timezone
@@ -60,11 +58,8 @@ from skyspy.models import (
     NotificationLog,
 )
 
-# Import consumers (after Django setup)
-from skyspy.channels.consumers.aircraft import AircraftConsumer
-from skyspy.channels.consumers.safety import SafetyConsumer
-from skyspy.channels.consumers.acars import AcarsConsumer
-from skyspy.channels.consumers.audio import AudioConsumer
+# Note: Django Channels consumers have been replaced with Socket.IO namespaces
+# See skyspy.socketio.namespaces for the new implementations
 
 
 # =============================================================================
@@ -142,7 +137,7 @@ def django_client():
 
 
 # =============================================================================
-# WebSocket Client Fixtures
+# Async Test Fixtures
 # =============================================================================
 
 @pytest.fixture
@@ -153,78 +148,9 @@ def event_loop():
     loop.close()
 
 
-@pytest.fixture
-async def aircraft_communicator():
-    """Create WebSocket communicator for aircraft consumer."""
-    from skyspy.asgi import application
-
-    communicator = WebsocketCommunicator(
-        application,
-        '/ws/aircraft/'
-    )
-    connected, _ = await communicator.connect()
-    assert connected
-
-    yield communicator
-
-    await communicator.disconnect()
-
-
-@pytest.fixture
-async def safety_communicator():
-    """Create WebSocket communicator for safety consumer."""
-    from skyspy.asgi import application
-
-    communicator = WebsocketCommunicator(
-        application,
-        '/ws/safety/'
-    )
-    connected, _ = await communicator.connect()
-    assert connected
-
-    yield communicator
-
-    await communicator.disconnect()
-
-
-@pytest.fixture
-async def acars_communicator():
-    """Create WebSocket communicator for ACARS consumer."""
-    from skyspy.asgi import application
-
-    communicator = WebsocketCommunicator(
-        application,
-        '/ws/acars/'
-    )
-    connected, _ = await communicator.connect()
-    assert connected
-
-    yield communicator
-
-    await communicator.disconnect()
-
-
-@pytest.fixture
-async def audio_communicator():
-    """Create WebSocket communicator for audio consumer."""
-    from skyspy.asgi import application
-
-    communicator = WebsocketCommunicator(
-        application,
-        '/ws/audio/'
-    )
-    connected, _ = await communicator.connect()
-    assert connected
-
-    yield communicator
-
-    await communicator.disconnect()
-
-
-@pytest.fixture
-def channel_layer():
-    """Provide access to the channel layer."""
-    return get_channel_layer()
+# Note: WebSocket fixtures have been removed after migrating from Django Channels to Socket.IO.
+# Socket.IO testing should use direct namespace testing or socket.io-client for integration tests.
+# See skyspy/tests/test_socketio_*.py for Socket.IO specific tests.
 
 
 # =============================================================================
@@ -692,32 +618,6 @@ def recent_safety_events(db):
 
 
 # =============================================================================
-# Async Helper Functions
+# Note: Async WebSocket helpers removed after Socket.IO migration
+# Socket.IO testing uses different patterns - see test_socketio_*.py files
 # =============================================================================
-
-async def receive_json_with_timeout(communicator, timeout=1.0):
-    """Receive JSON from communicator with timeout."""
-    try:
-        response = await asyncio.wait_for(
-            communicator.receive_json_from(),
-            timeout=timeout
-        )
-        return response
-    except asyncio.TimeoutError:
-        return None
-
-
-async def send_and_receive(communicator, message, timeout=1.0):
-    """Send message and receive response."""
-    await communicator.send_json_to(message)
-    return await receive_json_with_timeout(communicator, timeout)
-
-
-# Export helper functions
-@pytest.fixture
-def ws_helpers():
-    """Provide WebSocket helper functions."""
-    return {
-        'receive_json_with_timeout': receive_json_with_timeout,
-        'send_and_receive': send_and_receive,
-    }

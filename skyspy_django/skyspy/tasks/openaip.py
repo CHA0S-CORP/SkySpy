@@ -21,8 +21,7 @@ def refresh_openaip_data(self):
 
     Runs daily at 5 AM.
     """
-    from channels.layers import get_channel_layer
-    from skyspy.utils import sync_group_send
+    from skyspy.socketio.utils import sync_emit
 
     logger.info("Starting OpenAIP data refresh")
 
@@ -79,24 +78,19 @@ def refresh_openaip_data(self):
 
         logger.info(f"OpenAIP prefetch complete: {total_airspaces} airspaces, {total_airports} airports, {total_navaids} navaids")
 
-        # Broadcast update notification
+        # Broadcast update notification via Socket.IO
         try:
-            channel_layer = get_channel_layer()
-            if channel_layer:
-                sync_group_send(
-                    channel_layer,
-                    'airspace_all',
-                    {
-                        'type': 'openaip_refresh',
-                        'data': {
-                            'status': 'complete',
-                            'airspaces': total_airspaces,
-                            'airports': total_airports,
-                            'navaids': total_navaids,
-                            'timestamp': datetime.utcnow().isoformat() + 'Z'
-                        }
-                    }
-                )
+            sync_emit(
+                'openaip:refresh',
+                {
+                    'status': 'complete',
+                    'airspaces': total_airspaces,
+                    'airports': total_airports,
+                    'navaids': total_navaids,
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                },
+                room='topic_aircraft'
+            )
         except Exception as e:
             logger.warning(f"Failed to broadcast OpenAIP refresh: {e}")
 

@@ -40,3 +40,6 @@
 
 /* 11. Responsive - Breakpoints, mobile menu, touch improvements */
 @import './responsive.css';
+
+/* Tailwind CSS v4 - imported last to ensure utilities can override existing styles */
+@import 'tailwindcss';

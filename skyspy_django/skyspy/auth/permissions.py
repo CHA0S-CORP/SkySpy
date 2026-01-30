@@ -117,11 +117,15 @@ class FeatureBasedPermission(permissions.BasePermission):
 
         auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
 
+        # Public mode bypasses all permission checks - allows anonymous access
+        if auth_mode == 'public':
+            return True
+
         # Get feature name for this view
         feature = self._get_feature(view)
 
-        # Check if there's explicit FeatureAccess configuration FIRST
-        # This allows feature-based config to override AUTH_MODE
+        # Check if there's explicit FeatureAccess configuration
+        # This allows feature-based config to override AUTH_MODE in hybrid/private modes
         config = None
         if feature:
             try:
@@ -129,7 +133,7 @@ class FeatureBasedPermission(permissions.BasePermission):
             except FeatureAccess.DoesNotExist:
                 config = None
 
-        # If explicit FeatureAccess config exists, use it (overrides AUTH_MODE)
+        # If explicit FeatureAccess config exists, use it
         if config is not None:
             # Check if feature is disabled
             if not config.is_enabled:
@@ -142,10 +146,8 @@ class FeatureBasedPermission(permissions.BasePermission):
             return self._check_access_level(request, access_level, feature, is_write)
 
         # No explicit config - fall back to AUTH_MODE
-        if auth_mode == 'public':
-            return True
-        if auth_mode == 'authenticated':
-            # Authenticated mode requires auth for all access
+        if auth_mode == 'private':
+            # Private mode requires auth for all access
             return request.user and request.user.is_authenticated
 
         # Hybrid mode with no config - allow public read access, require auth for writes
@@ -159,18 +161,10 @@ class FeatureBasedPermission(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
         """Check object-level permissions (e.g., ownership)."""
-        from skyspy.models.auth import FeatureAccess
-
         auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
-        feature = self._get_feature(view)
 
-        # Check if explicit FeatureAccess config exists (overrides AUTH_MODE)
-        has_explicit_config = False
-        if feature:
-            has_explicit_config = FeatureAccess.objects.filter(feature=feature).exists()
-
-        # Only allow public access if no explicit config and AUTH_MODE is public
-        if auth_mode == 'public' and not has_explicit_config:
+        # Public mode bypasses all permission checks
+        if auth_mode == 'public':
             return True
 
         # For write operations, check ownership

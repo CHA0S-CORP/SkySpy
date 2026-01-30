@@ -1005,10 +1005,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               setProPhotoLoading(false);
             }
           } else {
-            // Fallback to HTTP POST
-            const res = await fetch(`${config.apiBaseUrl || ''}/api/v1/aircraft/${selectedAircraft.hex}/photo/cache`, {
-              method: 'POST'
-            });
+            // Fallback to HTTP GET from airframes endpoint
+            const res = await fetch(`${config.apiBaseUrl || ''}/api/v1/airframes/${selectedAircraft.hex}/photos`);
             const data = await safeJson(res);
             if (data) {
               if (data?.photo_url) {
@@ -6379,7 +6377,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr', gap: '3px 8px' }}>
                 <span style={{ color: 'rgba(100, 160, 200, 0.7)' }}>Type:</span>
-                <span>{hoverInfo.aircraft.t || hoverInfo.aircraft.desc || '---'}</span>
+                <span>{hoverInfo.aircraft.t || hoverInfo.aircraft.type || hoverInfo.aircraft.desc || '---'}</span>
                 <span style={{ color: 'rgba(100, 160, 200, 0.7)' }}>Alt:</span>
                 <span>{hoverInfo.aircraft.alt ? `${hoverInfo.aircraft.alt.toLocaleString()} ft` : '---'}</span>
                 <span style={{ color: 'rgba(100, 160, 200, 0.7)' }}>Speed:</span>
@@ -8417,9 +8415,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                           data = await wsRequest('photo-cache', { icao: aircraftHex });
                           if (data?.error) data = null;
                         } else {
-                          const res = await fetch(`${config.apiBaseUrl || ''}/api/v1/aircraft/${aircraftHex}/photo/cache`, {
-                            method: 'POST'
-                          });
+                          const res = await fetch(`${config.apiBaseUrl || ''}/api/v1/airframes/${aircraftHex}/photos`);
                           data = await safeJson(res);
                         }
 
@@ -8569,13 +8565,13 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                       ) : (
                         <ArrowRight size={14} className="trend-icon stable" />
                       )}
-                      {proDistanceNm.toFixed(1)} <span className="unit">nm</span>
+                      {proDistanceNm?.toFixed(1) ?? '--'} <span className="unit">nm</span>
                     </div>
                   </div>
                   <div className="pro-stat">
                     <div className="pro-stat-label"><Signal size={14} /> RSSI</div>
                     <div className="pro-stat-value rssi-stat">
-                      {proRssi !== undefined ? (
+                      {proRssi != null ? (
                         <>
                           <span className={`signal-bars ${proSignalClass}`}>
                             <span className="bar bar-1"></span>

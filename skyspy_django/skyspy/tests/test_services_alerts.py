@@ -629,12 +629,10 @@ class AlertServiceTriggerTests(TestCase):
         AlertHistory.objects.all().delete()
         NotificationLog.objects.all().delete()
 
-    @patch('skyspy.services.alerts.get_channel_layer')
-    @patch('skyspy.services.alerts.sync_group_send')
-    def test_trigger_alert_stores_history(self, mock_async, mock_channel):
+    @patch('skyspy.services.alerts.sync_emit')
+    def test_trigger_alert_stores_history(self, mock_sync_emit):
         """Test that triggered alerts are stored in history."""
-        mock_channel.return_value = MagicMock()
-        mock_async.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         db_rule = AlertRule.objects.create(
             name='Test Rule',
@@ -658,14 +656,10 @@ class AlertServiceTriggerTests(TestCase):
         self.assertEqual(history.callsign, 'UAL456')
         self.assertEqual(history.priority, 'warning')
 
-    @patch('skyspy.services.alerts.get_channel_layer')
-    @patch('skyspy.services.alerts.sync_group_send')
-    def test_trigger_alert_broadcasts_to_channel(self, mock_async, mock_channel):
-        """Test that triggered alerts are broadcast via channels."""
-        mock_channel_layer = MagicMock()
-        mock_channel.return_value = mock_channel_layer
-        mock_group_send = MagicMock()
-        mock_async.return_value = mock_group_send
+    @patch('skyspy.services.alerts.sync_emit')
+    def test_trigger_alert_broadcasts_to_channel(self, mock_sync_emit):
+        """Test that triggered alerts are broadcast via Socket.IO."""
+        mock_sync_emit.return_value = True
 
         db_rule = AlertRule.objects.create(
             name='Broadcast Test',
@@ -678,8 +672,8 @@ class AlertServiceTriggerTests(TestCase):
 
         self.service._trigger_alert(rule, aircraft)
 
-        # Verify channel broadcast was called
-        mock_async.assert_called()
+        # Verify Socket.IO broadcast was called
+        mock_sync_emit.assert_called()
 
     def test_trigger_alert_cooldown(self):
         """Test that alerts respect cooldown period."""
@@ -692,21 +686,19 @@ class AlertServiceTriggerTests(TestCase):
         rule = create_compiled_rule(db_rule)
         aircraft = {'hex': 'ABC123', 'flight': 'UAL456'}
 
-        with patch('skyspy.services.alerts.get_channel_layer') as mock_channel:
-            mock_channel.return_value = MagicMock()
-            with patch('skyspy.services.alerts.sync_group_send') as mock_async:
-                mock_async.return_value = MagicMock()
+        with patch('skyspy.services.alerts.sync_emit') as mock_sync_emit:
+            mock_sync_emit.return_value = True
 
-                # First trigger should succeed
-                alert1 = self.service._trigger_alert(rule, aircraft)
-                self.assertIsNotNone(alert1)
+            # First trigger should succeed
+            alert1 = self.service._trigger_alert(rule, aircraft)
+            self.assertIsNotNone(alert1)
 
-                # Second trigger should be blocked by cooldown
-                alert2 = self.service._trigger_alert(rule, aircraft)
-                self.assertIsNone(alert2)
+            # Second trigger should be blocked by cooldown
+            alert2 = self.service._trigger_alert(rule, aircraft)
+            self.assertIsNone(alert2)
 
-        # Only one history record
-        self.assertEqual(AlertHistory.objects.count(), 1)
+            # Only one history record
+            self.assertEqual(AlertHistory.objects.count(), 1)
 
     @pytest.mark.skip(reason="_trigger_alert expects CompiledRule, not AlertRule - needs refactoring")
     def test_trigger_alert_different_aircraft_no_cooldown(self):
@@ -718,23 +710,21 @@ class AlertServiceTriggerTests(TestCase):
             value='UAL',
         )
 
-        with patch('skyspy.services.alerts.get_channel_layer') as mock_channel:
-            mock_channel.return_value = MagicMock()
-            with patch('skyspy.services.alerts.sync_group_send') as mock_async:
-                mock_async.return_value = MagicMock()
+        with patch('skyspy.services.alerts.sync_emit') as mock_sync_emit:
+            mock_sync_emit.return_value = True
 
-                # First aircraft
-                aircraft1 = {'hex': 'ABC123', 'flight': 'UAL456'}
-                alert1 = self.service._trigger_alert(rule, aircraft1)
-                self.assertIsNotNone(alert1)
+            # First aircraft
+            aircraft1 = {'hex': 'ABC123', 'flight': 'UAL456'}
+            alert1 = self.service._trigger_alert(rule, aircraft1)
+            self.assertIsNotNone(alert1)
 
-                # Different aircraft (different ICAO)
-                aircraft2 = {'hex': 'DEF789', 'flight': 'UAL789'}
-                alert2 = self.service._trigger_alert(rule, aircraft2)
-                self.assertIsNotNone(alert2)
+            # Different aircraft (different ICAO)
+            aircraft2 = {'hex': 'DEF789', 'flight': 'UAL789'}
+            alert2 = self.service._trigger_alert(rule, aircraft2)
+            self.assertIsNotNone(alert2)
 
-        # Two history records
-        self.assertEqual(AlertHistory.objects.count(), 2)
+            # Two history records
+            self.assertEqual(AlertHistory.objects.count(), 2)
 
 
 class AlertServiceCheckAlertsTests(TestCase):
@@ -756,12 +746,10 @@ class AlertServiceCheckAlertsTests(TestCase):
         AlertRule.objects.all().delete()
         AlertHistory.objects.all().delete()
 
-    @patch('skyspy.services.alerts.get_channel_layer')
-    @patch('skyspy.services.alerts.sync_group_send')
-    def test_check_alerts_matches_enabled_rules(self, mock_async, mock_channel):
+    @patch('skyspy.services.alerts.sync_emit')
+    def test_check_alerts_matches_enabled_rules(self, mock_sync_emit):
         """Test that check_alerts only evaluates enabled rules."""
-        mock_channel.return_value = MagicMock()
-        mock_async.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         # Create enabled rule
         AlertRule.objects.create(
@@ -789,12 +777,10 @@ class AlertServiceCheckAlertsTests(TestCase):
         self.assertEqual(len(triggered), 1)
         self.assertEqual(triggered[0]['rule_name'], 'Enabled Rule')
 
-    @patch('skyspy.services.alerts.get_channel_layer')
-    @patch('skyspy.services.alerts.sync_group_send')
-    def test_check_alerts_respects_schedule(self, mock_async, mock_channel):
+    @patch('skyspy.services.alerts.sync_emit')
+    def test_check_alerts_respects_schedule(self, mock_sync_emit):
         """Test that check_alerts respects starts_at and expires_at."""
-        mock_channel.return_value = MagicMock()
-        mock_async.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         now = timezone.now()
 
@@ -837,12 +823,10 @@ class AlertServiceCheckAlertsTests(TestCase):
         self.assertEqual(len(triggered), 1)
         self.assertEqual(triggered[0]['rule_name'], 'Active Rule')
 
-    @patch('skyspy.services.alerts.get_channel_layer')
-    @patch('skyspy.services.alerts.sync_group_send')
-    def test_check_alerts_multiple_aircraft(self, mock_async, mock_channel):
+    @patch('skyspy.services.alerts.sync_emit')
+    def test_check_alerts_multiple_aircraft(self, mock_sync_emit):
         """Test check_alerts with multiple aircraft."""
-        mock_channel.return_value = MagicMock()
-        mock_async.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         AlertRule.objects.create(
             name='UAL Watch',
@@ -863,12 +847,10 @@ class AlertServiceCheckAlertsTests(TestCase):
         # Two UAL flights should trigger
         self.assertEqual(len(triggered), 2)
 
-    @patch('skyspy.services.alerts.get_channel_layer')
-    @patch('skyspy.services.alerts.sync_group_send')
-    def test_check_alerts_multiple_rules(self, mock_async, mock_channel):
+    @patch('skyspy.services.alerts.sync_emit')
+    def test_check_alerts_multiple_rules(self, mock_sync_emit):
         """Test check_alerts with multiple rules matching same aircraft."""
-        mock_channel.return_value = MagicMock()
-        mock_async.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         AlertRule.objects.create(
             name='ICAO Watch',
@@ -1072,12 +1054,10 @@ class AlertServiceEdgeCaseTests(TestCase):
 
         aircraft_list = [{'flight': 'UAL456'}]  # No hex
 
-        with patch('skyspy.services.alerts.get_channel_layer') as mock_channel:
-            mock_channel.return_value = MagicMock()
-            with patch('skyspy.services.alerts.sync_group_send') as mock_async:
-                mock_async.return_value = MagicMock()
+        with patch('skyspy.services.alerts.sync_emit') as mock_sync_emit:
+            mock_sync_emit.return_value = True
 
-                triggered = self.service.check_alerts(aircraft_list)
+            triggered = self.service.check_alerts(aircraft_list)
 
-                # Should still trigger (uses empty string for ICAO)
-                self.assertEqual(len(triggered), 1)
+            # Should still trigger (uses empty string for ICAO)
+            self.assertEqual(len(triggered), 1)

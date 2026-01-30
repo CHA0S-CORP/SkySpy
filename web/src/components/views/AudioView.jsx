@@ -9,14 +9,14 @@
  *
  * And extracted hooks:
  * - useAudioState: Global audio state management
- * - useAudioSocket: WebSocket connection for real-time updates
+ * - useSocketIOAudio: Socket.IO connection for real-time updates
  * - useAudioPlayback: Audio playback functionality
  */
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useSocketApi } from '../../hooks';
 import { globalAudioState, hasEmergencyKeyword } from '../../hooks/useAudioState';
-import { useAudioSocket, initAudioSocket } from '../../hooks/useAudioSocket';
+import { useSocketIOAudio, retrySocketIOAudio } from '../../hooks/socket';
 import { useAudioPlayback } from '../../hooks/useAudioPlayback';
 import { AudioStatsBar, AudioFilters, AudioControls, AudioList } from '../audio';
 
@@ -32,11 +32,10 @@ export {
   reorderQueue,
 } from '../../hooks/useAudioState';
 
-export {
-  initAudioSocket,
-  disconnectAudioSocket,
-  retryAudioSocket,
-} from '../../hooks/useAudioSocket';
+// Re-export Socket.IO audio functions for backward compatibility
+export { retrySocketIOAudio as retryAudioSocket } from '../../hooks/socket';
+// Note: initAudioSocket and disconnectAudioSocket are no longer needed with Socket.IO
+// The connection is handled automatically by useSocketIOAudio
 
 export function AudioView({ apiBase, onSelectAircraft }) {
   // Filter state
@@ -55,8 +54,8 @@ export function AudioView({ apiBase, onSelectAircraft }) {
   // Refs
   const filteredTransmissionsRef = useRef([]);
 
-  // Use audio socket hook
-  const { socketConnected, realtimeTransmissions } = useAudioSocket(apiBase);
+  // Use Socket.IO audio hook for real-time updates
+  const { socketConnected, realtimeTransmissions } = useSocketIOAudio(apiBase);
 
   // Use audio playback hook
   const {

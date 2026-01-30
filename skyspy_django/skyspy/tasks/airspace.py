@@ -8,10 +8,9 @@ import httpx
 from celery import shared_task
 from django.db import transaction
 from django.utils import timezone
-from channels.layers import get_channel_layer
 
 from skyspy.models import AirspaceAdvisory, AirspaceBoundary
-from skyspy.utils import sync_group_send
+from skyspy.socketio.utils import sync_emit
 
 logger = logging.getLogger(__name__)
 
@@ -44,21 +43,17 @@ def refresh_airspace_advisories():
                 expired_count = expired_advisories.count()
                 expired_advisories.delete()
 
-                # Broadcast advisory expirations
+                # Broadcast advisory expirations via Socket.IO
                 if expired_count > 0:
                     try:
-                        channel_layer = get_channel_layer()
-                        sync_group_send(
-                            channel_layer,
-                            'airspace_advisories',
+                        sync_emit(
+                            'airspace:advisory_expired',
                             {
-                                'type': 'airspace_advisory_expired',
-                                'data': {
-                                    'advisory_ids': expired_ids,
-                                    'count': expired_count,
-                                    'timestamp': datetime.utcnow().isoformat() + 'Z'
-                                }
-                            }
+                                'advisory_ids': expired_ids,
+                                'count': expired_count,
+                                'timestamp': datetime.utcnow().isoformat() + 'Z'
+                            },
+                            room='topic_aircraft'
                         )
                         logger.debug(f"Broadcast {expired_count} expired advisories")
                     except Exception as e:
@@ -117,19 +112,15 @@ def refresh_airspace_advisories():
 
             logger.info(f"Refreshed {len(advisories)} airspace advisories")
 
-            # Broadcast update to WebSocket clients
+            # Broadcast update to WebSocket clients via Socket.IO
             try:
-                channel_layer = get_channel_layer()
-                sync_group_send(
-                    channel_layer,
-                    'airspace_advisories',
+                sync_emit(
+                    'airspace:advisory',
                     {
-                        'type': 'airspace_advisory',
-                        'data': {
-                            'count': len(advisories),
-                            'timestamp': datetime.utcnow().isoformat() + 'Z'
-                        }
-                    }
+                        'count': len(advisories),
+                        'timestamp': datetime.utcnow().isoformat() + 'Z'
+                    },
+                    room='topic_aircraft'
                 )
             except Exception as e:
                 logger.warning(f"Failed to broadcast advisory update: {e}")
@@ -225,20 +216,16 @@ def refresh_airspace_boundaries(self):
         boundary_count = AirspaceBoundary.objects.count()
         logger.info(f"Airspace boundary refresh complete. Processed {total_stored} airspaces, {boundary_count} total in database.")
 
-        # Broadcast update
+        # Broadcast update via Socket.IO
         try:
-            channel_layer = get_channel_layer()
-            sync_group_send(
-                channel_layer,
-                'airspace_boundaries',
+            sync_emit(
+                'airspace:boundary',
                 {
-                    'type': 'airspace_boundary',
-                    'data': {
-                        'count': boundary_count,
-                        'new': total_stored,
-                        'timestamp': datetime.utcnow().isoformat() + 'Z'
-                    }
-                }
+                    'count': boundary_count,
+                    'new': total_stored,
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                },
+                room='topic_aircraft'
             )
         except Exception as e:
             logger.warning(f"Failed to broadcast boundary update: {e}")

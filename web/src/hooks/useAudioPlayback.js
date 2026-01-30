@@ -158,7 +158,12 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
     // Get or create audio element
     let audio = audioRefs[id];
     if (!audio) {
-      audio = new Audio(transmission.s3_url);
+      const audioUrl = transmission.s3_url || transmission.audio_url;
+      if (!audioUrl) {
+        console.warn('No audio URL for transmission:', id);
+        return;
+      }
+      audio = new Audio(audioUrl);
       audio.volume = isMuted ? 0 : audioVolume;
       audioRefs[id] = audio;
 
@@ -207,6 +212,7 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
       setLocalPlayingId(null);
       if (globalAudioState.progressIntervalRef) {
         clearInterval(globalAudioState.progressIntervalRef);
+        globalAudioState.progressIntervalRef = null;
       }
     } else {
       // Play - enable autoplay

@@ -1,0 +1,72 @@
+{
+  "categories": [
+    {
+      "title": "Getting Started",
+      "slug": "getting-started",
+      "order": 1,
+      "pages": [
+        "quick-start",
+        "overview",
+        "configuration"
+      ]
+    },
+    {
+      "title": "Core Features",
+      "slug": "core-features",
+      "order": 2,
+      "pages": [
+        "authentication",
+        "database"
+      ]
+    },
+    {
+      "title": "API Reference",
+      "slug": "api-reference",
+      "order": 3,
+      "pages": [
+        "rest-api",
+        "websocket-api"
+      ]
+    },
+    {
+      "title": "Components",
+      "slug": "components",
+      "order": 4,
+      "pages": [
+        "go-services",
+        "frontend",
+        "background-tasks"
+      ]
+    },
+    {
+      "title": "Features",
+      "slug": "features",
+      "order": 5,
+      "pages": [
+        "map-aviation",
+        "safety-alerts",
+        "acars",
+        "cannonball-mode",
+        "statistics"
+      ]
+    },
+    {
+      "title": "Operations",
+      "slug": "operations",
+      "order": 6,
+      "pages": [
+        "deployment",
+        "testing"
+      ]
+    },
+    {
+      "title": "Development",
+      "slug": "development",
+      "order": 7,
+      "pages": [
+        "contributing",
+        "troubleshooting"
+      ]
+    }
+  ]
+}

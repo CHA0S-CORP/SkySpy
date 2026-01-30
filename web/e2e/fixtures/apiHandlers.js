@@ -150,13 +150,16 @@ export async function setupApiHandlers(page, options = {}) {
     }
   });
 
-  // Mock photo cache endpoint
-  await page.route('**/api/v1/aircraft/*/photo/cache', async (route) => {
+  // Mock airframes photo endpoint
+  await page.route('**/api/v1/airframes/*/photos', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        url: 'https://example.com/aircraft-photo.jpg',
+        icao_hex: 'ABC123',
+        photo_url: 'https://example.com/aircraft-photo.jpg',
+        thumbnail_url: 'https://example.com/aircraft-photo-thumb.jpg',
+        photographer: 'Test Photographer',
         source: 'planespotters',
       }),
     });

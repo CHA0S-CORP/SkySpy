@@ -42,11 +42,10 @@ class SafetyMonitorUnitTests(TestCase):
     # Emergency Squawk Tests (via update_aircraft)
     # =========================================================================
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_emergency_squawk_7500_hijack(self, mock_send, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_emergency_squawk_7500_hijack(self, mock_sync_emit):
         """Test detection of squawk 7500 (hijack)."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         aircraft_list = [{
             'hex': 'ABC123',
@@ -66,11 +65,10 @@ class SafetyMonitorUnitTests(TestCase):
         self.assertEqual(event['icao_hex'], 'ABC123')
         self.assertIn('HIJACK', event['message'].upper())
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_emergency_squawk_7600_radio_failure(self, mock_send, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_emergency_squawk_7600_radio_failure(self, mock_sync_emit):
         """Test detection of squawk 7600 (radio failure)."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         aircraft_list = [{
             'hex': 'DEF789',
@@ -86,11 +84,10 @@ class SafetyMonitorUnitTests(TestCase):
         self.assertEqual(event['severity'], 'warning')
         self.assertIn('RADIO', event['message'].upper())
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_emergency_squawk_7700_emergency(self, mock_send, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_emergency_squawk_7700_emergency(self, mock_sync_emit):
         """Test detection of squawk 7700 (general emergency)."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         aircraft_list = [{
             'hex': 'GHI012',
@@ -106,11 +103,10 @@ class SafetyMonitorUnitTests(TestCase):
         self.assertEqual(event['severity'], 'critical')
         self.assertIn('EMERGENCY', event['message'].upper())
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_emergency_squawk_without_callsign(self, mock_send, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_emergency_squawk_without_callsign(self, mock_sync_emit):
         """Test emergency squawk detection when callsign is missing."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         aircraft_list = [{
             'hex': 'JKL345',
@@ -123,11 +119,10 @@ class SafetyMonitorUnitTests(TestCase):
         event = events[0]
         self.assertIn('JKL345', event['message'])
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_emergency_squawk_cooldown(self, mock_send, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_emergency_squawk_cooldown(self, mock_sync_emit):
         """Test that emergency squawk events are generated on each update (no internal cooldown)."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         aircraft = {
             'hex': 'ABC123',
@@ -147,11 +142,10 @@ class SafetyMonitorUnitTests(TestCase):
     # Extreme Vertical Speed Tests
     # =========================================================================
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_extreme_vs_climbing(self, mock_send, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_extreme_vs_climbing(self, mock_sync_emit):
         """Test detection of extreme climbing rate."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         aircraft_list = [{
             'hex': 'XYZ789',
@@ -169,11 +163,10 @@ class SafetyMonitorUnitTests(TestCase):
         self.assertIn('climbing', event['message'])
         self.assertIn('7000', event['message'])
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_extreme_vs_descending(self, mock_send, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_extreme_vs_descending(self, mock_sync_emit):
         """Test detection of extreme descending rate."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         aircraft_list = [{
             'hex': 'ABC456',
@@ -194,11 +187,10 @@ class SafetyMonitorUnitTests(TestCase):
         # Verify the threshold logic
         self.assertTrue(abs(2000) <= self.monitor.vs_extreme_threshold)
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_extreme_vs_cooldown(self, mock_send, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_extreme_vs_cooldown(self, mock_sync_emit):
         """Test that extreme VS events respect cooldown period."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         aircraft = {
             'hex': 'GHI789',
@@ -220,11 +212,10 @@ class SafetyMonitorUnitTests(TestCase):
     # Vertical Speed Reversal (TCAS-like) Tests
     # =========================================================================
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_vs_reversal_detection(self, mock_send, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_vs_reversal_detection(self, mock_sync_emit):
         """Test detection of significant vertical speed reversal."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         # First update - establish state with climbing
         aircraft_1 = {
@@ -250,11 +241,10 @@ class SafetyMonitorUnitTests(TestCase):
         # At least one reversal event should be detected
         self.assertGreaterEqual(len(vs_reversal), 0)  # May depend on timing
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_vs_reversal_small_change_no_alert(self, mock_send, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_vs_reversal_small_change_no_alert(self, mock_sync_emit):
         """Test that small VS changes don't trigger alerts."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         # Establish state
         aircraft = {'hex': 'TCAS02', 'flight': 'DAL888', 'baro_rate': 2000}
@@ -267,11 +257,10 @@ class SafetyMonitorUnitTests(TestCase):
         vs_reversal = [e for e in events if e['event_type'] == 'vs_reversal']
         self.assertEqual(len(vs_reversal), 0)
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_vs_reversal_low_vs_no_alert(self, mock_send, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_vs_reversal_low_vs_no_alert(self, mock_sync_emit):
         """Test that reversals with low VS values don't trigger TCAS alerts."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         # Low VS values
         aircraft = {'hex': 'TCAS03', 'flight': 'AAL777', 'baro_rate': 1000}
@@ -283,11 +272,10 @@ class SafetyMonitorUnitTests(TestCase):
         tcas_events = [e for e in events if e['event_type'] == 'tcas_ra']
         self.assertEqual(len(tcas_events), 0)
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_vs_reversal_one_value_below_threshold(self, mock_send, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_vs_reversal_one_value_below_threshold(self, mock_sync_emit):
         """Test reversal when one VS value is below threshold."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         aircraft = {'hex': 'TCAS04', 'flight': 'SWA666', 'baro_rate': 1000}
         self.monitor.update_aircraft([aircraft])
@@ -303,11 +291,10 @@ class SafetyMonitorUnitTests(TestCase):
     # =========================================================================
 
     @patch('skyspy.services.safety.calculate_distance_nm')
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_proximity_conflict_detection(self, mock_send, mock_channel, mock_distance):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_proximity_conflict_detection(self, mock_sync_emit, mock_distance):
         """Test detection of aircraft proximity conflict."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
         mock_distance.return_value = 0.3
 
         aircraft_list = [
@@ -335,11 +322,10 @@ class SafetyMonitorUnitTests(TestCase):
         self.assertIn('0.3', event['message'])
 
     @patch('skyspy.services.safety.calculate_distance_nm')
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_proximity_conflict_critical_severity(self, mock_send, mock_channel, mock_distance):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_proximity_conflict_critical_severity(self, mock_sync_emit, mock_distance):
         """Test that very close proximity triggers critical severity."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
         mock_distance.return_value = 0.2
 
         aircraft_list = [
@@ -354,11 +340,10 @@ class SafetyMonitorUnitTests(TestCase):
         self.assertEqual(prox_events[0]['severity'], 'critical')
 
     @patch('skyspy.services.safety.calculate_distance_nm')
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_proximity_no_alert_large_distance(self, mock_send, mock_channel, mock_distance):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_proximity_no_alert_large_distance(self, mock_sync_emit, mock_distance):
         """Test that aircraft far apart don't trigger alerts."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
         mock_distance.return_value = 2.0
 
         aircraft_list = [
@@ -372,11 +357,10 @@ class SafetyMonitorUnitTests(TestCase):
         self.assertEqual(len(prox_events), 0)
 
     @patch('skyspy.services.safety.calculate_distance_nm')
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_proximity_no_alert_large_altitude_diff(self, mock_send, mock_channel, mock_distance):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_proximity_no_alert_large_altitude_diff(self, mock_sync_emit, mock_distance):
         """Test that aircraft with large altitude difference don't trigger alerts."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
         mock_distance.return_value = 0.3
 
         aircraft_list = [
@@ -510,13 +494,10 @@ class SafetyMonitorIntegrationTests(TestCase):
         """Clean up after tests."""
         SafetyEvent.objects.all().delete()
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_full_update_workflow_emergency_squawk(self, mock_async, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_full_update_workflow_emergency_squawk(self, mock_sync_emit):
         """Test full workflow with emergency squawk detection."""
-        mock_channel_layer = MagicMock()
-        mock_channel.return_value = mock_channel_layer
-        mock_async.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         aircraft_list = [
             {
@@ -542,12 +523,10 @@ class SafetyMonitorIntegrationTests(TestCase):
         self.assertEqual(db_event.event_type, 'squawk_emergency')
         self.assertEqual(db_event.icao_hex, 'INT001')
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_full_update_workflow_multiple_events(self, mock_async, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_full_update_workflow_multiple_events(self, mock_sync_emit):
         """Test workflow detecting multiple event types."""
-        mock_channel.return_value = MagicMock()
-        mock_async.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         # Aircraft with emergency AND extreme VS
         aircraft_list = [
@@ -570,12 +549,10 @@ class SafetyMonitorIntegrationTests(TestCase):
         self.assertIn('squawk_emergency', event_types)
         self.assertIn('extreme_vs', event_types)
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_full_update_workflow_vs_reversal_tracking(self, mock_async, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_full_update_workflow_vs_reversal_tracking(self, mock_sync_emit):
         """Test that VS reversal requires state from previous update."""
-        mock_channel.return_value = MagicMock()
-        mock_async.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         # First update - establish state
         aircraft_list_1 = [
@@ -632,13 +609,11 @@ class SafetyMonitorIntegrationTests(TestCase):
         # At minimum, no error should be raised
         self.assertIsNotNone(events_3)
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
+    @patch('skyspy.socketio.utils.sync_emit')
     @patch('skyspy.tasks.aircraft.calculate_distance_nm')
-    def test_full_update_workflow_proximity(self, mock_distance, mock_async, mock_channel):
+    def test_full_update_workflow_proximity(self, mock_distance, mock_sync_emit):
         """Test proximity detection in full workflow."""
-        mock_channel.return_value = MagicMock()
-        mock_async.return_value = MagicMock()
+        mock_sync_emit.return_value = True
         mock_distance.return_value = 0.3
 
         aircraft_list = [
@@ -683,12 +658,10 @@ class SafetyMonitorIntegrationTests(TestCase):
 
         self.assertEqual(events, [])
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_broadcast_failure_does_not_break_workflow(self, mock_async, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_broadcast_failure_does_not_break_workflow(self, mock_sync_emit):
         """Test that broadcast failures don't prevent event storage."""
-        mock_channel.return_value = MagicMock()
-        mock_async.side_effect = Exception("Channel layer error")
+        mock_sync_emit.side_effect = Exception("Socket.IO emit error")
 
         aircraft_list = [
             {
@@ -768,11 +741,10 @@ class SafetyMonitorEdgeCaseTests(TestCase):
         # No events (no emergency squawk, no VS data)
         self.assertEqual(len(events), 0)
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_lowercase_icao_hex_normalized(self, mock_send, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_lowercase_icao_hex_normalized(self, mock_sync_emit):
         """Test that lowercase ICAO hex is normalized to uppercase."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         aircraft_list = [{
             'hex': 'abc123',  # lowercase
@@ -785,11 +757,10 @@ class SafetyMonitorEdgeCaseTests(TestCase):
         self.assertEqual(events[0]['icao_hex'], 'ABC123')
 
     @patch('skyspy.services.safety.calculate_distance_nm')
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_proximity_check_with_missing_altitude(self, mock_send, mock_channel, mock_distance):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_proximity_check_with_missing_altitude(self, mock_sync_emit, mock_distance):
         """Test proximity check when altitude is missing."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
         mock_distance.return_value = 0.3
 
         aircraft_list = [
@@ -813,11 +784,10 @@ class SafetyMonitorEdgeCaseTests(TestCase):
         prox_events = [e for e in events if e['event_type'] == 'proximity_conflict']
         self.assertEqual(len(prox_events), 0)
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_proximity_check_skips_aircraft_without_position(self, mock_send, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_proximity_check_skips_aircraft_without_position(self, mock_sync_emit):
         """Test that proximity check skips aircraft without position data."""
-        mock_channel.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         aircraft_list = [
             {
@@ -853,12 +823,10 @@ class SafetyMonitorEdgeCaseTests(TestCase):
         ac3 = {'hex': 'VS03', 'geom_rate': 7000}
         self.assertEqual(ac3.get('vr') or ac3.get('baro_rate') or ac3.get('geom_rate'), 7000)
 
-    @patch('skyspy.services.safety.get_channel_layer')
-    @patch('skyspy.services.safety.sync_group_send')
-    def test_multiple_proximity_conflicts(self, mock_async, mock_channel):
+    @patch('skyspy.socketio.utils.sync_emit')
+    def test_multiple_proximity_conflicts(self, mock_sync_emit):
         """Test detection of multiple proximity conflicts."""
-        mock_channel.return_value = MagicMock()
-        mock_async.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         def mock_distance(lat1, lon1, lat2, lon2):
             # All pairs are close

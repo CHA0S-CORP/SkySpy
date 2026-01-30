@@ -26,7 +26,9 @@ export function useNotificationChannels(apiBase = '') {
       const data = await safeJson(res);
       if (!data) throw new Error(`HTTP ${res.status}`);
       if (mountedRef.current) {
-        setChannels(data.results || data || []);
+        // Ensure we always set an array
+        const channelList = data?.results || data;
+        setChannels(Array.isArray(channelList) ? channelList : []);
         setError(null);
       }
     } catch (err) {

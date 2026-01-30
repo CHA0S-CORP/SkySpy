@@ -22,11 +22,9 @@ from skyspy.auth.authentication import (
     JWTCookieAuthentication,
     OptionalJWTAuthentication,
 )
-from skyspy.auth.websocket import (
-    TokenAuthMiddleware,
-    WebSocketPermissionMiddleware,
-    TokenAuthMiddlewareStack,
-)
+
+# Note: WebSocket authentication is now handled by Socket.IO middleware
+# See skyspy.socketio.middleware.auth for the new implementation
 
 __all__ = [
     # Backends
@@ -48,8 +46,4 @@ __all__ = [
     'APIKeyAuthentication',
     'JWTCookieAuthentication',
     'OptionalJWTAuthentication',
-    # WebSocket
-    'TokenAuthMiddleware',
-    'WebSocketPermissionMiddleware',
-    'TokenAuthMiddlewareStack',
 ]

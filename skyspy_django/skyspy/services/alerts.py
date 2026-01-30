@@ -20,10 +20,8 @@ from django.utils import timezone
 
 # Maximum allowed regex pattern length to prevent ReDoS attacks
 MAX_REGEX_PATTERN_LENGTH = 500
-from channels.layers import get_channel_layer
-
 from skyspy.models import AlertRule, AlertHistory, NotificationConfig, NotificationLog, NotificationChannel
-from skyspy.utils import sync_group_send
+from skyspy.socketio.utils import sync_emit
 from skyspy.services.alert_cooldowns import cooldown_manager
 from skyspy.services.alert_rule_cache import rule_cache, CompiledRule
 from skyspy.services.alert_metrics import alert_metrics, EvaluationTimer
@@ -361,26 +359,11 @@ class AlertService:
 
         # Broadcast alert via WebSocket
         try:
-            channel_layer = get_channel_layer()
-            sync_group_send(
-                channel_layer,
-                'alerts_all',
-                {
-                    'type': 'alert_triggered',
-                    'data': alert_data
-                }
-            )
+            sync_emit('alert:triggered', alert_data, room='topic_alerts')
 
             # Also broadcast to owner-specific channel if rule has owner
             if rule.owner_id:
-                sync_group_send(
-                    channel_layer,
-                    f'alerts_user_{rule.owner_id}',
-                    {
-                        'type': 'alert_triggered',
-                        'data': alert_data
-                    }
-                )
+                sync_emit('alert:triggered', alert_data, room=f'user_{rule.owner_id}')
         except Exception as e:
             logger.warning(f"Failed to broadcast alert: {e}")
 

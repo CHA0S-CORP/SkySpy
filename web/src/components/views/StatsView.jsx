@@ -39,7 +39,7 @@ import {
 // Main StatsView Component - Bento Grid Layout
 // ============================================================================
 
-export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, aircraft: wsAircraft, stats: wsStats, antennaAnalytics: antennaAnalyticsProp }) {
+export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, aircraft: wsAircraft, stats: wsStats, antennaAnalytics: antennaAnalyticsProp, extendedStats: extendedStatsProp }) {
   // Filter state
   const [timeRange, setTimeRange] = useState('24h');
   const [showMilitaryOnly, setShowMilitaryOnly] = useState(false);
@@ -59,6 +59,7 @@ export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, a
     wsAircraft,
     wsStats,
     antennaAnalyticsProp,
+    extendedStatsProp,
     filters: {
       timeRange,
       showMilitaryOnly,

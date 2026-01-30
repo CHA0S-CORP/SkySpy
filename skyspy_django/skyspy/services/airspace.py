@@ -15,10 +15,8 @@ from typing import Optional, List, Dict
 
 from django.core.cache import cache
 from django.utils import timezone
-from channels.layers import get_channel_layer
 
 from skyspy.models import AirspaceAdvisory, AirspaceBoundary
-from skyspy.utils import sync_group_send
 
 logger = logging.getLogger(__name__)
 
@@ -218,60 +216,45 @@ def update_boundary_cache(boundaries: List[dict]):
 
 def broadcast_advisory_update(advisories: List[dict]):
     """Broadcast advisory update to WebSocket clients."""
+    from skyspy.socketio.utils import sync_emit
+
     try:
-        channel_layer = get_channel_layer()
-        sync_group_send(
-            channel_layer,
-            'airspace_advisories',
-            {
-                'type': 'airspace_advisory',
-                'data': {
-                    'advisories': advisories,
-                    'count': len(advisories),
-                    'timestamp': datetime.utcnow().isoformat() + 'Z'
-                }
-            }
-        )
+        sync_emit('airspace:update', {
+            'update_type': 'advisory',
+            'advisories': advisories,
+            'count': len(advisories),
+            'timestamp': datetime.utcnow().isoformat() + 'Z'
+        }, room='topic_airspace')
     except Exception as e:
         logger.warning(f"Failed to broadcast advisory update: {e}")
 
 
 def broadcast_boundary_update(boundaries: List[dict]):
     """Broadcast boundary update to WebSocket clients."""
+    from skyspy.socketio.utils import sync_emit
+
     try:
-        channel_layer = get_channel_layer()
-        sync_group_send(
-            channel_layer,
-            'airspace_boundaries',
-            {
-                'type': 'airspace_boundary',
-                'data': {
-                    'boundaries': boundaries,
-                    'count': len(boundaries),
-                    'timestamp': datetime.utcnow().isoformat() + 'Z'
-                }
-            }
-        )
+        sync_emit('airspace:update', {
+            'update_type': 'boundary',
+            'boundaries': boundaries,
+            'count': len(boundaries),
+            'timestamp': datetime.utcnow().isoformat() + 'Z'
+        }, room='topic_airspace')
     except Exception as e:
         logger.warning(f"Failed to broadcast boundary update: {e}")
 
 
 def broadcast_advisory_expired(advisory_ids: List[str]):
     """Broadcast advisory expiration to WebSocket clients."""
+    from skyspy.socketio.utils import sync_emit
+
     try:
-        channel_layer = get_channel_layer()
-        sync_group_send(
-            channel_layer,
-            'airspace_advisories',
-            {
-                'type': 'airspace_advisory_expired',
-                'data': {
-                    'advisory_ids': advisory_ids,
-                    'count': len(advisory_ids),
-                    'timestamp': datetime.utcnow().isoformat() + 'Z'
-                }
-            }
-        )
+        sync_emit('airspace:update', {
+            'update_type': 'advisory_expired',
+            'advisory_ids': advisory_ids,
+            'count': len(advisory_ids),
+            'timestamp': datetime.utcnow().isoformat() + 'Z'
+        }, room='topic_airspace')
     except Exception as e:
         logger.warning(f"Failed to broadcast advisory expiration: {e}")
 

@@ -17,14 +17,13 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
-from channels.layers import get_channel_layer
 
 from skyspy.models import (
     CannonballPattern, CannonballSession, CannonballAlert,
     CannonballKnownAircraft, CannonballStats,
 )
 from skyspy.services.cannonball import CannonballService
-from skyspy.utils import sync_group_send
+from skyspy.socketio.utils import sync_emit
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +67,6 @@ def analyze_aircraft_patterns(self):
 
         # Skip analysis if no user location (Cannonball mode not active)
         if user_lat is None or user_lon is None:
-            logger.debug("Cannonball mode not active (no user location)")
             return
 
         # Analyze all aircraft for threats
@@ -325,51 +323,44 @@ def _create_alert(session: CannonballSession, alert_type: str, priority: str,
 
 
 def _broadcast_threats(threats: list):
-    """Broadcast threat updates via WebSocket."""
+    """Broadcast threat updates via Socket.IO."""
     try:
-        channel_layer = get_channel_layer()
         timestamp = timezone.now().isoformat().replace('+00:00', 'Z')
 
-        sync_group_send(
-            channel_layer,
-            'cannonball_threats',
+        sync_emit(
+            'threat_update',
             {
-                'type': 'threats_update',
-                'data': {
-                    'threats': threats,
-                    'count': len(threats),
-                    'timestamp': timestamp,
-                }
-            }
+                'threats': threats,
+                'count': len(threats),
+                'timestamp': timestamp,
+            },
+            room='cannonball_threats',
+            namespace='/cannonball'
         )
     except Exception as e:
         logger.debug(f"Failed to broadcast threats: {e}")
 
 
 def _broadcast_alert(alert: CannonballAlert, threat: dict):
-    """Broadcast a new alert via WebSocket."""
+    """Broadcast a new alert via Socket.IO."""
     try:
-        channel_layer = get_channel_layer()
-
-        sync_group_send(
-            channel_layer,
-            'cannonball_alerts',
+        sync_emit(
+            'new_alert',
             {
-                'type': 'new_alert',
-                'data': {
-                    'id': alert.id,
-                    'alert_type': alert.alert_type,
-                    'priority': alert.priority,
-                    'title': alert.title,
-                    'message': alert.message,
-                    'icao_hex': alert.session.icao_hex,
-                    'callsign': alert.session.callsign,
-                    'distance_nm': alert.distance_nm,
-                    'bearing': alert.bearing,
-                    'timestamp': alert.created_at.isoformat().replace('+00:00', 'Z'),
-                    'threat': threat,
-                }
-            }
+                'id': alert.id,
+                'alert_type': alert.alert_type,
+                'priority': alert.priority,
+                'title': alert.title,
+                'message': alert.message,
+                'icao_hex': alert.session.icao_hex,
+                'callsign': alert.session.callsign,
+                'distance_nm': alert.distance_nm,
+                'bearing': alert.bearing,
+                'timestamp': alert.created_at.isoformat().replace('+00:00', 'Z'),
+                'threat': threat,
+            },
+            room='cannonball_alerts',
+            namespace='/cannonball'
         )
     except Exception as e:
         logger.debug(f"Failed to broadcast alert: {e}")

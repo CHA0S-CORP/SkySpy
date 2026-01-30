@@ -145,7 +145,7 @@ export function useSafetyEventData({ eventId, apiBase, wsRequest, wsConnected })
       }
     };
 
-    // Listen for safety event updates from WebSocket (dispatched by useChannelsSocket)
+    // Listen for safety event updates from Socket.IO (dispatched by useSocketIOData)
     window.addEventListener('skyspy:safety:event_updated', handleSafetyUpdate);
     window.addEventListener('skyspy:safety:event_resolved', handleSafetyUpdate);
 

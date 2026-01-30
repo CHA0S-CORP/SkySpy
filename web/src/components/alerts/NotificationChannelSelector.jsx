@@ -34,8 +34,9 @@ export function NotificationChannelSelector({
   onToggleChannel,
   onToggleGlobal,
 }) {
-  // Filter to only enabled channels
-  const enabledChannels = channels.filter(c => c.enabled);
+  // Ensure channels is an array and filter to only enabled channels
+  const channelList = Array.isArray(channels) ? channels : [];
+  const enabledChannels = channelList.filter(c => c.enabled);
 
   return (
     <fieldset className="form-group notification-channels-fieldset">

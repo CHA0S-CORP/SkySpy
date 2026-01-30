@@ -35,5 +35,4 @@ Requirements:
     - pytest-django
     - pytest-asyncio
     - factory-boy
-    - channels[daphne]
 """

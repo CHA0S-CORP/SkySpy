@@ -30,11 +30,14 @@ class CachedAirportAdmin(admin.ModelAdmin):
 
     @admin.action(description="Refresh airports from source")
     def refresh_airports(self, request, queryset):
-        """Placeholder action for refreshing airports."""
+        """Trigger async task to refresh airports from Aviation Weather Center."""
+        from skyspy.tasks.geodata import refresh_airports as refresh_airports_task
+
+        refresh_airports_task.delay()
         self.message_user(
             request,
-            "Airport refresh functionality is not yet implemented.",
-            messages.INFO
+            "Airport refresh task has been queued. This may take a few moments.",
+            messages.SUCCESS
         )
 
 

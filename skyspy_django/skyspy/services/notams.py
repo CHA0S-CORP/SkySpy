@@ -15,6 +15,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from skyspy.models.notams import CachedNotam
+from skyspy.services.cache import cached_with_ttl
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,13 @@ def fetch_notams_from_api(
                 return []
 
             response.raise_for_status()
+
+            # Check if response is JSON before parsing
+            content_type = response.headers.get("content-type", "")
+            if "json" not in content_type and "javascript" not in content_type:
+                logger.warning(f"NOTAM API returned non-JSON content-type: {content_type}")
+                return []
+
             data = response.json() if response.text else {}
 
             # Parse the FAA NOTAM Search response format
@@ -150,11 +158,11 @@ def fetch_tfrs_from_api(
         List of TFR dictionaries
     """
     try:
-        with httpx.Client(timeout=30) as client:
+        with httpx.Client(timeout=30, follow_redirects=True) as client:
             response = client.get(
                 TFR_DATA_URL,
                 headers={
-                    "User-Agent": "Mozilla/5.0 (compatible; SkySpyAPI/2.6)",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                     "Accept": "application/json",
                 }
             )
@@ -164,6 +172,13 @@ def fetch_tfrs_from_api(
                 return []
 
             response.raise_for_status()
+
+            # Check if response is JSON before parsing
+            content_type = response.headers.get("content-type", "")
+            if "json" not in content_type and "javascript" not in content_type:
+                logger.warning(f"TFR API returned non-JSON content-type: {content_type}")
+                return []
+
             data = response.json() if response.text else []
 
             tfrs = []
@@ -420,6 +435,7 @@ def refresh_notams(
     return updated_count
 
 
+@cached_with_ttl(ttl=60)
 def get_notams(
     icao: Optional[str] = None,
     lat: Optional[float] = None,
@@ -521,6 +537,7 @@ def get_notams(
     return results[:limit]
 
 
+@cached_with_ttl(ttl=60)
 def get_tfrs(
     lat: Optional[float] = None,
     lon: Optional[float] = None,
@@ -614,6 +631,7 @@ def get_notams_for_airport(icao: str, active_only: bool = True) -> List[Dict[str
     return get_notams(icao=icao, active_only=active_only)
 
 
+@cached_with_ttl(ttl=60)
 def get_notam_stats() -> Dict[str, Any]:
     """
     Get statistics about cached NOTAMs.

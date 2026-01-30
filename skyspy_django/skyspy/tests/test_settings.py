@@ -21,7 +21,6 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'django_filters',
     'corsheaders',
-    'channels',
     'drf_spectacular',
     'django_celery_beat',
     'skyspy',
@@ -180,15 +179,12 @@ CACHES = {
 }
 
 # =============================================================================
-# Channels Configuration
+# Socket.IO Configuration
 # =============================================================================
 
-# Use in-memory channel layer for tests
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
-    }
-}
+# Note: Django Channels has been replaced with Socket.IO.
+# Socket.IO uses Redis for pub/sub in production, but for tests we don't need
+# a channel layer configuration. Socket.IO tests use python-socketio's test client.
 
 # =============================================================================
 # Celery Configuration
@@ -367,7 +363,7 @@ LOGGING = {
             'level': 'WARNING',  # Can set to DEBUG for test debugging
             'propagate': False,
         },
-        'channels': {
+        'sio': {
             'handlers': ['console'],
             'level': 'WARNING',
             'propagate': False,

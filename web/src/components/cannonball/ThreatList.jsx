@@ -22,7 +22,7 @@ export const ThreatList = memo(function ThreatList({ threats, onSelect }) {
           onClick={() => onSelect(threat)}
         >
           <span className="item-category">{threat.category}</span>
-          <span className="item-distance">{threat.distance_nm.toFixed(1)} NM</span>
+          <span className="item-distance">{threat.distance_nm?.toFixed(1) ?? '—'} NM</span>
           <span className="item-direction">{getDirectionName(threat.bearing)}</span>
           {threat.urgencyScore >= 60 && (
             <span className="urgency-badge urgency-high">{threat.urgencyScore}</span>

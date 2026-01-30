@@ -28,7 +28,6 @@ from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
-from channels.testing import WebsocketCommunicator
 
 from skyspy.models import (
     AircraftSighting,
@@ -97,8 +96,8 @@ def auth_mode_public():
 
 @pytest.fixture
 def auth_mode_authenticated():
-    """Set auth mode to authenticated (auth always required)."""
-    with override_settings(AUTH_MODE='authenticated'):
+    """Set auth mode to private (auth always required)."""
+    with override_settings(AUTH_MODE='private'):
         yield
 
 
@@ -842,49 +841,41 @@ def mock_whisper_service():
 # WebSocket Fixtures
 # =============================================================================
 
-@pytest.fixture
-async def ws_aircraft_communicator():
-    """WebSocket communicator for aircraft updates."""
-    from skyspy.asgi import application
-
-    communicator = WebsocketCommunicator(
-        application,
-        '/ws/aircraft/'
-    )
-    connected, _ = await communicator.connect()
-    assert connected
-    yield communicator
-    await communicator.disconnect()
-
+# NOTE: Django Channels WebsocketCommunicator fixtures have been removed.
+# Socket.IO uses python-socketio's test client for WebSocket testing.
+# See skyspy/tests/test_socketio_namespaces.py for Socket.IO test examples.
 
 @pytest.fixture
-async def ws_safety_communicator():
-    """WebSocket communicator for safety events."""
-    from skyspy.asgi import application
+def ws_aircraft_communicator():
+    """
+    Placeholder for WebSocket communicator fixture.
 
-    communicator = WebsocketCommunicator(
-        application,
-        '/ws/safety/'
-    )
-    connected, _ = await communicator.connect()
-    assert connected
-    yield communicator
-    await communicator.disconnect()
+    Django Channels has been replaced with Socket.IO.
+    Use python-socketio's test client for Socket.IO testing.
+    """
+    pytest.skip("Django Channels replaced with Socket.IO - use socketio test client")
 
 
 @pytest.fixture
-async def ws_alerts_communicator():
-    """WebSocket communicator for alert triggers."""
-    from skyspy.asgi import application
+def ws_safety_communicator():
+    """
+    Placeholder for WebSocket communicator fixture.
 
-    communicator = WebsocketCommunicator(
-        application,
-        '/ws/alerts/'
-    )
-    connected, _ = await communicator.connect()
-    assert connected
-    yield communicator
-    await communicator.disconnect()
+    Django Channels has been replaced with Socket.IO.
+    Use python-socketio's test client for Socket.IO testing.
+    """
+    pytest.skip("Django Channels replaced with Socket.IO - use socketio test client")
+
+
+@pytest.fixture
+def ws_alerts_communicator():
+    """
+    Placeholder for WebSocket communicator fixture.
+
+    Django Channels has been replaced with Socket.IO.
+    Use python-socketio's test client for Socket.IO testing.
+    """
+    pytest.skip("Django Channels replaced with Socket.IO - use socketio test client")
 
 
 # =============================================================================

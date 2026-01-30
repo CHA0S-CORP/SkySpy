@@ -738,24 +738,14 @@ def refresh_time_comparison_cache(broadcast: bool = True) -> dict:
 
 def broadcast_time_comparison_update(data: dict) -> None:
     """Broadcast time comparison stats update via WebSocket."""
-    from channels.layers import get_channel_layer
-    from skyspy.utils import sync_group_send
+    from skyspy.socketio.utils import sync_emit
 
     try:
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            sync_group_send(
-                channel_layer,
-                'aircraft_all',
-                {
-                    'type': 'stats_update',
-                    'data': {
-                        'stat_type': 'time_comparison',
-                        'stats': data
-                    }
-                }
-            )
-            logger.debug("Broadcast time comparison stats update")
+        sync_emit('stats:update', {
+            'stat_type': 'time_comparison',
+            'stats': data
+        }, room='topic_stats')
+        logger.debug("Broadcast time comparison stats update")
     except Exception as e:
         logger.warning(f"Failed to broadcast time comparison stats: {e}")
 

@@ -70,11 +70,14 @@ class AirspaceAdvisoryAdmin(admin.ModelAdmin):
 
     @admin.action(description="Refresh advisories from source")
     def refresh_advisories(self, request, queryset):
-        """Placeholder action for refreshing advisories."""
+        """Trigger async task to refresh advisories from Aviation Weather Center."""
+        from skyspy.tasks.airspace import refresh_airspace_advisories
+
+        refresh_airspace_advisories.delay()
         self.message_user(
             request,
-            "Advisory refresh functionality is not yet implemented.",
-            messages.INFO
+            "Advisory refresh task has been queued. This may take a few moments.",
+            messages.SUCCESS
         )
 
 

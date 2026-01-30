@@ -33,9 +33,9 @@ from typing import Optional
 
 from django.conf import settings
 from django.utils import timezone as dj_timezone
-from channels.layers import get_channel_layer
 
 from skyspy.services.acars_decoder import enrich_acars_message
+from skyspy.socketio.utils import sync_emit
 
 logger = logging.getLogger(__name__)
 
@@ -518,10 +518,8 @@ class AcarsService:
             logger.error(f"Error storing ACARS message: {e}", exc_info=True)
 
     async def _broadcast_message(self, msg: dict):
-        """Broadcast ACARS message to WebSocket clients."""
+        """Broadcast ACARS message to WebSocket clients via Socket.IO."""
         try:
-            channel_layer = get_channel_layer()
-
             # Add timestamp if not present
             if 'timestamp' not in msg or not isinstance(msg['timestamp'], str):
                 ts = msg.get('timestamp')
@@ -530,24 +528,13 @@ class AcarsService:
                 else:
                     msg['timestamp'] = datetime.now(dt_timezone.utc).isoformat().replace('+00:00', 'Z')
 
-            await channel_layer.group_send(
-                'acars_all',
-                {
-                    'type': 'acars_message',
-                    'data': msg
-                }
-            )
+            # Broadcast to all ACARS subscribers
+            sync_emit('acars:message', msg, room='acars_all', namespace='/acars')
 
-            # Also send to aircraft-specific group if we have ICAO
+            # Also send to aircraft-specific room if we have ICAO
             icao = msg.get('icao_hex')
             if icao:
-                await channel_layer.group_send(
-                    f'acars_{icao.lower()}',
-                    {
-                        'type': 'acars_message',
-                        'data': msg
-                    }
-                )
+                sync_emit('acars:message', msg, room=f'acars_{icao.lower()}', namespace='/acars')
 
         except Exception as e:
             logger.warning(f"Failed to broadcast ACARS message: {e}")

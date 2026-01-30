@@ -20,8 +20,7 @@ def refresh_notams(self):
 
     Runs every 15 minutes.
     """
-    from channels.layers import get_channel_layer
-    from skyspy.utils import sync_group_send
+    from skyspy.socketio.utils import sync_emit
 
     logger.info("Starting NOTAM cache refresh")
 
@@ -31,43 +30,35 @@ def refresh_notams(self):
         count = notams.refresh_notams()
         logger.info(f"Refreshed {count} NOTAMs")
 
-        # Broadcast update to WebSocket clients
+        # Broadcast update to WebSocket clients via Socket.IO
         try:
-            channel_layer = get_channel_layer()
-            if channel_layer:
-                stats = notams.get_notam_stats()
-                update_data = {
-                    'count': count,
-                    'active_notams': stats.get('active_notams', 0),
-                    'active_tfrs': stats.get('active_tfrs', 0),
+            stats = notams.get_notam_stats()
+            update_data = {
+                'count': count,
+                'active_notams': stats.get('active_notams', 0),
+                'active_tfrs': stats.get('active_tfrs', 0),
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            }
+
+            # Broadcast to topic_aircraft room (general aviation updates)
+            sync_emit(
+                'notam:refresh',
+                update_data,
+                room='topic_aircraft'
+            )
+
+            # Broadcast to notams room
+            sync_emit(
+                'notam:stats_update',
+                {
+                    'total_active': stats.get('active_notams', 0),
+                    'tfr_count': stats.get('active_tfrs', 0),
+                    'by_type': stats.get('by_type', {}),
+                    'last_update': datetime.utcnow().isoformat() + 'Z',
                     'timestamp': datetime.utcnow().isoformat() + 'Z'
-                }
-
-                # Broadcast to airspace WebSocket group
-                sync_group_send(
-                    channel_layer,
-                    'airspace_all',
-                    {
-                        'type': 'notam_refresh',
-                        'data': update_data
-                    }
-                )
-
-                # Broadcast to notams WebSocket group
-                sync_group_send(
-                    channel_layer,
-                    'notams_all',
-                    {
-                        'type': 'stats_update',
-                        'data': {
-                            'total_active': stats.get('active_notams', 0),
-                            'tfr_count': stats.get('active_tfrs', 0),
-                            'by_type': stats.get('by_type', {}),
-                            'last_update': datetime.utcnow().isoformat() + 'Z',
-                            'timestamp': datetime.utcnow().isoformat() + 'Z'
-                        }
-                    }
-                )
+                },
+                room='topic_notams'
+            )
         except Exception as e:
             logger.warning(f"Failed to broadcast NOTAM refresh: {e}")
 
@@ -126,53 +117,42 @@ def refresh_notams_for_airports(icao_list: list):
 @shared_task
 def broadcast_new_tfr(tfr_data: dict):
     """
-    Broadcast a new TFR notification to WebSocket clients.
+    Broadcast a new TFR notification to WebSocket clients via Socket.IO.
 
     Args:
         tfr_data: TFR data dictionary
     """
-    from channels.layers import get_channel_layer
-    from skyspy.utils import sync_group_send
+    from skyspy.socketio.utils import sync_emit
     from datetime import datetime
 
     try:
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            tfr_message = {
-                'tfr': tfr_data,
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
-            }
+        tfr_message = {
+            'tfr': tfr_data,
+            'timestamp': datetime.utcnow().isoformat() + 'Z'
+        }
 
-            # Broadcast to airspace WebSocket group
-            sync_group_send(
-                channel_layer,
-                'airspace_all',
-                {
-                    'type': 'new_tfr',
-                    'data': tfr_message
-                }
-            )
+        # Broadcast to topic_aircraft room (general aviation updates)
+        sync_emit(
+            'tfr:new',
+            tfr_message,
+            room='topic_aircraft'
+        )
 
-            # Broadcast to notams WebSocket group
-            sync_group_send(
-                channel_layer,
-                'notams_all',
-                {
-                    'type': 'tfr_new',
-                    'data': tfr_data
-                }
-            )
+        # Broadcast to notams room
+        sync_emit(
+            'tfr:new',
+            tfr_data,
+            room='topic_notams'
+        )
 
-            sync_group_send(
-                channel_layer,
-                'notams_tfrs',
-                {
-                    'type': 'tfr_new',
-                    'data': tfr_data
-                }
-            )
+        # Broadcast to TFR-specific room
+        sync_emit(
+            'tfr:new',
+            tfr_data,
+            room='topic_tfrs'
+        )
 
-            logger.info(f"Broadcast new TFR: {tfr_data.get('notam_id')}")
+        logger.info(f"Broadcast new TFR: {tfr_data.get('notam_id')}")
     except Exception as e:
         logger.error(f"Failed to broadcast TFR: {e}")
 

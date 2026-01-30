@@ -261,11 +261,12 @@ export const callsignsMatch = (acarsCallsign, adsbCallsign) => {
 
 // PIREP type classification for coloring
 export const getPirepType = (pirep) => {
-  const hasTurb = !!(pirep.turbulence || (pirep.rawOb && pirep.rawOb.includes('/TB')));
-  const hasIce = !!(pirep.icing || (pirep.rawOb && pirep.rawOb.includes('/IC')));
-  const hasWS = !!(pirep.rawOb && (pirep.rawOb.includes('/WS') || pirep.rawOb.includes('LLWS')));
-  const isUrgent = pirep.pirepType === 'UUA' || (pirep.rawOb && pirep.rawOb.includes(' UUA '));
-  
+  const rawText = pirep.raw_text || pirep.rawOb || '';
+  const hasTurb = !!(pirep.turbulence_type || pirep.turbulence || rawText.includes('/TB'));
+  const hasIce = !!(pirep.icing_type || pirep.icing || rawText.includes('/IC'));
+  const hasWS = !!(rawText.includes('/WS') || rawText.includes('LLWS'));
+  const isUrgent = pirep.report_type === 'UUA' || pirep.pirepType === 'UUA' || rawText.includes(' UUA ');
+
   if (isUrgent) return 'urgent';
   if (hasWS) return 'windshear';
   if (hasTurb && hasIce) return 'both';

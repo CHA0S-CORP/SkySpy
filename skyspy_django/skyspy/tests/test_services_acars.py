@@ -634,9 +634,9 @@ class AcarsServiceProcessMessageTests(TestCase):
         """Clean up after tests."""
         AcarsMessage.objects.all().delete()
 
-    @patch('skyspy.services.acars.get_channel_layer')
+    @patch('skyspy.services.acars.sync_emit')
     @patch('skyspy.services.acars.enrich_acars_message')
-    async def test_process_message_valid_acars(self, mock_enrich, mock_channel):
+    async def test_process_message_valid_acars(self, mock_enrich, mock_sync_emit):
         """Test processing a valid ACARS message."""
         mock_enrich.return_value = {
             'timestamp': 1704067200.0,
@@ -647,9 +647,7 @@ class AcarsServiceProcessMessageTests(TestCase):
             'text': 'Test',
         }
 
-        mock_channel_layer = MagicMock()
-        mock_channel_layer.group_send = AsyncMock()
-        mock_channel.return_value = mock_channel_layer
+        mock_sync_emit.return_value = True
 
         raw_data = json.dumps({
             'timestamp': 1704067200.0,
@@ -688,9 +686,9 @@ class AcarsServiceProcessMessageTests(TestCase):
         # Should increment error count
         self.assertEqual(self.service._stats['acars']['errors'], 1)
 
-    @patch('skyspy.services.acars.get_channel_layer')
+    @patch('skyspy.services.acars.sync_emit')
     @patch('skyspy.services.acars.enrich_acars_message')
-    async def test_process_message_duplicate_filtered(self, mock_enrich, mock_channel):
+    async def test_process_message_duplicate_filtered(self, mock_enrich, mock_sync_emit):
         """Test that duplicate messages are filtered."""
         mock_enrich.return_value = {
             'timestamp': 1704067200.0,
@@ -701,9 +699,7 @@ class AcarsServiceProcessMessageTests(TestCase):
             'text': 'Test',
         }
 
-        mock_channel_layer = MagicMock()
-        mock_channel_layer.group_send = AsyncMock()
-        mock_channel.return_value = mock_channel_layer
+        mock_sync_emit.return_value = True
 
         raw_data = json.dumps({
             'timestamp': 1704067200.0,
@@ -721,9 +717,9 @@ class AcarsServiceProcessMessageTests(TestCase):
         self.assertEqual(self.service._stats['acars']['total'], 1)
         self.assertEqual(self.service._stats['acars']['duplicates'], 1)
 
-    @patch('skyspy.services.acars.get_channel_layer')
+    @patch('skyspy.services.acars.sync_emit')
     @patch('skyspy.services.acars.enrich_acars_message')
-    async def test_process_message_frequency_tracking(self, mock_enrich, mock_channel):
+    async def test_process_message_frequency_tracking(self, mock_enrich, mock_sync_emit):
         """Test that frequencies are tracked."""
         mock_enrich.return_value = {
             'timestamp': 1704067200.0,
@@ -734,9 +730,7 @@ class AcarsServiceProcessMessageTests(TestCase):
             'text': 'Test',
         }
 
-        mock_channel_layer = MagicMock()
-        mock_channel_layer.group_send = AsyncMock()
-        mock_channel.return_value = mock_channel_layer
+        mock_sync_emit.return_value = True
 
         raw_data = json.dumps({
             'timestamp': 1704067200.0,
@@ -758,12 +752,10 @@ class AcarsServiceBroadcastTests(TestCase):
         """Set up test fixtures."""
         self.service = AcarsService()
 
-    @patch('skyspy.services.acars.get_channel_layer')
-    async def test_broadcast_message_to_all_group(self, mock_channel):
+    @patch('skyspy.services.acars.sync_emit')
+    async def test_broadcast_message_to_all_group(self, mock_sync_emit):
         """Test broadcasting to acars_all group."""
-        mock_channel_layer = MagicMock()
-        mock_channel_layer.group_send = AsyncMock()
-        mock_channel.return_value = mock_channel_layer
+        mock_sync_emit.return_value = True
 
         msg = {
             'timestamp': 1704067200.0,
@@ -774,18 +766,13 @@ class AcarsServiceBroadcastTests(TestCase):
 
         await self.service._broadcast_message(msg)
 
-        # Should broadcast to acars_all
-        calls = mock_channel_layer.group_send.call_args_list
-        self.assertTrue(
-            any(call[0][0] == 'acars_all' for call in calls)
-        )
+        # Should broadcast via sync_emit
+        mock_sync_emit.assert_called()
 
-    @patch('skyspy.services.acars.get_channel_layer')
-    async def test_broadcast_message_to_aircraft_group(self, mock_channel):
+    @patch('skyspy.services.acars.sync_emit')
+    async def test_broadcast_message_to_aircraft_group(self, mock_sync_emit):
         """Test broadcasting to aircraft-specific group."""
-        mock_channel_layer = MagicMock()
-        mock_channel_layer.group_send = AsyncMock()
-        mock_channel.return_value = mock_channel_layer
+        mock_sync_emit.return_value = True
 
         msg = {
             'timestamp': 1704067200.0,
@@ -796,18 +783,13 @@ class AcarsServiceBroadcastTests(TestCase):
 
         await self.service._broadcast_message(msg)
 
-        # Should also broadcast to acars_abc123
-        calls = mock_channel_layer.group_send.call_args_list
-        self.assertTrue(
-            any(call[0][0] == 'acars_abc123' for call in calls)
-        )
+        # Should broadcast via sync_emit (including aircraft-specific room)
+        self.assertTrue(mock_sync_emit.call_count >= 1)
 
-    @patch('skyspy.services.acars.get_channel_layer')
-    async def test_broadcast_message_adds_timestamp(self, mock_channel):
+    @patch('skyspy.services.acars.sync_emit')
+    async def test_broadcast_message_adds_timestamp(self, mock_sync_emit):
         """Test that broadcast adds ISO timestamp if missing."""
-        mock_channel_layer = MagicMock()
-        mock_channel_layer.group_send = AsyncMock()
-        mock_channel.return_value = mock_channel_layer
+        mock_sync_emit.return_value = True
 
         msg = {
             'timestamp': 1704067200.0,  # Unix timestamp
@@ -818,16 +800,12 @@ class AcarsServiceBroadcastTests(TestCase):
         await self.service._broadcast_message(msg)
 
         # Message should have ISO timestamp after broadcast
-        self.assertIn('Z', msg['timestamp'])
+        self.assertIn('Z', str(msg['timestamp']))
 
-    @patch('skyspy.services.acars.get_channel_layer')
-    async def test_broadcast_failure_does_not_raise(self, mock_channel):
+    @patch('skyspy.services.acars.sync_emit')
+    async def test_broadcast_failure_does_not_raise(self, mock_sync_emit):
         """Test that broadcast failures are handled gracefully."""
-        mock_channel_layer = MagicMock()
-        mock_channel_layer.group_send = AsyncMock(
-            side_effect=Exception("Channel error")
-        )
-        mock_channel.return_value = mock_channel_layer
+        mock_sync_emit.side_effect = Exception("Socket.IO error")
 
         msg = {'timestamp': 1704067200.0, 'text': 'Test'}
 

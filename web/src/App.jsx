@@ -19,8 +19,7 @@ import { LoginPage, ProtectedRoute } from './components/auth';
 import { useAuth } from './contexts/AuthContext';
 
 // Hooks
-import { useChannelsSocket } from './hooks/useChannelsSocket';
-import { usePositionChannels } from './hooks/usePositionChannels';
+import { useSocketIOData, useSocketIOPositions } from './hooks/socket';
 
 // Utils
 import { getConfig } from './utils';
@@ -37,7 +36,7 @@ const safeJson = async (res) => {
 // Hash Routing Utilities
 // ============================================================================
 
-const VALID_TABS = ['map', 'aircraft', 'stats', 'history', 'audio', 'notams', 'archive', 'alerts', 'system', 'airframe', 'event', 'login'];
+const VALID_TABS = ['map', 'aircraft', 'stats', 'history', 'audio', 'notams', 'archive', 'alerts', 'system', 'airframe', 'event', 'login', 'cannonball'];
 
 function parseHash() {
   const hash = window.location.hash.slice(1); // Remove #
@@ -134,15 +133,16 @@ export default function App() {
     safetyEvents,
     acarsMessages,
     antennaAnalytics,
+    extendedStats,
     request: wsRequest,
     getAirframeError,
     clearAirframeError,
-  } = useChannelsSocket(true, config.apiBaseUrl, 'all');
+  } = useSocketIOData(true, config.apiBaseUrl, 'all');
 
-  // Debug: Log aircraft data received from useChannelsSocket
+  // Debug: Log aircraft data received from useSocketIOData
   useEffect(() => {
     if (aircraft?.length > 0) {
-      console.log('[App] Aircraft from useChannelsSocket:', aircraft.length, 'aircraft');
+      console.log('[App] Aircraft from useSocketIOData:', aircraft.length, 'aircraft');
     }
   }, [aircraft]);
 
@@ -151,7 +151,7 @@ export default function App() {
   const {
     positionsRef,
     connected: positionSocketConnected,
-  } = usePositionChannels(activeTab === 'map', config.apiBaseUrl, true, 1000);
+  } = useSocketIOPositions(activeTab === 'map', config.apiBaseUrl, true, 1000);
 
   // Fetch status via WebSocket or fallback to HTTP
   useEffect(() => {
@@ -339,7 +339,7 @@ export default function App() {
             />
           )}
           {activeTab === 'aircraft' && <AircraftList aircraft={aircraft} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} />}
-          {activeTab === 'stats' && <StatsView apiBase={config.apiBaseUrl} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} wsRequest={wsRequest} wsConnected={connected} aircraft={aircraft} stats={stats} antennaAnalytics={antennaAnalytics} />}
+          {activeTab === 'stats' && <StatsView apiBase={config.apiBaseUrl} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} wsRequest={wsRequest} wsConnected={connected} aircraft={aircraft} stats={stats} antennaAnalytics={antennaAnalytics} extendedStats={extendedStats} />}
           {activeTab === 'history' && (
             <HistoryView
               apiBase={config.apiBaseUrl}
@@ -359,6 +359,13 @@ export default function App() {
           {activeTab === 'archive' && <ArchiveView apiBase={config.apiBaseUrl} hashParams={hashParams} setHashParams={setHashParams} />}
           {activeTab === 'alerts' && <AlertsView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={connected} aircraft={aircraft} feederLocation={status?.location} onLaunchCannonball={() => setShowCannonball(true)} />}
           {activeTab === 'system' && <SystemView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={connected} />}
+          {activeTab === 'cannonball' && (
+            <CannonballMode
+              apiBase={config.apiBaseUrl}
+              onExit={() => setActiveTab('map')}
+              aircraft={aircraft}
+            />
+          )}
           {activeTab === 'airframe' && (hashParams.icao || hashParams.call || hashParams.tail) && (() => {
             // Find aircraft by icao, callsign, or tail number
             const findAircraft = () => {

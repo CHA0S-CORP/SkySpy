@@ -67,7 +67,7 @@ services:
         echo 'Running database migrations...' &&
         python manage.py migrate --noinput &&
         echo 'Running tests...' &&
-        COVERAGE_FILE=/app/test-results/.coverage pytest -v --tb=short --junitxml=/app/test-results/results.xml --cov=skyspy --cov-report=xml:/app/test-results/coverage.xml --cov-report=html:/app/test-results/coverage --cov-report=term-missing --cov-fail-under=40
+        COVERAGE_FILE=/app/test-results/.coverage pytest -v --tb=short --junitxml=/app/test-results/results.xml --cov=skyspy --cov-report=xml:/app/test-results/coverage.xml --cov-report=html:/app/test-results/coverage --cov-report=term-missing --cov-fail-under=80
       "
 
   # Django API Development server
@@ -77,12 +77,15 @@ services:
       context: .
       dockerfile: Dockerfile
     profiles: ["dev"]
+    env_file:
+      - .env.test
     environment:
       # Django Settings
       - DJANGO_SETTINGS_MODULE=skyspy.settings
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-dev-secret-key-change-in-production}
       - DEBUG=${DEBUG:-True}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       # Authentication (default to public for dev)
       - AUTH_MODE=${AUTH_MODE:-public}
 
@@ -190,6 +193,8 @@ services:
       dockerfile: Dockerfile
     container_name: skyspy_celery_worker_dev
     profiles: ["dev"]
+    env_file:
+      - .env.test
     environment:
       - DJANGO_SETTINGS_MODULE=skyspy.settings
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-dev-secret-key-change-in-production}
@@ -230,6 +235,8 @@ services:
       dockerfile: Dockerfile
     container_name: skyspy_celery_beat_dev
     profiles: ["dev"]
+    env_file:
+      - .env.test
     environment:
       - DJANGO_SETTINGS_MODULE=skyspy.settings
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-dev-secret-key-change-in-production}
@@ -293,6 +300,7 @@ services:
       - ./web/src:/app/src
       - ./web/public:/app/public
       - ./web/index.html:/app/index.html
+      - ./web/vite.config.js:/app/vite.config.js
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - VITE_API_TARGET=${VITE_API_TARGET:-http://api:8000}

@@ -178,10 +178,10 @@ export function PirepPopup({
         )}
 
         {/* Raw PIREP */}
-        {pirep.rawOb && (
+        {(pirep.raw_text || pirep.rawOb) && (
           <div className="detail-row raw-section">
             <span>Raw PIREP</span>
-            <span className="mono raw-text">{pirep.rawOb}</span>
+            <span className="mono raw-text">{pirep.raw_text || pirep.rawOb}</span>
           </div>
         )}
 

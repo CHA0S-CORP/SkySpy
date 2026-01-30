@@ -13,6 +13,9 @@ import {
 /**
  * Custom hook for managing all stats data fetching and state
  * Consolidates data fetching logic from StatsView
+ *
+ * Now supports real-time pushed stats via Socket.IO stats:update events.
+ * When pushed data is available, it's used instead of polling.
  */
 export function useStatsData({
   apiBase,
@@ -21,6 +24,7 @@ export function useStatsData({
   wsAircraft,
   wsStats,
   antennaAnalyticsProp,
+  extendedStatsProp,
   filters
 }) {
   const {
@@ -124,12 +128,19 @@ export function useStatsData({
   const { data: speedAnalytics } = useSocketApi(`/api/v1/history/analytics/speed?${filterParams}`, null, apiBase, socketOpts);
   const { data: correlationData } = useSocketApi(`/api/v1/history/analytics/correlation?${filterParams}`, null, apiBase, socketOpts);
 
-  // Extended stats from Django API
-  const { data: flightPatternsData, loading: flightPatternsLoading } = useSocketApi(`/api/v1/stats/flight-patterns?${filterParams}`, null, apiBase, socketOpts);
-  const { data: geographicData, loading: geographicLoading } = useSocketApi(`/api/v1/stats/geographic?${filterParams}`, null, apiBase, socketOpts);
-  const { data: trackingQualityData, loading: trackingQualityLoading } = useSocketApi(`/api/v1/stats/tracking-quality?${filterParams}`, null, apiBase, socketOpts);
-  const { data: engagementData, loading: engagementLoading } = useSocketApi(`/api/v1/stats/engagement?${filterParams}`, null, apiBase, socketOpts);
+  // Extended stats from Django API (with pushed data override)
+  // When Socket.IO pushes stats:update events, use that data instead of fetching
+  const { data: fetchedFlightPatterns, loading: flightPatternsLoading } = useSocketApi(`/api/v1/stats/flight-patterns?${filterParams}`, null, apiBase, socketOpts);
+  const { data: fetchedGeographic, loading: geographicLoading } = useSocketApi(`/api/v1/stats/geographic?${filterParams}`, null, apiBase, socketOpts);
+  const { data: fetchedTrackingQuality, loading: trackingQualityLoading } = useSocketApi(`/api/v1/stats/tracking-quality?${filterParams}`, null, apiBase, socketOpts);
+  const { data: fetchedEngagement, loading: engagementLoading } = useSocketApi(`/api/v1/stats/engagement?${filterParams}`, null, apiBase, socketOpts);
   const { data: favoritesData, loading: favoritesLoading } = useSocketApi(`/api/v1/stats/favorites?hours=${selectedHours}`, null, apiBase, socketOpts);
+
+  // Use pushed stats when available, otherwise use fetched data
+  const flightPatternsData = extendedStatsProp?.flightPatterns || fetchedFlightPatterns;
+  const geographicData = extendedStatsProp?.geographic || fetchedGeographic;
+  const trackingQualityData = extendedStatsProp?.trackingQuality || fetchedTrackingQuality;
+  const engagementData = extendedStatsProp?.engagement || fetchedEngagement;
 
   // Track throughput over time
   useEffect(() => {

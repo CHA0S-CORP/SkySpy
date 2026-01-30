@@ -197,7 +197,7 @@ function deriveSocketEvent(endpoint) {
     '/api/v1/system/status': 'system-status',
     '/api/v1/system/health': 'system-health',
     '/api/v1/system/info': 'system-info',
-    '/api/v1/system/databases': 'database-stats',
+    '/api/v1/system/databases': 'system-databases',
     '/api/v1/system/geodata': 'geodata-stats',
     '/api/v1/system/weather': 'weather-stats',
     // Legacy aliases (point to system endpoints)

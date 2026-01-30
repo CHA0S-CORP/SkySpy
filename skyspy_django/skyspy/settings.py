@@ -73,10 +73,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'django_filters',
     'corsheaders',
-    'channels',
     'django_celery_beat',
     'drf_spectacular',
-    'django_eventstream',
     # SkysPy apps
     'skyspy',
 ]
@@ -419,30 +417,10 @@ else:
         }
     }
 
-if BUILD_MODE:
-    # Use in-memory channel layer during build to avoid Redis connection
-    CHANNEL_LAYERS = {
-        'default': {
-            'BACKEND': 'channels.layers.InMemoryChannelLayer',
-        },
-    }
-else:
-    CHANNEL_LAYERS = {
-        'default': {
-            'BACKEND': 'channels_redis.core.RedisChannelLayer',
-            'CONFIG': {
-                'hosts': [REDIS_URL],
-                'capacity': 1500,
-                'expiry': 60,  # Message expiry (seconds)
-                'group_expiry': 300,  # Group membership expiry (seconds)
-            },
-        },
-    }
-
-
 # =============================================================================
-# WebSocket Configuration
+# Socket.IO Configuration
 # =============================================================================
+# Socket.IO uses Redis for multi-process pub/sub (configured via REDIS_URL)
 # Rate limits for WebSocket broadcasts (messages per second)
 WS_RATE_LIMITS = {
     'aircraft:update': 10,      # Max 10 Hz

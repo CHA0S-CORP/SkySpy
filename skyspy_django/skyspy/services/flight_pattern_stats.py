@@ -996,24 +996,14 @@ def refresh_all_stats_cache(broadcast: bool = True) -> dict:
 
 def broadcast_stats_update(stat_type: str, data: dict) -> None:
     """Broadcast stats update via WebSocket."""
-    from channels.layers import get_channel_layer
-    from skyspy.utils import sync_group_send
+    from skyspy.socketio.utils import sync_emit
 
     try:
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            sync_group_send(
-                channel_layer,
-                'aircraft_all',
-                {
-                    'type': 'stats_update',
-                    'data': {
-                        'stat_type': stat_type,
-                        'stats': data
-                    }
-                }
-            )
-            logger.debug(f"Broadcast flight pattern stats update: {stat_type}")
+        sync_emit('stats:update', {
+            'stat_type': stat_type,
+            'stats': data
+        }, room='topic_stats')
+        logger.debug(f"Broadcast flight pattern stats update: {stat_type}")
     except Exception as e:
         logger.warning(f"Failed to broadcast flight pattern stats update: {e}")
 

@@ -188,8 +188,8 @@ export function PirepPopup({ pirep, onClose, mapMode, getDistanceNm, getBearing 
       <div className="popup-header">
         <AlertTriangle size={20} aria-hidden="true" />
         <span id={titleId} className="popup-callsign">{decoded?.location || pirep.icaoId || 'PIREP'}</span>
-        <span className={`pirep-type-badge ${pirep.pirepType?.toLowerCase() || 'ua'}`}>
-          {pirep.pirepType || 'UA'}
+        <span className={`pirep-type-badge ${(pirep.report_type || pirep.pirepType)?.toLowerCase() || 'ua'}`}>
+          {pirep.report_type || pirep.pirepType || 'UA'}
         </span>
       </div>
       
@@ -266,10 +266,10 @@ export function PirepPopup({ pirep, onClose, mapMode, getDistanceNm, getBearing 
           </div>
         )}
         
-        {pirep.rawOb && (
+        {(pirep.raw_text || pirep.rawOb) && (
           <div className="detail-row raw-section">
             <span>Raw</span>
-            <span className="mono raw-text">{pirep.rawOb}</span>
+            <span className="mono raw-text">{pirep.raw_text || pirep.rawOb}</span>
           </div>
         )}
         

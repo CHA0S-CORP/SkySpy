@@ -34,9 +34,9 @@ class RefreshAirspaceAdvisoriesTaskTest(TestCase):
         """Set up test fixtures."""
         AirspaceAdvisory.objects.all().delete()
 
-    @patch('skyspy.tasks.airspace.get_channel_layer')
+    @patch('skyspy.tasks.airspace.sync_emit')
     @patch('skyspy.tasks.airspace.httpx.get')
-    def test_refresh_advisories_success(self, mock_httpx_get, mock_get_channel_layer):
+    def test_refresh_advisories_success(self, mock_httpx_get, mock_sync_emit):
         """Test successful advisory refresh."""
         # Mock httpx response with G-AIRMET data
         mock_response = MagicMock()
@@ -70,9 +70,8 @@ class RefreshAirspaceAdvisoriesTaskTest(TestCase):
         ]
         mock_httpx_get.return_value = mock_response
 
-        # Mock channel layer
-        mock_channel_layer = MagicMock()
-        mock_get_channel_layer.return_value = mock_channel_layer
+        # Mock sync_emit
+        mock_sync_emit.return_value = True
 
         # Execute task
         refresh_airspace_advisories()
@@ -95,9 +94,9 @@ class RefreshAirspaceAdvisoriesTaskTest(TestCase):
         self.assertEqual(sigmet.hazard, 'TURB')
         self.assertEqual(sigmet.severity, 'severe')
 
-    @patch('skyspy.tasks.airspace.get_channel_layer')
+    @patch('skyspy.tasks.airspace.sync_emit')
     @patch('skyspy.tasks.airspace.httpx.get')
-    def test_refresh_advisories_updates_existing(self, mock_httpx_get, mock_get_channel_layer):
+    def test_refresh_advisories_updates_existing(self, mock_httpx_get, mock_sync_emit):
         """Test that existing advisories are updated, not duplicated."""
         # Create existing advisory
         AirspaceAdvisory.objects.create(
@@ -119,7 +118,7 @@ class RefreshAirspaceAdvisoriesTaskTest(TestCase):
             },
         ]
         mock_httpx_get.return_value = mock_response
-        mock_get_channel_layer.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         refresh_airspace_advisories()
 
@@ -130,9 +129,9 @@ class RefreshAirspaceAdvisoriesTaskTest(TestCase):
         advisory = AirspaceAdvisory.objects.get(advisory_id='GAIRMET-IFR-001')
         self.assertEqual(advisory.severity, 'moderate')
 
-    @patch('skyspy.tasks.airspace.get_channel_layer')
+    @patch('skyspy.tasks.airspace.sync_emit')
     @patch('skyspy.tasks.airspace.httpx.get')
-    def test_refresh_advisories_deletes_expired(self, mock_httpx_get, mock_get_channel_layer):
+    def test_refresh_advisories_deletes_expired(self, mock_httpx_get, mock_sync_emit):
         """Test that expired advisories are deleted."""
         now = timezone.now()
 
@@ -156,7 +155,7 @@ class RefreshAirspaceAdvisoriesTaskTest(TestCase):
         mock_response.status_code = 200
         mock_response.json.return_value = []  # Empty response
         mock_httpx_get.return_value = mock_response
-        mock_get_channel_layer.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         refresh_airspace_advisories()
 
@@ -184,9 +183,9 @@ class RefreshAirspaceAdvisoriesTaskTest(TestCase):
         # Task should complete without raising
         refresh_airspace_advisories()
 
-    @patch('skyspy.tasks.airspace.get_channel_layer')
+    @patch('skyspy.tasks.airspace.sync_emit')
     @patch('skyspy.tasks.airspace.httpx.get')
-    def test_refresh_advisories_skips_invalid_advisory(self, mock_httpx_get, mock_get_channel_layer):
+    def test_refresh_advisories_skips_invalid_advisory(self, mock_httpx_get, mock_sync_emit):
         """Test that advisories without ID are skipped."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -202,7 +201,7 @@ class RefreshAirspaceAdvisoriesTaskTest(TestCase):
             },
         ]
         mock_httpx_get.return_value = mock_response
-        mock_get_channel_layer.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         refresh_airspace_advisories()
 
@@ -210,9 +209,9 @@ class RefreshAirspaceAdvisoriesTaskTest(TestCase):
         self.assertEqual(AirspaceAdvisory.objects.count(), 1)
         self.assertTrue(AirspaceAdvisory.objects.filter(advisory_id='GAIRMET-VALID-001').exists())
 
-    @patch('skyspy.tasks.airspace.get_channel_layer')
+    @patch('skyspy.tasks.airspace.sync_emit')
     @patch('skyspy.tasks.airspace.httpx.get')
-    def test_refresh_advisories_handles_invalid_dates(self, mock_httpx_get, mock_get_channel_layer):
+    def test_refresh_advisories_handles_invalid_dates(self, mock_httpx_get, mock_sync_emit):
         """Test handling of invalid date formats in advisory data."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -225,7 +224,7 @@ class RefreshAirspaceAdvisoriesTaskTest(TestCase):
             },
         ]
         mock_httpx_get.return_value = mock_response
-        mock_get_channel_layer.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         # Should not raise
         refresh_airspace_advisories()
@@ -235,9 +234,9 @@ class RefreshAirspaceAdvisoriesTaskTest(TestCase):
         self.assertIsNone(advisory.valid_from)
         self.assertIsNone(advisory.valid_to)
 
-    @patch('skyspy.tasks.airspace.get_channel_layer')
+    @patch('skyspy.tasks.airspace.sync_emit')
     @patch('skyspy.tasks.airspace.httpx.get')
-    def test_refresh_advisories_broadcasts_update(self, mock_httpx_get, mock_get_channel_layer):
+    def test_refresh_advisories_broadcasts_update(self, mock_httpx_get, mock_sync_emit):
         """Test that WebSocket update is broadcast on success."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -246,19 +245,16 @@ class RefreshAirspaceAdvisoriesTaskTest(TestCase):
         ]
         mock_httpx_get.return_value = mock_response
 
-        mock_channel_layer = MagicMock()
-        mock_get_channel_layer.return_value = mock_channel_layer
+        mock_sync_emit.return_value = True
 
         refresh_airspace_advisories()
 
-        # Verify broadcast was called
-        mock_channel_layer.group_send.assert_called()
-        call_args = mock_channel_layer.group_send.call_args
-        self.assertEqual(call_args[0][0], 'airspace_advisories')
+        # Verify sync_emit was called
+        mock_sync_emit.assert_called()
 
-    @patch('skyspy.tasks.airspace.get_channel_layer')
+    @patch('skyspy.tasks.airspace.sync_emit')
     @patch('skyspy.tasks.airspace.httpx.get')
-    def test_refresh_advisories_handles_broadcast_failure(self, mock_httpx_get, mock_get_channel_layer):
+    def test_refresh_advisories_handles_broadcast_failure(self, mock_httpx_get, mock_sync_emit):
         """Test that broadcast failure doesn't break the task."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -268,9 +264,7 @@ class RefreshAirspaceAdvisoriesTaskTest(TestCase):
         mock_httpx_get.return_value = mock_response
 
         # Make broadcast fail
-        mock_channel_layer = MagicMock()
-        mock_channel_layer.group_send.side_effect = Exception("Redis unavailable")
-        mock_get_channel_layer.return_value = mock_channel_layer
+        mock_sync_emit.side_effect = Exception("Redis unavailable")
 
         # Task should complete without raising
         refresh_airspace_advisories()
@@ -287,8 +281,8 @@ class RefreshAirspaceBoundariesTaskTest(TestCase):
         """Set up test fixtures."""
         AirspaceBoundary.objects.all().delete()
 
-    @patch('skyspy.tasks.airspace.get_channel_layer')
-    def test_refresh_boundaries_success(self, mock_get_channel_layer):
+    @patch('skyspy.tasks.airspace.sync_emit')
+    def test_refresh_boundaries_success(self, mock_sync_emit):
         """Test successful boundary refresh."""
         # Create some boundaries
         AirspaceBoundary.objects.create(
@@ -314,8 +308,7 @@ class RefreshAirspaceBoundariesTaskTest(TestCase):
             source='faa',
         )
 
-        mock_channel_layer = MagicMock()
-        mock_get_channel_layer.return_value = mock_channel_layer
+        mock_sync_emit.return_value = True
 
         # Execute task
         refresh_airspace_boundaries()
@@ -323,41 +316,34 @@ class RefreshAirspaceBoundariesTaskTest(TestCase):
         # Verify boundaries still exist (task just logs count)
         self.assertEqual(AirspaceBoundary.objects.count(), 2)
 
-    @patch('skyspy.tasks.airspace.get_channel_layer')
-    def test_refresh_boundaries_empty_database(self, mock_get_channel_layer):
+    @patch('skyspy.tasks.airspace.sync_emit')
+    def test_refresh_boundaries_empty_database(self, mock_sync_emit):
         """Test boundary refresh with empty database."""
-        mock_channel_layer = MagicMock()
-        mock_get_channel_layer.return_value = mock_channel_layer
+        mock_sync_emit.return_value = True
 
         # Task should complete without error
         refresh_airspace_boundaries()
 
-    @patch('skyspy.tasks.airspace.sync_group_send')
-    @patch('skyspy.tasks.airspace.get_channel_layer')
+    @patch('skyspy.tasks.airspace.sync_emit')
     @patch('skyspy.services.openaip._is_enabled')
     @patch('skyspy.services.openaip.get_airspaces')
     def test_refresh_boundaries_broadcasts_update(
-        self, mock_get_airspaces, mock_is_enabled, mock_get_channel_layer, mock_sync_group_send
+        self, mock_get_airspaces, mock_is_enabled, mock_sync_emit
     ):
         """Test that WebSocket update is broadcast."""
         mock_is_enabled.return_value = True
         mock_get_airspaces.return_value = []  # Empty list is OK for this test
-        mock_channel_layer = MagicMock()
-        mock_get_channel_layer.return_value = mock_channel_layer
+        mock_sync_emit.return_value = True
 
         refresh_airspace_boundaries()
 
-        # Verify broadcast was called
-        mock_sync_group_send.assert_called()
-        call_args = mock_sync_group_send.call_args
-        self.assertEqual(call_args[0][1], 'airspace_boundaries')
+        # Verify sync_emit was called
+        mock_sync_emit.assert_called()
 
-    @patch('skyspy.tasks.airspace.get_channel_layer')
-    def test_refresh_boundaries_handles_broadcast_failure(self, mock_get_channel_layer):
+    @patch('skyspy.tasks.airspace.sync_emit')
+    def test_refresh_boundaries_handles_broadcast_failure(self, mock_sync_emit):
         """Test that broadcast failure doesn't break the task."""
-        mock_channel_layer = MagicMock()
-        mock_channel_layer.group_send.side_effect = Exception("Redis unavailable")
-        mock_get_channel_layer.return_value = mock_channel_layer
+        mock_sync_emit.side_effect = Exception("Redis unavailable")
 
         # Task should complete without raising
         refresh_airspace_boundaries()

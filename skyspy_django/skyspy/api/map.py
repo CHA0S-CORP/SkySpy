@@ -201,15 +201,13 @@ class MapViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='sse/status')
     def sse_status(self, request):
         """Get SSE/WebSocket service status and statistics."""
-        from channels.layers import get_channel_layer
-
         aircraft_list = cache.get("current_aircraft", [])
 
-        # Try to get channel layer stats
-        channel_layer = get_channel_layer()
-        redis_enabled = channel_layer is not None
+        # Check if Redis is configured for Socket.IO
+        redis_url = getattr(settings, 'REDIS_URL', None)
+        redis_enabled = redis_url is not None
 
-        # Get subscriber count from cache (updated by consumers)
+        # Get subscriber count from cache (updated by Socket.IO namespaces)
         subscriber_count = cache.get("websocket_subscribers", 0)
         aircraft_consumers = cache.get("aircraft_consumer_count", 0)
         safety_consumers = cache.get("safety_consumer_count", 0)
@@ -219,7 +217,7 @@ class MapViewSet(viewsets.ViewSet):
         last_broadcast = cache.get("last_aircraft_broadcast")
 
         return Response({
-            'mode': 'redis' if redis_enabled else 'memory',
+            'mode': 'socketio',
             'redis_enabled': redis_enabled,
             'subscribers': subscriber_count,
             'subscribers_by_type': {

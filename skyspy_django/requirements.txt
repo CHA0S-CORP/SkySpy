@@ -16,12 +16,11 @@ djangorestframework-simplejwt>=5.3
 mozilla-django-oidc>=4.0
 PyJWT>=2.8
 
-# Real-time (Django Channels)
-channels>=4.0
-channels-redis>=4.1
-daphne>=4.0
-django-eventstream>=4.5
-
+# Real-time (Socket.IO)
+python-socketio[asyncio_client]>=5.11.0
+msgpack>=1.0  # Required for Socket.IO Redis pub/sub serialization
+redis>=5.0  # Sync Redis client for Socket.IO broadcasts from Celery
+django_eventstream>=4.5
 # Background Tasks (Celery)
 celery[redis,gevent]>=5.3
 django-celery-beat>=2.5
@@ -30,7 +29,7 @@ gevent>=24.2
 # Database
 psycopg[binary]>=3.1
 asyncpg>=0.29.0
-
+daphne>=4.0
 # HTTP Client
 httpx>=0.26.0
 

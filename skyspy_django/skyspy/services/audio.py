@@ -1363,12 +1363,7 @@ def _broadcast_transcription_event(
         error: Optional error message for failures
     """
     try:
-        from channels.layers import get_channel_layer
-        from skyspy.utils import sync_group_send
-
-        channel_layer = get_channel_layer()
-        if not channel_layer:
-            return
+        from skyspy.socketio.utils import sync_emit
 
         event_data = {
             "id": transmission.id,
@@ -1391,14 +1386,7 @@ def _broadcast_transcription_event(
         elif status == "failed" and error:
             event_data["error"] = error
 
-        sync_group_send(
-            channel_layer,
-            'audio_transmissions',
-            {
-                'type': 'audio_transmission',
-                'data': event_data
-            }
-        )
+        sync_emit('audio:transmission', event_data, room='audio_transmissions', namespace='/audio')
 
         logger.debug(f"Broadcast transcription event: {status} for {transmission.id}")
 
@@ -1413,12 +1401,7 @@ def broadcast_new_transmission(transmission: AudioTransmission):
     Call this after creating a new transmission record.
     """
     try:
-        from channels.layers import get_channel_layer
-        from skyspy.utils import sync_group_send
-
-        channel_layer = get_channel_layer()
-        if not channel_layer:
-            return
+        from skyspy.socketio.utils import sync_emit
 
         event_data = {
             "id": transmission.id,
@@ -1431,14 +1414,7 @@ def broadcast_new_transmission(transmission: AudioTransmission):
             "transcription_status": transmission.transcription_status,
         }
 
-        sync_group_send(
-            channel_layer,
-            'audio_transmissions',
-            {
-                'type': 'audio_transmission',
-                'data': event_data
-            }
-        )
+        sync_emit('audio:transmission', event_data, room='audio_transmissions', namespace='/audio')
 
     except Exception as e:
         logger.warning(f"Failed to broadcast new transmission: {e}")

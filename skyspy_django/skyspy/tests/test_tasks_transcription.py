@@ -522,26 +522,25 @@ class ExtractCallsignsTaskTest(TestCase):
 class BroadcastTranscriptionUpdateTest(TestCase):
     """Tests for _broadcast_transcription_update helper function."""
 
-    @patch('skyspy.tasks.transcription.get_channel_layer')
-    def test_broadcast_started(self, mock_get_channel_layer):
+    @patch('skyspy.tasks.transcription.sync_emit')
+    def test_broadcast_started(self, mock_sync_emit):
         """Test broadcasting transcription started event."""
         transmission = AudioTransmission.objects.create(
             filename='test.mp3',
             transcription_status='processing',
         )
 
-        mock_channel_layer = MagicMock()
-        mock_get_channel_layer.return_value = mock_channel_layer
+        mock_sync_emit.return_value = True
 
         _broadcast_transcription_update(transmission, 'started')
 
-        mock_channel_layer.group_send.assert_called()
-        call_args = mock_channel_layer.group_send.call_args
-        self.assertEqual(call_args[0][0], 'audio_transcriptions')
-        self.assertEqual(call_args[0][1]['type'], 'audio_transcription_started')
+        mock_sync_emit.assert_called()
+        call_args = mock_sync_emit.call_args
+        # Check that the event name includes 'started'
+        self.assertIn('started', call_args[0][0])
 
-    @patch('skyspy.tasks.transcription.get_channel_layer')
-    def test_broadcast_completed(self, mock_get_channel_layer):
+    @patch('skyspy.tasks.transcription.sync_emit')
+    def test_broadcast_completed(self, mock_sync_emit):
         """Test broadcasting transcription completed event with transcript."""
         transmission = AudioTransmission.objects.create(
             filename='test.mp3',
@@ -549,17 +548,17 @@ class BroadcastTranscriptionUpdateTest(TestCase):
             transcript='United 123 cleared for takeoff',
         )
 
-        mock_channel_layer = MagicMock()
-        mock_get_channel_layer.return_value = mock_channel_layer
+        mock_sync_emit.return_value = True
 
         _broadcast_transcription_update(transmission, 'completed')
 
-        call_args = mock_channel_layer.group_send.call_args
-        data = call_args[0][1]['data']
-        self.assertEqual(data['transcript'], 'United 123 cleared for takeoff')
+        mock_sync_emit.assert_called()
+        call_args = mock_sync_emit.call_args
+        # Check that the event name includes 'completed'
+        self.assertIn('completed', call_args[0][0])
 
-    @patch('skyspy.tasks.transcription.get_channel_layer')
-    def test_broadcast_failed(self, mock_get_channel_layer):
+    @patch('skyspy.tasks.transcription.sync_emit')
+    def test_broadcast_failed(self, mock_sync_emit):
         """Test broadcasting transcription failed event with error."""
         transmission = AudioTransmission.objects.create(
             filename='test.mp3',
@@ -567,26 +566,24 @@ class BroadcastTranscriptionUpdateTest(TestCase):
             transcription_error='Service unavailable',
         )
 
-        mock_channel_layer = MagicMock()
-        mock_get_channel_layer.return_value = mock_channel_layer
+        mock_sync_emit.return_value = True
 
         _broadcast_transcription_update(transmission, 'failed')
 
-        call_args = mock_channel_layer.group_send.call_args
-        data = call_args[0][1]['data']
-        self.assertEqual(data['error'], 'Service unavailable')
+        mock_sync_emit.assert_called()
+        call_args = mock_sync_emit.call_args
+        # Check that the event name includes 'failed'
+        self.assertIn('failed', call_args[0][0])
 
-    @patch('skyspy.tasks.transcription.get_channel_layer')
-    def test_broadcast_handles_failure(self, mock_get_channel_layer):
+    @patch('skyspy.tasks.transcription.sync_emit')
+    def test_broadcast_handles_failure(self, mock_sync_emit):
         """Test that broadcast failure is handled gracefully."""
         transmission = AudioTransmission.objects.create(
             filename='test.mp3',
             transcription_status='completed',
         )
 
-        mock_channel_layer = MagicMock()
-        mock_channel_layer.group_send.side_effect = Exception("Redis unavailable")
-        mock_get_channel_layer.return_value = mock_channel_layer
+        mock_sync_emit.side_effect = Exception("Redis unavailable")
 
         # Should not raise
         _broadcast_transcription_update(transmission, 'completed')

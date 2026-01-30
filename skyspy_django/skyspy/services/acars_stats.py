@@ -538,24 +538,14 @@ def refresh_acars_stats_cache(broadcast: bool = True) -> None:
 
 def broadcast_acars_stats_update(stat_type: str, data: dict) -> None:
     """Broadcast ACARS stats update via WebSocket."""
-    from channels.layers import get_channel_layer
-    from skyspy.utils import sync_group_send
+    from skyspy.socketio.utils import sync_emit
 
     try:
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            sync_group_send(
-                channel_layer,
-                'acars_all',
-                {
-                    'type': 'stats_update',
-                    'data': {
-                        'stat_type': stat_type,
-                        'stats': data
-                    }
-                }
-            )
-            logger.debug(f"Broadcast ACARS stats update: {stat_type}")
+        sync_emit('acars:update', {
+            'stat_type': stat_type,
+            'stats': data
+        }, room='topic_acars')
+        logger.debug(f"Broadcast ACARS stats update: {stat_type}")
     except Exception as e:
         logger.warning(f"Failed to broadcast ACARS stats update: {e}")
 

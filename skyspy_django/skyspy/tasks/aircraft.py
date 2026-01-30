@@ -15,10 +15,9 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
-from channels.layers import get_channel_layer
 
 from skyspy.models import AircraftSighting, AircraftSession, AircraftInfo
-from skyspy.utils import sync_group_send
+from skyspy.socketio.utils import sync_emit
 
 logger = logging.getLogger(__name__)
 
@@ -155,25 +154,21 @@ def poll_aircraft(self):
         # Build current aircraft lookup
         current_aircraft_map = {ac.get('hex'): ac for ac in aircraft_list if ac.get('hex')}
 
-        # Broadcast to WebSocket clients
+        # Broadcast to WebSocket clients via Socket.IO
         try:
-            channel_layer = get_channel_layer()
             timestamp = timezone.now().isoformat().replace('+00:00', 'Z')
 
             # 1. Broadcast new aircraft events
             if new_icaos:
                 new_aircraft = [current_aircraft_map[icao] for icao in new_icaos if icao in current_aircraft_map]
-                sync_group_send(
-                    channel_layer,
-                    'aircraft_aircraft',
+                sync_emit(
+                    'aircraft:new',
                     {
-                        'type': 'aircraft_new',
-                        'data': {
-                            'aircraft': new_aircraft,
-                            'count': len(new_aircraft),
-                            'timestamp': timestamp
-                        }
-                    }
+                        'aircraft': new_aircraft,
+                        'count': len(new_aircraft),
+                        'timestamp': timestamp
+                    },
+                    room='topic_aircraft'
                 )
                 logger.debug(f"Broadcast {len(new_aircraft)} new aircraft")
 
@@ -183,18 +178,15 @@ def poll_aircraft(self):
                     {'hex': icao, 'flight': _previous_aircraft.get(icao, {}).get('flight')}
                     for icao in removed_icaos
                 ]
-                sync_group_send(
-                    channel_layer,
-                    'aircraft_aircraft',
+                sync_emit(
+                    'aircraft:remove',
                     {
-                        'type': 'aircraft_remove',
-                        'data': {
-                            'aircraft': removed_aircraft,
-                            'icaos': list(removed_icaos),
-                            'count': len(removed_aircraft),
-                            'timestamp': timestamp
-                        }
-                    }
+                        'aircraft': removed_aircraft,
+                        'icaos': list(removed_icaos),
+                        'count': len(removed_aircraft),
+                        'timestamp': timestamp
+                    },
+                    room='topic_aircraft'
                 )
                 logger.debug(f"Broadcast {len(removed_aircraft)} removed aircraft")
 
@@ -212,31 +204,25 @@ def poll_aircraft(self):
                 for ac in aircraft_list
                 if ac.get('lat') is not None and ac.get('lon') is not None
             ]
-            sync_group_send(
-                channel_layer,
-                'aircraft_aircraft',
+            sync_emit(
+                'positions:update',
                 {
-                    'type': 'positions_update',
-                    'data': {
-                        'positions': positions,
-                        'count': len(positions),
-                        'timestamp': timestamp
-                    }
-                }
+                    'positions': positions,
+                    'count': len(positions),
+                    'timestamp': timestamp
+                },
+                room='topic_aircraft'
             )
 
             # 4. Full aircraft update (existing behavior)
-            sync_group_send(
-                channel_layer,
-                'aircraft_aircraft',
+            sync_emit(
+                'aircraft:update',
                 {
-                    'type': 'aircraft_update',
-                    'data': {
-                        'aircraft': aircraft_list,
-                        'count': len(aircraft_list),
-                        'timestamp': timestamp
-                    }
-                }
+                    'aircraft': aircraft_list,
+                    'count': len(aircraft_list),
+                    'timestamp': timestamp
+                },
+                room='topic_aircraft'
             )
         except Exception as e:
             logger.warning(f"Failed to broadcast aircraft update: {e}")

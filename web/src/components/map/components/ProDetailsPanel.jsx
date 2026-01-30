@@ -329,9 +329,7 @@ export function ProDetailsPanel({
                       data = await wsRequest('photo-cache', { icao: aircraftHex });
                       if (data?.error) data = null;
                     } else {
-                      const res = await fetch(`${config.apiBaseUrl || ''}/api/v1/aircraft/${aircraftHex}/photo/cache`, {
-                        method: 'POST'
-                      });
+                      const res = await fetch(`${config.apiBaseUrl || ''}/api/v1/airframes/${aircraftHex}/photos`);
                       data = await safeJson(res);
                     }
 

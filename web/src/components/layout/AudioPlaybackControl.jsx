@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Volume2, VolumeX, X, PlayCircle, Plane, Clock, Radio, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 
 // Import the global audio state from AudioView
-import { getGlobalAudioState, subscribeToAudioStateChanges, clearAutoplayFilter, setAutoplay as setGlobalAutoplay, initAudioSocket, retryAudioSocket } from '../views/AudioView';
+import { getGlobalAudioState, subscribeToAudioStateChanges, clearAutoplayFilter, setAutoplay as setGlobalAutoplay, retryAudioSocket } from '../views/AudioView';
 
 export function AudioPlaybackControl() {
   const [playingId, setPlayingId] = useState(null);
@@ -20,12 +20,8 @@ export function AudioPlaybackControl() {
   const [socketReconnectFailed, setSocketReconnectFailed] = useState(false);
   const timerRef = useRef(null);
 
-  // Initialize socket when autoplay is enabled
-  useEffect(() => {
-    if (autoplay) {
-      initAudioSocket();
-    }
-  }, [autoplay]);
+  // Socket.IO connection is now handled automatically by useSocketIOAudio
+  // No need for manual initialization
 
   // Subscribe to global audio state changes
   useEffect(() => {
@@ -125,19 +121,22 @@ export function AudioPlaybackControl() {
     const vol = parseFloat(e.target.value);
     setAudioVolume(vol);
     const audioState = getGlobalAudioState();
-    const audio = audioState.audioRefs[playingId];
-    if (audio && !isMuted) {
-      audio.volume = vol;
+    // Apply volume to all cached audio elements for consistent playback
+    if (!isMuted) {
+      Object.values(audioState.audioRefs).forEach(audio => {
+        if (audio) audio.volume = vol;
+      });
     }
   };
 
   const toggleMute = () => {
     const audioState = getGlobalAudioState();
-    const audio = audioState.audioRefs[playingId];
-    if (audio) {
-      audio.volume = isMuted ? audioVolume : 0;
-    }
-    setIsMuted(!isMuted);
+    const newMuted = !isMuted;
+    // Apply mute state to all cached audio elements for consistent playback
+    Object.values(audioState.audioRefs).forEach(audio => {
+      if (audio) audio.volume = newMuted ? 0 : audioVolume;
+    });
+    setIsMuted(newMuted);
   };
 
   const handleClose = () => {

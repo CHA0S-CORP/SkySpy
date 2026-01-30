@@ -9,11 +9,11 @@ const safeJson = async (res) => {
 };
 
 /**
- * Hook for fetching aviation data via WebSocket requests with HTTP fallback
- * Uses WebSocket when connected, falls back to HTTP API when not
+ * Hook for fetching aviation data via Socket.IO requests with HTTP fallback
+ * Uses Socket.IO when connected, falls back to HTTP API when not
  *
- * @param {Function} wsRequest - WebSocket request function from useChannelsSocket
- * @param {boolean} wsConnected - Whether WebSocket is connected
+ * @param {Function} wsRequest - Request function from useSocketIOData
+ * @param {boolean} wsConnected - Whether Socket.IO is connected
  * @param {number} feederLat - Feeder latitude
  * @param {number} feederLon - Feeder longitude
  * @param {number} radarRange - Radar range in nm
@@ -85,10 +85,16 @@ export function useAviationData(wsRequest, wsConnected, feederLat, feederLon, ra
 
     const baseParams = { lat: feederLat, lon: feederLon };
 
-    // Helper to make request - use WebSocket if connected, else HTTP
+    // Helper to make request - use WebSocket if connected, fall back to HTTP on timeout/error
     const makeRequest = async (wsType, httpEndpoint, params, timeout = 10000) => {
       if (wsRequest && wsConnected) {
-        return wsRequest(wsType, params, timeout);
+        try {
+          return await wsRequest(wsType, params, timeout);
+        } catch (err) {
+          // On socket timeout or error, fall back to HTTP
+          console.log(`[useAviationData] Socket request failed for ${wsType}, trying HTTP fallback:`, err.message);
+          return fetchHttp(httpEndpoint, params);
+        }
       }
       return fetchHttp(httpEndpoint, params);
     };

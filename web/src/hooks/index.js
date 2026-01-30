@@ -9,10 +9,17 @@ export { useStats } from './useStats';
 export { useStatsData } from './useStatsData';
 export { useDataCache } from './useDataCache';
 
-// WebSocket hooks (Django Channels)
-export { useNativeWebSocket } from './useNativeWebSocket';
-export { useChannelsSocket } from './useChannelsSocket';
-export { usePositionChannels } from './usePositionChannels';
+// Socket.IO hooks
+export {
+  useSocketIO,
+  useSocketIODefault,
+  useSocketIOData,
+  useSocketIOPositions,
+  useSocketIOAudio,
+  retrySocketIOAudio,
+  useSocketIOApi,
+  useSocketIOCannonball,
+} from './socket';
 
 // Map hooks
 export { useDraggable } from './useDraggable';
@@ -58,12 +65,6 @@ export {
   EMERGENCY_KEYWORDS,
   AUTOPLAY_MAX_AGE_MS,
 } from './useAudioState';
-export {
-  useAudioSocket,
-  initAudioSocket,
-  disconnectAudioSocket,
-  retryAudioSocket,
-} from './useAudioSocket';
 export { useAudioPlayback } from './useAudioPlayback';
 
 // UI hooks

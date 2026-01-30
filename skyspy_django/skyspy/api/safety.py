@@ -68,6 +68,29 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
         })
 
     @extend_schema(
+        summary="Get safety monitor status",
+        description="Get the current status of the safety monitoring system"
+    )
+    @action(detail=False, methods=['get'], url_path='monitor/status')
+    def monitor_status(self, request):
+        """Get safety monitor status."""
+        enabled = settings.SAFETY_MONITORING_ENABLED
+        tracked_aircraft = 0
+
+        try:
+            from skyspy.services.safety import safety_monitor
+            stats = safety_monitor.get_stats()
+            tracked_aircraft = stats.get('tracked_aircraft', 0)
+        except Exception:
+            pass
+
+        return Response({
+            'enabled': enabled,
+            'tracked_aircraft': tracked_aircraft,
+            'timestamp': timezone.now().isoformat()
+        })
+
+    @extend_schema(
         summary="Get safety statistics",
         parameters=[
             OpenApiParameter(name='hours', type=int, description='Time range in hours'),

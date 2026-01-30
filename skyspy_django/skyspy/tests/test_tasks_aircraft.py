@@ -73,14 +73,14 @@ class PollAircraftTaskTest(TestCase):
         """Clean up after tests."""
         cache.clear()
 
-    @patch('skyspy.tasks.aircraft.get_channel_layer')
+    @patch('skyspy.tasks.aircraft.sync_emit')
     @patch('skyspy.tasks.aircraft.httpx.get')
     @override_settings(
         ULTRAFEEDER_URL='http://test-feeder:8080',
         FEEDER_LAT=47.5,
         FEEDER_LON=-122.0
     )
-    def test_poll_aircraft_success(self, mock_httpx_get, mock_get_channel_layer):
+    def test_poll_aircraft_success(self, mock_httpx_get, mock_sync_emit):
         """Test successful aircraft polling."""
         # Mock httpx response
         mock_response = MagicMock()
@@ -112,9 +112,8 @@ class PollAircraftTaskTest(TestCase):
         }
         mock_httpx_get.return_value = mock_response
 
-        # Mock channel layer
-        mock_channel_layer = MagicMock()
-        mock_get_channel_layer.return_value = mock_channel_layer
+        # Mock sync_emit
+        mock_sync_emit.return_value = True
 
         # Execute task
         poll_aircraft()
@@ -162,10 +161,10 @@ class PollAircraftTaskTest(TestCase):
         # Execute task (should not raise)
         poll_aircraft()
 
-    @patch('skyspy.tasks.aircraft.get_channel_layer')
+    @patch('skyspy.tasks.aircraft.sync_emit')
     @patch('skyspy.tasks.aircraft.httpx.get')
     @override_settings(FEEDER_LAT=47.5, FEEDER_LON=-122.0)
-    def test_poll_aircraft_emergency_squawk(self, mock_httpx_get, mock_get_channel_layer):
+    def test_poll_aircraft_emergency_squawk(self, mock_httpx_get, mock_sync_emit):
         """Test detection of emergency squawk codes."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -180,7 +179,7 @@ class PollAircraftTaskTest(TestCase):
             ]
         }
         mock_httpx_get.return_value = mock_response
-        mock_get_channel_layer.return_value = MagicMock()
+        mock_sync_emit.return_value = True
 
         poll_aircraft()
 
