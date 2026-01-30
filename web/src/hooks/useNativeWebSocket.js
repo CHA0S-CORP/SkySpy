@@ -384,18 +384,30 @@ export function useNativeWebSocket({
   }, []);
 
   // Connect on mount and when enabled changes
+  // Use a small delay to handle React StrictMode double-mount gracefully
   useEffect(() => {
     mountedRef.current = true;
     enabledRef.current = enabled;
 
+    let connectTimeout = null;
+
     if (enabled) {
-      connect();
+      // Small delay to allow StrictMode's rapid unmount-remount to settle
+      connectTimeout = setTimeout(() => {
+        if (mountedRef.current && enabledRef.current) {
+          connect();
+        }
+      }, 100);
     } else {
       // Disconnect if disabled
       close();
     }
 
     return () => {
+      // Clear connect timeout to prevent connection after unmount
+      if (connectTimeout) {
+        clearTimeout(connectTimeout);
+      }
       // Clear reconnect timeout FIRST to prevent race condition where
       // reconnect fires after mountedRef is set to false but before cleanup completes
       clearTimers();

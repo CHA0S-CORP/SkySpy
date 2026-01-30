@@ -13,6 +13,32 @@ from skyspy.models import AirspaceAdvisory, AirspaceBoundary, CachedAirport, Cac
 logger = logging.getLogger(__name__)
 
 
+def _safe_int(value, default: int, min_val: int = None, max_val: int = None) -> int:
+    """
+    Safely parse an integer parameter with bounds checking.
+
+    Args:
+        value: The value to parse (can be str, int, or None)
+        default: Default value if parsing fails
+        min_val: Minimum allowed value (optional)
+        max_val: Maximum allowed value (optional)
+
+    Returns:
+        Validated integer within bounds
+    """
+    try:
+        result = int(value) if value is not None else default
+    except (ValueError, TypeError):
+        result = default
+
+    if min_val is not None and result < min_val:
+        result = min_val
+    if max_val is not None and result > max_val:
+        result = max_val
+
+    return result
+
+
 class AirspaceConsumer(BaseConsumer):
     """
     WebSocket consumer for airspace data.
@@ -37,7 +63,8 @@ class AirspaceConsumer(BaseConsumer):
         advisories = await self.get_active_advisories()
         boundaries = await self.get_boundaries()
 
-        await self.send_json({
+        # Send immediately to bypass any batching
+        await self.send_json_immediate({
             'type': 'airspace:snapshot',
             'data': {
                 'advisories': advisories,
@@ -47,14 +74,18 @@ class AirspaceConsumer(BaseConsumer):
         })
 
     async def handle_request(self, request_type: str, request_id: str, params: dict):
-        """Handle request/response messages."""
+        """Handle request/response messages.
+
+        Note: All responses use send_json_immediate to bypass batching,
+        ensuring immediate delivery for request/response correlation.
+        """
         if request_type == 'advisories':
             # Return active advisories with optional filters
             advisories = await self.get_active_advisories(
                 hazard=params.get('hazard'),
                 advisory_type=params.get('advisory_type')
             )
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'advisories',
@@ -69,7 +100,7 @@ class AirspaceConsumer(BaseConsumer):
                 lon=params.get('lon'),
                 radius_nm=params.get('radius_nm') or params.get('radius', 100)
             )
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': request_type,
@@ -85,7 +116,7 @@ class AirspaceConsumer(BaseConsumer):
             advisories = await self.get_active_advisories()
             boundaries = await self.get_boundaries(lat=lat, lon=lon, radius_nm=radius_nm)
 
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'airspaces',
@@ -100,10 +131,10 @@ class AirspaceConsumer(BaseConsumer):
             lat = params.get('lat', settings.FEEDER_LAT)
             lon = params.get('lon', settings.FEEDER_LON)
             radius_nm = params.get('radius_nm', 100)
-            limit = min(int(params.get('limit', 20)), 50)
+            limit = _safe_int(params.get('limit'), 20, min_val=1, max_val=50)
 
             metars = await self.get_metars(lat, lon, radius_nm, limit)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'metars',
@@ -115,14 +146,14 @@ class AirspaceConsumer(BaseConsumer):
             station = params.get('station') or params.get('icao')
             if station:
                 metar = await self.get_metar(station)
-                await self.send_json({
+                await self.send_json_immediate({
                     'type': 'response',
                     'request_id': request_id,
                     'request_type': 'metar',
                     'data': metar
                 })
             else:
-                await self.send_json({
+                await self.send_json_immediate({
                     'type': 'error',
                     'request_id': request_id,
                     'message': 'Missing station parameter'
@@ -133,14 +164,14 @@ class AirspaceConsumer(BaseConsumer):
             station = params.get('station') or params.get('icao')
             if station:
                 taf = await self.get_taf(station)
-                await self.send_json({
+                await self.send_json_immediate({
                     'type': 'response',
                     'request_id': request_id,
                     'request_type': 'taf',
                     'data': taf
                 })
             else:
-                await self.send_json({
+                await self.send_json_immediate({
                     'type': 'error',
                     'request_id': request_id,
                     'message': 'Missing station parameter'
@@ -151,10 +182,10 @@ class AirspaceConsumer(BaseConsumer):
             lat = params.get('lat', settings.FEEDER_LAT)
             lon = params.get('lon', settings.FEEDER_LON)
             radius_nm = params.get('radius_nm', 200)
-            hours = int(params.get('hours', 6))
+            hours = _safe_int(params.get('hours'), 6, min_val=1, max_val=72)
 
             pireps = await self.get_pireps(lat, lon, radius_nm, hours)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'pireps',
@@ -165,7 +196,7 @@ class AirspaceConsumer(BaseConsumer):
             # Return SIGMETs
             hazard = params.get('hazard')
             sigmets = await self.get_sigmets(hazard)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'sigmets',
@@ -177,10 +208,10 @@ class AirspaceConsumer(BaseConsumer):
             lat = params.get('lat', settings.FEEDER_LAT)
             lon = params.get('lon', settings.FEEDER_LON)
             radius_nm = params.get('radius_nm', 50)
-            limit = min(int(params.get('limit', 20)), 100)
+            limit = _safe_int(params.get('limit'), 20, min_val=1, max_val=100)
 
             airports = await self.get_airports(lat, lon, radius_nm, limit)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'airports',
@@ -193,10 +224,10 @@ class AirspaceConsumer(BaseConsumer):
             lon = params.get('lon', settings.FEEDER_LON)
             radius_nm = params.get('radius_nm', 100)
             navaid_type = params.get('type')
-            limit = min(int(params.get('limit', 50)), 200)
+            limit = _safe_int(params.get('limit'), 50, min_val=1, max_val=200)
 
             navaids = await self.get_navaids(lat, lon, radius_nm, navaid_type, limit)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'navaids',

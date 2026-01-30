@@ -100,10 +100,28 @@ class StatsConsumer(BaseConsumer):
         self.default_filters = {}
 
     async def connect(self):
-        """Handle WebSocket connection."""
+        """Handle WebSocket connection with proper authentication checks."""
+        # Check authentication via parent class (respects AUTH_MODE setting)
+        from django.conf import settings
+        auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
+        user = self.scope.get('user')
+        auth_error = self.scope.get('auth_error')
+
+        if auth_mode == 'private':
+            if not user or not user.is_authenticated:
+                await self.close(code=4001)  # Unauthorized
+                return
+
+        if auth_error and auth_mode != 'public':
+            logger.warning(f"Stats WebSocket auth error: {auth_error}")
+            if auth_mode == 'private':
+                await self.close(code=4001)
+                return
+
+        # Accept the connection
         await self.accept()
 
-        # Initialize rate limiter from base class
+        # Initialize rate limiter (parent class initializes in connect, but we override)
         from skyspy.channels.consumers.base import RateLimiter
         if self.enable_rate_limiting:
             self._rate_limiter = RateLimiter()

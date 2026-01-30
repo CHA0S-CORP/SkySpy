@@ -32,6 +32,8 @@ from skyspy.services.flight_pattern_stats import (
     calculate_airport_connectivity,
     calculate_military_breakdown,
 )
+from skyspy.auth.authentication import OptionalJWTAuthentication, APIKeyAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +48,9 @@ class FlightPatternStatsViewSet(viewsets.ViewSet):
     - Average flight duration by aircraft type
     - Most common aircraft types/models
     """
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="Get all flight pattern statistics",
@@ -260,6 +265,9 @@ class GeographicStatsViewSet(viewsets.ViewSet):
     - Airport connectivity
     - Military vs civilian breakdown
     """
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="Get all geographic statistics",
@@ -541,6 +549,9 @@ class CombinedStatsViewSet(viewsets.ViewSet):
 
     Provides a unified endpoint for retrieving all stats in a single request.
     """
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="Get all flight pattern and geographic statistics",

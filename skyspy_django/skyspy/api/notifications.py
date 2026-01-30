@@ -23,6 +23,8 @@ from skyspy.serializers.notifications import (
     NotificationChannelUpdateSerializer,
     NotificationChannelListSerializer,
 )
+from skyspy.auth.authentication import OptionalJWTAuthentication, APIKeyAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
 
 logger = logging.getLogger(__name__)
 
@@ -386,6 +388,9 @@ class NotificationChannelViewSet(viewsets.ModelViewSet):
 
 class NotificationViewSet(viewsets.ViewSet):
     """ViewSet for global notification configuration."""
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="Get notification config",

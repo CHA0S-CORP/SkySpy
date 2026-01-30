@@ -2,38 +2,9 @@ import React, { useRef, useCallback, useEffect } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, Map as MapIcon, History, ExternalLink } from 'lucide-react';
 import L from 'leaflet';
 import { ReplayControlsCompact } from '../components/ReplayControls';
-
-// Helper to safely parse JSON from fetch response
-const safeJson = async (res) => {
-  if (!res.ok) return null;
-  const ct = res.headers.get('content-type');
-  if (!ct || !ct.includes('application/json')) return null;
-  try { return await res.json(); } catch { return null; }
-};
-
-const EVENT_TYPE_LABELS = {
-  'tcas_ra': 'TCAS RA',
-  'tcas_ta': 'TCAS TA',
-  'extreme_vs': 'Extreme VS',
-  'vs_reversal': 'VS Reversal',
-  'proximity_conflict': 'Proximity',
-  'squawk_hijack': 'Squawk 7500',
-  'squawk_radio_failure': 'Squawk 7600',
-  'squawk_emergency': 'Squawk 7700'
-};
-
-function getSeverityClass(severity) {
-  switch (severity) {
-    case 'critical': return 'severity-critical';
-    case 'warning': return 'severity-warning';
-    case 'low': return 'severity-low';
-    default: return '';
-  }
-}
-
-function formatEventType(type) {
-  return EVENT_TYPE_LABELS[type] || type;
-}
+import { getSeverityClass, formatEventType } from './safetyConstants';
+import { createAircraftIcon, getInterpolatedPosition, safeJson } from './safetyMapUtils';
+import { SnapshotSection } from './SnapshotSection';
 
 export function SafetyTab({
   hex,

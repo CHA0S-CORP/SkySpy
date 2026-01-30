@@ -18,6 +18,7 @@ export default defineConfig({
     },
   },
   server: {
+    host: '0.0.0.0',
     port: 3000,
     proxy: {
       '/api': {
@@ -28,6 +29,16 @@ export default defineConfig({
         target: apiTarget.replace('http', 'ws'),
         ws: true,
         changeOrigin: true,
+        secure: false,
+        // Ensure WebSocket upgrade headers are properly forwarded
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            console.log('WebSocket proxy error:', err.message);
+          });
+          proxy.on('proxyReqWs', (proxyReq, req, socket) => {
+            console.log('WebSocket proxying:', req.url);
+          });
+        },
       },
       '/health': {
         target: apiTarget,

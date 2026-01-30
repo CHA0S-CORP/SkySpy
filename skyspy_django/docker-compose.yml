@@ -165,10 +165,12 @@ services:
       sh -c "
         echo 'Running database migrations...' &&
         python manage.py migrate --noinput &&
+        echo 'Syncing Celery tasks to database...' &&
+        python manage.py sync_celery_tasks &&
         echo 'Populating initial aviation data...' &&
         python manage.py populate_data || echo 'Data population completed (some errors may be normal on first run)' &&
         echo 'Starting Daphne ASGI server...' &&
-        daphne -b 0.0.0.0 -p 8000 skyspy.asgi:application
+        daphne -b 0.0.0.0 -p 8000 --application-close-timeout 30 skyspy.asgi:application
       "
 
   # ---------------------------------------------------------------------------

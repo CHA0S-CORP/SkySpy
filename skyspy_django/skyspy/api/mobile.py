@@ -25,6 +25,8 @@ from skyspy.services.law_enforcement_db import (
     calculate_bearing,
     get_direction_name,
 )
+from skyspy.auth.authentication import OptionalJWTAuthentication, APIKeyAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,9 @@ class MobileViewSet(ViewSet):
     """
     Mobile position and threat detection API.
     """
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @action(detail=False, methods=['POST'], url_path='position')
     def update_position(self, request):

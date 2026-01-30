@@ -43,8 +43,14 @@ def _get_batch_config():
     return {
         'window_ms': getattr(settings, 'WS_BATCH_WINDOW_MS', 200),
         'max_size': getattr(settings, 'WS_MAX_BATCH_SIZE', 50),
+        'max_bytes': getattr(settings, 'WS_MAX_BATCH_BYTES', 1024 * 1024),  # 1MB default
         'immediate_types': getattr(settings, 'WS_IMMEDIATE_TYPES', ['alert', 'safety', 'emergency']),
     }
+
+
+# Maximum allowed JSON message size (bytes) to prevent DoS
+MAX_JSON_SIZE = getattr(settings, 'WS_MAX_JSON_SIZE', 10 * 1024 * 1024)  # 10MB default
+MAX_JSON_DEPTH = getattr(settings, 'WS_MAX_JSON_DEPTH', 50)  # Maximum nesting depth
 
 
 class RateLimiter:
@@ -89,6 +95,7 @@ class MessageBatcher:
 
     def __init__(self, send_callback):
         self._batch: deque = deque()
+        self._batch_size_bytes: int = 0  # Track total byte size of batch
         self._send_callback = send_callback
         self._batch_task: Optional[asyncio.Task] = None
         self._config = _get_batch_config()
@@ -104,15 +111,23 @@ class MessageBatcher:
                 await self._send_callback(message)
                 return
 
+        # Estimate message size for byte limit enforcement
+        try:
+            msg_size = len(json.dumps(message))
+        except (TypeError, ValueError):
+            msg_size = 1024  # Default estimate if serialization fails
+
         async with self._lock:
             self._batch.append(message)
+            self._batch_size_bytes += msg_size
 
             # Start batch timer if not running
             if self._batch_task is None or self._batch_task.done():
                 self._batch_task = asyncio.create_task(self._flush_after_delay())
 
-            # Flush immediately if batch is full
-            if len(self._batch) >= self._config['max_size']:
+            # Flush immediately if batch is full (by count OR by bytes)
+            max_bytes = self._config.get('max_bytes', 1024 * 1024)
+            if len(self._batch) >= self._config['max_size'] or self._batch_size_bytes >= max_bytes:
                 if self._batch_task and not self._batch_task.done():
                     self._batch_task.cancel()
                 await self._flush()
@@ -134,6 +149,7 @@ class MessageBatcher:
             # Group messages by type for combined sending
             messages = list(self._batch)
             self._batch.clear()
+            self._batch_size_bytes = 0  # Reset byte counter
 
         if len(messages) == 1:
             # Single message, send directly
@@ -184,6 +200,24 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
 
     async def connect(self):
         """Handle WebSocket connection."""
+        # Check authentication based on AUTH_MODE
+        from django.conf import settings
+        auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
+        user = self.scope.get('user')
+        auth_error = self.scope.get('auth_error')
+
+        if auth_mode == 'private':
+            if not user or not user.is_authenticated:
+                await self.close(code=4001)  # Unauthorized
+                return
+
+        if auth_error and auth_mode != 'public':
+            logger.warning(f"WebSocket auth error: {auth_error}")
+            # Close connection for private mode
+            if auth_mode == 'private':
+                await self.close(code=4001)
+                return
+
         # Accept the connection
         await self.accept()
 
@@ -238,28 +272,50 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
     async def receive(self, text_data=None, bytes_data=None):
         """Handle incoming WebSocket messages with JSON error handling."""
         if text_data:
+            # Enforce message size limit to prevent DoS
+            if len(text_data) > MAX_JSON_SIZE:
+                logger.warning(f"Rejected oversized JSON message: {len(text_data)} bytes from {self.channel_name}")
+                try:
+                    await self.send_json({
+                        'type': 'error',
+                        'message': 'Message too large'
+                    })
+                except Exception as e:
+                    logger.debug(f"Failed to send error response (connection may be closed): {e}")
+                return
+
             try:
                 content = json.loads(text_data)
+
+                # Check for excessive nesting depth (DoS prevention)
+                if self._check_json_depth(content) > MAX_JSON_DEPTH:
+                    logger.warning(f"Rejected deeply nested JSON from {self.channel_name}")
+                    await self.send_json({
+                        'type': 'error',
+                        'message': 'Message structure too deeply nested'
+                    })
+                    return
+
                 await self.receive_json(content)
             except json.JSONDecodeError as e:
-                logger.warning(f"Invalid JSON received: {e}")
+                logger.warning(f"Invalid JSON received from {self.channel_name}: {e}")
                 try:
                     await self.send_json({
                         'type': 'error',
-                        'message': f'Invalid JSON: {str(e)}'
+                        'message': 'Invalid JSON format'  # Don't expose parse error details
                     })
-                except Exception:
-                    pass  # Connection may be closed
+                except Exception as send_err:
+                    logger.debug(f"Failed to send JSON error response (connection may be closed): {send_err}")
             except Exception as e:
                 # Catch any other exceptions to prevent consumer crash
-                logger.exception(f"Error processing message: {e}")
+                logger.exception(f"Error processing message from {self.channel_name}: {e}")
                 try:
                     await self.send_json({
                         'type': 'error',
-                        'message': f'Internal error: {str(e)}'
+                        'message': 'Internal server error'  # Don't expose internal error details
                     })
-                except Exception:
-                    pass  # Connection may be closed
+                except Exception as send_err:
+                    logger.debug(f"Failed to send internal error response (connection may be closed): {send_err}")
         elif bytes_data:
             # Binary data not supported
             try:
@@ -267,8 +323,23 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
                     'type': 'error',
                     'message': 'Binary data not supported'
                 })
-            except Exception:
-                pass  # Connection may be closed
+            except Exception as e:
+                logger.debug(f"Failed to send binary error response (connection may be closed): {e}")
+
+    def _check_json_depth(self, obj, current_depth=0) -> int:
+        """Check the nesting depth of a JSON object to prevent DoS."""
+        if current_depth > MAX_JSON_DEPTH:
+            return current_depth  # Early exit if already too deep
+
+        if isinstance(obj, dict):
+            if not obj:
+                return current_depth
+            return max(self._check_json_depth(v, current_depth + 1) for v in obj.values())
+        elif isinstance(obj, list):
+            if not obj:
+                return current_depth
+            return max(self._check_json_depth(item, current_depth + 1) for item in obj)
+        return current_depth
 
     async def receive_json(self, content):
         """Handle incoming JSON messages."""
@@ -295,7 +366,8 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
             })
 
         elif action == 'ping':
-            await self.send_json({'type': 'pong'})
+            # Send pong immediately, bypassing batching
+            await self.send_json_immediate({'type': 'pong'})
 
         elif action == 'request':
             # Handle request/response pattern
@@ -310,15 +382,67 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
                 'message': f'Unknown action: {action}'
             })
 
+    # Request types that require specific permissions
+    REQUEST_PERMISSIONS = {
+        'system-info': 'system.view_info',
+        'system-databases': 'system.view_databases',
+        'system-status': 'system.view_status',
+        'safety-status': 'safety.view',
+        'acars-status': 'acars.view',
+    }
+
+    async def _check_request_permission(self, request_type: str) -> bool:
+        """
+        Check if the current user has permission to make this request.
+
+        Args:
+            request_type: The type of request being made
+
+        Returns:
+            True if permission is granted, False otherwise
+        """
+        from django.conf import settings
+
+        # Public mode allows all access
+        auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
+        if auth_mode == 'public':
+            return True
+
+        # Check if this request type requires a specific permission
+        required_perm = self.REQUEST_PERMISSIONS.get(request_type)
+        if not required_perm:
+            return True  # No specific permission required
+
+        # Check permission via middleware
+        check_permission = self.scope.get('check_permission')
+        if check_permission:
+            return await check_permission(required_perm)
+
+        # Fallback: require authentication
+        user = self.scope.get('user')
+        return user and user.is_authenticated
+
     async def handle_request(self, request_type: str, request_id: str, params: dict):
         """
         Handle a request/response message.
         Override in subclasses for specific request types.
+
+        Note: All responses use send_json_immediate to bypass batching,
+        ensuring immediate delivery for request/response correlation.
         """
+        # Check permission for this request type
+        if not await self._check_request_permission(request_type):
+            await self.send_json_immediate({
+                'type': 'error',
+                'request_id': request_id,
+                'message': 'Permission denied'
+            })
+            return
+
         # System-wide request handlers available from any consumer
         if request_type == 'status':
             status = await self.get_system_status()
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'status',
@@ -327,7 +451,7 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
 
         elif request_type == 'health' or request_type == 'system-health':
             health = await self.get_health_status()
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': request_type,
@@ -336,7 +460,7 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
 
         elif request_type == 'system-info':
             info = await self.get_system_info()
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'system-info',
@@ -345,7 +469,7 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
 
         elif request_type == 'system-databases':
             db_stats = await self.get_database_stats()
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'system-databases',
@@ -354,7 +478,7 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
 
         elif request_type == 'system-status':
             status = await self.get_detailed_system_status()
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'system-status',
@@ -363,7 +487,7 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
 
         elif request_type == 'ws-status':
             ws_status = await self.get_ws_status()
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'ws-status',
@@ -372,7 +496,7 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
 
         elif request_type == 'safety-status':
             safety_status = await self.get_safety_status()
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'safety-status',
@@ -381,7 +505,7 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
 
         elif request_type == 'acars-status':
             acars_status = await self.get_acars_status()
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'acars-status',
@@ -390,7 +514,7 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
 
         elif request_type == 'metars':
             metars_data = await self.get_metars(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'metars',
@@ -399,7 +523,7 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
 
         elif request_type == 'pireps':
             pireps_data = await self.get_pireps(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'pireps',
@@ -407,7 +531,7 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
             })
 
         else:
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'error',
                 'request_id': request_id,
                 'message': f'Unknown request type: {request_type}'
@@ -572,29 +696,55 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
         }
 
     @database_sync_to_async
-    def get_system_info(self):
-        """Get system information."""
+    def _is_admin_user(self, user) -> bool:
+        """Check if the user has admin permissions."""
+        if user is None:
+            return False
+        if not hasattr(user, 'is_authenticated') or not user.is_authenticated:
+            return False
+        # Check for staff/superuser status or specific permission
+        if hasattr(user, 'is_superuser') and user.is_superuser:
+            return True
+        if hasattr(user, 'is_staff') and user.is_staff:
+            return True
+        if hasattr(user, 'has_perm') and user.has_perm('skyspy.view_system_info'):
+            return True
+        return False
+
+    async def get_system_info(self):
+        """Get system information, redacting sensitive data for non-admin users."""
         import sys
         import platform
 
-        return {
+        user = self.scope.get('user')
+        is_admin = await self._is_admin_user(user)
+
+        # Basic info available to all users
+        info = {
             'version': getattr(settings, 'VERSION', '1.0.0'),
-            'python_version': sys.version,
-            'platform': platform.platform(),
-            'django_version': __import__('django').get_version(),
-            'debug': settings.DEBUG,
-            'feeder': {
-                'latitude': settings.FEEDER_LAT,
-                'longitude': settings.FEEDER_LON,
-            },
-            'features': {
-                'acars_enabled': getattr(settings, 'ACARS_ENABLED', False),
-                'safety_monitoring': getattr(settings, 'SAFETY_MONITORING_ENABLED', True),
-                'photo_cache': getattr(settings, 'PHOTO_CACHE_ENABLED', False),
-                's3_storage': getattr(settings, 'S3_ENABLED', False),
-            },
             'timestamp': datetime.utcnow().isoformat() + 'Z'
         }
+
+        # Add sensitive info only for admins
+        if is_admin:
+            info.update({
+                'python_version': sys.version,
+                'platform': platform.platform(),
+                'django_version': __import__('django').get_version(),
+                'debug': settings.DEBUG,
+                'feeder': {
+                    'latitude': settings.FEEDER_LAT,
+                    'longitude': settings.FEEDER_LON,
+                },
+                'features': {
+                    'acars_enabled': getattr(settings, 'ACARS_ENABLED', False),
+                    'safety_monitoring': getattr(settings, 'SAFETY_MONITORING_ENABLED', True),
+                    'photo_cache': getattr(settings, 'PHOTO_CACHE_ENABLED', False),
+                    's3_storage': getattr(settings, 'S3_ENABLED', False),
+                },
+            })
+
+        return info
 
     @database_sync_to_async
     def get_database_stats(self):
@@ -667,8 +817,57 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
             if '=' in param:
                 key, value = param.split('=', 1)
                 if key == 'topics':
-                    topics.extend(value.split(','))
+                    # Validate and sanitize topic names
+                    for topic in value.split(','):
+                        sanitized = self._sanitize_group_name(topic.strip())
+                        if sanitized:
+                            topics.append(sanitized)
         return topics
+
+    def _sanitize_group_name(self, name: str) -> str:
+        """
+        Sanitize a group name to prevent injection attacks.
+
+        Only allows alphanumeric characters, hyphens, and underscores.
+        Returns empty string if the name is invalid.
+        """
+        if not name:
+            return ''
+        # Only allow safe characters for group names
+        import re
+        if not re.match(r'^[a-zA-Z0-9_-]+$', name):
+            logger.warning(f"Rejected invalid group name: {name!r}")
+            return ''
+        # Limit length to prevent DoS
+        if len(name) > 100:
+            logger.warning(f"Rejected overly long group name: {len(name)} chars")
+            return ''
+        return name
+
+    async def _check_topic_permission(self, user, topic):
+        """Check if user has permission to subscribe to a topic."""
+        from django.conf import settings
+
+        # Public mode allows all access
+        auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
+        if auth_mode == 'public':
+            return True
+
+        # Check if topic requires permission
+        from skyspy.auth.websocket import WebSocketPermissionMiddleware
+        topic_perms = WebSocketPermissionMiddleware.TOPIC_PERMISSIONS
+
+        required_perm = topic_perms.get(topic)
+        if not required_perm:
+            return True  # No specific permission required for this topic
+
+        # Check permission
+        check_permission = self.scope.get('check_permission')
+        if check_permission:
+            return await check_permission(required_perm)
+
+        # Fallback: require authentication for private topics
+        return user and user.is_authenticated
 
     async def _join_topics(self, topics: list):
         """Join channel groups for topics."""
@@ -679,12 +878,17 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
         if 'all' in topics:
             topics = self.supported_topics
 
+        user = self.scope.get('user')
         for topic in topics:
-            if topic in self.supported_topics:
-                group_name = f"{self.group_name_prefix}_{topic}"
-                await self.channel_layer.group_add(group_name, self.channel_name)
-                self.subscribed_topics.add(topic)
-                logger.debug(f"Joined group: {group_name}")
+            if topic not in self.supported_topics:
+                continue
+            if not await self._check_topic_permission(user, topic):
+                logger.warning(f"User {user} denied access to topic {topic}")
+                continue  # Skip unauthorized topics
+            group_name = f"{self.group_name_prefix}_{topic}"
+            await self.channel_layer.group_add(group_name, self.channel_name)
+            self.subscribed_topics.add(topic)
+            logger.debug(f"Joined group: {group_name}")
 
     async def _leave_topics(self, topics: list):
         """Leave channel groups for topics."""
@@ -733,12 +937,36 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
 
     # Group message handlers - called when messages are sent to groups
 
+    async def _should_receive_broadcast(self, event: dict) -> bool:
+        """
+        Check if this consumer should receive a broadcast message.
+
+        This method re-validates permissions before sending broadcast messages
+        to prevent stale permission grants from allowing unauthorized access.
+
+        Override in subclasses for custom permission logic.
+        """
+        # Extract topic from event if available
+        topic = event.get('topic')
+        if not topic:
+            # No topic specified, allow by default
+            return True
+
+        # Re-check permission for the topic
+        user = self.scope.get('user')
+        return await self._check_topic_permission(user, topic)
+
     async def broadcast_message(self, event):
         """Handle broadcast message from channel layer."""
+        if not await self._should_receive_broadcast(event):
+            logger.debug(f"Blocked broadcast to {self.channel_name} - permission denied")
+            return
         await self.send_json(event['data'])
 
     async def snapshot(self, event):
         """Handle snapshot message."""
+        if not await self._should_receive_broadcast(event):
+            return
         await self.send_json({
             'type': f'{self.group_name_prefix}:snapshot',
             'data': event['data']
@@ -746,6 +974,8 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
 
     async def update(self, event):
         """Handle update message."""
+        if not await self._should_receive_broadcast(event):
+            return
         await self.send_json({
             'type': f'{self.group_name_prefix}:update',
             'data': event['data']
@@ -753,6 +983,8 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
 
     async def new_item(self, event):
         """Handle new item message."""
+        if not await self._should_receive_broadcast(event):
+            return
         await self.send_json({
             'type': f'{self.group_name_prefix}:new',
             'data': event['data']
@@ -760,6 +992,8 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
 
     async def remove_item(self, event):
         """Handle remove item message."""
+        if not await self._should_receive_broadcast(event):
+            return
         await self.send_json({
             'type': f'{self.group_name_prefix}:remove',
             'data': event['data']

@@ -2,10 +2,10 @@
 // Configuration Helpers
 // ============================================================================
 
-// API base URL - defaults to relative URLs (same origin) which works with Vite proxy in dev
-// and with Django serving static files in production
-// Strip trailing slash to prevent double slashes in URL construction
-export const API_BASE_URL = (import.meta.env.VITE_API_TARGET || '').replace(/\/$/, '');
+// API base URL - always use relative URLs (empty string) for browser requests.
+// This works with Vite's proxy in dev and Django serving static files in production.
+// VITE_API_TARGET should only be used in vite.config.js for the proxy target, not here.
+export const API_BASE_URL = '';
 
 // API v1 prefix for Django REST Framework
 export const API_V1_PREFIX = '/api/v1';
@@ -56,10 +56,10 @@ export const getConfig = () => {
   try {
     const stored = localStorage.getItem('adsb-dashboard-config');
     const config = stored ? { ...DEFAULT_CONFIG, ...JSON.parse(stored) } : DEFAULT_CONFIG;
-    // Always normalize apiBaseUrl to prevent double slashes
-    if (config.apiBaseUrl) {
-      config.apiBaseUrl = config.apiBaseUrl.replace(/\/$/, '');
-    }
+    // ALWAYS force apiBaseUrl to empty string - browser requests must use relative URLs
+    // to go through Vite's proxy in dev or Django's reverse proxy in production.
+    // This overrides any cached values from localStorage.
+    config.apiBaseUrl = '';
     return config;
   } catch (e) {
     // localStorage may not be available in private browsing mode

@@ -9,9 +9,24 @@ import math
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import timezone
+
+# Check if numpy is available (required by analytics tasks)
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
+
+# Skip all tests in this module if numpy is not available
+pytestmark = pytest.mark.skipif(
+    not HAS_NUMPY,
+    reason="numpy is required for analytics tests"
+)
 
 from skyspy.models import AircraftSighting, AircraftSession
 from skyspy.tasks.analytics import (

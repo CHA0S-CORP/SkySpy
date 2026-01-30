@@ -12,12 +12,17 @@ from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from skyspy.serializers.common import GeoJSONFeatureCollectionSerializer
+from skyspy.auth.authentication import OptionalJWTAuthentication, APIKeyAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
 
 logger = logging.getLogger(__name__)
 
 
 class MapViewSet(viewsets.ViewSet):
     """ViewSet for map data and GeoJSON output."""
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="Get GeoJSON aircraft data",

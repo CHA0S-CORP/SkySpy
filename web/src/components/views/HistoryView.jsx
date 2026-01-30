@@ -1,24 +1,44 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, Map as MapIcon, Play, Pause, SkipBack, SkipForward, Shield, Search, MessageCircle, ExternalLink, Plane, List, LayoutGrid, X, Radio } from 'lucide-react';
-import L from 'leaflet';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { AlertTriangle, ChevronDown, ChevronUp, Map as MapIcon, MessageCircle } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
-import { useSocketApi, useSortState } from '../../hooks';
+import { useSocketApi, useSortState, useAcarsData, useReplayState } from '../../hooks';
 import { TabBar } from '../common/TabBar';
 import { SafetyEventCard } from '../safety/SafetyEventCard';
 import { SortControls } from '../common/SortControls';
-import { SortableTableHeader } from '../common/SortableTableHeader';
 
-// Helper to safely parse JSON from fetch response
-const safeJson = async (res) => {
-  if (!res.ok) return null;
-  const ct = res.headers.get('content-type');
-  if (!ct || !ct.includes('application/json')) return null;
-  try { return await res.json(); } catch { return null; }
-};
+// Import history components
+import {
+  VALID_DATA_TYPES,
+  TIME_RANGES,
+  TIME_RANGE_HOURS,
+  SESSION_SORT_CONFIG,
+  SESSION_SORT_FIELDS,
+  SIGHTINGS_SORT_CONFIG,
+  SAFETY_SORT_CONFIG,
+  SAFETY_SORT_FIELDS,
+  ACARS_SORT_CONFIG,
+} from '../history/historyConstants';
 
-const VALID_DATA_TYPES = ['sessions', 'sightings', 'acars', 'safety'];
+import { SessionCard } from '../history/SessionCard';
+import { SessionsFilters } from '../history/SessionsFilters';
+import { SightingsTable } from '../history/SightingsTable';
+import { SafetyEventMap } from '../history/SafetyEventMap';
+import { SnapshotContainer } from '../history/SnapshotView';
+import { AcarsFilters, AcarsQuickFilters } from '../history/AcarsFilters';
+import { AcarsMessageItem } from '../history/AcarsMessageItem';
 
-export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewEvent, targetEventId, onEventViewed, hashParams = {}, setHashParams, wsRequest, wsConnected }) {
+export function HistoryView({
+  apiBase,
+  onSelectAircraft,
+  onSelectByTail,
+  onViewEvent,
+  targetEventId,
+  onEventViewed,
+  hashParams = {},
+  setHashParams,
+  wsRequest,
+  wsConnected
+}) {
   // Sync viewType with URL hash params
   const [viewType, setViewTypeState] = useState(() => {
     if (hashParams.data && VALID_DATA_TYPES.includes(hashParams.data)) {
@@ -40,294 +60,31 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
     if (hashParams.data && VALID_DATA_TYPES.includes(hashParams.data) && hashParams.data !== viewType) {
       setViewTypeState(hashParams.data);
     }
-  }, [hashParams.data]);
+  }, [hashParams.data, viewType]);
 
   const [timeRange, setTimeRange] = useState('24h');
   const [expandedSnapshots, setExpandedSnapshots] = useState({});
-  const [expandedMaps, setExpandedMaps] = useState({});
-  const [trackData, setTrackData] = useState({}); // Cache for flight tracks
-  const [replayState, setReplayState] = useState({}); // Per-event replay state
-  const [graphZoomState, setGraphZoomState] = useState({}); // Per-event graph zoom: { eventKey: { zoom: 1, offset: 0 } }
-  const graphDragRef = useRef({}); // Per-event drag state
-  const mapRefs = useRef({}); // Store Leaflet map instances
-  const replayMarkersRef = useRef({}); // Store replay markers
-  const replayTracksRef = useRef({}); // Store animated track polylines
-  const animationFrameRef = useRef({}); // Animation frame IDs
-  const eventRefs = useRef({}); // Refs for scrolling to specific events
+  const eventRefs = useRef({});
 
   // Session filters
   const [sessionSearch, setSessionSearch] = useState('');
   const [showMilitaryOnly, setShowMilitaryOnly] = useState(false);
 
-  // Session sort configuration (8 fields)
-  const sessionSortConfig = useMemo(() => ({
-    last_seen: { type: 'date', defaultDirection: 'desc' },
-    callsign: { type: 'string', defaultDirection: 'asc' },
-    type: { type: 'string', defaultDirection: 'asc' },
-    duration_min: { type: 'number', defaultDirection: 'desc' },
-    min_distance_nm: { type: 'number', defaultDirection: 'asc' },
-    max_rssi: { type: 'number', defaultDirection: 'desc' },
-    max_alt: { type: 'number', defaultDirection: 'desc' },
-    safety_event_count: { type: 'number', defaultDirection: 'desc' }
-  }), []);
-
-  const sessionSortFields = useMemo(() => [
-    { key: 'last_seen', label: 'Time' },
-    { key: 'callsign', label: 'Callsign' },
-    { key: 'type', label: 'Type' },
-    { key: 'duration_min', label: 'Duration' },
-    { key: 'min_distance_nm', label: 'Distance' },
-    { key: 'max_rssi', label: 'Signal' },
-    { key: 'max_alt', label: 'Altitude' },
-    { key: 'safety_event_count', label: 'Safety' }
-  ], []);
-
-  // Sightings sort configuration (7 fields)
-  const sightingsSortConfig = useMemo(() => ({
-    timestamp: { type: 'date', defaultDirection: 'desc' },
-    icao_hex: { type: 'string', defaultDirection: 'asc' },
-    callsign: { type: 'string', defaultDirection: 'asc' },
-    altitude: { type: 'number', defaultDirection: 'desc' },
-    gs: { type: 'number', defaultDirection: 'desc' },
-    distance_nm: { type: 'number', defaultDirection: 'asc' },
-    rssi: { type: 'number', defaultDirection: 'desc' }
-  }), []);
-
-  const sightingsColumns = useMemo(() => [
-    { key: 'timestamp', label: 'Time' },
-    { key: 'icao_hex', label: 'ICAO' },
-    { key: 'callsign', label: 'Callsign' },
-    { key: 'altitude', label: 'Altitude', align: 'right' },
-    { key: 'gs', label: 'Speed', align: 'right' },
-    { key: 'distance_nm', label: 'Distance', align: 'right' },
-    { key: 'rssi', label: 'Signal', align: 'right' }
-  ], []);
-
-  // Safety Events sort configuration
-  const safetySortConfig = useMemo(() => ({
-    severity: {
-      type: 'custom',
-      defaultDirection: 'desc',
-      comparator: (a, b) => {
-        const severityOrder = { critical: 3, warning: 2, info: 1 };
-        const aVal = severityOrder[a] || 0;
-        const bVal = severityOrder[b] || 0;
-        return aVal - bVal;
-      }
-    },
-    timestamp: { type: 'date', defaultDirection: 'desc' },
-    'details.horizontal_nm': { type: 'number', defaultDirection: 'asc', path: 'details.horizontal_nm' },
-    'details.vertical_ft': { type: 'number', defaultDirection: 'asc', path: 'details.vertical_ft' },
-    event_type: { type: 'string', defaultDirection: 'asc' }
-  }), []);
-
-  const safetySortFields = useMemo(() => [
-    { key: 'severity', label: 'Severity' },
-    { key: 'timestamp', label: 'Time' },
-    { key: 'details.horizontal_nm', label: 'Horiz Distance' },
-    { key: 'details.vertical_ft', label: 'Vert Distance' },
-    { key: 'event_type', label: 'Type' }
-  ], []);
-
-  // ACARS sort configuration
-  const acarsSortConfig = useMemo(() => ({
-    timestamp: { type: 'date', defaultDirection: 'desc' },
-    callsign: { type: 'string', defaultDirection: 'asc' },
-    label: { type: 'string', defaultDirection: 'asc' },
-    source: { type: 'string', defaultDirection: 'asc' }
-  }), []);
-
-  const acarsSortFields = useMemo(() => [
-    { key: 'timestamp', label: 'Time' },
-    { key: 'callsign', label: 'Callsign' },
-    { key: 'label', label: 'Label' },
-    { key: 'source', label: 'Source' }
-  ], []);
-
-  // ACARS filters
-  const [acarsSearch, setAcarsSearch] = useState('');
-  const [acarsSource, setAcarsSource] = useState('all');
-  const [acarsHideEmpty, setAcarsHideEmpty] = useState(true);
-  const [acarsMessages, setAcarsMessages] = useState([]);
-  const [acarsSelectedLabels, setAcarsSelectedLabels] = useState([]);
-  const [acarsAirlineFilter, setAcarsAirlineFilter] = useState('');
-  const [showLabelDropdown, setShowLabelDropdown] = useState(false);
-  const [callsignHexCache, setCallsignHexCache] = useState({}); // Callsign → ICAO hex cache
-  const [regHexCache, setRegHexCache] = useState({}); // Registration → ICAO hex cache
-  const [labelReference, setLabelReference] = useState({}); // Label reference from API
-  const labelDropdownRef = useRef(null);
-
-  // New ACARS UI states
-  const [acarsCompactMode, setAcarsCompactMode] = useState(() => {
-    const saved = localStorage.getItem('acars-compact-mode');
-    return saved === 'true';
+  // Use replay state hook for safety event maps
+  const replay = useReplayState({
+    apiBase,
+    wsRequest,
+    wsConnected
   });
-  const [acarsQuickFilters, setAcarsQuickFilters] = useState(() => {
-    const saved = localStorage.getItem('acars-quick-filters');
-    return saved ? JSON.parse(saved) : [];
+
+  // Use ACARS data hook
+  const acars = useAcarsData({
+    apiBase,
+    timeRange,
+    wsRequest,
+    wsConnected,
+    viewType
   });
-  const [expandedMessages, setExpandedMessages] = useState({});
-  const [allMessagesExpanded, setAllMessagesExpanded] = useState(false);
-  const [visibleAcarsCount, setVisibleAcarsCount] = useState(50);
-  const acarsListRef = useRef(null);
-
-  // Quick filter categories with their associated labels
-  const quickFilterCategories = {
-    position: { name: 'Position', labels: ['C1', 'SQ', '47', '2Z', 'AD', 'AE'] },
-    weather: { name: 'Weather', labels: ['15', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '44', '80', '81', '83', '3M', '3S'] },
-    oooi: { name: 'OOOI', labels: ['10', '11', '12', '13', '14', '16', '17'] },
-    operational: { name: 'Operational', labels: ['H1', 'H2', '5Z', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', 'B1', 'B2', 'B9'] },
-    freetext: { name: 'Free Text', labels: ['AA', 'AB', 'FA', 'FF', 'F3', 'F5', 'F7'] },
-    maintenance: { name: 'Maintenance', labels: ['50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '5A', '5U'] },
-  };
-
-  // Get category for a label
-  const getLabelCategory = useCallback((label) => {
-    if (!label) return null;
-    const upperLabel = label.toUpperCase();
-    for (const [category, data] of Object.entries(quickFilterCategories)) {
-      if (data.labels.includes(upperLabel)) {
-        return category;
-      }
-    }
-    // Check for CPDLC/data link
-    if (['CA', 'CR', 'CC', 'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'AD', 'AE', 'AF', 'D1', 'D2'].includes(upperLabel)) {
-      return 'cpdlc';
-    }
-    return null;
-  }, []);
-
-  // ACARS message label descriptions
-  const acarsLabelDescriptions = {
-    // Common operational labels
-    '_d': 'Command/Response',
-    'H1': 'Departure Message',
-    'H2': 'Arrival Message',
-    '5Z': 'Airline Designated',
-    '80': 'Terminal Weather',
-    '81': 'Terminal Weather',
-    '83': 'Request Terminal Weather',
-    'B1': 'Request Departure Clearance',
-    'B2': 'Departure Clearance',
-    'B3': 'Request Oceanic Clearance',
-    'B4': 'Oceanic Clearance',
-    'B5': 'Departure Slot',
-    'B6': 'Expected Departure Clearance',
-    'BA': 'Beacon Request',
-    'C1': 'Position Report',
-    'CA': 'CPDLC',
-    'Q0': 'Link Test',
-    'Q1': 'Link Test',
-    'Q2': 'Link Test',
-    'QA': 'ACARS Test',
-    'SA': 'System Report',
-    'SQ': 'Squawk Report',
-    // OOOI Messages
-    '10': 'OUT - Leaving Gate',
-    '11': 'OFF - Takeoff',
-    '12': 'ON - Landing',
-    '13': 'IN - Arrived Gate',
-    '14': 'ETA Report',
-    '15': 'Flight Status',
-    '16': 'Route Change',
-    '17': 'Fuel Report',
-    '20': 'Delay Report',
-    '21': 'Delay Report',
-    '22': 'Ground Delay',
-    '23': 'Estimated Gate Arrival',
-    '24': 'Crew Report',
-    '25': 'Passenger Count',
-    '26': 'Connecting Passengers',
-    '27': 'Load Report',
-    '28': 'Weight & Balance',
-    '29': 'Cargo/Mail',
-    '2Z': 'Progress Report',
-    // Weather
-    '30': 'Request Weather',
-    '31': 'METAR',
-    '32': 'TAF',
-    '33': 'ATIS',
-    '34': 'PIREP',
-    '35': 'Wind Data',
-    '36': 'SIGMET',
-    '37': 'NOTAM',
-    '38': 'Turbulence Report',
-    '39': 'Weather Update',
-    '3M': 'METAR Request',
-    '3S': 'SIGMET Request',
-    // Flight planning
-    '40': 'Flight Plan',
-    '41': 'Flight Plan Amendment',
-    '42': 'Route Request',
-    '43': 'Oceanic Report',
-    '44': 'Position Report',
-    '45': 'Flight Level Change',
-    '46': 'Speed Change',
-    '47': 'Waypoint Report',
-    '48': 'ETA Update',
-    '49': 'Fuel Status',
-    '4A': 'Company Specific',
-    '4M': 'Company Specific',
-    // Maintenance
-    '50': 'Maintenance Message',
-    '51': 'Engine Report',
-    '52': 'APU Report',
-    '53': 'Fault Report',
-    '54': 'System Status',
-    '55': 'Configuration',
-    '56': 'Performance Data',
-    '57': 'Trend Data',
-    '58': 'Oil Status',
-    '59': 'Exceedance Report',
-    '5A': 'Technical Log',
-    '5U': 'Airline Specific',
-    // Free text
-    'AA': 'Free Text',
-    'AB': 'Free Text Reply',
-    'F3': 'Free Text',
-    'F5': 'Free Text',
-    'F7': 'Departure Info',
-    'FA': 'Free Text',
-    'FF': 'Free Text',
-    // ADS-C
-    'AD': 'ADS-C Report',
-    'AE': 'ADS-C Emergency',
-    'AF': 'ADS-C Contract',
-    // FANS/CPDLC
-    'A0': 'FANS Application',
-    'A1': 'CPDLC Connect',
-    'A2': 'CPDLC Disconnect',
-    'A3': 'CPDLC Uplink',
-    'A4': 'CPDLC Downlink',
-    'A5': 'CPDLC Cancel',
-    'A6': 'CPDLC Status',
-    'A7': 'CPDLC Error',
-    'CR': 'CPDLC Request',
-    'CC': 'CPDLC Communication',
-    // Data link
-    'D1': 'Data Link',
-    'D2': 'Data Link',
-    // Miscellaneous
-    'RA': 'ACARS Uplink',
-    'RF': 'Radio Frequency',
-    'MA': 'Media Advisory',
-    '00': 'Heartbeat',
-    '7A': 'Telex',
-    '8A': 'Company Specific',
-    '8D': 'Telex Delivery',
-    '8E': 'Telex Error',
-  };
-
-  // Get human-readable label description (prefer API data, fall back to local)
-  const getAcarsLabelDescription = (label, msgLabelInfo = null) => {
-    if (!label) return null;
-    // First check if message has label_info from API
-    if (msgLabelInfo?.name) return msgLabelInfo.name;
-    // Check API-fetched label reference
-    if (labelReference[label]?.name) return labelReference[label].name;
-    // Fall back to local descriptions
-    return acarsLabelDescriptions[label.toUpperCase()] || acarsLabelDescriptions[label] || null;
-  };
 
   // Toggle snapshot expansion
   const toggleSnapshot = (eventId) => {
@@ -337,1004 +94,44 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
     }));
   };
 
-  // Toggle map expansion
-  const toggleMap = useCallback(async (eventKey, event) => {
-    const isOpening = !expandedMaps[eventKey];
-
-    setExpandedMaps(prev => ({
-      ...prev,
-      [eventKey]: !prev[eventKey]
-    }));
-
-    // If opening, fetch track data for involved aircraft
-    if (isOpening && event) {
-      const icaos = [event.icao, event.icao_2].filter(Boolean);
-
-      for (const icao of icaos) {
-        if (!trackData[icao]) {
-          try {
-            let data;
-            if (wsRequest && wsConnected) {
-              // Use WebSocket for fetching sightings
-              const result = await wsRequest('sightings', { icao_hex: icao, hours: 2, limit: 500 });
-              if (result && (result.sightings || result.results)) {
-                data = result;
-              } else {
-                throw new Error('Invalid sightings response');
-              }
-            } else {
-              // Fallback to HTTP if WebSocket unavailable
-              // Django API uses /api/v1/sightings with query params (was /api/v1/history/sightings/{icao})
-              const res = await fetch(`${apiBase}/api/v1/sightings?icao_hex=${icao}&hours=2&limit=500`);
-              data = await safeJson(res);
-              if (!data) throw new Error('HTTP request failed');
-            }
-            const sightings = data?.sightings || data?.results || [];
-            setTrackData(prev => ({ ...prev, [icao]: sightings }));
-          } catch (err) {
-            console.error('Failed to fetch track data:', err);
-          }
-        }
-      }
-
-      // Initialize replay state for this event
-      setReplayState(prev => ({
-        ...prev,
-        [eventKey]: { position: 100, isPlaying: false, speed: 1 } // Start at most recent (100%)
-      }));
-    }
-  }, [expandedMaps, trackData, apiBase, wsRequest, wsConnected]);
-
-  // Get interpolated position along a track
-  const getInterpolatedPosition = (track, percentage) => {
-    if (!track || track.length === 0) return null;
-    if (track.length === 1) return { ...track[0], index: 0 };
-
-    // Track is newest first, so reverse for timeline order
-    const ordered = [...track].reverse();
-    const index = Math.floor((percentage / 100) * (ordered.length - 1));
-    const clampedIndex = Math.max(0, Math.min(index, ordered.length - 1));
-    return { ...ordered[clampedIndex], index: clampedIndex };
-  };
-
-  // Update replay markers and track lines when position changes
-  const updateReplayMarkers = useCallback((eventKey, event, position) => {
-    const map = mapRefs.current[eventKey];
-    if (!map) return;
-
-    const icaos = [event.icao, event.icao_2].filter(Boolean);
-    const colors = ['#00ff88', '#44aaff'];
-
-    icaos.forEach((icao, i) => {
-      const track = trackData[icao];
-      if (!track || track.length === 0) return;
-
-      const pos = getInterpolatedPosition(track, position);
-      if (!pos || !pos.lat || !pos.lon) return;
-
-      const markerId = `${eventKey}_${icao}`;
-      const trackId = `${eventKey}_track_${icao}`;
-
-      // Remove existing marker
-      if (replayMarkersRef.current[markerId]) {
-        map.removeLayer(replayMarkersRef.current[markerId]);
-      }
-
-      // Update track polyline - show only the portion up to current position
-      // Track is newest first, reverse for timeline order (oldest to newest)
-      const ordered = [...track].reverse().filter(p => p.lat && p.lon);
-      if (ordered.length > 1) {
-        // Calculate how many points to show based on position percentage
-        const endIndex = Math.floor((position / 100) * (ordered.length - 1));
-        const visibleTrack = ordered.slice(0, endIndex + 1);
-
-        // Remove existing animated track
-        if (replayTracksRef.current[trackId]) {
-          map.removeLayer(replayTracksRef.current[trackId]);
-        }
-
-        // Create new track polyline up to current position
-        if (visibleTrack.length > 1) {
-          const coords = visibleTrack.map(p => [p.lat, p.lon]);
-          const polyline = L.polyline(coords, {
-            color: colors[i],
-            weight: 3,
-            opacity: 0.8
-          }).addTo(map);
-          replayTracksRef.current[trackId] = polyline;
-        }
-      }
-
-      // Create new marker at interpolated position
-      const icon = createAircraftIcon(pos.track, colors[i]);
-      const marker = L.marker([pos.lat, pos.lon], { icon }).addTo(map);
-      marker.bindPopup(`
-        <b>${pos.callsign || icao}</b><br>
-        Alt: ${pos.altitude?.toLocaleString() || '--'} ft<br>
-        Speed: ${pos.gs?.toFixed(0) || '--'} kts<br>
-        VS: ${pos.vr > 0 ? '+' : ''}${pos.vr || 0} fpm
-      `);
-
-      replayMarkersRef.current[markerId] = marker;
-    });
-  }, [trackData]);
-
-  // Handle replay slider change
-  const handleReplayChange = useCallback((eventKey, event, newPosition) => {
-    setReplayState(prev => ({
-      ...prev,
-      [eventKey]: { ...prev[eventKey], position: newPosition }
-    }));
-    updateReplayMarkers(eventKey, event, newPosition);
-  }, [updateReplayMarkers]);
-
-  // Toggle play/pause
-  const togglePlay = useCallback((eventKey, event) => {
-    const state = replayState[eventKey];
-    if (!state) return;
-
-    const newPlaying = !state.isPlaying;
-    setReplayState(prev => ({
-      ...prev,
-      [eventKey]: { ...prev[eventKey], isPlaying: newPlaying }
-    }));
-
-    if (newPlaying) {
-      // Start animation with time-based speed control
-      let pos = state.position <= 0 ? 0 : state.position;
-      let lastTime = performance.now();
-
-      const animate = (currentTime) => {
-        // Get current speed from state (may have changed during playback)
-        const currentState = replayState[eventKey];
-        const speed = currentState?.speed || 1;
-
-        const deltaTime = currentTime - lastTime;
-        lastTime = currentTime;
-
-        // Base speed: 100% in ~20 seconds at 1x, adjusted by speed
-        const increment = (deltaTime / 200) * speed;
-        pos += increment;
-
-        if (pos >= 100) {
-          pos = 100;
-          setReplayState(prev => ({
-            ...prev,
-            [eventKey]: { ...prev[eventKey], position: 100, isPlaying: false }
-          }));
-          updateReplayMarkers(eventKey, event, 100);
-          return;
-        }
-        setReplayState(prev => ({
-          ...prev,
-          [eventKey]: { ...prev[eventKey], position: pos }
-        }));
-        updateReplayMarkers(eventKey, event, pos);
-        animationFrameRef.current[eventKey] = requestAnimationFrame(animate);
-      };
-      animationFrameRef.current[eventKey] = requestAnimationFrame(animate);
-    } else {
-      // Stop animation
-      if (animationFrameRef.current[eventKey]) {
-        cancelAnimationFrame(animationFrameRef.current[eventKey]);
-      }
-    }
-  }, [replayState, updateReplayMarkers]);
-
-  // Skip to start/end
-  const skipToStart = useCallback((eventKey, event) => {
-    if (animationFrameRef.current[eventKey]) {
-      cancelAnimationFrame(animationFrameRef.current[eventKey]);
-    }
-    setReplayState(prev => ({
-      ...prev,
-      [eventKey]: { ...prev[eventKey], position: 0, isPlaying: false }
-    }));
-    updateReplayMarkers(eventKey, event, 0);
-  }, [updateReplayMarkers]);
-
-  const skipToEnd = useCallback((eventKey, event) => {
-    if (animationFrameRef.current[eventKey]) {
-      cancelAnimationFrame(animationFrameRef.current[eventKey]);
-    }
-    setReplayState(prev => ({
-      ...prev,
-      [eventKey]: { ...prev[eventKey], position: 100, isPlaying: false }
-    }));
-    updateReplayMarkers(eventKey, event, 100);
-  }, [updateReplayMarkers]);
-
-  // Handle speed change
-  const handleSpeedChange = useCallback((eventKey, newSpeed) => {
-    setReplayState(prev => ({
-      ...prev,
-      [eventKey]: { ...prev[eventKey], speed: newSpeed }
-    }));
-  }, []);
-
-  // Graph zoom/scroll handlers (per-event)
-  const handleGraphWheel = useCallback((eventKey, e) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.25 : 0.25;
-    setGraphZoomState(prev => {
-      const current = prev[eventKey] || { zoom: 1, offset: 0 };
-      const newZoom = Math.max(1, Math.min(8, current.zoom + delta));
-      let newOffset = current.offset;
-      // Adjust offset when zooming out to keep in valid range
-      if (newZoom < current.zoom) {
-        const maxOffset = Math.max(0, 100 - (100 / newZoom));
-        newOffset = Math.min(current.offset, maxOffset);
-      }
-      return { ...prev, [eventKey]: { zoom: newZoom, offset: newOffset } };
-    });
-  }, []);
-
-  const handleGraphDragStart = useCallback((eventKey, e) => {
-    const current = graphZoomState[eventKey] || { zoom: 1, offset: 0 };
-    if (current.zoom <= 1) return;
-    graphDragRef.current[eventKey] = {
-      isDragging: true,
-      startX: e.clientX || e.touches?.[0]?.clientX || 0,
-      startOffset: current.offset
-    };
-  }, [graphZoomState]);
-
-  const handleGraphDragMove = useCallback((eventKey, e) => {
-    const drag = graphDragRef.current[eventKey];
-    if (!drag?.isDragging) return;
-    const current = graphZoomState[eventKey] || { zoom: 1, offset: 0 };
-    const currentX = e.clientX || e.touches?.[0]?.clientX || 0;
-    const deltaX = drag.startX - currentX;
-    const graphWidth = 200;
-    const visiblePercent = 100 / current.zoom;
-    const maxOffset = 100 - visiblePercent;
-    const percentDelta = (deltaX / graphWidth) * visiblePercent;
-    const newOffset = Math.max(0, Math.min(maxOffset, drag.startOffset + percentDelta));
-    setGraphZoomState(prev => ({
-      ...prev,
-      [eventKey]: { ...prev[eventKey], offset: newOffset }
-    }));
-  }, [graphZoomState]);
-
-  const handleGraphDragEnd = useCallback((eventKey) => {
-    if (graphDragRef.current[eventKey]) {
-      graphDragRef.current[eventKey].isDragging = false;
-    }
-  }, []);
-
-  const resetGraphZoom = useCallback((eventKey) => {
-    setGraphZoomState(prev => ({
-      ...prev,
-      [eventKey]: { zoom: 1, offset: 0 }
-    }));
-  }, []);
-
-  // Jump to event position (50% where event occurred)
-  const jumpToEvent = useCallback((eventKey, event) => {
-    if (animationFrameRef.current[eventKey]) {
-      cancelAnimationFrame(animationFrameRef.current[eventKey]);
-    }
-    const current = replayState[eventKey] || { speed: 1 };
-    setReplayState(prev => ({
-      ...prev,
-      [eventKey]: { position: 50, isPlaying: false, speed: current.speed }
-    }));
-    updateReplayMarkers(eventKey, event, 50);
-  }, [replayState, updateReplayMarkers]);
-
-  // Render mini graph with optional position indicator and zoom/scroll support
-  const renderMiniGraph = (track, dataKey, color, label, unit, formatFn, positionPercent = null, eventKey = null) => {
-    if (!track || track.length < 2) return null;
-
-    // Reverse so oldest is first (left to right timeline)
-    const ordered = [...track].reverse();
-    const values = ordered.map(p => p[dataKey]).filter(v => v != null);
-    if (values.length < 2) return null;
-
-    const format = formatFn || (v => v?.toLocaleString());
-    const width = 200;
-    const height = 40;
-    const padding = 2;
-
-    // Get zoom state for this event
-    const zoomState = eventKey ? (graphZoomState[eventKey] || { zoom: 1, offset: 0 }) : { zoom: 1, offset: 0 };
-    const { zoom, offset } = zoomState;
-    const isZoomed = zoom > 1;
-
-    // Full range for consistent Y scaling
-    const fullMin = Math.min(...values);
-    const fullMax = Math.max(...values);
-    const fullRange = fullMax - fullMin || 1;
-
-    let visibleValues, visibleMin, visibleMax, startPercent, endPercent;
-
-    if (isZoomed) {
-      // Calculate visible window based on zoom and offset
-      const visiblePercent = 100 / zoom;
-      startPercent = offset;
-      endPercent = offset + visiblePercent;
-
-      // Get visible portion of data
-      const startIdx = Math.floor((startPercent / 100) * (values.length - 1));
-      const endIdx = Math.ceil((endPercent / 100) * (values.length - 1));
-      visibleValues = values.slice(startIdx, endIdx + 1);
-      visibleMin = visibleValues.length > 0 ? Math.min(...visibleValues) : fullMin;
-      visibleMax = visibleValues.length > 0 ? Math.max(...visibleValues) : fullMax;
-    } else {
-      // Not zoomed - use all values
-      startPercent = 0;
-      endPercent = 100;
-      visibleValues = values;
-      visibleMin = fullMin;
-      visibleMax = fullMax;
-    }
-
-    // Create SVG path - map to full width
-    const points = visibleValues.map((v, i) => {
-      const x = padding + (i / Math.max(1, visibleValues.length - 1)) * (width - padding * 2);
-      const y = height - padding - ((v - fullMin) / fullRange) * (height - padding * 2);
-      return `${x},${y}`;
-    }).join(' ');
-
-    // Get current value at position (always from full dataset)
-    let currentValue = null;
-    if (positionPercent !== null && values.length > 0) {
-      const idx = Math.floor((positionPercent / 100) * (values.length - 1));
-      const clampedIdx = Math.max(0, Math.min(idx, values.length - 1));
-      currentValue = values[clampedIdx];
-    }
-
-    // Calculate position indicator (only if position is within visible window)
-    let indicatorX = null;
-    let indicatorY = null;
-    const positionInWindow = positionPercent !== null && positionPercent >= startPercent && positionPercent <= endPercent;
-    if (positionInWindow) {
-      const visiblePercent = 100 / zoom;
-      const relativePosition = (positionPercent - startPercent) / visiblePercent;
-      indicatorX = padding + relativePosition * (width - padding * 2);
-      if (currentValue !== null) {
-        indicatorY = height - padding - ((currentValue - fullMin) / fullRange) * (height - padding * 2);
-      }
-    }
-
-    // Graph container props for zoom/scroll
-    const graphProps = eventKey ? {
-      className: `mini-graph${isZoomed ? ' zoomable' : ''}`,
-      onWheel: (e) => handleGraphWheel(eventKey, e),
-      onMouseDown: (e) => handleGraphDragStart(eventKey, e),
-      onMouseMove: (e) => handleGraphDragMove(eventKey, e),
-      onMouseUp: () => handleGraphDragEnd(eventKey),
-      onMouseLeave: () => handleGraphDragEnd(eventKey),
-      onTouchStart: (e) => handleGraphDragStart(eventKey, e),
-      onTouchMove: (e) => handleGraphDragMove(eventKey, e),
-      onTouchEnd: () => handleGraphDragEnd(eventKey),
-    } : { className: 'mini-graph' };
-
-    return (
-      <div {...graphProps}>
-        <div className="mini-graph-header">
-          <span className="mini-graph-label">{label}</span>
-          {isZoomed && (
-            <span className="mini-graph-zoom" onClick={() => resetGraphZoom(eventKey)}>
-              {zoom.toFixed(1)}x
-            </span>
-          )}
-          {currentValue !== null && (
-            <span className="mini-graph-current" style={{ color }}>
-              {format(currentValue)} {unit}
-            </span>
-          )}
-        </div>
-        <svg width={width} height={height} className="mini-graph-svg">
-          <polyline
-            points={points}
-            fill="none"
-            stroke={color}
-            strokeWidth="1.5"
-            opacity="0.6"
-          />
-          {indicatorX !== null && (
-            <>
-              <line
-                x1={indicatorX}
-                y1={0}
-                x2={indicatorX}
-                y2={height}
-                stroke={color}
-                strokeWidth="2"
-                opacity="0.9"
-              />
-              {indicatorY !== null && (
-                <circle
-                  cx={indicatorX}
-                  cy={indicatorY}
-                  r="4"
-                  fill={color}
-                  stroke="#000"
-                  strokeWidth="1"
-                />
-              )}
-            </>
-          )}
-        </svg>
-        <div className="mini-graph-range">
-          <span>{format(isZoomed ? visibleMin : fullMin)} {unit}</span>
-          <span>{format(isZoomed ? visibleMax : fullMax)} {unit}</span>
-        </div>
-      </div>
-    );
-  };
-
-  // Initialize map when expanded
-  const initializeMap = useCallback((eventKey, event, containerRef) => {
-    if (!containerRef || mapRefs.current[eventKey]) return;
-
-    const snapshot1 = event.aircraft_snapshot;
-    const snapshot2 = event.aircraft_snapshot_2;
-
-    // Determine center point - use event location from details if available
-    let eventLat, eventLon;
-
-    // Try to get exact event location from details
-    if (event.details?.lat && event.details?.lon) {
-      eventLat = event.details.lat;
-      eventLon = event.details.lon;
-    } else if (snapshot1?.lat && snapshot1?.lon && snapshot2?.lat && snapshot2?.lon) {
-      // Midpoint between two aircraft
-      eventLat = (snapshot1.lat + snapshot2.lat) / 2;
-      eventLon = (snapshot1.lon + snapshot2.lon) / 2;
-    } else if (snapshot1?.lat && snapshot1?.lon) {
-      eventLat = snapshot1.lat;
-      eventLon = snapshot1.lon;
-    } else if (snapshot2?.lat && snapshot2?.lon) {
-      eventLat = snapshot2.lat;
-      eventLon = snapshot2.lon;
-    } else {
-      return; // No valid coordinates
-    }
-
-    const map = L.map(containerRef, {
-      center: [eventLat, eventLon],
-      zoom: 10,
-      zoomControl: false,
-      attributionControl: false
-    });
-
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19
-    }).addTo(map);
-
-    // Add event location marker with pulsing effect using divIcon
-    const eventIcon = L.divIcon({
-      className: 'event-location-marker',
-      html: `
-        <div class="event-marker-pulse-ring"></div>
-        <div class="event-marker-core"></div>
-      `,
-      iconSize: [30, 30],
-      iconAnchor: [15, 15]
-    });
-
-    const eventMarker = L.marker([eventLat, eventLon], { icon: eventIcon }).addTo(map);
-    eventMarker.bindPopup(`<b>Event Location</b><br>${event.event_type?.replace(/_/g, ' ')}<br>${new Date(event.timestamp).toLocaleString()}`);
-
-    // Add faint background track lines (full path for context)
-    const icaos = [event.icao, event.icao_2].filter(Boolean);
-    const colors = ['#00ff88', '#44aaff'];
-
-    icaos.forEach((icao, i) => {
-      const track = trackData[icao];
-      if (track?.length > 1) {
-        const coords = [...track].reverse()
-          .filter(p => p.lat && p.lon)
-          .map(p => [p.lat, p.lon]);
-        if (coords.length > 1) {
-          // Add full track as faint dotted line (background/future path)
-          L.polyline(coords, {
-            color: colors[i],
-            weight: 1,
-            opacity: 0.25,
-            dashArray: '4, 6'
-          }).addTo(map);
-        }
-      }
-    });
-
-    // Add initial aircraft markers at current replay position
-    const state = replayState[eventKey];
-    if (state) {
-      updateReplayMarkers(eventKey, event, state.position);
-    }
-
-    // Fit bounds if we have two aircraft
-    if (snapshot1?.lat && snapshot2?.lat) {
-      const bounds = L.latLngBounds([
-        [snapshot1.lat, snapshot1.lon],
-        [snapshot2.lat, snapshot2.lon]
-      ]);
-      map.fitBounds(bounds.pad(0.3));
-    }
-
-    mapRefs.current[eventKey] = map;
-  }, [trackData, replayState, updateReplayMarkers]);
-
-  // Create aircraft icon
-  const createAircraftIcon = (track, color) => {
-    const rotation = track || 0;
-    return L.divIcon({
-      className: 'safety-aircraft-marker',
-      html: `
-        <svg width="24" height="24" viewBox="0 0 24 24" style="transform: rotate(${rotation}deg)">
-          <path d="M12 2 L14 8 L20 10 L14 12 L14 18 L12 16 L10 18 L10 12 L4 10 L10 8 Z"
-                fill="${color}" stroke="#000" stroke-width="0.5"/>
-        </svg>
-      `,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
-    });
-  };
-
-  // Get timestamp for replay position
-  const getReplayTimestamp = (eventKey, event) => {
-    const state = replayState[eventKey];
-    if (!state) return null;
-
-    const icao = event.icao || event.icao_2;
-    const track = trackData[icao];
-    if (!track || track.length === 0) return null;
-
-    const pos = getInterpolatedPosition(track, state.position);
-    if (!pos?.timestamp) return null;
-
-    return new Date(pos.timestamp).toLocaleTimeString();
-  };
-
-  // Cleanup maps on unmount or when closing
-  useEffect(() => {
-    return () => {
-      Object.values(mapRefs.current).forEach(map => {
-        if (map) map.remove();
-      });
-      Object.values(animationFrameRef.current).forEach(id => {
-        cancelAnimationFrame(id);
-      });
-      mapRefs.current = {};
-      replayMarkersRef.current = {};
-      replayTracksRef.current = {};
-    };
-  }, []);
-
-  // Cleanup individual map when collapsed
-  useEffect(() => {
-    Object.keys(mapRefs.current).forEach(key => {
-      if (!expandedMaps[key] && mapRefs.current[key]) {
-        mapRefs.current[key].remove();
-        delete mapRefs.current[key];
-        // Clean up replay markers for this map
-        Object.keys(replayMarkersRef.current).forEach(mKey => {
-          if (mKey.startsWith(key)) {
-            delete replayMarkersRef.current[mKey];
-          }
-        });
-        // Clean up replay tracks for this map
-        Object.keys(replayTracksRef.current).forEach(tKey => {
-          if (tKey.startsWith(key)) {
-            delete replayTracksRef.current[tKey];
-          }
-        });
-        // Stop animation
-        if (animationFrameRef.current[key]) {
-          cancelAnimationFrame(animationFrameRef.current[key]);
-          delete animationFrameRef.current[key];
-        }
-      }
-    });
-  }, [expandedMaps]);
-
-  const hours = { '1h': 1, '6h': 6, '24h': 24, '48h': 48, '7d': 168 };
-  // Django API endpoints:
-  // - Sessions: /api/v1/sessions (was /api/v1/history/sessions)
-  // - Sightings: /api/v1/sightings (was /api/v1/history/sightings)
-  // - ACARS: /api/v1/acars (was /api/v1/acars/messages)
-  // - History: /api/v1/history (general historical data)
+  // Build API endpoint based on view type
   const endpoint = viewType === 'sessions'
-    ? `/api/v1/sessions?hours=${hours[timeRange]}`
+    ? `/api/v1/sessions?hours=${TIME_RANGE_HOURS[timeRange]}`
     : viewType === 'sightings'
-    ? `/api/v1/sightings?hours=${hours[timeRange]}&limit=100`
+    ? `/api/v1/sightings?hours=${TIME_RANGE_HOURS[timeRange]}&limit=100`
     : viewType === 'acars'
-    ? `/api/v1/acars?hours=${hours[timeRange]}&limit=200`
-    : `/api/v1/safety/events?hours=${hours[timeRange]}&limit=100`;
+    ? `/api/v1/acars?hours=${TIME_RANGE_HOURS[timeRange]}&limit=200`
+    : `/api/v1/safety/events?hours=${TIME_RANGE_HOURS[timeRange]}&limit=100`;
 
-  const { data, refetch } = useSocketApi(endpoint, null, apiBase, { wsRequest, wsConnected });
+  const { data } = useSocketApi(endpoint, null, apiBase, { wsRequest, wsConnected });
 
-  // Note: useSocketApi already refetches when endpoint changes, no need for additional effect
-
-  // Fetch label reference once on mount
-  const labelsFetchedRef = useRef(false);
-  useEffect(() => {
-    if (labelsFetchedRef.current) return;
-
-    const fetchLabels = async () => {
-      try {
-        const res = await fetch(`${apiBase}/api/v1/acars/labels`);
-        const data = await safeJson(res);
-        if (data) {
-          setLabelReference(data.labels || {});
-          labelsFetchedRef.current = true;
-        }
-      } catch (err) {
-        console.log('Labels fetch error:', err.message);
-      }
-    };
-    fetchLabels();
-  }, [apiBase]);
-
-  // Store ws functions in refs to avoid triggering re-fetches
-  const wsRequestRef = useRef(wsRequest);
-  const wsConnectedRef = useRef(wsConnected);
-  useEffect(() => {
-    wsRequestRef.current = wsRequest;
-    wsConnectedRef.current = wsConnected;
-  }, [wsRequest, wsConnected]);
-
-  // Fetch ACARS messages when viewing ACARS tab - prefer WebSocket
-  useEffect(() => {
-    if (viewType !== 'acars') return;
-
-    const fetchAcars = async () => {
-      try {
-        const queryParams = {
-          hours: hours[timeRange],
-          limit: 200,
-        };
-        if (acarsSource !== 'all') queryParams.source = acarsSource;
-        if (acarsAirlineFilter) queryParams.airline = acarsAirlineFilter;
-        if (acarsSelectedLabels.length > 0) queryParams.label = acarsSelectedLabels.join(',');
-
-        let result = null;
-
-        // Prefer WebSocket (use refs for current values)
-        if (wsRequestRef.current && wsConnectedRef.current) {
-          try {
-            result = await wsRequestRef.current('acars-messages', queryParams);
-            if (result?.error) result = null;
-          } catch (err) {
-            console.debug('ACARS WS request failed:', err.message);
-          }
-        }
-
-        // HTTP fallback only if socket didn't work
-        // Django API uses /api/v1/acars (was /api/v1/acars/messages)
-        if (!result) {
-          const params = new URLSearchParams();
-          params.set('hours', hours[timeRange]);
-          params.set('limit', '200');
-          if (acarsSource !== 'all') params.set('source', acarsSource);
-          if (acarsAirlineFilter) params.set('airline', acarsAirlineFilter);
-          if (acarsSelectedLabels.length > 0) params.set('label', acarsSelectedLabels.join(','));
-
-          const res = await fetch(`${apiBase}/api/v1/acars?${params.toString()}`);
-          result = await safeJson(res);
-        }
-
-        if (result) {
-          // Django API returns messages array directly or in a 'messages' key
-          setAcarsMessages(result.messages || result.results || result || []);
-        }
-      } catch (err) {
-        console.log('ACARS fetch error:', err.message);
-      }
-    };
-    fetchAcars();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewType, timeRange, acarsSource, acarsAirlineFilter, acarsSelectedLabels, apiBase]);
-
-  // Lookup hex values from sightings for ACARS messages with callsign but no icao_hex
-  useEffect(() => {
-    if (viewType !== 'acars' || acarsMessages.length === 0) return;
-
-    // Find callsigns that need lookup (have callsign, no icao_hex, not in cache)
-    const callsignsToLookup = new Set();
-    for (const msg of acarsMessages) {
-      if (msg.callsign && !msg.icao_hex) {
-        const cs = msg.callsign.trim().toUpperCase();
-        // Skip if already looked up (cached as null or has value)
-        if (!(cs in callsignHexCache)) {
-          callsignsToLookup.add(cs);
-        }
-      }
-    }
-
-    if (callsignsToLookup.size === 0) return;
-
-    // Lookup each callsign from sightings API
-    // Django API uses /api/v1/sightings (was /api/v1/history/sightings)
-    const lookupCallsigns = async () => {
-      const lookups = Array.from(callsignsToLookup).slice(0, 10);
-
-      for (const callsign of lookups) {
-        try {
-          let data;
-          if (wsRequest && wsConnected) {
-            // Use WebSocket for fetching sightings by callsign
-            const result = await wsRequest('sightings', { callsign: callsign, hours: 24, limit: 1 });
-            if (result && (result.sightings || result.results)) {
-              data = result;
-            } else {
-              throw new Error('Invalid sightings response');
-            }
-          } else {
-            // Fallback to HTTP if WebSocket unavailable
-            const res = await fetch(`${apiBase}/api/v1/sightings?callsign=${encodeURIComponent(callsign)}&hours=24&limit=1`);
-            data = await safeJson(res);
-            if (!data) throw new Error('HTTP request failed');
-          }
-          const sightings = data?.sightings || data?.results || [];
-          if (sightings.length > 0 && sightings[0].icao_hex) {
-            setCallsignHexCache(prev => ({
-              ...prev,
-              [callsign]: sightings[0].icao_hex
-            }));
-          } else {
-            // Cache negative result to avoid repeated lookups
-            setCallsignHexCache(prev => ({ ...prev, [callsign]: null }));
-          }
-        } catch (err) {
-          // Cache as null to avoid repeated failed lookups
-          setCallsignHexCache(prev => ({ ...prev, [callsign]: null }));
-        }
-      }
-    };
-
-    lookupCallsigns();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewType, acarsMessages.length, apiBase, wsRequest, wsConnected]);
-
-  // Lookup ICAO hex from registration for ACARS messages
-  useEffect(() => {
-    if (viewType !== 'acars' || acarsMessages.length === 0) return;
-
-    // Find registrations that need lookup (have registration, no icao_hex, not in cache)
-    const regsToLookup = new Set();
-    for (const msg of acarsMessages) {
-      if (msg.registration && !msg.icao_hex) {
-        const reg = msg.registration.trim().toUpperCase();
-        if (!(reg in regHexCache)) {
-          regsToLookup.add(reg);
-        }
-      }
-    }
-
-    if (regsToLookup.size === 0) return;
-
-    // Lookup each registration from sightings API
-    // Django API uses /api/v1/sightings (was /api/v1/history/sightings)
-    const lookupRegs = async () => {
-      const lookups = Array.from(regsToLookup).slice(0, 10);
-
-      for (const reg of lookups) {
-        try {
-          let data;
-          if (wsRequest && wsConnected) {
-            const result = await wsRequest('sightings', { registration: reg, hours: 168, limit: 1 });
-            if (result && (result.sightings || result.results)) {
-              data = result;
-            } else {
-              throw new Error('Invalid sightings response');
-            }
-          } else {
-            const res = await fetch(`${apiBase}/api/v1/sightings?registration=${encodeURIComponent(reg)}&hours=168&limit=1`);
-            data = await safeJson(res);
-            if (!data) throw new Error('HTTP request failed');
-          }
-          const sightings = data?.sightings || data?.results || [];
-          if (sightings.length > 0 && sightings[0].icao_hex) {
-            setRegHexCache(prev => ({
-              ...prev,
-              [reg]: sightings[0].icao_hex
-            }));
-          } else {
-            setRegHexCache(prev => ({ ...prev, [reg]: null }));
-          }
-        } catch (err) {
-          setRegHexCache(prev => ({ ...prev, [reg]: null }));
-        }
-      }
-    };
-
-    lookupRegs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewType, acarsMessages.length, apiBase, wsRequest, wsConnected]);
-
-  // Close label dropdown when clicking outside
-  useEffect(() => {
-    if (!showLabelDropdown) return;
-
-    const handleClickOutside = (e) => {
-      if (labelDropdownRef.current && !labelDropdownRef.current.contains(e.target)) {
-        setShowLabelDropdown(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showLabelDropdown]);
-
-  // Persist compact mode to localStorage
-  useEffect(() => {
-    localStorage.setItem('acars-compact-mode', acarsCompactMode.toString());
-  }, [acarsCompactMode]);
-
-  // Persist quick filters to localStorage
-  useEffect(() => {
-    localStorage.setItem('acars-quick-filters', JSON.stringify(acarsQuickFilters));
-  }, [acarsQuickFilters]);
-
-  // Toggle quick filter
-  const toggleQuickFilter = useCallback((category) => {
-    setAcarsQuickFilters(prev =>
-      prev.includes(category)
-        ? prev.filter(c => c !== category)
-        : [...prev, category]
-    );
-  }, []);
-
-  // Clear all quick filters
-  const clearQuickFilters = useCallback(() => {
-    setAcarsQuickFilters([]);
-  }, []);
-
-  // Toggle message expansion
-  const toggleMessageExpansion = useCallback((msgId) => {
-    setExpandedMessages(prev => ({
-      ...prev,
-      [msgId]: !prev[msgId]
-    }));
-  }, []);
-
-  // Toggle all messages expansion
-  const toggleAllMessages = useCallback(() => {
-    setAllMessagesExpanded(prev => !prev);
-    setExpandedMessages({});
-  }, []);
-
-  // Reset visible count when filters change
-  useEffect(() => {
-    setVisibleAcarsCount(50);
-  }, [acarsSearch, acarsQuickFilters, acarsHideEmpty, acarsSelectedLabels, acarsAirlineFilter, acarsSource]);
-
-  // Lazy load more messages on scroll
-  const handleAcarsScroll = useCallback((e) => {
-    const { scrollTop, scrollHeight, clientHeight } = e.target;
-    if (scrollHeight - scrollTop - clientHeight < 200) {
-      setVisibleAcarsCount(prev => prev + 50);
-    }
-  }, []);
-
-  // Get available labels from ACARS messages for the filter dropdown
-  const availableLabels = useMemo(() => {
-    if (!acarsMessages.length) return [];
-
-    const labelCounts = {};
-    acarsMessages.forEach(msg => {
-      if (msg.label) {
-        const label = msg.label.toUpperCase();
-        labelCounts[label] = (labelCounts[label] || 0) + 1;
-      }
-    });
-
-    return Object.entries(labelCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([label, count]) => ({
-        label,
-        count,
-        description: getAcarsLabelDescription(label)
-      }));
-  }, [acarsMessages]);
-
-  // Filter ACARS messages
-  const filteredAcarsMessages = useMemo(() => {
-    if (!acarsMessages.length) return [];
-
-    let filtered = acarsMessages;
-
-    // Filter out empty messages if hideEmpty is enabled
-    if (acarsHideEmpty) {
-      filtered = filtered.filter(msg => msg.text && msg.text.trim().length > 0);
-    }
-
-    // Apply quick filter chips
-    if (acarsQuickFilters.length > 0) {
-      const allowedLabels = new Set();
-      acarsQuickFilters.forEach(category => {
-        const catData = quickFilterCategories[category];
-        if (catData) {
-          catData.labels.forEach(l => allowedLabels.add(l));
-        }
-      });
-      filtered = filtered.filter(msg => {
-        const label = msg.label?.toUpperCase();
-        return label && allowedLabels.has(label);
-      });
-    }
-
-    // Apply search filter (includes airline name search)
-    if (acarsSearch) {
-      const search = acarsSearch.toLowerCase();
-      filtered = filtered.filter(msg =>
-        msg.icao_hex?.toLowerCase().includes(search) ||
-        msg.callsign?.toLowerCase().includes(search) ||
-        msg.text?.toLowerCase().includes(search) ||
-        msg.label?.toLowerCase().includes(search) ||
-        msg.airline?.name?.toLowerCase().includes(search) ||
-        msg.airline?.icao?.toLowerCase().includes(search) ||
-        msg.airline?.iata?.toLowerCase().includes(search)
-      );
-    }
-
-    return filtered;
-  }, [acarsMessages, acarsSearch, acarsHideEmpty, acarsQuickFilters]);
-
-  // Handle navigation to a specific safety event (from aircraft detail page)
+  // Handle navigation to a specific safety event
   useEffect(() => {
     if (!targetEventId || !data?.events) return;
 
-    // Switch to safety view
     setViewType('safety');
 
-    // Find the event in our data
     const eventIndex = data.events.findIndex(e => e.id === targetEventId || e.id === String(targetEventId));
     if (eventIndex === -1) return;
 
     const event = data.events[eventIndex];
     const eventKey = event.id || eventIndex;
 
-    // Auto-expand the map for this event
-    if (!expandedMaps[eventKey]) {
-      toggleMap(eventKey, event);
+    if (!replay.expandedMaps[eventKey]) {
+      replay.toggleMap(eventKey, event);
     }
 
-    // Scroll to the event after a short delay to allow render
     setTimeout(() => {
       const eventEl = eventRefs.current[eventKey];
       if (eventEl) {
         eventEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Add a highlight effect
         eventEl.classList.add('highlight-event');
         setTimeout(() => eventEl.classList.remove('highlight-event'), 2000);
       }
     }, 100);
 
-    // Clear the target after handling
     onEventViewed?.();
-  }, [targetEventId, data?.events, expandedMaps, toggleMap, onEventViewed]);
-
-  // Render aircraft snapshot data
-  const renderSnapshot = (snapshot, label) => {
-    if (!snapshot) return null;
-    return (
-      <div className="snapshot-section">
-        {label && <div className="snapshot-label">{label}</div>}
-        <div className="snapshot-grid">
-          {snapshot.flight && <div className="snapshot-item"><span>Callsign</span><span>{snapshot.flight}</span></div>}
-          {snapshot.hex && <div className="snapshot-item"><span>ICAO</span><span className="icao-link" onClick={() => onSelectAircraft?.(snapshot.hex)}>{snapshot.hex}</span></div>}
-          {snapshot.lat && <div className="snapshot-item"><span>Lat</span><span>{snapshot.lat?.toFixed(5)}</span></div>}
-          {snapshot.lon && <div className="snapshot-item"><span>Lon</span><span>{snapshot.lon?.toFixed(5)}</span></div>}
-          {snapshot.alt_baro && <div className="snapshot-item"><span>Alt (baro)</span><span>{snapshot.alt_baro?.toLocaleString()} ft</span></div>}
-          {snapshot.alt_geom && <div className="snapshot-item"><span>Alt (geom)</span><span>{snapshot.alt_geom?.toLocaleString()} ft</span></div>}
-          {snapshot.gs && <div className="snapshot-item"><span>Ground Speed</span><span>{snapshot.gs?.toFixed(0)} kts</span></div>}
-          {snapshot.track !== undefined && snapshot.track !== null && <div className="snapshot-item"><span>Track</span><span>{snapshot.track?.toFixed(0)}°</span></div>}
-          {snapshot.baro_rate && <div className="snapshot-item"><span>Baro Rate</span><span>{snapshot.baro_rate > 0 ? '+' : ''}{snapshot.baro_rate} fpm</span></div>}
-          {snapshot.geom_rate && <div className="snapshot-item"><span>Geom Rate</span><span>{snapshot.geom_rate > 0 ? '+' : ''}{snapshot.geom_rate} fpm</span></div>}
-          {snapshot.squawk && <div className="snapshot-item"><span>Squawk</span><span>{snapshot.squawk}</span></div>}
-          {snapshot.category && <div className="snapshot-item"><span>Category</span><span>{snapshot.category}</span></div>}
-          {snapshot.nav_altitude_mcp && <div className="snapshot-item"><span>MCP Alt</span><span>{snapshot.nav_altitude_mcp?.toLocaleString()} ft</span></div>}
-          {snapshot.nav_heading !== undefined && snapshot.nav_heading !== null && <div className="snapshot-item"><span>Nav Heading</span><span>{snapshot.nav_heading?.toFixed(0)}°</span></div>}
-          {snapshot.emergency && <div className="snapshot-item"><span>Emergency</span><span>{snapshot.emergency}</span></div>}
-        </div>
-      </div>
-    );
-  };
+  }, [targetEventId, data?.events, replay.expandedMaps, replay.toggleMap, onEventViewed]);
 
   // Filter sessions (before sorting)
   const filteredSessionsUnsorted = useMemo(() => {
@@ -1342,7 +139,6 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
 
     let filtered = [...data.sessions];
 
-    // Search filter
     if (sessionSearch) {
       const search = sessionSearch.toLowerCase();
       filtered = filtered.filter(s =>
@@ -1352,7 +148,6 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
       );
     }
 
-    // Military filter
     if (showMilitaryOnly) {
       filtered = filtered.filter(s => s.is_military);
     }
@@ -1360,7 +155,7 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
     return filtered;
   }, [data?.sessions, sessionSearch, showMilitaryOnly]);
 
-  // Sort sessions using useSortState hook
+  // Sort sessions
   const {
     sortField: sessionSortField,
     sortDirection: sessionSortDirection,
@@ -1371,10 +166,10 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
     defaultField: 'last_seen',
     defaultDirection: 'desc',
     data: filteredSessionsUnsorted,
-    sortConfig: sessionSortConfig
+    sortConfig: SESSION_SORT_CONFIG
   });
 
-  // Sort sightings using useSortState hook
+  // Sort sightings
   const {
     sortField: sightingsSortField,
     sortDirection: sightingsSortDirection,
@@ -1385,10 +180,10 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
     defaultField: 'timestamp',
     defaultDirection: 'desc',
     data: data?.sightings || [],
-    sortConfig: sightingsSortConfig
+    sortConfig: SIGHTINGS_SORT_CONFIG
   });
 
-  // Sort safety events using useSortState hook
+  // Sort safety events
   const {
     sortField: safetySortField,
     sortDirection: safetySortDirection,
@@ -1399,10 +194,10 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
     defaultField: 'timestamp',
     defaultDirection: 'desc',
     data: data?.events || [],
-    sortConfig: safetySortConfig
+    sortConfig: SAFETY_SORT_CONFIG
   });
 
-  // Sort ACARS using useSortState hook
+  // Sort ACARS
   const {
     sortField: acarsSortField,
     sortDirection: acarsSortDirection,
@@ -1412,13 +207,13 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
     viewKey: 'history-acars',
     defaultField: 'timestamp',
     defaultDirection: 'desc',
-    data: filteredAcarsMessages,
-    sortConfig: acarsSortConfig
+    data: acars.filteredAcarsMessages,
+    sortConfig: ACARS_SORT_CONFIG
   });
 
   // Calculate counts for tab badges
   const sessionCount = data?.sessions?.length || 0;
-  const acarsCount = acarsMessages?.length || 0;
+  const acarsCount = acars.acarsMessages?.length || 0;
   const safetyCount = data?.events?.length || 0;
   const hasCriticalSafety = data?.events?.some(e => e.severity === 'critical');
 
@@ -1430,202 +225,57 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
     { id: 'safety', label: 'Safety', icon: <AlertTriangle size={14} />, count: safetyCount > 0 ? safetyCount : null, badgeVariant: safetyCount > 0 ? 'warning' : 'default', alertDot: hasCriticalSafety }
   ];
 
-  const timeRanges = ['1h', '6h', '24h', '48h', '7d'];
-
   return (
     <div className="history-container">
       <TabBar
         tabs={tabs}
         activeTab={viewType}
         onTabChange={setViewType}
-        timeRanges={timeRanges}
+        timeRanges={TIME_RANGES}
         activeTimeRange={timeRange}
         onTimeRangeChange={setTimeRange}
       />
 
       {viewType === 'sessions' && (
         <>
-          <div className="sessions-filters">
-            <div className="search-box">
-              <Search size={16} />
-              <input
-                type="text"
-                placeholder="Search ICAO, callsign, type..."
-                value={sessionSearch}
-                onChange={(e) => setSessionSearch(e.target.value)}
-              />
-            </div>
-            <button
-              className={`filter-btn ${showMilitaryOnly ? 'active' : ''}`}
-              onClick={() => setShowMilitaryOnly(!showMilitaryOnly)}
-            >
-              <Shield size={16} />
-              Military
-            </button>
-            <SortControls
-              fields={sessionSortFields}
-              activeField={sessionSortField}
-              direction={sessionSortDirection}
-              onSort={handleSessionSort}
-            />
-            <div className="sessions-count">
-              {filteredSessions.length} of {data?.sessions?.length || 0} sessions
-            </div>
-          </div>
+          <SessionsFilters
+            sessionSearch={sessionSearch}
+            setSessionSearch={setSessionSearch}
+            showMilitaryOnly={showMilitaryOnly}
+            setShowMilitaryOnly={setShowMilitaryOnly}
+            sessionSortField={sessionSortField}
+            sessionSortDirection={sessionSortDirection}
+            handleSessionSort={handleSessionSort}
+            filteredCount={filteredSessions.length}
+            totalCount={data?.sessions?.length || 0}
+          />
           <div className="sessions-grid">
-            {filteredSessions.map((session, i) => {
-              // Determine category color based on aircraft type
-              const getTypeCategory = (type) => {
-                if (!type) return 'unknown';
-                const t = type.toUpperCase();
-                if (['A388', 'A380', 'B748', 'B744', 'A346', 'A345', 'A343', 'A342', 'B77W', 'B77L', 'B789', 'B78X'].includes(t)) return 'heavy';
-                if (['A320', 'A321', 'A319', 'A318', 'B737', 'B738', 'B739', 'B38M', 'B39M', 'E190', 'E195', 'E170', 'E175'].includes(t)) return 'medium';
-                if (['C172', 'C182', 'C208', 'PA28', 'PA32', 'SR22', 'DA40', 'DA42', 'BE36', 'M20P'].includes(t)) return 'light';
-                if (['R22', 'R44', 'EC35', 'EC45', 'AS50', 'B06', 'B407', 'S76', 'A109', 'H145', 'H160'].includes(t)) return 'helicopter';
-                if (['F16', 'F15', 'F18', 'F22', 'F35', 'B1', 'B2', 'B52', 'C17', 'C130', 'C5', 'KC10', 'KC135', 'E3', 'E8'].includes(t)) return 'military-type';
-                return 'airliner';
-              };
-              const typeCategory = getTypeCategory(session.type);
-
-              return (
-                <div
-                  key={i}
-                  className={`session-card ${session.is_military ? 'military' : ''} ${session.safety_event_count > 0 ? 'has-safety-events' : ''} type-${typeCategory}`}
-                  onClick={() => onSelectAircraft?.(session.icao_hex)}
-                >
-                  <div className="session-header">
-                    <div className="session-identity">
-                      <div className="session-callsign">
-                        {session.callsign || session.icao_hex}
-                        {session.is_military && <span className="military-badge">MIL</span>}
-                        {session.safety_event_count > 0 && (
-                          <span className="safety-badge" title={`${session.safety_event_count} safety event${session.safety_event_count > 1 ? 's' : ''}`}>
-                            <AlertTriangle size={14} />
-                            {session.safety_event_count}
-                          </span>
-                        )}
-                      </div>
-                      <div className="session-icao-row">
-                        <span
-                          className="icao-link"
-                          onClick={(e) => { e.stopPropagation(); onSelectAircraft?.(session.icao_hex); }}
-                        >
-                          {session.icao_hex}
-                        </span>
-                        {session.type && <span className={`session-type type-${typeCategory}`}>{session.type}</span>}
-                        {session.registration && <span className="session-reg">{session.registration}</span>}
-                      </div>
-                    </div>
-                    <div className="session-duration-badge">
-                      <span className="duration-value">{Math.round(session.duration_min || 0)}</span>
-                      <span className="duration-unit">min</span>
-                    </div>
-                  </div>
-
-                  <div className="session-visual-stats">
-                    <div className="session-altitude-bar">
-                      <div className="altitude-bar-label">Altitude</div>
-                      <div className="altitude-bar-container">
-                        <div
-                          className="altitude-bar-fill"
-                          style={{ width: `${Math.min(100, ((session.max_alt || 0) / 45000) * 100)}%` }}
-                        />
-                        <span className="altitude-bar-value">
-                          {session.max_alt != null ? `${(session.max_alt / 1000).toFixed(0)}k ft` : '--'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="session-signal-indicator">
-                      <div className="signal-label">Signal</div>
-                      <div className={`signal-bars ${session.max_rssi >= -3 ? 'excellent' : session.max_rssi >= -10 ? 'good' : session.max_rssi >= -20 ? 'fair' : 'weak'}`}>
-                        <span className="bar bar-1"></span>
-                        <span className="bar bar-2"></span>
-                        <span className="bar bar-3"></span>
-                        <span className="bar bar-4"></span>
-                      </div>
-                      <span className="signal-value">{session.max_rssi?.toFixed(0) || '--'} dB</span>
-                    </div>
-                  </div>
-
-                  <div className="session-stats">
-                    <div className="session-stat">
-                      <span className="session-stat-label">Distance</span>
-                      <span className="session-stat-value">
-                        {session.min_distance_nm != null ? `${session.min_distance_nm.toFixed(1)}` : '--'}
-                        {session.max_distance_nm != null ? ` - ${session.max_distance_nm.toFixed(1)}` : ''} nm
-                      </span>
-                    </div>
-                    <div className="session-stat">
-                      <span className="session-stat-label">Max V/S</span>
-                      <span className={`session-stat-value ${session.max_vr > 0 ? 'climbing' : session.max_vr < 0 ? 'descending' : ''}`}>
-                        {session.max_vr != null ? `${session.max_vr > 0 ? '+' : ''}${session.max_vr}` : '--'} fpm
-                      </span>
-                    </div>
-                    <div className="session-stat">
-                      <span className="session-stat-label">Messages</span>
-                      <span className="session-stat-value">{session.message_count?.toLocaleString() || '--'}</span>
-                    </div>
-                    <div className="session-stat">
-                      <span className="session-stat-label">Squawks</span>
-                      <span className={`session-stat-value ${session.squawk === '7500' || session.squawk === '7600' || session.squawk === '7700' ? 'emergency-squawk' : ''}`}>
-                        {session.squawk || '--'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="session-times">
-                    <span className="session-time">
-                      <span className="time-label">First:</span> {new Date(session.first_seen).toLocaleTimeString()}
-                    </span>
-                    <span className="session-time">
-                      <span className="time-label">Last:</span> {new Date(session.last_seen).toLocaleTimeString()}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+            {filteredSessions.map((session, i) => (
+              <SessionCard
+                key={i}
+                session={session}
+                onSelectAircraft={onSelectAircraft}
+              />
+            ))}
           </div>
         </>
       )}
 
       {viewType === 'sightings' && (
-        <div className="sightings-table-wrapper">
-          <table className="sightings-table">
-            <SortableTableHeader
-              columns={sightingsColumns}
-              sortField={sightingsSortField}
-              sortDirection={sightingsSortDirection}
-              onSort={handleSightingsSort}
-            />
-            <tbody>
-              {sortedSightings.map((s, i) => (
-                <tr key={i}>
-                  <td>{new Date(s.timestamp).toLocaleTimeString()}</td>
-                  <td className="mono">
-                    <span
-                      className="icao-link"
-                      onClick={() => onSelectAircraft?.(s.icao_hex)}
-                    >
-                      {s.icao_hex}
-                    </span>
-                  </td>
-                  <td>{s.callsign || '--'}</td>
-                  <td className="mono">{s.altitude?.toLocaleString() || '--'}</td>
-                  <td className="mono">{s.gs?.toFixed(0) || '--'}</td>
-                  <td className="mono">{s.distance_nm?.toFixed(1) || '--'}</td>
-                  <td className="mono">{s.rssi != null ? `${s.rssi.toFixed(1)} dB` : '--'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <SightingsTable
+          sightings={sortedSightings}
+          sortField={sightingsSortField}
+          sortDirection={sightingsSortDirection}
+          onSort={handleSightingsSort}
+          onSelectAircraft={onSelectAircraft}
+        />
       )}
 
       {viewType === 'safety' && (
         <>
           <div className="safety-events-header">
             <SortControls
-              fields={safetySortFields}
+              fields={SAFETY_SORT_FIELDS}
               activeField={safetySortField}
               direction={safetySortDirection}
               onSort={handleSafetySort}
@@ -1642,318 +292,118 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
               </div>
             )}
             {sortedSafetyEvents.map((event, i) => {
-            const eventKey = event.id || i;
-            const hasSnapshot = event.aircraft_snapshot || event.aircraft_snapshot_2;
-            const isExpanded = expandedSnapshots[eventKey];
-            const state = replayState[eventKey];
-            const hasMap = event.aircraft_snapshot?.lat || event.aircraft_snapshot_2?.lat;
+              const eventKey = event.id || i;
+              const hasSnapshot = event.aircraft_snapshot || event.aircraft_snapshot_2;
+              const isExpanded = expandedSnapshots[eventKey];
+              const hasMap = event.aircraft_snapshot?.lat || event.aircraft_snapshot_2?.lat;
 
-            return (
-              <div
-                key={eventKey}
-                ref={el => eventRefs.current[eventKey] = el}
-                className="safety-event-wrapper"
-              >
-                {/* Use new SafetyEventCard component */}
-                <SafetyEventCard
-                  event={event}
-                  onSelectAircraft={onSelectAircraft}
-                  onViewEvent={onViewEvent}
-                />
+              return (
+                <div
+                  key={eventKey}
+                  ref={el => eventRefs.current[eventKey] = el}
+                  className="safety-event-wrapper"
+                >
+                  <SafetyEventCard
+                    event={event}
+                    onSelectAircraft={onSelectAircraft}
+                    onViewEvent={onViewEvent}
+                  />
 
-                {/* Additional action buttons for expanded features */}
-                <div className="safety-event-expand-actions">
-                  {hasSnapshot && (
-                    <button
-                      className="snapshot-toggle"
-                      onClick={() => toggleSnapshot(eventKey)}
-                    >
-                      {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      {isExpanded ? 'Hide' : 'Show'} Telemetry
-                    </button>
+                  <div className="safety-event-expand-actions">
+                    {hasSnapshot && (
+                      <button
+                        className="snapshot-toggle"
+                        onClick={() => toggleSnapshot(eventKey)}
+                      >
+                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        {isExpanded ? 'Hide' : 'Show'} Telemetry
+                      </button>
+                    )}
+
+                    {hasMap && (
+                      <button
+                        className="snapshot-toggle map-toggle"
+                        onClick={() => replay.toggleMap(eventKey, event)}
+                      >
+                        <MapIcon size={14} />
+                        {replay.expandedMaps[eventKey] ? 'Hide' : 'Show'} Map
+                      </button>
+                    )}
+                  </div>
+
+                  {isExpanded && (
+                    <SnapshotContainer
+                      event={event}
+                      onSelectAircraft={onSelectAircraft}
+                    />
                   )}
 
-                  {hasMap && (
-                    <button
-                      className="snapshot-toggle map-toggle"
-                      onClick={() => toggleMap(eventKey, event)}
-                    >
-                      <MapIcon size={14} />
-                      {expandedMaps[eventKey] ? 'Hide' : 'Show'} Map
-                    </button>
+                  {replay.expandedMaps[eventKey] && (
+                    <SafetyEventMap
+                      eventKey={eventKey}
+                      event={event}
+                      trackData={replay.trackData}
+                      replayState={replay.replayState}
+                      graphZoomState={replay.graphZoomState}
+                      onInitializeMap={replay.initializeMap}
+                      onReplayChange={replay.handleReplayChange}
+                      onTogglePlay={replay.togglePlay}
+                      onSkipToStart={replay.skipToStart}
+                      onSkipToEnd={replay.skipToEnd}
+                      onSpeedChange={replay.handleSpeedChange}
+                      onJumpToEvent={replay.jumpToEvent}
+                      onGraphWheel={replay.handleGraphWheel}
+                      onGraphDragStart={replay.handleGraphDragStart}
+                      onGraphDragMove={replay.handleGraphDragMove}
+                      onGraphDragEnd={replay.handleGraphDragEnd}
+                      onResetGraphZoom={replay.resetGraphZoom}
+                      getReplayTimestamp={replay.getReplayTimestamp}
+                      onSelectAircraft={onSelectAircraft}
+                    />
                   )}
                 </div>
-
-                {isExpanded && (
-                  <div className="snapshot-container">
-                    {renderSnapshot(event.aircraft_snapshot, event.aircraft_snapshot_2 ? 'Aircraft 1' : null)}
-                    {renderSnapshot(event.aircraft_snapshot_2, 'Aircraft 2')}
-                  </div>
-                )}
-
-                {expandedMaps[eventKey] && (
-                  <div className="safety-event-map-container">
-                    <div
-                      className="safety-event-map"
-                      ref={(el) => {
-                        if (el && expandedMaps[eventKey]) {
-                          setTimeout(() => initializeMap(eventKey, event, el), 50);
-                        }
-                      }}
-                    />
-
-                    {/* Flight data graphs */}
-                    <div className="flight-graphs">
-                      {[event.icao, event.icao_2].filter(Boolean).map((icao, idx) => {
-                        const track = trackData[icao];
-                        if (!track || track.length < 2) return null;
-                        const color = idx === 0 ? '#00ff88' : '#44aaff';
-                        const position = state?.position ?? 100;
-                        return (
-                          <div key={icao} className="aircraft-graphs">
-                            <div className="graphs-header" style={{ color }}>
-                              {event[idx === 0 ? 'callsign' : 'callsign_2'] || icao}
-                            </div>
-                            <div className="graphs-row">
-                              {renderMiniGraph(track, 'altitude', color, 'Altitude', 'ft', null, position, eventKey)}
-                              {renderMiniGraph(track, 'gs', color, 'Speed', 'kts', v => v?.toFixed(0), position, eventKey)}
-                              {renderMiniGraph(track, 'vr', color, 'V/S', 'fpm', v => (v > 0 ? '+' : '') + v, position, eventKey)}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Replay controls */}
-                    <div className="replay-controls">
-                      <div className="replay-buttons">
-                        <button
-                          className="replay-btn"
-                          onClick={() => skipToStart(eventKey, event)}
-                          title="Skip to start"
-                        >
-                          <SkipBack size={16} />
-                        </button>
-                        <button
-                          className="replay-btn play-btn"
-                          onClick={() => togglePlay(eventKey, event)}
-                          title={state?.isPlaying ? 'Pause' : 'Play'}
-                        >
-                          {state?.isPlaying ? <Pause size={18} /> : <Play size={18} />}
-                        </button>
-                        <button
-                          className="replay-btn"
-                          onClick={() => skipToEnd(eventKey, event)}
-                          title="Skip to end"
-                        >
-                          <SkipForward size={16} />
-                        </button>
-                        <button
-                          className="replay-btn event-btn"
-                          onClick={() => jumpToEvent(eventKey, event)}
-                          title="Jump to event"
-                        >
-                          <AlertTriangle size={14} />
-                        </button>
-                        <select
-                          className="speed-select"
-                          value={state?.speed || 1}
-                          onChange={(e) => handleSpeedChange(eventKey, parseFloat(e.target.value))}
-                          title="Playback speed"
-                        >
-                          <option value={0.25}>0.25x</option>
-                          <option value={0.5}>0.5x</option>
-                          <option value={1}>1x</option>
-                          <option value={2}>2x</option>
-                          <option value={4}>4x</option>
-                        </select>
-                      </div>
-                      <div className="replay-slider-container">
-                        <input
-                          type="range"
-                          className="replay-slider"
-                          min="0"
-                          max="100"
-                          value={state?.position || 100}
-                          onChange={(e) => handleReplayChange(eventKey, event, parseFloat(e.target.value))}
-                        />
-                        <div className="replay-time">
-                          {getReplayTimestamp(eventKey, event) || '--:--'}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="safety-map-legend">
-                      <div className="legend-item">
-                        <span className="legend-marker event-marker"></span>
-                        <span>Event Location</span>
-                      </div>
-                      {event.aircraft_snapshot?.lat && (
-                        <div className="legend-item clickable" onClick={() => onSelectAircraft?.(event.icao)}>
-                          <span className="legend-marker ac1-marker"></span>
-                          <span className="legend-callsign">{event.callsign || event.icao}</span>
-                        </div>
-                      )}
-                      {event.aircraft_snapshot_2?.lat && (
-                        <div className="legend-item clickable" onClick={() => onSelectAircraft?.(event.icao_2)}>
-                          <span className="legend-marker ac2-marker"></span>
-                          <span className="legend-callsign">{event.callsign_2 || event.icao_2}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
           </div>
         </>
       )}
 
       {viewType === 'acars' && (
         <>
-          <div className="acars-history-filters">
-            <div className="search-box">
-              <Search size={16} />
-              <input
-                type="text"
-                placeholder="Search ICAO, callsign, airline, text..."
-                value={acarsSearch}
-                onChange={(e) => setAcarsSearch(e.target.value)}
-              />
-            </div>
-            <div className="airline-filter">
-              <Plane size={14} />
-              <input
-                type="text"
-                placeholder="Airline..."
-                value={acarsAirlineFilter}
-                onChange={(e) => setAcarsAirlineFilter(e.target.value)}
-              />
-            </div>
-            <select
-              className="source-filter"
-              value={acarsSource}
-              onChange={(e) => setAcarsSource(e.target.value)}
-            >
-              <option value="all">All Sources</option>
-              <option value="acars">ACARS</option>
-              <option value="vdlm2">VDL Mode 2</option>
-            </select>
-            <div className="label-filter-container" ref={labelDropdownRef}>
-              <button
-                className={`label-filter-btn ${acarsSelectedLabels.length > 0 ? 'active' : ''}`}
-                onClick={() => setShowLabelDropdown(!showLabelDropdown)}
-              >
-                Message Types
-                {acarsSelectedLabels.length > 0 && (
-                  <span className="label-filter-count">{acarsSelectedLabels.length}</span>
-                )}
-                <ChevronDown size={14} className={showLabelDropdown ? 'rotated' : ''} />
-              </button>
-              {showLabelDropdown && (
-                <div className="label-filter-dropdown">
-                  <div className="label-filter-header">
-                    <span>Filter by Message Type</span>
-                    {acarsSelectedLabels.length > 0 && (
-                      <button
-                        className="label-clear-btn"
-                        onClick={() => setAcarsSelectedLabels([])}
-                      >
-                        Clear all
-                      </button>
-                    )}
-                  </div>
-                  <div className="label-filter-list">
-                    {availableLabels.map(({ label, count, description }) => (
-                      <label key={label} className="label-filter-item">
-                        <input
-                          type="checkbox"
-                          checked={acarsSelectedLabels.includes(label)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setAcarsSelectedLabels([...acarsSelectedLabels, label]);
-                            } else {
-                              setAcarsSelectedLabels(acarsSelectedLabels.filter(l => l !== label));
-                            }
-                          }}
-                        />
-                        <span className="label-code">{label}</span>
-                        <span className="label-desc">{description || label}</span>
-                        <span className="label-count">{count}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-            <label className="hide-empty-toggle">
-              <input
-                type="checkbox"
-                checked={acarsHideEmpty}
-                onChange={(e) => setAcarsHideEmpty(e.target.checked)}
-              />
-              Hide empty
-            </label>
-            <div className="acars-view-toggle">
-              <button
-                className={`acars-view-btn ${!acarsCompactMode ? 'active' : ''}`}
-                onClick={() => setAcarsCompactMode(false)}
-                title="Expanded view"
-              >
-                <LayoutGrid size={14} />
-              </button>
-              <button
-                className={`acars-view-btn ${acarsCompactMode ? 'active' : ''}`}
-                onClick={() => setAcarsCompactMode(true)}
-                title="Compact view"
-              >
-                <List size={14} />
-              </button>
-            </div>
-            <button
-              className="acars-expand-all-btn"
-              onClick={toggleAllMessages}
-              title={allMessagesExpanded ? 'Collapse all messages' : 'Expand all messages'}
-            >
-              {allMessagesExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              {allMessagesExpanded ? 'Collapse' : 'Expand'}
-            </button>
-            <SortControls
-              fields={acarsSortFields}
-              activeField={acarsSortField}
-              direction={acarsSortDirection}
-              onSort={handleAcarsSort}
-              compact
-            />
-            <div className="acars-history-count">
-              {sortedAcarsMessages.length === acarsMessages.length
-                ? `${acarsMessages.length} message${acarsMessages.length !== 1 ? 's' : ''}`
-                : `${sortedAcarsMessages.length} of ${acarsMessages.length}`}
-            </div>
-          </div>
-          {/* Quick Filter Chips */}
-          <div className="acars-quick-filter-chips">
-            {Object.entries(quickFilterCategories).map(([key, { name }]) => (
-              <button
-                key={key}
-                className={`acars-filter-chip chip-${key} ${acarsQuickFilters.includes(key) ? 'active' : ''}`}
-                onClick={() => toggleQuickFilter(key)}
-              >
-                <span className="chip-dot" />
-                {name}
-              </button>
-            ))}
-            {acarsQuickFilters.length > 0 && (
-              <button className="acars-chips-clear" onClick={clearQuickFilters}>
-                <X size={12} /> Clear
-              </button>
-            )}
-          </div>
+          <AcarsFilters
+            acarsSearch={acars.acarsSearch}
+            setAcarsSearch={acars.setAcarsSearch}
+            acarsAirlineFilter={acars.acarsAirlineFilter}
+            setAcarsAirlineFilter={acars.setAcarsAirlineFilter}
+            acarsSource={acars.acarsSource}
+            setAcarsSource={acars.setAcarsSource}
+            acarsSelectedLabels={acars.acarsSelectedLabels}
+            setAcarsSelectedLabels={acars.setAcarsSelectedLabels}
+            showLabelDropdown={acars.showLabelDropdown}
+            setShowLabelDropdown={acars.setShowLabelDropdown}
+            labelDropdownRef={acars.labelDropdownRef}
+            availableLabels={acars.availableLabels}
+            acarsHideEmpty={acars.acarsHideEmpty}
+            setAcarsHideEmpty={acars.setAcarsHideEmpty}
+            acarsCompactMode={acars.acarsCompactMode}
+            setAcarsCompactMode={acars.setAcarsCompactMode}
+            allMessagesExpanded={acars.allMessagesExpanded}
+            toggleAllMessages={acars.toggleAllMessages}
+            acarsSortField={acarsSortField}
+            acarsSortDirection={acarsSortDirection}
+            handleAcarsSort={handleAcarsSort}
+            filteredCount={sortedAcarsMessages.length}
+            totalCount={acars.acarsMessages.length}
+          />
+          <AcarsQuickFilters
+            acarsQuickFilters={acars.acarsQuickFilters}
+            toggleQuickFilter={acars.toggleQuickFilter}
+            clearQuickFilters={acars.clearQuickFilters}
+          />
           <div
-            ref={acarsListRef}
-            className={`acars-history-list ${acarsCompactMode ? 'compact' : ''}`}
-            onScroll={handleAcarsScroll}
+            ref={acars.acarsListRef}
+            className={`acars-history-list ${acars.acarsCompactMode ? 'compact' : ''}`}
+            onScroll={acars.handleAcarsScroll}
           >
             {sortedAcarsMessages.length === 0 ? (
               <div className="no-events-message">
@@ -1961,186 +411,25 @@ export function HistoryView({ apiBase, onSelectAircraft, onSelectByTail, onViewE
                 <p>No ACARS messages in the selected time range</p>
               </div>
             ) : (
-              sortedAcarsMessages.slice(0, visibleAcarsCount).map((msg, i) => {
-                const timestamp = typeof msg.timestamp === 'number'
-                  ? new Date(msg.timestamp * 1000)
-                  : new Date(msg.timestamp);
-
-                // Check cache for hex lookup by callsign or registration (from sightings API)
-                const cachedHex = msg.callsign ? callsignHexCache[msg.callsign.trim().toUpperCase()] : null;
-                const regCachedHex = msg.registration ? regHexCache[msg.registration.trim().toUpperCase()] : null;
-                const linkHex = msg.icao_hex || cachedHex || regCachedHex;
-                const canLink = !!linkHex;
-                const isFromHistory = !msg.icao_hex && cachedHex;
-                const labelDesc = getAcarsLabelDescription(msg.label, msg.label_info);
-                const category = getLabelCategory(msg.label);
-                const msgId = `${msg.timestamp}-${i}`;
-                const isExpanded = allMessagesExpanded || expandedMessages[msgId];
-                const textContent = msg.formatted_text || msg.text || '';
-                const isLongText = textContent.length > 100;
-
-                return (
-                  <div
-                    key={i}
-                    className={`acars-history-item ${canLink ? 'clickable' : ''} ${category ? `category-${category}` : ''}`}
-                    onClick={(e) => {
-                      if (canLink && onSelectAircraft) {
-                        e.preventDefault();
-                        onSelectAircraft(linkHex);
-                      }
-                    }}
-                    title={canLink ? (isFromHistory ? 'Click to view aircraft (from sightings)' : 'Click to view aircraft details') : 'No ICAO hex available'}
-                  >
-                    <div className="acars-history-header">
-                      {msg.callsign && (
-                        <span
-                          className={`acars-history-callsign ${canLink ? 'clickable' : ''}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            if (canLink && onSelectAircraft) {
-                              onSelectAircraft(linkHex);
-                            }
-                          }}
-                        >
-                          {msg.callsign}
-                          {canLink && <ExternalLink size={10} />}
-                        </span>
-                      )}
-                      {msg.airline?.name && (
-                        <span className="acars-history-airline" title={`${msg.airline.icao || msg.airline.iata}`}>
-                          <Plane size={12} />
-                          {msg.airline.name}
-                        </span>
-                      )}
-                      {msg.registration && (
-                        <span
-                          className="acars-history-reg clickable"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            if (canLink && onSelectAircraft) {
-                              // Use ICAO hex if available
-                              onSelectAircraft(linkHex);
-                            } else if (onSelectByTail) {
-                              // Fall back to tail/registration lookup
-                              onSelectByTail(msg.registration);
-                            }
-                          }}
-                        >
-                          {msg.registration}
-                          <ExternalLink size={10} />
-                        </span>
-                      )}
-                      <span className="acars-history-time">{timestamp.toLocaleString()}</span>
-                      {msg.label && (
-                        <span className={`acars-history-label ${category ? `category-${category}` : ''}`} title={msg.label_info?.description || labelDesc || msg.label}>
-                          {msg.label}
-                          {labelDesc && (
-                            <span className="acars-label-desc">{labelDesc}</span>
-                          )}
-                        </span>
-                      )}
-                      <span className={`acars-history-source ${msg.source}`}>{msg.source?.toUpperCase()}</span>
-                      {msg.frequency && <span className="acars-history-freq">{msg.frequency} MHz</span>}
-                      {/* Compact mode preview */}
-                      <span className="acars-compact-preview">
-                        {textContent.slice(0, 60)}{textContent.length > 60 ? '...' : ''}
-                      </span>
-                    </div>
-                    {(msg.icao_hex || cachedHex) && (
-                      <div className="acars-history-aircraft">
-                        <span
-                          className="acars-history-icao clickable"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            if (onSelectAircraft) {
-                              onSelectAircraft(linkHex);
-                            }
-                          }}
-                        >
-                          {msg.icao_hex || cachedHex}
-                          <ExternalLink size={10} />
-                        </span>
-                      </div>
-                    )}
-                    {/* Show decoded/formatted text if available, otherwise show raw text */}
-                    {msg.formatted_text ? (
-                      <div className="acars-formatted-text">
-                        <div className="acars-formatted-header">Decoded:</div>
-                        <pre className={`acars-formatted-content ${!isExpanded && isLongText ? 'collapsed' : ''}`}>{msg.formatted_text}</pre>
-                        {isLongText && (
-                          <button
-                            className="acars-text-toggle"
-                            onClick={(e) => { e.stopPropagation(); toggleMessageExpansion(msgId); }}
-                          >
-                            {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                            {isExpanded ? 'Show less' : 'Show more'}
-                          </button>
-                        )}
-                        {msg.text && (
-                          <details className="acars-raw-toggle">
-                            <summary>Raw Message</summary>
-                            <pre className="acars-history-text">{msg.text}</pre>
-                          </details>
-                        )}
-                      </div>
-                    ) : (
-                      msg.text && (
-                        <>
-                          <pre className={`acars-history-text ${!isExpanded && isLongText ? 'collapsed' : ''}`}>{msg.text}</pre>
-                          {isLongText && (
-                            <button
-                              className="acars-text-toggle"
-                              onClick={(e) => { e.stopPropagation(); toggleMessageExpansion(msgId); }}
-                            >
-                              {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                              {isExpanded ? 'Show less' : 'Show more'}
-                            </button>
-                          )}
-                        </>
-                      )
-                    )}
-                    {msg.decoded_text && Object.keys(msg.decoded_text).length > 0 && !msg.formatted_text && (
-                      <div className="acars-decoded-info">
-                        {msg.decoded_text.message_type && (
-                          <span className="acars-decoded-type">{msg.decoded_text.message_type}</span>
-                        )}
-                        {msg.decoded_text.airports_mentioned && (
-                          <span className="acars-decoded-item" title="Airports mentioned">
-                            ✈ {msg.decoded_text.airports_mentioned.join(', ')}
-                          </span>
-                        )}
-                        {msg.decoded_text.airports && (
-                          <span className="acars-decoded-item" title="Airports">
-                            ✈ {msg.decoded_text.airports.join(', ')}
-                          </span>
-                        )}
-                        {msg.decoded_text.flight_levels && (
-                          <span className="acars-decoded-item" title="Flight levels">
-                            ⬆ {msg.decoded_text.flight_levels.join(', ')}
-                          </span>
-                        )}
-                        {msg.decoded_text.position && (
-                          <span className="acars-decoded-item" title="Position">
-                            📍 {msg.decoded_text.position.lat.toFixed(3)}, {msg.decoded_text.position.lon.toFixed(3)}
-                          </span>
-                        )}
-                        {msg.decoded_text.ground_station && (
-                          <span className="acars-decoded-item" title="Ground Station">
-                            📡 {msg.decoded_text.ground_station}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
+              sortedAcarsMessages.slice(0, acars.visibleAcarsCount).map((msg, i) => (
+                <AcarsMessageItem
+                  key={i}
+                  msg={msg}
+                  index={i}
+                  callsignHexCache={acars.callsignHexCache}
+                  regHexCache={acars.regHexCache}
+                  labelReference={acars.labelReference}
+                  allMessagesExpanded={acars.allMessagesExpanded}
+                  expandedMessages={acars.expandedMessages}
+                  toggleMessageExpansion={acars.toggleMessageExpansion}
+                  onSelectAircraft={onSelectAircraft}
+                  onSelectByTail={onSelectByTail}
+                />
+              ))
             )}
-            {visibleAcarsCount < sortedAcarsMessages.length && (
+            {acars.visibleAcarsCount < sortedAcarsMessages.length && (
               <div className="acars-load-more">
-                Showing {visibleAcarsCount} of {sortedAcarsMessages.length} — scroll for more
+                Showing {acars.visibleAcarsCount} of {sortedAcarsMessages.length} - scroll for more
               </div>
             )}
           </div>

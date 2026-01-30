@@ -250,54 +250,60 @@ class AircraftInfoSerializer(serializers.ModelSerializer):
         return None
 
     def get_photo_url(self, obj):
-        """Return cached photo URL if available, otherwise external URL."""
+        """Return API photo URL if cached, otherwise None to trigger fetch."""
         from django.conf import settings
         from pathlib import Path
 
         if not obj.icao_hex:
-            return obj.photo_url
+            return None
+
+        icao = obj.icao_hex.upper()
 
         if settings.PHOTO_CACHE_ENABLED:
             if settings.S3_ENABLED:
-                # For S3: use photo_cache service to get URL (with existence check)
+                # For S3: check if photo exists in cache
                 from skyspy.services.photo_cache import get_photo_url as get_cached_url
-                cached_url = get_cached_url(obj.icao_hex, is_thumbnail=False, verify_exists=True)
+                cached_url = get_cached_url(icao, is_thumbnail=False, verify_exists=True)
                 if cached_url:
-                    return cached_url
+                    # Return API URL - PhotoServeView will redirect to S3
+                    return f"/api/v1/photos/{icao}"
             else:
                 # For local: verify file actually exists
                 cache_dir = Path(settings.PHOTO_CACHE_DIR)
-                photo_path = cache_dir / f"{obj.icao_hex.upper()}.jpg"
+                photo_path = cache_dir / f"{icao}.jpg"
                 if photo_path.exists() and photo_path.stat().st_size > 0:
-                    return f"/api/v1/photos/{obj.icao_hex.upper()}"
+                    return f"/api/v1/photos/{icao}"
 
-        # Fall back to external URL
-        return obj.photo_url
+        # No cached photo available
+        return None
 
     def get_photo_thumbnail_url(self, obj):
-        """Return cached thumbnail URL if available, otherwise external URL."""
+        """Return API thumbnail URL if cached, otherwise None."""
         from django.conf import settings
         from pathlib import Path
 
         if not obj.icao_hex:
-            return obj.photo_thumbnail_url
+            return None
+
+        icao = obj.icao_hex.upper()
 
         if settings.PHOTO_CACHE_ENABLED:
             if settings.S3_ENABLED:
-                # For S3: use photo_cache service to get URL (with existence check)
+                # For S3: check if thumbnail exists in cache
                 from skyspy.services.photo_cache import get_photo_url as get_cached_url
-                cached_url = get_cached_url(obj.icao_hex, is_thumbnail=True, verify_exists=True)
+                cached_url = get_cached_url(icao, is_thumbnail=True, verify_exists=True)
                 if cached_url:
-                    return cached_url
+                    # Return API URL - PhotoServeView will redirect to S3
+                    return f"/api/v1/photos/{icao}/thumb"
             else:
                 # For local: verify file actually exists
                 cache_dir = Path(settings.PHOTO_CACHE_DIR)
-                thumb_path = cache_dir / f"{obj.icao_hex.upper()}_thumb.jpg"
+                thumb_path = cache_dir / f"{icao}_thumb.jpg"
                 if thumb_path.exists() and thumb_path.stat().st_size > 0:
-                    return f"/api/v1/photos/{obj.icao_hex.upper()}/thumb"
+                    return f"/api/v1/photos/{icao}/thumb"
 
-        # Fall back to external URL
-        return obj.photo_thumbnail_url
+        # No cached thumbnail available
+        return None
 
 
 class AircraftPhotoSerializer(serializers.Serializer):

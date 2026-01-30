@@ -76,6 +76,9 @@ class FeatureBasedPermission(permissions.BasePermission):
         'GeographicStatsViewSet': 'system',
         'CombinedStatsViewSet': 'system',
         'AntennaAnalyticsViewSet': 'system',
+        'RouteLookupView': 'system',
+        'GeodataStatsView': 'system',
+        'WeatherCacheStatsView': 'system',
         # Map and navigation
         'MapViewSet': 'aircraft',
         'NotamViewSet': 'aircraft',
@@ -105,44 +108,69 @@ class FeatureBasedPermission(permissions.BasePermission):
         """Check if user has access to this feature."""
         from skyspy.models.auth import FeatureAccess
 
-        # Check auth mode first
+        # Validate API key scopes if present
+        api_key_scopes = getattr(request, 'api_key_scopes', None)
+        if api_key_scopes is not None:
+            required_scope = self._get_required_scope(view)
+            if required_scope and required_scope not in api_key_scopes:
+                return False
+
         auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
+
+        # Get feature name for this view
+        feature = self._get_feature(view)
+
+        # Check if there's explicit FeatureAccess configuration FIRST
+        # This allows feature-based config to override AUTH_MODE
+        config = None
+        if feature:
+            try:
+                config = FeatureAccess.objects.get(feature=feature)
+            except FeatureAccess.DoesNotExist:
+                config = None
+
+        # If explicit FeatureAccess config exists, use it (overrides AUTH_MODE)
+        if config is not None:
+            # Check if feature is disabled
+            if not config.is_enabled:
+                return False
+
+            # Determine if this is a read or write operation
+            is_write = request.method not in permissions.SAFE_METHODS
+            access_level = config.write_access if is_write else config.read_access
+
+            return self._check_access_level(request, access_level, feature, is_write)
+
+        # No explicit config - fall back to AUTH_MODE
         if auth_mode == 'public':
             return True
         if auth_mode == 'authenticated':
             # Authenticated mode requires auth for all access
             return request.user and request.user.is_authenticated
 
-        # Hybrid mode - check per-feature configuration
-        feature = self._get_feature(view)
+        # Hybrid mode with no config - allow public read access, require auth for writes
         if not feature:
             # Unknown view, default to authenticated access
             return request.user and request.user.is_authenticated
 
-        # Get feature access configuration
-        try:
-            config = FeatureAccess.objects.get(feature=feature)
-        except FeatureAccess.DoesNotExist:
-            # No config in hybrid mode = allow public read access, require auth for writes
-            if request.method in permissions.SAFE_METHODS:
-                return True
-            return request.user and request.user.is_authenticated
-
-        # Check if feature is disabled
-        if not config.is_enabled:
-            return False
-
-        # Determine if this is a read or write operation
-        is_write = request.method not in permissions.SAFE_METHODS
-        access_level = config.write_access if is_write else config.read_access
-
-        return self._check_access_level(request, access_level, feature, is_write)
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return request.user and request.user.is_authenticated
 
     def has_object_permission(self, request, view, obj):
         """Check object-level permissions (e.g., ownership)."""
-        # Check auth mode - public mode allows all access
+        from skyspy.models.auth import FeatureAccess
+
         auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
-        if auth_mode == 'public':
+        feature = self._get_feature(view)
+
+        # Check if explicit FeatureAccess config exists (overrides AUTH_MODE)
+        has_explicit_config = False
+        if feature:
+            has_explicit_config = FeatureAccess.objects.filter(feature=feature).exists()
+
+        # Only allow public access if no explicit config and AUTH_MODE is public
+        if auth_mode == 'public' and not has_explicit_config:
             return True
 
         # For write operations, check ownership
@@ -153,6 +181,11 @@ class FeatureBasedPermission(permissions.BasePermission):
 
     def _get_feature(self, view):
         """Get feature name from view."""
+        view_name = view.__class__.__name__
+        return self.FEATURE_MAP.get(view_name)
+
+    def _get_required_scope(self, view):
+        """Get the required API key scope for this view from FEATURE_MAP."""
         view_name = view.__class__.__name__
         return self.FEATURE_MAP.get(view_name)
 
@@ -279,6 +312,16 @@ class HasPermission(permissions.BasePermission):
         # Get required permissions from view or class
         required = getattr(view, 'required_permissions', None) or self.required_permissions
 
+        # Validate API key scopes if present
+        api_key_scopes = getattr(request, 'api_key_scopes', None)
+        if api_key_scopes is not None and required:
+            # Check if any required permission's feature is in API key scopes
+            for perm in required:
+                # Extract feature from permission (e.g., 'alerts.create' -> 'alerts')
+                feature = perm.split('.')[0] if '.' in perm else perm
+                if feature not in api_key_scopes:
+                    return False
+
         # Check if any required permissions are admin-related (always enforce)
         always_enforce = any(
             perm in self.ALWAYS_ENFORCE_PERMISSIONS
@@ -335,6 +378,21 @@ class HasAnyPermission(permissions.BasePermission):
         """Check if user has any of the required permissions."""
         # Get required permissions from view or class
         required = getattr(view, 'required_permissions', None) or self.required_permissions
+
+        # Validate API key scopes if present
+        # For HasAnyPermission, check if at least one required permission's feature is in scopes
+        api_key_scopes = getattr(request, 'api_key_scopes', None)
+        if api_key_scopes is not None and required:
+            # Check if any required permission's feature is in API key scopes
+            has_valid_scope = False
+            for perm in required:
+                # Extract feature from permission (e.g., 'alerts.create' -> 'alerts')
+                feature = perm.split('.')[0] if '.' in perm else perm
+                if feature in api_key_scopes:
+                    has_valid_scope = True
+                    break
+            if not has_valid_scope:
+                return False
 
         # Check if any required permissions are admin-related (always enforce)
         always_enforce = any(

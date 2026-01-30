@@ -992,8 +992,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             const data = await wsRequest('photo-cache', { icao: selectedAircraft.hex });
             if (data?.photo_url) {
               setProPhotoUrl(resolvePhotoUrl(data.photo_url));
-            } else if (data?.thumbnail_url) {
-              setProPhotoUrl(resolvePhotoUrl(data.thumbnail_url));
+            } else if (data?.photo_thumbnail_url || data?.thumbnail_url) {
+              setProPhotoUrl(resolvePhotoUrl(data.photo_thumbnail_url || data.thumbnail_url));
             } else if (data?.error) {
               console.debug('Photo cache WS error:', data.error);
               setProPhotoError(true);
@@ -1013,8 +1013,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             if (data) {
               if (data?.photo_url) {
                 setProPhotoUrl(resolvePhotoUrl(data.photo_url));
-              } else if (data?.thumbnail_url) {
-                setProPhotoUrl(resolvePhotoUrl(data.thumbnail_url));
+              } else if (data?.photo_thumbnail_url || data?.thumbnail_url) {
+                setProPhotoUrl(resolvePhotoUrl(data.photo_thumbnail_url || data.thumbnail_url));
               } else {
                 setProPhotoError(true);
                 setProPhotoLoading(false);
@@ -2686,7 +2686,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           promises.push(
             (wsRequest && wsConnected
               ? wsRequest('airspaces', baseParams)
-              : fetchHttp('airspaces', baseParams)
+              : fetchHttp('airspace/advisories', baseParams)
             )
               .then(data => {
                 const advisories = (data?.advisories || extractData(data)).map(adv => ({
@@ -2703,7 +2703,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           promises.push(
             (wsRequest && wsConnected
               ? wsRequest('airspace-boundaries', { ...baseParams, radius: Math.round(radarRange * 1.5) })
-              : fetchHttp('airspace-boundaries', { ...baseParams, radius: Math.round(radarRange * 1.5) })
+              : fetchHttp('airspace/boundaries', { ...baseParams, radius: Math.round(radarRange * 1.5) })
             )
               .then(data => {
                 // Response has { boundaries: [...], count, source, ... }
@@ -3029,6 +3029,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   // 60Hz re-renders that were causing performance issues.
 
   const sortedAircraft = useMemo(() => {
+    // Debug: Log aircraft data received by MapView
+    console.log('[MapView] sortedAircraft memo running, received', aircraft?.length ?? 0, 'aircraft');
     let filtered = [...aircraft].filter(a => a.lat && a.lon);
 
     // Build set of aircraft with safety events for safetyEventsOnly filter
@@ -8421,8 +8423,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                           data = await safeJson(res);
                         }
 
-                        if (data?.photo_url || data?.thumbnail_url) {
-                          setProPhotoUrl(resolvePhotoUrl(data.photo_url || data.thumbnail_url));
+                        if (data?.photo_url || data?.photo_thumbnail_url || data?.thumbnail_url) {
+                          setProPhotoUrl(resolvePhotoUrl(data.photo_url || data.photo_thumbnail_url || data.thumbnail_url));
                           if (proPhotoRetryRef.current) {
                             clearInterval(proPhotoRetryRef.current);
                             proPhotoRetryRef.current = null;

@@ -16,6 +16,8 @@ from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from skyspy.models import AntennaAnalyticsSnapshot
+from skyspy.auth.authentication import OptionalJWTAuthentication, APIKeyAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,9 @@ class AntennaAnalyticsViewSet(ViewSet):
 
     Provides current analytics from cache and historical snapshots from database.
     """
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="Get current antenna analytics",

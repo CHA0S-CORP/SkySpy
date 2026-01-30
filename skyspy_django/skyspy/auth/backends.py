@@ -81,10 +81,15 @@ class OIDCAuthenticationBackend:
         username = self._generate_username(claims, subject)
 
         # Check if user with same email exists (link accounts)
-        if email:
+        # Only if OIDC_ALLOW_EMAIL_LINKING is explicitly enabled
+        # WARNING: Email linking can be a security vulnerability if an attacker
+        # controls an OIDC provider and uses matching email addresses to take over accounts
+        allow_email_linking = getattr(settings, 'OIDC_ALLOW_EMAIL_LINKING', False)
+        if allow_email_linking and email:
             try:
                 user = User.objects.get(email=email)
                 # Link existing user to OIDC
+                logger.info(f"Linking existing user {user.username} to OIDC via email {email}")
                 self._create_or_update_profile(user, claims, subject, issuer)
                 return user
             except User.DoesNotExist:

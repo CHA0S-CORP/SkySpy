@@ -70,11 +70,7 @@ from skyspy.tests.factories import (
 # Database Setup
 # =============================================================================
 
-@pytest.fixture(scope='session')
-def django_db_setup(django_db_blocker):
-    """Set up test database - use PostgreSQL from test_settings."""
-    # Database is configured in test_settings.py to use PostgreSQL
-    pass
+# Note: django_db_setup is defined in the parent conftest.py
 
 
 @pytest.fixture(autouse=True)

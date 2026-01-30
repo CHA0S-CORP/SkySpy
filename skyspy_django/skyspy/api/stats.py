@@ -37,12 +37,17 @@ from skyspy.serializers.stats import (
     LifetimeStatsResponseSerializer, GamificationDashboardSerializer,
     NotableRegistrationSerializer, NotableCallsignSerializer, RareAircraftTypeSerializer,
 )
+from skyspy.auth.authentication import OptionalJWTAuthentication, APIKeyAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
 
 logger = logging.getLogger(__name__)
 
 
 class TrackingQualityViewSet(viewsets.ViewSet):
     """ViewSet for tracking quality statistics."""
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="Get tracking quality stats",
@@ -220,6 +225,9 @@ from django.db import models as django_models
 
 class EngagementViewSet(viewsets.ViewSet):
     """ViewSet for engagement statistics."""
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="Get engagement stats",
@@ -437,6 +445,9 @@ class EngagementViewSet(viewsets.ViewSet):
 class FavoritesViewSet(viewsets.ViewSet):
     """ViewSet for managing aircraft favorites."""
 
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
+
     @extend_schema(
         summary="List user favorites",
         description="Get list of favorited aircraft for the current user/session"
@@ -593,6 +604,9 @@ class FlightPatternsViewSet(viewsets.ViewSet):
     - Flight patterns (busiest hours, aircraft types, duration by type)
     - Geographic data (countries of origin, operators, locations)
     """
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="Get flight patterns statistics",
@@ -786,6 +800,9 @@ class GeographicStatsViewSet(viewsets.ViewSet):
     - Connected locations
     - Military vs civilian breakdown
     """
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="Get geographic statistics",

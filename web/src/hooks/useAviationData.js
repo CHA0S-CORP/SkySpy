@@ -115,14 +115,14 @@ export function useAviationData(wsRequest, wsConnected, feederLat, feederLon, ra
 
       // Airspace boundaries (static) - from database, shorter timeout OK
       promises.push(
-        makeRequest('airspace-boundaries', 'airspace-boundaries', { ...baseParams, radius: Math.round(radarRange * 1.5) })
+        makeRequest('airspace-boundaries', 'airspace/boundaries', { ...baseParams, radius: Math.round(radarRange * 1.5) })
           .then(data => ({ type: 'airspace', data: extractData(data) }))
           .catch(err => ({ type: 'airspace', error: err.message }))
       );
 
       // Airspace advisories (G-AIRMETs) - from database, shorter timeout OK
       promises.push(
-        makeRequest('airspaces', 'airspaces', baseParams)
+        makeRequest('airspaces', 'airspace/advisories', baseParams)
           .then(data => ({ type: 'airspaceAdvisories', data: data?.advisories || extractData(data) }))
           .catch(err => ({ type: 'airspaceAdvisories', error: err.message }))
       );

@@ -35,26 +35,38 @@ class AlertsConsumer(BaseConsumer):
     supported_topics = ['alerts', 'triggers', 'all']
 
     async def connect(self):
-        """Handle WebSocket connection with user-specific groups."""
-        await super().connect()
+        """Handle WebSocket connection with user-specific groups.
 
-        # Join user-specific group if authenticated
+        Note: Groups are added BEFORE calling super().connect() to prevent
+        race conditions where messages could be missed between accept() and
+        group membership being established.
+        """
+        # Initialize group tracking
+        self._user_group = None
+        self._session_group = None
+
+        # Join user-specific group if authenticated BEFORE accept
         user = self.scope.get('user')
         if user and user.is_authenticated:
-            user_group = f'alerts_user_{user.id}'
-            await self.channel_layer.group_add(user_group, self.channel_name)
-            self._user_group = user_group
-        else:
-            self._user_group = None
+            # Validate user.id is a safe value for group name
+            user_id = user.id
+            if isinstance(user_id, int) or (isinstance(user_id, str) and user_id.isalnum()):
+                user_group = f'alerts_user_{user_id}'
+                await self.channel_layer.group_add(user_group, self.channel_name)
+                self._user_group = user_group
 
-        # Join session-specific group for anonymous users
+        # Join session-specific group for anonymous users BEFORE accept
         session = self.scope.get('session')
         if session and session.session_key:
-            session_group = f'alerts_session_{session.session_key}'
-            await self.channel_layer.group_add(session_group, self.channel_name)
-            self._session_group = session_group
-        else:
-            self._session_group = None
+            # Validate session_key is safe for group name (Django session keys are alphanumeric)
+            session_key = session.session_key
+            if session_key and session_key.isalnum():
+                session_group = f'alerts_session_{session_key}'
+                await self.channel_layer.group_add(session_group, self.channel_name)
+                self._session_group = session_group
+
+        # Now call parent connect which will accept() the connection
+        await super().connect()
 
     async def disconnect(self, close_code):
         """Handle WebSocket disconnect."""
@@ -81,12 +93,24 @@ class AlertsConsumer(BaseConsumer):
             }
         })
 
+    def _safe_int(self, value, default: int, min_val: int = None, max_val: int = None) -> int:
+        """Safely parse an integer parameter with bounds checking."""
+        try:
+            result = int(value) if value is not None else default
+        except (ValueError, TypeError):
+            result = default
+        if min_val is not None and result < min_val:
+            result = min_val
+        if max_val is not None and result > max_val:
+            result = max_val
+        return result
+
     async def handle_request(self, request_type: str, request_id: str, params: dict):
         """Handle request/response messages."""
         if request_type == 'alerts':
             # Return recent alerts
-            hours = int(params.get('hours', 24))
-            limit = min(int(params.get('limit', 50)), 200)
+            hours = self._safe_int(params.get('hours'), 24, min_val=1, max_val=720)
+            limit = self._safe_int(params.get('limit'), 50, min_val=1, max_val=200)
             alerts = await self.get_alerts_history(hours, limit)
             await self.send_json({
                 'type': 'response',
@@ -236,14 +260,15 @@ class AlertsConsumer(BaseConsumer):
         """Get active alert rules visible to user."""
         from django.db.models import Q
 
-        queryset = AlertRule.objects.filter(enabled=True)
+        # Use select_related to prevent N+1 queries when accessing rule.owner_id
+        queryset = AlertRule.objects.filter(enabled=True).select_related('owner')
 
         user = self.scope.get('user')
         if user and user.is_authenticated:
             if not user.is_superuser:
-                subscribed_rule_ids = AlertSubscription.objects.filter(
+                subscribed_rule_ids = list(AlertSubscription.objects.filter(
                     user=user
-                ).values_list('rule_id', flat=True)
+                ).values_list('rule_id', flat=True))
 
                 queryset = queryset.filter(
                     Q(owner=user) |

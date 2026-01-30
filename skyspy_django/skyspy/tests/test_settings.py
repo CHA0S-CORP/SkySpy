@@ -142,15 +142,30 @@ def parse_database_url(url):
         },
     }
 
-# Use DATABASE_URL from environment if available, otherwise use defaults for local testing
-DATABASE_URL = os.environ.get(
-    'DATABASE_URL',
-    'postgresql://skyspy_test:skyspy_test@localhost:5433/skyspy_test'
-)
+# Use DATABASE_URL from environment if available, otherwise use SQLite file for local testing
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
-DATABASES = {
-    'default': parse_database_url(DATABASE_URL)
-}
+if DATABASE_URL:
+    DATABASES = {
+        'default': parse_database_url(DATABASE_URL)
+    }
+else:
+    # Use SQLite file for local testing (not in-memory to persist across connections)
+    import tempfile
+    _test_db_file = os.path.join(tempfile.gettempdir(), 'skyspy_test.sqlite3')
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': _test_db_file,
+            'TIME_ZONE': 'UTC',
+            'ATOMIC_REQUESTS': False,
+            'AUTOCOMMIT': True,
+            'CONN_MAX_AGE': 0,
+            'CONN_HEALTH_CHECKS': False,
+            'OPTIONS': {},
+            'TEST': {'NAME': _test_db_file},
+        }
+    }
 
 # =============================================================================
 # Cache Configuration

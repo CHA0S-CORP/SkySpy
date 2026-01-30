@@ -1,29 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Bell, Trash2, Info, AlertTriangle, AlertCircle, Check, Clock, Plane,
+  Bell, Trash2, Check, Clock, Plane,
   Radar, RefreshCw, Search, Filter, ChevronDown, CheckCheck, X, Download
 } from 'lucide-react';
 import { useSocketApi } from '../../hooks';
 import { ConfirmModal } from '../common/ConfirmModal';
-
-// Severity icons that don't rely on color alone
-const SEVERITY_ICONS = {
-  info: Info,
-  warning: AlertTriangle,
-  critical: AlertCircle,
-  emergency: AlertCircle,
-};
-
-// Severity labels for screen readers
-const SEVERITY_LABELS = {
-  info: 'Information',
-  warning: 'Warning',
-  critical: 'Critical',
-  emergency: 'Emergency',
-};
-
-// Items per page options
-const PAGE_SIZE_OPTIONS = [25, 50, 100];
+import { SEVERITY_ICONS, SEVERITY_LABELS, PAGE_SIZE_OPTIONS } from './alertHistoryConstants';
+import { AlertHistoryItem } from './AlertHistoryItem';
+import { AlertHistoryToolbar } from './AlertHistoryToolbar';
 
 /**
  * Consolidated AlertHistory component with:

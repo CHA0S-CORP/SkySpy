@@ -139,6 +139,13 @@ export default function App() {
     clearAirframeError,
   } = useChannelsSocket(true, config.apiBaseUrl, 'all');
 
+  // Debug: Log aircraft data received from useChannelsSocket
+  useEffect(() => {
+    if (aircraft?.length > 0) {
+      console.log('[App] Aircraft from useChannelsSocket:', aircraft.length, 'aircraft');
+    }
+  }, [aircraft]);
+
   // High-frequency position updates for smooth map rendering
   // Uses refs instead of state to avoid 60Hz re-renders
   const {

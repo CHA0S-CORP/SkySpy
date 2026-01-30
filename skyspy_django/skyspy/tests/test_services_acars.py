@@ -543,12 +543,14 @@ class AcarsServiceStatisticsTests(TestCase):
 
     def test_get_stats_hourly_count_cleanup(self):
         """Test that old hourly counts are cleaned up."""
-        # Add old timestamp (2 hours ago)
-        old_time = datetime.utcnow() - timedelta(hours=2)
+        from datetime import timezone as dt_timezone
+
+        # Add old timestamp (2 hours ago) - must be timezone-aware
+        old_time = datetime.now(dt_timezone.utc) - timedelta(hours=2)
         self.service._hourly_counts['acars'].append(old_time)
 
-        # Add recent timestamp
-        recent_time = datetime.utcnow()
+        # Add recent timestamp - must be timezone-aware
+        recent_time = datetime.now(dt_timezone.utc)
         self.service._hourly_counts['acars'].append(recent_time)
 
         stats = self.service.get_stats()

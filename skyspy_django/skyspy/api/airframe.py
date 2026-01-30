@@ -18,6 +18,8 @@ from skyspy.serializers.aircraft import (
     BulkAircraftInfoSerializer,
     AircraftInfoCacheStatsSerializer,
 )
+from skyspy.auth.authentication import OptionalJWTAuthentication, APIKeyAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +27,8 @@ logger = logging.getLogger(__name__)
 class PhotoServeView(APIView):
     """Serve cached aircraft photos."""
 
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     def get(self, request, icao_hex, photo_type='full'):
         """
@@ -67,8 +69,8 @@ class PhotoServeView(APIView):
 class AirframeViewSet(viewsets.ViewSet):
     """ViewSet for aircraft information and photos."""
 
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="Get aircraft info by ICAO",

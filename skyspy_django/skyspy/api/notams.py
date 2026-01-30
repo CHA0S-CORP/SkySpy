@@ -17,12 +17,17 @@ from skyspy.serializers.notams import (
     TfrListResponseSerializer,
     NotamStatsSerializer,
 )
+from skyspy.auth.authentication import OptionalJWTAuthentication, APIKeyAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
 
 logger = logging.getLogger(__name__)
 
 
 class NotamViewSet(viewsets.ViewSet):
     """ViewSet for NOTAM and TFR data."""
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="List NOTAMs",

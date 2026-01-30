@@ -10,120 +10,29 @@
  */
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { getConfig } from '../utils/config';
-
-// Helper to safely parse JSON from fetch response
-const safeJson = async (res) => {
-  const ct = res.headers.get('content-type');
-  if (!ct || !ct.includes('application/json')) return null;
-  try { return await res.json(); } catch { return null; }
-};
+import {
+  getStoredTokens,
+  storeTokens,
+  clearTokens,
+  getStoredUser,
+  storeUser,
+} from './auth/tokenStorage';
+import { parseJwt, isTokenExpired } from './auth/jwtUtils';
+import { safeJson, createUserData, createDefaultConfig } from './auth/apiHelpers';
 
 const AuthContext = createContext(null);
-
-// Token storage keys
-const ACCESS_TOKEN_KEY = 'skyspy_access_token';
-const REFRESH_TOKEN_KEY = 'skyspy_refresh_token';
-const USER_KEY = 'skyspy_user';
-
-/**
- * Get stored tokens from localStorage
- */
-function getStoredTokens() {
-  return {
-    accessToken: localStorage.getItem(ACCESS_TOKEN_KEY),
-    refreshToken: localStorage.getItem(REFRESH_TOKEN_KEY),
-  };
-}
-
-/**
- * Store tokens in localStorage
- */
-function storeTokens(accessToken, refreshToken) {
-  if (accessToken) {
-    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-  }
-  if (refreshToken) {
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-  }
-}
-
-/**
- * Clear stored tokens
- */
-function clearTokens() {
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-}
-
-/**
- * Get stored user from localStorage
- */
-function getStoredUser() {
-  try {
-    const userJson = localStorage.getItem(USER_KEY);
-    return userJson ? JSON.parse(userJson) : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Store user in localStorage
- */
-function storeUser(user) {
-  if (user) {
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
-  }
-}
-
-/**
- * Parse JWT token to get expiration
- */
-function parseJwt(token) {
-  try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-    return JSON.parse(jsonPayload);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Check if token is expired or about to expire (within 30 seconds)
- */
-function isTokenExpired(token, bufferSeconds = 30) {
-  if (!token) return true;
-  const payload = parseJwt(token);
-  if (!payload || !payload.exp) return true;
-  const expiresAt = payload.exp * 1000;
-  return Date.now() >= expiresAt - bufferSeconds * 1000;
-}
 
 export function AuthProvider({ children }) {
   const [status, setStatus] = useState('loading'); // 'loading' | 'anonymous' | 'authenticated'
   const [user, setUser] = useState(null);
-  const [config, setConfig] = useState({
-    authEnabled: true,
-    publicMode: false,
-    oidcEnabled: false,
-    localAuthEnabled: true,
-    features: {},
-  });
+  const [config, setConfig] = useState(createDefaultConfig(true));
   const [error, setError] = useState(null);
 
   const refreshTimeoutRef = useRef(null);
-  const refreshInProgressRef = useRef(false); // Prevent race conditions
-  const refreshPromiseRef = useRef(null); // Share refresh promise across concurrent calls
-  const oidcPopupRef = useRef(null); // Track OIDC popup window
-  const oidcCleanupRef = useRef(null); // Store OIDC cleanup function for unmount
+  const refreshInProgressRef = useRef(false);
+  const refreshPromiseRef = useRef(null);
+  const oidcPopupRef = useRef(null);
+  const oidcCleanupRef = useRef(null);
   const apiBaseUrl = getConfig().apiBaseUrl;
 
   /**
@@ -146,11 +55,9 @@ export function AuthProvider({ children }) {
       headers,
     });
 
-    // If unauthorized and we have a refresh token, try to refresh
     if (response.status === 401) {
       const refreshed = await refreshAccessToken();
       if (refreshed) {
-        // Retry with new token
         const newTokens = getStoredTokens();
         headers['Authorization'] = `Bearer ${newTokens.accessToken}`;
         return fetch(url, { ...options, headers });
@@ -161,15 +68,33 @@ export function AuthProvider({ children }) {
   }, []);
 
   /**
+   * Schedule token refresh before expiration
+   */
+  const scheduleTokenRefresh = useCallback((token) => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
+
+    const payload = parseJwt(token);
+    if (!payload || !payload.exp) return;
+
+    const expiresAt = payload.exp * 1000;
+    const refreshIn = expiresAt - Date.now() - 30000;
+
+    if (refreshIn > 0) {
+      refreshTimeoutRef.current = setTimeout(() => {
+        refreshAccessToken();
+      }, refreshIn);
+    }
+  }, []);
+
+  /**
    * Refresh the access token (with race condition protection)
    */
   const refreshAccessToken = useCallback(async () => {
     const { refreshToken } = getStoredTokens();
-    if (!refreshToken) {
-      return false;
-    }
+    if (!refreshToken) return false;
 
-    // If refresh is already in progress, wait for the existing promise
     if (refreshInProgressRef.current && refreshPromiseRef.current) {
       return refreshPromiseRef.current;
     }
@@ -185,7 +110,6 @@ export function AuthProvider({ children }) {
         });
 
         if (!response.ok) {
-          // Refresh failed - clear tokens and set anonymous
           clearTokens();
           setUser(null);
           setStatus('anonymous');
@@ -213,29 +137,7 @@ export function AuthProvider({ children }) {
 
     refreshPromiseRef.current = doRefresh();
     return refreshPromiseRef.current;
-  }, [apiBaseUrl]);
-
-  /**
-   * Schedule token refresh before expiration
-   */
-  const scheduleTokenRefresh = useCallback((token) => {
-    if (refreshTimeoutRef.current) {
-      clearTimeout(refreshTimeoutRef.current);
-    }
-
-    const payload = parseJwt(token);
-    if (!payload || !payload.exp) return;
-
-    // Refresh 30 seconds before expiration
-    const expiresAt = payload.exp * 1000;
-    const refreshIn = expiresAt - Date.now() - 30000;
-
-    if (refreshIn > 0) {
-      refreshTimeoutRef.current = setTimeout(() => {
-        refreshAccessToken();
-      }, refreshIn);
-    }
-  }, [refreshAccessToken]);
+  }, [apiBaseUrl, scheduleTokenRefresh]);
 
   /**
    * Fetch auth configuration from server
@@ -243,14 +145,13 @@ export function AuthProvider({ children }) {
   const fetchAuthConfig = useCallback(async () => {
     try {
       const response = await fetch(`${apiBaseUrl}/api/v1/auth/config`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch auth config');
-      }
-      // Check content type to avoid parsing HTML as JSON
+      if (!response.ok) throw new Error('Failed to fetch auth config');
+
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         throw new Error('Auth config endpoint returned non-JSON response');
       }
+
       const data = await response.json();
       setConfig({
         authEnabled: data.auth_enabled,
@@ -263,14 +164,7 @@ export function AuthProvider({ children }) {
       });
       return data;
     } catch {
-      // Auth endpoint unavailable - default to public mode (no auth required)
-      setConfig({
-        authEnabled: false,
-        publicMode: true,
-        oidcEnabled: false,
-        localAuthEnabled: false,
-        features: {},
-      });
+      setConfig(createDefaultConfig(false));
       return { auth_enabled: false };
     }
   }, [apiBaseUrl]);
@@ -281,19 +175,12 @@ export function AuthProvider({ children }) {
   const fetchProfile = useCallback(async () => {
     try {
       const response = await authFetch(`${apiBaseUrl}/api/v1/auth/profile`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch profile');
-      }
+      if (!response.ok) throw new Error('Failed to fetch profile');
+
       const data = await safeJson(response);
       if (!data) throw new Error('Invalid response');
-      const userData = {
-        id: data.id,
-        username: data.username,
-        email: data.email,
-        displayName: data.display_name,
-        permissions: data.permissions || [],
-        roles: data.roles || [],
-      };
+
+      const userData = createUserData(data);
       setUser(userData);
       storeUser(userData);
       return userData;
@@ -316,21 +203,11 @@ export function AuthProvider({ children }) {
       });
 
       const data = await safeJson(response);
-      if (!response.ok) {
-        throw new Error(data?.error || 'Login failed');
-      }
+      if (!response.ok) throw new Error(data?.error || 'Login failed');
       if (!data) throw new Error('Invalid response');
 
       storeTokens(data.access, data.refresh);
-
-      const userData = {
-        id: data.user.id,
-        username: data.user.username,
-        email: data.user.email,
-        displayName: data.user.display_name,
-        permissions: data.user.permissions || [],
-        roles: data.user.roles || [],
-      };
+      const userData = createUserData(data.user);
       setUser(userData);
       storeUser(userData);
       setStatus('authenticated');
@@ -357,7 +234,6 @@ export function AuthProvider({ children }) {
       console.error('Logout request failed:', err);
     }
 
-    // Clear local state regardless of server response
     clearTokens();
     setUser(null);
     setStatus('anonymous');
@@ -378,62 +254,38 @@ export function AuthProvider({ children }) {
         throw new Error('Failed to get OIDC authorization URL');
       }
 
-      // Open popup for OIDC flow
       const popup = window.open(
         data.authorization_url,
         'oidc_login',
         'width=500,height=600,menubar=no,toolbar=no'
       );
 
-      // Store popup reference for unmount cleanup
       oidcPopupRef.current = popup;
 
-      // Listen for message from popup
       return new Promise((resolve, reject) => {
         let timeoutId = null;
         let popupCheckInterval = null;
         let isCleanedUp = false;
 
         const cleanup = () => {
-          // Prevent double cleanup
           if (isCleanedUp) return;
           isCleanedUp = true;
-
           window.removeEventListener('message', handleMessage);
-          if (timeoutId) {
-            clearTimeout(timeoutId);
-            timeoutId = null;
-          }
-          if (popupCheckInterval) {
-            clearInterval(popupCheckInterval);
-            popupCheckInterval = null;
-          }
-          // Clear refs
+          if (timeoutId) clearTimeout(timeoutId);
+          if (popupCheckInterval) clearInterval(popupCheckInterval);
           oidcCleanupRef.current = null;
           oidcPopupRef.current = null;
         };
 
-        // Store cleanup function in ref for component unmount
         oidcCleanupRef.current = cleanup;
 
         const handleMessage = (event) => {
-          // Ignore messages after cleanup
           if (isCleanedUp) return;
-
           if (event.data && event.data.type === 'oidc_callback') {
             cleanup();
-
             if (event.data.access) {
               storeTokens(event.data.access, event.data.refresh);
-
-              const userData = {
-                id: event.data.user.id,
-                username: event.data.user.username,
-                email: event.data.user.email,
-                displayName: event.data.user.display_name,
-                permissions: event.data.user.permissions || [],
-                roles: event.data.user.roles || [],
-              };
+              const userData = createUserData(event.data.user);
               setUser(userData);
               storeUser(userData);
               setStatus('authenticated');
@@ -447,26 +299,18 @@ export function AuthProvider({ children }) {
 
         window.addEventListener('message', handleMessage);
 
-        // Check if popup is closed by user
         popupCheckInterval = setInterval(() => {
-          // Stop checking after cleanup
           if (isCleanedUp) return;
-
           if (popup && popup.closed) {
             cleanup();
             reject(new Error('OIDC login cancelled'));
           }
         }, 500);
 
-        // Timeout after 5 minutes
         timeoutId = setTimeout(() => {
-          // Ignore timeout after cleanup
           if (isCleanedUp) return;
-
           cleanup();
-          if (popup && !popup.closed) {
-            popup.close();
-          }
+          if (popup && !popup.closed) popup.close();
           reject(new Error('OIDC login timed out'));
         }, 300000);
       });
@@ -480,12 +324,8 @@ export function AuthProvider({ children }) {
    * Check if user has a specific permission
    */
   const hasPermission = useCallback((permission) => {
-    if (!config.authEnabled || config.publicMode) {
-      return true;
-    }
-    if (!user) {
-      return false;
-    }
+    if (!config.authEnabled || config.publicMode) return true;
+    if (!user) return false;
     return user.permissions.includes(permission);
   }, [config.authEnabled, config.publicMode, user]);
 
@@ -493,12 +333,8 @@ export function AuthProvider({ children }) {
    * Check if user has any of the specified permissions
    */
   const hasAnyPermission = useCallback((permissions) => {
-    if (!config.authEnabled || config.publicMode) {
-      return true;
-    }
-    if (!user) {
-      return false;
-    }
+    if (!config.authEnabled || config.publicMode) return true;
+    if (!user) return false;
     return permissions.some(p => user.permissions.includes(p));
   }, [config.authEnabled, config.publicMode, user]);
 
@@ -506,12 +342,8 @@ export function AuthProvider({ children }) {
    * Check if user has all specified permissions
    */
   const hasAllPermissions = useCallback((permissions) => {
-    if (!config.authEnabled || config.publicMode) {
-      return true;
-    }
-    if (!user) {
-      return false;
-    }
+    if (!config.authEnabled || config.publicMode) return true;
+    if (!user) return false;
     return permissions.every(p => user.permissions.includes(p));
   }, [config.authEnabled, config.publicMode, user]);
 
@@ -519,31 +351,16 @@ export function AuthProvider({ children }) {
    * Check if a feature is accessible
    */
   const canAccessFeature = useCallback((feature, action = 'read') => {
-    if (!config.authEnabled || config.publicMode) {
-      return true;
-    }
+    if (!config.authEnabled || config.publicMode) return true;
 
     const featureConfig = config.features[feature];
-    if (!featureConfig) {
-      // Unknown feature - require authentication
-      return status === 'authenticated';
-    }
-
-    if (!featureConfig.is_enabled) {
-      return false;
-    }
+    if (!featureConfig) return status === 'authenticated';
+    if (!featureConfig.is_enabled) return false;
 
     const accessLevel = action === 'write' ? featureConfig.write_access : featureConfig.read_access;
+    if (accessLevel === 'public') return true;
+    if (accessLevel === 'authenticated') return status === 'authenticated';
 
-    if (accessLevel === 'public') {
-      return true;
-    }
-
-    if (accessLevel === 'authenticated') {
-      return status === 'authenticated';
-    }
-
-    // Permission required
     const permissionSuffix = action === 'write' ? 'edit' : 'view';
     return hasPermission(`${feature}.${permissionSuffix}`);
   }, [config, status, hasPermission]);
@@ -553,39 +370,28 @@ export function AuthProvider({ children }) {
    */
   const getAccessToken = useCallback(() => {
     const { accessToken } = getStoredTokens();
-
-    // Check if token is expired and try to use cached user
-    if (accessToken && !isTokenExpired(accessToken)) {
-      return accessToken;
-    }
-
+    if (accessToken && !isTokenExpired(accessToken)) return accessToken;
     return null;
   }, []);
 
   // Initialize auth state on mount
   useEffect(() => {
     const initAuth = async () => {
-      // Fetch auth config first
       const authConfig = await fetchAuthConfig();
 
       if (authConfig && !authConfig.auth_enabled) {
-        // Auth disabled - set anonymous and done
         setStatus('anonymous');
         return;
       }
 
-      // Check for existing tokens
       const { accessToken, refreshToken } = getStoredTokens();
 
       if (!accessToken && !refreshToken) {
-        // No tokens - anonymous
         setStatus('anonymous');
         return;
       }
 
-      // Try to use existing access token
       if (accessToken && !isTokenExpired(accessToken)) {
-        // Token valid - fetch profile
         const storedUser = getStoredUser();
         if (storedUser) {
           setUser(storedUser);
@@ -603,49 +409,32 @@ export function AuthProvider({ children }) {
         return;
       }
 
-      // Access token expired - try refresh
       if (refreshToken) {
         const refreshed = await refreshAccessToken();
         if (refreshed) {
           const profile = await fetchProfile();
-          if (profile) {
-            setStatus('authenticated');
-          } else {
-            setStatus('anonymous');
-          }
+          setStatus(profile ? 'authenticated' : 'anonymous');
         } else {
           setStatus('anonymous');
         }
         return;
       }
 
-      // No valid tokens
       setStatus('anonymous');
     };
 
     initAuth();
 
     return () => {
-      if (refreshTimeoutRef.current) {
-        clearTimeout(refreshTimeoutRef.current);
-      }
-      // Cleanup OIDC flow if in progress
-      if (oidcCleanupRef.current) {
-        oidcCleanupRef.current();
-      }
-      // Close OIDC popup if still open
-      if (oidcPopupRef.current && !oidcPopupRef.current.closed) {
-        oidcPopupRef.current.close();
-      }
+      if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current);
+      if (oidcCleanupRef.current) oidcCleanupRef.current();
+      if (oidcPopupRef.current && !oidcPopupRef.current.closed) oidcPopupRef.current.close();
     };
   }, [fetchAuthConfig, fetchProfile, refreshAccessToken, scheduleTokenRefresh]);
 
-  // Memoize clearError to prevent creating new function on each render
   const clearError = useCallback(() => setError(null), []);
 
-  // Memoize the context value to prevent unnecessary re-renders
   const value = useMemo(() => ({
-    // State
     status,
     user,
     config,
@@ -653,39 +442,21 @@ export function AuthProvider({ children }) {
     isLoading: status === 'loading',
     isAuthenticated: status === 'authenticated',
     isAnonymous: status === 'anonymous',
-
-    // Actions
     login,
     logout,
     loginWithOIDC,
     refreshAccessToken,
-
-    // Helpers
     authFetch,
     hasPermission,
     hasAnyPermission,
     hasAllPermissions,
     canAccessFeature,
     getAccessToken,
-
-    // Clear error
     clearError,
   }), [
-    status,
-    user,
-    config,
-    error,
-    login,
-    logout,
-    loginWithOIDC,
-    refreshAccessToken,
-    authFetch,
-    hasPermission,
-    hasAnyPermission,
-    hasAllPermissions,
-    canAccessFeature,
-    getAccessToken,
-    clearError,
+    status, user, config, error, login, logout, loginWithOIDC,
+    refreshAccessToken, authFetch, hasPermission, hasAnyPermission,
+    hasAllPermissions, canAccessFeature, getAccessToken, clearError,
   ]);
 
   return (

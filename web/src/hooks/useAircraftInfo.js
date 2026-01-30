@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-
-// Helper to safely parse JSON from fetch response
-const safeJson = async (res) => {
-  if (!res.ok) return null;
-  const ct = res.headers.get('content-type');
-  if (!ct || !ct.includes('application/json')) return null;
-  try { return await res.json(); } catch { return null; }
-};
+import {
+  MAX_CACHE_SIZE,
+  isCacheEntryValid,
+  enforceMaxCacheSize,
+  cleanupCache,
+  safeJson,
+  createBatches,
+  isValidIcao,
+  normalizeIcao,
+  createErrorInfo,
+} from './aircraftInfo';
 
 /**
  * Robust aircraft info lookup hook with:

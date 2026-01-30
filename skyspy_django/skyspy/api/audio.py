@@ -42,6 +42,8 @@ from skyspy.services.storage import (
     sanitize_filename,
     read_local_file,
 )
+from skyspy.auth.authentication import OptionalJWTAuthentication, APIKeyAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +51,8 @@ logger = logging.getLogger(__name__)
 class AudioViewSet(viewsets.ModelViewSet):
     """ViewSet for audio transmissions."""
 
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     queryset = AudioTransmission.objects.all()
     serializer_class = AudioTransmissionSerializer

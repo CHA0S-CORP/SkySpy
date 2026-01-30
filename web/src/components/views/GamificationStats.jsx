@@ -1,26 +1,23 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Trophy, Award, Star, Target, Flame, Zap,
-  Crown, Medal, Gift, Sparkles, CheckCircle,
-  Clock, Plane, Globe, Radio, Eye, RefreshCw,
-  TrendingUp, Calendar, Filter, ChevronDown
+  Trophy, Medal, Star, Flame, Gift, CheckCircle,
+  Clock, Plane, Globe, RefreshCw, TrendingUp, Target
 } from 'lucide-react';
 import { useStats } from '../../hooks';
+import { TIME_RANGES } from '../gamification/gamificationConstants';
+import { RecordsTab } from '../gamification/RecordsTab';
+import { SightingsTab } from '../gamification/SightingsTab';
+import { StreaksTab } from '../gamification/StreaksTab';
+import { BadgesTab } from '../gamification/BadgesTab';
 
 /**
  * GamificationStats - Full page view for gamification/achievements
- * - Personal records display (cards with icons)
- * - Rare sightings list
- * - Spotting progress (airlines collected, types collected)
- * - Current streaks
- * - Milestones and badges
  */
 export function GamificationStats({ apiBase, wsRequest, wsConnected, onSelectAircraft }) {
   const [timeRange, setTimeRange] = useState('24h');
   const [activeTab, setActiveTab] = useState('records');
 
-  const hours = { '24h': 24, '7d': 168, '30d': 720, '90d': 2160, 'all': 8760 };
-  const selectedHours = hours[timeRange] || 24;
+  const selectedHours = TIME_RANGES[timeRange] || 24;
 
   const { achievements, loading, error, refetch } = useStats(apiBase, {
     wsRequest,
@@ -38,38 +35,6 @@ export function GamificationStats({ apiBase, wsRequest, wsConnected, onSelectAir
     milestones = [],
     badges = []
   } = data || {};
-
-  // Icon mapping for records
-  const recordIcons = {
-    furthest_distance: Target,
-    highest_altitude: Zap,
-    longest_tracking: Clock,
-    fastest_aircraft: Flame,
-    most_aircraft_hour: Crown,
-    most_types_day: Plane,
-    most_countries: Globe,
-    most_acars: Radio,
-    earliest_morning: Star,
-    latest_night: Star,
-    default: Award
-  };
-
-  // Rarity colors
-  const rarityColors = {
-    legendary: '#ffd700',
-    epic: '#a371f7',
-    rare: '#00c8ff',
-    uncommon: '#00ff88',
-    common: '#6b7280'
-  };
-
-  const rarityLabels = {
-    legendary: 'Legendary',
-    epic: 'Epic',
-    rare: 'Rare',
-    uncommon: 'Uncommon',
-    common: 'Common'
-  };
 
   // Calculate collection percentages
   const airlinesCollected = collection_progress.airlines_collected ?? 0;
@@ -136,7 +101,7 @@ export function GamificationStats({ apiBase, wsRequest, wsConnected, onSelectAir
           <Clock size={14} />
           <span className="filter-label">Time Range</span>
           <div className="time-range-buttons">
-            {Object.keys(hours).map(range => (
+            {Object.keys(TIME_RANGES).map(range => (
               <button
                 key={range}
                 className={`time-btn ${timeRange === range ? 'active' : ''}`}
@@ -154,7 +119,7 @@ export function GamificationStats({ apiBase, wsRequest, wsConnected, onSelectAir
             { key: 'sightings', label: 'Rare Sightings', icon: Star },
             { key: 'progress', label: 'Progress', icon: TrendingUp },
             { key: 'streaks', label: 'Streaks', icon: Flame },
-            { key: 'badges', label: 'Badges', icon: Award }
+            { key: 'badges', label: 'Badges', icon: Medal }
           ].map(tab => (
             <button
               key={tab.key}
@@ -202,99 +167,14 @@ export function GamificationStats({ apiBase, wsRequest, wsConnected, onSelectAir
 
       {/* Main Content - Conditional by Tab */}
       <div className="achievements-content">
-        {/* Personal Records Tab */}
         {activeTab === 'records' && (
-          <div className="achievements-grid expanded">
-            <div className="achievements-card records-card full-width">
-              <div className="card-header">
-                <Medal size={16} />
-                <span>Personal Records</span>
-                <span className="card-badge">{personal_records.length} records</span>
-              </div>
-              {personal_records.length === 0 ? (
-                <div className="empty-state">No records yet - keep spotting!</div>
-              ) : (
-                <div className="records-grid large">
-                  {personal_records.map((record, i) => {
-                    const IconComponent = recordIcons[record.type] || recordIcons.default;
-                    return (
-                      <div
-                        key={record.type || i}
-                        className={`record-card large ${onSelectAircraft && record.icao_hex ? 'clickable' : ''}`}
-                        onClick={() => record.icao_hex && onSelectAircraft?.(record.icao_hex)}
-                      >
-                        <div className="record-icon large">
-                          <IconComponent size={32} />
-                        </div>
-                        <div className="record-content">
-                          <span className="record-title">{record.title || record.type}</span>
-                          <span className="record-value">{record.value}</span>
-                          {record.aircraft && (
-                            <span className="record-aircraft">{record.aircraft}</span>
-                          )}
-                          {record.date && (
-                            <span className="record-date">
-                              <Calendar size={10} /> {record.date}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
+          <RecordsTab personal_records={personal_records} onSelectAircraft={onSelectAircraft} />
         )}
 
-        {/* Rare Sightings Tab */}
         {activeTab === 'sightings' && (
-          <div className="achievements-grid expanded">
-            <div className="achievements-card sightings-card full-width">
-              <div className="card-header">
-                <Star size={16} />
-                <span>Rare Sightings</span>
-                <span className="card-badge">{rare_sightings.length} sightings</span>
-              </div>
-              {rare_sightings.length === 0 ? (
-                <div className="empty-state">No rare sightings recorded</div>
-              ) : (
-                <div className="sightings-list expanded">
-                  {rare_sightings.map((sighting, i) => (
-                    <div
-                      key={sighting.icao_hex || i}
-                      className={`sighting-item large ${onSelectAircraft ? 'clickable' : ''}`}
-                      onClick={() => onSelectAircraft?.(sighting.icao_hex)}
-                    >
-                      <div
-                        className="sighting-rarity large"
-                        style={{ backgroundColor: rarityColors[sighting.rarity] || rarityColors.common }}
-                        title={sighting.rarity}
-                      >
-                        <Sparkles size={16} />
-                      </div>
-                      <div className="sighting-info">
-                        <span className="sighting-type">{sighting.aircraft_type || 'Unknown'}</span>
-                        <span className="sighting-callsign">{sighting.callsign || sighting.icao_hex}</span>
-                        <span className="sighting-rarity-label">
-                          {rarityLabels[sighting.rarity] || 'Unknown'}
-                        </span>
-                      </div>
-                      <div className="sighting-details">
-                        {sighting.reason && (
-                          <span className="sighting-reason">{sighting.reason}</span>
-                        )}
-                        <span className="sighting-date">{sighting.date}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          <SightingsTab rare_sightings={rare_sightings} onSelectAircraft={onSelectAircraft} />
         )}
 
-        {/* Progress Tab */}
         {activeTab === 'progress' && (
           <div className="achievements-grid expanded">
             <div className="achievements-card collection-card large">
@@ -310,10 +190,7 @@ export function GamificationStats({ apiBase, wsRequest, wsConnected, onSelectAir
                     <span className="collection-count">{typesCollected}/{typesToTarget}</span>
                   </div>
                   <div className="collection-bar-track large">
-                    <div
-                      className="collection-bar-fill types"
-                      style={{ width: `${typesPct}%` }}
-                    />
+                    <div className="collection-bar-fill types" style={{ width: `${typesPct}%` }} />
                   </div>
                   <span className="collection-pct">{typesPct.toFixed(1)}%</span>
                 </div>
@@ -325,10 +202,7 @@ export function GamificationStats({ apiBase, wsRequest, wsConnected, onSelectAir
                     <span className="collection-count">{airlinesCollected}/{airlinesToTarget}</span>
                   </div>
                   <div className="collection-bar-track large">
-                    <div
-                      className="collection-bar-fill airlines"
-                      style={{ width: `${airlinesPct}%` }}
-                    />
+                    <div className="collection-bar-fill airlines" style={{ width: `${airlinesPct}%` }} />
                   </div>
                   <span className="collection-pct">{airlinesPct.toFixed(1)}%</span>
                 </div>
@@ -340,16 +214,12 @@ export function GamificationStats({ apiBase, wsRequest, wsConnected, onSelectAir
                     <span className="collection-count">{countriesCollected}/{countriesToTarget}</span>
                   </div>
                   <div className="collection-bar-track large">
-                    <div
-                      className="collection-bar-fill countries"
-                      style={{ width: `${countriesPct}%` }}
-                    />
+                    <div className="collection-bar-fill countries" style={{ width: `${countriesPct}%` }} />
                   </div>
                   <span className="collection-pct">{countriesPct.toFixed(1)}%</span>
                 </div>
               </div>
 
-              {/* Recent Unlocks */}
               {collection_progress.recent_unlocks?.length > 0 && (
                 <div className="recent-unlocks expanded">
                   <span className="unlocks-title">Recent Unlocks</span>
@@ -365,7 +235,6 @@ export function GamificationStats({ apiBase, wsRequest, wsConnected, onSelectAir
               )}
             </div>
 
-            {/* Milestones */}
             {milestones.length > 0 && (
               <div className="achievements-card milestones-card large">
                 <div className="card-header">
@@ -389,10 +258,7 @@ export function GamificationStats({ apiBase, wsRequest, wsConnected, onSelectAir
                         <span className="milestone-description">{milestone.description}</span>
                         {!milestone.achieved && milestone.progress !== undefined && (
                           <div className="milestone-progress large">
-                            <div
-                              className="milestone-progress-fill"
-                              style={{ width: `${milestone.progress}%` }}
-                            />
+                            <div className="milestone-progress-fill" style={{ width: `${milestone.progress}%` }} />
                             <span className="milestone-progress-text">{milestone.progress.toFixed(0)}%</span>
                           </div>
                         )}
@@ -408,124 +274,9 @@ export function GamificationStats({ apiBase, wsRequest, wsConnected, onSelectAir
           </div>
         )}
 
-        {/* Streaks Tab */}
-        {activeTab === 'streaks' && (
-          <div className="achievements-grid expanded">
-            <div className="achievements-card streaks-card full-width">
-              <div className="card-header">
-                <Flame size={16} />
-                <span>Current Streaks</span>
-              </div>
-              <div className="streaks-grid large">
-                <div className={`streak-item large ${(streaks.daily_active || 0) > 0 ? 'active' : ''}`}>
-                  <div className="streak-icon large">
-                    <Flame size={32} />
-                  </div>
-                  <div className="streak-content">
-                    <span className="streak-value">{streaks.daily_active || 0}</span>
-                    <span className="streak-label">Day Streak</span>
-                    <span className="streak-description">Consecutive days with activity</span>
-                  </div>
-                </div>
+        {activeTab === 'streaks' && <StreaksTab streaks={streaks} />}
 
-                <div className={`streak-item large ${(streaks.early_bird || 0) > 0 ? 'active' : ''}`}>
-                  <div className="streak-icon large early">
-                    <Star size={32} />
-                  </div>
-                  <div className="streak-content">
-                    <span className="streak-value">{streaks.early_bird || 0}</span>
-                    <span className="streak-label">Early Bird</span>
-                    <span className="streak-description">Days with activity before 7 AM</span>
-                  </div>
-                </div>
-
-                <div className={`streak-item large ${(streaks.night_owl || 0) > 0 ? 'active' : ''}`}>
-                  <div className="streak-icon large night">
-                    <Eye size={32} />
-                  </div>
-                  <div className="streak-content">
-                    <span className="streak-value">{streaks.night_owl || 0}</span>
-                    <span className="streak-label">Night Owl</span>
-                    <span className="streak-description">Days with activity after 10 PM</span>
-                  </div>
-                </div>
-
-                <div className={`streak-item large ${(streaks.variety_hunter || 0) > 0 ? 'active' : ''}`}>
-                  <div className="streak-icon large variety">
-                    <Target size={32} />
-                  </div>
-                  <div className="streak-content">
-                    <span className="streak-value">{streaks.variety_hunter || 0}</span>
-                    <span className="streak-label">Variety Hunter</span>
-                    <span className="streak-description">Days with 10+ unique aircraft types</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Best streaks */}
-              <div className="best-streaks">
-                {streaks.best_daily && (
-                  <div className="best-streak">
-                    <Crown size={16} />
-                    <span>Best daily streak: <strong>{streaks.best_daily} days</strong></span>
-                  </div>
-                )}
-                {streaks.best_variety && (
-                  <div className="best-streak">
-                    <Crown size={16} />
-                    <span>Best variety streak: <strong>{streaks.best_variety} days</strong></span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Badges Tab */}
-        {activeTab === 'badges' && (
-          <div className="achievements-grid expanded">
-            <div className="achievements-card badges-card full-width">
-              <div className="card-header">
-                <Award size={16} />
-                <span>Badges</span>
-                <span className="card-badge">
-                  {badges.filter(b => b.unlocked).length}/{badges.length} unlocked
-                </span>
-              </div>
-              {badges.length === 0 ? (
-                <div className="empty-state">No badges available yet</div>
-              ) : (
-                <div className="badges-grid large">
-                  {badges.map((badge, i) => (
-                    <div
-                      key={badge.id || i}
-                      className={`badge-item large ${badge.unlocked ? 'unlocked' : 'locked'}`}
-                      title={badge.description}
-                    >
-                      <div className="badge-icon large" style={{ backgroundColor: badge.color }}>
-                        {badge.icon === 'star' && <Star size={28} />}
-                        {badge.icon === 'trophy' && <Trophy size={28} />}
-                        {badge.icon === 'medal' && <Medal size={28} />}
-                        {badge.icon === 'crown' && <Crown size={28} />}
-                        {badge.icon === 'flame' && <Flame size={28} />}
-                        {badge.icon === 'plane' && <Plane size={28} />}
-                        {badge.icon === 'globe' && <Globe size={28} />}
-                        {(!badge.icon || !['star', 'trophy', 'medal', 'crown', 'flame', 'plane', 'globe'].includes(badge.icon)) && <Award size={28} />}
-                      </div>
-                      <span className="badge-name">{badge.name}</span>
-                      {badge.description && (
-                        <span className="badge-description">{badge.description}</span>
-                      )}
-                      {badge.unlocked && badge.date && (
-                        <span className="badge-date">Earned {badge.date}</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        {activeTab === 'badges' && <BadgesTab badges={badges} />}
       </div>
     </div>
   );

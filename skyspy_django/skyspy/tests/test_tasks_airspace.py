@@ -332,18 +332,25 @@ class RefreshAirspaceBoundariesTaskTest(TestCase):
         # Task should complete without error
         refresh_airspace_boundaries()
 
+    @patch('skyspy.tasks.airspace.sync_group_send')
     @patch('skyspy.tasks.airspace.get_channel_layer')
-    def test_refresh_boundaries_broadcasts_update(self, mock_get_channel_layer):
+    @patch('skyspy.services.openaip._is_enabled')
+    @patch('skyspy.services.openaip.get_airspaces')
+    def test_refresh_boundaries_broadcasts_update(
+        self, mock_get_airspaces, mock_is_enabled, mock_get_channel_layer, mock_sync_group_send
+    ):
         """Test that WebSocket update is broadcast."""
+        mock_is_enabled.return_value = True
+        mock_get_airspaces.return_value = []  # Empty list is OK for this test
         mock_channel_layer = MagicMock()
         mock_get_channel_layer.return_value = mock_channel_layer
 
         refresh_airspace_boundaries()
 
         # Verify broadcast was called
-        mock_channel_layer.group_send.assert_called()
-        call_args = mock_channel_layer.group_send.call_args
-        self.assertEqual(call_args[0][0], 'airspace_boundaries')
+        mock_sync_group_send.assert_called()
+        call_args = mock_sync_group_send.call_args
+        self.assertEqual(call_args[0][1], 'airspace_boundaries')
 
     @patch('skyspy.tasks.airspace.get_channel_layer')
     def test_refresh_boundaries_handles_broadcast_failure(self, mock_get_channel_layer):

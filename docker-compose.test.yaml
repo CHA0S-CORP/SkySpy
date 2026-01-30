@@ -83,6 +83,8 @@ services:
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-dev-secret-key-change-in-production}
       - DEBUG=${DEBUG:-True}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
+      # Authentication (default to public for dev)
+      - AUTH_MODE=${AUTH_MODE:-public}
 
       # Database: Point to pgbouncer instead of postgres
       - DATABASE_URL=postgresql://${POSTGRES_USER:-adsb}:${POSTGRES_PASSWORD:-adsb}@pgbouncer:5432/${POSTGRES_DB:-adsb}
@@ -152,6 +154,7 @@ services:
       - PYTHONUNBUFFERED=1
     volumes:
       - ./test/api-cache:/data
+      - ./skyspy_django/skyspy:/app/skyspy:ro  # Hot reload Python code
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
@@ -174,8 +177,10 @@ services:
       sh -c "
         echo 'Running database migrations...' &&
         python manage.py migrate --noinput &&
+        echo 'Syncing Celery tasks to database...' &&
+        python manage.py sync_celery_tasks &&
         echo 'Starting Daphne ASGI server...' &&
-        daphne -b 0.0.0.0 -p 8000 skyspy.asgi:application
+        daphne -b 0.0.0.0 -p 8000 --application-close-timeout 30 skyspy.asgi:application
       "
 
   # Celery Worker for dev profile
@@ -203,6 +208,7 @@ services:
       - RADIO_AUDIO_DIR=/data/radio
     volumes:
       - ./test/api-cache:/data
+      - ./skyspy_django/skyspy:/app/skyspy:ro  # Hot reload Python code
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -229,6 +235,8 @@ services:
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-dev-secret-key-change-in-production}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-adsb}:${POSTGRES_PASSWORD:-adsb}@pgbouncer:5432/${POSTGRES_DB:-adsb}
       - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./skyspy_django/skyspy:/app/skyspy:ro  # Hot reload Python code
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -287,8 +295,11 @@ services:
       - ./web/index.html:/app/index.html
     environment:
       - NODE_ENV=${NODE_ENV:-development}
+      - VITE_API_TARGET=${VITE_API_TARGET:-http://api:8000}
     stdin_open: true
     tty: true
+    networks:
+      - test-network
 
   # PostgreSQL for integration tests
   postgres:

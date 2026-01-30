@@ -66,52 +66,37 @@ def analyze_aircraft_patterns(self):
         user_lat = cache.get('cannonball_user_lat')
         user_lon = cache.get('cannonball_user_lon')
 
-        # Process all aircraft
+        # Skip analysis if no user location (Cannonball mode not active)
+        if user_lat is None or user_lon is None:
+            logger.debug("Cannonball mode not active (no user location)")
+            return
+
+        # Analyze all aircraft for threats
+        threat_objects = service.analyze_aircraft(
+            aircraft_list=aircraft_list,
+            user_lat=user_lat,
+            user_lon=user_lon,
+        )
+
+        # Convert threat objects to dicts and process
         threats = []
-        for aircraft in aircraft_list:
-            icao = aircraft.get('hex', '').upper()
-            if not icao or icao.startswith('~'):
-                continue
+        for threat in threat_objects:
+            threat_dict = threat.to_dict()
+            threats.append(threat_dict)
 
-            lat = aircraft.get('lat')
-            lon = aircraft.get('lon')
-            if lat is None or lon is None:
-                continue
+            # Check for known LE aircraft in database
+            known_aircraft = CannonballKnownAircraft.objects.filter(
+                icao_hex=threat.hex
+            ).first()
 
-            # Add position to history
-            service.add_position(
-                icao_hex=icao,
-                lat=lat,
-                lon=lon,
-                altitude=aircraft.get('alt_baro') or aircraft.get('alt_geom'),
-                ground_speed=aircraft.get('gs'),
-                track=aircraft.get('track'),
-                callsign=aircraft.get('flight'),
-            )
+            if known_aircraft:
+                known_aircraft.record_detection()
+                threat_dict['known_le'] = True
+                threat_dict['agency_name'] = known_aircraft.agency_name
+                threat_dict['agency_type'] = known_aircraft.agency_type
 
-            # Analyze for LE characteristics
-            threat = service.analyze_aircraft(
-                aircraft,
-                user_lat=user_lat,
-                user_lon=user_lon,
-            )
-
-            if threat:
-                threats.append(threat)
-
-                # Check for known LE aircraft in database
-                known_aircraft = CannonballKnownAircraft.objects.filter(
-                    icao_hex=icao
-                ).first()
-
-                if known_aircraft:
-                    known_aircraft.record_detection()
-                    threat['known_le'] = True
-                    threat['agency_name'] = known_aircraft.agency_name
-                    threat['agency_type'] = known_aircraft.agency_type
-
-                # Update or create session
-                _update_cannonball_session(threat, user_lat, user_lon)
+            # Update or create session
+            _update_cannonball_session(threat_dict, user_lat, user_lon)
 
         # Store threats in cache for API access
         if threats:

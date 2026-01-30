@@ -124,9 +124,13 @@ WS_RATE_LIMITS = {
 }
 
 # Message batching configuration
-WS_BATCH_WINDOW_MS = 200  # Collect messages for 200ms before sending
+WS_BATCH_WINDOW_MS = 50  # Collect messages for 50ms before sending (reduced from 200ms for responsiveness)
 WS_MAX_BATCH_SIZE = 50  # Maximum messages per batch
-WS_IMMEDIATE_TYPES = ['alert', 'safety', 'emergency']  # Send these immediately
+# Immediate types bypass batching entirely for real-time feel
+WS_IMMEDIATE_TYPES = [
+    'alert', 'safety', 'emergency',  # Critical events
+    'aircraft:update', 'aircraft:new', 'aircraft:position',  # Real-time aircraft updates
+]
 
 # =============================================================================
 # Logging (reduce verbosity for RPi)

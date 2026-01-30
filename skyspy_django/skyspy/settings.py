@@ -229,7 +229,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # - public: No authentication required for any endpoint
 # - private: Authentication required for all endpoints
 # - hybrid: Per-feature configuration (default in production)
-AUTH_MODE = get_env('AUTH_MODE', 'public' if DEBUG else 'hybrid')
+AUTH_MODE = get_env('AUTH_MODE', 'hybrid')  # Never default to public
 
 # JWT Configuration
 JWT_SECRET_KEY = get_env('JWT_SECRET_KEY', SECRET_KEY)
@@ -241,8 +241,12 @@ if JWT_SECRET_KEY == SECRET_KEY:
         'For better security, set a separate JWT_SECRET_KEY environment variable.',
         UserWarning
     )
+
+if not DEBUG and JWT_SECRET_KEY == SECRET_KEY:
+    import logging
+    logging.warning("JWT_SECRET_KEY should not equal DJANGO_SECRET_KEY in production!")
 JWT_ACCESS_TOKEN_LIFETIME_MINUTES = get_env('JWT_ACCESS_TOKEN_LIFETIME_MINUTES', '60', int)
-JWT_REFRESH_TOKEN_LIFETIME_DAYS = get_env('JWT_REFRESH_TOKEN_LIFETIME_DAYS', '7', int)
+JWT_REFRESH_TOKEN_LIFETIME_DAYS = get_env('JWT_REFRESH_TOKEN_LIFETIME_DAYS', '2', int)
 JWT_AUTH_COOKIE = get_env('JWT_AUTH_COOKIE', 'False', bool)
 
 # OIDC Configuration
@@ -384,15 +388,36 @@ SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_SAMESITE = 'Lax'
 
-if not DEBUG:
-    CSRF_COOKIE_SECURE = True
-    SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = not DEBUG or get_env('FORCE_SECURE_COOKIES', 'false', bool)
+SESSION_COOKIE_SECURE = not DEBUG or get_env('FORCE_SECURE_COOKIES', 'false', bool)
 
 
 # =============================================================================
 # Django Channels (WebSocket/Real-time)
 # =============================================================================
 REDIS_URL = get_env('REDIS_URL', 'redis://redis:6379/0')
+
+# =============================================================================
+# Cache Configuration (Redis for shared aircraft data across processes)
+# =============================================================================
+if BUILD_MODE:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'db': '1',  # Use DB 1 for cache (DB 0 used by Celery)
+            },
+            'KEY_PREFIX': 'skyspy',
+            'TIMEOUT': 300,  # 5 minute default timeout
+        }
+    }
 
 if BUILD_MODE:
     # Use in-memory channel layer during build to avoid Redis connection
@@ -408,10 +433,33 @@ else:
             'CONFIG': {
                 'hosts': [REDIS_URL],
                 'capacity': 1500,
-                'expiry': 10,
+                'expiry': 60,  # Message expiry (seconds)
+                'group_expiry': 300,  # Group membership expiry (seconds)
             },
         },
     }
+
+
+# =============================================================================
+# WebSocket Configuration
+# =============================================================================
+# Rate limits for WebSocket broadcasts (messages per second)
+WS_RATE_LIMITS = {
+    'aircraft:update': 10,      # Max 10 Hz
+    'aircraft:position': 5,     # Max 5 Hz for position-only updates
+    'aircraft:delta': 10,       # Max 10 Hz for delta updates
+    'stats:update': 0.5,        # Max 0.5 Hz (2 second minimum)
+    'default': 5,               # Default rate limit
+}
+
+# Message batching configuration
+WS_BATCH_WINDOW_MS = 50         # Collect messages for 50ms before sending
+WS_MAX_BATCH_SIZE = 50          # Maximum messages per batch
+# Immediate types bypass batching entirely for real-time feel
+WS_IMMEDIATE_TYPES = [
+    'alert', 'safety', 'emergency',                         # Critical events
+    'aircraft:update', 'aircraft:new', 'aircraft:position', # Real-time aircraft updates
+]
 
 
 # =============================================================================

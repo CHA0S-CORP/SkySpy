@@ -414,3 +414,4 @@ app.conf.task_routes = {
 app.conf.worker_prefetch_multiplier = 1  # Disable prefetching for time-sensitive tasks
 app.conf.task_acks_late = True  # Acknowledge after completion
 app.conf.task_reject_on_worker_lost = True  # Re-queue if worker dies
+app.conf.worker_cancel_long_running_tasks_on_connection_loss = True  # Cancel tasks on connection loss (Celery 6.0 default)

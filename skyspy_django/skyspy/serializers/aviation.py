@@ -40,10 +40,16 @@ class AirspaceBoundarySerializer(serializers.ModelSerializer):
 class CachedAirportSerializer(serializers.ModelSerializer):
     """Cached airport data."""
 
+    # Include both lat/lon (frontend expects) and latitude/longitude (standard)
+    lat = serializers.FloatField(source='latitude', read_only=True)
+    lon = serializers.FloatField(source='longitude', read_only=True)
+
     class Meta:
         model = CachedAirport
         fields = [
-            'id', 'fetched_at', 'icao_id', 'name', 'latitude', 'longitude',
+            'id', 'fetched_at', 'icao_id', 'name',
+            'lat', 'lon',  # Frontend-compatible
+            'latitude', 'longitude',  # Standard
             'elevation_ft', 'airport_type', 'country', 'region', 'source_data'
         ]
 
@@ -51,11 +57,17 @@ class CachedAirportSerializer(serializers.ModelSerializer):
 class CachedNavaidSerializer(serializers.ModelSerializer):
     """Cached navigation aid data."""
 
+    # Include both lat/lon (frontend expects) and latitude/longitude (standard)
+    lat = serializers.FloatField(source='latitude', read_only=True)
+    lon = serializers.FloatField(source='longitude', read_only=True)
+
     class Meta:
         model = CachedNavaid
         fields = [
             'id', 'fetched_at', 'ident', 'name', 'navaid_type',
-            'latitude', 'longitude', 'frequency', 'channel', 'source_data'
+            'lat', 'lon',  # Frontend-compatible
+            'latitude', 'longitude',  # Standard
+            'frequency', 'channel', 'source_data'
         ]
 
 
@@ -74,11 +86,17 @@ class CachedGeoJSONSerializer(serializers.ModelSerializer):
 class CachedPirepSerializer(serializers.ModelSerializer):
     """Cached PIREP data."""
 
+    # Include both lat/lon (frontend expects) and latitude/longitude (standard)
+    lat = serializers.FloatField(source='latitude', read_only=True)
+    lon = serializers.FloatField(source='longitude', read_only=True)
+
     class Meta:
         model = CachedPirep
         fields = [
-            'id', 'fetched_at', 'pirep_id', 'report_type', 'latitude',
-            'longitude', 'location', 'observation_time', 'flight_level',
+            'id', 'fetched_at', 'pirep_id', 'report_type',
+            'lat', 'lon',  # Frontend-compatible field names
+            'latitude', 'longitude',  # Standard field names
+            'location', 'observation_time', 'flight_level',
             'altitude_ft', 'aircraft_type', 'turbulence_type',
             'turbulence_freq', 'turbulence_base_ft', 'turbulence_top_ft',
             'icing_type', 'icing_intensity', 'icing_base_ft', 'icing_top_ft',

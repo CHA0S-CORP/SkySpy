@@ -72,28 +72,33 @@ from skyspy.channels.consumers.audio import AudioConsumer
 # =============================================================================
 
 @pytest.fixture(scope='session')
-def django_db_setup():
+def django_db_setup(django_db_blocker):
     """
     Set up test database.
 
-    When DATABASE_URL is set (e.g., in Docker), use the configured PostgreSQL database.
-    Otherwise, fall back to SQLite in-memory for local testing.
+    Uses the database configured in test_settings.py:
+    - PostgreSQL when DATABASE_URL is set (Docker/CI)
+    - SQLite file when DATABASE_URL is not set (local testing)
     """
     import os
+    import tempfile
+    from django.core.management import call_command
+
+    # For SQLite, delete any existing test database file to start fresh
     if not os.environ.get('DATABASE_URL'):
-        # Only use SQLite for local testing without DATABASE_URL
-        settings.DATABASES['default'] = {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': ':memory:',
-            'TIME_ZONE': 'UTC',
-            'ATOMIC_REQUESTS': False,
-            'AUTOCOMMIT': True,
-            'CONN_MAX_AGE': 0,
-            'CONN_HEALTH_CHECKS': False,
-            'OPTIONS': {},
-            'TEST': {'NAME': ':memory:'},
-        }
-    # When DATABASE_URL is set, test_settings.py already configures the database
+        test_db_file = os.path.join(tempfile.gettempdir(), 'skyspy_test.sqlite3')
+        if os.path.exists(test_db_file):
+            os.remove(test_db_file)
+
+    # Run migrations to create tables
+    with django_db_blocker.unblock():
+        call_command('migrate', '--run-syncdb', verbosity=0)
+
+        # Clear FeatureAccess records so tests use AUTH_MODE='public' behavior
+        # The migration creates records with read_access='authenticated' which
+        # would override AUTH_MODE='public' set in test_settings.py
+        from skyspy.models.auth import FeatureAccess
+        FeatureAccess.objects.all().delete()
 
 
 @pytest.fixture(autouse=True)

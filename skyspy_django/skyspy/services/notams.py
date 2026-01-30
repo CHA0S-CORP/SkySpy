@@ -82,14 +82,16 @@ def fetch_notams_from_api(
         return fetch_tfrs_from_api(lat, lon, radius_nm)
 
     try:
-        with httpx.Client(timeout=30) as client:
+        with httpx.Client(timeout=30, follow_redirects=True) as client:
             response = client.post(
                 FAA_NOTAM_API_URL,
                 json=search_params,
                 headers={
-                    "User-Agent": "Mozilla/5.0 (compatible; SkySpyAPI/2.6)",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                     "Accept": "application/json",
                     "Content-Type": "application/json",
+                    "Origin": "https://notams.aim.faa.gov",
+                    "Referer": "https://notams.aim.faa.gov/notamSearch/",
                 }
             )
 

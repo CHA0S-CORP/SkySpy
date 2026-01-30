@@ -36,6 +36,8 @@ from skyspy.services.acars_stats import (
     get_cached_acars_trends,
     get_cached_acars_airlines,
 )
+from skyspy.auth.authentication import OptionalJWTAuthentication, APIKeyAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +45,8 @@ logger = logging.getLogger(__name__)
 class AcarsViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for ACARS/VDL2 messages."""
 
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     queryset = AcarsMessage.objects.all()
     serializer_class = AcarsMessageSerializer

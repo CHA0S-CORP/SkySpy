@@ -2,6 +2,9 @@
 // Alert Handling Utilities
 // ============================================================================
 
+// Re-export alert evaluation utilities from alerts/ directory
+export * from './alerts/index';
+
 export const handleAlertTriggered = (alertData) => {
   const history = JSON.parse(localStorage.getItem('alert-history') || '[]');
   history.unshift({

@@ -77,6 +77,16 @@ class AircraftConsumer(BaseConsumer):
     # Fields to track for delta updates
     DELTA_FIELDS = ['lat', 'lon', 'alt', 'alt_baro', 'track', 'gs', 'vr', 'baro_rate', 'squawk']
 
+    # Request types that require specific permissions (extends base class)
+    REQUEST_PERMISSIONS = {
+        **BaseConsumer.REQUEST_PERMISSIONS,
+        'aircraft-info': 'aircraft.view',
+        'aircraft-info-bulk': 'aircraft.view',
+        'safety-events': 'safety.view',
+        'safety-stats': 'safety.view',
+        'acars-stats': 'acars.view',
+    }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.client_filters = {}
@@ -118,20 +128,24 @@ class AircraftConsumer(BaseConsumer):
             await super().receive_json(content)
 
     async def handle_request(self, request_type: str, request_id: str, params: dict):
-        """Handle request/response messages."""
+        """Handle request/response messages.
+
+        Note: All responses use send_json_immediate to bypass batching,
+        ensuring immediate delivery for request/response correlation.
+        """
         if request_type == 'aircraft':
             # Return single aircraft by ICAO
             icao = params.get('icao')
             if icao:
                 aircraft = await self.get_aircraft_by_icao(icao)
-                await self.send_json({
+                await self.send_json_immediate({
                     'type': 'response',
                     'request_id': request_id,
                     'request_type': 'aircraft',
                     'data': aircraft
                 })
             else:
-                await self.send_json({
+                await self.send_json_immediate({
                     'type': 'error',
                     'request_id': request_id,
                     'message': 'Missing icao parameter'
@@ -140,7 +154,7 @@ class AircraftConsumer(BaseConsumer):
         elif request_type == 'aircraft_list':
             # Return list of aircraft with optional filters
             aircraft_list = await self.get_aircraft_list(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'aircraft_list',
@@ -152,14 +166,14 @@ class AircraftConsumer(BaseConsumer):
             icao = params.get('icao') or params.get('hex')
             if icao:
                 info = await self.get_aircraft_info(icao)
-                await self.send_json({
+                await self.send_json_immediate({
                     'type': 'response',
                     'request_id': request_id,
                     'request_type': 'aircraft-info',
                     'data': info
                 })
             else:
-                await self.send_json({
+                await self.send_json_immediate({
                     'type': 'error',
                     'request_id': request_id,
                     'message': 'Missing icao parameter'
@@ -170,14 +184,14 @@ class AircraftConsumer(BaseConsumer):
             icaos = params.get('icaos', [])
             if icaos and isinstance(icaos, list):
                 info = await self.get_aircraft_info_bulk(icaos)
-                await self.send_json({
+                await self.send_json_immediate({
                     'type': 'response',
                     'request_id': request_id,
                     'request_type': 'aircraft-info-bulk',
                     'data': info
                 })
             else:
-                await self.send_json({
+                await self.send_json_immediate({
                     'type': 'error',
                     'request_id': request_id,
                     'message': 'Missing or invalid icaos parameter (expected list)'
@@ -186,7 +200,7 @@ class AircraftConsumer(BaseConsumer):
         elif request_type == 'aircraft-stats':
             # Get live aircraft statistics
             stats = await self.get_aircraft_stats()
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'aircraft-stats',
@@ -196,7 +210,7 @@ class AircraftConsumer(BaseConsumer):
         elif request_type == 'aircraft-top':
             # Get top aircraft by category
             top = await self.get_top_aircraft()
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'aircraft-top',
@@ -206,7 +220,7 @@ class AircraftConsumer(BaseConsumer):
         elif request_type == 'sightings':
             # Get historical sightings
             sightings = await self.get_sightings(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'sightings',
@@ -216,7 +230,7 @@ class AircraftConsumer(BaseConsumer):
         elif request_type == 'history-stats':
             # Get history statistics
             stats = await self.get_history_stats(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'history-stats',
@@ -226,7 +240,7 @@ class AircraftConsumer(BaseConsumer):
         elif request_type == 'history-trends':
             # Get traffic trends
             trends = await self.get_history_trends(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'history-trends',
@@ -236,7 +250,7 @@ class AircraftConsumer(BaseConsumer):
         elif request_type == 'history-top':
             # Get top performers
             top = await self.get_history_top(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'history-top',
@@ -246,7 +260,7 @@ class AircraftConsumer(BaseConsumer):
         elif request_type == 'history-sessions':
             # Get aircraft sessions
             sessions = await self.get_history_sessions(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'history-sessions',
@@ -256,7 +270,7 @@ class AircraftConsumer(BaseConsumer):
         elif request_type == 'history-analytics-distance':
             # Get distance analytics
             analytics = await self.get_distance_analytics(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'history-analytics-distance',
@@ -266,7 +280,7 @@ class AircraftConsumer(BaseConsumer):
         elif request_type == 'history-analytics-speed':
             # Get speed analytics
             analytics = await self.get_speed_analytics(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'history-analytics-speed',
@@ -276,7 +290,7 @@ class AircraftConsumer(BaseConsumer):
         elif request_type == 'history-analytics-correlation':
             # Get correlation analytics
             analytics = await self.get_correlation_analytics(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'history-analytics-correlation',
@@ -286,7 +300,7 @@ class AircraftConsumer(BaseConsumer):
         elif request_type == 'antenna-polar':
             # Get antenna polar coverage
             polar = await self.get_antenna_polar(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'antenna-polar',
@@ -296,7 +310,7 @@ class AircraftConsumer(BaseConsumer):
         elif request_type == 'antenna-rssi':
             # Get RSSI vs distance data
             rssi = await self.get_antenna_rssi(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'antenna-rssi',
@@ -306,7 +320,7 @@ class AircraftConsumer(BaseConsumer):
         elif request_type == 'antenna-summary':
             # Get antenna performance summary
             summary = await self.get_antenna_summary(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'antenna-summary',
@@ -316,7 +330,7 @@ class AircraftConsumer(BaseConsumer):
         elif request_type == 'antenna-analytics':
             # Get all antenna analytics data
             analytics = await self.get_antenna_analytics(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'antenna-analytics',
@@ -328,14 +342,14 @@ class AircraftConsumer(BaseConsumer):
             icao = params.get('icao') or params.get('hex')
             if icao:
                 photo_data = await self.get_aircraft_photo(icao, params)
-                await self.send_json({
+                await self.send_json_immediate({
                     'type': 'response',
                     'request_id': request_id,
                     'request_type': request_type,
                     'data': photo_data
                 })
             else:
-                await self.send_json({
+                await self.send_json_immediate({
                     'type': 'error',
                     'request_id': request_id,
                     'message': 'Missing icao parameter'
@@ -344,7 +358,7 @@ class AircraftConsumer(BaseConsumer):
         elif request_type == 'safety-stats':
             # Get safety statistics
             stats = await self.get_safety_stats()
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'safety-stats',
@@ -354,7 +368,7 @@ class AircraftConsumer(BaseConsumer):
         elif request_type == 'acars-stats':
             # Get ACARS statistics
             stats = await self.get_acars_stats()
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'acars-stats',
@@ -364,7 +378,7 @@ class AircraftConsumer(BaseConsumer):
         # Aviation data requests (delegated from /ws/all/)
         elif request_type == 'airports':
             airports = await self.get_airports(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'airports',
@@ -373,7 +387,7 @@ class AircraftConsumer(BaseConsumer):
 
         elif request_type == 'navaids':
             navaids = await self.get_navaids(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'navaids',
@@ -382,7 +396,7 @@ class AircraftConsumer(BaseConsumer):
 
         elif request_type in ('airspaces', 'airspace-boundaries', 'boundaries'):
             boundaries = await self.get_airspace_boundaries(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': request_type,
@@ -391,7 +405,7 @@ class AircraftConsumer(BaseConsumer):
 
         elif request_type == 'safety-events':
             events = await self.get_safety_events(params)
-            await self.send_json({
+            await self.send_json_immediate({
                 'type': 'response',
                 'request_id': request_id,
                 'request_type': 'safety-events',
@@ -405,15 +419,21 @@ class AircraftConsumer(BaseConsumer):
         """Send initial aircraft snapshot on connect."""
         # Get current aircraft from cache
         aircraft_list = await self.get_current_aircraft()
+        logger.info(f"Sending aircraft snapshot: {len(aircraft_list)} aircraft to {self.channel_name}")
 
-        await self.send_json({
-            'type': 'aircraft:snapshot',
-            'data': {
-                'aircraft': aircraft_list,
-                'count': len(aircraft_list),
-                'timestamp': datetime.utcnow().isoformat()
-            }
-        })
+        try:
+            # Send immediately without batching - snapshot must not be wrapped in batch
+            await self.send_json_immediate({
+                'type': 'aircraft:snapshot',
+                'data': {
+                    'aircraft': aircraft_list,
+                    'count': len(aircraft_list),
+                    'timestamp': datetime.utcnow().isoformat()
+                }
+            })
+            logger.info(f"Aircraft snapshot sent successfully to {self.channel_name}")
+        except Exception as e:
+            logger.error(f"Failed to send aircraft snapshot: {e}")
 
     @sync_to_async
     def get_current_aircraft(self):
@@ -1012,29 +1032,54 @@ class AircraftConsumer(BaseConsumer):
 
     @database_sync_to_async
     def get_aircraft_photo(self, icao: str, params: dict):
-        """Get aircraft photo URL."""
-        from skyspy.services.aircraft_info import get_aircraft_photo
-        prefer_thumbnail = params.get('thumbnail', False)
-        photo_url = get_aircraft_photo(icao, prefer_thumbnail=prefer_thumbnail)
+        """Get aircraft photo URL via API endpoint."""
+        from django.conf import settings
+        from pathlib import Path
+        from skyspy.services.photo_cache import get_photo_url as get_cached_url
 
-        # Also try to get from database for more details
+        icao = icao.upper()
+        prefer_thumbnail = params.get('thumbnail', False)
+
+        photo_url = None
+        thumbnail_url = None
+
+        # Check if photos are cached
+        if settings.PHOTO_CACHE_ENABLED:
+            if settings.S3_ENABLED:
+                if get_cached_url(icao, is_thumbnail=False, verify_exists=True):
+                    photo_url = f"/api/v1/photos/{icao}"
+                if get_cached_url(icao, is_thumbnail=True, verify_exists=True):
+                    thumbnail_url = f"/api/v1/photos/{icao}/thumb"
+            else:
+                cache_dir = Path(settings.PHOTO_CACHE_DIR)
+                photo_path = cache_dir / f"{icao}.jpg"
+                thumb_path = cache_dir / f"{icao}_thumb.jpg"
+                if photo_path.exists() and photo_path.stat().st_size > 0:
+                    photo_url = f"/api/v1/photos/{icao}"
+                if thumb_path.exists() and thumb_path.stat().st_size > 0:
+                    thumbnail_url = f"/api/v1/photos/{icao}/thumb"
+
+        # Get additional metadata from database
+        photographer = None
+        source = None
+        page_link = None
+
         try:
-            info = AircraftInfo.objects.filter(icao_hex=icao.upper()).first()
+            info = AircraftInfo.objects.filter(icao_hex=icao).first()
             if info:
-                return {
-                    'icao': icao.upper(),
-                    'photo_url': photo_url or info.photo_url,
-                    'photo_thumbnail_url': info.photo_thumbnail_url,
-                    'photo_page_link': info.photo_page_link,
-                    'photo_photographer': info.photo_photographer,
-                    'photo_source': info.photo_source,
-                }
+                photographer = info.photo_photographer
+                source = info.photo_source
+                page_link = info.photo_page_link
         except Exception:
             pass
 
         return {
-            'icao': icao.upper(),
+            'icao': icao,
             'photo_url': photo_url,
+            'photo_thumbnail_url': thumbnail_url,
+            'photo_page_link': page_link,
+            'photo_photographer': photographer,
+            'photo_source': source,
         }
 
     @database_sync_to_async
@@ -1227,6 +1272,14 @@ class AircraftConsumer(BaseConsumer):
 
     async def aircraft_update(self, event):
         """Handle aircraft update broadcast."""
+        logger.info(f"aircraft_update handler called with {len(event.get('data', {}).get('aircraft', []))} aircraft")
+
+        # Periodically cleanup stale delta state to prevent memory leaks
+        aircraft_data = event.get('data', {}).get('aircraft', [])
+        if aircraft_data:
+            active_icaos = {ac.get('hex') or ac.get('icao_hex') for ac in aircraft_data if ac.get('hex') or ac.get('icao_hex')}
+            self._cleanup_delta_state(active_icaos)
+
         await self.send_json({
             'type': 'aircraft:update',
             'data': event['data']
@@ -1262,6 +1315,7 @@ class AircraftConsumer(BaseConsumer):
 
     async def positions_update(self, event):
         """Handle position-only lightweight update."""
+        logger.info(f"positions_update handler called with {len(event.get('data', {}).get('positions', []))} positions")
         await self.send_json({
             'type': 'positions:update',
             'data': event['data']

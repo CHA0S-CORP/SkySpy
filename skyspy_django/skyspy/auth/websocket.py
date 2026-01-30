@@ -45,10 +45,22 @@ class TokenAuthMiddleware(BaseMiddleware):
         # For hybrid mode, track authentication state
         scope['is_authenticated'] = user.is_authenticated
 
+        # Reject connection at middleware level if flagged
+        if scope.get('reject_connection'):
+            # Send WebSocket close frame with 4001 (Unauthorized) code
+            await send({
+                'type': 'websocket.close',
+                'code': 4001,
+            })
+            return
+
         return await super().__call__(scope, receive, send)
 
     async def _authenticate(self, scope):
         """Attempt to authenticate the WebSocket connection."""
+        auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
+        reject_invalid = getattr(settings, 'WS_REJECT_INVALID_TOKENS', False)
+
         # Extract token from query string
         token = self._get_token_from_query(scope)
 
@@ -57,7 +69,10 @@ class TokenAuthMiddleware(BaseMiddleware):
             token = self._get_token_from_protocol(scope)
 
         if not token:
-            # No token provided - return anonymous
+            # No token provided
+            if auth_mode == 'private':
+                scope['auth_error'] = 'Authentication required'
+                logger.warning("WebSocket authentication failed: no token provided in private mode")
             return AnonymousUser()
 
         # Validate JWT token
@@ -72,9 +87,17 @@ class TokenAuthMiddleware(BaseMiddleware):
             logger.debug(f"WebSocket authenticated via API key: {user.username}")
             return user
 
-        # Invalid token
-        logger.warning("WebSocket authentication failed: invalid token")
-        scope['auth_error'] = 'Invalid or expired token'
+        # Invalid token - set auth_error prominently
+        error_msg = 'Invalid or expired token'
+        scope['auth_error'] = error_msg
+        scope['auth_failed'] = True  # Additional flag for explicit failure detection
+        logger.warning(f"WebSocket authentication failed: {error_msg}")
+
+        # Reject invalid tokens if configured (instead of falling back to anonymous)
+        if reject_invalid or auth_mode == 'private':
+            scope['reject_connection'] = True
+            logger.info("WebSocket connection will be rejected due to invalid token")
+
         return AnonymousUser()
 
     def _get_token_from_query(self, scope):

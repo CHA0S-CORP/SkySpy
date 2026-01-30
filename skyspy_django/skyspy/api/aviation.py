@@ -4,6 +4,7 @@ Aviation weather and data API views.
 import logging
 from datetime import timedelta
 
+from django.core.cache import cache
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -178,20 +179,61 @@ class AviationViewSet(viewsets.ViewSet):
     )
     @action(detail=False, methods=['get'])
     def pireps(self, request):
-        """Get PIREP data."""
+        """Get PIREP data with optional spatial filtering."""
+        from math import cos, pi
+
         hours = int(request.query_params.get('hours', 6))
+        lat_str = request.query_params.get('lat')
+        lon_str = request.query_params.get('lon')
+        radius_str = request.query_params.get('radius', request.query_params.get('radius_nm', '500'))
+
+        # Build cache key from query params
+        cache_key = f"pireps:{hours}:{lat_str}:{lon_str}:{radius_str}"
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
+
         cutoff = timezone.now() - timedelta(hours=hours)
 
-        pireps = CachedPirep.objects.filter(
+        query = CachedPirep.objects.filter(
             observation_time__gte=cutoff
-        ).order_by('-observation_time')[:100]
+        )
 
-        return Response({
+        # Add spatial filtering if lat/lon/radius provided
+        if lat_str and lon_str:
+            try:
+                lat = float(lat_str)
+                lon = float(lon_str)
+                radius = float(radius_str) if radius_str else 500
+
+                # Convert nautical miles to degrees (1 nm ≈ 1/60 degree)
+                lat_delta = radius / 60.0
+                # Adjust longitude delta for latitude (longitude degrees get smaller toward poles)
+                lon_delta = radius / (60.0 * max(cos(lat * pi / 180), 0.1))
+
+                query = query.filter(
+                    latitude__gte=lat - lat_delta,
+                    latitude__lte=lat + lat_delta,
+                    longitude__gte=lon - lon_delta,
+                    longitude__lte=lon + lon_delta,
+                )
+            except (ValueError, TypeError):
+                # Invalid coordinates - skip spatial filtering
+                pass
+
+        pireps = query.order_by('-observation_time')[:100]
+
+        response_data = {
             'data': CachedPirepSerializer(pireps, many=True).data,
             'count': pireps.count(),
             'source': 'aviationweather.gov',
             'cached': True,
-        })
+        }
+
+        # Cache for 2 minutes (PIREPs refresh every 10 minutes)
+        cache.set(cache_key, response_data, timeout=120)
+
+        return Response(response_data)
 
     @extend_schema(
         summary="Get SIGMET data",
@@ -292,15 +334,26 @@ class AviationViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def airports(self, request):
         """Get airport data."""
-        queryset = CachedAirport.objects.all()
-
         airport_type = request.query_params.get('type')
-        if airport_type:
-            queryset = queryset.filter(airport_type=airport_type)
-
         lat = request.query_params.get('lat')
         lon = request.query_params.get('lon')
         radius_nm = float(request.query_params.get('radius_nm', 100))
+        limit = int(request.query_params.get('limit', 500))
+
+        # Build cache key from query params (round lat/lon for better cache hits)
+        lat_rounded = round(float(lat), 2) if lat else None
+        lon_rounded = round(float(lon), 2) if lon else None
+        radius_rounded = round(radius_nm, 0)
+        cache_key = f"airports:{lat_rounded}:{lon_rounded}:{radius_rounded}:{airport_type}:{limit}"
+
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
+
+        queryset = CachedAirport.objects.all()
+
+        if airport_type:
+            queryset = queryset.filter(airport_type=airport_type)
 
         if lat and lon:
             lat = float(lat)
@@ -315,12 +368,17 @@ class AviationViewSet(viewsets.ViewSet):
                 longitude__lte=lon + lon_delta,
             )
 
-        airports = queryset[:500]
+        airports = queryset[:limit]
 
-        return Response({
+        response_data = {
             'airports': CachedAirportSerializer(airports, many=True).data,
             'count': airports.count(),
-        })
+        }
+
+        # Cache for 5 minutes (airport data rarely changes)
+        cache.set(cache_key, response_data, timeout=300)
+
+        return Response(response_data)
 
     @extend_schema(
         summary="Get navaids",

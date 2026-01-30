@@ -76,9 +76,18 @@ export function usePositionChannels(enabled, apiBase, interpolate = true, interp
     const { type } = data;
 
     try {
-      // Initial snapshot
-      if (type === 'positions:snapshot') {
-        if (!data?.data?.positions || typeof data.data.positions !== 'object') return;
+      // Handle batched messages (from rate-limited/batched consumers)
+      if (type === 'batch' && Array.isArray(data.messages)) {
+        data.messages.forEach(msg => { if (msg) handleMessage(msg); });
+        return;
+      }
+
+      // Initial snapshot - handle both aircraft:snapshot (backend) and positions:snapshot (legacy)
+      if (type === 'aircraft:snapshot' || type === 'positions:snapshot') {
+        // Backend sends aircraft:snapshot with data.aircraft array
+        // Legacy positions:snapshot has data.positions object
+        const aircraftArray = data?.data?.aircraft;
+        const positionsObj = data?.data?.positions;
 
         const now = performance.now();
 
@@ -88,13 +97,35 @@ export function usePositionChannels(enabled, apiBase, interpolate = true, interp
         prevPositionsRef.current = {};
         lastUpdateRef.current = {};
 
-        for (const [icao, pos] of Object.entries(data.data.positions)) {
-          if (pos && typeof pos === 'object' &&
-              Number.isFinite(pos.lat) && Number.isFinite(pos.lon)) {
-            targetPositionsRef.current[icao] = pos;
-            prevPositionsRef.current[icao] = pos;
-            lastUpdateRef.current[icao] = now;
-            interpolatedPositionsRef.current[icao] = pos;
+        if (Array.isArray(aircraftArray)) {
+          // Convert aircraft array to positions map
+          for (const ac of aircraftArray) {
+            const icao = ac.hex || ac.icao_hex;
+            if (icao && Number.isFinite(ac.lat) && Number.isFinite(ac.lon)) {
+              const pos = {
+                lat: ac.lat,
+                lon: ac.lon,
+                alt: ac.alt_baro || ac.alt,
+                track: ac.track,
+                gs: ac.gs,
+                vr: ac.vr || ac.baro_rate,
+              };
+              targetPositionsRef.current[icao] = pos;
+              prevPositionsRef.current[icao] = pos;
+              lastUpdateRef.current[icao] = now;
+              interpolatedPositionsRef.current[icao] = pos;
+            }
+          }
+        } else if (positionsObj && typeof positionsObj === 'object') {
+          // Legacy positions format
+          for (const [icao, pos] of Object.entries(positionsObj)) {
+            if (pos && typeof pos === 'object' &&
+                Number.isFinite(pos.lat) && Number.isFinite(pos.lon)) {
+              targetPositionsRef.current[icao] = pos;
+              prevPositionsRef.current[icao] = pos;
+              lastUpdateRef.current[icao] = now;
+              interpolatedPositionsRef.current[icao] = pos;
+            }
           }
         }
 
@@ -106,26 +137,73 @@ export function usePositionChannels(enabled, apiBase, interpolate = true, interp
       else if (type === 'positions:update') {
         if (!data?.data) return;
 
+        // Debug: Log position updates
+        const updateCount = Array.isArray(data.data.positions) ? data.data.positions.length : Object.keys(data.data.positions || {}).length;
+        console.log('[usePositionChannels] positions:update received:', updateCount, 'positions');
+
         const now = performance.now();
-        const updatedPositions = data.data.positions || {};
+        const positionsData = data.data.positions;
         const removedIcaos = Array.isArray(data.data.removed) ? data.data.removed : [];
 
-        // Update targets and track previous positions
-        for (const [icao, pos] of Object.entries(updatedPositions)) {
-          if (!pos || typeof pos !== 'object' ||
-              !Number.isFinite(pos.lat) || !Number.isFinite(pos.lon)) {
+        // Handle both array format (backend) and object format (legacy)
+        const positionsArray = Array.isArray(positionsData) ? positionsData : [];
+        const positionsMap = !Array.isArray(positionsData) && positionsData ? positionsData : null;
+
+        // Process array format (from backend task)
+        for (const pos of positionsArray) {
+          const icao = pos.hex || pos.icao_hex;
+          if (!icao || !Number.isFinite(pos.lat) || !Number.isFinite(pos.lon)) {
             continue;
           }
+
+          const posData = {
+            lat: pos.lat,
+            lon: pos.lon,
+            alt: pos.alt,
+            track: pos.track,
+            gs: pos.gs,
+            vr: pos.vr,
+          };
 
           // Store current target as previous for interpolation
           if (targetPositionsRef.current[icao]) {
             prevPositionsRef.current[icao] = { ...targetPositionsRef.current[icao] };
           } else {
-            prevPositionsRef.current[icao] = pos;
+            prevPositionsRef.current[icao] = posData;
           }
 
-          targetPositionsRef.current[icao] = pos;
+          targetPositionsRef.current[icao] = posData;
           lastUpdateRef.current[icao] = now;
+
+          // If not interpolating, update interpolated positions directly
+          if (!interpolateRef.current) {
+            interpolatedPositionsRef.current[icao] = posData;
+          }
+        }
+
+        // Process legacy object/map format
+        if (positionsMap) {
+          for (const [icao, pos] of Object.entries(positionsMap)) {
+            if (!pos || typeof pos !== 'object' ||
+                !Number.isFinite(pos.lat) || !Number.isFinite(pos.lon)) {
+              continue;
+            }
+
+            // Store current target as previous for interpolation
+            if (targetPositionsRef.current[icao]) {
+              prevPositionsRef.current[icao] = { ...targetPositionsRef.current[icao] };
+            } else {
+              prevPositionsRef.current[icao] = pos;
+            }
+
+            targetPositionsRef.current[icao] = pos;
+            lastUpdateRef.current[icao] = now;
+
+            // If not interpolating, update interpolated positions directly
+            if (!interpolateRef.current) {
+              interpolatedPositionsRef.current[icao] = pos;
+            }
+          }
         }
 
         // Remove aircraft
@@ -141,15 +219,6 @@ export function usePositionChannels(enabled, apiBase, interpolate = true, interp
         // Update count
         if (mountedRef.current) {
           setCount(Object.keys(targetPositionsRef.current).length);
-        }
-
-        // If not interpolating, update interpolated positions directly
-        if (!interpolateRef.current) {
-          for (const [icao, pos] of Object.entries(updatedPositions)) {
-            if (pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lon)) {
-              interpolatedPositionsRef.current[icao] = pos;
-            }
-          }
         }
       }
     } catch (err) {
@@ -168,7 +237,7 @@ export function usePositionChannels(enabled, apiBase, interpolate = true, interp
     setConnected(true);
     // Subscribe to positions topic using the ref
     if (wsSendRef.current) {
-      wsSendRef.current({ action: 'subscribe', topics: ['positions'] });
+      wsSendRef.current({ action: 'subscribe', topics: ['aircraft'] });
     }
   }, []);
 
@@ -196,7 +265,7 @@ export function usePositionChannels(enabled, apiBase, interpolate = true, interp
     enabled,
     apiBase,
     path: 'aircraft',
-    queryParams: { topics: 'positions' },
+    queryParams: { topics: 'aircraft' },
     onMessage: handleMessage,
     onConnect: handleConnect,
     onDisconnect: handleDisconnect,

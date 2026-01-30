@@ -16,6 +16,8 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from skyspy.models.notams import CachedNotam
 from skyspy.models.aviation import CachedPirep
+from skyspy.auth.authentication import OptionalJWTAuthentication, APIKeyAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +25,8 @@ logger = logging.getLogger(__name__)
 class ArchiveViewSet(viewsets.ViewSet):
     """ViewSet for archived/historical data."""
 
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="List archived NOTAMs",

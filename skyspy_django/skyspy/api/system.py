@@ -24,6 +24,8 @@ from skyspy.serializers.system import (
     StatusResponseSerializer,
     ApiInfoSerializer,
 )
+from skyspy.auth.authentication import OptionalJWTAuthentication, APIKeyAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
 
 logger = logging.getLogger(__name__)
 
@@ -206,14 +208,17 @@ class StatusView(APIView):
         # Get SSE subscriber count from cache (set by SSE views)
         sse_subscribers = cache.get("sse_subscriber_count", 0)
 
-        # Get scheduled Celery tasks
-        celery_tasks = []
-        try:
-            from django_celery_beat.models import PeriodicTask
-            active_tasks = PeriodicTask.objects.filter(enabled=True).values_list('name', flat=True)
-            celery_tasks = list(active_tasks)
-        except Exception:
-            pass
+        # Get scheduled Celery tasks (cached to reduce DB load)
+        celery_tasks = cache.get('celery_periodic_tasks')
+        if celery_tasks is None:
+            celery_tasks = []
+            try:
+                from django_celery_beat.models import PeriodicTask
+                active_tasks = PeriodicTask.objects.filter(enabled=True).values_list('name', flat=True)
+                celery_tasks = list(active_tasks)
+                cache.set('celery_periodic_tasks', celery_tasks, timeout=300)  # Cache for 5 minutes
+            except Exception:
+                pass
 
         # Get antenna analytics from cache
         antenna_analytics = cache.get("antenna_analytics")
@@ -531,6 +536,9 @@ class AircraftLookupView(APIView):
 class RouteLookupView(APIView):
     """Look up flight route by callsign."""
 
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
+
     @extend_schema(
         summary="Route lookup",
         description="Look up flight route information by callsign from adsb.im"
@@ -563,6 +571,9 @@ class RouteLookupView(APIView):
 class GeodataStatsView(APIView):
     """Geographic data cache statistics."""
 
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
+
     @extend_schema(
         summary="Geodata cache stats",
         description="Statistics about cached geographic data (airports, navaids, GeoJSON)"
@@ -584,6 +595,9 @@ class GeodataStatsView(APIView):
 
 class WeatherCacheStatsView(APIView):
     """Weather cache statistics."""
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="Weather cache stats",
