@@ -504,7 +504,9 @@ if BUILD_MODE:
     CELERY_RESULT_BACKEND = "cache+memory://"
 else:
     CELERY_BROKER_URL = REDIS_URL
-    CELERY_RESULT_BACKEND = REDIS_URL
+    # Use django-celery-results database backend for queryable task results
+    CELERY_RESULT_BACKEND = "django-db"
+    CELERY_CACHE_BACKEND = "django-cache"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
@@ -512,6 +514,10 @@ CELERY_TIMEZONE = "UTC"
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+# Result expiration (7 days default, adjustable)
+CELERY_RESULT_EXPIRES = int(get_env("CELERY_RESULT_EXPIRES", 60 * 60 * 24 * 7))
+# Extended result format stores task args, kwargs, and other metadata
+CELERY_RESULT_EXTENDED = True
 
 
 # =============================================================================

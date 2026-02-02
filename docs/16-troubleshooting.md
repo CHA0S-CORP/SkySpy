@@ -24,7 +24,7 @@ SkysPy is a multi-component system. Understanding which component is affected sp
 flowchart TB
     subgraph Frontend["🖥️ Frontend Layer"]
         WEB[React Web App]
-        WS_CLIENT[WebSocket Client]
+        WS_CLIENT[Socket.IO Client]
     end
 
     subgraph API["⚡ API Layer"]
@@ -105,7 +105,7 @@ flowchart TD
     Q3 -->|No| API_ISSUE[⚡ API/Database Issue]
     Q3 -->|Yes| DATA_ISSUE[📡 ADS-B Connection Issue]
 
-    Q4 -->|No| WS_ISSUE[🔌 WebSocket Issue]
+    Q4 -->|No| WS_ISSUE[🔌 Socket.IO Issue]
     Q4 -->|Yes| Q5{Performance<br/>acceptable?}
 
     Q5 -->|No| PERF_ISSUE[🐢 Performance Issue]
@@ -220,7 +220,7 @@ flowchart TD
 <summary><strong>❌ Redis Connection Refused</strong></summary>
 
 #### Symptoms
-- 🔌 WebSocket connections fail
+- 🔌 Socket.IO connections fail
 - ⚙️ Celery workers cannot start
 - 💾 Cache operations fail
 - 📊 Health check shows `cache: down`
@@ -397,21 +397,21 @@ run_all_cleanup_tasks()
 
 ---
 
-### 🟠 WebSocket Issues
+### 🟠 Socket.IO Issues
 
 <details>
-<summary><strong>🔌 WebSocket Connections Dropping Frequently</strong></summary>
+<summary><strong>🔌 Socket.IO Connections Dropping Frequently</strong></summary>
 
 #### Symptoms
 - ✈️ Aircraft disappear intermittently
-- 🖥️ Browser console shows WebSocket errors
+- 🖥️ Browser console shows Socket.IO errors
 - 👥 Users report real-time updates stopping
 
 #### Diagnostic Flowchart
 
 ```mermaid
 flowchart TD
-    A[WebSocket Dropping] --> B{Can you connect<br/>to WS endpoint?}
+    A[Socket.IO Dropping] --> B{Can you connect<br/>to Socket.IO endpoint?}
     B -->|No| C{Is API server<br/>running?}
     B -->|Yes| D{Connections<br/>stable locally?}
 
@@ -436,8 +436,8 @@ flowchart TD
 | Action | Command |
 |--------|---------|
 | Check channel layer | See Python command below |
-| View ASGI logs | `docker compose logs -f api \| grep -E "(WebSocket\|channels)"` |
-| Test WS endpoint | See browser console test below |
+| View ASGI logs | `docker compose logs -f api \| grep -E "(Socket\.IO\|channels)"` |
+| Test Socket.IO endpoint | See browser console test below |
 
 #### Test Channel Layer
 ```bash
@@ -451,10 +451,16 @@ print('Channel layer:', layer)
 
 #### Browser Console Test
 ```javascript
-const ws = new WebSocket('ws://localhost:8000/ws/aircraft/');
-ws.onopen = () => console.log('✅ Connected');
-ws.onerror = (e) => console.error('❌ Error:', e);
-ws.onclose = (e) => console.log('🔌 Closed:', e.code, e.reason);
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:8000/aircraft', {
+  path: '/socket.io/',
+  transports: ['websocket', 'polling']
+});
+
+socket.on('connect', () => console.log('✅ Connected'));
+socket.on('connect_error', (e) => console.error('❌ Error:', e));
+socket.on('disconnect', (reason) => console.log('🔌 Disconnected:', reason));
 ```
 
 > 💡 **Rate Limits**
@@ -478,11 +484,11 @@ ws.onclose = (e) => console.log('🔌 Closed:', e.code, e.reason);
 ---
 
 <details>
-<summary><strong>🔐 WebSocket Authentication Failures</strong></summary>
+<summary><strong>🔐 Socket.IO Authentication Failures</strong></summary>
 
 #### Symptoms
-- 🔒 WebSocket closes with code `4001`
-- 📝 Logs show `WebSocket auth error`
+- 🔒 Socket.IO disconnects with authentication errors
+- 📝 Logs show Socket.IO auth error
 
 #### Error Code Reference
 
@@ -504,8 +510,12 @@ ws.onclose = (e) => console.log('🔌 Closed:', e.code, e.reason);
 
 2. **Verify JWT token is being passed:**
    ```javascript
-   // Token should be passed in query params
-   const ws = new WebSocket('ws://host/ws/aircraft/?token=<jwt_token>');
+   // Token should be passed in Socket.IO auth or query params
+   const socket = io('http://host/aircraft', {
+     path: '/socket.io/',
+     auth: { token: '<jwt_token>' },
+     query: { token: '<jwt_token>' }
+   });
    ```
 
 3. **Check token expiration:**
@@ -752,9 +762,9 @@ docker compose exec redis redis-cli --bigkeys
 > ERROR django.db.backends OperationalError: could not connect to server
 > ```
 
-> 🔌 **WebSocket Connection**
+> 🔌 **Socket.IO Connection**
 > ```
-> INFO skyspy.channels.consumers.base WebSocket connected: specific.ABC123, topics: ['all']
+> INFO skyspy.socketio Socket.IO connected: specific.ABC123, topics: ['all']
 > ```
 
 > ⚠️ **Celery Task Failure**
@@ -828,7 +838,7 @@ Comprehensive system status including statistics.
   "safety_tracked_aircraft": 12,
   "notifications_configured": true,
   "redis_enabled": true,
-  "websocket_connections": 3,
+  "socketio_connections": 3,
   "acars_enabled": true,
   "acars_running": true,
   "polling_interval_seconds": 2,
@@ -1013,19 +1023,19 @@ cleanup_old_sightings(days=7)
 
 ---
 
-### 🔌 WebSockets
+### 🔌 Socket.IO
 
 <details>
-<summary><strong>Why do I see "WebSocket connection failed" in the console?</strong></summary>
+<summary><strong>Why do I see "Socket.IO connection failed" in the console?</strong></summary>
 
 **Common causes:**
 1. 🌐 **CORS issues:** Ensure `CORS_ALLOWED_ORIGINS` includes your frontend URL
-2. 🔀 **Reverse proxy:** Configure WebSocket proxying in nginx/traefik
-3. 🔥 **Firewall:** Ensure WebSocket port is accessible
+2. 🔀 **Reverse proxy:** Configure Socket.IO proxying in nginx/traefik
+3. 🔥 **Firewall:** Ensure Socket.IO port is accessible
 
 **For nginx, add:**
 ```nginx
-location /ws/ {
+location /socket.io/ {
     proxy_pass http://api:8000;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
@@ -1037,22 +1047,29 @@ location /ws/ {
 </details>
 
 <details>
-<summary><strong>How do I test WebSocket connectivity?</strong></summary>
+<summary><strong>How do I test Socket.IO connectivity?</strong></summary>
 
-**Using wscat:**
+**Using socket.io-client:**
 ```bash
-# Install wscat
-npm install -g wscat
+# Install socket.io-client
+npm install -g socket.io-client
 
-# Connect
-wscat -c ws://localhost:8000/ws/aircraft/
+# Test in Node.js
+node -e "const io = require('socket.io-client'); \
+const socket = io('http://localhost:8000/aircraft', {path: '/socket.io/'}); \
+socket.on('connect', () => console.log('Connected'));"
 ```
 
 **Using browser console:**
 ```javascript
-const ws = new WebSocket('ws://localhost:8000/ws/aircraft/');
-ws.onmessage = (e) => console.log(JSON.parse(e.data));
-ws.onopen = () => ws.send(JSON.stringify({action: 'ping'}));
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:8000/aircraft', {
+  path: '/socket.io/'
+});
+
+socket.on('connect', () => console.log('Connected'));
+socket.on('aircraft:update', (data) => console.log('Update:', data));
 ```
 
 </details>

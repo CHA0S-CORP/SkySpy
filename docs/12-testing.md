@@ -72,7 +72,7 @@ skyspy_django/skyspy/tests/
 │   ├── test_e2e_stats.py         # Statistics E2E tests
 │   └── test_e2e_websocket.py     # Socket.IO E2E tests
 ├── test_api_*.py                 # REST API endpoint tests
-├── test_consumers_*.py           # WebSocket consumer tests
+├── test_consumers_*.py           # Socket.IO consumer tests
 ├── test_services_*.py            # Business logic/service tests
 ├── test_tasks_*.py               # Celery task tests
 ├── test_integration.py           # Cross-component integration tests

@@ -51,7 +51,7 @@ graph TB
         D[Voice/Haptic Alerts]
     end
 
-    subgraph API["WebSocket/API Layer"]
+    subgraph API["Socket.IO/API Layer"]
         E[Django REST]
         F[Threat Streaming]
         G[Session Management]
@@ -92,7 +92,7 @@ graph TB
 | **Frontend** | `RadarView.jsx` | Full-screen radar visualization |
 | **Backend** | `CannonballService` | Core threat analysis engine |
 | **Backend** | `analyze_aircraft_patterns` | Celery task for real-time analysis |
-| **Backend** | `CannonballConsumer` | WebSocket consumer for real-time updates |
+| **Backend** | `CannonballConsumer` | Socket.IO consumer for real-time updates |
 
 ---
 
@@ -660,13 +660,17 @@ Deactivate Cannonball mode session.
 
 ---
 
-## WebSocket Integration
+## Socket.IO Integration
 
 ### Connection
 
 ```javascript
-const wsUrl = `wss://api.example.com/ws/cannonball/`;
-const ws = new WebSocket(wsUrl);
+import { io } from 'socket.io-client';
+
+const socket = io('https://api.example.com/cannonball', {
+  path: '/socket.io/',
+  transports: ['websocket', 'polling']
+});
 ```
 
 ### Message Flow
@@ -676,7 +680,7 @@ sequenceDiagram
     participant C as Client
     participant S as Server
 
-    C->>S: Connect to WebSocket
+    C->>S: Connect to Socket.IO
     S->>C: session_started
 
     loop Every Position Update
@@ -693,34 +697,34 @@ sequenceDiagram
 ### Client Messages
 
 **Position Update:**
-```json
-{
-  "type": "position_update",
-  "lat": 34.0522,
-  "lon": -118.2437,
-  "heading": 270,
-  "speed": 65
-}
+```javascript
+socket.emit('position_update', {
+  lat: 34.0522,
+  lon: -118.2437,
+  heading: 270,
+  speed: 65
+});
 ```
 
 **Set Radius:**
-```json
-{
-  "type": "set_radius",
-  "radius_nm": 25
-}
+```javascript
+socket.emit('set_radius', {
+  radius_nm: 25
+});
 ```
 
 ### Server Messages
 
 **Threats Update:**
-```json
-{
-  "type": "threats",
-  "data": [...],
-  "count": 3,
-  "timestamp": "2024-01-15T12:00:00Z"
-}
+```javascript
+socket.on('threats', (data) => {
+  console.log(data);
+  // {
+  //   "data": [...],
+  //   "count": 3,
+  //   "timestamp": "2024-01-15T12:00:00Z"
+  // }
+});
 ```
 
 **New Alert:**
@@ -842,7 +846,7 @@ Monitoring during extended road trips.
 
 > **Security Measures:**
 > - All API endpoints support JWT authentication
-> - WebSocket connections are authenticated
+> - Socket.IO connections are authenticated
 > - Rate limiting on location updates
 > - No PII collected or stored
 
@@ -871,7 +875,7 @@ Background tasks that power Cannonball Mode:
 > - **Solution:** Move to area with clear sky view, wait for GPS lock
 
 > **Warning - Connection Issues:**
-> - **Problem:** WebSocket disconnects frequently
+> - **Problem:** Socket.IO disconnects frequently
 > - **Solution:** Check network stability, system will auto-reconnect with exponential backoff
 >
 > - **Problem:** Threats not updating
@@ -892,7 +896,7 @@ Background tasks that power Cannonball Mode:
 |---------|------|---------|
 | 1.0.0 | 2024-01 | Initial release |
 | 1.1.0 | 2024-02 | Added pattern detection |
-| 1.2.0 | 2024-03 | WebSocket real-time updates |
+| 1.2.0 | 2024-03 | Socket.IO real-time updates |
 | 2.0.0 | 2024-06 | Heads-up display, voice control |
 
 ---

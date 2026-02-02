@@ -67,7 +67,7 @@ flowchart TB
             AD["ACARS Decoder"]
         end
         subgraph channels["🔌 Django Channels"]
-            WS["WebSocket Consumers"]
+            WS["Socket.IO Handlers"]
         end
     end
 
@@ -130,7 +130,7 @@ flowchart TB
 |:----------|:-----------|:--------|
 | ![Go](https://img.shields.io/badge/TUI-Bubble%20Tea-00ADD8?logo=go) | Bubble Tea | Terminal user interface |
 | ![LipGloss](https://img.shields.io/badge/Styling-Lip%20Gloss-FF69B4) | Lip Gloss | Terminal styling |
-| ![WebSocket](https://img.shields.io/badge/WebSocket-Gorilla-1F8ACB) | Gorilla WebSocket | Real-time data streaming |
+| ![Socket.IO](https://img.shields.io/badge/Socket.IO-Client-1F8ACB) | Socket.IO Client | Real-time data streaming |
 | ![Cobra](https://img.shields.io/badge/CLI-Cobra-00ADD8) | Cobra | Command-line parsing |
 | ![Auth](https://img.shields.io/badge/Auth-OIDC%20+%20API%20Keys-000000) | OIDC + API Keys | Authentication support |
 
@@ -154,7 +154,7 @@ flowchart TB
 - 🔄 Processing and normalizing aircraft position data
 - 📐 Calculating distance and bearing from receiver location
 - ⏱️ Managing aircraft sessions (first seen, last seen, tracking quality)
-- 📢 Broadcasting updates via WebSocket to connected clients
+- 📢 Broadcasting updates via Socket.IO to connected clients
 
 ```python
 # Polling configuration (celery.py)
@@ -506,7 +506,7 @@ SkySpy provides a comprehensive REST API with OpenAPI documentation:
 | 📥 [Installation Guide](./02-installation.md) | Detailed setup instructions |
 | ⚙️ [Configuration Reference](./03-configuration.md) | Environment variables and settings |
 | 🔗 [API Reference](./04-api-reference.md) | Complete API documentation |
-| 🔌 [WebSocket Protocol](./05-websocket.md) | Real-time streaming guide |
+| 🔌 [Socket.IO Protocol](./socketio/00-overview.md) | Real-time streaming guide |
 | 🔔 [Alert Rules](./06-alerts.md) | Custom alert configuration |
 | 🔐 [Authentication](./07-authentication.md) | Auth modes and SSO setup |
 

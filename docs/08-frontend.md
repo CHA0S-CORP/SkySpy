@@ -15,13 +15,13 @@ privacy:
 ![React](https://img.shields.io/badge/React-18+-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-5+-646CFF?style=for-the-badge&logo=vite&logoColor=white)
 ![Leaflet](https://img.shields.io/badge/Leaflet-1.9+-199900?style=for-the-badge&logo=leaflet&logoColor=white)
-![WebSocket](https://img.shields.io/badge/WebSocket-Real--time-FF6B6B?style=for-the-badge&logo=socket.io&logoColor=white)
+![Socket.IO](https://img.shields.io/badge/Socket.IO-Real--time-FF6B6B?style=for-the-badge&logo=socket.io&logoColor=white)
 
 ---
 
 ## 🎯 Overview
 
-The SkySpy frontend is a **modern React application** built with Vite, delivering a real-time aircraft tracking and monitoring dashboard. Features include a modular component architecture, WebSocket-based real-time data streaming, and responsive design for desktop and mobile.
+The SkySpy frontend is a **modern React application** built with Vite, delivering a real-time aircraft tracking and monitoring dashboard. Features include a modular component architecture, Socket.IO-based real-time data streaming, and responsive design for desktop and mobile.
 
 > 📸 **Screenshot Placeholder**
 > ![Main Dashboard](screenshots/dashboard-overview.png)
@@ -36,7 +36,7 @@ The SkySpy frontend is a **modern React application** built with Vite, deliverin
 | ⚛️ **React 18+** | UI framework with hooks-based architecture | ![React](https://img.shields.io/badge/-React-61DAFB?logo=react&logoColor=black) |
 | ⚡ **Vite** | Lightning-fast build tool and dev server | ![Vite](https://img.shields.io/badge/-Vite-646CFF?logo=vite&logoColor=white) |
 | 🗺️ **Leaflet** | Interactive map rendering | ![Leaflet](https://img.shields.io/badge/-Leaflet-199900?logo=leaflet&logoColor=white) |
-| 🔌 **WebSocket** | Real-time data via Django Channels | ![WebSocket](https://img.shields.io/badge/-WebSocket-010101?logo=socket.io&logoColor=white) |
+| 🔌 **Socket.IO** | Real-time data streaming | ![Socket.IO](https://img.shields.io/badge/-Socket.IO-010101?logo=socket.io&logoColor=white) |
 | 🎨 **CSS3** | Custom styling with CSS variables | ![CSS3](https://img.shields.io/badge/-CSS3-1572B6?logo=css3&logoColor=white) |
 | 🔷 **Lucide** | Icon library | ![Lucide](https://img.shields.io/badge/-Lucide-F56565?logo=lucide&logoColor=white) |
 
@@ -69,7 +69,7 @@ web/src/
 │   └── 🔑 AuthContext.jsx       # Auth state management
 │
 ├── 📂 hooks/                     # Custom React hooks
-│   ├── 📡 channels/             # WebSocket handlers
+│   ├── 📡 channels/             # Socket.IO handlers
 │   └── ℹ️ aircraftInfo/         # Data fetching utilities
 │
 ├── 📂 styles/                    # CSS stylesheets
@@ -88,7 +88,7 @@ The application uses **hash-based routing** for view navigation. `App.jsx` serve
 flowchart TB
     subgraph App["🚀 App.jsx"]
         Nav["📍 Navigation State"]
-        WS["🔌 WebSocket Connections"]
+        WS["🔌 Socket.IO Connections"]
         Config["⚙️ Global Configuration"]
         Auth["🔐 Authentication"]
     end
@@ -331,8 +331,8 @@ A **fullscreen mobile-optimized mode** for proximity-based aircraft detection:
 ```mermaid
 flowchart TB
     subgraph Sources["📡 Data Sources"]
-        WS1["🔌 Main WebSocket"]
-        WS2["🔌 Position WebSocket"]
+        WS1["🔌 Main Socket.IO"]
+        WS2["🔌 Position Socket.IO"]
         API["🌐 REST API"]
         LS["💾 localStorage"]
     end
@@ -379,11 +379,11 @@ const {
   hasAnyPermission, // Check any of the permissions
   hasAllPermissions,// Check all permissions
   canAccessFeature, // Feature-based access check
-  getAccessToken,   // Get JWT for WebSocket
+  getAccessToken,   // Get JWT for Socket.IO
 } = useAuth();
 ```
 
-### 🔌 WebSocket State
+### 🔌 Socket.IO State
 
 ```mermaid
 sequenceDiagram
@@ -425,13 +425,13 @@ sequenceDiagram
 | Hook | Purpose | Example |
 |:-----|:--------|:--------|
 | `useApi` | HTTP API calls with loading/error states | `const { data, loading, error } = useApi('/api/stats')` |
-| `useSocketApi` | HTTP with WebSocket fallback | `useSocketApi('/api/aircraft', wsData)` |
+| `useSocketApi` | HTTP with Socket.IO fallback | `useSocketApi('/api/aircraft', wsData)` |
 | `useAircraftInfo` | Aircraft registry lookups with caching | `const info = useAircraftInfo(icao)` |
 | `useAviationData` | Aviation reference data (airports, VORs) | `const { airports } = useAviationData()` |
 | `useAlertRules` | Alert rule CRUD operations | `const { rules, createRule } = useAlertRules()` |
 | `useStatsData` | Statistics data aggregation | `const stats = useStatsData(timeRange)` |
 
-### 🔌 WebSocket Hooks
+### 🔌 Socket.IO Hooks
 
 ```javascript
 // 📡 Main channels socket

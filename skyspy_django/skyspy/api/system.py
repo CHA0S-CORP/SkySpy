@@ -343,6 +343,15 @@ class SystemInfoView(APIView):
                         "geodata": "/api/v1/system/geodata",
                         "weather": "/api/v1/system/weather",
                     },
+                    "tasks": {
+                        "list": "/api/v1/tasks/",
+                        "detail": "/api/v1/tasks/{task_id}/",
+                        "status": "/api/v1/tasks/{task_id}/status/",
+                        "revoke": "/api/v1/tasks/{task_id}/revoke/",
+                        "stats": "/api/v1/tasks/stats/",
+                        "active": "/api/v1/tasks/active/",
+                        "registered": "/api/v1/tasks/registered/",
+                    },
                     "lookup": {
                         "aircraft": "/api/v1/lookup/aircraft/{icao_hex}",
                         "opensky": "/api/v1/lookup/opensky/{icao_hex}",

@@ -93,7 +93,7 @@ export function AirspaceAdvisoryItem({
 
         <div className="advisory-title">
           <span className="advisory-type">{advisory.advisory_type || 'ADVISORY'}</span>
-          <span className="advisory-id">{advisory.id?.slice(-6) || '--'}</span>
+          <span className="advisory-id">{advisory.id != null ? String(advisory.id).slice(-6) : '--'}</span>
         </div>
 
         <div className="advisory-meta">

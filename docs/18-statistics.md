@@ -35,7 +35,7 @@ graph TB
 
     subgraph "API Layer"
         REST[REST API]
-        WS[WebSocket]
+        WS[Socket.IO]
     end
 
     subgraph "Frontend"
@@ -60,7 +60,7 @@ graph TB
 | Component | Purpose | Technology |
 |-----------|---------|------------|
 | **REST API** | Request-response statistics | Django REST Framework |
-| **WebSocket** | Real-time streaming updates | Django Channels |
+| **Socket.IO** | Real-time streaming updates | Socket.IO |
 | **Dashboard** | Interactive visualizations | React + Recharts |
 | **Cache** | Performance optimization | Redis |
 
@@ -469,38 +469,38 @@ Signal strength analysis by distance for antenna performance evaluation.
 
 ## Real-Time Stats Streaming
 
-SkySpy provides WebSocket-based real-time statistics streaming.
+SkySpy provides Socket.IO-based real-time statistics streaming.
 
 ### Connection Flow
 
 ```mermaid
 sequenceDiagram
     participant Client
-    participant WebSocket
+    participant SocketIO as Socket.IO
     participant Cache
     participant Database
 
-    Client->>WebSocket: Connect to ws://server/ws/stats/
-    WebSocket-->>Client: stats.connected (available types)
+    Client->>SocketIO: Connect to /stats namespace
+    SocketIO-->>Client: stats.connected (available types)
 
-    Client->>WebSocket: stats.subscribe (flight_patterns)
-    WebSocket-->>Client: stats.subscribed
+    Client->>SocketIO: stats.subscribe (flight_patterns)
+    SocketIO-->>Client: stats.subscribed
 
     loop Every 5 seconds
-        Cache->>WebSocket: Stats updated
-        WebSocket-->>Client: stats.update
+        Cache->>SocketIO: Stats updated
+        SocketIO-->>Client: stats.update
     end
 
-    Client->>WebSocket: stats.request (specific query)
-    WebSocket->>Cache: Check cache
+    Client->>SocketIO: stats.request (specific query)
+    SocketIO->>Cache: Check cache
     alt Cache hit
-        Cache-->>WebSocket: Cached data
+        Cache-->>SocketIO: Cached data
     else Cache miss
-        WebSocket->>Database: Query
-        Database-->>WebSocket: Fresh data
-        WebSocket->>Cache: Store
+        SocketIO->>Database: Query
+        Database-->>SocketIO: Fresh data
+        SocketIO->>Cache: Store
     end
-    WebSocket-->>Client: stats.response
+    SocketIO-->>Client: stats.response
 ```
 
 ### Available Stat Types
@@ -563,50 +563,58 @@ sequenceDiagram
 | `daily_stats` | Daily gamification |
 | `lifetime_stats` | Lifetime totals |
 
-### WebSocket Messages
+### Socket.IO Messages
 
 **Subscribe:**
 
-```json
-{
-  "type": "stats.subscribe",
-  "stat_types": ["flight_patterns", "tracking_quality"]
-}
+```javascript
+socket.emit('stats.subscribe', {
+  stat_types: ['flight_patterns', 'tracking_quality']
+});
 ```
 
 **Request Data:**
 
-```json
-{
-  "type": "stats.request",
-  "stat_type": "flight_patterns",
-  "filters": {
-    "hours": 24,
-    "limit": 50
+```javascript
+socket.emit('stats.request', {
+  stat_type: 'flight_patterns',
+  filters: {
+    hours: 24,
+    limit: 50
   },
-  "request_id": "req-123"
-}
+  request_id: 'req-123'
+});
 ```
 
 **Set Filters:**
 
-```json
-{
-  "type": "stats.set_filters",
-  "filters": {
-    "hours": 48,
-    "aircraft_type": "B738"
+```javascript
+socket.emit('stats.set_filters', {
+  filters: {
+    hours: 48,
+    aircraft_type: 'B738'
   }
-}
+});
 ```
 
 **Refresh Cache:**
 
-```json
-{
-  "type": "stats.refresh",
-  "stat_type": "geographic"
-}
+```javascript
+socket.emit('stats.refresh', {
+  stat_type: 'geographic'
+});
+```
+
+**Listening for Updates:**
+
+```javascript
+socket.on('stats.update', (data) => {
+  console.log('Stats updated:', data);
+});
+
+socket.on('stats.response', (data) => {
+  console.log('Stats response:', data);
+});
 ```
 
 ---
@@ -1268,14 +1276,13 @@ Statistics are cached at multiple levels for performance:
 GET /api/v1/stats/flight-patterns?refresh=true
 ```
 
-**WebSocket:**
+**Socket.IO:**
 
-```json
-{
-  "type": "stats.request",
-  "stat_type": "flight_patterns",
-  "filters": {"force_refresh": true}
-}
+```javascript
+socket.emit('stats.request', {
+  stat_type: 'flight_patterns',
+  filters: { force_refresh: true }
+});
 ```
 
 ---
@@ -1284,7 +1291,7 @@ GET /api/v1/stats/flight-patterns?refresh=true
 
 | Practice | Icon | Description |
 |----------|------|-------------|
-| **Use WebSocket for Real-Time** | bolt | Subscribe to stat types you need updates for rather than polling REST endpoints. |
+| **Use Socket.IO for Real-Time** | bolt | Subscribe to stat types you need updates for rather than polling REST endpoints. |
 | **Cache Appropriately** | database | Do not force-refresh unless necessary. Default cache TTLs are optimized for typical use cases. |
 | **Filter at the Source** | filter | Use query parameters to filter data server-side rather than fetching everything and filtering client-side. |
 | **Batch Requests** | boxes-stacked | Use the combined endpoints (`/api/v1/stats/combined`) when you need multiple stat types. |

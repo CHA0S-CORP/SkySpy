@@ -39,6 +39,7 @@ export const DEFAULT_OVERLAYS = {
   airspace: true,
   metars: false,
   pireps: false,
+  advisories: false, // Weather advisories (SIGMETs, AIRMETs, G-AIRMETs)
   // Terrain overlays (pro mode only)
   water: false,
   counties: false,

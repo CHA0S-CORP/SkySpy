@@ -621,7 +621,7 @@ GET /api/v1/map/cluster/?zoom=8
 
 ---
 
-#### 📡 Get SSE/WebSocket Status
+#### 📡 Get SSE/Socket.IO Status
 
 ```http
 GET /api/v1/map/sse/status/
@@ -976,4 +976,4 @@ flowchart LR
 |--------------|:-------:|
 | 🗃️ Database queries | 10 seconds |
 | 🌐 External API calls | 20 seconds |
-| 📡 WebSocket requests | 10-20 seconds |
+| 📡 Socket.IO requests | 10-20 seconds |

@@ -1605,4 +1605,4 @@ The Docker images are built with security in mind:
 
 ---
 
-> **Next Steps**: After deployment, check out the [API Reference](/api-reference) and [WebSocket Guide](/websockets) to start building integrations.
+> **Next Steps**: After deployment, check out the [API Reference](/api-reference) and [Socket.IO Guide](/docs/socketio-overview) to start building integrations.

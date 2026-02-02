@@ -38,7 +38,7 @@ flowchart LR
 
     subgraph Core["⚙️ SkySpy"]
         API[Django API]
-        WS[WebSocket]
+        WS[Socket.IO]
     end
 
     subgraph Output["🖥️ Clients"]

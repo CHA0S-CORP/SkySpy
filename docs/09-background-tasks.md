@@ -22,7 +22,7 @@ privacy:
 flowchart TB
     subgraph Producers["📤 Task Producers"]
         API[🌐 Django API]
-        WS[🔌 WebSocket Handlers]
+        WS[🔌 Socket.IO Handlers]
         Beat[⏱️ Celery Beat Scheduler]
     end
 
@@ -682,7 +682,7 @@ Archives and deletes expired NOTAMs based on retention policy.
 <details>
 <summary>🚨 <strong>broadcast_new_tfr</strong> - TFR Alerts</summary>
 
-Broadcasts a new TFR notification via WebSocket.
+Broadcasts a new TFR notification via Socket.IO.
 
 | Property | Value |
 |:---------|:------|

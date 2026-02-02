@@ -2316,17 +2316,21 @@ const aircraft = await aircraftResponse.json();
 
 console.log(`Tracking ${aircraft.count} aircraft`);
 
-// WebSocket connection
-const ws = new WebSocket(`wss://your-domain.com/ws/?token=${access}`);
+// Socket.IO connection
+import { io } from 'socket.io-client';
 
-ws.onopen = () => {
-  ws.send(JSON.stringify({ action: 'subscribe', topic: 'aircraft' }));
-};
+const socket = io('https://your-domain.com', {
+  auth: { token: access },
+  transports: ['websocket']
+});
 
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
+socket.on('connect', () => {
+  socket.emit('subscribe', { topics: ['aircraft'] });
+});
+
+socket.on('aircraft:update', (data) => {
   console.log('Aircraft update:', data);
-};
+});
 ```
 
 </details>

@@ -693,7 +693,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A[📥 WebSocket receives message] --> B[🔄 Parse JSON to Aircraft struct]
+    A[📥 Socket.IO receives message] --> B[🔄 Parse JSON to Aircraft struct]
     B --> C[✏️ Create/Update radar.Target]
     C --> D{Receiver coords set?}
     D -->|Yes| E[📐 Calculate distance/bearing]
@@ -771,7 +771,7 @@ flowchart TD
 |------|----------|-------------|
 | Trail Cleanup | 30 seconds | Purge stale trails (5+ minutes) |
 | Alert Cooldowns | Periodic | Clean old trigger records |
-| Message Buffers | Continuous | WebSocket channels buffered to 100 messages |
+| Message Buffers | Continuous | Socket.IO channels buffered to 100 messages |
 | Spectrum Decay | Per update | Old signal data decays at 15% per cycle |
 
 ### CPU Optimization
@@ -781,7 +781,7 @@ flowchart TD
 | 🖥️ Render Rate | UI updates every 150ms (not per message) |
 | 📐 Haversine Calculations | Only when receiver coordinates set |
 | 📂 Lazy Loading | Overlays parsed only on demand |
-| 🔌 Gorilla WebSocket | Efficient WebSocket implementation |
+| 🔌 Socket.IO Client | Real-time streaming client |
 
 ### Network Efficiency
 
@@ -1088,7 +1088,7 @@ A12345,UAL123,52.367600,4.904100,35000,450.500000,270.000000,-500.000000,1234,25
 # Check server connectivity
 curl http://myserver.com/api/v1/status/
 
-# Verify WebSocket endpoint
+# Verify Socket.IO endpoint
 wscat -c "ws://myserver.com/ws/aircraft/?topics=aircraft"
 
 # Check auth configuration

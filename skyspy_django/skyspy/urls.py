@@ -74,6 +74,7 @@ from skyspy.api.notams import NotamViewSet
 from skyspy.api.notifications import NotificationChannelViewSet, NotificationViewSet
 from skyspy.api.safety import SafetyEventViewSet
 from skyspy.api.stats import EngagementViewSet, FavoritesViewSet, TrackingQualityViewSet
+from skyspy.api.tasks import TaskResultViewSet
 from skyspy.api.system import (
     AircraftLookupView,
     ExternalDatabaseStatsView,
@@ -133,6 +134,7 @@ router.register(r"cannonball/patterns", CannonballPatternViewSet, basename="cann
 router.register(r"cannonball/alerts", CannonballAlertViewSet, basename="cannonball-alerts")
 router.register(r"cannonball/known-aircraft", CannonballKnownAircraftViewSet, basename="cannonball-known-aircraft")
 router.register(r"cannonball/stats", CannonballStatsViewSet, basename="cannonball-stats")
+router.register(r"tasks", TaskResultViewSet, basename="tasks")
 
 # Admin management router
 admin_router = DefaultRouter()
