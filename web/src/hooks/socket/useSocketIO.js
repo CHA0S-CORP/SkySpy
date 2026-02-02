@@ -145,16 +145,16 @@ export function useSocketIO({
       };
 
       // Create socket with merged config
-      // Use both transports: polling establishes connection reliably through proxies,
-      // then upgrades to websocket for better performance
+      // Use websocket transport with polling fallback
+      // Note: Set upgrade to false to prevent transport switching issues with some proxies
       const socket = io(fullUrl, {
         path: pathRef.current,
         auth: {
           token: accessToken,
           ...authRef.current,
         },
-        transports: ['polling', 'websocket'],
-        upgrade: true,
+        transports: ['websocket', 'polling'],
+        upgrade: false,
         ...defaultReconnectConfig,
         ...reconnectConfig,
       });

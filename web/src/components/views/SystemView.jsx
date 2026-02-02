@@ -234,22 +234,33 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
   // Helper to check service status from Django health response
   const getServiceStatus = useCallback(
     (serviceName) => {
+      // Map frontend service names to backend keys
+      const backendKey = serviceName === 'redis' ? 'cache' : serviceName;
+
       // Check health.services structure (Django format)
       if (
-        health?.services?.[serviceName]?.status === 'up' ||
-        health?.services?.[serviceName]?.status === 'healthy'
+        health?.services?.[backendKey]?.status === 'up' ||
+        health?.services?.[backendKey]?.status === 'healthy'
       ) {
         return 'online';
       }
       // Check health.components structure (alternate format)
       if (
-        health?.components?.[serviceName]?.status === 'up' ||
-        health?.components?.[serviceName]?.status === 'healthy'
+        health?.components?.[backendKey]?.status === 'up' ||
+        health?.components?.[backendKey]?.status === 'healthy'
       ) {
         return 'online';
       }
       // Check status object directly
       if (status?.[`${serviceName}_online`] || status?.[`${serviceName}_status`] === 'online') {
+        return 'online';
+      }
+      // For redis, also check redis_enabled in status
+      if (serviceName === 'redis' && status?.redis_enabled) {
+        return 'online';
+      }
+      // For celery, check celery_running in status
+      if (serviceName === 'celery' && status?.celery_running) {
         return 'online';
       }
       // Loading state
@@ -271,7 +282,8 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
       database: getServiceStatus('database'),
       redis: getServiceStatus('redis'),
       celery: getServiceStatus('celery'),
-      websocket: status?.websocket?.active || wsStatus?.mode ? 'online' : 'offline',
+      websocket:
+        status?.websocket_connections !== undefined || wsConnected ? 'online' : 'offline',
     };
 
     Object.entries(currentServices).forEach(([service, currentStatus]) => {
@@ -287,7 +299,7 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
     });
 
     prevStatusRef.current = currentServices;
-  }, [status, health, wsStatus, addSystemEvent, getServiceStatus]);
+  }, [status, health, wsConnected, addSystemEvent, getServiceStatus]);
 
   const handleTestNotification = async () => {
     setTestLoading(true);
@@ -372,7 +384,7 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
       {
         name: 'WebSocket Server',
         status:
-          status?.websocket?.active || wsStatus?.mode
+          status?.websocket_connections !== undefined || wsConnected
             ? 'online'
             : status === null
               ? 'warning'
@@ -401,23 +413,23 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
     }
 
     return { services, online, offline, warning, total, overallStatus, statusText };
-  }, [getServiceStatus, status, wsStatus]);
+  }, [getServiceStatus, status, wsConnected]);
 
   // Copy coordinates to clipboard
   const handleCopyCoords = useCallback(() => {
-    const lat = status?.location?.lat;
-    const lon = status?.location?.lon;
+    const lat = status?.location?.latitude;
+    const lon = status?.location?.longitude;
     if (lat && lon) {
       navigator.clipboard.writeText(`${lat.toFixed(6)}, ${lon.toFixed(6)}`);
       setCopiedCoords(true);
       setTimeout(() => setCopiedCoords(false), 2000);
     }
-  }, [status?.location?.lat, status?.location?.lon]);
+  }, [status?.location?.latitude, status?.location?.longitude]);
 
   // Initialize mini-map for Feeder Location
   useEffect(() => {
-    const lat = status?.location?.lat;
-    const lon = status?.location?.lon;
+    const lat = status?.location?.latitude;
+    const lon = status?.location?.longitude;
 
     if (!mapContainerRef.current || !lat || !lon) return;
 
@@ -470,7 +482,7 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
         mapRef.current = null;
       }
     };
-  }, [status?.location?.lat, status?.location?.lon, status?.coverage_range_nm]);
+  }, [status?.location?.latitude, status?.location?.longitude, status?.coverage_range_nm]);
 
   // Toggle service expansion
   const toggleServiceExpand = useCallback((serviceName) => {
@@ -692,25 +704,27 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
 
             {renderServiceItem(
               'redis',
-              'Redis',
+              'Redis/Cache',
               getServiceStatus('redis'),
               getServiceStatus('redis') === 'online'
                 ? 'Connected'
-                : health?.services?.redis?.status === 'not_configured'
-                  ? 'Not Configured'
-                  : 'Disabled'
+                : health?.services?.cache?.status === 'degraded'
+                  ? 'Degraded'
+                  : status?.redis_enabled === false
+                    ? 'Not Configured'
+                    : 'Offline'
             )}
 
             {renderServiceItem(
               'websocket',
               'WebSocket Server',
-              status?.websocket?.active || wsStatus?.mode
+              status?.websocket_connections !== undefined || wsConnected
                 ? 'online'
                 : status === null
                   ? 'warning'
                   : 'offline',
-              status?.websocket?.mode || wsStatus?.mode
-                ? (status?.websocket?.mode || wsStatus?.mode) === 'redis'
+              status?.websocket_connections !== undefined || wsConnected
+                ? status?.redis_enabled
                   ? 'Redis Mode'
                   : 'Memory Mode'
                 : status === null
@@ -806,15 +820,15 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
           <div className="stats-list">
             <div className="stat-row">
               <span>WS Clients</span>
-              <span className="mono">
-                {status?.websocket?.clients || wsStatus?.subscribers || 0}
-              </span>
+              <span className="mono">{status?.websocket_connections || 0}</span>
+            </div>
+            <div className="stat-row">
+              <span>SSE Subscribers</span>
+              <span className="mono">{status?.sse_subscribers || 0}</span>
             </div>
             <div className="stat-row">
               <span>Tracked Aircraft</span>
-              <span className="mono">
-                {status?.websocket?.tracked_aircraft || wsStatus?.tracked_aircraft || 0}
-              </span>
+              <span className="mono">{status?.aircraft_count || 0}</span>
             </div>
             <div className="stat-row">
               <span>Poll Interval</span>
@@ -828,23 +842,11 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
                 {status?.db_store_interval_seconds || systemInfo?.db_store_interval || '--'}s
               </span>
             </div>
-            {(status?.websocket?.redis_enabled || wsStatus?.redis_enabled) && (
-              <>
-                <div className="stat-row">
-                  <span>Redis Pub/Sub</span>
-                  <span className="mono">Active</span>
-                </div>
-                <div className="stat-row">
-                  <span>Last Publish</span>
-                  <span className="mono">
-                    {status?.websocket?.last_publish || wsStatus?.last_publish
-                      ? new Date(
-                          status?.websocket?.last_publish || wsStatus?.last_publish
-                        ).toLocaleTimeString()
-                      : '--'}
-                  </span>
-                </div>
-              </>
+            {status?.redis_enabled && (
+              <div className="stat-row">
+                <span>Redis Pub/Sub</span>
+                <span className="mono">Active</span>
+              </div>
             )}
           </div>
         </div>
@@ -1012,16 +1014,20 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
               <div className="location-coords">
                 <div className="coord">
                   <span className="coord-label">Latitude</span>
-                  <span className="coord-value">{status?.location?.lat?.toFixed(6) || '--'}</span>
+                  <span className="coord-value">
+                    {status?.location?.latitude?.toFixed(6) || '--'}
+                  </span>
                 </div>
                 <div className="coord">
                   <span className="coord-label">Longitude</span>
-                  <span className="coord-value">{status?.location?.lon?.toFixed(6) || '--'}</span>
+                  <span className="coord-value">
+                    {status?.location?.longitude?.toFixed(6) || '--'}
+                  </span>
                 </div>
                 <button
                   className={`copy-coords-btn ${copiedCoords ? 'copied' : ''}`}
                   onClick={handleCopyCoords}
-                  disabled={!status?.location?.lat}
+                  disabled={!status?.location?.latitude}
                   title="Copy coordinates"
                 >
                   {copiedCoords ? <CheckCircle size={14} /> : <Copy size={14} />}
