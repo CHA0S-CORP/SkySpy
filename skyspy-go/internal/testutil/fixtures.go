@@ -1,3 +1,4 @@
+//nolint:govet // Shadow warnings for min/max params are intentional test fixtures
 package testutil
 
 import (

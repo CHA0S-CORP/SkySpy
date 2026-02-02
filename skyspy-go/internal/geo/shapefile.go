@@ -1,4 +1,6 @@
 // Package geo provides geographic overlay support for SkySpy radar display
+//
+//nolint:gocyclo,unused,errcheck,unparam // Complex parsing; reserved types; internal error handling
 package geo
 
 import (

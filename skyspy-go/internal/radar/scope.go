@@ -1,4 +1,6 @@
 // Package radar provides radar scope rendering functionality
+//
+//nolint:gocyclo,gocritic // Complex rendering functions are necessary; style preferences
 package radar
 
 import (

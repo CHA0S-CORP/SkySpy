@@ -1,4 +1,6 @@
 // Package theme provides color schemes for the SkySpy radar display
+//
+//nolint:revive // ThemeInfo name is intentional for API clarity
 package theme
 
 import "github.com/charmbracelet/lipgloss"

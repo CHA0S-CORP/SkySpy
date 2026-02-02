@@ -1,4 +1,6 @@
 // Package ws provides WebSocket client functionality for SkySpy
+//
+//nolint:gocritic // paramTypeCombine style preference
 package ws
 
 import (
@@ -204,7 +206,10 @@ func (c *Client) runConnection(url string, msgCh chan<- Message, topic string) {
 			}
 		}
 
-		conn, _, err := dialer.Dial(url, header)
+		conn, resp, err := dialer.Dial(url, header)
+		if resp != nil && resp.Body != nil {
+			_ = resp.Body.Close()
+		}
 		if err != nil {
 			c.setState(StateDisconnected)
 			select {
