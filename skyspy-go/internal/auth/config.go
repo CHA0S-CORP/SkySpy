@@ -8,8 +8,9 @@ import (
 	"time"
 )
 
-//nolint:revive // AuthConfig name is intentional for clarity
 // AuthConfig represents the authentication configuration from the API
+//
+//nolint:revive // AuthConfig name is intentional for clarity
 type AuthConfig struct {
 	AuthMode         string                   `json:"auth_mode"`
 	AuthEnabled      bool                     `json:"auth_enabled"`

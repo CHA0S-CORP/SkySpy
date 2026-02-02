@@ -125,8 +125,9 @@ func ExportAircraftJSON(aircraft map[string]*radar.Target, directory string) (st
 	return filename, nil
 }
 
-//nolint:revive // Function name is intentional for API clarity
 // ExportAircraftJSONToFile exports aircraft data to a specific JSON file
+//
+//nolint:revive // Function name is intentional for API clarity
 func ExportAircraftJSONToFile(aircraft map[string]*radar.Target, filename string) error {
 	data := AircraftExportData{
 		Timestamp:     time.Now().Format(time.RFC3339),
