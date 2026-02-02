@@ -6,7 +6,7 @@ import './styles/index.css';
 import { Sidebar, Header, SettingsModal } from './components/layout';
 
 // View components
-import { AircraftList, StatsView, HistoryView, AudioView, AlertsView, SystemView, SafetyEventPage, NotamsView, ArchiveView, CannonballMode } from './components/views';
+import { AircraftList, StatsView, HistoryView, AudioView, AlertsView, SystemView, SafetyEventPage, NotamsView, ArchiveView, CannonballMode, AdminConfigView } from './components/views';
 
 // Map components
 import { MapView } from './components/map';
@@ -39,7 +39,7 @@ const safeJson = async (res) => {
 // Hash Routing Utilities
 // ============================================================================
 
-const VALID_TABS = ['map', 'aircraft', 'stats', 'history', 'audio', 'notams', 'archive', 'alerts', 'system', 'airframe', 'event', 'login', 'cannonball'];
+const VALID_TABS = ['map', 'aircraft', 'stats', 'history', 'audio', 'notams', 'archive', 'alerts', 'system', 'admin', 'airframe', 'event', 'login', 'cannonball'];
 
 function parseHash() {
   const hash = window.location.hash.slice(1); // Remove #
@@ -374,6 +374,7 @@ export default function App() {
           {activeTab === 'archive' && <ArchiveView apiBase={config.apiBaseUrl} hashParams={hashParams} setHashParams={setHashParams} />}
           {activeTab === 'alerts' && <AlertsView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={isReady} aircraft={aircraft} feederLocation={status?.location} onLaunchCannonball={() => setShowCannonball(true)} />}
           {activeTab === 'system' && <SystemView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={isReady} />}
+          {activeTab === 'admin' && <AdminConfigView apiBase={config.apiBaseUrl} />}
           {activeTab === 'cannonball' && (
             <CannonballMode
               apiBase={config.apiBaseUrl}

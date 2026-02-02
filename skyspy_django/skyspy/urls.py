@@ -76,6 +76,7 @@ from skyspy.api.auth import (
     UserViewSet, RoleViewSet, UserRoleViewSet, APIKeyViewSet,
     FeatureAccessViewSet, OIDCClaimMappingViewSet,
 )
+from skyspy.api.config import ConfigViewSet
 
 # Create router and register viewsets
 router = DefaultRouter()
@@ -118,6 +119,7 @@ admin_router.register(r'user-roles', UserRoleViewSet, basename='admin-user-roles
 admin_router.register(r'api-keys', APIKeyViewSet, basename='admin-api-keys')
 admin_router.register(r'feature-access', FeatureAccessViewSet, basename='admin-feature-access')
 admin_router.register(r'oidc-mappings', OIDCClaimMappingViewSet, basename='admin-oidc-mappings')
+admin_router.register(r'config', ConfigViewSet, basename='admin-config')
 
 urlpatterns = [
     # Admin

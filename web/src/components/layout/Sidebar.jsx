@@ -4,7 +4,7 @@ import {
   Map as MapIcon, Radar, ChevronLeft, ChevronRight, ChevronDown,
   Layers, ExternalLink, Ship, LineChart, MessageSquare,
   LayoutDashboard, Database, Clock, Settings, FileWarning, Archive,
-  Crosshair
+  Crosshair, Cog
 } from 'lucide-react';
 import { useAlertNotifications } from '../../hooks/useAlertNotifications';
 import { useAuth } from '../../contexts/AuthContext';
@@ -19,7 +19,8 @@ const tabs = [
   { id: 'notams', icon: FileWarning, label: 'NOTAMs', feature: 'aircraft' },
   { id: 'archive', icon: Archive, label: 'Archive', feature: 'history' },
   { id: 'alerts', icon: Bell, label: 'Alerts', feature: 'alerts' },
-  { id: 'system', icon: Activity, label: 'System', feature: 'system' }
+  { id: 'system', icon: Activity, label: 'System', feature: 'system' },
+  { id: 'admin', icon: Cog, label: 'Admin Config', feature: 'system', permission: 'system.manage' }
 ];
 
 const externalServices = [
@@ -41,13 +42,18 @@ export function Sidebar({ activeTab, setActiveTab, connected, collapsed, setColl
 
   // Filter tabs based on permissions
   const visibleTabs = useMemo(() => {
-    // If auth is disabled or public mode, show all tabs
+    // If auth is disabled or public mode, show all tabs (except admin which requires explicit permission)
     if (!authConfig.authEnabled || authConfig.publicMode) {
-      return tabs;
+      return tabs.filter(tab => !tab.permission);
     }
 
-    // Filter based on feature access
+    // Filter based on feature access and specific permissions
     return tabs.filter(tab => {
+      // Check specific permission first (e.g., system.manage for admin)
+      if (tab.permission) {
+        return canAccessFeature(tab.permission.split('.')[0], 'write');
+      }
+      // Check general feature access
       if (!tab.feature) return true;
       return canAccessFeature(tab.feature, 'read');
     });

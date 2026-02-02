@@ -513,6 +513,32 @@ class IsOwnerOrAdmin(permissions.BasePermission):
         return False
 
 
+class HasSystemManagePermission(permissions.BasePermission):
+    """
+    Permission class for system configuration management.
+
+    Requires system.manage permission or admin/superadmin role.
+    Always enforced regardless of AUTH_MODE.
+    """
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+
+        if user.is_superuser:
+            return True
+
+        try:
+            profile = user.skyspy_profile
+            return profile.has_permission('system.manage')
+        except AttributeError:
+            return False
+        except Exception as e:
+            logger.warning(f"Unexpected error checking system.manage permission: {e}")
+            return False
+
+
 class CanAccessAlert(permissions.BasePermission):
     """
     Special permission for alert rules.

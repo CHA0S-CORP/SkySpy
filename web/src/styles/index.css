@@ -35,6 +35,9 @@
 /* 9. Auth - Login, user menu, permissions */
 @import './auth.css';
 
+/* 9b. Admin - Configuration management */
+@import './admin.css';
+
 /* 10. Cannonball Mode - Full-screen threat detection UI */
 @import './cannonball.css';
 

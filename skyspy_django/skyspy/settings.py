@@ -26,6 +26,54 @@ def get_env(key, default=None, cast=str):
 BUILD_MODE = get_env('BUILD_MODE', 'False', bool)
 
 
+def get_db_config(key, default=None, cast=str):
+    """
+    Get configuration value from database with env var override.
+
+    Priority order:
+    1. Environment variable (if env_var is set on the config)
+    2. Database value
+    3. Default value
+
+    Args:
+        key: Configuration key (e.g., 'safety.vs_change_threshold')
+        default: Default value if not found
+        cast: Type to cast the value to (str, bool, int, float)
+
+    Returns:
+        Configuration value with proper type casting
+    """
+    if BUILD_MODE:
+        # During build, return default to avoid database connection
+        return default
+
+    try:
+        from skyspy.models.config import SystemConfig
+        config = SystemConfig.objects.get(key=key)
+
+        # Check for environment variable override
+        if config.env_var:
+            env_value = os.environ.get(config.env_var)
+            if env_value is not None:
+                if cast == bool:
+                    return env_value.lower() in ('true', '1', 'yes', 'on')
+                return cast(env_value)
+
+        # Get database value
+        value = config.value or config.default_value
+        if value is None or value == '':
+            return default
+
+        # Cast to proper type
+        if cast == bool:
+            return str(value).lower() in ('true', '1', 'yes', 'on')
+        return cast(value)
+
+    except Exception:
+        # On any error (import, DoesNotExist, etc.), return default
+        return default
+
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = get_env('DEBUG', 'True', bool)
 

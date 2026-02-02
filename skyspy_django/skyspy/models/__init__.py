@@ -32,6 +32,7 @@ from skyspy.models.cannonball import (
     CannonballPattern, CannonballSession, CannonballAlert,
     CannonballKnownAircraft, CannonballStats,
 )
+from skyspy.models.config import SystemConfig, ConfigAuditLog
 
 __all__ = [
     # Aircraft
@@ -99,4 +100,14 @@ __all__ = [
     'CannonballAlert',
     'CannonballKnownAircraft',
     'CannonballStats',
+    # System Configuration
+    'SystemConfig',
+    'ConfigAuditLog',
 ]
+
+# Connect cache invalidation signals after models are loaded
+try:
+    from skyspy.signals import connect_cache_signals
+    connect_cache_signals()
+except ImportError:
+    pass  # Signals module may not exist in some configurations

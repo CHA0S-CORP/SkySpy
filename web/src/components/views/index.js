@@ -10,6 +10,7 @@ export { SafetyEventPage } from './SafetyEventPage';
 export { NotamsView } from './NotamsView';
 export { ArchiveView } from './ArchiveView';
 export { CannonballMode } from './CannonballMode';
+export { AdminConfigView } from './AdminConfigView';
 
 // Stats Components - Standalone Views
 export { FlightPatternsStats } from './FlightPatternsStats';
