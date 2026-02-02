@@ -269,8 +269,7 @@ class FlushStreamToDatabaseTest(TestCase):
         # Should not raise
         flush_stream_to_database()
 
-    @patch("skyspy.tasks.aircraft_stream.AircraftSighting")
-    def test_flush_creates_sightings(self, MockSighting):
+    def test_flush_creates_sightings(self):
         """Test that buffered aircraft are flushed to database."""
         # Add some aircraft to buffer
         with _db_buffer_lock:
@@ -321,8 +320,8 @@ class ProcessNewAircraftLookupsTest(TestCase):
         # Should not raise
         process_new_aircraft_lookups()
 
-    @patch("skyspy.tasks.aircraft_stream.fetch_aircraft_info")
-    def test_process_queues_lookups(self, mock_fetch):
+    @patch("skyspy.tasks.external_db.fetch_aircraft_info_batch")
+    def test_process_queues_lookups(self, mock_fetch_batch):
         """Test that queued aircraft are sent for lookup."""
         # Add some aircraft to queue
         _new_aircraft_queue.append("A12345")
@@ -330,8 +329,12 @@ class ProcessNewAircraftLookupsTest(TestCase):
 
         process_new_aircraft_lookups()
 
-        # Check lookups were queued
-        self.assertEqual(mock_fetch.delay.call_count, 2)
+        # Check batch lookup was queued (single call with list of ICAOs)
+        mock_fetch_batch.delay.assert_called_once()
+        icao_list = mock_fetch_batch.delay.call_args[0][0]
+        self.assertEqual(len(icao_list), 2)
+        self.assertIn("A12345", icao_list)
+        self.assertIn("A67890", icao_list)
 
 
 @override_settings(**CELERY_TEST_SETTINGS)

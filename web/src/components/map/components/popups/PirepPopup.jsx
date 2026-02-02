@@ -86,6 +86,9 @@ export function PirepPopup({
   const hasWindshear = decoded?.windshear && decoded.windshear.level > 0;
   const hasHazards = hasTurbulence || hasIcing || hasWindshear;
 
+  // Get human-readable summary from backend or decoded data
+  const humanSummary = pirep.human_summary || decoded?.humanSummary || pirep.decoded?.human_summary;
+
   return (
     <div
       className={`weather-popup pirep-popup ${config.mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${decoded?.type === 'UUA' ? 'urgent-pirep' : ''} ${isDragging ? 'dragging' : ''}`}
@@ -108,6 +111,13 @@ export function PirepPopup({
 
       {/* Hazard Banner - always visible at top */}
       <PirepHazardBanner decoded={decoded} severity={severity} />
+
+      {/* Human-readable summary from backend */}
+      {humanSummary && (
+        <div className="pirep-human-summary">
+          <span>{humanSummary}</span>
+        </div>
+      )}
 
       <div className="popup-details">
         {/* At-a-glance summary */}

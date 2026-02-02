@@ -1,7 +1,23 @@
 import React from 'react';
-import { MapPin, Clock, Calendar, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  MapPin,
+  Clock,
+  Calendar,
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
+  Info,
+} from 'lucide-react';
 import { NOTAM_TYPES } from './notamTypes';
 import { formatDate } from './notamUtils';
+
+// Severity badge colors
+const SEVERITY_COLORS = {
+  critical: { bg: '#dc2626', text: '#fff' },
+  moderate: { bg: '#f59e0b', text: '#000' },
+  advisory: { bg: '#3b82f6', text: '#fff' },
+};
 
 // Single NOTAM Card component
 export function NotamCard({ notam, expanded, onToggle }) {
@@ -10,15 +26,31 @@ export function NotamCard({ notam, expanded, onToggle }) {
   const isActive = new Date(notam.effective_start) <= new Date();
   const isPermanent = notam.is_permanent;
 
+  // Get decoded data from backend if available
+  const decoded = notam.decoded;
+  const severity = notam.severity || decoded?.severity || 'advisory';
+  const humanSummary = notam.human_summary || decoded?.human_summary;
+  const severityColors = SEVERITY_COLORS[severity] || SEVERITY_COLORS.advisory;
+
   return (
     <div
-      className={`notam-card ${notam.type?.toLowerCase()} ${expanded ? 'expanded' : ''} ${isActive ? 'active' : 'upcoming'}`}
+      className={`notam-card ${notam.type?.toLowerCase()} ${expanded ? 'expanded' : ''} ${isActive ? 'active' : 'upcoming'} severity-${severity}`}
       onClick={onToggle}
     >
       <div className="notam-card-header">
         <div className="notam-type-badge" style={{ backgroundColor: typeInfo.color }}>
           <TypeIcon size={14} />
           <span>{typeInfo.label}</span>
+        </div>
+        {/* Severity badge */}
+        <div
+          className="notam-severity-badge"
+          style={{ backgroundColor: severityColors.bg, color: severityColors.text }}
+        >
+          {severity === 'critical' && <AlertTriangle size={12} />}
+          {severity === 'moderate' && <AlertCircle size={12} />}
+          {severity === 'advisory' && <Info size={12} />}
+          <span>{severity}</span>
         </div>
         <div className="notam-location">
           <MapPin size={14} />
@@ -27,6 +59,13 @@ export function NotamCard({ notam, expanded, onToggle }) {
         <div className="notam-id">{notam.notam_id}</div>
         {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
       </div>
+
+      {/* Human-readable summary if available */}
+      {humanSummary && (
+        <div className="notam-human-summary">
+          <p>{humanSummary}</p>
+        </div>
+      )}
 
       <div className="notam-card-summary">
         <p className="notam-text-preview">
@@ -58,6 +97,44 @@ export function NotamCard({ notam, expanded, onToggle }) {
 
       {expanded && (
         <div className="notam-card-details">
+          {/* Decoded information section */}
+          {decoded && (
+            <div className="notam-decoded-info">
+              {decoded.affected_entity && (
+                <div className="decoded-row">
+                  <span className="decoded-label">Affected:</span>
+                  <span className="decoded-value">{decoded.affected_entity.display}</span>
+                </div>
+              )}
+              {decoded.condition && (
+                <div className="decoded-row">
+                  <span className="decoded-label">Status:</span>
+                  <span className="decoded-value">{decoded.condition.label}</span>
+                </div>
+              )}
+              {decoded.reason && (
+                <div className="decoded-row">
+                  <span className="decoded-label">Reason:</span>
+                  <span className="decoded-value">{decoded.reason.label}</span>
+                </div>
+              )}
+              {decoded.category_label && (
+                <div className="decoded-row">
+                  <span className="decoded-label">Category:</span>
+                  <span className="decoded-value">{decoded.category_label}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Expanded text with abbreviations decoded */}
+          {decoded?.expanded_text && (
+            <div className="notam-expanded-text">
+              <h4>Plain English</h4>
+              <p>{decoded.expanded_text}</p>
+            </div>
+          )}
+
           <div className="notam-full-text">
             <h4>Full Text</h4>
             <pre>{notam.text}</pre>

@@ -215,7 +215,7 @@ class SessionViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
         serializer = self.get_serializer(queryset, many=True)
-        return Response({"results": serializer.data, "count": queryset.count()})
+        return Response({"sessions": serializer.data, "count": queryset.count()})
 
 
 class HistoryViewSet(viewsets.ViewSet):

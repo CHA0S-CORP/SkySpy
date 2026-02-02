@@ -641,7 +641,7 @@ class EnrichMessageTests(TestCase):
         self.assertIsNone(enriched["label_info"])
 
     def test_enrich_message_with_decoded_text(self):
-        """Test that text is decoded and added."""
+        """Test that text is decoded and added when decode_text=True."""
         msg = {
             "source": "acars",
             "icao_hex": "ABC123",
@@ -650,7 +650,7 @@ class EnrichMessageTests(TestCase):
             "text": "N 47.5,W122.3,100",
         }
 
-        enriched = enrich_acars_message(msg)
+        enriched = enrich_acars_message(msg, decode_text=True)
 
         self.assertIn("decoded_text", enriched)
         self.assertEqual(enriched["decoded_text"]["message_type"], "OOOI Event")

@@ -12,6 +12,7 @@ import {
   Check,
   Eye,
   AlertTriangle,
+  AlertOctagon,
 } from 'lucide-react';
 import { NOTAM_TYPE_CONFIG } from '../../../hooks/useNotams';
 
@@ -22,6 +23,13 @@ const NOTAM_ICONS = {
   Shield,
   Navigation,
   ExternalLink,
+};
+
+// Severity configuration
+const SEVERITY_CONFIG = {
+  critical: { icon: AlertOctagon, color: '#dc2626', label: 'Critical' },
+  moderate: { icon: AlertCircle, color: '#f59e0b', label: 'Moderate' },
+  advisory: { icon: Info, color: '#3b82f6', label: 'Advisory' },
 };
 
 /**
@@ -69,10 +77,17 @@ export function NotamItem({ notam, isAcknowledged, onAcknowledge, onShowOnMap, i
   // Check if NOTAM has location data for map display
   const hasLocation = notam.latitude && notam.longitude;
 
+  // Get decoded data from backend
+  const decoded = notam.decoded;
+  const severity = notam.severity || decoded?.severity || 'advisory';
+  const humanSummary = notam.human_summary || decoded?.human_summary;
+  const severityConfig = SEVERITY_CONFIG[severity] || SEVERITY_CONFIG.advisory;
+  const SeverityIcon = severityConfig.icon;
+
   return (
     <div
-      className={`notam-item ${isAcknowledged ? 'acknowledged' : ''} ${isHighlighted ? 'highlighted' : ''} ${expiringSoon ? 'expiring-soon' : ''} ${notam.type === 'TFR' ? 'tfr' : ''}`}
-      style={{ '--notam-color': typeConfig.color }}
+      className={`notam-item ${isAcknowledged ? 'acknowledged' : ''} ${isHighlighted ? 'highlighted' : ''} ${expiringSoon ? 'expiring-soon' : ''} ${notam.type === 'TFR' ? 'tfr' : ''} severity-${severity}`}
+      style={{ '--notam-color': typeConfig.color, '--severity-color': severityConfig.color }}
     >
       {/* Collapsed header - always visible */}
       <button
@@ -83,6 +98,15 @@ export function NotamItem({ notam, isAcknowledged, onAcknowledge, onShowOnMap, i
         <div className="notam-type-badge" style={{ backgroundColor: typeConfig.color }}>
           <IconComponent size={12} />
           <span>{notam.type || 'D'}</span>
+        </div>
+
+        {/* Severity badge */}
+        <div
+          className="notam-severity-badge"
+          style={{ backgroundColor: severityConfig.color }}
+          title={severityConfig.label}
+        >
+          <SeverityIcon size={10} />
         </div>
 
         <div className="notam-title">
@@ -105,8 +129,13 @@ export function NotamItem({ notam, isAcknowledged, onAcknowledge, onShowOnMap, i
         </div>
       </button>
 
-      {/* Text preview when collapsed */}
-      {!isExpanded && notam.text && (
+      {/* Human-readable summary when collapsed */}
+      {!isExpanded && humanSummary && (
+        <div className="notam-human-summary">{humanSummary}</div>
+      )}
+
+      {/* Text preview when collapsed (fallback if no summary) */}
+      {!isExpanded && !humanSummary && notam.text && (
         <div className="notam-preview">
           {notam.text.slice(0, 80)}
           {notam.text.length > 80 ? '...' : ''}
@@ -116,6 +145,43 @@ export function NotamItem({ notam, isAcknowledged, onAcknowledge, onShowOnMap, i
       {/* Expanded content */}
       {isExpanded && (
         <div className="notam-content">
+          {/* Human-readable summary at top when expanded */}
+          {humanSummary && (
+            <div className="notam-summary-expanded">
+              <strong>{humanSummary}</strong>
+            </div>
+          )}
+
+          {/* Decoded information */}
+          {decoded && (
+            <div className="notam-decoded">
+              {decoded.affected_entity && (
+                <div className="decoded-item">
+                  <span className="decoded-label">Affected:</span>
+                  <span>{decoded.affected_entity.display}</span>
+                </div>
+              )}
+              {decoded.condition && (
+                <div className="decoded-item">
+                  <span className="decoded-label">Status:</span>
+                  <span>{decoded.condition.label}</span>
+                </div>
+              )}
+              {decoded.reason && (
+                <div className="decoded-item">
+                  <span className="decoded-label">Reason:</span>
+                  <span>{decoded.reason.label}</span>
+                </div>
+              )}
+              {decoded.category_label && decoded.category !== 'OTHER' && (
+                <div className="decoded-item">
+                  <span className="decoded-label">Category:</span>
+                  <span>{decoded.category_label}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Time validity */}
           <div className="notam-validity">
             <div className="validity-row">
@@ -167,7 +233,15 @@ export function NotamItem({ notam, isAcknowledged, onAcknowledge, onShowOnMap, i
             </div>
           )}
 
-          {/* Full text */}
+          {/* Expanded text (abbreviations decoded) */}
+          {decoded?.expanded_text && (
+            <div className="notam-expanded-text">
+              <div className="expanded-text-label">Plain English:</div>
+              <div className="expanded-text-content">{decoded.expanded_text}</div>
+            </div>
+          )}
+
+          {/* Full text (original) */}
           {notam.text && <div className="notam-full-text">{notam.text}</div>}
 
           {/* Keywords */}

@@ -950,23 +950,32 @@ class AlertServiceWebhookTests(TestCase):
         """Set up test fixtures."""
         self.service = AlertService()
 
-    @patch("httpx.post")
-    def test_call_webhook_success(self, mock_post):
+    @patch("httpx.Client")
+    def test_call_webhook_success(self, mock_client_class):
         """Test successful webhook call."""
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_post.return_value = mock_response
+        mock_response.raise_for_status = MagicMock()
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_class.return_value = mock_client
 
         data = {"rule_name": "Test", "message": "Test message"}
 
         self.service._call_webhook("https://example.com/webhook", data)
 
-        mock_post.assert_called_once_with("https://example.com/webhook", json=data, timeout=10.0)
+        mock_client.post.assert_called_once_with("https://example.com/webhook", json=data)
 
-    @patch("httpx.post")
-    def test_call_webhook_failure_does_not_raise(self, mock_post):
+    @patch("httpx.Client")
+    def test_call_webhook_failure_does_not_raise(self, mock_client_class):
         """Test that webhook failures are logged but don't raise."""
-        mock_post.side_effect = Exception("Connection failed")
+        mock_client = MagicMock()
+        mock_client.post.side_effect = Exception("Connection failed")
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_class.return_value = mock_client
 
         data = {"rule_name": "Test", "message": "Test message"}
 
@@ -1039,5 +1048,5 @@ class AlertServiceEdgeCaseTests(TestCase):
 
             triggered = self.service.check_alerts(aircraft_list)
 
-            # Should still trigger (uses empty string for ICAO)
-            self.assertEqual(len(triggered), 1)
+            # Should NOT trigger because ICAO hex is required for cooldown tracking
+            self.assertEqual(len(triggered), 0)

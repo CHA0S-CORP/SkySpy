@@ -197,10 +197,162 @@ export const decodeMetar = (metar) => {
 };
 
 // PIREP Decoder
+// Uses backend decoded data when available, with fallback for cached/legacy data
 export const decodePirep = (pirep) => {
   if (!pirep) return null;
 
-  // Normalize field names (backend uses snake_case, legacy uses camelCase)
+  // If backend has already decoded this PIREP, use that data
+  // and merge with frontend-specific processing
+  if (pirep.decoded && typeof pirep.decoded === 'object') {
+    return decodePirepFromBackend(pirep);
+  }
+
+  // Fallback: decode locally for legacy/cached data
+  return decodePirepLocal(pirep);
+};
+
+/**
+ * Process a PIREP that has been decoded by the backend.
+ * Converts backend format to frontend-expected format.
+ */
+const decodePirepFromBackend = (pirep) => {
+  const backendDecoded = pirep.decoded;
+  const raw = pirep.raw_text || pirep.rawOb || '';
+  const reportType = pirep.report_type || 'UA';
+
+  // Parse observation time
+  let timeStr = null;
+  if (pirep.observation_time || pirep.obsTime) {
+    timeStr = utcToLocal(pirep.observation_time || pirep.obsTime);
+  }
+
+  // Build altitude info
+  let altitude = null;
+  const flightLevel = pirep.flight_level ?? pirep.fltLvl;
+  const altitudeFt = pirep.altitude_ft;
+  if (flightLevel != null && !isNaN(flightLevel)) {
+    const altFt = altitudeFt ?? flightLevel * 100;
+    altitude = {
+      flightLevel: flightLevel,
+      feet: altFt,
+      text: `FL${flightLevel} (${altFt.toLocaleString()}ft)`,
+    };
+  } else if (altitudeFt != null && !isNaN(altitudeFt)) {
+    altitude = {
+      flightLevel: Math.round(altitudeFt / 100),
+      feet: altitudeFt,
+      text: `${altitudeFt.toLocaleString()}ft`,
+    };
+  }
+
+  // Convert backend turbulence to frontend format
+  let turbulence = null;
+  if (backendDecoded.turbulence && backendDecoded.turbulence.level > 0) {
+    const turb = backendDecoded.turbulence;
+    turbulence = {
+      raw: pirep.turbulence_type || turb.code,
+      intensity: turb.label,
+      level: turb.level,
+      detail: turb.description,
+      type: turb.type?.label || '',
+      warning:
+        turb.level >= 4
+          ? '⚠️ HAZARDOUS - Avoid if possible'
+          : turb.level >= 3
+            ? '⚡ Use caution'
+            : '',
+    };
+  }
+
+  // Convert backend icing to frontend format
+  let icing = null;
+  if (backendDecoded.icing && backendDecoded.icing.level > 0) {
+    const ice = backendDecoded.icing;
+    icing = {
+      raw: pirep.icing_type || ice.code,
+      intensity: ice.label,
+      level: ice.level,
+      detail: ice.description,
+      type: ice.type?.label || '',
+      warning:
+        ice.level >= 3
+          ? '⚠️ HAZARDOUS - Avoid if possible'
+          : ice.level >= 2
+            ? '❄️ Use caution, check anti-ice'
+            : '',
+    };
+  }
+
+  // Convert backend wind shear to frontend format
+  let windshear = null;
+  if (backendDecoded.wind_shear) {
+    const ws = backendDecoded.wind_shear;
+    windshear = {
+      raw: ws.code,
+      intensity: ws.label,
+      level: ws.level,
+      detail: ws.description,
+      gainLoss: ws.gain_loss ? (ws.gain_loss === 'gain' ? 'Gain' : 'Loss') : null,
+      altRange: null,
+      warning:
+        ws.level >= 3
+          ? '⚠️ SEVERE - Avoid area'
+          : ws.level >= 2
+            ? '💨 CAUTION - Wind shear reported'
+            : '💨 Wind shear reported',
+    };
+  }
+
+  // Build temperature info
+  const tempVal = pirep.temperature_c ?? pirep.temp;
+  let temperature = null;
+  if (tempVal !== undefined && tempVal !== null && !isNaN(tempVal)) {
+    temperature = {
+      celsius: tempVal,
+      fahrenheit: Math.round((tempVal * 9) / 5 + 32),
+      isaDeviation: flightLevel ? Math.round(tempVal - (15 - flightLevel * 100 * 0.00198)) : null,
+    };
+  }
+
+  // Build wind info
+  const wdirVal = pirep.wind_dir ?? pirep.wdir;
+  const wspdVal = pirep.wind_speed_kt ?? pirep.wspd;
+  let wind = null;
+  if (wdirVal != null && !isNaN(wdirVal) && wspdVal != null && !isNaN(wspdVal)) {
+    wind = {
+      direction: wdirVal,
+      speed: wspdVal,
+      text: `${wdirVal}° at ${wspdVal}kt`,
+    };
+  }
+
+  return {
+    raw: raw,
+    type: reportType,
+    typeDesc: reportType === 'UUA' ? 'URGENT Pilot Report' : 'Routine Pilot Report',
+    time: timeStr,
+    aircraft: pirep.aircraft_type || pirep.acType || null,
+    altitude: altitude,
+    location: pirep.location || null,
+    sky: null,
+    turbulence: turbulence,
+    icing: icing,
+    windshear: windshear,
+    weather: pirep.weather ? { raw: pirep.weather, description: pirep.weather } : null,
+    temperature: temperature,
+    wind: wind,
+    remarks: null,
+    // Include backend summary for display
+    humanSummary: backendDecoded.human_summary || pirep.human_summary,
+    severity: backendDecoded.severity || pirep.severity,
+    hazards: backendDecoded.hazards || [],
+  };
+};
+
+/**
+ * Local/fallback PIREP decoder for legacy or cached data without backend decoding.
+ */
+const decodePirepLocal = (pirep) => {
   const raw = pirep.raw_text || pirep.rawOb || '';
 
   // Parse raw PIREP string
@@ -261,7 +413,6 @@ export const decodePirep = (pirep) => {
     timeStr = utcToLocal(pirep.observation_time || pirep.obsTime);
   }
 
-  // Normalize field values (backend uses snake_case, legacy uses camelCase)
   const turbStr = pirep.turbulence_type || pirep.turbulence || rawParsed.turbulence;
   const iceStr = pirep.icing_type || pirep.icing || rawParsed.icing;
   const tempVal = pirep.temperature_c ?? pirep.temp ?? rawParsed.temp;
@@ -293,7 +444,7 @@ export const decodePirep = (pirep) => {
     remarks: rawParsed.remarks || null,
   };
 
-  // Altitude/Flight Level (backend uses flight_level/altitude_ft, legacy uses fltLvl)
+  // Altitude/Flight Level
   const flightLevel = pirep.flight_level ?? pirep.fltLvl;
   const altitudeFt = pirep.altitude_ft;
   if (flightLevel != null && !isNaN(flightLevel)) {
@@ -513,11 +664,22 @@ export const decodePirep = (pirep) => {
  * Get the maximum severity level from a PIREP
  * Returns an object with level (0-6), type ('turbulence', 'icing', 'windshear', 'both'),
  * and description
+ *
+ * Uses backend severity data when available.
  */
 export const getPirepMaxSeverity = (pirep) => {
   if (!pirep) return { level: 0, type: 'routine', description: 'Routine' };
 
-  const decoded = typeof pirep.decoded === 'object' ? pirep.decoded : decodePirep(pirep);
+  // If backend provides severity, use it as the primary source
+  const backendSeverity = pirep.severity || pirep.decoded?.severity;
+  const severityToLevel = {
+    routine: 0,
+    caution: 2,
+    hazardous: 4,
+    severe: 5,
+  };
+
+  const decoded = decodePirep(pirep);
   if (!decoded) return { level: 0, type: 'routine', description: 'Routine' };
 
   // Check for UUA (Urgent)
@@ -530,6 +692,12 @@ export const getPirepMaxSeverity = (pirep) => {
 
   // Determine max level and type
   let maxLevel = Math.max(turbLevel, iceLevel, wsLevel);
+
+  // Use backend severity level if available and higher
+  if (backendSeverity && severityToLevel[backendSeverity] !== undefined) {
+    maxLevel = Math.max(maxLevel, severityToLevel[backendSeverity]);
+  }
+
   let type = 'routine';
   let description = 'Routine';
 
@@ -567,6 +735,8 @@ export const getPirepMaxSeverity = (pirep) => {
     iceLevel,
     wsLevel,
     isUrgent,
+    // Include backend severity category for reference
+    backendSeverity: backendSeverity || null,
   };
 };
 

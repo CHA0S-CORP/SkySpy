@@ -140,7 +140,7 @@ class AcarsService:
         """
         ts = msg.get("timestamp", 0)
         if isinstance(ts, float):
-            ts = round(ts)  # Round to nearest second for consistent deduplication
+            ts = int(ts)  # Truncate to second for consistent deduplication
         icao = msg.get("icao_hex", "") or ""
         label = msg.get("label", "") or ""
         text = (msg.get("text", "") or "")[:50]

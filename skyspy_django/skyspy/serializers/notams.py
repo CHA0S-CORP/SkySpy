@@ -39,7 +39,7 @@ class CachedNotamSerializer(serializers.ModelSerializer):
 
 
 class NotamResponseSerializer(serializers.Serializer):
-    """Response serializer for NOTAM list."""
+    """Response serializer for NOTAM list with decoded human-readable fields."""
 
     notam_id = serializers.CharField(help_text="Unique NOTAM identifier")
     notam_type = serializers.CharField(help_text="NOTAM type (D, FDC, TFR, GPS)")
@@ -59,6 +59,10 @@ class NotamResponseSerializer(serializers.Serializer):
     is_active = serializers.BooleanField(help_text="Whether NOTAM is currently active")
     is_tfr = serializers.BooleanField(help_text="Whether this is a TFR")
     distance_nm = serializers.FloatField(required=False, allow_null=True, help_text="Distance from search center in nm")
+    # Decoded fields for human-readable display
+    severity = serializers.CharField(required=False, allow_null=True, help_text="Severity level (critical/moderate/advisory)")
+    human_summary = serializers.CharField(required=False, allow_null=True, help_text="Human-readable summary")
+    decoded = serializers.DictField(required=False, allow_null=True, help_text="Full decoded NOTAM data")
 
 
 class NotamListResponseSerializer(serializers.Serializer):

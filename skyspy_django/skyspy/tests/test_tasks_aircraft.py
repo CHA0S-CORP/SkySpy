@@ -114,10 +114,11 @@ class PollAircraftTaskTest(TestCase):
         # Execute task
         poll_aircraft()
 
-        # Verify HTTP request
-        mock_httpx_get.assert_called_once()
-        call_args = mock_httpx_get.call_args
-        self.assertIn("aircraft.json", call_args[0][0])
+        # Verify HTTP request to feeder (may have additional calls for aircraft lookups)
+        mock_httpx_get.assert_called()
+        # First call should be to the feeder
+        first_call_url = mock_httpx_get.call_args_list[0][0][0]
+        self.assertIn("aircraft.json", first_call_url)
 
         # Verify cache updates
         aircraft_list = cache.get("current_aircraft")

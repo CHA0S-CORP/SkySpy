@@ -3713,6 +3713,63 @@ function MapView({
     return ((Math.atan2(lonNm, latNm) * 180) / Math.PI + 360) % 360;
   };
 
+  // Filter NOTAMs to only those visible on the map (within radar range)
+  const visibleNotams = useMemo(() => {
+    if (!mapNotams || mapNotams.length === 0) return [];
+
+    // Use radar range with a buffer for panning
+    const visibleRange = radarRange * 1.5;
+
+    return mapNotams.filter((notam) => {
+      // Check point location
+      if (notam.latitude && notam.longitude) {
+        const dist = getDistanceNm(notam.latitude, notam.longitude);
+        if (dist <= visibleRange) return true;
+      }
+
+      // Check geometry (for TFRs with polygon bounds)
+      if (notam.geometry?.coordinates) {
+        const coords = notam.geometry.type === 'Polygon'
+          ? notam.geometry.coordinates[0]
+          : notam.geometry.type === 'MultiPolygon'
+            ? notam.geometry.coordinates[0][0]
+            : null;
+
+        if (coords && coords.length > 0) {
+          // Check if any vertex is within visible range
+          for (const coord of coords) {
+            const lon = Array.isArray(coord) ? coord[0] : coord.lon;
+            const lat = Array.isArray(coord) ? coord[1] : coord.lat;
+            if (lat && lon) {
+              const dist = getDistanceNm(lat, lon);
+              if (dist <= visibleRange) return true;
+            }
+          }
+
+          // Also check the center of the polygon
+          const lats = coords.map(c => Array.isArray(c) ? c[1] : c.lat).filter(Boolean);
+          const lons = coords.map(c => Array.isArray(c) ? c[0] : c.lon).filter(Boolean);
+          if (lats.length > 0 && lons.length > 0) {
+            const centerLat = lats.reduce((a, b) => a + b, 0) / lats.length;
+            const centerLon = lons.reduce((a, b) => a + b, 0) / lons.length;
+            const centerDist = getDistanceNm(centerLat, centerLon);
+            if (centerDist <= visibleRange) return true;
+          }
+        }
+      }
+
+      return false;
+    });
+  }, [mapNotams, radarRange, feederLat, feederLon]);
+
+  // Count unacknowledged NOTAMs that are visible on the map
+  const visibleUnacknowledgedCount = useMemo(() => {
+    if (!visibleNotams || !acknowledgedNotams) return 0;
+    return visibleNotams.filter(
+      (notam) => !acknowledgedNotams.has(notam.notam_id || notam.id)
+    ).length;
+  }, [visibleNotams, acknowledgedNotams]);
+
   // Get color class for speed based on value and altitude (for pro panel)
   const getSpeedColorClass = (speed, altitude) => {
     if (!speed) return '';
@@ -7692,6 +7749,9 @@ function MapView({
                   }
 
                   if (inside) {
+                    // Don't override aircraft selections - aircraft have priority
+                    if (closestType === 'aircraft') return;
+
                     // Use center distance as priority (closer centers = higher priority)
                     const centerLat = as.center_lat || as.lat;
                     const centerLon = as.center_lon || as.lon;
@@ -7700,14 +7760,14 @@ function MapView({
                       const clickDist = Math.sqrt(
                         (clickX - centerPos.x) ** 2 + (clickY - centerPos.y) ** 2
                       );
-                      // Only select if closer than current closest (or if no closer point-based item)
-                      if (clickDist < closestDist || closestDist > 30) {
+                      // Only select airspace if nothing else is close (closestDist > 30)
+                      if (closestDist > 30) {
                         closestDist = Math.min(clickDist, 25); // Cap distance for polygon items
                         closest = as;
                         closestType = 'airspace';
                       }
-                    } else {
-                      // No center, just select if inside
+                    } else if (closestDist > 30) {
+                      // No center, just select if inside and nothing else is close
                       closest = as;
                       closestType = 'airspace';
                       closestDist = 20;
@@ -10107,8 +10167,8 @@ function MapView({
               title="NOTAMs"
             >
               <FileWarning size={18} />
-              {notamUnacknowledgedCount > 0 && (
-                <span className="notam-badge">{notamUnacknowledgedCount}</span>
+              {visibleUnacknowledgedCount > 0 && (
+                <span className="notam-badge">{visibleUnacknowledgedCount}</span>
               )}
             </button>
             <button
@@ -10985,7 +11045,7 @@ function MapView({
         <NotamPanel
           show={showNotamPanel}
           onClose={() => setShowNotamPanel(false)}
-          notams={mapNotams}
+          notams={visibleNotams}
           loading={notamsLoading}
           error={notamsError}
           acknowledged={acknowledgedNotams}
@@ -11007,7 +11067,7 @@ function MapView({
           typeFilter={notamTypeFilter}
           setTypeFilter={setNotamTypeFilter}
           selectedNotamId={selectedNotamId}
-          unacknowledgedCount={notamUnacknowledgedCount}
+          unacknowledgedCount={visibleUnacknowledgedCount}
         />
       )}
 

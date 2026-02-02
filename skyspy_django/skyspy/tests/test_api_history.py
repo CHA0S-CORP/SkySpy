@@ -261,7 +261,7 @@ class SessionViewSetTests(APITestCase):
         response = self.client.get("/api/v1/sessions/")
         data = response.json()
 
-        self.assertIn("results", data)
+        self.assertIn("sessions", data)
 
     def test_list_with_sessions(self):
         """Test list with existing sessions."""
@@ -278,7 +278,7 @@ class SessionViewSetTests(APITestCase):
         response = self.client.get("/api/v1/sessions/")
         data = response.json()
 
-        self.assertGreater(len(data["results"]), 0)
+        self.assertGreater(len(data["sessions"]), 0)
 
     def test_list_session_structure(self):
         """Test that sessions have expected fields."""
@@ -303,7 +303,7 @@ class SessionViewSetTests(APITestCase):
         session.save()
 
         response = self.client.get("/api/v1/sessions/")
-        sess = response.json()["results"][0]
+        sess = response.json()["sessions"][0]
 
         expected_fields = [
             "id",
@@ -338,7 +338,7 @@ class SessionViewSetTests(APITestCase):
         session.save()
 
         response = self.client.get("/api/v1/sessions/")
-        sess = response.json()["results"][0]
+        sess = response.json()["sessions"][0]
 
         # Duration should be approximately 30 minutes
         self.assertAlmostEqual(sess["duration_min"], 30.0, delta=1.0)
@@ -361,7 +361,7 @@ class SessionViewSetTests(APITestCase):
         response = self.client.get("/api/v1/sessions/?hours=24")
         data = response.json()
 
-        icao_list = [s["icao_hex"] for s in data["results"]]
+        icao_list = [s["icao_hex"] for s in data["sessions"]]
         self.assertIn("NEW123", icao_list)
         self.assertNotIn("OLD123", icao_list)
 
@@ -373,7 +373,7 @@ class SessionViewSetTests(APITestCase):
         response = self.client.get("/api/v1/sessions/?military_only=true")
         data = response.json()
 
-        for session in data["results"]:
+        for session in data["sessions"]:
             self.assertTrue(session["is_military"])
 
     def test_list_filter_by_icao(self):
@@ -384,7 +384,7 @@ class SessionViewSetTests(APITestCase):
         response = self.client.get("/api/v1/sessions/?icao_hex=ABC123")
         data = response.json()
 
-        for session in data["results"]:
+        for session in data["sessions"]:
             self.assertEqual(session["icao_hex"], "ABC123")
 
     def test_list_ordered_by_last_seen(self):
@@ -395,8 +395,8 @@ class SessionViewSetTests(APITestCase):
         response = self.client.get("/api/v1/sessions/")
         data = response.json()
 
-        if len(data["results"]) >= 2:
-            self.assertEqual(data["results"][0]["icao_hex"], "SECOND")
+        if len(data["sessions"]) >= 2:
+            self.assertEqual(data["sessions"][0]["icao_hex"], "SECOND")
 
     def test_list_read_only(self):
         """Test that POST is not allowed."""
@@ -914,7 +914,7 @@ class HistoryIntegrationTests(APITestCase):
 
         # Check that old data is excluded
         sighting_icaos = [s["icao_hex"] for s in sightings_response.json()["results"]]
-        session_icaos = [s["icao_hex"] for s in sessions_response.json()["results"]]
+        session_icaos = [s["icao_hex"] for s in sessions_response.json()["sessions"]]
 
         self.assertNotIn("OLD", sighting_icaos)
         self.assertNotIn("OLD", session_icaos)

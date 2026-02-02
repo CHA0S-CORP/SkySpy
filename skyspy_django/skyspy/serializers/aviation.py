@@ -127,11 +127,16 @@ class CachedGeoJSONSerializer(serializers.ModelSerializer):
 
 
 class CachedPirepSerializer(serializers.ModelSerializer):
-    """Cached PIREP data."""
+    """Cached PIREP data with decoded human-readable fields."""
 
     # Include both lat/lon (frontend expects) and latitude/longitude (standard)
     lat = serializers.FloatField(source="latitude", read_only=True)
     lon = serializers.FloatField(source="longitude", read_only=True)
+
+    # Decoded fields for human-readable display
+    severity = serializers.SerializerMethodField()
+    human_summary = serializers.SerializerMethodField()
+    decoded = serializers.SerializerMethodField()
 
     class Meta:
         model = CachedPirep
@@ -165,7 +170,29 @@ class CachedPirepSerializer(serializers.ModelSerializer):
             "wind_speed_kt",
             "raw_text",
             "source_data",
+            # Decoded fields
+            "severity",
+            "human_summary",
+            "decoded",
         ]
+
+    def get_severity(self, obj):
+        """Get the overall severity category for this PIREP."""
+        from skyspy.services.pirep_decoder import get_max_severity
+
+        return get_max_severity(obj)
+
+    def get_human_summary(self, obj):
+        """Get a human-readable summary of this PIREP."""
+        from skyspy.services.pirep_decoder import generate_summary
+
+        return generate_summary(obj)
+
+    def get_decoded(self, obj):
+        """Get the full decoded PIREP data."""
+        from skyspy.services.pirep_decoder import decode_pirep
+
+        return decode_pirep(obj)
 
 
 class AviationDataSerializer(serializers.Serializer):

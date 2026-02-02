@@ -33,8 +33,9 @@ logger = logging.getLogger(__name__)
 # For now, we use the FAA NOTAM Search API which may have rate limits
 FAA_NOTAM_API_URL = "https://notams.aim.faa.gov/notamSearch/search"
 
-# TFR data is still available from tfr.faa.gov
-TFR_DATA_URL = "https://tfr.faa.gov/tfr2/list.json"
+# TFR data via FAA GeoServer WFS (Web Feature Service)
+# The old tfr2/list.json endpoint was deprecated in late 2025
+TFR_GEOSERVER_URL = "https://tfr.faa.gov/geoserver/TFR/ows"
 
 # Refresh interval (15 minutes)
 REFRESH_INTERVAL_SECONDS = 900
@@ -183,7 +184,7 @@ def fetch_tfrs_from_api(
     radius_nm: float = 500,
 ) -> list[dict[str, Any]]:
     """
-    Fetch TFRs from FAA TFR data feed.
+    Fetch TFRs from FAA GeoServer WFS (Web Feature Service).
 
     Args:
         lat: Center latitude for filtering
@@ -191,71 +192,98 @@ def fetch_tfrs_from_api(
         radius_nm: Search radius in nautical miles
 
     Returns:
-        List of TFR dictionaries
+        List of TFR dictionaries with GeoJSON geometry
     """
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "application/json",
     }
 
+    # Build WFS request URL
+    # Using EPSG:4326 for lat/lon coordinates
+    params = {
+        "service": "WFS",
+        "version": "1.1.0",
+        "request": "GetFeature",
+        "typeName": "TFR:V_TFR_LOC",
+        "maxFeatures": "300",
+        "outputFormat": "application/json",
+        "srsname": "EPSG:4326",
+    }
+
+    url = f"{TFR_GEOSERVER_URL}?{'&'.join(f'{k}={v}' for k, v in params.items())}"
+
     try:
-        response = _http_get_with_retry(TFR_DATA_URL, headers, timeout=15.0)
+        response = _http_get_with_retry(url, headers, timeout=30.0)
 
         if response.status_code == 404:
-            logger.warning("FAA TFR API returned 404 - endpoint may have changed")
+            logger.warning("FAA TFR GeoServer returned 404 - endpoint may have changed")
             return []
 
         response.raise_for_status()
 
         # Check if response is JSON before parsing
         content_type = response.headers.get("content-type", "")
-        if "json" not in content_type and "javascript" not in content_type:
-            logger.warning(f"TFR API returned non-JSON content-type: {content_type}")
+        if "json" not in content_type:
+            logger.warning(f"TFR GeoServer returned non-JSON content-type: {content_type}")
             return []
 
         try:
-            data = response.json() if response.text else []
+            data = response.json() if response.text else {}
         except json.JSONDecodeError as e:
-            logger.warning(f"TFR API returned invalid JSON: {e}")
+            logger.warning(f"TFR GeoServer returned invalid JSON: {e}")
             return []
 
         tfrs = []
-        tfr_list = data if isinstance(data, list) else data.get("tfrs", [])
+        features = data.get("features", [])
 
-        for item in tfr_list:
+        for feature in features:
+            props = feature.get("properties", {})
+            geometry = feature.get("geometry")
+
+            # Extract center point from polygon for distance filtering
+            center_lat = None
+            center_lon = None
+            if geometry and geometry.get("type") == "Polygon":
+                coords = geometry.get("coordinates", [[]])[0]
+                if coords:
+                    lons = [c[0] for c in coords]
+                    lats = [c[1] for c in coords]
+                    center_lon = sum(lons) / len(lons)
+                    center_lat = sum(lats) / len(lats)
+
             tfr = {
-                "id": item.get("notam") or item.get("id"),
-                "notamId": item.get("notam"),
+                "id": props.get("NOTAM_KEY") or props.get("GID"),
+                "notamId": props.get("NOTAM_KEY"),
                 "type": "TFR",
-                "text": item.get("txtDescrUSNS") or item.get("description", ""),
-                "effectiveStart": item.get("dateEffective"),
-                "effectiveEnd": item.get("dateExpire"),
-                "reason": item.get("txtDescrModern") or item.get("type"),
-                "geometry": item.get("geometry"),
+                "text": props.get("TITLE", ""),
+                "effectiveStart": None,  # Not provided in this endpoint
+                "effectiveEnd": None,
+                "reason": props.get("LEGAL", ""),
+                "geometry": geometry,
+                "location": props.get("CNS_LOCATION_ID", ""),
+                "state": props.get("STATE", ""),
+                "lat": center_lat,
+                "lon": center_lon,
             }
 
-            # Extract coordinates if available
-            if item.get("lat"):
-                tfr["lat"] = float(item.get("lat"))
-            if item.get("lng") or item.get("lon"):
-                tfr["lon"] = float(item.get("lng") or item.get("lon"))
-
             # Filter by distance if coordinates provided
-            if lat is not None and lon is not None and tfr.get("lat") and tfr.get("lon"):
-                distance = haversine_nm(lat, lon, tfr["lat"], tfr["lon"])
+            if lat is not None and lon is not None and center_lat and center_lon:
+                distance = haversine_nm(lat, lon, center_lat, center_lon)
                 if distance > radius_nm:
                     continue
                 tfr["distance_nm"] = round(distance, 1)
 
             tfrs.append(tfr)
 
+        logger.info(f"Fetched {len(tfrs)} TFRs from FAA GeoServer")
         return tfrs
 
     except httpx.HTTPStatusError as e:
-        logger.error(f"TFR API HTTP error: {e.response.status_code}")
+        logger.error(f"TFR GeoServer HTTP error: {e.response.status_code}")
         return []
     except Exception as e:
-        logger.error(f"TFR API request failed: {e}")
+        logger.error(f"TFR GeoServer request failed: {e}")
         return []
 
 
@@ -592,9 +620,15 @@ def get_notams(
 
     notams = list(queryset.order_by("-effective_start")[: limit * 2])
 
+    # Import decoder for human-readable fields
+    from skyspy.services.notam_decoder import decode_notam
+
     # Calculate distances and filter
     results = []
     for notam in notams:
+        # Get decoded fields
+        decoded = decode_notam(notam)
+
         data = {
             "notam_id": notam.notam_id,
             "notam_type": notam.notam_type,
@@ -613,6 +647,10 @@ def get_notams(
             "reason": notam.reason,
             "is_active": notam.is_active,
             "is_tfr": notam.is_tfr,
+            # Decoded human-readable fields
+            "severity": decoded["severity"],
+            "human_summary": decoded["human_summary"],
+            "decoded": decoded,
         }
 
         if lat is not None and lon is not None and notam.latitude and notam.longitude:
@@ -680,8 +718,14 @@ def get_tfrs(
 
     tfrs = list(queryset.order_by("-effective_start")[:100])
 
+    # Import decoder for human-readable fields
+    from skyspy.services.notam_decoder import decode_notam
+
     results = []
     for tfr in tfrs:
+        # Get decoded fields
+        decoded = decode_notam(tfr)
+
         data = {
             "notam_id": tfr.notam_id,
             "location": tfr.location,
@@ -696,6 +740,10 @@ def get_tfrs(
             "text": tfr.text,
             "geometry": tfr.geometry,
             "is_active": tfr.is_active,
+            # Decoded human-readable fields
+            "severity": decoded["severity"],
+            "human_summary": decoded["human_summary"],
+            "decoded": decoded,
         }
 
         if lat is not None and lon is not None and tfr.latitude and tfr.longitude:
@@ -813,10 +861,19 @@ def get_archived_notams(
     now = timezone.now()
     cutoff = now - timedelta(days=days)
 
-    queryset = CachedNotam.objects.filter(
-        is_archived=True,
-        archived_at__gte=cutoff,
-    )
+    # Query archived NOTAMs first
+    queryset = CachedNotam.objects.filter(is_archived=True)
+
+    # If no archived NOTAMs, show expired NOTAMs within the date range as historical data
+    if not queryset.exists():
+        queryset = CachedNotam.objects.filter(
+            effective_end__isnull=False,
+            effective_end__lt=now,
+            effective_end__gte=cutoff,
+            is_permanent=False,
+        )
+    else:
+        queryset = queryset.filter(Q(archived_at__gte=cutoff) | Q(effective_end__gte=cutoff))
 
     if icao:
         queryset = queryset.filter(location__iexact=icao)
