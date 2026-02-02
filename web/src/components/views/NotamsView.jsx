@@ -70,21 +70,21 @@ export function NotamsView({ apiBase }) {
     }
   }, [apiBase, httpFallbackAttempted]);
 
-  // WebSocket message handler
+  // WebSocket message handler (backend sends notam:* singular)
   const handleMessage = useCallback((data) => {
     switch (data.type) {
-      case 'notams:snapshot':
+      case 'notam:snapshot':
         setNotams(data.data?.notams || []);
         setTfrs(data.data?.tfrs || []);
         setStats(data.data?.stats || null);
         setLoading(false);
         setError(null);
         break;
-      case 'notams:new':
+      case 'notam:new':
         setNotams(prev => [data.data, ...prev]);
         if (data.data?.type === 'TFR') setTfrs(prev => [data.data, ...prev]);
         break;
-      case 'notams:update':
+      case 'notam:update':
         setNotams(prev => prev.map(n =>
           n.notam_id === data.data?.notam_id ? { ...n, ...data.data } : n
         ));
@@ -94,17 +94,21 @@ export function NotamsView({ apiBase }) {
           ));
         }
         break;
-      case 'notams:expired':
-      case 'notams:tfr_expired':
+      case 'notam:expired':
+      case 'notam:tfr_expired':
         setNotams(prev => prev.filter(n => n.notam_id !== data.data?.notam_id));
         setTfrs(prev => prev.filter(t => t.notam_id !== data.data?.notam_id));
         break;
-      case 'notams:tfr_new':
+      case 'notam:tfr_new':
         setTfrs(prev => [data.data, ...prev]);
         setNotams(prev => [data.data, ...prev]);
         break;
-      case 'notams:stats':
+      case 'notam:stats':
         setStats(data.data);
+        break;
+      case 'notam:refresh':
+        // Backend triggered a refresh - request new snapshot
+        emit('request', { type: 'notam-snapshot', request_id: `notam-refresh-${Date.now()}` });
         break;
       case 'response':
         const resolver = pendingRequestsRef.current.get(data.request_id);
@@ -151,18 +155,19 @@ export function NotamsView({ apiBase }) {
     },
   });
 
-  // Set up message event listeners
+  // Set up message event listeners (backend sends notam:* singular)
   useEffect(() => {
     if (!connected) return;
 
     const eventTypes = [
-      'notams:snapshot',
-      'notams:new',
-      'notams:update',
-      'notams:expired',
-      'notams:tfr_expired',
-      'notams:tfr_new',
-      'notams:stats',
+      'notam:snapshot',
+      'notam:new',
+      'notam:update',
+      'notam:expired',
+      'notam:tfr_expired',
+      'notam:tfr_new',
+      'notam:stats',
+      'notam:refresh',
       'response',
       'error',
     ];

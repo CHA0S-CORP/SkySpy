@@ -255,6 +255,17 @@ export function useSocketIOAudio(apiBase) {
       });
     });
 
+    // Handle audio:snapshot sent on connect - provides recent transmissions
+    const snapshotUnsub = on('audio:snapshot', (data) => {
+      console.log('[useSocketIOAudio] Audio snapshot received:', data);
+      if (data?.transmissions && Array.isArray(data.transmissions)) {
+        // Process each transmission from the snapshot
+        data.transmissions.forEach(transmission => {
+          handleNewTransmission(transmission);
+        });
+      }
+    });
+
     // Handle transcript updates (legacy events)
     const transcriptEvents = [
       'audio.transcript_update',
@@ -335,6 +346,7 @@ export function useSocketIOAudio(apiBase) {
     return () => {
       unsubscribers.forEach(unsub => unsub && unsub());
       transcriptUnsubscribers.forEach(unsub => unsub && unsub());
+      snapshotUnsub && snapshotUnsub();
       transcriptionStartedUnsub && transcriptionStartedUnsub();
       transcriptionCompletedUnsub && transcriptionCompletedUnsub();
       transcriptionFailedUnsub && transcriptionFailedUnsub();

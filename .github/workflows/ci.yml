@@ -2,29 +2,25 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
-      - develop
-    tags:
-      - 'v*'
+    branches: [main, develop]
+    tags: ['v*']
   pull_request:
-    branches:
-      - main
-      - develop
+    branches: [main, develop]
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  UV_SYSTEM_PYTHON: 1
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # =============================================================================
-  # Stage 1: Path Detection & Parallel Linting/Security (~2 min)
-  # =============================================================================
+  # ===========================================================================
+  # Stage 1: Path Detection (runs in parallel with linting)
+  # ===========================================================================
 
   detect-changes:
     name: Detect Changes
@@ -35,11 +31,8 @@ jobs:
       go: ${{ steps.filter.outputs.go }}
       docker: ${{ steps.filter.outputs.docker }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Detect file changes
-        uses: dorny/paths-filter@v3
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
@@ -48,8 +41,6 @@ jobs:
               - 'skyspy_common/**'
               - 'requirements*.txt'
               - 'pyproject.toml'
-              - 'setup.py'
-              - 'setup.cfg'
             frontend:
               - 'web/**'
               - '!web/e2e/**'
@@ -62,200 +53,93 @@ jobs:
               - 'docker-compose*.yaml'
               - 'docker-compose*.yml'
 
+  # ===========================================================================
+  # Stage 1b: Linting (runs in parallel with path detection)
+  # ===========================================================================
+
   lint-python:
     name: Lint Python
     runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.python == 'true'
-    timeout-minutes: 10
-    continue-on-error: true
-
+    timeout-minutes: 5
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-
-      - name: Install linting tools
-        run: pip install ruff black mypy
-
-      - name: Run ruff (linting + import sorting)
-        run: ruff check --output-format=github .
-
-      - name: Run black (format check)
-        run: black --check --diff .
-
-      - name: Run mypy (type checking)
-        run: mypy --ignore-missing-imports --no-error-summary .
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv tool run ruff check --output-format=github .
+      - run: uv tool run ruff format --check .
 
   lint-frontend:
     name: Lint Frontend
     runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.frontend == 'true'
-    timeout-minutes: 10
-    continue-on-error: true
-
+    timeout-minutes: 5
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
-
-      - name: Install dependencies
+      - run: npm ci
         working-directory: web
-        run: npm ci
-
-      - name: Run ESLint
+      - run: npm run lint && npm run format:check
         working-directory: web
-        run: npm run lint
-
-      - name: Run Prettier check
-        working-directory: web
-        run: npm run format:check
 
   lint-go:
     name: Lint Go
     runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.go == 'true'
-    timeout-minutes: 10
-    continue-on-error: true
-
+    timeout-minutes: 5
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.22'
           cache-dependency-path: skyspy-go/go.sum
-
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v4
+      - uses: golangci/golangci-lint-action@v6
         with:
           version: latest
           working-directory: skyspy-go
-          args: --timeout=5m
-
       - name: Check gofmt
         working-directory: skyspy-go
-        run: |
-          if [ -n "$(gofmt -l .)" ]; then
-            echo "Go files are not properly formatted:"
-            gofmt -l .
-            exit 1
-          fi
+        run: test -z "$(gofmt -l .)"
+
+  # ===========================================================================
+  # Stage 2: Security & Unit Tests (parallel after path detection)
+  # ===========================================================================
 
   security-python:
-    name: Security Scan Python
+    name: Security Python
     runs-on: ubuntu-latest
     needs: detect-changes
     if: needs.detect-changes.outputs.python == 'true'
-    timeout-minutes: 10
-
+    timeout-minutes: 5
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-
-      - name: Install security tools
-        run: pip install bandit pip-audit
-
-      - name: Run Bandit (Python security linter)
-        run: bandit -r skyspy_django skyspy_common -x "*/tests/*,*/test_*" -ll -ii
-
-      - name: Run pip-audit (dependency vulnerabilities)
-        run: pip-audit --requirement skyspy_django/requirements.txt --ignore-vuln PYSEC-2024-48
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: |
+          uv tool run bandit -r skyspy_django skyspy_common -x "*/tests/*,*/test_*" -ll -ii
+          uv tool run pip-audit --requirement skyspy_django/requirements.txt --ignore-vuln PYSEC-2024-48
 
   security-frontend:
-    name: Security Scan Frontend
+    name: Security Frontend
     runs-on: ubuntu-latest
     needs: detect-changes
     if: needs.detect-changes.outputs.frontend == 'true'
-    timeout-minutes: 10
-
+    timeout-minutes: 5
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
-
-      - name: Install dependencies
+      - run: npm ci && npm audit --audit-level=high
         working-directory: web
-        run: npm ci
-
-      - name: Run npm audit
-        working-directory: web
-        run: npm audit --audit-level=high
-
-  frontend-unit-tests:
-    name: Frontend Unit Tests
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.frontend == 'true'
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
-
-      - name: Install dependencies
-        working-directory: web
-        run: npm ci
-
-      - name: Run Vitest
-        working-directory: web
-        run: npm run test:unit:coverage
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: web/coverage/coverage-final.json
-          flags: frontend
-          name: frontend-coverage
-          fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  # =============================================================================
-  # Stage 2: Unit Tests (~4 min)
-  # =============================================================================
 
   test-python-unit:
     name: Python Unit Tests
     runs-on: ubuntu-latest
-    needs: [detect-changes, security-python]
+    needs: detect-changes
     if: needs.detect-changes.outputs.python == 'true'
-    timeout-minutes: 15
-
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:16-alpine
@@ -263,78 +147,48 @@ jobs:
           POSTGRES_USER: adsb
           POSTGRES_PASSWORD: adsb
           POSTGRES_DB: adsb_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 3s --health-retries 5
+        ports: ['5432:5432']
       redis:
         image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 5
+        ports: ['6379:6379']
+    env:
+      DJANGO_SETTINGS_MODULE: skyspy.tests.test_settings
+      DJANGO_SECRET_KEY: test-secret-key-for-ci
+      DATABASE_URL: postgresql://adsb:adsb@localhost:5432/adsb_test
+      REDIS_URL: redis://localhost:6379/0
+      FEEDER_LAT: '48.6969'
+      FEEDER_LON: '-122.6767'
+      SAFETY_MONITORING_ENABLED: 'true'
+      PHOTO_CACHE_ENABLED: 'false'
+      S3_ENABLED: 'false'
+      WHISPER_ENABLED: 'false'
+      TRANSCRIPTION_ENABLED: 'false'
+      OPENSKY_DB_ENABLED: 'false'
+      LLM_ENABLED: 'false'
+      PROMETHEUS_ENABLED: 'false'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
       - name: Install dependencies
         working-directory: skyspy_django
         run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pytest-cov pytest-django pytest-asyncio
-
-      - name: Install skyspy_common
-        run: pip install -e skyspy_common
-
-      - name: Run unit tests
+          uv pip install -r requirements.txt
+          uv pip install pytest pytest-cov pytest-django pytest-asyncio
+          uv pip install -e ../skyspy_common
+      - name: Run tests
         working-directory: skyspy_django
-        env:
-          DJANGO_SETTINGS_MODULE: skyspy.tests.test_settings
-          DJANGO_SECRET_KEY: test-secret-key-for-ci-testing-only
-          DATABASE_URL: postgresql://adsb:adsb@localhost:5432/adsb_test
-          REDIS_URL: redis://localhost:6379/0
-          FEEDER_LAT: 48.6969
-          FEEDER_LON: -122.6767
-          SAFETY_MONITORING_ENABLED: 'true'
-          PHOTO_CACHE_ENABLED: 'false'
-          S3_ENABLED: 'false'
-          WHISPER_ENABLED: 'false'
-          TRANSCRIPTION_ENABLED: 'false'
-          OPENSKY_DB_ENABLED: 'false'
-          LLM_ENABLED: 'false'
-          SENTRY_DSN: ''
-          PROMETHEUS_ENABLED: 'false'
         run: |
           python manage.py migrate --noinput
           pytest -v --tb=short \
             --ignore=skyspy/tests/e2e \
             --ignore=skyspy/tests/integration \
-            --cov=skyspy \
-            --cov-report=xml:coverage.xml \
-            --cov-report=term-missing \
-            --cov-fail-under=80
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+            --cov=skyspy --cov-report=xml --cov-fail-under=80
+      - uses: codecov/codecov-action@v5
         with:
           files: skyspy_django/coverage.xml
           flags: python-unit
-          name: python-unit-coverage
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
@@ -342,97 +196,91 @@ jobs:
   test-go:
     name: Go Tests
     runs-on: ubuntu-latest
-    needs: [detect-changes]
+    needs: detect-changes
     if: needs.detect-changes.outputs.go == 'true'
-    timeout-minutes: 10
-
+    timeout-minutes: 5
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.22'
           cache-dependency-path: skyspy-go/go.sum
-
-      - name: Run Go tests
+      - name: Run tests
         working-directory: skyspy-go
         run: |
           go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
           echo "Coverage: ${COVERAGE}%"
-          if (( $(echo "$COVERAGE < 70" | bc -l) )); then
-            echo "Coverage ${COVERAGE}% is below 70% threshold"
-            exit 1
-          fi
-
-      - name: Upload Go coverage to Codecov
-        uses: codecov/codecov-action@v4
+          (( $(echo "$COVERAGE >= 70" | bc -l) )) || exit 1
+      - uses: codecov/codecov-action@v5
         with:
           files: skyspy-go/coverage.out
           flags: go
-          name: go-coverage
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  frontend-build-check:
-    name: Frontend Build Check
+  test-frontend-unit:
+    name: Frontend Unit Tests
     runs-on: ubuntu-latest
-    needs: [detect-changes, security-frontend, frontend-unit-tests]
+    needs: detect-changes
     if: needs.detect-changes.outputs.frontend == 'true'
-    timeout-minutes: 10
-
+    timeout-minutes: 5
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
-
-      - name: Install dependencies
+      - run: npm ci
         working-directory: web
-        run: npm ci
-
-      - name: Build
+      - run: npm run test:unit:coverage
         working-directory: web
-        run: npm run build
+      - uses: codecov/codecov-action@v5
+        with:
+          files: web/coverage/coverage-final.json
+          flags: frontend
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  # =============================================================================
-  # Stage 3: Integration Tests (~6 min)
-  # =============================================================================
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: web
+
+  # ===========================================================================
+  # Stage 3: Integration Tests
+  # ===========================================================================
 
   test-python-integration:
     name: Python Integration Tests
     runs-on: ubuntu-latest
     needs: [detect-changes, test-python-unit]
     if: needs.detect-changes.outputs.python == 'true'
-    timeout-minutes: 20
-
+    timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: network=host
-
-      - name: Expose GitHub Actions cache for Docker
-        uses: crazy-max/ghaction-github-runtime@v3
-
-      - name: Create .env.test
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Create test env
         run: |
           cat > .env.test << 'EOF'
           POSTGRES_USER=adsb
           POSTGRES_PASSWORD=adsb
           POSTGRES_DB=adsb_test
-          DJANGO_SECRET_KEY=test-secret-key-for-ci-testing-only
+          DJANGO_SECRET_KEY=test-secret-key-for-ci
           DJANGO_SETTINGS_MODULE=skyspy.tests.test_settings
           DEBUG=False
           ALLOWED_HOSTS=*
@@ -448,20 +296,15 @@ jobs:
           DB_STORE_INTERVAL=5
           SESSION_TIMEOUT_MINUTES=30
           SAFETY_MONITORING_ENABLED=true
-          APPRISE_URLS=
-          NOTIFICATION_COOLDOWN=300
           ACARS_ENABLED=true
           ACARS_PORT=5555
           VDLM2_PORT=5556
           OPENSKY_DB_ENABLED=false
-          OPENSKY_DB_PATH=/data/opensky/aircraft-database.csv
           PHOTO_CACHE_ENABLED=false
-          PHOTO_CACHE_DIR=/data/photos
           S3_ENABLED=false
           WHISPER_ENABLED=false
           TRANSCRIPTION_ENABLED=false
           LLM_ENABLED=false
-          SENTRY_DSN=
           PROMETHEUS_ENABLED=false
           PYTHONDONTWRITEBYTECODE=1
           PYTHONUNBUFFERED=1
@@ -470,80 +313,53 @@ jobs:
           MOCK_INTERVAL_MAX=2.0
           STATION_ID=CI-TEST-STATION
           EOF
-
-      - name: Build test images with cache
+      - name: Build and run tests
         run: |
           docker buildx bake -f docker-compose.test.yaml \
-            --set "*.cache-from=type=gha,scope=integration" \
-            --set "*.cache-to=type=gha,mode=max,scope=integration" \
+            --set "*.cache-from=type=gha" \
+            --set "*.cache-to=type=gha,mode=max" \
             --load
-        timeout-minutes: 10
+          docker compose -f docker-compose.test.yaml --env-file .env.test up -d --wait postgres pgbouncer redis ultrafeeder dump978
+          docker compose -f docker-compose.test.yaml --env-file .env.test --profile test run --rm api-test
         env:
           DOCKER_BUILDKIT: 1
-
-      - name: Start services
-        run: |
-          docker compose -f docker-compose.test.yaml --env-file .env.test up -d --wait postgres pgbouncer redis ultrafeeder dump978
-        timeout-minutes: 5
-
-      - name: Run integration tests
-        run: |
-          docker compose -f docker-compose.test.yaml --env-file .env.test --profile test run --rm api-test
-        timeout-minutes: 10
-
-      - name: Upload test results
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
           name: integration-test-results
           path: test-results/
-          retention-days: 30
-
-      - name: Upload coverage to Codecov
+          retention-days: 7
+      - uses: codecov/codecov-action@v5
         if: success()
-        uses: codecov/codecov-action@v4
         with:
           files: test-results/coverage.xml
           flags: python-integration
-          name: python-integration-coverage
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-      - name: Cleanup
-        if: always()
+      - if: always()
         run: docker compose -f docker-compose.test.yaml --env-file .env.test down -v
 
-  # =============================================================================
-  # Stage 4: E2E Tests (~8 min)
-  # =============================================================================
+  # ===========================================================================
+  # Stage 4: E2E Tests
+  # ===========================================================================
 
   test-e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    needs: [detect-changes, test-python-integration, frontend-build-check]
+    needs: [detect-changes, test-python-integration, build-frontend]
     if: needs.detect-changes.outputs.python == 'true' || needs.detect-changes.outputs.frontend == 'true'
-    timeout-minutes: 30
-
+    timeout-minutes: 20
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: network=host
-
-      - name: Expose GitHub Actions cache for Docker
-        uses: crazy-max/ghaction-github-runtime@v3
-
-      - name: Create .env.test
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Create test env
         run: |
           cat > .env.test << 'EOF'
           POSTGRES_USER=adsb
           POSTGRES_PASSWORD=adsb
           POSTGRES_DB=adsb_test
-          DJANGO_SECRET_KEY=test-secret-key-for-ci-testing-only
+          DJANGO_SECRET_KEY=test-secret-key-for-ci
           DJANGO_SETTINGS_MODULE=skyspy.settings
           DEBUG=False
           ALLOWED_HOSTS=*
@@ -559,8 +375,6 @@ jobs:
           DB_STORE_INTERVAL=5
           SESSION_TIMEOUT_MINUTES=30
           SAFETY_MONITORING_ENABLED=true
-          APPRISE_URLS=
-          NOTIFICATION_COOLDOWN=300
           ACARS_ENABLED=true
           ACARS_PORT=5555
           VDLM2_PORT=5556
@@ -570,7 +384,6 @@ jobs:
           WHISPER_ENABLED=false
           TRANSCRIPTION_ENABLED=false
           LLM_ENABLED=false
-          SENTRY_DSN=
           PROMETHEUS_ENABLED=false
           PYTHONDONTWRITEBYTECODE=1
           PYTHONUNBUFFERED=1
@@ -579,77 +392,57 @@ jobs:
           MOCK_INTERVAL_MAX=2.0
           STATION_ID=CI-TEST-STATION
           EOF
-
-      - name: Build and start backend services
+      - name: Start backend
         run: |
           docker buildx bake -f docker-compose.test.yaml \
-            --set "*.cache-from=type=gha,scope=e2e" \
-            --set "*.cache-to=type=gha,mode=max,scope=e2e" \
+            --set "*.cache-from=type=gha" \
+            --set "*.cache-to=type=gha,mode=max" \
             --load
           docker compose -f docker-compose.test.yaml --env-file .env.test --profile dev up -d --wait
-        timeout-minutes: 10
         env:
           DOCKER_BUILDKIT: 1
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
-
-      - name: Install frontend dependencies
+      - run: npm ci
         working-directory: web
-        run: npm ci
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}
-          restore-keys: |
-            playwright-${{ runner.os }}-
-
-      - name: Install Playwright browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
+      - name: Install Playwright
         working-directory: web
         run: npx playwright install --with-deps chromium
-
-      - name: Install Playwright deps (if cache hit)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+      - name: Install Playwright deps
         working-directory: web
         run: npx playwright install-deps chromium
-
-      - name: Run Playwright tests
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+      - run: npm run test:e2e
         working-directory: web
-        run: npm run test:e2e
         env:
           CI: true
-
-      - name: Upload Playwright report
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: web/playwright-report/
-          retention-days: 30
-
-      - name: Upload E2E test results
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
           name: e2e-test-results
           path: web/test-results/
-          retention-days: 30
-
-      - name: Cleanup
-        if: always()
+          retention-days: 7
+      - if: always()
         run: docker compose -f docker-compose.test.yaml --env-file .env.test down -v
 
-  # =============================================================================
-  # Stage 5: Docker Build & Push (push only, ~10 min)
-  # =============================================================================
+  # ===========================================================================
+  # Stage 5: Docker Build & Push
+  # ===========================================================================
 
   docker-build-push:
     name: Build ${{ matrix.name }}
@@ -660,14 +453,12 @@ jobs:
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       !contains(needs.*.result, 'failure') &&
       !contains(needs.*.result, 'cancelled')
-    timeout-minutes: 30
-
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: write
       id-token: write
       attestations: write
-
     strategy:
       fail-fast: true
       matrix:
@@ -676,45 +467,29 @@ jobs:
             dockerfile: Dockerfile
             image-suffix: ""
             context: .
-            cache-scope: api
           - name: rtl-airband-uploader
             dockerfile: rtl-airband-uploader/Dockerfile
             image-suffix: -rtl-airband-uploader
             context: rtl-airband-uploader
-            cache-scope: rtl-airband
           - name: 1090 Mock
             dockerfile: test/mock-1090/Dockerfile
             image-suffix: -1090-mock
             context: test/mock-1090
-            cache-scope: 1090-mock
           - name: ACARS Mock
             dockerfile: test/acars-mock/Dockerfile
             image-suffix: -acarshub-mock
             context: test/acars-mock
-            cache-scope: acars-mock
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: linux/amd64,linux/arm64
-
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GHCR
-        uses: docker/login-action@v3
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
+      - uses: docker/metadata-action@v5
         id: meta
-        uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image-suffix }}
           tags: |
@@ -722,13 +497,10 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push
+      - uses: docker/build-push-action@v6
         id: build
-        uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
@@ -736,66 +508,32 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.cache-scope }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.cache-scope }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           sbom: true
           provenance: true
-
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@v1
+      - uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image-suffix }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
-      - name: Build summary
-        run: |
-          echo "### ${{ matrix.name }} Build Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image-suffix }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Digest:** \`${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-
-  # =============================================================================
-  # CI Summary
-  # =============================================================================
+  # ===========================================================================
+  # CI Gate
+  # ===========================================================================
 
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs:
-      - detect-changes
-      - security-python
-      - security-frontend
-      - frontend-unit-tests
-      - test-python-unit
-      - test-go
-      - frontend-build-check
-      - test-python-integration
-      - test-e2e
+    needs: [lint-python, lint-frontend, lint-go, security-python, security-frontend, test-python-unit, test-go, test-frontend-unit, build-frontend, test-python-integration, test-e2e]
     if: always()
-
     steps:
       - name: Check results
         run: |
-          # Check if any required job failed
           RESULTS='${{ toJSON(needs.*.result) }}'
           echo "Job results: $RESULTS"
-
-          # Count failures (excluding skipped jobs which are OK)
-          if echo "$RESULTS" | grep -q '"failure"'; then
-            echo "Some jobs failed!"
+          if echo "$RESULTS" | grep -qE '"failure"|"cancelled"'; then
+            echo "CI failed"
             exit 1
           fi
-
-          if echo "$RESULTS" | grep -q '"cancelled"'; then
-            echo "Some jobs were cancelled!"
-            exit 1
-          fi
-
-          echo "All jobs passed or were skipped (OK for path filtering)"
+          echo "CI passed"

@@ -198,7 +198,7 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
       }
 
       // Antenna analytics
-      else if (type === 'antenna:analytics') {
+      else if (type === 'antenna:analytics_update') {
         if (data) {
           setAntennaAnalytics(data);
         }
@@ -231,17 +231,17 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
         }
       }
 
-      // NOTAMS events
-      else if (type === 'notams:snapshot') {
+      // NOTAM events (backend sends notam:* singular)
+      else if (type === 'notam:snapshot') {
         if (data?.notams) setNotams(data.notams);
         if (data?.tfrs) setTfrs(data.tfrs);
         if (data?.stats) setNotamStats(data.stats);
-      } else if (type === 'notams:new' || type === 'notams:tfr_new') {
+      } else if (type === 'notam:new' || type === 'notam:tfr_new') {
         if (data) {
           setNotams(prev => [data, ...prev]);
           if (data.type === 'TFR') setTfrs(prev => [data, ...prev]);
         }
-      } else if (type === 'notams:update') {
+      } else if (type === 'notam:update') {
         if (data?.notam_id) {
           setNotams(prev => prev.map(n =>
             n.notam_id === data.notam_id ? { ...n, ...data } : n
@@ -252,13 +252,18 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
             ));
           }
         }
-      } else if (type === 'notams:expired' || type === 'notams:tfr_expired') {
+      } else if (type === 'notam:expired' || type === 'notam:tfr_expired') {
         if (data?.notam_id) {
           setNotams(prev => prev.filter(n => n.notam_id !== data.notam_id));
           setTfrs(prev => prev.filter(t => t.notam_id !== data.notam_id));
         }
-      } else if (type === 'notams:stats') {
+      } else if (type === 'notam:stats') {
         if (data) setNotamStats(data);
+      } else if (type === 'notam:refresh') {
+        // Refresh triggered by backend - request new snapshot
+        if (socketEmitRef.current) {
+          socketEmitRef.current('request', { type: 'notam-snapshot', request_id: `notam-refresh-${Date.now()}` });
+        }
       }
 
       // Request/Response
@@ -410,12 +415,12 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
       // Airspace
       'airspace:snapshot', 'airspace:update', 'airspace:advisory', 'airspace:boundary',
       // Antenna
-      'antenna:analytics',
+      'antenna:analytics_update',
       // Airframe
       'airframe:error',
-      // NOTAMS
-      'notams:snapshot', 'notams:new', 'notams:update', 'notams:expired',
-      'notams:tfr_new', 'notams:tfr_expired', 'notams:stats',
+      // NOTAM (backend sends notam:* singular)
+      'notam:snapshot', 'notam:new', 'notam:update', 'notam:expired',
+      'notam:tfr_new', 'notam:tfr_expired', 'notam:stats', 'notam:refresh',
       // Stats
       'stats:update',
       // Request/Response
