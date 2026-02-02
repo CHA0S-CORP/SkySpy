@@ -55,7 +55,9 @@ Examples:
 	RunE: run,
 }
 
-func init() {
+// setupCommands initializes all command flags and subcommands.
+// This replaces init() to satisfy gochecknoinits linter.
+func setupCommands() {
 	// Global flags (available to all commands)
 	rootCmd.PersistentFlags().StringVar(&host, "host", "", "Server hostname")
 	rootCmd.PersistentFlags().IntVar(&port, "port", 0, "Server port")
@@ -72,7 +74,9 @@ func init() {
 	rootCmd.Flags().BoolVar(&noAudio, "no-audio", false, "Disable audio alerts")
 
 	// Add subcommands
-	RegisterAuthCommands() // Sets up auth command hierarchy
+	RegisterAuthCommands()  // Sets up auth command hierarchy
+	RegisterRadioFlags()    // Sets up radio command flags
+	RegisterRadioProFlags() // Sets up radio-pro command flags
 	rootCmd.AddCommand(loginCmd)
 	rootCmd.AddCommand(logoutCmd)
 	rootCmd.AddCommand(authCmd)
@@ -82,6 +86,9 @@ func init() {
 }
 
 func main() {
+	// Initialize commands and flags
+	setupCommands()
+
 	// Check for API key in environment
 	if envKey := os.Getenv("SKYSPY_API_KEY"); envKey != "" && apiKey == "" {
 		apiKey = envKey

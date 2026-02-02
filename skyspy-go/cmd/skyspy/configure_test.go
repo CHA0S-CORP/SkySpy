@@ -1015,7 +1015,7 @@ func TestWizardUpdateAtNonFieldSection(t *testing.T) {
 }
 
 // TestWizardApplyFieldsWithInvalidValues tests applying fields with invalid values
-func TestWizardApplyFieldsWithInvalidValues(t *testing.T) {
+func TestWizardApplyFieldsWithInvalidValues(_ *testing.T) {
 	cfg := config.DefaultConfig()
 	m := newWizardModel(cfg)
 
@@ -1054,9 +1054,8 @@ func TestWizardApplyFieldsWithInvalidValues(t *testing.T) {
 	m.applyFields()
 
 	// Port should still have default value since "not_a_number" is invalid
-	if cfg.Connection.Port == 0 {
-		// Port wasn't changed from default since value was invalid
-	}
+	// Just verify no panic occurred during applyFields
+	_ = cfg.Connection.Port
 }
 
 // TestWizardRenderFieldsWithSelection tests rendering with selected bool field
@@ -1081,7 +1080,7 @@ func TestWizardRenderFieldsWithSelection(t *testing.T) {
 }
 
 // TestWizardRenderFieldsWithSelectField tests rendering with selected select field
-func TestWizardRenderFieldsWithSelectField(t *testing.T) {
+func TestWizardRenderFieldsWithSelectField(_ *testing.T) {
 	cfg := config.DefaultConfig()
 	m := newWizardModel(cfg)
 	m.section = sectionDisplay
@@ -1095,9 +1094,8 @@ func TestWizardRenderFieldsWithSelectField(t *testing.T) {
 	}
 
 	view := m.renderFields()
-	if !strings.Contains(view, "<") && !strings.Contains(view, ">") {
-		// Select field arrows should be shown when selected
-	}
+	// Select field arrows should be shown when selected - just verify no panic
+	_ = view
 }
 
 // TestWizardSectionConstants tests section constants are in correct order
@@ -1183,7 +1181,7 @@ func TestWizardHandleEnterFromWelcome(t *testing.T) {
 }
 
 // TestWizardHandleEnterFromSection tests handleEnter from a section with fields
-func TestWizardHandleEnterFromSection(t *testing.T) {
+func TestWizardHandleEnterFromSection(_ *testing.T) {
 	cfg := config.DefaultConfig()
 	m := newWizardModel(cfg)
 	m.section = sectionConnection
@@ -1192,16 +1190,13 @@ func TestWizardHandleEnterFromSection(t *testing.T) {
 	newModel, _ := m.handleEnter()
 	model := newModel.(wizardModel)
 
-	// Should move to next field or section
-	if model.fieldIndex == 0 && model.section == sectionConnection {
-		// Stayed at same position (might be valid behavior)
-	} else if model.fieldIndex > 0 || model.section > sectionConnection {
-		// Moved forward (expected)
-	}
+	// Should move to next field or section - just verify no panic
+	_ = model.fieldIndex
+	_ = model.section
 }
 
 // TestWizardStylesAreInitialized tests that all styles are initialized
-func TestWizardStylesAreInitialized(t *testing.T) {
+func TestWizardStylesAreInitialized(_ *testing.T) {
 	cfg := config.DefaultConfig()
 	m := newWizardModel(cfg)
 
@@ -1558,7 +1553,7 @@ func TestWizardTextInputFocusOnEsc(t *testing.T) {
 }
 
 // TestWizardTextInputUpdateMultipleChars tests the text input update with multiple characters
-func TestWizardTextInputUpdateMultipleChars(t *testing.T) {
+func TestWizardTextInputUpdateMultipleChars(_ *testing.T) {
 	cfg := config.DefaultConfig()
 	m := newWizardModel(cfg)
 	m.section = sectionConnection

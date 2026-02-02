@@ -40,7 +40,9 @@ Examples:
 	RunE: runRadioPro,
 }
 
-func init() {
+// RegisterRadioProFlags sets up the radio-pro command flags.
+// Call this from the main command initialization.
+func RegisterRadioProFlags() {
 	radioProCmd.Flags().StringVar(&radioProFrequency, "frequency", "", "Monitor specific frequency (e.g., 1090, 136.9)")
 	radioProCmd.Flags().BoolVar(&radioProScanMode, "scan", false, "Enable frequency scanning mode")
 }

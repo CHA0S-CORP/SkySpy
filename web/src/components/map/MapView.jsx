@@ -5108,9 +5108,10 @@ function MapView({
 
         // Helper to get smooth altitude-based RGB color
         const getAltitudeRGB = (alt) => {
-          if (!alt || alt <= 0) return { r: 50, g: 255, b: 100 }; // Ground level: bright green
+          const numAlt = Number(alt);
+          if (!Number.isFinite(numAlt) || numAlt <= 0) return { r: 50, g: 255, b: 100 }; // Ground level: bright green
           // Smooth gradient: Green (0ft) -> Yellow (10000ft) -> Orange (25000ft) -> Red/Magenta (45000ft+)
-          const clampedAlt = Math.max(0, Math.min(alt, 45000));
+          const clampedAlt = Math.max(0, Math.min(numAlt, 45000));
           if (clampedAlt < 10000) {
             // Green to Yellow transition (0-10000ft)
             const t = clampedAlt / 10000;

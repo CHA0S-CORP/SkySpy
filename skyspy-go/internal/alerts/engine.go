@@ -74,7 +74,7 @@ func (e *AlertEngine) AddGeofence(geofence *Geofence) {
 }
 
 // CheckAircraft checks an aircraft against all enabled rules
-func (e *AlertEngine) CheckAircraft(state *AircraftState, prevState *AircraftState) []TriggeredAlert {
+func (e *AlertEngine) CheckAircraft(state, prevState *AircraftState) []TriggeredAlert {
 	var triggered []TriggeredAlert
 
 	if state == nil {

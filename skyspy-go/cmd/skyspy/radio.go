@@ -32,7 +32,9 @@ Examples:
 	RunE: runRadio,
 }
 
-func init() {
+// RegisterRadioFlags sets up the radio command flags.
+// Call this from the main command initialization.
+func RegisterRadioFlags() {
 	radioCmd.Flags().StringVar(&radioFrequency, "frequency", "", "Monitor specific frequency (e.g., 1090, 136.9)")
 	radioCmd.Flags().BoolVar(&radioScanMode, "scan", false, "Enable frequency scanning mode")
 }

@@ -608,13 +608,11 @@ func TestRadioCommands_ScanFlagIsBool(t *testing.T) {
 }
 
 func TestRadioCommands_FrequencyFlagIsString(t *testing.T) {
-	root := createTestRootWithRadio()
-
 	// Test that --frequency accepts string values (including decimals)
 	testFrequencies := []string{"1090", "136.725", "131.550", "10.0", "999.999"}
 
 	for _, freq := range testFrequencies {
-		root = createTestRootWithRadio()
+		root := createTestRootWithRadio()
 		output, err := executeRadioCommand(root, "radio", "--frequency", freq)
 		if err != nil {
 			t.Errorf("Unexpected error for frequency %q: %v", freq, err)
