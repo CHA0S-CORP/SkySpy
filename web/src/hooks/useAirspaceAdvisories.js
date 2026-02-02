@@ -171,9 +171,7 @@ export function useAirspaceAdvisories(wsRequest, wsConnected, options = {}) {
     : advisories;
 
   // Get unacknowledged count
-  const unacknowledgedCount = filteredAdvisories.filter(
-    (adv) => !acknowledged.has(adv.id)
-  ).length;
+  const unacknowledgedCount = filteredAdvisories.filter((adv) => !acknowledged.has(adv.id)).length;
 
   // Get advisories grouped by hazard type
   const advisoriesByHazard = filteredAdvisories.reduce((acc, adv) => {

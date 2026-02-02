@@ -1,7 +1,8 @@
 ---
 title: Client Implementation
 slug: socketio-client-implementation
-excerpt: Complete JavaScript and Python client examples with best practices
+content:
+  excerpt: Complete JavaScript and Python client examples with best practices
 ---
 
 # Client Implementation

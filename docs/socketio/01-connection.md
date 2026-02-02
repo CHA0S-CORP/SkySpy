@@ -1,7 +1,10 @@
 ---
 title: Connection & Authentication
 slug: socketio-connection
-excerpt: Connect to SkySpy's Socket.IO server, authenticate, and choose the right namespace
+content:
+  excerpt: >-
+    Connect to SkySpy's Socket.IO server, authenticate, and choose the right
+    namespace
 ---
 
 # Connection & Authentication

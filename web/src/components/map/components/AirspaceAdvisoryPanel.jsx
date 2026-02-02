@@ -2,7 +2,6 @@ import React, { useMemo } from 'react';
 import { AlertTriangle, X, GripHorizontal, RefreshCw } from 'lucide-react';
 import { useDraggable } from '../../../hooks/useDraggable';
 import { AirspaceAdvisoryItem } from './AirspaceAdvisoryItem';
-import { HAZARD_CONFIG } from '../../../hooks/useAirspaceAdvisories';
 
 // Available hazard filters
 const HAZARD_FILTER_OPTIONS = [
@@ -37,7 +36,7 @@ export function AirspaceAdvisoryPanel({
   unacknowledgedCount,
 }) {
   // Draggable panel behavior
-  const { position, handleMouseDown, dragProps } = useDraggable(
+  const { position, handleMouseDown } = useDraggable(
     { x: null, y: null },
     { width: 340, height: 500 }
   );

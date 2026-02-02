@@ -419,7 +419,7 @@ func (m *Manager) GetTokenInfo() map[string]interface{} {
 
 	if m.apiKey != "" {
 		info["auth_type"] = authTypeAPIKey
-		info["api_key_prefix"] = m.apiKey[:min(10, len(m.apiKey))] + "..."
+		info["api_key_prefix"] = m.apiKey[:minInt(10, len(m.apiKey))] + "..."
 	} else if m.tokens != nil {
 		info["auth_type"] = authTypeOIDC
 		info["username"] = m.tokens.Username
@@ -438,7 +438,7 @@ func decodeJSON(r io.Reader, v interface{}) error {
 	return json.NewDecoder(r).Decode(v)
 }
 
-func min(a, b int) int {
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}

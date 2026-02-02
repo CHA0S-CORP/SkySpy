@@ -1,7 +1,8 @@
 ---
 title: Message Protocol
 slug: socketio-message-protocol
-excerpt: Understanding Socket.IO events, payloads, and the request/response pattern
+content:
+  excerpt: 'Understanding Socket.IO events, payloads, and the request/response pattern'
 ---
 
 # Message Protocol

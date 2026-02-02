@@ -521,7 +521,8 @@ export const getPirepMaxSeverity = (pirep) => {
   if (!decoded) return { level: 0, type: 'routine', description: 'Routine' };
 
   // Check for UUA (Urgent)
-  const isUrgent = decoded.type === 'UUA' || (pirep.raw_text || pirep.rawOb || '').includes(' UUA ');
+  const isUrgent =
+    decoded.type === 'UUA' || (pirep.raw_text || pirep.rawOb || '').includes(' UUA ');
 
   const turbLevel = decoded.turbulence?.level || 0;
   const iceLevel = decoded.icing?.level || 0;

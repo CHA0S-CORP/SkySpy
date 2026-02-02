@@ -83,8 +83,9 @@ func (s *CallbackServer) Start() error {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		if err := server.Serve(s.listener); err != http.ErrServerClosed {
+		if err := server.Serve(s.listener); err != nil && err != http.ErrServerClosed {
 			// Log error but don't fail - server might be intentionally closed
+			_ = err
 		}
 	}()
 

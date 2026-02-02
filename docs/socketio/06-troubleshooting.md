@@ -1,7 +1,8 @@
 ---
 title: Troubleshooting & Debugging
 slug: socketio-troubleshooting
-excerpt: Common issues, debugging tips, rate limits, and security best practices
+content:
+  excerpt: 'Common issues, debugging tips, rate limits, and security best practices'
 ---
 
 # Troubleshooting & Debugging

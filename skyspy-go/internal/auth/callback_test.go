@@ -435,7 +435,10 @@ func TestCallbackServer_Stop(t *testing.T) {
 
 	// Verify server is stopped (connection should be refused)
 	client := &http.Client{Timeout: 500 * time.Millisecond}
-	_, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/", port))
+	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/", port))
+	if resp != nil {
+		resp.Body.Close()
+	}
 	if err == nil {
 		t.Error("expected connection error after server stop")
 	}
@@ -537,7 +540,10 @@ func TestCallbackServer_ConcurrentCallbacks(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		go func(n int) {
 			callbackURL := fmt.Sprintf("http://127.0.0.1:%d/callback?code=code-%d&state=state-%d", server.Port(), n, n)
-			http.Get(callbackURL)
+			resp, _ := http.Get(callbackURL) //nolint:bodyclose // response not needed, intentionally leaked
+			if resp != nil {
+				resp.Body.Close()
+			}
 		}(i)
 	}
 
@@ -585,15 +591,10 @@ func TestCallbackResult_Fields(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.result.Code != tc.result.Code {
-				t.Error("Code field mismatch")
-			}
-			if tc.result.State != tc.result.State {
-				t.Error("State field mismatch")
-			}
-			if tc.result.Error != tc.result.Error {
-				t.Error("Error field mismatch")
-			}
+			// Verify fields are accessible (these tests just ensure struct is correct)
+			_ = tc.result.Code
+			_ = tc.result.State
+			_ = tc.result.Error
 		})
 	}
 }

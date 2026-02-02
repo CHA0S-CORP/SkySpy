@@ -1,7 +1,10 @@
 ---
 title: Specialized Namespaces
 slug: socketio-specialized-namespaces
-excerpt: Audio transcriptions, radio monitoring, and mobile threat detection namespaces
+content:
+  excerpt: >-
+    Audio transcriptions, radio monitoring, and mobile threat detection
+    namespaces
 ---
 
 # Specialized Namespaces

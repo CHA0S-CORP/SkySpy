@@ -34,9 +34,7 @@ export function TimeFreshnessIndicator({ pirep, decoded }) {
     <div className="time-freshness-indicator">
       <Clock size={14} />
       <span className="time-value">{displayTime || 'Unknown'}</span>
-      {relativeText && (
-        <span className={`freshness-badge ${freshnessClass}`}>{relativeText}</span>
-      )}
+      {relativeText && <span className={`freshness-badge ${freshnessClass}`}>{relativeText}</span>}
     </div>
   );
 }

@@ -45,7 +45,8 @@ export function ArchivedPirepCard({ pirep, expanded, onToggle }) {
   const isUrgent = pirep.report_type === 'UUA';
   const hasTurbulence = pirep.turbulence_type && pirep.turbulence_type !== 'NEG';
   const hasIcing = pirep.icing_type && pirep.icing_type !== 'NEG';
-  const hasWindshear = pirep.raw_text && (pirep.raw_text.includes('/WS') || pirep.raw_text.includes('LLWS'));
+  const hasWindshear =
+    pirep.raw_text && (pirep.raw_text.includes('/WS') || pirep.raw_text.includes('LLWS'));
 
   // Get max severity for indicator bar
   const maxSeverity = getMaxSeverityLevel(pirep);

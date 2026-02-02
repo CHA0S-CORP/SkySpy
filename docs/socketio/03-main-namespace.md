@@ -1,7 +1,10 @@
 ---
 title: Main Namespace
 slug: socketio-main-namespace
-excerpt: Aircraft tracking, safety events, alerts, and statistics on the default Socket.IO namespace
+content:
+  excerpt: >-
+    Aircraft tracking, safety events, alerts, and statistics on the default
+    Socket.IO namespace
 ---
 
 # Main Namespace

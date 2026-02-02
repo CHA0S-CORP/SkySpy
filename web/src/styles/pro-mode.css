@@ -3315,6 +3315,29 @@
   color: var(--accent-green);
 }
 
+/* Advisory badge on header button */
+.pro-header-btn {
+  position: relative;
+}
+
+.pro-header-btn .advisory-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: rgba(255, 150, 50, 0.9);
+  color: rgba(0, 0, 0, 0.9);
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
 /* Pro Track Length Slider */
 .pro-track-length-slider {
   display: flex;
@@ -4015,7 +4038,8 @@
 }
 
 @keyframes expiring-pulse {
-  0%, 100% {
+  0%,
+  100% {
     background: transparent;
   }
   50% {
@@ -4196,6 +4220,498 @@
   background: rgba(100, 180, 100, 0.3);
   border-color: rgba(100, 200, 100, 0.5);
   color: rgba(150, 255, 150, 0.9);
+}
+
+/* ============================================================================
+   NOTAM Panel
+   ============================================================================ */
+
+.notam-panel {
+  position: absolute;
+  top: 70px;
+  right: 280px;
+  width: 360px;
+  max-height: calc(100vh - 160px);
+  background: rgba(15, 25, 35, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(80, 140, 200, 0.4);
+  border-radius: 8px;
+  z-index: 950;
+  font-family: 'JetBrains Mono', monospace;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.notam-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(20, 40, 60, 0.8);
+  border-bottom: 1px solid rgba(80, 140, 200, 0.3);
+  cursor: grab;
+  user-select: none;
+}
+
+.notam-panel-header:active {
+  cursor: grabbing;
+}
+
+.notam-panel-drag-handle {
+  color: rgba(100, 160, 200, 0.5);
+  display: flex;
+  align-items: center;
+}
+
+.notam-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  color: rgba(100, 180, 255, 0.9);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.notam-panel-title svg {
+  color: rgba(239, 68, 68, 0.9);
+}
+
+.notam-count-badge {
+  background: rgba(239, 68, 68, 0.3);
+  color: rgba(255, 150, 150, 1);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+}
+
+.tfr-count-badge {
+  background: rgba(239, 68, 68, 0.5);
+  color: rgba(255, 255, 255, 1);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid rgba(239, 68, 68, 0.7);
+}
+
+.notam-panel-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.notam-panel-btn {
+  background: transparent;
+  border: none;
+  padding: 6px;
+  border-radius: 4px;
+  color: rgba(100, 160, 200, 0.7);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notam-panel-btn:hover {
+  background: rgba(80, 140, 200, 0.2);
+  color: rgba(150, 210, 255, 1);
+}
+
+.notam-panel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.notam-panel-btn.close:hover {
+  background: rgba(255, 100, 100, 0.2);
+  color: rgba(255, 150, 150, 1);
+}
+
+.notam-panel-btn .spinning {
+  animation: spin 1s linear infinite;
+}
+
+/* NOTAM filter bar */
+.notam-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(15, 30, 45, 0.6);
+  border-bottom: 1px solid rgba(80, 140, 200, 0.2);
+}
+
+.notam-filter-select {
+  flex: 1;
+  background: rgba(20, 40, 60, 0.8);
+  border: 1px solid rgba(80, 140, 200, 0.3);
+  border-radius: 4px;
+  padding: 6px 10px;
+  color: rgba(150, 210, 255, 0.9);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.notam-filter-select:focus {
+  outline: none;
+  border-color: rgba(100, 180, 255, 0.6);
+}
+
+.notam-filter-select option {
+  background: rgba(20, 35, 50, 1);
+  color: rgba(200, 220, 240, 1);
+}
+
+.notam-filter-count {
+  font-size: 10px;
+  color: rgba(100, 160, 200, 0.6);
+  white-space: nowrap;
+}
+
+/* NOTAM list */
+.notam-list {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(80, 140, 200, 0.3) transparent;
+}
+
+.notam-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.notam-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.notam-list::-webkit-scrollbar-thumb {
+  background: rgba(80, 140, 200, 0.3);
+  border-radius: 3px;
+}
+
+.notam-empty,
+.notam-error {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(100, 160, 200, 0.5);
+}
+
+.notam-error {
+  color: rgba(255, 150, 150, 0.8);
+}
+
+/* NOTAM item */
+.notam-item {
+  border-bottom: 1px solid rgba(80, 140, 200, 0.15);
+  border-left: 3px solid var(--notam-color, rgba(96, 165, 250, 0.5));
+  transition: all 0.2s;
+}
+
+.notam-item:hover {
+  background: rgba(80, 140, 200, 0.1);
+}
+
+.notam-item.acknowledged {
+  opacity: 0.5;
+  border-left-color: rgba(100, 160, 200, 0.3);
+}
+
+.notam-item.highlighted {
+  background: rgba(100, 180, 255, 0.15);
+  border-left-width: 4px;
+}
+
+.notam-item.tfr {
+  border-left-color: rgba(239, 68, 68, 0.8);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.notam-item.tfr:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.notam-item.expiring-soon:not(.acknowledged) {
+  animation: expiring-pulse 2s ease-in-out infinite;
+}
+
+/* NOTAM header (collapsed view) */
+.notam-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+}
+
+.notam-header:hover {
+  background: rgba(80, 140, 200, 0.05);
+}
+
+.notam-type-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.notam-type-badge svg {
+  flex-shrink: 0;
+}
+
+.notam-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.notam-location-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(150, 210, 255, 0.9);
+}
+
+.notam-id {
+  font-size: 9px;
+  color: rgba(100, 160, 200, 0.5);
+  font-family: monospace;
+}
+
+.notam-status {
+  display: flex;
+  align-items: center;
+}
+
+.active-badge,
+.upcoming-badge,
+.permanent-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.active-badge {
+  background: rgba(16, 185, 129, 0.3);
+  color: rgba(100, 255, 180, 1);
+  border: 1px solid rgba(16, 185, 129, 0.5);
+}
+
+.upcoming-badge {
+  background: rgba(245, 158, 11, 0.3);
+  color: rgba(255, 200, 100, 1);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+}
+
+.permanent-badge {
+  background: rgba(139, 92, 246, 0.3);
+  color: rgba(180, 150, 255, 1);
+  border: 1px solid rgba(139, 92, 246, 0.5);
+}
+
+.notam-expand-icon {
+  color: rgba(100, 160, 200, 0.5);
+  transition: transform 0.2s;
+}
+
+/* NOTAM preview */
+.notam-preview {
+  padding: 0 12px 8px 12px;
+  font-size: 10px;
+  color: rgba(150, 180, 200, 0.7);
+  line-height: 1.4;
+}
+
+/* NOTAM content (expanded view) */
+.notam-content {
+  padding: 0 12px 12px 12px;
+  border-top: 1px solid rgba(80, 140, 200, 0.1);
+  margin-top: 4px;
+}
+
+.notam-validity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.validity-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+}
+
+.validity-row svg {
+  color: rgba(100, 160, 200, 0.5);
+  flex-shrink: 0;
+}
+
+.validity-row .validity-label {
+  color: rgba(100, 160, 200, 0.6);
+  min-width: 55px;
+}
+
+.validity-row .validity-time {
+  color: rgba(150, 210, 255, 0.9);
+  font-family: monospace;
+}
+
+.validity-row.permanent {
+  color: rgba(180, 150, 255, 0.9);
+}
+
+.validity-row .expiring-badge {
+  background: rgba(255, 150, 50, 0.3);
+  color: rgba(255, 180, 100, 1);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 8px;
+  font-weight: 600;
+}
+
+.notam-altitude,
+.notam-radius {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 10px;
+}
+
+.altitude-label,
+.radius-label {
+  color: rgba(100, 160, 200, 0.6);
+}
+
+.notam-altitude span:not(.altitude-label),
+.notam-radius span:not(.radius-label) {
+  color: rgba(100, 200, 180, 0.9);
+}
+
+.notam-coords {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 10px;
+  color: rgba(100, 160, 200, 0.7);
+}
+
+.notam-coords svg {
+  color: rgba(100, 160, 200, 0.5);
+  flex-shrink: 0;
+}
+
+.notam-full-text {
+  padding: 8px;
+  margin: 8px 0;
+  background: rgba(10, 20, 30, 0.6);
+  border-radius: 4px;
+  font-size: 10px;
+  color: rgba(180, 200, 220, 0.8);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  font-family: monospace;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.notam-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.notam-keywords .keyword-tag {
+  background: rgba(80, 140, 200, 0.2);
+  color: rgba(150, 200, 255, 0.9);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 9px;
+}
+
+/* NOTAM action buttons */
+.notam-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.notam-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(40, 80, 120, 0.4);
+  border: 1px solid rgba(80, 140, 200, 0.3);
+  border-radius: 4px;
+  color: rgba(150, 210, 255, 0.9);
+  font-size: 10px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.notam-action-btn:hover {
+  background: rgba(60, 100, 150, 0.5);
+  border-color: rgba(100, 180, 255, 0.5);
+}
+
+.notam-action-btn.show-on-map:hover {
+  background: rgba(50, 150, 100, 0.4);
+  border-color: rgba(100, 200, 150, 0.5);
+  color: rgba(150, 255, 200, 1);
+}
+
+.notam-action-btn.acknowledge.active {
+  background: rgba(100, 180, 100, 0.3);
+  border-color: rgba(100, 200, 100, 0.5);
+  color: rgba(150, 255, 150, 0.9);
+}
+
+/* NOTAM badge on header button */
+.pro-header-btn .notam-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: rgba(239, 68, 68, 0.9);
+  color: rgba(255, 255, 255, 1);
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 /* ============================================================================

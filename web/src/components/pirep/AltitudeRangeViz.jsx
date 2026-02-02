@@ -15,9 +15,7 @@ export function AltitudeRangeViz({ decoded, pirep }) {
   const reportedFL = altitudeFt ? Math.round(altitudeFt / 100) : null;
 
   // Get hazard altitude ranges
-  const turbBase = pirep?.turbulence_base_ft
-    ? Math.round(pirep.turbulence_base_ft / 100)
-    : null;
+  const turbBase = pirep?.turbulence_base_ft ? Math.round(pirep.turbulence_base_ft / 100) : null;
   const turbTop = pirep?.turbulence_top_ft ? Math.round(pirep.turbulence_top_ft / 100) : null;
   const iceBase = pirep?.icing_base_ft ? Math.round(pirep.icing_base_ft / 100) : null;
   const iceTop = pirep?.icing_top_ft ? Math.round(pirep.icing_top_ft / 100) : null;

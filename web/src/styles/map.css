@@ -1752,8 +1752,13 @@
 }
 
 @keyframes hazard-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.8; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
 }
 
 .pirep-hazard-banner .urgent-icon {
@@ -1762,8 +1767,13 @@
 }
 
 @keyframes urgent-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .pirep-hazard-banner .hazard-items {
@@ -1931,18 +1941,38 @@
 }
 
 /* Turbulence gauge colors (6 segments) */
-.severity-gauge.turbulence .gauge-segment.segment-0.active { background: #88cc44; }
-.severity-gauge.turbulence .gauge-segment.segment-1.active { background: #aacc44; }
-.severity-gauge.turbulence .gauge-segment.segment-2.active { background: #cccc44; }
-.severity-gauge.turbulence .gauge-segment.segment-3.active { background: #ffaa44; }
-.severity-gauge.turbulence .gauge-segment.segment-4.active { background: #ff6644; }
-.severity-gauge.turbulence .gauge-segment.segment-5.active { background: #ff4444; }
+.severity-gauge.turbulence .gauge-segment.segment-0.active {
+  background: #88cc44;
+}
+.severity-gauge.turbulence .gauge-segment.segment-1.active {
+  background: #aacc44;
+}
+.severity-gauge.turbulence .gauge-segment.segment-2.active {
+  background: #cccc44;
+}
+.severity-gauge.turbulence .gauge-segment.segment-3.active {
+  background: #ffaa44;
+}
+.severity-gauge.turbulence .gauge-segment.segment-4.active {
+  background: #ff6644;
+}
+.severity-gauge.turbulence .gauge-segment.segment-5.active {
+  background: #ff4444;
+}
 
 /* Icing gauge colors (4 segments) */
-.severity-gauge.icing .gauge-segment.segment-0.active { background: #88ccff; }
-.severity-gauge.icing .gauge-segment.segment-1.active { background: #66aaff; }
-.severity-gauge.icing .gauge-segment.segment-2.active { background: #4488ff; }
-.severity-gauge.icing .gauge-segment.segment-3.active { background: #ff4488; }
+.severity-gauge.icing .gauge-segment.segment-0.active {
+  background: #88ccff;
+}
+.severity-gauge.icing .gauge-segment.segment-1.active {
+  background: #66aaff;
+}
+.severity-gauge.icing .gauge-segment.segment-2.active {
+  background: #4488ff;
+}
+.severity-gauge.icing .gauge-segment.segment-3.active {
+  background: #ff4488;
+}
 
 .severity-gauge .gauge-segment.current {
   box-shadow: 0 0 6px currentColor;

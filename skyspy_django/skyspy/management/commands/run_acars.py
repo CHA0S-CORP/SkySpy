@@ -44,9 +44,7 @@ class Command(BaseCommand):
         )
         parser.add_argument("--no-acars", action="store_true", help="Disable ACARS listener")
         parser.add_argument("--no-vdlm2", action="store_true", help="Disable VDL2 listener")
-        parser.add_argument(
-            "-v", "--verbosity", type=int, default=1, help="Verbosity level (0=minimal, 1=normal, 2=verbose)"
-        )
+        # Note: verbosity is already provided by Django's BaseCommand
 
     def handle(self, *args, **options):
         # Set up logging

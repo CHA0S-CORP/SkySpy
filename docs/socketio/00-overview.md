@@ -1,7 +1,10 @@
 ---
 title: Socket.IO Overview
 slug: socketio-overview
-excerpt: Real-time aviation data streaming with Socket.IO - architecture, features, and capabilities
+content:
+  excerpt: >-
+    Real-time aviation data streaming with Socket.IO - architecture, features,
+    and capabilities
 ---
 
 # Socket.IO Overview

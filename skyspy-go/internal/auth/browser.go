@@ -6,14 +6,21 @@ import (
 	"runtime"
 )
 
+// Operating system constants
+const (
+	osDarwin  = "darwin"
+	osLinux   = "linux"
+	osWindows = "windows"
+)
+
 // OpenBrowser opens the default web browser to the specified URL
 func OpenBrowser(url string) error {
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
-	case "darwin":
+	case osDarwin:
 		cmd = exec.Command("open", url)
-	case "linux":
+	case osLinux:
 		// Try xdg-open first, then common browsers
 		if _, err := exec.LookPath("xdg-open"); err == nil {
 			cmd = exec.Command("xdg-open", url)
@@ -30,7 +37,7 @@ func OpenBrowser(url string) error {
 		} else {
 			return fmt.Errorf("no browser found - please open this URL manually:\n%s", url)
 		}
-	case "windows":
+	case osWindows:
 		cmd = exec.Command("cmd", "/c", "start", url)
 	default:
 		return fmt.Errorf("unsupported platform - please open this URL manually:\n%s", url)
@@ -42,9 +49,9 @@ func OpenBrowser(url string) error {
 // CanOpenBrowser returns true if we can open a browser on this system
 func CanOpenBrowser() bool {
 	switch runtime.GOOS {
-	case "darwin", "windows":
+	case osDarwin, osWindows:
 		return true
-	case "linux":
+	case osLinux:
 		browsers := []string{"xdg-open", "x-www-browser", "sensible-browser", "firefox", "chromium-browser", "google-chrome"}
 		for _, browser := range browsers {
 			if _, err := exec.LookPath(browser); err == nil {

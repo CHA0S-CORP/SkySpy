@@ -122,6 +122,8 @@ import { useAircraftInfo } from '../../hooks/useAircraftInfo';
 import { useToastContextSafe } from '../../hooks/useToast';
 import { useAirspaceAdvisories, HAZARD_CONFIG } from '../../hooks/useAirspaceAdvisories';
 import { AirspaceAdvisoryPanel } from './components/AirspaceAdvisoryPanel';
+import { useNotams, NOTAM_TYPE_CONFIG } from '../../hooks/useNotams';
+import { NotamPanel } from './components/NotamPanel';
 
 // Phase 5.1: Pro Radar Theme Color Presets
 const PRO_THEME_COLORS = {
@@ -285,6 +287,9 @@ function MapView({
   const [showAdvisoryPanel, setShowAdvisoryPanel] = useState(false); // Airspace advisories panel
   const [selectedAdvisoryId, setSelectedAdvisoryId] = useState(null); // Highlighted advisory on map
   const [advisoryHazardFilter, setAdvisoryHazardFilter] = useState(null); // Advisory hazard filter
+  const [showNotamPanel, setShowNotamPanel] = useState(false); // NOTAM panel
+  const [selectedNotamId, setSelectedNotamId] = useState(null); // Highlighted NOTAM on map
+  const [notamTypeFilter, setNotamTypeFilter] = useState(null); // NOTAM type filter
   const [acarsMessages, setAcarsMessages] = useState([]); // Live ACARS messages
   const [acarsStatus, setAcarsStatus] = useState(null); // ACARS service status
   const [acarsFilters, setAcarsFilters] = useState(() => {
@@ -339,6 +344,24 @@ function MapView({
   } = useAirspaceAdvisories(wsRequest, wsConnected, {
     hazardFilter: advisoryHazardFilter,
     refreshInterval: 60000,
+  });
+
+  // NOTAMs hook for pro mode
+  const {
+    notams: mapNotams,
+    loading: notamsLoading,
+    error: notamsError,
+    acknowledged: acknowledgedNotams,
+    acknowledgeNotam,
+    unacknowledgeNotam,
+    unacknowledgedCount: notamUnacknowledgedCount,
+    refresh: refreshNotams,
+  } = useNotams(wsRequest, wsConnected, {
+    typeFilter: notamTypeFilter,
+    refreshInterval: 300000,
+    lat: feederLat,
+    lon: feederLon,
+    radius: radarRange,
   });
 
   // Toast context for notifications (gracefully handles if not in provider)
@@ -4693,7 +4716,8 @@ function MapView({
 
             if (adv.lower_alt_ft !== undefined && adv.upper_alt_ft !== undefined) {
               ctx.font = '10px "JetBrains Mono", monospace';
-              const lower = adv.lower_alt_ft === 0 ? 'SFC' : `FL${Math.round(adv.lower_alt_ft / 100)}`;
+              const lower =
+                adv.lower_alt_ft === 0 ? 'SFC' : `FL${Math.round(adv.lower_alt_ft / 100)}`;
               const upper =
                 adv.upper_alt_ft >= 18000
                   ? `FL${Math.round(adv.upper_alt_ft / 100)}`
@@ -4733,9 +4757,12 @@ function MapView({
           // Severity-based marker sizing (12-20px)
           const baseSize = 6; // Half of 12px base
           let markerSize = baseSize;
-          if (severityLevel >= 5) markerSize = 10; // 20px for severe/extreme
-          else if (severityLevel >= 4) markerSize = 9; // 18px for mod-severe
-          else if (severityLevel >= 3) markerSize = 8; // 16px for moderate
+          if (severityLevel >= 5)
+            markerSize = 10; // 20px for severe/extreme
+          else if (severityLevel >= 4)
+            markerSize = 9; // 18px for mod-severe
+          else if (severityLevel >= 3)
+            markerSize = 8; // 16px for moderate
           else if (severityLevel >= 2) markerSize = 7; // 14px for light-moderate
           // Level 0-1 stays at baseSize (12px)
 
@@ -4884,7 +4911,12 @@ function MapView({
               ctx.beginPath();
               ctx.moveTo(-3 * innerScale, yScaled);
               ctx.quadraticCurveTo(-1.5 * innerScale, yScaled - 1.2 * innerScale, 0, yScaled);
-              ctx.quadraticCurveTo(1.5 * innerScale, yScaled + 1.2 * innerScale, 3 * innerScale, yScaled);
+              ctx.quadraticCurveTo(
+                1.5 * innerScale,
+                yScaled + 1.2 * innerScale,
+                3 * innerScale,
+                yScaled
+              );
               ctx.stroke();
             });
           } else if (pirepType === 'icing') {
@@ -4905,9 +4937,15 @@ function MapView({
               const by = Math.sin(angle) * branchDist;
               ctx.beginPath();
               ctx.moveTo(bx, by);
-              ctx.lineTo(bx + Math.cos(angle + 0.5) * branchLen, by + Math.sin(angle + 0.5) * branchLen);
+              ctx.lineTo(
+                bx + Math.cos(angle + 0.5) * branchLen,
+                by + Math.sin(angle + 0.5) * branchLen
+              );
               ctx.moveTo(bx, by);
-              ctx.lineTo(bx + Math.cos(angle - 0.5) * branchLen, by + Math.sin(angle - 0.5) * branchLen);
+              ctx.lineTo(
+                bx + Math.cos(angle - 0.5) * branchLen,
+                by + Math.sin(angle - 0.5) * branchLen
+              );
               ctx.stroke();
             }
           } else if (pirepType === 'windshear') {

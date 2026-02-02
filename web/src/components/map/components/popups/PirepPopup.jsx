@@ -144,9 +144,7 @@ export function PirepPopup({
                 label="Turbulence"
               />
             )}
-            {hasIcing && (
-              <SeverityGauge type="icing" level={decoded.icing.level} label="Icing" />
-            )}
+            {hasIcing && <SeverityGauge type="icing" level={decoded.icing.level} label="Icing" />}
           </div>
         )}
 
