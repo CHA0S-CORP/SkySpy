@@ -213,7 +213,16 @@ CATEGORIES = {
     },
     "NAVAID": {
         "severity": "moderate",
-        "patterns": [r"\bVOR\b", r"\bILS\b", r"\bDME\b", r"\bNDB\b", r"\bLOC\b", r"GLIDESLOPE", r"GLIDE\s+SLOPE", r"\bGS\b\s+(?:U/S|OTS|INOP)"],
+        "patterns": [
+            r"\bVOR\b",
+            r"\bILS\b",
+            r"\bDME\b",
+            r"\bNDB\b",
+            r"\bLOC\b",
+            r"GLIDESLOPE",
+            r"GLIDE\s+SLOPE",
+            r"\bGS\b\s+(?:U/S|OTS|INOP)",
+        ],
         "label": "Navaid",
     },
     "SUA": {

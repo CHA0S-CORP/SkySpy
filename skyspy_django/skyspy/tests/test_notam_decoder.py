@@ -288,9 +288,7 @@ class SeverityTests(TestCase):
 
     def test_severity_with_geometry_critical(self):
         """Test that NOTAMs with geometry are critical."""
-        notam = create_mock_notam(
-            text="SOMETHING", geometry={"type": "Polygon", "coordinates": []}
-        )
+        notam = create_mock_notam(text="SOMETHING", geometry={"type": "Polygon", "coordinates": []})
         result = get_severity(notam)
         self.assertEqual(result, "critical")
 

@@ -16,11 +16,23 @@ TURBULENCE_CODES = {
     "NEG": {"label": "None", "level": 0, "description": "Smooth flight, no turbulence reported"},
     "SMTH": {"label": "Smooth", "level": 0, "description": "Smooth flight, no turbulence reported"},
     "LGT": {"label": "Light", "level": 1, "description": "Slight, erratic changes in altitude/attitude"},
-    "LGT-MOD": {"label": "Light to Moderate", "level": 2, "description": "Changes in altitude/attitude, aircraft remains in control"},
+    "LGT-MOD": {
+        "label": "Light to Moderate",
+        "level": 2,
+        "description": "Changes in altitude/attitude, aircraft remains in control",
+    },
     "MOD": {"label": "Moderate", "level": 3, "description": "Causes rapid bumps, aircraft remains in positive control"},
-    "MOD-SEV": {"label": "Moderate to Severe", "level": 4, "description": "Large, abrupt changes, large airspeed variations"},
+    "MOD-SEV": {
+        "label": "Moderate to Severe",
+        "level": 4,
+        "description": "Large, abrupt changes, large airspeed variations",
+    },
     "SEV": {"label": "Severe", "level": 5, "description": "Aircraft may be momentarily out of control"},
-    "EXTRM": {"label": "Extreme", "level": 6, "description": "Aircraft violently tossed, practically impossible to control"},
+    "EXTRM": {
+        "label": "Extreme",
+        "level": 6,
+        "description": "Aircraft violently tossed, practically impossible to control",
+    },
 }
 
 # Turbulence type codes
@@ -34,13 +46,29 @@ TURBULENCE_TYPES = {
 # Icing intensity codes and descriptions
 ICING_CODES = {
     "NEG": {"label": "None", "level": 0, "description": "No icing observed"},
-    "TRC": {"label": "Trace", "level": 1, "description": "Ice becomes noticeable, rate of accumulation slightly greater than sublimation"},
+    "TRC": {
+        "label": "Trace",
+        "level": 1,
+        "description": "Ice becomes noticeable, rate of accumulation slightly greater than sublimation",
+    },
     "TRC-LGT": {"label": "Trace to Light", "level": 1, "description": "Light ice accumulation beginning"},
     "LGT": {"label": "Light", "level": 2, "description": "May create problem with prolonged exposure (>1hr)"},
     "LGT-MOD": {"label": "Light to Moderate", "level": 2, "description": "Ice accumulation rate increasing"},
-    "MOD": {"label": "Moderate", "level": 3, "description": "Short encounters potentially hazardous, use of de-icing/anti-icing recommended"},
-    "MOD-SEV": {"label": "Moderate to Severe", "level": 4, "description": "Significant ice buildup, immediate action required"},
-    "SEV": {"label": "Severe", "level": 5, "description": "De-icing/anti-icing equipment fails to reduce or control hazard"},
+    "MOD": {
+        "label": "Moderate",
+        "level": 3,
+        "description": "Short encounters potentially hazardous, use of de-icing/anti-icing recommended",
+    },
+    "MOD-SEV": {
+        "label": "Moderate to Severe",
+        "level": 4,
+        "description": "Significant ice buildup, immediate action required",
+    },
+    "SEV": {
+        "label": "Severe",
+        "level": 5,
+        "description": "De-icing/anti-icing equipment fails to reduce or control hazard",
+    },
 }
 
 # Icing type codes
@@ -144,7 +172,12 @@ def decode_icing(pirep: CachedPirep) -> dict | None:
             intensity_info = {"code": code, **info}
 
     if not intensity_info:
-        intensity_info = {"code": icing_type or icing_intensity, "label": icing_type or icing_intensity, "level": 0, "description": ""}
+        intensity_info = {
+            "code": icing_type or icing_intensity,
+            "label": icing_type or icing_intensity,
+            "level": 0,
+            "description": "",
+        }
 
     # Check for ice type
     ice_type_info = None

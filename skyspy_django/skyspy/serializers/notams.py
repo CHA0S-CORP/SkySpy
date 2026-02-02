@@ -60,7 +60,9 @@ class NotamResponseSerializer(serializers.Serializer):
     is_tfr = serializers.BooleanField(help_text="Whether this is a TFR")
     distance_nm = serializers.FloatField(required=False, allow_null=True, help_text="Distance from search center in nm")
     # Decoded fields for human-readable display
-    severity = serializers.CharField(required=False, allow_null=True, help_text="Severity level (critical/moderate/advisory)")
+    severity = serializers.CharField(
+        required=False, allow_null=True, help_text="Severity level (critical/moderate/advisory)"
+    )
     human_summary = serializers.CharField(required=False, allow_null=True, help_text="Human-readable summary")
     decoded = serializers.DictField(required=False, allow_null=True, help_text="Full decoded NOTAM data")
 
