@@ -1388,11 +1388,7 @@ def get_matched_radio_calls(
                 and af_callsign.upper() == callsign.upper()
                 or operator_icao
                 and af_airline_icao.upper() == operator_icao.upper()
-            ) or (
-                registration
-                and af_type == "general_aviation"
-                and af_callsign.upper() == registration.upper()
-            ):
+            ) or (registration and af_type == "general_aviation" and af_callsign.upper() == registration.upper()):
                 matched = True
 
             if matched:

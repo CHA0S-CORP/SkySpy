@@ -98,8 +98,8 @@ func TestWizardViewQuit(t *testing.T) {
 	m.quitting = true
 
 	view := m.View()
-	if !strings.Contains(view, "cancelled") {
-		t.Error("Expected quit view to contain 'cancelled'")
+	if !strings.Contains(view, "canceled") {
+		t.Error("Expected quit view to contain 'canceled'")
 	}
 }
 
@@ -963,9 +963,8 @@ func TestWizardNavigationAtBoundaries(t *testing.T) {
 	m.fieldIndex = 0
 	newModel, _ = m.handlePrev()
 	model = newModel.(wizardModel)
-	if model.fieldIndex != 0 && model.section != sectionConnection {
-		// Either stay at 0 or go to previous section
-	}
+	// Either stay at 0 or go to previous section - just verify no panic
+	_ = model.fieldIndex
 
 	// Test next at summary
 	m.section = sectionSummary
@@ -977,7 +976,7 @@ func TestWizardNavigationAtBoundaries(t *testing.T) {
 }
 
 // TestWizardUpdateTextInputFocus tests text input focus behavior
-func TestWizardUpdateTextInputFocus(t *testing.T) {
+func TestWizardUpdateTextInputFocus(_ *testing.T) {
 	cfg := config.DefaultConfig()
 	m := newWizardModel(cfg)
 	m.section = sectionConnection

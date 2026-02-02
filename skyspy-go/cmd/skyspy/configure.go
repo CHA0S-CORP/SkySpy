@@ -50,6 +50,16 @@ const (
 	fieldSelect
 )
 
+// Field names used in multiple places
+const (
+	fieldNamePort         = "port"
+	fieldNameTheme        = "theme"
+	fieldNameRefreshRate  = "refresh_rate"
+	fieldNameDefaultRange = "default_range"
+	fieldNameRangeRings   = "range_rings"
+	valueOff              = "OFF"
+)
+
 type wizardField struct {
 	name        string
 	label       string
@@ -150,7 +160,7 @@ func newWizardModel(cfg *config.Config) wizardModel {
 	// Connection section
 	m.fields[sectionConnection] = []wizardField{
 		m.createTextField("host", "Server Host", "Hostname or IP of the SkySpy server", cfg.Connection.Host),
-		m.createNumberField("port", "Server Port", "Port number (typically 80 or 443)", cfg.Connection.Port),
+		m.createNumberField(fieldNamePort, "Server Port", "Port number (typically 80 or 443)", cfg.Connection.Port),
 		m.createFloatField("receiver_lat", "Receiver Latitude", "Your receiver's latitude (-90 to 90)", cfg.Connection.ReceiverLat),
 		m.createFloatField("receiver_lon", "Receiver Longitude", "Your receiver's longitude (-180 to 180)", cfg.Connection.ReceiverLon),
 		m.createBoolField("auto_reconnect", "Auto Reconnect", "Automatically reconnect on connection loss", cfg.Connection.AutoReconnect),
@@ -172,20 +182,20 @@ func newWizardModel(cfg *config.Config) wizardModel {
 	}
 
 	m.fields[sectionDisplay] = []wizardField{
-		m.createSelectField("theme", "Color Theme", "Visual theme for the radar display", themeOptions, themeKeys, themeIndex),
+		m.createSelectField(fieldNameTheme, "Color Theme", "Visual theme for the radar display", themeOptions, themeKeys, themeIndex),
 		m.createBoolField("show_labels", "Show Labels", "Display aircraft callsign labels on radar", cfg.Display.ShowLabels),
 		m.createBoolField("show_trails", "Show Trails", "Display aircraft movement trails", cfg.Display.ShowTrails),
 		m.createBoolField("show_acars", "Show ACARS Panel", "Display ACARS message panel", cfg.Display.ShowACARS),
 		m.createBoolField("show_target_list", "Show Target List", "Display aircraft target list", cfg.Display.ShowTargetList),
 		m.createBoolField("show_vu_meters", "Show VU Meters", "Display signal VU meters", cfg.Display.ShowVUMeters),
 		m.createBoolField("show_spectrum", "Show Spectrum", "Display frequency spectrum", cfg.Display.ShowSpectrum),
-		m.createNumberField("refresh_rate", "Refresh Rate (Hz)", "Display update frequency (1-60)", cfg.Display.RefreshRate),
+		m.createNumberField(fieldNameRefreshRate, "Refresh Rate (Hz)", "Display update frequency (1-60)", cfg.Display.RefreshRate),
 	}
 
 	// Radar section
 	m.fields[sectionRadar] = []wizardField{
-		m.createNumberField("default_range", "Default Range (nm)", "Initial radar range in nautical miles", cfg.Radar.DefaultRange),
-		m.createNumberField("range_rings", "Range Rings", "Number of concentric range rings (0-10)", cfg.Radar.RangeRings),
+		m.createNumberField(fieldNameDefaultRange, "Default Range (nm)", "Initial radar range in nautical miles", cfg.Radar.DefaultRange),
+		m.createNumberField(fieldNameRangeRings, "Range Rings", "Number of concentric range rings (0-10)", cfg.Radar.RangeRings),
 		m.createNumberField("sweep_speed", "Sweep Speed", "Radar sweep animation speed (1-20)", cfg.Radar.SweepSpeed),
 		m.createBoolField("show_compass", "Show Compass", "Display compass rose around radar", cfg.Radar.ShowCompass),
 		m.createBoolField("show_grid", "Show Grid", "Display coordinate grid on radar", cfg.Radar.ShowGrid),
@@ -451,7 +461,7 @@ func (m *wizardModel) applyFields() {
 		switch f.name {
 		case "host":
 			m.cfg.Connection.Host = f.textInput.Value()
-		case "port":
+		case fieldNamePort:
 			if v, err := strconv.Atoi(f.textInput.Value()); err == nil {
 				m.cfg.Connection.Port = v
 			}
@@ -471,7 +481,7 @@ func (m *wizardModel) applyFields() {
 	// Display
 	for _, f := range m.fields[sectionDisplay] {
 		switch f.name {
-		case "theme":
+		case fieldNameTheme:
 			if f.selectIndex < len(f.optionKeys) {
 				m.cfg.Display.Theme = f.optionKeys[f.selectIndex]
 			}
@@ -487,7 +497,7 @@ func (m *wizardModel) applyFields() {
 			m.cfg.Display.ShowVUMeters = f.boolValue
 		case "show_spectrum":
 			m.cfg.Display.ShowSpectrum = f.boolValue
-		case "refresh_rate":
+		case fieldNameRefreshRate:
 			if v, err := strconv.Atoi(f.textInput.Value()); err == nil {
 				m.cfg.Display.RefreshRate = v
 			}
@@ -497,11 +507,11 @@ func (m *wizardModel) applyFields() {
 	// Radar
 	for _, f := range m.fields[sectionRadar] {
 		switch f.name {
-		case "default_range":
+		case fieldNameDefaultRange:
 			if v, err := strconv.Atoi(f.textInput.Value()); err == nil {
 				m.cfg.Radar.DefaultRange = v
 			}
-		case "range_rings":
+		case fieldNameRangeRings:
 			if v, err := strconv.Atoi(f.textInput.Value()); err == nil {
 				m.cfg.Radar.RangeRings = v
 			}
@@ -541,7 +551,7 @@ func (m wizardModel) View() string {
 		if m.saved {
 			return m.successStyle.Render("\n  Configuration saved to ~/.config/skyspy/settings.json\n\n")
 		}
-		return "\n  Configuration wizard cancelled.\n\n"
+		return "\n  Configuration wizard canceled.\n\n"
 	}
 
 	var b strings.Builder
@@ -644,7 +654,7 @@ func (m wizardModel) renderFields() string {
 		case fieldBool:
 			if f.boolValue {
 				b.WriteString(m.successStyle.Render("[ON] "))
-				b.WriteString(m.dimStyle.Render("OFF"))
+				b.WriteString(m.dimStyle.Render(valueOff))
 			} else {
 				b.WriteString(m.dimStyle.Render("ON "))
 				b.WriteString(m.errorStyle.Render("[OFF]"))
@@ -689,7 +699,7 @@ func (m wizardModel) renderSummary() string {
 			if f.boolValue {
 				value = "ON"
 			} else {
-				value = "OFF"
+				value = valueOff
 			}
 		}
 		b.WriteString(fmt.Sprintf("    %s: %s\n", m.dimStyle.Render(f.label), m.valueStyle.Render(value)))
@@ -707,7 +717,7 @@ func (m wizardModel) renderSummary() string {
 			if f.boolValue {
 				value = "ON"
 			} else {
-				value = "OFF"
+				value = valueOff
 			}
 		case fieldSelect:
 			value = f.optionKeys[f.selectIndex]
@@ -727,7 +737,7 @@ func (m wizardModel) renderSummary() string {
 			if f.boolValue {
 				value = "ON"
 			} else {
-				value = "OFF"
+				value = valueOff
 			}
 		}
 		b.WriteString(fmt.Sprintf("    %s: %s\n", m.dimStyle.Render(f.label), m.valueStyle.Render(value)))
@@ -745,7 +755,7 @@ func (m wizardModel) renderSummary() string {
 			if f.boolValue {
 				value = "ON"
 			} else {
-				value = "OFF"
+				value = valueOff
 			}
 		}
 		b.WriteString(fmt.Sprintf("    %s: %s\n", m.dimStyle.Render(f.label), m.valueStyle.Render(value)))

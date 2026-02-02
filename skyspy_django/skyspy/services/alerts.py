@@ -139,8 +139,12 @@ class AlertService:
         Evaluates both simple conditions and complex AND/OR conditions.
         """
         # Check simple conditions
-        if rule.rule_type and rule.value and not self._evaluate_simple_condition(
-            aircraft, rule.rule_type, rule.operator, rule.value, compiled_regex=rule.compiled_regex
+        if (
+            rule.rule_type
+            and rule.value
+            and not self._evaluate_simple_condition(
+                aircraft, rule.rule_type, rule.operator, rule.value, compiled_regex=rule.compiled_regex
+            )
         ):
             return False
 

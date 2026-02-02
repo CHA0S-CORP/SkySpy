@@ -451,6 +451,7 @@ class StreamAircraftTaskTest(TestCase):
     @patch("skyspy.tasks.aircraft_stream.socket.socket")
     @override_settings(
         AIRCRAFT_STREAM_ENABLED=True,
+        AIRCRAFT_STREAM_MODE="tcp",  # Must use TCP mode for socket patching to work
         AIRCRAFT_STREAM_HOST="test-host",
         AIRCRAFT_STREAM_PORT=30047,
         AIRCRAFT_STREAM_RECONNECT_DELAY=1,
@@ -496,6 +497,7 @@ class StreamAircraftIntegrationTest(TestCase):
     @patch("skyspy.tasks.aircraft_stream.socket.socket")
     @override_settings(
         AIRCRAFT_STREAM_ENABLED=True,
+        AIRCRAFT_STREAM_MODE="tcp",  # Must use TCP mode for socket patching to work
         AIRCRAFT_STREAM_HOST="localhost",
         AIRCRAFT_STREAM_PORT=30047,
         AIRCRAFT_STREAM_RECONNECT_DELAY=1,

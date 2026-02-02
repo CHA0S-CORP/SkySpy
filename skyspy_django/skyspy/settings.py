@@ -89,7 +89,9 @@ elif DEBUG:
 
     SECRET_KEY = get_random_secret_key()
     warnings.warn(
-        "DJANGO_SECRET_KEY not set - using randomly generated key. This is only acceptable in DEBUG mode.", UserWarning, stacklevel=2
+        "DJANGO_SECRET_KEY not set - using randomly generated key. This is only acceptable in DEBUG mode.",
+        UserWarning,
+        stacklevel=2,
     )
 else:
     # Production mode requires an explicit secret key
@@ -286,7 +288,8 @@ if JWT_SECRET_KEY == SECRET_KEY:
     warnings.warn(
         "JWT_SECRET_KEY is using the same value as SECRET_KEY. "
         "For better security, set a separate JWT_SECRET_KEY environment variable.",
-        UserWarning, stacklevel=2,
+        UserWarning,
+        stacklevel=2,
     )
 
 if not DEBUG and JWT_SECRET_KEY == SECRET_KEY:

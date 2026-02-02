@@ -523,7 +523,16 @@ class GamificationService:
         patterns = self._get_notable_callsigns()
 
         for pattern in patterns:
-            if pattern["pattern_type"] == "prefix" and callsign.upper().startswith(pattern["pattern"].upper()) or pattern["pattern_type"] == "contains" and pattern["pattern"].upper() in callsign.upper() or pattern["pattern_type"] == "exact" and callsign.upper() == pattern["pattern"].upper() or pattern["pattern_type"] == "regex" and re.match(pattern["pattern"], callsign, re.IGNORECASE):
+            if (
+                pattern["pattern_type"] == "prefix"
+                and callsign.upper().startswith(pattern["pattern"].upper())
+                or pattern["pattern_type"] == "contains"
+                and pattern["pattern"].upper() in callsign.upper()
+                or pattern["pattern_type"] == "exact"
+                and callsign.upper() == pattern["pattern"].upper()
+                or pattern["pattern_type"] == "regex"
+                and re.match(pattern["pattern"], callsign, re.IGNORECASE)
+            ):
                 return pattern
 
         return None

@@ -217,7 +217,6 @@ def fetch_aircraft_info(icao_hex: str):
     icao = icao_hex.upper().strip()
     logger.debug(f"Fetching aircraft info for {icao}")
 
-
     try:
         from skyspy.models import AircraftInfo
         from skyspy.services import external_db
@@ -529,20 +528,20 @@ def upgrade_aircraft_photo(icao_hex: str):
             and old_photo_url
             and ("plnspttrs.net" in old_photo_url or photo_source == "planespotters.net")
         ):
-                try:
-                    ps_url = f"https://api.planespotters.net/pub/photos/hex/{icao}"
-                    response = httpx.get(ps_url, timeout=10.0)
-                    if response.status_code == 200:
-                        data = response.json()
-                        if data.get("photos"):
-                            photo = data["photos"][0]
-                            photo_page_link = photo.get("link")
-                            if photo_page_link:
-                                info.photo_page_link = photo_page_link
-                                info.save(update_fields=["photo_page_link"])
-                                logger.info(f"Got page link for {icao}: {photo_page_link}")
-                except Exception as e:
-                    logger.debug(f"Planespotters API failed for {icao}: {e}")
+            try:
+                ps_url = f"https://api.planespotters.net/pub/photos/hex/{icao}"
+                response = httpx.get(ps_url, timeout=10.0)
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("photos"):
+                        photo = data["photos"][0]
+                        photo_page_link = photo.get("link")
+                        if photo_page_link:
+                            info.photo_page_link = photo_page_link
+                            info.save(update_fields=["photo_page_link"])
+                            logger.info(f"Got page link for {icao}: {photo_page_link}")
+            except Exception as e:
+                logger.debug(f"Planespotters API failed for {icao}: {e}")
 
         # Update if we found a better URL
         if new_photo_url and new_photo_url != old_photo_url:

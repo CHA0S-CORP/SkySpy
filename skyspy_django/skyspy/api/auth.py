@@ -384,7 +384,11 @@ class APIKeyViewSet(viewsets.ModelViewSet):
         api_key = self.get_object()
 
         # Check ownership
-        if api_key.user != request.user and not request.user.is_superuser and not self._has_admin_permission(request.user):
+        if (
+            api_key.user != request.user
+            and not request.user.is_superuser
+            and not self._has_admin_permission(request.user)
+        ):
             return Response({"error": "Cannot regenerate another user's API key"}, status=status.HTTP_403_FORBIDDEN)
 
         # Generate new key
