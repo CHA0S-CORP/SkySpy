@@ -7556,8 +7556,18 @@ function MapView({
               }
 
               // Check Airspaces if enabled - use point-in-polygon test
-              if (overlays.airspace && airspaceData.length > 0) {
-                airspaceData.forEach((as) => {
+              if (overlays.airspace) {
+                // Compute filtered airspace data inline (same logic as canvas rendering)
+                const rawAirspaces = [...(aviationData.airspaces || []), ...(aviationData.boundaries || [])];
+                const filteredAirspaces = rawAirspaces.filter((as) => {
+                  const asClass = as.class || as.airspace_class || as.type?.replace('CLASS_', '') || '';
+                  if (airspaceTypeFilters[asClass] !== undefined) {
+                    return airspaceTypeFilters[asClass];
+                  }
+                  if (as.isAdvisory) return true;
+                  return true;
+                });
+                filteredAirspaces.forEach((as) => {
                   // Get polygon coordinates
                   let polygonCoords = null;
                   if (as.polygon) {
@@ -7957,18 +7967,48 @@ function MapView({
             <span className="toggle-label">Airspace</span>
           </label>
           {overlays.airspace && (
-            <label className="overlay-toggle" style={{ paddingLeft: '20px' }}>
-              <input
-                type="checkbox"
-                checked={showAirspaceLabels}
-                onChange={() => {
-                  const newVal = !showAirspaceLabels;
-                  setShowAirspaceLabels(newVal);
-                  localStorage.setItem('adsb-show-airspace-labels', String(newVal));
-                }}
-              />
-              <span className="toggle-label">Show Labels</span>
-            </label>
+            <>
+              <label className="overlay-toggle" style={{ paddingLeft: '20px' }}>
+                <input
+                  type="checkbox"
+                  checked={showAirspaceLabels}
+                  onChange={() => {
+                    const newVal = !showAirspaceLabels;
+                    setShowAirspaceLabels(newVal);
+                    localStorage.setItem('adsb-show-airspace-labels', String(newVal));
+                  }}
+                />
+                <span className="toggle-label">Show Labels</span>
+              </label>
+              <div className="overlay-section-title" style={{ paddingLeft: '20px', fontSize: '10px', marginTop: '8px' }}>
+                Airspace Types
+              </div>
+              {[
+                { key: 'B', label: 'Class B' },
+                { key: 'C', label: 'Class C' },
+                { key: 'D', label: 'Class D' },
+                { key: 'E', label: 'Class E' },
+                { key: 'MOA', label: 'MOA' },
+                { key: 'RESTRICTED', label: 'Restricted' },
+                { key: 'WARNING', label: 'Warning' },
+                { key: 'PROHIBITED', label: 'Prohibited' },
+                { key: 'TFR', label: 'TFR' },
+                { key: 'ALERT', label: 'Alert' },
+              ].map(({ key, label }) => (
+                <label key={key} className="overlay-toggle" style={{ paddingLeft: '30px' }}>
+                  <input
+                    type="checkbox"
+                    checked={airspaceTypeFilters[key] ?? true}
+                    onChange={() => {
+                      const newFilters = { ...airspaceTypeFilters, [key]: !airspaceTypeFilters[key] };
+                      setAirspaceTypeFilters(newFilters);
+                      localStorage.setItem('adsb-airspace-type-filters', JSON.stringify(newFilters));
+                    }}
+                  />
+                  <span className="toggle-label">{label}</span>
+                </label>
+              ))}
+            </>
           )}
           <label className="overlay-toggle">
             <input
