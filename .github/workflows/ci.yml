@@ -445,11 +445,11 @@ jobs:
         run: docker compose -f docker-compose.test.yaml --env-file .env.test down -v
 
   # ===========================================================================
-  # Stage 5: Documentation Sync (ReadMe.io)
+  # Stage 5: ReadMe Sync (each job has its own concurrency group)
   # ===========================================================================
 
   export-openapi:
-    name: Export OpenAPI Schema
+    name: Sync API to ReadMe
     runs-on: ubuntu-latest
     needs: [detect-changes, test-python-unit]
     if: |
@@ -457,6 +457,9 @@ jobs:
       github.event_name == 'push' &&
       needs.detect-changes.outputs.python == 'true'
     timeout-minutes: 10
+    concurrency:
+      group: readme-api-sync
+      cancel-in-progress: false
     services:
       postgres:
         image: postgres:16-alpine
@@ -515,6 +518,9 @@ jobs:
       github.ref == 'refs/heads/main' &&
       github.event_name == 'push'
     timeout-minutes: 5
+    concurrency:
+      group: readme-docs-sync
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - name: Sync documentation to ReadMe

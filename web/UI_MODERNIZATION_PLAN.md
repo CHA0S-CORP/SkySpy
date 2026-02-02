@@ -2616,6 +2616,768 @@ const AircraftRow = React.memo(function AircraftRow({ aircraft, onSelect }) {
 
 ---
 
+## Phase 7: Admin Settings Page
+
+**Goal:** Build a comprehensive admin settings UI with category navigation, real-time validation, pending changes tracking, and audit log viewing.
+
+### 7.1 Overview
+
+The Admin Settings page provides administrators with a web interface to manage ~70 runtime-editable system configurations across 12 categories. This phase implements the frontend for the `/api/v1/admin/config/` endpoints.
+
+**Key Features:**
+- Category-based navigation with setting counts
+- Pending changes tracking with bulk save
+- Real-time validation feedback
+- Restart requirement warnings
+- Sensitive value masking with reveal
+- Audit log viewer
+- Export/Import functionality
+
+### 7.2 Create Admin Settings View
+
+**File:** `src/views/AdminSettingsView.tsx`
+
+```tsx
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { AdminConfigCategory } from '@/components/admin/AdminConfigCategory';
+import { AdminAuditLog } from '@/components/admin/AdminAuditLog';
+import { AdminConfigExport } from '@/components/admin/AdminConfigExport';
+import { api } from '@/lib/api';
+import { Settings, History, Download } from '@/components/icons';
+
+export default function AdminSettingsView() {
+  const [activeTab, setActiveTab] = useState('settings');
+  const [pendingChanges, setPendingChanges] = useState<Record<string, string>>({});
+
+  const { data: configData, isLoading } = useQuery({
+    queryKey: ['admin', 'config'],
+    queryFn: () => api.getAdminConfig(),
+  });
+
+  const hasPendingChanges = Object.keys(pendingChanges).length > 0;
+
+  return (
+    <div className="p-6 space-y-6">
+      <header className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-text-primary">System Configuration</h1>
+          <p className="text-text-secondary mt-1">
+            Manage runtime settings across {configData?.total_count ?? 0} configurations
+          </p>
+        </div>
+        {hasPendingChanges && (
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-accent-yellow">
+              {Object.keys(pendingChanges).length} unsaved changes
+            </span>
+            <button className="btn-primary">Save All</button>
+          </div>
+        )}
+      </header>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="settings">
+            <Settings className="w-4 h-4 mr-2" />
+            Settings
+          </TabsTrigger>
+          <TabsTrigger value="audit">
+            <History className="w-4 h-4 mr-2" />
+            Audit Log
+          </TabsTrigger>
+          <TabsTrigger value="export">
+            <Download className="w-4 h-4 mr-2" />
+            Export/Import
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="settings">
+          <AdminConfigSettings
+            categories={configData?.categories ?? []}
+            isLoading={isLoading}
+            pendingChanges={pendingChanges}
+            onPendingChange={(key, value) =>
+              setPendingChanges((prev) => ({ ...prev, [key]: value }))
+            }
+          />
+        </TabsContent>
+
+        <TabsContent value="audit">
+          <AdminAuditLog />
+        </TabsContent>
+
+        <TabsContent value="export">
+          <AdminConfigExport />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+```
+
+### 7.3 Create Category Navigation Component
+
+**File:** `src/components/admin/AdminConfigSettings.tsx`
+
+```tsx
+import { useState } from 'react';
+import { cn } from '@/components/ui/cn';
+import { AdminConfigForm } from './AdminConfigForm';
+import type { ConfigCategory } from '@/types/admin';
+
+interface AdminConfigSettingsProps {
+  categories: ConfigCategory[];
+  isLoading: boolean;
+  pendingChanges: Record<string, string>;
+  onPendingChange: (key: string, value: string) => void;
+}
+
+const CATEGORY_ICONS: Record<string, React.ComponentType> = {
+  adsb_sources: Radio,
+  location: MapPin,
+  safety: AlertTriangle,
+  alerts: Bell,
+  acars: MessageSquare,
+  storage: Database,
+  transcription: Mic,
+  external_apis: Globe,
+  monitoring: Activity,
+  notifications: Send,
+  aircraft_data: Plane,
+  display: Monitor,
+};
+
+export function AdminConfigSettings({
+  categories,
+  isLoading,
+  pendingChanges,
+  onPendingChange,
+}: AdminConfigSettingsProps) {
+  const [activeCategory, setActiveCategory] = useState(categories[0]?.category ?? '');
+
+  if (isLoading) {
+    return <AdminConfigSkeleton />;
+  }
+
+  const activeConfig = categories.find((c) => c.category === activeCategory);
+
+  return (
+    <div className="flex gap-6 mt-4">
+      {/* Category Navigation */}
+      <nav className="w-64 shrink-0 space-y-1">
+        {categories.map((cat) => {
+          const Icon = CATEGORY_ICONS[cat.category] ?? Settings;
+          const hasChanges = cat.configs.some((c) => c.key in pendingChanges);
+
+          return (
+            <button
+              key={cat.category}
+              onClick={() => setActiveCategory(cat.category)}
+              className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-md text-left',
+                'transition-colors',
+                activeCategory === cat.category
+                  ? 'bg-bg-hover text-text-primary'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover/50'
+              )}
+            >
+              <Icon className="w-4 h-4" />
+              <span className="flex-1 truncate">{cat.category_display}</span>
+              <span className="text-xs text-text-dim">{cat.configs.length}</span>
+              {hasChanges && (
+                <span className="w-2 h-2 rounded-full bg-accent-yellow" />
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Configuration Form */}
+      <div className="flex-1 min-w-0">
+        {activeConfig && (
+          <AdminConfigForm
+            category={activeConfig}
+            pendingChanges={pendingChanges}
+            onPendingChange={onPendingChange}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+### 7.4 Create Configuration Form Component
+
+**File:** `src/components/admin/AdminConfigForm.tsx`
+
+```tsx
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { FormField, FormLabel, FormInput, FormError, FormDescription } from '@/components/ui/form';
+import { Switch } from '@/components/ui/switch';
+import { AlertTriangle, Eye, EyeOff, RefreshCw } from '@/components/icons';
+import { api } from '@/lib/api';
+import type { ConfigCategory, ConfigItem } from '@/types/admin';
+
+interface AdminConfigFormProps {
+  category: ConfigCategory;
+  pendingChanges: Record<string, string>;
+  onPendingChange: (key: string, value: string) => void;
+}
+
+export function AdminConfigForm({
+  category,
+  pendingChanges,
+  onPendingChange,
+}: AdminConfigFormProps) {
+  const queryClient = useQueryClient();
+
+  const updateMutation = useMutation({
+    mutationFn: ({ key, value }: { key: string; value: string }) =>
+      api.updateAdminConfig(key, value),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'config'] });
+    },
+  });
+
+  return (
+    <div className="space-y-6">
+      <header className="pb-4 border-b border-border">
+        <h2 className="text-lg font-medium text-text-primary">
+          {category.category_display}
+        </h2>
+        <p className="text-sm text-text-secondary mt-1">
+          {category.configs.length} configuration{category.configs.length !== 1 ? 's' : ''}
+        </p>
+      </header>
+
+      <div className="space-y-6">
+        {category.configs.map((config) => (
+          <ConfigField
+            key={config.key}
+            config={config}
+            pendingValue={pendingChanges[config.key]}
+            onValueChange={(value) => onPendingChange(config.key, value)}
+            onSave={(value) => updateMutation.mutate({ key: config.key, value })}
+            isSaving={updateMutation.isPending}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface ConfigFieldProps {
+  config: ConfigItem;
+  pendingValue?: string;
+  onValueChange: (value: string) => void;
+  onSave: (value: string) => void;
+  isSaving: boolean;
+}
+
+function ConfigField({
+  config,
+  pendingValue,
+  onValueChange,
+  onSave,
+  isSaving,
+}: ConfigFieldProps) {
+  const [showSensitive, setShowSensitive] = useState(false);
+  const currentValue = pendingValue ?? config.value;
+  const hasChanged = pendingValue !== undefined && pendingValue !== config.value;
+
+  return (
+    <FormField>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1">
+          <FormLabel htmlFor={config.key} className="flex items-center gap-2">
+            {config.display_name}
+            {config.requires_restart && (
+              <span
+                className="text-accent-yellow"
+                title="Requires service restart"
+              >
+                <RefreshCw className="w-3 h-3" />
+              </span>
+            )}
+            {config.has_env_override && (
+              <span className="text-xs bg-bg-hover px-1.5 py-0.5 rounded">
+                ENV override
+              </span>
+            )}
+          </FormLabel>
+          <FormDescription>{config.description}</FormDescription>
+        </div>
+
+        {hasChanged && (
+          <button
+            onClick={() => onSave(pendingValue!)}
+            disabled={isSaving}
+            className="btn-primary btn-sm"
+          >
+            Save
+          </button>
+        )}
+      </div>
+
+      {config.value_type === 'boolean' ? (
+        <Switch
+          id={config.key}
+          checked={currentValue === 'true'}
+          onCheckedChange={(checked) => onValueChange(checked ? 'true' : 'false')}
+          disabled={config.is_readonly}
+        />
+      ) : config.is_sensitive ? (
+        <div className="relative">
+          <FormInput
+            id={config.key}
+            type={showSensitive ? 'text' : 'password'}
+            value={currentValue}
+            onChange={(e) => onValueChange(e.target.value)}
+            disabled={config.is_readonly}
+            className="pr-10"
+          />
+          <button
+            type="button"
+            onClick={() => setShowSensitive(!showSensitive)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary"
+          >
+            {showSensitive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        </div>
+      ) : (
+        <FormInput
+          id={config.key}
+          type={config.value_type === 'integer' || config.value_type === 'float' ? 'number' : 'text'}
+          value={currentValue}
+          onChange={(e) => onValueChange(e.target.value)}
+          disabled={config.is_readonly}
+          min={config.validation_rules?.min}
+          max={config.validation_rules?.max}
+        />
+      )}
+
+      {config.is_readonly && (
+        <p className="text-xs text-text-dim">
+          This setting is read-only and can only be changed via environment variables.
+        </p>
+      )}
+    </FormField>
+  );
+}
+```
+
+### 7.5 Create Audit Log Component
+
+**File:** `src/components/admin/AdminAuditLog.tsx`
+
+```tsx
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { FormInput } from '@/components/ui/form';
+import { api } from '@/lib/api';
+import { formatDistanceToNow } from 'date-fns';
+
+export function AdminAuditLog() {
+  const [configKey, setConfigKey] = useState('');
+  const [hours, setHours] = useState<number | undefined>(24);
+
+  const { data: auditData, isLoading } = useQuery({
+    queryKey: ['admin', 'config', 'audit', { configKey, hours }],
+    queryFn: () => api.getAdminConfigAuditLog({ config_key: configKey || undefined, hours }),
+  });
+
+  return (
+    <div className="space-y-4 mt-4">
+      {/* Filters */}
+      <div className="flex gap-4">
+        <FormInput
+          placeholder="Filter by config key..."
+          value={configKey}
+          onChange={(e) => setConfigKey(e.target.value)}
+          className="w-64"
+        />
+        <Select value={String(hours ?? '')} onValueChange={(v) => setHours(v ? Number(v) : undefined)}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Time range" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1">Last hour</SelectItem>
+            <SelectItem value="24">Last 24 hours</SelectItem>
+            <SelectItem value="168">Last 7 days</SelectItem>
+            <SelectItem value="">All time</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Audit Log Table */}
+      <div className="border border-border rounded-lg overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-bg-hover">
+            <tr>
+              <th className="px-4 py-3 text-left text-sm font-medium text-text-secondary">Configuration</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-text-secondary">Old Value</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-text-secondary">New Value</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-text-secondary">Changed By</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-text-secondary">When</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {auditData?.audit_log.map((entry) => (
+              <tr key={entry.id} className="hover:bg-bg-hover/50">
+                <td className="px-4 py-3">
+                  <div className="text-sm text-text-primary">{entry.config_display_name}</div>
+                  <div className="text-xs text-text-dim font-mono">{entry.config_key}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <code className="text-sm text-text-secondary bg-bg-hover px-1.5 py-0.5 rounded">
+                    {entry.old_value || '(empty)'}
+                  </code>
+                </td>
+                <td className="px-4 py-3">
+                  <code className="text-sm text-accent-cyan bg-bg-hover px-1.5 py-0.5 rounded">
+                    {entry.new_value}
+                  </code>
+                </td>
+                <td className="px-4 py-3 text-sm text-text-secondary">
+                  {entry.changed_by_username}
+                </td>
+                <td className="px-4 py-3 text-sm text-text-secondary">
+                  {formatDistanceToNow(new Date(entry.changed_at), { addSuffix: true })}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {auditData?.audit_log.length === 0 && (
+          <div className="px-4 py-8 text-center text-text-secondary">
+            No configuration changes found for the selected filters.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+### 7.6 Create Export/Import Component
+
+**File:** `src/components/admin/AdminConfigExport.tsx`
+
+```tsx
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Switch } from '@/components/ui/switch';
+import { FormLabel } from '@/components/ui/form';
+import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
+import { Download, Upload, AlertTriangle } from '@/components/icons';
+import { api } from '@/lib/api';
+
+export function AdminConfigExport() {
+  const [includeSensitive, setIncludeSensitive] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [dryRun, setDryRun] = useState(true);
+  const queryClient = useQueryClient();
+
+  const exportMutation = useMutation({
+    mutationFn: () => api.exportAdminConfig({ include_sensitive: includeSensitive }),
+    onSuccess: (data) => {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `skyspy-config-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+  });
+
+  const importMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const content = await file.text();
+      const configs = JSON.parse(content);
+      return api.importAdminConfig({ configs: configs.configs, dry_run: dryRun });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'config'] });
+      setImportFile(null);
+    },
+  });
+
+  return (
+    <div className="grid md:grid-cols-2 gap-6 mt-4">
+      {/* Export Section */}
+      <div className="p-6 bg-bg-card border border-border rounded-lg space-y-4">
+        <h3 className="text-lg font-medium text-text-primary flex items-center gap-2">
+          <Download className="w-5 h-5" />
+          Export Configuration
+        </h3>
+        <p className="text-sm text-text-secondary">
+          Download all configuration settings as a JSON file for backup or transfer.
+        </p>
+
+        <div className="flex items-center justify-between">
+          <FormLabel htmlFor="include-sensitive" className="flex items-center gap-2">
+            Include sensitive values
+            <AlertTriangle className="w-4 h-4 text-accent-yellow" />
+          </FormLabel>
+          <Switch
+            id="include-sensitive"
+            checked={includeSensitive}
+            onCheckedChange={setIncludeSensitive}
+          />
+        </div>
+
+        {includeSensitive && (
+          <p className="text-xs text-accent-yellow">
+            Warning: Export will contain API keys and secrets in plain text.
+          </p>
+        )}
+
+        <button
+          onClick={() => exportMutation.mutate()}
+          disabled={exportMutation.isPending}
+          className="btn-primary w-full"
+        >
+          {exportMutation.isPending ? 'Exporting...' : 'Export Configuration'}
+        </button>
+      </div>
+
+      {/* Import Section */}
+      <div className="p-6 bg-bg-card border border-border rounded-lg space-y-4">
+        <h3 className="text-lg font-medium text-text-primary flex items-center gap-2">
+          <Upload className="w-5 h-5" />
+          Import Configuration
+        </h3>
+        <p className="text-sm text-text-secondary">
+          Restore configuration from a previously exported JSON file.
+        </p>
+
+        <input
+          type="file"
+          accept=".json"
+          onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+          className="block w-full text-sm text-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-bg-hover file:text-text-primary hover:file:bg-bg-hover/80"
+        />
+
+        <div className="flex items-center justify-between">
+          <FormLabel htmlFor="dry-run">
+            Dry run (validate without applying)
+          </FormLabel>
+          <Switch
+            id="dry-run"
+            checked={dryRun}
+            onCheckedChange={setDryRun}
+          />
+        </div>
+
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <button
+              disabled={!importFile || importMutation.isPending}
+              className="btn-secondary w-full"
+            >
+              {importMutation.isPending ? 'Importing...' : dryRun ? 'Validate Import' : 'Import Configuration'}
+            </button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {dryRun ? 'Validate Configuration Import' : 'Confirm Configuration Import'}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {dryRun
+                  ? 'This will validate the configuration file without making any changes.'
+                  : 'This will overwrite current configuration values. Are you sure you want to proceed?'}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => importFile && importMutation.mutate(importFile)}>
+                {dryRun ? 'Validate' : 'Import'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </div>
+  );
+}
+```
+
+### 7.7 Add Admin Types
+
+**File:** `src/types/admin.ts`
+
+```typescript
+export interface ConfigItem {
+  key: string;
+  category: string;
+  value: string;
+  value_type: 'string' | 'integer' | 'float' | 'boolean' | 'json' | 'secret';
+  display_name: string;
+  description: string;
+  validation_rules: {
+    required?: boolean;
+    min?: number;
+    max?: number;
+    pattern?: string;
+    choices?: string[];
+  };
+  env_var: string;
+  default_value: string;
+  requires_restart: boolean;
+  is_sensitive: boolean;
+  is_readonly: boolean;
+  sort_order: number;
+  has_env_override: boolean;
+  updated_at: string;
+  updated_by_username: string;
+}
+
+export interface ConfigCategory {
+  category: string;
+  category_display: string;
+  has_changes: boolean;
+  configs: ConfigItem[];
+}
+
+export interface ConfigResponse {
+  categories: ConfigCategory[];
+  total_count: number;
+}
+
+export interface AuditLogEntry {
+  id: number;
+  config_key: string;
+  config_display_name: string;
+  old_value: string;
+  new_value: string;
+  changed_by: number;
+  changed_by_username: string;
+  changed_at: string;
+  ip_address: string;
+}
+
+export interface AuditLogResponse {
+  audit_log: AuditLogEntry[];
+  count: number;
+}
+
+export interface ConfigExport {
+  configs: Record<string, { value: string; category: string; value_type: string }>;
+  exported_at: string;
+  version: string;
+  include_sensitive: boolean;
+}
+
+export interface ImportResult {
+  imported: number;
+  skipped: number;
+  errors: Record<string, string>;
+  dry_run: boolean;
+}
+```
+
+### 7.8 Add API Endpoints
+
+**Update:** `src/lib/api.ts`
+
+```typescript
+// Add to existing api object
+export const api = {
+  // ... existing endpoints
+
+  // Admin Config
+  getAdminConfig: (category?: string) =>
+    apiRequest(`/api/v1/admin/config/${category ? `?category=${category}` : ''}`),
+
+  getAdminConfigByKey: (key: string, reveal = false) =>
+    apiRequest(`/api/v1/admin/config/${key}/${reveal ? '?reveal=true' : ''}`),
+
+  updateAdminConfig: (key: string, value: string) =>
+    apiRequest(`/api/v1/admin/config/${key}/`, {
+      method: 'PATCH',
+      body: JSON.stringify({ value }),
+    }),
+
+  bulkUpdateAdminConfig: (updates: Record<string, string>) =>
+    apiRequest('/api/v1/admin/config/bulk_update/', {
+      method: 'POST',
+      body: JSON.stringify({ updates }),
+    }),
+
+  resetAdminConfigToDefault: (keys: string[]) =>
+    apiRequest('/api/v1/admin/config/reset_to_default/', {
+      method: 'POST',
+      body: JSON.stringify({ keys }),
+    }),
+
+  getAdminConfigAuditLog: (params: { config_key?: string; hours?: number; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params.config_key) searchParams.set('config_key', params.config_key);
+    if (params.hours) searchParams.set('hours', String(params.hours));
+    if (params.limit) searchParams.set('limit', String(params.limit));
+    return apiRequest(`/api/v1/admin/config/audit_log/?${searchParams}`);
+  },
+
+  exportAdminConfig: (params: { include_sensitive?: boolean }) =>
+    apiRequest(`/api/v1/admin/config/export/${params.include_sensitive ? '?include_sensitive=true' : ''}`),
+
+  importAdminConfig: (data: { configs: Record<string, unknown>; dry_run?: boolean; skip_readonly?: boolean }) =>
+    apiRequest('/api/v1/admin/config/import_config/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  validateAdminConfig: (key: string, value: string) =>
+    apiRequest('/api/v1/admin/config/validate/', {
+      method: 'POST',
+      body: JSON.stringify({ key, value }),
+    }),
+
+  revealAdminConfigValue: (key: string) =>
+    apiRequest(`/api/v1/admin/config/${key}/reveal/`, { method: 'POST' }),
+};
+```
+
+### 7.9 Files to Create/Modify
+
+| Action | File |
+|--------|------|
+| Create | `src/views/AdminSettingsView.tsx` |
+| Create | `src/components/admin/AdminConfigSettings.tsx` |
+| Create | `src/components/admin/AdminConfigForm.tsx` |
+| Create | `src/components/admin/AdminAuditLog.tsx` |
+| Create | `src/components/admin/AdminConfigExport.tsx` |
+| Create | `src/types/admin.ts` |
+| Modify | `src/lib/api.ts` (add admin config endpoints) |
+| Modify | `src/views/index.tsx` (add lazy-loaded AdminSettingsView) |
+| Create | `src/components/admin/AdminConfigSettings.stories.tsx` |
+| Create | `src/components/admin/AdminConfigForm.stories.tsx` |
+
+### 7.10 Deliverables Checklist
+
+- [ ] Admin Settings view with category navigation
+- [ ] Real-time validation on form inputs
+- [ ] Pending changes tracking with bulk save
+- [ ] Restart requirement warnings displayed
+- [ ] Sensitive value masking with reveal toggle
+- [ ] Environment override indicators
+- [ ] Audit log viewer with filtering
+- [ ] Export functionality with sensitive value option
+- [ ] Import with dry-run validation
+- [ ] Reset to default functionality
+- [ ] TypeScript types for all admin config entities
+- [ ] Storybook stories for admin components
+- [ ] Proper error handling and loading states
+- [ ] Role-based access control (admin/superadmin only)
+
+---
+
 ## Summary & Dependencies
 
 ### Phase Dependencies
@@ -2630,7 +3392,12 @@ Phase 1 (Design System) ──┬──> Phase 2 (Radix UI)
                                                               │
                                                               v
                                                     Phase 6 (Performance)
+                                                              │
+                                                              v
+                                                    Phase 7 (Admin Settings)
 ```
+
+> **Note:** Phase 7 (Admin Settings) depends on Phases 2 (Radix UI), 3 (TanStack Query), 4 (Accessibility), and 5 (TypeScript) for form components, data fetching, accessible controls, and type safety.
 
 ### New Dependencies Summary
 
@@ -2675,7 +3442,8 @@ Phase 1 (Design System) ──┬──> Phase 2 (Radix UI)
 | Phase 4 | ~5 | ~20 |
 | Phase 5 | ~5 | ~30 |
 | Phase 6 | ~5 | ~10 |
-| **Total** | **~46** | **~80** |
+| Phase 7 | ~8 | ~3 |
+| **Total** | **~54** | **~83** |
 
 ---
 
