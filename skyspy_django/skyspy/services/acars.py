@@ -540,8 +540,11 @@ class AcarsService:
                 else:
                     msg['timestamp'] = datetime.now(dt_timezone.utc).isoformat().replace('+00:00', 'Z')
 
-            # Broadcast to all ACARS subscribers
+            # Broadcast to all ACARS subscribers on /acars namespace
             sync_emit('acars:message', msg, room='acars_all', namespace='/acars')
+
+            # Also broadcast to main namespace for frontend compatibility
+            sync_emit('acars:message', msg, room='topic_acars', namespace='/')
 
             # Also send to aircraft-specific room if we have ICAO
             icao = msg.get('icao_hex')

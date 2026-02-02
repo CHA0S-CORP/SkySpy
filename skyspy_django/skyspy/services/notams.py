@@ -421,9 +421,11 @@ def refresh_notams(
 
     logger.info(f"Parsed {len(parsed_notams)} unique NOTAMs")
 
-    # Upsert NOTAMs
+    # Upsert NOTAMs and track changes for broadcasting
     now = timezone.now()
     updated_count = 0
+    new_notams = []
+    updated_notams = []
 
     for notam_data in parsed_notams.values():
         notam_id = notam_data.pop("notam_id")
@@ -437,8 +439,46 @@ def refresh_notams(
         )
         updated_count += 1
 
+        # Track for broadcasting
+        notam_broadcast_data = {
+            'notam_id': notam_id,
+            **notam_data,
+            'timestamp': now.isoformat().replace('+00:00', 'Z'),
+        }
+        if created:
+            new_notams.append(notam_broadcast_data)
+        else:
+            updated_notams.append(notam_broadcast_data)
+
+    # Broadcast new NOTAMs
+    if new_notams:
+        from skyspy.socketio.utils import sync_emit
+        for notam in new_notams[:20]:  # Limit broadcasts to avoid flooding
+            try:
+                event_name = 'notam:tfr_new' if notam.get('notam_type') == 'TFR' else 'notam:new'
+                sync_emit(event_name, notam, room='topic_notams')
+            except Exception as e:
+                logger.warning(f"Failed to broadcast new NOTAM: {e}")
+
+    # Broadcast updated NOTAMs
+    if updated_notams:
+        from skyspy.socketio.utils import sync_emit
+        for notam in updated_notams[:20]:  # Limit broadcasts
+            try:
+                sync_emit('notam:update', notam, room='topic_notams')
+            except Exception as e:
+                logger.warning(f"Failed to broadcast NOTAM update: {e}")
+
     # Soft archive expired NOTAMs (7+ days past expiration, not yet archived)
     archive_cutoff = now - timedelta(days=7)
+
+    # Get NOTAMs that will be archived for broadcasting
+    expiring_notams = list(CachedNotam.objects.filter(
+        effective_end__lt=archive_cutoff,
+        is_permanent=False,
+        is_archived=False,
+    ).values_list('notam_id', 'notam_type'))
+
     archived_count = CachedNotam.objects.filter(
         effective_end__lt=archive_cutoff,
         is_permanent=False,
@@ -451,6 +491,18 @@ def refresh_notams(
 
     if archived_count:
         logger.info(f"Archived {archived_count} expired NOTAMs")
+
+        # Broadcast expired NOTAMs
+        from skyspy.socketio.utils import sync_emit
+        for notam_id, notam_type in expiring_notams[:20]:  # Limit broadcasts
+            try:
+                event_name = 'notam:tfr_expired' if notam_type == 'TFR' else 'notam:expired'
+                sync_emit(event_name, {
+                    'notam_id': notam_id,
+                    'timestamp': now.isoformat().replace('+00:00', 'Z'),
+                }, room='topic_notams')
+            except Exception as e:
+                logger.warning(f"Failed to broadcast expired NOTAM: {e}")
 
     # Hard delete NOTAMs that have been archived for 90+ days
     hard_delete_cutoff = now - timedelta(days=90)

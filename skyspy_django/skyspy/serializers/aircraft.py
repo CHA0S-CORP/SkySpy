@@ -252,7 +252,7 @@ class AircraftInfoSerializer(serializers.ModelSerializer):
     def get_photo_url(self, obj):
         """Return API photo URL if cached, otherwise None to trigger fetch."""
         from django.conf import settings
-        from pathlib import Path
+        from django.core.cache import cache
 
         if not obj.icao_hex:
             return None
@@ -268,11 +268,18 @@ class AircraftInfoSerializer(serializers.ModelSerializer):
                     # Return API URL - PhotoServeView will redirect to S3
                     return f"/api/v1/photos/{icao}"
             else:
-                # For local: verify file actually exists
-                cache_dir = Path(settings.PHOTO_CACHE_DIR)
-                photo_path = cache_dir / f"{icao}.jpg"
-                if photo_path.exists() and photo_path.stat().st_size > 0:
+                # Use cached set instead of filesystem check for performance
+                # The cache stores a set of ICAOs for O(1) lookup
+                cached_icaos = cache.get('cached_photo_icaos')
+                if cached_icaos is not None and icao in cached_icaos:
                     return f"/api/v1/photos/{icao}"
+                else:
+                    # Fallback to filesystem check if cache not populated yet
+                    from pathlib import Path
+                    cache_dir = Path(settings.PHOTO_CACHE_DIR)
+                    photo_path = cache_dir / f"{icao}.jpg"
+                    if photo_path.exists() and photo_path.stat().st_size > 0:
+                        return f"/api/v1/photos/{icao}"
 
         # No cached photo available
         return None
@@ -280,7 +287,7 @@ class AircraftInfoSerializer(serializers.ModelSerializer):
     def get_photo_thumbnail_url(self, obj):
         """Return API thumbnail URL if cached, otherwise None."""
         from django.conf import settings
-        from pathlib import Path
+        from django.core.cache import cache
 
         if not obj.icao_hex:
             return None
@@ -296,11 +303,18 @@ class AircraftInfoSerializer(serializers.ModelSerializer):
                     # Return API URL - PhotoServeView will redirect to S3
                     return f"/api/v1/photos/{icao}/thumb"
             else:
-                # For local: verify file actually exists
-                cache_dir = Path(settings.PHOTO_CACHE_DIR)
-                thumb_path = cache_dir / f"{icao}_thumb.jpg"
-                if thumb_path.exists() and thumb_path.stat().st_size > 0:
+                # Use cached set instead of filesystem check for performance
+                # The cache stores a set of ICAOs for O(1) lookup
+                cached_thumbs = cache.get('cached_photo_thumb_icaos')
+                if cached_thumbs is not None and icao in cached_thumbs:
                     return f"/api/v1/photos/{icao}/thumb"
+                else:
+                    # Fallback to filesystem check if cache not populated yet
+                    from pathlib import Path
+                    cache_dir = Path(settings.PHOTO_CACHE_DIR)
+                    thumb_path = cache_dir / f"{icao}_thumb.jpg"
+                    if thumb_path.exists() and thumb_path.stat().st_size > 0:
+                        return f"/api/v1/photos/{icao}/thumb"
 
         # No cached thumbnail available
         return None

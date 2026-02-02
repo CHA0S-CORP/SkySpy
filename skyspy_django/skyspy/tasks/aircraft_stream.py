@@ -181,6 +181,27 @@ def broadcast_removed_aircraft(removed_icaos: List[str], timestamp: str):
         )
 
 
+def broadcast_heartbeat(aircraft_count: int, timestamp: str):
+    """
+    Broadcast periodic heartbeat with aircraft count.
+
+    This provides frontend with regular updates even when no aircraft changes occur.
+
+    Args:
+        aircraft_count: Current number of tracked aircraft
+        timestamp: ISO timestamp string
+    """
+    sync_emit(
+        'aircraft:heartbeat',
+        {
+            'count': aircraft_count,
+            'aircraft_count': aircraft_count,  # Alias for frontend compatibility
+            'timestamp': timestamp
+        },
+        room='topic_aircraft'
+    )
+
+
 def update_state_and_broadcast(batch: List[dict]):
     """
     Hot path: Update in-memory state and broadcast to clients.
@@ -269,19 +290,27 @@ def update_state_and_broadcast(batch: List[dict]):
 
 def sync_cache_state():
     """
-    Sync in-memory state to Django cache.
+    Sync in-memory state to Django cache and broadcast heartbeat.
 
     Called periodically, not on every update, to reduce cache overhead.
     """
     with _aircraft_state_lock:
         aircraft_list = list(_aircraft_state.values())
 
+    timestamp = timezone.now().isoformat().replace('+00:00', 'Z')
+
     cache.set_many({
         CACHE_KEY_AIRCRAFT: aircraft_list,
         CACHE_KEY_TIMESTAMP: time.time(),
         CACHE_KEY_ONLINE: True,
-        CACHE_KEY_LAST_BROADCAST: timezone.now().isoformat().replace('+00:00', 'Z'),
+        CACHE_KEY_LAST_BROADCAST: timestamp,
     }, timeout=30)
+
+    # Broadcast heartbeat with current aircraft count
+    try:
+        broadcast_heartbeat(len(aircraft_list), timestamp)
+    except Exception as e:
+        logger.warning(f"Failed to broadcast heartbeat: {e}")
 
 
 # ============================================================================
@@ -352,7 +381,11 @@ def flush_stream_to_database(self):
                 sightings.append(sighting)
 
             if sightings:
-                AircraftSighting.objects.bulk_create(sightings, ignore_conflicts=True)
+                try:
+                    AircraftSighting.objects.bulk_create(sightings, batch_size=500)
+                except Exception:
+                    # Fallback to ignore_conflicts only on error (e.g., duplicate key)
+                    AircraftSighting.objects.bulk_create(sightings, ignore_conflicts=True, batch_size=500)
                 logger.debug(f"Flushed {len(sightings)} stream sightings to database")
 
     except Exception as e:
@@ -370,28 +403,27 @@ def process_new_aircraft_lookups(self):
 
     Runs separately from streaming to avoid blocking.
     Thread-safe: Uses lock when accessing the queue.
+    Uses batch task for better efficiency (reduces Celery overhead).
     """
-    from skyspy.tasks.external_db import fetch_aircraft_info
+    from skyspy.tasks.external_db import fetch_aircraft_info_batch
 
-    # Grab queued aircraft (thread-safe)
+    # Grab queued aircraft (thread-safe) - batch of up to 50
     to_lookup = []
     with _new_aircraft_queue_lock:
-        while _new_aircraft_queue and len(to_lookup) < 20:
+        while _new_aircraft_queue and len(to_lookup) < 50:
             try:
                 icao = _new_aircraft_queue.popleft()
                 to_lookup.append(icao)
             except IndexError:
                 break
 
-    # Queue lookups (these run async)
-    for icao in to_lookup:
-        try:
-            fetch_aircraft_info.delay(icao)
-        except Exception as e:
-            logger.debug(f"Failed to queue lookup for {icao}: {e}")
-
+    # Queue batch lookup (single task for all ICAOs)
     if to_lookup:
-        logger.debug(f"Queued {len(to_lookup)} aircraft for info lookup")
+        try:
+            fetch_aircraft_info_batch.delay(to_lookup)
+            logger.debug(f"Queued batch of {len(to_lookup)} aircraft for info lookup")
+        except Exception as e:
+            logger.debug(f"Failed to queue batch lookup: {e}")
 
 
 # ============================================================================

@@ -17,15 +17,20 @@ from skyspy.socketio.utils import sync_emit
 logger = logging.getLogger(__name__)
 
 
-def broadcast_airframe_error(icao: str, error_message: str, sources_tried: list = None):
+def broadcast_airframe_error(icao: str, error_message: str, sources_tried: list = None, error_type: str = 'lookup_failed'):
     """Broadcast an airframe lookup error to WebSocket clients via Socket.IO."""
     try:
         sync_emit(
             'airframe:error',
             {
-                'icao': icao,
-                'error': error_message,
+                'icao_hex': icao.upper() if icao else '',
+                'icao': icao,  # Keep for backwards compatibility
+                'error_type': error_type,
+                'error_message': error_message,
+                'error': error_message,  # Keep for backwards compatibility
+                'source': 'external_db',
                 'sources_tried': sources_tried or [],
+                'details': {'sources_tried': sources_tried or []},
                 'timestamp': datetime.utcnow().isoformat() + 'Z'
             },
             room='topic_aircraft'
@@ -115,6 +120,84 @@ def load_opensky_database():
     except Exception as e:
         logger.error(f"Failed to load OpenSky database: {e}")
         return False
+
+
+@shared_task(bind=True, max_retries=2, ignore_result=True)
+def fetch_aircraft_info_batch(self, icao_list: list):
+    """
+    Batch fetch aircraft info for multiple ICAOs.
+
+    This reduces Celery task overhead compared to individual tasks.
+    Used by process_new_aircraft_lookups for better efficiency.
+    """
+    from skyspy.services import external_db
+    from skyspy.models import AircraftInfo
+
+    if not icao_list:
+        return {'processed': 0}
+
+    # Limit batch size
+    icao_list = icao_list[:50]
+
+    # Check which ICAOs we already have valid info for
+    existing = set(
+        AircraftInfo.objects.filter(
+            icao_hex__in=[i.upper() for i in icao_list],
+            fetch_failed=False
+        ).values_list('icao_hex', flat=True)
+    )
+
+    to_lookup = [icao for icao in icao_list if icao.upper() not in existing]
+
+    processed = 0
+    for icao in to_lookup:
+        try:
+            # Use the existing fetch_aircraft_info logic inline
+            icao = icao.upper().strip()
+            data = external_db.lookup_all(icao)
+
+            if data:
+                AircraftInfo.objects.update_or_create(
+                    icao_hex=icao,
+                    defaults={
+                        'registration': data.get('registration'),
+                        'type_code': data.get('type_code'),
+                        'manufacturer': data.get('manufacturer'),
+                        'model': data.get('model'),
+                        'operator': data.get('operator'),
+                        'operator_icao': data.get('operator_icao'),
+                        'owner': data.get('owner'),
+                        'year_built': data.get('year_built'),
+                        'serial_number': data.get('serial_number'),
+                        'country': data.get('country'),
+                        'category': data.get('category'),
+                        'is_military': data.get('is_military', False),
+                        'is_interesting': data.get('is_interesting', False),
+                        'is_pia': data.get('is_pia', False),
+                        'is_ladd': data.get('is_ladd', False),
+                        'city': data.get('city'),
+                        'state': data.get('state'),
+                        'source': ','.join(data.get('sources', [])),
+                        'fetch_failed': False,
+                    }
+                )
+                processed += 1
+                _trigger_photo_fetch_if_enabled(icao)
+            else:
+                # Mark as failed
+                AircraftInfo.objects.update_or_create(
+                    icao_hex=icao,
+                    defaults={
+                        'fetch_failed': True,
+                        'source': 'failed',
+                    }
+                )
+
+        except Exception as e:
+            logger.debug(f"Batch lookup failed for {icao}: {e}")
+
+    logger.debug(f"Batch processed {processed} aircraft info lookups")
+    return {'processed': processed, 'total': len(to_lookup)}
 
 
 @shared_task
@@ -692,6 +775,60 @@ def cleanup_orphan_aircraft_info(days_without_sighting: int = 30):
 
     except Exception as e:
         logger.error(f"Error cleaning up orphan aircraft info: {e}")
+        return {'error': str(e)}
+
+
+@shared_task
+def update_cached_photo_set():
+    """
+    Update Redis set of cached photo ICAOs.
+
+    This allows the serializer to check photo existence via cache
+    instead of filesystem operations, significantly improving performance
+    when serializing many aircraft.
+
+    Should be run periodically (e.g., every 5 minutes).
+    """
+    from pathlib import Path
+    from django.core.cache import cache
+
+    if not getattr(settings, 'PHOTO_CACHE_ENABLED', False):
+        return {'cached': 0, 'enabled': False}
+
+    if getattr(settings, 'S3_ENABLED', False):
+        # For S3, we rely on the photo_cache service's existing logic
+        # This task is mainly for local filesystem caching
+        return {'cached': 0, 's3_mode': True}
+
+    cache_dir = Path(getattr(settings, 'PHOTO_CACHE_DIR', '/tmp/photo_cache'))
+    if not cache_dir.exists():
+        cache.set('cached_photo_icaos', [], timeout=600)
+        return {'cached': 0, 'dir_missing': True}
+
+    icaos = set()
+    thumbs = set()
+
+    try:
+        for photo in cache_dir.glob("*.jpg"):
+            name = photo.stem.upper()
+            # Skip thumbnails for the main photo list
+            if "_thumb" in name.lower():
+                # Track thumbs separately
+                thumbs.add(name.replace('_THUMB', ''))
+            else:
+                # Verify file is not empty
+                if photo.stat().st_size > 0:
+                    icaos.add(name)
+
+        # Store both main photos and thumbnails as sets for O(1) lookup
+        cache.set('cached_photo_icaos', icaos, timeout=600)
+        cache.set('cached_photo_thumb_icaos', thumbs, timeout=600)
+
+        logger.info(f"Updated cached photo set: {len(icaos)} photos, {len(thumbs)} thumbnails")
+        return {'cached': len(icaos), 'thumbnails': len(thumbs)}
+
+    except Exception as e:
+        logger.error(f"Error updating cached photo set: {e}")
         return {'error': str(e)}
 
 

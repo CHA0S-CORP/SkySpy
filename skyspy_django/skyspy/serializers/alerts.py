@@ -328,10 +328,14 @@ class AlertRuleSerializer(serializers.ModelSerializer):
         return False
 
     def get_subscriber_count(self, obj) -> int:
-        return obj.subscriptions.count()
+        # Use annotated value if available (from ViewSet's get_queryset)
+        if hasattr(obj, '_subscriber_count'):
+            return obj._subscriber_count
+        return obj.subscriptions.count()  # Fallback
 
     def get_notification_channel_ids(self, obj) -> list:
-        return list(obj.notification_channels.values_list('id', flat=True))
+        # Use prefetched data if available
+        return [ch.id for ch in obj.notification_channels.all()]
 
 
 class AlertRulesListSerializer(serializers.Serializer):

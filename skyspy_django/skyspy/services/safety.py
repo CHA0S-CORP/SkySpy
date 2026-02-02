@@ -845,8 +845,16 @@ class SafetyMonitor:
         """Broadcast event to WebSocket clients."""
         from skyspy.socketio.utils import sync_emit
 
+        # Map internal event types to Socket.IO event names expected by frontend
+        event_name_map = {
+            'safety_event': 'safety:event',
+            'safety_event_updated': 'safety:event_updated',
+            'safety_event_resolved': 'safety:event_resolved',
+        }
+        socket_event = event_name_map.get(event_type, 'safety:event')
+
         try:
-            sync_emit('safety:event', {
+            sync_emit(socket_event, {
                 **event,
                 'event_action': event_type,
                 'timestamp': timezone.now().isoformat().replace('+00:00', 'Z')

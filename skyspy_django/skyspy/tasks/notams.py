@@ -143,7 +143,7 @@ def refresh_notams(self):
 
             # Broadcast to notams room
             sync_emit(
-                'notam:stats_update',
+                'notam:stats',
                 {
                     'total_active': stats.get('active_notams', 0),
                     'tfr_count': stats.get('active_tfrs', 0),
@@ -227,21 +227,21 @@ def broadcast_new_tfr(tfr_data: dict):
 
         # Broadcast to topic_aircraft room (general aviation updates)
         sync_emit(
-            'tfr:new',
+            'notam:tfr_new',
             tfr_message,
             room='topic_aircraft'
         )
 
         # Broadcast to notams room
         sync_emit(
-            'tfr:new',
+            'notam:tfr_new',
             tfr_data,
             room='topic_notams'
         )
 
         # Broadcast to TFR-specific room
         sync_emit(
-            'tfr:new',
+            'notam:tfr_new',
             tfr_data,
             room='topic_tfrs'
         )

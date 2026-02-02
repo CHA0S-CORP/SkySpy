@@ -370,8 +370,14 @@ class MainNamespace(socketio.AsyncNamespace):
         await sio.save_session(sid, session)
 
     async def _send_initial_state(self, sid: str):
-        """Send initial aircraft snapshot on connect."""
+        """Send initial snapshots on connect for all subscribed data types."""
         logger.info(f"[_send_initial_state] Starting for {sid}")
+
+        # Get session to check subscribed topics
+        session = await sio.get_session(sid)
+        subscribed = session.get('subscribed_topics', set())
+
+        # Always send aircraft snapshot (default subscription)
         try:
             aircraft_list = await self._get_current_aircraft()
             logger.info(f"[_send_initial_state] Got {len(aircraft_list)} aircraft from cache")
@@ -383,6 +389,54 @@ class MainNamespace(socketio.AsyncNamespace):
             logger.info(f"[_send_initial_state] Emitted aircraft:snapshot to {sid}")
         except Exception as e:
             logger.error(f"Failed to send aircraft snapshot to {sid}: {e}", exc_info=True)
+
+        # Send safety snapshot if subscribed
+        if 'safety' in subscribed or 'all' in subscribed:
+            try:
+                safety_events = await self._get_safety_events({'hours': 24, 'limit': 50})
+                await sio.emit('safety:snapshot', {
+                    'events': safety_events,
+                    'count': len(safety_events),
+                    'timestamp': timezone.now().isoformat()
+                }, to=sid, namespace=self.namespace)
+                logger.debug(f"[_send_initial_state] Emitted safety:snapshot to {sid}")
+            except Exception as e:
+                logger.error(f"Failed to send safety snapshot to {sid}: {e}", exc_info=True)
+
+        # Send alert snapshot if subscribed
+        if 'alerts' in subscribed or 'all' in subscribed:
+            try:
+                alert_data = await self._get_alert_snapshot({'hours': 24, 'limit': 50})
+                await sio.emit('alert:snapshot', {
+                    'alerts': alert_data.get('alerts', []),
+                    'count': alert_data.get('count', 0),
+                    'timestamp': timezone.now().isoformat()
+                }, to=sid, namespace=self.namespace)
+                logger.debug(f"[_send_initial_state] Emitted alert:snapshot to {sid}")
+            except Exception as e:
+                logger.error(f"Failed to send alert snapshot to {sid}: {e}", exc_info=True)
+
+        # Send ACARS snapshot if subscribed
+        if 'acars' in subscribed or 'all' in subscribed:
+            try:
+                acars_data = await self._get_acars_snapshot({'hours': 1, 'limit': 50})
+                await sio.emit('acars:snapshot', {
+                    'messages': acars_data.get('messages', []),
+                    'count': acars_data.get('count', 0),
+                    'timestamp': timezone.now().isoformat()
+                }, to=sid, namespace=self.namespace)
+                logger.debug(f"[_send_initial_state] Emitted acars:snapshot to {sid}")
+            except Exception as e:
+                logger.error(f"Failed to send ACARS snapshot to {sid}: {e}", exc_info=True)
+
+        # Send NOTAM snapshot if subscribed
+        if 'notams' in subscribed or 'all' in subscribed:
+            try:
+                notam_data = await self._get_notam_snapshot({'active_only': True, 'limit': 100})
+                await sio.emit('notam:snapshot', notam_data, to=sid, namespace=self.namespace)
+                logger.debug(f"[_send_initial_state] Emitted notam:snapshot to {sid}")
+            except Exception as e:
+                logger.error(f"Failed to send NOTAM snapshot to {sid}: {e}", exc_info=True)
 
     async def _check_request_permission(self, sid: str, request_type: str) -> bool:
         """Check if the session user has permission for this request type."""
@@ -498,6 +552,14 @@ class MainNamespace(socketio.AsyncNamespace):
             'alert-rule-update': self._handle_alert_rule_update,
             'alert-rule-delete': self._handle_alert_rule_delete,
             'alert-rule-toggle': self._handle_alert_rule_toggle,
+            # NOTAM endpoints (for frontend compatibility)
+            'notam-snapshot': self._handle_notam_snapshot,
+            'airport': self._handle_airport_notams,
+            'refresh': self._handle_notam_refresh,
+            # Snapshot endpoints for initial state
+            'safety-snapshot': self._handle_safety_snapshot,
+            'alert-snapshot': self._handle_alert_snapshot,
+            'acars-snapshot': self._handle_acars_snapshot,
         }
 
         handler = handlers.get(request_type)
@@ -699,20 +761,30 @@ class MainNamespace(socketio.AsyncNamespace):
         if not cached:
             return []
 
-        result = cached
-        if filters.get('military_only'):
-            result = [ac for ac in result if ac.get('is_military')]
-        if filters.get('category'):
-            cat = filters['category']
-            result = [ac for ac in result if ac.get('category') == cat]
-        if filters.get('min_altitude') is not None:
-            min_alt = filters['min_altitude']
-            result = [ac for ac in result if (ac.get('alt_baro') or 0) >= min_alt]
-        if filters.get('max_altitude') is not None:
-            max_alt = filters['max_altitude']
-            result = [ac for ac in result if (ac.get('alt_baro') or 0) <= max_alt]
+        # Extract filter values once
+        military_only = filters.get('military_only')
+        category = filters.get('category')
+        min_alt = filters.get('min_altitude')
+        max_alt = filters.get('max_altitude')
 
-        return result
+        # No filters? Return original list
+        if not any([military_only, category, min_alt is not None, max_alt is not None]):
+            return cached
+
+        # Single-pass filtering with all conditions
+        def matches(ac):
+            if military_only and not ac.get('is_military'):
+                return False
+            if category and ac.get('category') != category:
+                return False
+            alt = ac.get('alt_baro') or 0
+            if min_alt is not None and alt < min_alt:
+                return False
+            if max_alt is not None and alt > max_alt:
+                return False
+            return True
+
+        return [ac for ac in cached if matches(ac)]
 
     @sync_to_async
     def _get_aircraft_info(self, icao: str):
@@ -753,26 +825,16 @@ class MainNamespace(socketio.AsyncNamespace):
         if not icao_list:
             return {'aircraft': {}, 'found': 0, 'requested': 0}
 
-        result = {}
-        for info in AircraftInfo.objects.filter(icao_hex__in=icao_list):
-            result[info.icao_hex] = {
-                'icao_hex': info.icao_hex,
-                'registration': info.registration,
-                'type_code': info.type_code,
-                'manufacturer': info.manufacturer,
-                'model': info.model,
-                'operator': info.operator,
-                'operator_icao': info.operator_icao,
-                'owner': info.owner,
-                'year_built': info.year_built,
-                'serial_number': info.serial_number,
-                'country': info.country,
-                'category': info.category,
-                'is_military': info.is_military,
-                'photo_url': info.photo_url,
-                'photo_photographer': info.photo_photographer,
-                'source': info.source,
-            }
+        # Use values() to avoid model instantiation overhead
+        infos = AircraftInfo.objects.filter(icao_hex__in=icao_list).values(
+            'icao_hex', 'registration', 'type_code', 'manufacturer', 'model',
+            'operator', 'operator_icao', 'owner', 'year_built', 'serial_number',
+            'country', 'category', 'is_military', 'photo_url', 'photo_photographer',
+            'source'
+        )
+
+        # Build result dict keyed by icao_hex
+        result = {info['icao_hex']: info for info in infos}
 
         return {
             'aircraft': result,
@@ -2333,6 +2395,186 @@ class MainNamespace(socketio.AsyncNamespace):
             }
         except AlertRule.DoesNotExist:
             raise ValueError('Rule not found')
+
+    # =========================================================================
+    # NOTAM Handlers
+    # =========================================================================
+
+    async def _handle_notam_snapshot(self, params: dict):
+        """Get full NOTAM snapshot with NOTAMs, TFRs, and stats."""
+        return await self._get_notam_snapshot(params)
+
+    async def _handle_airport_notams(self, params: dict):
+        """Get NOTAMs for a specific airport."""
+        icao = params.get('icao')
+        if not icao:
+            raise ValueError('Missing icao parameter')
+        return await self._get_airport_notams(icao.upper())
+
+    async def _handle_notam_refresh(self, params: dict):
+        """Trigger a NOTAM refresh."""
+        return await self._trigger_notam_refresh()
+
+    @sync_to_async
+    def _get_notam_snapshot(self, params: dict):
+        """Get current NOTAMs, TFRs, and stats."""
+        from skyspy.models import CachedNotam
+
+        limit = _parse_int_param(params.get('limit'), 100, min_val=1, max_val=500)
+        active_only = params.get('active_only', True)
+
+        now = timezone.now()
+        queryset = CachedNotam.objects.all()
+
+        if active_only:
+            queryset = queryset.filter(
+                Q(effective_end__isnull=True) | Q(effective_end__gte=now)
+            ).filter(effective_start__lte=now)
+
+        notams = []
+        tfrs = []
+
+        for n in queryset.order_by('-effective_start')[:limit]:
+            notam_data = {
+                'notam_id': n.notam_id,
+                'location': n.location,
+                'text': n.text,
+                'type': n.notam_type,
+                'effective_start': n.effective_start.isoformat() if n.effective_start else None,
+                'effective_end': n.effective_end.isoformat() if n.effective_end else None,
+                'fetched_at': n.fetched_at.isoformat() if n.fetched_at else None,
+                'classification': n.classification,
+                'reason': n.reason,
+            }
+            notams.append(notam_data)
+            if n.notam_type == 'TFR':
+                tfrs.append(notam_data)
+
+        # Get stats
+        stats = {
+            'total_active': len(notams),
+            'tfr_count': len(tfrs),
+            'by_type': {},
+            'last_update': now.isoformat(),
+        }
+
+        for n in notams:
+            t = n.get('type', 'OTHER')
+            stats['by_type'][t] = stats['by_type'].get(t, 0) + 1
+
+        return {
+            'notams': notams,
+            'tfrs': tfrs,
+            'stats': stats,
+            'timestamp': now.isoformat(),
+        }
+
+    @sync_to_async
+    def _get_airport_notams(self, icao: str):
+        """Get NOTAMs for a specific airport."""
+        from skyspy.models import CachedNotam
+
+        now = timezone.now()
+        queryset = CachedNotam.objects.filter(
+            location__icontains=icao
+        ).filter(
+            Q(effective_end__isnull=True) | Q(effective_end__gte=now)
+        ).order_by('-effective_start')[:50]
+
+        notams = []
+        for n in queryset:
+            notams.append({
+                'notam_id': n.notam_id,
+                'location': n.location,
+                'text': n.text,
+                'type': n.notam_type,
+                'effective_start': n.effective_start.isoformat() if n.effective_start else None,
+                'effective_end': n.effective_end.isoformat() if n.effective_end else None,
+                'fetched_at': n.fetched_at.isoformat() if n.fetched_at else None,
+                'classification': n.classification,
+                'reason': n.reason,
+            })
+
+        return notams
+
+    @sync_to_async
+    def _trigger_notam_refresh(self):
+        """Trigger a NOTAM refresh task."""
+        from skyspy.tasks.notams import refresh_notams
+
+        try:
+            refresh_notams.delay()
+            return {'success': True, 'message': 'NOTAM refresh queued'}
+        except Exception as e:
+            logger.error(f"Failed to queue NOTAM refresh: {e}")
+            return {'success': False, 'message': str(e)}
+
+    # =========================================================================
+    # Snapshot Handlers (for initial state)
+    # =========================================================================
+
+    async def _handle_safety_snapshot(self, params: dict):
+        """Get safety events snapshot."""
+        events = await self._get_safety_events(params)
+        return {'events': events}
+
+    async def _handle_alert_snapshot(self, params: dict):
+        """Get alerts snapshot."""
+        return await self._get_alert_snapshot(params)
+
+    async def _handle_acars_snapshot(self, params: dict):
+        """Get ACARS messages snapshot."""
+        return await self._get_acars_snapshot(params)
+
+    @sync_to_async
+    def _get_alert_snapshot(self, params: dict):
+        """Get recent alert history."""
+        from skyspy.models import AlertHistory
+
+        hours = _parse_int_param(params.get('hours'), 24, min_val=1, max_val=168)
+        limit = _parse_int_param(params.get('limit'), 50, min_val=1, max_val=200)
+
+        cutoff = timezone.now() - timedelta(hours=hours)
+
+        alerts = []
+        for alert in AlertHistory.objects.filter(triggered_at__gte=cutoff).order_by('-triggered_at')[:limit]:
+            alerts.append({
+                'id': str(alert.id),
+                'rule_name': alert.rule_name,
+                'icao_hex': alert.icao_hex,
+                'callsign': alert.callsign,
+                'priority': alert.priority,
+                'triggered_at': alert.triggered_at.isoformat() if alert.triggered_at else None,
+                'message': alert.message,
+                'data': alert.data,
+            })
+
+        return {'alerts': alerts, 'count': len(alerts)}
+
+    @sync_to_async
+    def _get_acars_snapshot(self, params: dict):
+        """Get recent ACARS messages."""
+        from skyspy.models import AcarsMessage
+
+        hours = _parse_int_param(params.get('hours'), 1, min_val=1, max_val=24)
+        limit = _parse_int_param(params.get('limit'), 50, min_val=1, max_val=200)
+
+        cutoff = timezone.now() - timedelta(hours=hours)
+
+        messages = []
+        for msg in AcarsMessage.objects.filter(timestamp__gte=cutoff).order_by('-timestamp')[:limit]:
+            messages.append({
+                'id': msg.id,
+                'timestamp': msg.timestamp.isoformat() if msg.timestamp else None,
+                'icao_hex': msg.icao_hex,
+                'flight': msg.flight,
+                'label': msg.label,
+                'text': msg.text,
+                'mode': msg.mode,
+                'block_id': msg.block_id,
+            })
+
+        return {'messages': messages, 'count': len(messages)}
 
     # =========================================================================
     # Extended Stats Handlers

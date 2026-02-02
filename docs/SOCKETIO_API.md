@@ -426,6 +426,101 @@ Response:
 }
 ```
 
+#### NOTAM Requests
+
+**`notam-snapshot`** - Full NOTAM snapshot with NOTAMs, TFRs, and stats
+```json
+{
+  "type": "notam-snapshot",
+  "request_id": "req-notam-001",
+  "params": { "active_only": true, "limit": 100 }
+}
+```
+
+Response:
+```json
+{
+  "notams": [...],
+  "tfrs": [...],
+  "stats": {
+    "total_active": 45,
+    "tfr_count": 3,
+    "by_type": { "TFR": 3, "D": 30, "FDC": 12 },
+    "last_update": "2026-02-01T12:34:56Z"
+  },
+  "timestamp": "2026-02-01T12:34:56Z"
+}
+```
+
+**`airport`** - NOTAMs for a specific airport
+```json
+{
+  "type": "airport",
+  "request_id": "req-notam-002",
+  "params": { "icao": "KJFK" }
+}
+```
+
+Response:
+```json
+[
+  {
+    "notam_id": "NOTAM-12345",
+    "location": "KJFK",
+    "text": "RWY 04L/22R CLSD FOR MAINT",
+    "type": "D",
+    "effective_start": "2026-02-01T12:00:00Z",
+    "effective_end": "2026-02-01T18:00:00Z"
+  }
+]
+```
+
+**`refresh`** - Trigger NOTAM cache refresh
+```json
+{
+  "type": "refresh",
+  "request_id": "req-notam-003",
+  "params": {}
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "message": "NOTAM refresh queued"
+}
+```
+
+#### Snapshot Requests
+
+**`safety-snapshot`** - Safety events snapshot
+```json
+{
+  "type": "safety-snapshot",
+  "request_id": "req-snap-001",
+  "params": { "hours": 24, "limit": 50 }
+}
+```
+
+**`alert-snapshot`** - Alert history snapshot
+```json
+{
+  "type": "alert-snapshot",
+  "request_id": "req-snap-002",
+  "params": { "hours": 24, "limit": 50 }
+}
+```
+
+**`acars-snapshot`** - ACARS messages snapshot
+```json
+{
+  "type": "acars-snapshot",
+  "request_id": "req-snap-003",
+  "params": { "hours": 1, "limit": 50 }
+}
+```
+
 #### Safety Requests
 
 **`safety-events`** - Recent safety events
@@ -1103,9 +1198,39 @@ Events broadcast from Celery tasks to connected clients.
 }
 ```
 
+**`aircraft:heartbeat`** - Periodic count update (every ~5 seconds)
+```json
+{
+  "count": 42,
+  "aircraft_count": 42,
+  "timestamp": "2026-02-01T12:34:56Z"
+}
+```
+
+**`airframe:error`** - Airframe lookup error
+```json
+{
+  "icao_hex": "A1B2C3",
+  "error_type": "lookup_failed",
+  "error_message": "No data found in any source",
+  "source": "external_db",
+  "details": { "sources_tried": ["adsbx", "opensky", "faa"] },
+  "timestamp": "2026-02-01T12:34:56Z"
+}
+```
+
 ### Safety Events (Room: `topic_safety`)
 
-**`safety:event`**
+**`safety:snapshot`** (sent on connect)
+```json
+{
+  "events": [...],
+  "count": 5,
+  "timestamp": "2026-02-01T12:34:56Z"
+}
+```
+
+**`safety:event`** - New safety event
 ```json
 {
   "event_type": "emergency_squawk",
@@ -1120,6 +1245,26 @@ Events broadcast from Celery tasks to connected clients.
     "latitude": 40.1,
     "longitude": -74.5
   },
+  "timestamp": "2026-02-01T12:34:56Z"
+}
+```
+
+**`safety:event_updated`** - Safety event updated (e.g., acknowledged)
+```json
+{
+  "id": "event-uuid",
+  "event_action": "safety_event_updated",
+  "acknowledged": true,
+  "timestamp": "2026-02-01T12:34:56Z"
+}
+```
+
+**`safety:event_resolved`** - Safety event resolved/cleared
+```json
+{
+  "id": "event-uuid",
+  "event_action": "safety_event_resolved",
+  "resolution": "aircraft_landed",
   "timestamp": "2026-02-01T12:34:56Z"
 }
 ```
@@ -1150,16 +1295,81 @@ Events broadcast from Celery tasks to connected clients.
 }
 ```
 
-**`tfr:new`**
+**`notam:snapshot`** (sent on connect/request)
 ```json
 {
-  "tfr": {
-    "notam_id": "TFR123",
-    "effective_start": "2026-02-01T12:00:00Z",
-    "effective_end": "2026-02-01T18:00:00Z",
-    "reason": "PRESIDENTIAL",
-    "geometry": { "type": "Polygon", "coordinates": [...] }
+  "notams": [...],
+  "tfrs": [...],
+  "stats": {
+    "total_active": 45,
+    "tfr_count": 3,
+    "by_type": { "TFR": 3, "D": 30, "FDC": 12 },
+    "last_update": "2026-02-01T12:34:56Z"
   },
+  "timestamp": "2026-02-01T12:34:56Z"
+}
+```
+
+**`notam:new`**
+```json
+{
+  "notam_id": "NOTAM-12345",
+  "location": "KJFK",
+  "text": "RWY 04L/22R CLSD FOR MAINT",
+  "type": "D",
+  "effective_start": "2026-02-01T12:00:00Z",
+  "effective_end": "2026-02-01T18:00:00Z",
+  "timestamp": "2026-02-01T12:34:56Z"
+}
+```
+
+**`notam:tfr_new`**
+```json
+{
+  "notam_id": "TFR123",
+  "location": "WASHINGTON DC",
+  "text": "TEMPORARY FLIGHT RESTRICTION...",
+  "type": "TFR",
+  "effective_start": "2026-02-01T12:00:00Z",
+  "effective_end": "2026-02-01T18:00:00Z",
+  "reason": "PRESIDENTIAL",
+  "geometry": { "type": "Polygon", "coordinates": [...] },
+  "timestamp": "2026-02-01T12:34:56Z"
+}
+```
+
+**`notam:update`**
+```json
+{
+  "notam_id": "NOTAM-12345",
+  "effective_end": "2026-02-01T20:00:00Z",
+  "timestamp": "2026-02-01T12:34:56Z"
+}
+```
+
+**`notam:expired`**
+```json
+{
+  "notam_id": "NOTAM-12345",
+  "timestamp": "2026-02-01T12:34:56Z"
+}
+```
+
+**`notam:tfr_expired`**
+```json
+{
+  "notam_id": "TFR123",
+  "timestamp": "2026-02-01T12:34:56Z"
+}
+```
+
+**`notam:stats`**
+```json
+{
+  "total_active": 45,
+  "tfr_count": 3,
+  "by_type": { "TFR": 3, "D": 30, "FDC": 12 },
+  "last_update": "2026-02-01T12:34:56Z",
   "timestamp": "2026-02-01T12:34:56Z"
 }
 ```
@@ -1187,13 +1397,13 @@ Events broadcast from Celery tasks to connected clients.
 
 | Room | Joined Via | Events Received |
 |------|------------|-----------------|
-| `topic_aircraft` | Subscribe to `aircraft` | positions:update, aircraft:*, notam:*, tfr:*, airspace:*, antenna:* |
-| `topic_safety` | Subscribe to `safety` | safety:event |
+| `topic_aircraft` | Subscribe to `aircraft` | positions:update, aircraft:*, airframe:error, airspace:*, antenna:*, notam:refresh |
+| `topic_safety` | Subscribe to `safety` | safety:snapshot, safety:event, safety:event_updated, safety:event_resolved |
 | `topic_stats` | Subscribe to `stats` | stats:update |
-| `topic_alerts` | Subscribe to `alerts` | alert:new, alert:update |
-| `topic_acars` | Subscribe to `acars` | acars:message |
-| `topic_airspace` | Subscribe to `airspace` | airspace:*, notam:* |
-| `topic_notams` | Subscribe to `notams` | notam:*, tfr:* |
+| `topic_alerts` | Subscribe to `alerts` | alert:snapshot, alert:triggered |
+| `topic_acars` | Subscribe to `acars` | acars:snapshot, acars:message |
+| `topic_airspace` | Subscribe to `airspace` | airspace:* |
+| `topic_notams` | Subscribe to `notams` | notam:snapshot, notam:new, notam:tfr_new, notam:update, notam:expired, notam:tfr_expired, notam:stats, notam:refresh |
 
 ### Audio Namespace Rooms
 

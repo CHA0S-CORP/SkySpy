@@ -64,13 +64,8 @@ def _apply_lite_mode_sampling(queryset, sample_size: int = None):
 
     size = sample_size or MAX_STATS_SAMPLE_SIZE
 
-    # Use timestamp-based ordering for more representative sampling
-    # (avoids random ordering which is slow on large tables)
-    count = queryset.count()
-    if count <= size:
-        return queryset
-
-    logger.debug(f"Lite mode: sampling {size} from {count} records")
+    # Just return limited queryset - no need to count first
+    # The slice will be a no-op if there are fewer records than the limit
     return queryset.order_by('-timestamp')[:size]
 
 class ExtractEpoch(Extract):
@@ -142,51 +137,69 @@ def _simplify_aircraft(aircraft: dict, distance_nm: float = None) -> dict:
 
 
 def calculate_aircraft_stats(aircraft_list: list[dict]) -> dict:
-    """Calculate aircraft stats from in-memory aircraft list."""
+    """Calculate aircraft stats from in-memory aircraft list using single pass."""
     now = timezone.now()
 
-    with_pos = sum(1 for a in aircraft_list if _is_valid_position(a.get("lat"), a.get("lon")))
-    military_count = sum(1 for a in aircraft_list if a.get("dbFlags", 0) & 1)
-    emergency = [
-        {"hex": a.get("hex"), "flight": a.get("flight"), "squawk": a.get("squawk")}
-        for a in aircraft_list if a.get("squawk") in ["7500", "7600", "7700"]
-    ]
-
-    # Category breakdown
+    # Single pass over aircraft list for all stats
+    with_pos = 0
+    military_count = 0
+    emergency = []
     categories_count = {}
+    alt_ground = alt_low = alt_med = alt_high = 0
+    dist_close = dist_near = dist_mid = dist_far = 0
+    speed_slow = speed_med = speed_fast = 0
+
     for a in aircraft_list:
+        # Position check
+        if _is_valid_position(a.get("lat"), a.get("lon")):
+            with_pos += 1
+
+        # Military
+        if a.get("dbFlags", 0) & 1:
+            military_count += 1
+
+        # Emergency
+        squawk = a.get("squawk")
+        if squawk in ("7500", "7600", "7700"):
+            emergency.append({"hex": a.get("hex"), "flight": a.get("flight"), "squawk": squawk})
+
+        # Category
         cat = a.get("category", "unknown")
         categories_count[cat] = categories_count.get(cat, 0) + 1
 
-    # Altitude breakdown
-    alt_ground = sum(
-        1 for a in aircraft_list
-        if a.get("alt_baro") == "ground" or
-        (isinstance(a.get("alt_baro"), (int, float)) and a.get("alt_baro", 99999) <= 0)
-    )
-    alt_low = sum(
-        1 for a in aircraft_list
-        if isinstance(a.get("alt_baro"), (int, float)) and 0 < a["alt_baro"] < 10000
-    )
-    alt_med = sum(
-        1 for a in aircraft_list
-        if isinstance(a.get("alt_baro"), (int, float)) and 10000 <= a["alt_baro"] < 30000
-    )
-    alt_high = sum(
-        1 for a in aircraft_list
-        if isinstance(a.get("alt_baro"), (int, float)) and a["alt_baro"] >= 30000
-    )
+        # Altitude
+        alt = a.get("alt_baro")
+        if alt == "ground" or (isinstance(alt, (int, float)) and alt <= 0):
+            alt_ground += 1
+        elif isinstance(alt, (int, float)):
+            if alt < 10000:
+                alt_low += 1
+            elif alt < 30000:
+                alt_med += 1
+            else:
+                alt_high += 1
 
-    # Distance breakdown
-    dist_close = sum(1 for a in aircraft_list if a.get("distance_nm") is not None and a["distance_nm"] < 25)
-    dist_near = sum(1 for a in aircraft_list if a.get("distance_nm") is not None and 25 <= a["distance_nm"] < 50)
-    dist_mid = sum(1 for a in aircraft_list if a.get("distance_nm") is not None and 50 <= a["distance_nm"] < 100)
-    dist_far = sum(1 for a in aircraft_list if a.get("distance_nm") is not None and a["distance_nm"] >= 100)
+        # Distance
+        dist = a.get("distance_nm")
+        if dist is not None:
+            if dist < 25:
+                dist_close += 1
+            elif dist < 50:
+                dist_near += 1
+            elif dist < 100:
+                dist_mid += 1
+            else:
+                dist_far += 1
 
-    # Speed breakdown
-    speed_slow = sum(1 for a in aircraft_list if a.get("gs") and a["gs"] < 200)
-    speed_med = sum(1 for a in aircraft_list if a.get("gs") and 200 <= a["gs"] < 400)
-    speed_fast = sum(1 for a in aircraft_list if a.get("gs") and a["gs"] >= 400)
+        # Speed
+        gs = a.get("gs")
+        if gs:
+            if gs < 200:
+                speed_slow += 1
+            elif gs < 400:
+                speed_med += 1
+            else:
+                speed_fast += 1
 
     return {
         "total": len(aircraft_list),
@@ -264,53 +277,39 @@ def calculate_history_stats(hours: int = 24) -> dict:
     """Calculate historical statistics."""
     cutoff = timezone.now() - timedelta(hours=hours)
 
-    sightings_count = AircraftSighting.objects.filter(timestamp__gt=cutoff).count()
-    sessions_count = AircraftSession.objects.filter(last_seen__gt=cutoff).count()
-    unique_aircraft = AircraftSession.objects.filter(last_seen__gt=cutoff).values('icao_hex').distinct().count()
-    military_sessions = AircraftSession.objects.filter(last_seen__gt=cutoff, is_military=True).count()
-
-    # Altitude stats
-    alt_stats = AircraftSighting.objects.filter(
-        timestamp__gt=cutoff,
-        altitude_baro__isnull=False
-    ).aggregate(
-        avg_alt=Avg('altitude_baro'),
+    # Combined sightings query - single query for all sighting stats
+    sighting_stats = AircraftSighting.objects.filter(timestamp__gt=cutoff).aggregate(
+        sightings_count=Count('id'),
+        avg_alt=Avg('altitude_baro', filter=Q(altitude_baro__isnull=False)),
         max_alt=Max('altitude_baro'),
-        min_alt=Min('altitude_baro')
-    )
-
-    # Distance stats
-    dist_stats = AircraftSighting.objects.filter(
-        timestamp__gt=cutoff,
-        distance_nm__isnull=False
-    ).aggregate(
-        avg_dist=Avg('distance_nm'),
+        min_alt=Min('altitude_baro'),
+        avg_dist=Avg('distance_nm', filter=Q(distance_nm__isnull=False)),
         max_dist=Max('distance_nm'),
-        min_dist=Min('distance_nm')
+        min_dist=Min('distance_nm'),
+        avg_speed=Avg('ground_speed', filter=Q(ground_speed__isnull=False)),
+        max_speed=Max('ground_speed'),
     )
 
-    # Speed stats
-    speed_stats = AircraftSighting.objects.filter(
-        timestamp__gt=cutoff,
-        ground_speed__isnull=False
-    ).aggregate(
-        avg_speed=Avg('ground_speed'),
-        max_speed=Max('ground_speed')
+    # Combined session query - single query for all session stats
+    session_stats = AircraftSession.objects.filter(last_seen__gt=cutoff).aggregate(
+        sessions_count=Count('id'),
+        unique_aircraft=Count('icao_hex', distinct=True),
+        military_sessions=Count('id', filter=Q(is_military=True)),
     )
 
     return {
-        "total_sightings": sightings_count,
-        "total_sessions": sessions_count,
-        "unique_aircraft": unique_aircraft,
-        "military_sessions": military_sessions,
+        "total_sightings": sighting_stats['sightings_count'] or 0,
+        "total_sessions": session_stats['sessions_count'] or 0,
+        "unique_aircraft": session_stats['unique_aircraft'] or 0,
+        "military_sessions": session_stats['military_sessions'] or 0,
         "time_range_hours": hours,
-        "avg_altitude": round(alt_stats['avg_alt']) if alt_stats['avg_alt'] else None,
-        "max_altitude": alt_stats['max_alt'],
-        "min_altitude": alt_stats['min_alt'],
-        "avg_distance_nm": round(dist_stats['avg_dist'], 1) if dist_stats['avg_dist'] else None,
-        "max_distance_nm": round(dist_stats['max_dist'], 1) if dist_stats['max_dist'] else None,
-        "avg_speed": round(speed_stats['avg_speed']) if speed_stats['avg_speed'] else None,
-        "max_speed": round(speed_stats['max_speed']) if speed_stats['max_speed'] else None,
+        "avg_altitude": round(sighting_stats['avg_alt']) if sighting_stats['avg_alt'] else None,
+        "max_altitude": sighting_stats['max_alt'],
+        "min_altitude": sighting_stats['min_alt'],
+        "avg_distance_nm": round(sighting_stats['avg_dist'], 1) if sighting_stats['avg_dist'] else None,
+        "max_distance_nm": round(sighting_stats['max_dist'], 1) if sighting_stats['max_dist'] else None,
+        "avg_speed": round(sighting_stats['avg_speed']) if sighting_stats['avg_speed'] else None,
+        "max_speed": round(sighting_stats['max_speed']) if sighting_stats['max_speed'] else None,
         "timestamp": timezone.now().isoformat() + "Z"
     }
 

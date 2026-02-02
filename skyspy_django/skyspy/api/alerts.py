@@ -4,7 +4,7 @@ Alert rules, subscriptions, and history API views.
 import logging
 from datetime import timedelta
 
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -56,7 +56,11 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Filter rules by ownership and visibility."""
-        queryset = super().get_queryset().select_related('owner')
+        queryset = super().get_queryset().select_related('owner').prefetch_related(
+            'notification_channels'
+        ).annotate(
+            _subscriber_count=Count('subscriptions')
+        )
         user = self.request.user
 
         # Apply visibility filtering
@@ -750,7 +754,7 @@ class AlertHistoryViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         """Filter history by ownership and time range."""
-        queryset = super().get_queryset().select_related('rule', 'rule__owner')
+        queryset = super().get_queryset().select_related('rule', 'rule__owner', 'acknowledged_by')
         user = self.request.user
 
         # Time range filter
