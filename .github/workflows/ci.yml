@@ -23,7 +23,7 @@ jobs:
 
   detect-changes:
     name: Detect Changes
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     outputs:
       python: ${{ steps.filter.outputs.python }}
       frontend: ${{ steps.filter.outputs.frontend }}
@@ -58,7 +58,7 @@ jobs:
 
   lint-python:
     name: Lint Python
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +68,7 @@ jobs:
 
   lint-frontend:
     name: Lint Frontend
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -84,7 +84,7 @@ jobs:
 
   lint-go:
     name: Lint Go
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -106,7 +106,7 @@ jobs:
 
   security-python:
     name: Security Python
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: detect-changes
     if: needs.detect-changes.outputs.python == 'true'
     timeout-minutes: 5
@@ -122,7 +122,7 @@ jobs:
 
   security-frontend:
     name: Security Frontend
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: detect-changes
     if: needs.detect-changes.outputs.frontend == 'true'
     timeout-minutes: 5
@@ -138,7 +138,7 @@ jobs:
 
   test-python-unit:
     name: Python Unit Tests
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: detect-changes
     if: needs.detect-changes.outputs.python == 'true'
     timeout-minutes: 10
@@ -202,7 +202,7 @@ jobs:
 
   test-go:
     name: Go Tests
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: detect-changes
     if: needs.detect-changes.outputs.go == 'true'
     timeout-minutes: 5
@@ -229,7 +229,7 @@ jobs:
 
   test-frontend-unit:
     name: Frontend Unit Tests
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: detect-changes
     if: needs.detect-changes.outputs.frontend == 'true'
     timeout-minutes: 5
@@ -254,7 +254,7 @@ jobs:
 
   build-frontend:
     name: Build Frontend
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: detect-changes
     if: needs.detect-changes.outputs.frontend == 'true'
     timeout-minutes: 5
@@ -274,7 +274,7 @@ jobs:
 
   test-python-integration:
     name: Python Integration Tests
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [detect-changes, test-python-unit]
     if: needs.detect-changes.outputs.python == 'true'
     timeout-minutes: 15
@@ -353,7 +353,7 @@ jobs:
 
   test-e2e:
     name: E2E Tests
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [detect-changes, test-python-integration, build-frontend]
     if: needs.detect-changes.outputs.python == 'true' || needs.detect-changes.outputs.frontend == 'true'
     timeout-minutes: 20
@@ -453,7 +453,7 @@ jobs:
 
   export-openapi:
     name: Sync API to ReadMe
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [detect-changes, test-python-unit]
     if: |
       github.ref == 'refs/heads/main' &&
@@ -515,7 +515,7 @@ jobs:
 
   sync-docs:
     name: Sync Docs to ReadMe
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [detect-changes, test-python-unit]
     if: |
       github.ref == 'refs/heads/main' &&
@@ -537,7 +537,7 @@ jobs:
 
   docker-build-push:
     name: Build ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [detect-changes, test-python-unit, test-go, test-python-integration, test-e2e]
     if: |
       always() &&
@@ -615,7 +615,7 @@ jobs:
 
   ci-success:
     name: CI Success
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [lint-python, lint-frontend, lint-go, security-python, security-frontend, test-python-unit, test-go, test-frontend-unit, build-frontend, test-python-integration, test-e2e, export-openapi, sync-docs]
     if: always()
     steps:
