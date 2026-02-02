@@ -129,7 +129,7 @@ class CannonballNamespace(socketio.AsyncNamespace):
         return True
 
     async def on_disconnect(self, sid):
-        """Handle client disconnection and clean up cached position."""
+        """Handle client disconnection and clean up cached position and resources."""
         try:
             session = await sio.get_session(sid, namespace='/cannonball')
             session_id = session.get('session_id')
@@ -139,6 +139,15 @@ class CannonballNamespace(socketio.AsyncNamespace):
                 cache_key = f'{POSITION_CACHE_PREFIX}{session_id}'
                 await sync_to_async(cache.delete)(cache_key)
                 logger.debug(f"Cleaned up position cache for session {session_id}")
+
+            # Clean up rate limiter if present (for future-proofing)
+            rate_limiter = session.get('rate_limiter')
+            if rate_limiter:
+                rate_limiter.cleanup_old_entries()
+                rate_limiter.reset()
+
+            # Clear session data
+            await sio.save_session(sid, {}, namespace='/cannonball')
 
         except Exception as e:
             logger.debug(f"Error during disconnect cleanup: {e}")

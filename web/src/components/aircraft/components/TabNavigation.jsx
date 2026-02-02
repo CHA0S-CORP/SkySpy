@@ -1,14 +1,18 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Info, Radar, Radio, MessageCircle, AlertTriangle, History, Map as MapIcon } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, AlertTriangle, Map as MapIcon } from 'lucide-react';
 
+/**
+ * New 4-tab configuration:
+ * - Overview: Combined Info + Live (aircraft specs + real-time telemetry)
+ * - Communications: Combined Radio + ACARS (all transmission data)
+ * - Safety: Safety events (unchanged)
+ * - Track: Combined History + Track (all positional/temporal data)
+ */
 const TAB_CONFIG = [
-  { id: 'info', label: 'Info', icon: Info, ariaLabel: 'Aircraft information' },
-  { id: 'live', label: 'Live', icon: Radar, ariaLabel: 'Live status' },
-  { id: 'radio', label: 'Radio', icon: Radio, ariaLabel: 'Radio transmissions' },
-  { id: 'acars', label: 'ACARS', icon: MessageCircle, ariaLabel: 'ACARS messages' },
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard, ariaLabel: 'Overview (info and live status)' },
+  { id: 'communications', label: 'Comms', icon: MessageSquare, ariaLabel: 'Communications (radio and ACARS)' },
   { id: 'safety', label: 'Safety', icon: AlertTriangle, ariaLabel: 'Safety events', isAlert: true },
-  { id: 'history', label: 'History', icon: History, ariaLabel: 'Flight history' },
-  { id: 'track', label: 'Track', icon: MapIcon, ariaLabel: 'Track map' },
+  { id: 'track', label: 'Track', icon: MapIcon, ariaLabel: 'Track and history' },
 ];
 
 export function TabNavigation({
@@ -68,10 +72,10 @@ export function TabNavigation({
 
   const getTabBadge = (tabId) => {
     switch (tabId) {
-      case 'radio':
-        return radioCount > 0 ? radioCount : null;
-      case 'acars':
-        return acarsCount > 0 ? acarsCount : null;
+      case 'communications':
+        // Combined count of radio + ACARS
+        const commCount = radioCount + acarsCount;
+        return commCount > 0 ? commCount : null;
       case 'safety':
         return safetyCount > 0 ? safetyCount : null;
       default:

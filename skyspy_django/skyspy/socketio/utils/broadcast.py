@@ -15,14 +15,16 @@ Message format follows Socket.IO's internal protocol (msgpack serialized).
 """
 import json
 import logging
+from threading import Lock
 from typing import Any, Optional
 
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-# Redis connection pool for sync Socket.IO broadcasts
+# Redis connection pool for sync Socket.IO broadcasts (thread-safe singleton)
 _redis_pool = None
+_redis_pool_lock = Lock()
 
 
 def _get_redis_client():
@@ -32,16 +34,31 @@ def _get_redis_client():
     Uses a connection pool to properly manage connections and support
     automatic reconnection. Each call returns a new Redis client instance
     that shares the underlying connection pool.
+
+    Thread-safe: Uses double-checked locking pattern to ensure only one
+    pool is created even under concurrent access.
     """
     global _redis_pool
-    if _redis_pool is None:
+
+    # Fast path: pool already exists
+    if _redis_pool is not None:
         import redis
-        redis_url = getattr(settings, 'REDIS_URL', 'redis://localhost:6379/0')
-        _redis_pool = redis.ConnectionPool.from_url(
-            redis_url,
-            max_connections=10,
-            retry_on_timeout=True,
-        )
+        return redis.Redis(connection_pool=_redis_pool)
+
+    # Slow path: need to create pool with lock
+    with _redis_pool_lock:
+        # Double-check after acquiring lock
+        if _redis_pool is None:
+            import redis
+            redis_url = getattr(settings, 'REDIS_URL', 'redis://localhost:6379/0')
+            pool_size = getattr(settings, 'SOCKETIO_REDIS_POOL_SIZE', 50)
+            _redis_pool = redis.ConnectionPool.from_url(
+                redis_url,
+                max_connections=pool_size,
+                retry_on_timeout=True,
+            )
+            logger.info(f"Created Redis connection pool with {pool_size} max connections")
+
     import redis
     return redis.Redis(connection_pool=_redis_pool)
 

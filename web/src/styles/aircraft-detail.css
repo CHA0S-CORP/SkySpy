@@ -6063,3 +6063,217 @@
     font-size: 0.7rem;
   }
 }
+
+/* ============================================================================
+   Overview Tab Styles
+   ============================================================================ */
+
+.overview-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 16px;
+}
+
+.overview-section {
+  background: rgba(30, 40, 50, 0.4);
+  border: 1px solid rgba(90, 122, 154, 0.15);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.overview-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.live-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--accent-green);
+  border-radius: 50%;
+  animation: live-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.live-telemetry-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.position-info {
+  margin-top: 12px;
+}
+
+/* ============================================================================
+   Communications Tab Styles
+   ============================================================================ */
+
+.communications-tab {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.comm-unified-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(30, 40, 50, 0.5);
+  border-bottom: 1px solid rgba(90, 122, 154, 0.15);
+}
+
+.comm-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  padding: 8px 12px;
+  background: rgba(20, 30, 40, 0.8);
+  border: 1px solid rgba(90, 122, 154, 0.2);
+  border-radius: 8px;
+}
+
+.comm-search-box input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+
+.comm-search-box input::placeholder {
+  color: var(--text-dim);
+}
+
+.comm-search-box svg {
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.comm-time-select {
+  padding: 8px 12px;
+  background: rgba(20, 30, 40, 0.8);
+  border: 1px solid rgba(90, 122, 154, 0.2);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.comm-time-select:hover {
+  border-color: var(--accent-cyan);
+}
+
+.comm-subtabs {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(20, 30, 40, 0.3);
+  border-bottom: 1px solid rgba(90, 122, 154, 0.1);
+}
+
+.comm-subtab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  min-height: 44px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.comm-subtab:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.comm-subtab.active {
+  background: rgba(74, 222, 128, 0.1);
+  border-color: rgba(74, 222, 128, 0.3);
+  color: var(--accent-green);
+}
+
+.comm-subtab-badge {
+  padding: 2px 8px;
+  background: rgba(90, 122, 154, 0.2);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.comm-subtab.active .comm-subtab-badge {
+  background: rgba(74, 222, 128, 0.2);
+  color: var(--accent-green);
+}
+
+.comm-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Hide duplicate toolbar when using CommunicationsTab */
+.communications-tab .radio-toolbar,
+.communications-tab .acars-filter {
+  display: none;
+}
+
+/* ============================================================================
+   Accessibility - Focus States
+   ============================================================================ */
+
+.detail-tab:focus-visible,
+.comm-subtab:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}
+
+/* Screen reader only content */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ============================================================================
+   Reduced Motion Support
+   ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .live-indicator {
+    animation: none;
+  }
+
+  .overview-section,
+  .comm-subtab,
+  .detail-tab {
+    transition: none;
+  }
+}

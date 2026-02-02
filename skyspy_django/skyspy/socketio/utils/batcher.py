@@ -74,6 +74,9 @@ class MessageBatcher:
         except (TypeError, ValueError):
             msg_size = 1024  # Default estimate if serialization fails
 
+        # Determine if we need to flush after adding (check outside lock to avoid deadlock)
+        should_flush = False
+
         async with self._lock:
             self._batch.append(message)
             self._batch_size_bytes += msg_size
@@ -82,17 +85,21 @@ class MessageBatcher:
             if self._batch_task is None or self._batch_task.done():
                 self._batch_task = asyncio.create_task(self._flush_after_delay())
 
-            # Flush immediately if batch is full (by count OR by bytes)
+            # Check if batch is full (by count OR by bytes)
             max_bytes = self._config.get('max_bytes', 1024 * 1024)
             if len(self._batch) >= self._config['max_size'] or self._batch_size_bytes >= max_bytes:
                 if self._batch_task and not self._batch_task.done():
                     self._batch_task.cancel()
-                try:
-                    await self._flush()
-                except Exception as e:
-                    # Log error but don't lose already-cleared messages
-                    # (messages were already removed from batch in _flush)
-                    logger.error(f"Error flushing message batch: {e}", exc_info=True)
+                should_flush = True
+
+        # Flush outside the lock to avoid deadlock (since _flush acquires the lock)
+        if should_flush:
+            try:
+                await self._flush()
+            except Exception as e:
+                # Log error but don't lose already-cleared messages
+                # (messages were already removed from batch in _flush)
+                logger.error(f"Error flushing message batch: {e}", exc_info=True)
 
     async def _flush_after_delay(self):
         """Wait for batch window then flush."""

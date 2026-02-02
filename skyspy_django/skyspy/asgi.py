@@ -21,7 +21,7 @@ django.setup()
 from django.core.asgi import get_asgi_application
 
 # Import Socket.IO components
-from skyspy.socketio import sio, socket_app
+from skyspy.socketio import sio
 from skyspy.socketio.namespaces import register_all_namespaces
 
 logger = logging.getLogger(__name__)

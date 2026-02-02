@@ -89,7 +89,21 @@ class AudioNamespace(socketio.AsyncNamespace):
         return True
 
     async def on_disconnect(self, sid):
-        """Handle client disconnection."""
+        """Handle client disconnection and clean up resources."""
+        try:
+            session = await sio.get_session(sid, namespace='/audio')
+
+            # Clean up rate limiter to prevent memory leaks
+            rate_limiter = session.get('rate_limiter')
+            if rate_limiter:
+                rate_limiter.cleanup_old_entries()
+                rate_limiter.reset()
+
+            # Clear session data
+            await sio.save_session(sid, {}, namespace='/audio')
+        except Exception as e:
+            logger.debug(f"Error during audio disconnect cleanup for {sid}: {e}")
+
         logger.info(f"Client disconnected from /audio: {sid}")
 
     async def _send_initial_state(self, sid):

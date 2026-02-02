@@ -3,8 +3,12 @@ Rate limiter for Socket.IO messages.
 
 Provides per-topic rate limiting to control message frequency
 and reduce bandwidth usage.
+
+Thread-safe: Uses threading.Lock to protect internal state from
+concurrent access in multi-threaded async environments.
 """
 import time
+from threading import Lock
 from typing import Optional
 
 
@@ -14,11 +18,12 @@ DEFAULT_RATE_LIMITS = {
     'aircraft:position': 5,   # Max 5 Hz
     'stats:update': 0.5,      # Max 0.5 Hz (2 second minimum)
     'default': 5,             # Default rate limit
+    'request': 10,            # Max 10 requests per second
 }
 
 
 class RateLimiter:
-    """Per-topic rate limiter for Socket.IO messages."""
+    """Per-topic rate limiter for Socket.IO messages (thread-safe)."""
 
     def __init__(self, rate_limits: Optional[dict[str, float]] = None):
         """
@@ -30,10 +35,11 @@ class RateLimiter:
         """
         self._last_send: dict[str, float] = {}
         self._rate_limits = rate_limits if rate_limits is not None else DEFAULT_RATE_LIMITS.copy()
+        self._lock = Lock()
 
     def can_send(self, topic: str) -> bool:
         """
-        Check if a message for this topic can be sent.
+        Check if a message for this topic can be sent (thread-safe).
 
         Args:
             topic: The message topic/event name.
@@ -41,23 +47,25 @@ class RateLimiter:
         Returns:
             True if the message can be sent, False if rate limited.
         """
-        now = time.time()
-        rate_limit = self._rate_limits.get(topic, self._rate_limits.get('default', 5))
+        now = time.monotonic()  # Use monotonic clock for duration tracking
 
-        if rate_limit <= 0:
-            return True  # No limit
+        with self._lock:
+            rate_limit = self._rate_limits.get(topic, self._rate_limits.get('default', 5))
 
-        min_interval = 1.0 / rate_limit
-        last_send = self._last_send.get(topic, 0)
+            if rate_limit <= 0:
+                return True  # No limit
 
-        if now - last_send >= min_interval:
-            self._last_send[topic] = now
-            return True
-        return False
+            min_interval = 1.0 / rate_limit
+            last_send = self._last_send.get(topic, 0)
+
+            if now - last_send >= min_interval:
+                self._last_send[topic] = now
+                return True
+            return False
 
     def get_wait_time(self, topic: str) -> float:
         """
-        Get time to wait before next send is allowed.
+        Get time to wait before next send is allowed (thread-safe).
 
         Args:
             topic: The message topic/event name.
@@ -66,43 +74,47 @@ class RateLimiter:
             Time in seconds to wait before sending is allowed.
             Returns 0 if sending is allowed immediately.
         """
-        now = time.time()
-        rate_limit = self._rate_limits.get(topic, self._rate_limits.get('default', 5))
+        now = time.monotonic()
 
-        if rate_limit <= 0:
-            return 0
+        with self._lock:
+            rate_limit = self._rate_limits.get(topic, self._rate_limits.get('default', 5))
 
-        min_interval = 1.0 / rate_limit
-        last_send = self._last_send.get(topic, 0)
-        wait = min_interval - (now - last_send)
-        return max(0, wait)
+            if rate_limit <= 0:
+                return 0
+
+            min_interval = 1.0 / rate_limit
+            last_send = self._last_send.get(topic, 0)
+            wait = min_interval - (now - last_send)
+            return max(0, wait)
 
     def reset(self, topic: Optional[str] = None):
         """
-        Reset rate limiting state.
+        Reset rate limiting state (thread-safe).
 
         Args:
             topic: Optional topic to reset. If None, resets all topics.
         """
-        if topic is None:
-            self._last_send.clear()
-        elif topic in self._last_send:
-            del self._last_send[topic]
+        with self._lock:
+            if topic is None:
+                self._last_send.clear()
+            elif topic in self._last_send:
+                del self._last_send[topic]
 
     def set_rate_limit(self, topic: str, rate: float):
         """
-        Set or update the rate limit for a specific topic.
+        Set or update the rate limit for a specific topic (thread-safe).
 
         Args:
             topic: The message topic/event name.
             rate: The rate limit in Hz (messages per second).
                   Use 0 or negative for no limit.
         """
-        self._rate_limits[topic] = rate
+        with self._lock:
+            self._rate_limits[topic] = rate
 
     def cleanup_old_entries(self, max_age: float = 300.0):
         """
-        Remove stale entries from the rate limiter to prevent memory leaks.
+        Remove stale entries from the rate limiter to prevent memory leaks (thread-safe).
 
         This should be called periodically (e.g., on disconnect or via a
         background task) to clean up entries for topics that are no longer
@@ -111,5 +123,6 @@ class RateLimiter:
         Args:
             max_age: Maximum age in seconds for entries to keep (default: 300s / 5 min)
         """
-        now = time.time()
-        self._last_send = {k: v for k, v in self._last_send.items() if now - v < max_age}
+        now = time.monotonic()
+        with self._lock:
+            self._last_send = {k: v for k, v in self._last_send.items() if now - v < max_age}

@@ -49,11 +49,13 @@ _db_buffer_lock = Lock()
 _seen_aircraft: Set[str] = set()
 _seen_aircraft_lock = Lock()
 
-# Track new aircraft for batch lookup
+# Track new aircraft for batch lookup (thread-safe with lock)
 _new_aircraft_queue: Deque[str] = deque(maxlen=500)
+_new_aircraft_queue_lock = Lock()
 
-# Last state snapshot for change detection
+# Last state snapshot for change detection (thread-safe with lock)
 _previous_icaos: Set[str] = set()
+_previous_icaos_lock = Lock()
 
 # Cache keys
 CACHE_KEY_AIRCRAFT = 'current_aircraft'
@@ -184,6 +186,7 @@ def update_state_and_broadcast(batch: List[dict]):
     Hot path: Update in-memory state and broadcast to clients.
 
     This is the critical path - no database operations here.
+    Thread-safe: Uses locks for all shared state access.
     """
     global _previous_icaos
 
@@ -196,11 +199,10 @@ def update_state_and_broadcast(batch: List[dict]):
     batch_by_icao = {ac['hex']: ac for ac in batch if ac.get('hex')}
     current_icaos = set(batch_by_icao.keys())
 
-    # Detect new aircraft
-    new_icaos = current_icaos - _previous_icaos
-
-    # Detect removed aircraft (were in previous batch but not in current)
-    removed_icaos = list(_previous_icaos - current_icaos)
+    # Detect new and removed aircraft (thread-safe read of previous state)
+    with _previous_icaos_lock:
+        new_icaos = current_icaos - _previous_icaos
+        removed_icaos = list(_previous_icaos - current_icaos)
 
     # Update in-memory aircraft state and detect stale aircraft
     stale_icaos = []
@@ -219,17 +221,20 @@ def update_state_and_broadcast(batch: List[dict]):
     # Combine removed aircraft: those not in current batch + stale ones
     all_removed = list(set(removed_icaos + stale_icaos))
 
-    # Queue new aircraft for background lookup (non-blocking)
+    # Queue new aircraft for background lookup (non-blocking, thread-safe)
     if new_icaos:
         with _seen_aircraft_lock:
             truly_new = [icao for icao in new_icaos if icao not in _seen_aircraft]
             _seen_aircraft.update(truly_new)
-            # Limit seen set size
+            # Limit seen set size (atomic clear and update within lock)
             if len(_seen_aircraft) > 10000:
+                # Keep the truly_new ones we just added
                 _seen_aircraft.clear()
                 _seen_aircraft.update(truly_new)
 
-        _new_aircraft_queue.extend(truly_new)
+        # Thread-safe queue access
+        with _new_aircraft_queue_lock:
+            _new_aircraft_queue.extend(truly_new)
 
     # Broadcast to clients (this is the latency-critical part)
     try:
@@ -251,8 +256,9 @@ def update_state_and_broadcast(batch: List[dict]):
     except Exception as e:
         logger.warning(f"Broadcast error: {e}")
 
-    # Update previous state for change detection
-    _previous_icaos = current_icaos
+    # Update previous state for change detection (thread-safe)
+    with _previous_icaos_lock:
+        _previous_icaos = current_icaos
 
     # Buffer for database write (non-blocking append)
     with _db_buffer_lock:
@@ -363,17 +369,19 @@ def process_new_aircraft_lookups(self):
     Cold path: Process queued new aircraft for info lookups.
 
     Runs separately from streaming to avoid blocking.
+    Thread-safe: Uses lock when accessing the queue.
     """
     from skyspy.tasks.external_db import fetch_aircraft_info
 
-    # Grab queued aircraft
+    # Grab queued aircraft (thread-safe)
     to_lookup = []
-    while _new_aircraft_queue and len(to_lookup) < 20:
-        try:
-            icao = _new_aircraft_queue.popleft()
-            to_lookup.append(icao)
-        except IndexError:
-            break
+    with _new_aircraft_queue_lock:
+        while _new_aircraft_queue and len(to_lookup) < 20:
+            try:
+                icao = _new_aircraft_queue.popleft()
+                to_lookup.append(icao)
+            except IndexError:
+                break
 
     # Queue lookups (these run async)
     for icao in to_lookup:
@@ -903,9 +911,13 @@ def update_cache_and_broadcast(batch: list):
 
 def queue_new_aircraft_for_lookup(aircraft_list: list):
     """
-    Legacy function - now uses async queue.
+    Legacy function - now uses async queue (thread-safe).
     """
-    for ac in aircraft_list:
-        icao = ac.get('hex', '').upper()
-        if icao and not icao.startswith('~'):
-            _new_aircraft_queue.append(icao)
+    icaos_to_add = [
+        ac.get('hex', '').upper()
+        for ac in aircraft_list
+        if ac.get('hex', '').upper() and not ac.get('hex', '').upper().startswith('~')
+    ]
+    if icaos_to_add:
+        with _new_aircraft_queue_lock:
+            _new_aircraft_queue.extend(icaos_to_add)

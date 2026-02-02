@@ -8,19 +8,15 @@ import { InfoTabSkeleton, LiveTabSkeleton, MapTabSkeleton } from './skeletons';
 import { ErrorBoundary } from '../common/ErrorBoundary';
 
 // Lazy load tab components for better performance
-const InfoTab = lazy(() => import('./tabs/InfoTab').then(m => ({ default: m.InfoTab })));
-const LiveTab = lazy(() => import('./tabs/LiveTab').then(m => ({ default: m.LiveTab })));
-const RadioTab = lazy(() => import('./tabs/RadioTab').then(m => ({ default: m.RadioTab })));
-const AcarsTab = lazy(() => import('./tabs/AcarsTab').then(m => ({ default: m.AcarsTab })));
+const OverviewTab = lazy(() => import('./tabs/OverviewTab').then(m => ({ default: m.OverviewTab })));
+const CommunicationsTab = lazy(() => import('./tabs/CommunicationsTab').then(m => ({ default: m.CommunicationsTab })));
 const SafetyTab = lazy(() => import('./tabs/SafetyTab').then(m => ({ default: m.SafetyTab })));
-const HistoryTab = lazy(() => import('./tabs/HistoryTab').then(m => ({ default: m.HistoryTab })));
 const TrackTab = lazy(() => import('./tabs/TrackTab').then(m => ({ default: m.TrackTab })));
 
 // Loading fallback components
 function TabLoadingFallback({ type = 'default' }) {
-  if (type === 'info') return <InfoTabSkeleton />;
-  if (type === 'live') return <LiveTabSkeleton />;
-  if (type === 'map') return <MapTabSkeleton />;
+  if (type === 'overview') return <InfoTabSkeleton />;
+  if (type === 'track') return <MapTabSkeleton />;
 
   return (
     <div className="detail-loading" role="status" aria-busy="true">
@@ -58,7 +54,7 @@ export function AircraftDetailPage({
     feederLocation,
     wsRequest,
     wsConnected,
-    initialTab,
+    initialTab: initialTab || 'overview', // Default to new overview tab
     onTabChange
   });
 
@@ -187,20 +183,16 @@ export function AircraftDetailPage({
     );
   }
 
-  // Render tab content
+  // Render tab content based on new 4-tab structure
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'info':
+      case 'overview':
         return (
-          <Suspense fallback={<InfoTabSkeleton />}>
-            <InfoTab info={info} hex={hex} photoInfo={photoInfo} />
-          </Suspense>
-        );
-
-      case 'live':
-        return (
-          <Suspense fallback={<LiveTabSkeleton />}>
-            <LiveTab
+          <Suspense fallback={<TabLoadingFallback type="overview" />}>
+            <OverviewTab
+              info={info}
+              hex={hex}
+              photoInfo={photoInfo}
               aircraft={aircraft}
               trackHistory={trackHistory}
               calculateDistance={calculateDistance}
@@ -208,11 +200,12 @@ export function AircraftDetailPage({
           </Suspense>
         );
 
-      case 'radio':
+      case 'communications':
         return (
           <Suspense fallback={<TabLoadingFallback />}>
-            <RadioTab
+            <CommunicationsTab
               hex={hex}
+              // Radio props
               radioLoading={radioLoading}
               radioTransmissions={radioTransmissions}
               filteredRadioTransmissions={filteredRadioTransmissions}
@@ -231,14 +224,7 @@ export function AircraftDetailPage({
               handleRadioPlay={handleRadioPlay}
               handleRadioSeek={handleRadioSeek}
               toggleRadioAutoplay={toggleRadioAutoplay}
-            />
-          </Suspense>
-        );
-
-      case 'acars':
-        return (
-          <Suspense fallback={<TabLoadingFallback />}>
-            <AcarsTab
+              // ACARS props
               acarsMessages={acarsMessages}
               acarsHours={acarsHours}
               setAcarsHours={setAcarsHours}
@@ -280,26 +266,6 @@ export function AircraftDetailPage({
           </Suspense>
         );
 
-      case 'history':
-        return (
-          <Suspense fallback={<MapTabSkeleton />}>
-            <HistoryTab
-              sightings={sightings}
-              feederLocation={feederLocation}
-              showTrackMap={showTrackMap}
-              setShowTrackMap={setShowTrackMap}
-              replayPosition={replayPosition}
-              setReplayPosition={setReplayPosition}
-              isPlaying={isPlaying}
-              setIsPlaying={setIsPlaying}
-              graphZoom={graphZoom}
-              setGraphZoom={setGraphZoom}
-              graphScrollOffset={graphScrollOffset}
-              setGraphScrollOffset={setGraphScrollOffset}
-            />
-          </Suspense>
-        );
-
       case 'track':
         return (
           <Suspense fallback={<MapTabSkeleton />}>
@@ -328,7 +294,19 @@ export function AircraftDetailPage({
         );
 
       default:
-        return null;
+        // Fallback to overview for unknown tabs
+        return (
+          <Suspense fallback={<TabLoadingFallback type="overview" />}>
+            <OverviewTab
+              info={info}
+              hex={hex}
+              photoInfo={photoInfo}
+              aircraft={aircraft}
+              trackHistory={trackHistory}
+              calculateDistance={calculateDistance}
+            />
+          </Suspense>
+        );
     }
   };
 
@@ -364,7 +342,7 @@ export function AircraftDetailPage({
         onRetry={retryPhoto}
       />
 
-      {/* Tab Navigation */}
+      {/* Tab Navigation - Updated for 4-tab structure */}
       <TabNavigation
         activeTab={activeTab}
         onTabChange={setActiveTab}
