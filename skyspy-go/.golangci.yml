@@ -227,6 +227,7 @@ issues:
         - ineffassign
         - stylecheck
         - revive
+        - unused
     # Exclude govet shadow and unusedwrite checks from test files
     - path: _test\.go
       text: "shadow:|unusedwrite:"

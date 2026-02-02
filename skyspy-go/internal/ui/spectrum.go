@@ -1,4 +1,6 @@
 // Package ui provides reusable UI components for SkySpy applications
+//
+//nolint:gocritic // ifElseChain style is acceptable in rendering code
 package ui
 
 import (

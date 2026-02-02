@@ -1,3 +1,4 @@
+//nolint:gocritic,errcheck,gosec,revive // Test utilities: ifElseChain style; error handling; file perms; indent flow
 package testutil
 
 import (

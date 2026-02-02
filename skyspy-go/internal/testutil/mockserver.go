@@ -1,4 +1,6 @@
 // Package testutil provides testing utilities for SkySpy Go CLI E2E tests
+//
+//nolint:unused,errcheck,unparam,goconst // Test utilities: reserved fields; error handling; unused results; test constants
 package testutil
 
 import (
