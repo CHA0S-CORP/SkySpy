@@ -223,6 +223,13 @@ issues:
         - gocyclo
         - errcheck
         - gocritic
+        - nolintlint
+        - ineffassign
+    # Exclude govet shadow checks from test files (common pattern in test code)
+    - path: _test\.go
+      text: "shadow:"
+      linters:
+        - govet
 
     # Exclude linters from generated files
     - path: ".*\\.gen\\.go"

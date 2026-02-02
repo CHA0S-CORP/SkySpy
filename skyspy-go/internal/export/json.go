@@ -1,6 +1,6 @@
 // Package export provides export functionality for SkySpy CLI
 //
-//nolint:revive // Export* function names are intentional for API clarity
+//nolint:revive,dupl // Export* function names are intentional; similar export functions share patterns
 package export
 
 import (
