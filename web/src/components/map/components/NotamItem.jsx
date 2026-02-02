@@ -130,9 +130,7 @@ export function NotamItem({ notam, isAcknowledged, onAcknowledge, onShowOnMap, i
       </button>
 
       {/* Human-readable summary when collapsed */}
-      {!isExpanded && humanSummary && (
-        <div className="notam-human-summary">{humanSummary}</div>
-      )}
+      {!isExpanded && humanSummary && <div className="notam-human-summary">{humanSummary}</div>}
 
       {/* Text preview when collapsed (fallback if no summary) */}
       {!isExpanded && !humanSummary && notam.text && (

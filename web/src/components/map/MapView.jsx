@@ -3729,11 +3729,12 @@ function MapView({
 
       // Check geometry (for TFRs with polygon bounds)
       if (notam.geometry?.coordinates) {
-        const coords = notam.geometry.type === 'Polygon'
-          ? notam.geometry.coordinates[0]
-          : notam.geometry.type === 'MultiPolygon'
-            ? notam.geometry.coordinates[0][0]
-            : null;
+        const coords =
+          notam.geometry.type === 'Polygon'
+            ? notam.geometry.coordinates[0]
+            : notam.geometry.type === 'MultiPolygon'
+              ? notam.geometry.coordinates[0][0]
+              : null;
 
         if (coords && coords.length > 0) {
           // Check if any vertex is within visible range
@@ -3747,8 +3748,8 @@ function MapView({
           }
 
           // Also check the center of the polygon
-          const lats = coords.map(c => Array.isArray(c) ? c[1] : c.lat).filter(Boolean);
-          const lons = coords.map(c => Array.isArray(c) ? c[0] : c.lon).filter(Boolean);
+          const lats = coords.map((c) => (Array.isArray(c) ? c[1] : c.lat)).filter(Boolean);
+          const lons = coords.map((c) => (Array.isArray(c) ? c[0] : c.lon)).filter(Boolean);
           if (lats.length > 0 && lons.length > 0) {
             const centerLat = lats.reduce((a, b) => a + b, 0) / lats.length;
             const centerLon = lons.reduce((a, b) => a + b, 0) / lons.length;
@@ -3765,9 +3766,8 @@ function MapView({
   // Count unacknowledged NOTAMs that are visible on the map
   const visibleUnacknowledgedCount = useMemo(() => {
     if (!visibleNotams || !acknowledgedNotams) return 0;
-    return visibleNotams.filter(
-      (notam) => !acknowledgedNotams.has(notam.notam_id || notam.id)
-    ).length;
+    return visibleNotams.filter((notam) => !acknowledgedNotams.has(notam.notam_id || notam.id))
+      .length;
   }, [visibleNotams, acknowledgedNotams]);
 
   // Get color class for speed based on value and altitude (for pro panel)
