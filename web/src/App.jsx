@@ -116,7 +116,12 @@ export default function App() {
   const [showCannonball, setShowCannonball] = useState(false);
 
   // Auth context
-  const { status: authStatus, isAuthenticated, config: authConfig, getAccessToken } = useAuth();
+  const {
+    status: authStatus,
+    isAuthenticated,
+    config: authConfig,
+    getAccessToken: _getAccessToken,
+  } = useAuth();
 
   const activeTab = hashState.tab;
   const hashParams = hashState.params;

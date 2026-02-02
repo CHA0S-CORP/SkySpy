@@ -136,8 +136,8 @@ func run(cmd *cobra.Command, args []string) error {
 		cfg.Display.Theme = themeName
 	}
 	if exportDir != "" {
-		absPath, err := filepath.Abs(exportDir)
-		if err == nil {
+		absPath, pathErr := filepath.Abs(exportDir)
+		if pathErr == nil {
 			cfg.Export.Directory = absPath
 		} else {
 			cfg.Export.Directory = exportDir

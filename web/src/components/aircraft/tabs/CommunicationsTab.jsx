@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { Radio, MessageCircle, Search, Radar } from 'lucide-react';
 import { RadioTab } from './RadioTab';
 import { AcarsTab } from './AcarsTab';

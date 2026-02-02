@@ -13,7 +13,7 @@ from celery import shared_task
 
 from skyspy.models import AcarsMessage
 from skyspy.services.acars_decoder import decode_message_text
-from skyspy.services.libacars_binding import MsgDir, is_available as libacars_is_available
+from skyspy.services.libacars_binding import is_available as libacars_is_available
 
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { Shield, AlertTriangle, ArrowUp, ArrowDown, Radio, Plane } from 'lucide-react';
+import { Shield, AlertTriangle, ArrowUp, ArrowDown, Radio } from 'lucide-react';
 
 // Helper to get cardinal direction from heading
 const getCardinalDirection = (heading) => {

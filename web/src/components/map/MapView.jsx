@@ -4663,7 +4663,48 @@ function MapView({
         ctx.setLineDash([6, 4]);
 
         airspaceAdvisories.forEach((adv) => {
-          if (!adv.polygon || adv.polygon.length < 3) return;
+          // Handle GeoJSON format: { type: "Polygon", coordinates: [[[lon, lat], ...]] }
+          // or flat array format: [[lon, lat], ...]
+          let polygonCoords = adv.polygon;
+          if (adv.polygon?.type === 'Polygon' && adv.polygon?.coordinates?.[0]) {
+            polygonCoords = adv.polygon.coordinates[0];
+          } else if (adv.polygon?.coordinates) {
+            polygonCoords = adv.polygon.coordinates;
+          }
+
+          if (!polygonCoords || polygonCoords.length < 3) return;
+
+          // Calculate bounding box for viewport culling and label positioning
+          const lats = polygonCoords.map((p) => (Array.isArray(p) ? p[1] : p.lat));
+          const lons = polygonCoords.map((p) => (Array.isArray(p) ? p[0] : p.lon));
+          const minLat = Math.min(...lats);
+          const maxLat = Math.max(...lats);
+          const minLon = Math.min(...lons);
+          const maxLon = Math.max(...lons);
+
+          // Check if advisory intersects viewport - convert center to screen and check distance
+          const centerLat = (minLat + maxLat) / 2;
+          const centerLon = (minLon + maxLon) / 2;
+          const centerScreen = latLonToScreen(centerLat, centerLon);
+
+          // Estimate advisory size on screen (rough approximation)
+          const corner1 = latLonToScreen(maxLat, maxLon);
+          const corner2 = latLonToScreen(minLat, minLon);
+          const advisoryScreenRadius = Math.max(
+            Math.abs(corner1.x - corner2.x),
+            Math.abs(corner1.y - corner2.y)
+          ) / 2;
+
+          // Skip if center is too far outside viewport (with advisory radius as margin)
+          const margin = advisoryScreenRadius + 100;
+          if (
+            centerScreen.x < -margin ||
+            centerScreen.x > width + margin ||
+            centerScreen.y < -margin ||
+            centerScreen.y > height + margin
+          ) {
+            return;
+          }
 
           // Get color from hazard type
           const hazardConfig = HAZARD_CONFIG[adv.hazard] || { color: '#888888' };
@@ -4685,7 +4726,7 @@ function MapView({
           ctx.lineWidth = isSelected ? 3 : 1.5;
 
           ctx.beginPath();
-          adv.polygon.forEach((coord, idx) => {
+          polygonCoords.forEach((coord, idx) => {
             // Polygon coords are [lon, lat] format
             const lon = Array.isArray(coord) ? coord[0] : coord.lon;
             const lat = Array.isArray(coord) ? coord[1] : coord.lat;
@@ -4703,10 +4744,9 @@ function MapView({
 
           // Draw hazard label at center if selected
           if (isSelected) {
-            const lats = adv.polygon.map((p) => (Array.isArray(p) ? p[1] : p.lat));
-            const lons = adv.polygon.map((p) => (Array.isArray(p) ? p[0] : p.lon));
-            const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
-            const centerLon = (Math.min(...lons) + Math.max(...lons)) / 2;
+            // Reuse minLat/maxLat/minLon/maxLon computed above for bounds check
+            const centerLat = (minLat + maxLat) / 2;
+            const centerLon = (minLon + maxLon) / 2;
             const labelPos = latLonToScreen(centerLat, centerLon);
 
             ctx.setLineDash([]);

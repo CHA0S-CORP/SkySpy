@@ -74,7 +74,6 @@ from skyspy.api.notams import NotamViewSet
 from skyspy.api.notifications import NotificationChannelViewSet, NotificationViewSet
 from skyspy.api.safety import SafetyEventViewSet
 from skyspy.api.stats import EngagementViewSet, FavoritesViewSet, TrackingQualityViewSet
-from skyspy.api.tasks import TaskResultViewSet
 from skyspy.api.system import (
     AircraftLookupView,
     ExternalDatabaseStatsView,
@@ -87,6 +86,7 @@ from skyspy.api.system import (
     SystemInfoView,
     WeatherCacheStatsView,
 )
+from skyspy.api.tasks import TaskResultViewSet
 
 # Import Auth views and ViewSets
 from skyspy.auth.views import (

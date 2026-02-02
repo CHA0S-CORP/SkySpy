@@ -16,8 +16,9 @@ import { ConfigAuditLog } from './ConfigAuditLog';
 
 /**
  * Category icons mapping
+ * @todo Use for category headers
  */
-const CATEGORY_ICONS = {
+const _CATEGORY_ICONS = {
   adsb_sources: Settings,
   location: Settings,
   safety: AlertTriangle,
@@ -49,7 +50,7 @@ export function ConfigPage({ apiBase = '', onToast }) {
     saveAllPendingChanges,
     resetToDefault,
     revealSensitiveValue,
-    pendingChanges,
+    pendingChanges: _pendingChanges,
     pendingChangeCount,
     hasChange,
     hasRestartRequired,
@@ -163,7 +164,8 @@ export function ConfigPage({ apiBase = '', onToast }) {
   };
 
   // Handle reset to default
-  const handleResetToDefault = async (key) => {
+  // eslint-disable-next-line no-unused-vars -- Planned feature for reset-to-default functionality
+  const _handleResetToDefault = async (key) => {
     const config = categories.flatMap((c) => c.configs).find((c) => c.key === key);
     if (config) {
       const confirmed = window.confirm(

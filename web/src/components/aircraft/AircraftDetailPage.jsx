@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css';
 
 import { useAircraftDetail } from './hooks/useAircraftDetail';
 import { AircraftHeader, AircraftPhotoHero, TabNavigation, ExternalLinks } from './components';
-import { InfoTabSkeleton, LiveTabSkeleton, MapTabSkeleton } from './skeletons';
+import { InfoTabSkeleton, MapTabSkeleton } from './skeletons';
 import { ErrorBoundary } from '../common/ErrorBoundary';
 
 // Lazy load tab components for better performance
@@ -135,11 +135,11 @@ export function AircraftDetailPage({
 
     // History/sightings
     sightings,
-    showTrackMap,
+    showTrackMap: _showTrackMap,
     setShowTrackMap,
-    replayPosition,
+    replayPosition: _replayPosition,
     setReplayPosition,
-    isPlaying,
+    isPlaying: _isPlaying,
     setIsPlaying,
 
     // Track tab

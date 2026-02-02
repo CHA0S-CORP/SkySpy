@@ -314,7 +314,7 @@ func TestThemeIntegration(t *testing.T) {
 	// Test getting a specific theme
 	classic := theme.Get("classic")
 	if classic == nil {
-		t.Error("Expected classic theme to exist")
+		t.Fatal("Expected classic theme to exist")
 	}
 
 	if classic.Name == "" {

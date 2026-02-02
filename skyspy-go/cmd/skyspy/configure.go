@@ -564,11 +564,12 @@ func (m wizardModel) View() string {
 	// Progress indicator
 	b.WriteString("  ")
 	for i, name := range m.sectionNames {
-		if i == m.section {
+		switch {
+		case i == m.section:
 			b.WriteString(m.selectedStyle.Render(fmt.Sprintf("[%s]", name)))
-		} else if i < m.section {
+		case i < m.section:
 			b.WriteString(m.successStyle.Render(fmt.Sprintf("[%s]", name)))
-		} else {
+		default:
 			b.WriteString(m.dimStyle.Render(fmt.Sprintf("[%s]", name)))
 		}
 		if i < len(m.sectionNames)-1 {
@@ -589,11 +590,12 @@ func (m wizardModel) View() string {
 
 	// Navigation help
 	b.WriteString("\n")
-	if m.section == sectionWelcome {
+	switch m.section {
+	case sectionWelcome:
 		b.WriteString(m.helpStyle.Render("  Press Enter to start, q to quit"))
-	} else if m.section == sectionSummary {
+	case sectionSummary:
 		b.WriteString(m.helpStyle.Render("  Press Enter to save, Esc to go back, q to quit without saving"))
-	} else {
+	default:
 		b.WriteString(m.helpStyle.Render("  Tab/Down: next  Shift+Tab/Up: previous  Space: toggle  Esc: back"))
 	}
 	b.WriteString("\n")

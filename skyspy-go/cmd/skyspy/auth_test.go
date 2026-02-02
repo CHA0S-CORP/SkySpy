@@ -24,16 +24,16 @@ Examples:
   skyspy login --host myserver.com --port 443`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Test implementation that returns error for unreachable server
-			host, _ := cmd.Flags().GetString("host")
-			if host == "" {
-				host = "localhost"
+			hostVal, _ := cmd.Flags().GetString("host")
+			if hostVal == "" {
+				hostVal = "localhost"
 			}
-			port, _ := cmd.Flags().GetInt("port")
-			if port == 0 {
-				port = 8080
+			portVal, _ := cmd.Flags().GetInt("port")
+			if portVal == 0 {
+				portVal = 8080
 			}
-			cmd.Printf("Connecting to %s:%d...\n", host, port)
-			return &ServerUnreachableError{Host: host, Port: port}
+			cmd.Printf("Connecting to %s:%d...\n", hostVal, portVal)
+			return &ServerUnreachableError{Host: hostVal, Port: portVal}
 		},
 	}
 	return cmd
@@ -50,15 +50,15 @@ Examples:
   skyspy logout
   skyspy logout --host myserver.com --port 443`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			host, _ := cmd.Flags().GetString("host")
-			if host == "" {
-				host = "localhost"
+			hostVal, _ := cmd.Flags().GetString("host")
+			if hostVal == "" {
+				hostVal = "localhost"
 			}
-			port, _ := cmd.Flags().GetInt("port")
-			if port == 0 {
-				port = 8080
+			portVal, _ := cmd.Flags().GetInt("port")
+			if portVal == 0 {
+				portVal = 8080
 			}
-			cmd.Printf("Not logged in to %s:%d\n", host, port)
+			cmd.Printf("Not logged in to %s:%d\n", hostVal, portVal)
 			return nil
 		},
 	}
@@ -76,15 +76,15 @@ Examples:
   skyspy auth status
   skyspy auth status --host myserver.com --port 443`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			host, _ := cmd.Flags().GetString("host")
-			if host == "" {
-				host = "localhost"
+			hostVal, _ := cmd.Flags().GetString("host")
+			if hostVal == "" {
+				hostVal = "localhost"
 			}
-			port, _ := cmd.Flags().GetInt("port")
-			if port == 0 {
-				port = 8080
+			portVal, _ := cmd.Flags().GetInt("port")
+			if portVal == 0 {
+				portVal = 8080
 			}
-			cmd.Printf("Server: %s:%d\n", host, port)
+			cmd.Printf("Server: %s:%d\n", hostVal, portVal)
 			cmd.Printf("Status: Cannot connect to server\n")
 			cmd.Printf("Error: connection refused\n")
 			return nil
