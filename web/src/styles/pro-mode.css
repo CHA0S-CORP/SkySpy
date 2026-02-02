@@ -3215,7 +3215,7 @@
 }
 
 .pro-track-length-slider input[type="range"] {
-  width: 80px;
+  width: 100px;
   height: 4px;
   -webkit-appearance: none;
   appearance: none;
@@ -3407,6 +3407,39 @@
 
 .pro-alert-btn:active {
   transform: scale(0.98);
+}
+
+.pro-alert-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pro-alert-btn:disabled:hover {
+  background: rgba(30, 40, 50, 0.8);
+  border-color: rgba(90, 122, 154, 0.3);
+  color: var(--text-secondary);
+  transform: none;
+}
+
+.pro-alert-btn.created {
+  background: rgba(74, 222, 128, 0.15);
+  border-color: rgba(74, 222, 128, 0.4);
+  color: rgba(74, 222, 128, 0.95);
+}
+
+.pro-alert-btn.created:hover {
+  background: rgba(74, 222, 128, 0.2);
+  border-color: rgba(74, 222, 128, 0.5);
+  color: rgba(74, 222, 128, 1);
+}
+
+.pro-alert-btn .animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* Pro Panel Button - 44px minimum touch targets for accessibility */

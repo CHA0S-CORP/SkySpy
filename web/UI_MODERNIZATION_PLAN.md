@@ -8,6 +8,425 @@ This document provides detailed implementation plans for modernizing the SkySpy 
 
 ---
 
+## Agent Task Breakdown for Parallel Implementation
+
+This section organizes each phase into discrete, parallelizable agent tasks. Tasks marked with the same letter (e.g., A1, A2) can run in parallel. Sequential dependencies are noted.
+
+### Execution Strategy
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           PHASE 1: Design System                            │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐                                      │
+│  │ Task A1 │  │ Task A2 │  │ Task A3 │  ← Run in parallel                   │
+│  │ Tokens  │  │ Motion  │  │Storybook│                                      │
+│  └────┬────┘  └────┬────┘  └────┬────┘                                      │
+│       └────────────┴────────────┘                                           │
+│                     ↓                                                       │
+│              ┌─────────────┐                                                │
+│              │   Task B1   │  ← Depends on A1-A3                            │
+│              │  UI Stories │                                                │
+│              └─────────────┘                                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Phase 1 Agent Tasks: Design System Foundation
+
+| Task ID | Task Name | Dependencies | Parallel Group | Description |
+|---------|-----------|--------------|----------------|-------------|
+| P1-A1 | Create Design Tokens | None | A | Create `src/design-system/tokens.js` with colors, spacing, typography, shadows |
+| P1-A2 | Create Motion System | None | A | Create `src/design-system/motion.js` with animation presets |
+| P1-A3 | Initialize Storybook | None | A | Run `npx storybook@latest init`, configure `.storybook/preview.js` |
+| P1-A4 | Create Design System Index | None | A | Create `src/design-system/index.js` barrel export |
+| P1-B1 | Badge Stories | P1-A3 | B | Create `src/components/ui/badge.stories.jsx` |
+| P1-B2 | MetricCard Stories | P1-A3 | B | Create `src/components/ui/metric-card.stories.jsx` |
+| P1-B3 | Button Stories | P1-A3 | B | Create stories for existing button components |
+| P1-B4 | BentoCard Stories | P1-A3 | B | Create `src/components/ui/bento-card.stories.jsx` |
+| P1-B5 | Accordion Stories | P1-A3 | B | Create `src/components/ui/accordion.stories.jsx` |
+| P1-C1 | Update package.json | P1-A3 | C | Add storybook scripts to package.json |
+| P1-C2 | Verify Storybook | P1-B* | C | Run storybook, verify all components render |
+
+**Parallel Execution Plan:**
+```bash
+# Wave A (parallel) - ~5 min
+Agent-1: P1-A1 (tokens.js)
+Agent-2: P1-A2 (motion.js)
+Agent-3: P1-A3 (storybook init)
+Agent-4: P1-A4 (index.js)
+
+# Wave B (parallel, after A3) - ~10 min
+Agent-1: P1-B1 (badge stories)
+Agent-2: P1-B2 (metric-card stories)
+Agent-3: P1-B3 (button stories)
+Agent-4: P1-B4 (bento-card stories)
+Agent-5: P1-B5 (accordion stories)
+
+# Wave C (sequential) - ~3 min
+Agent-1: P1-C1, P1-C2
+```
+
+---
+
+### Phase 2 Agent Tasks: Radix UI Primitives
+
+| Task ID | Task Name | Dependencies | Parallel Group | Description |
+|---------|-----------|--------------|----------------|-------------|
+| P2-A1 | Install Radix Dependencies | None | A | Install all @radix-ui packages |
+| P2-B1 | Create Dialog Component | P2-A1 | B | Create `src/components/ui/dialog.jsx` with Radix Dialog |
+| P2-B2 | Create AlertDialog Component | P2-A1 | B | Create `src/components/ui/alert-dialog.jsx` |
+| P2-B3 | Create Tooltip Component | P2-A1 | B | Create `src/components/ui/tooltip.jsx` |
+| P2-B4 | Create Tabs Component | P2-A1 | B | Create `src/components/ui/tabs.jsx` |
+| P2-B5 | Create Select Component | P2-A1 | B | Create `src/components/ui/select.jsx` |
+| P2-B6 | Create Switch Component | P2-A1 | B | Create `src/components/ui/switch.jsx` |
+| P2-B7 | Create Popover Component | P2-A1 | B | Create `src/components/ui/popover.jsx` |
+| P2-B8 | Create ScrollArea Component | P2-A1 | B | Create `src/components/ui/scroll-area.jsx` |
+| P2-C1 | Migrate ConfirmModal | P2-B2 | C | Update ConfirmModal to use AlertDialog |
+| P2-C2 | Migrate TabBar | P2-B4 | C | Update TabBar to use Radix Tabs |
+| P2-C3 | Update UI Index | P2-B* | C | Add all new components to `src/components/ui/index.js` |
+| P2-D1 | Dialog Stories | P2-B1 | D | Create stories for Dialog component |
+| P2-D2 | Select Stories | P2-B5 | D | Create stories for Select component |
+| P2-D3 | Tabs Stories | P2-B4 | D | Create stories for Tabs component |
+
+**Parallel Execution Plan:**
+```bash
+# Wave A - ~2 min
+Agent-1: P2-A1 (install deps)
+
+# Wave B (parallel) - ~15 min
+Agent-1: P2-B1 (dialog)
+Agent-2: P2-B2 (alert-dialog)
+Agent-3: P2-B3 (tooltip)
+Agent-4: P2-B4 (tabs)
+Agent-5: P2-B5 (select)
+Agent-6: P2-B6 (switch)
+Agent-7: P2-B7 (popover)
+Agent-8: P2-B8 (scroll-area)
+
+# Wave C (parallel) - ~8 min
+Agent-1: P2-C1 (migrate ConfirmModal)
+Agent-2: P2-C2 (migrate TabBar)
+Agent-3: P2-C3 (update index)
+
+# Wave D (parallel) - ~5 min
+Agent-1: P2-D1, P2-D2, P2-D3 (stories)
+```
+
+---
+
+### Phase 3 Agent Tasks: TanStack Query Migration
+
+| Task ID | Task Name | Dependencies | Parallel Group | Description |
+|---------|-----------|--------------|----------------|-------------|
+| P3-A1 | Install TanStack Query | None | A | Install @tanstack/react-query and devtools |
+| P3-A2 | Create API Layer | None | A | Create `src/lib/api.js` with all endpoints and error handling |
+| P3-B1 | Create QueryProvider | P3-A1 | B | Create `src/providers/QueryProvider.jsx` |
+| P3-B2 | Create Aircraft Query Hooks | P3-A1, P3-A2 | B | Create `src/hooks/queries/useAircraftQueries.js` |
+| P3-B3 | Create Stats Query Hooks | P3-A1, P3-A2 | B | Create `src/hooks/queries/useStatsQueries.js` |
+| P3-B4 | Create Alert Query Hooks | P3-A1, P3-A2 | B | Create `src/hooks/queries/useAlertQueries.js` |
+| P3-B5 | Create ACARS Query Hooks | P3-A1, P3-A2 | B | Create `src/hooks/queries/useAcarsQueries.js` |
+| P3-B6 | Create Safety Query Hooks | P3-A1, P3-A2 | B | Create `src/hooks/queries/useSafetyQueries.js` |
+| P3-B7 | Create History Query Hooks | P3-A1, P3-A2 | B | Create `src/hooks/queries/useHistoryQueries.js` |
+| P3-C1 | Create Query Hooks Index | P3-B* | C | Create `src/hooks/queries/index.js` barrel export |
+| P3-C2 | Update main.jsx | P3-B1 | C | Wrap app with QueryProvider |
+| P3-D1 | Migrate useAlertRules | P3-B4 | D | Update existing hook to use Query internally |
+| P3-D2 | Migrate useStats | P3-B3 | D | Update existing hook to use Query internally |
+| P3-D3 | Migrate useAircraft | P3-B2 | D | Update existing hook to use Query internally |
+| P3-D4 | Deprecate useApi | P3-D* | D | Mark useApi as deprecated, add migration notes |
+
+**Parallel Execution Plan:**
+```bash
+# Wave A (parallel) - ~5 min
+Agent-1: P3-A1 (install)
+Agent-2: P3-A2 (api layer)
+
+# Wave B (parallel) - ~12 min
+Agent-1: P3-B1 (QueryProvider)
+Agent-2: P3-B2 (aircraft queries)
+Agent-3: P3-B3 (stats queries)
+Agent-4: P3-B4 (alert queries)
+Agent-5: P3-B5 (acars queries)
+Agent-6: P3-B6 (safety queries)
+Agent-7: P3-B7 (history queries)
+
+# Wave C (parallel) - ~3 min
+Agent-1: P3-C1 (index)
+Agent-2: P3-C2 (main.jsx)
+
+# Wave D (parallel) - ~10 min
+Agent-1: P3-D1 (migrate useAlertRules)
+Agent-2: P3-D2 (migrate useStats)
+Agent-3: P3-D3 (migrate useAircraft)
+Agent-4: P3-D4 (deprecate useApi)
+```
+
+---
+
+### Phase 4 Agent Tasks: Accessibility Audit & Fixes
+
+| Task ID | Task Name | Dependencies | Parallel Group | Description |
+|---------|-----------|--------------|----------------|-------------|
+| P4-A1 | Install A11y Tools | None | A | Install eslint-plugin-jsx-a11y, @axe-core/react |
+| P4-A2 | Configure ESLint A11y | P4-A1 | A | Update .eslintrc.cjs with jsx-a11y rules |
+| P4-A3 | Create A11y Utils | None | A | Create `src/utils/a11y.js` with axe-core init |
+| P4-B1 | Create Form Components | None | B | Create `src/components/ui/form.jsx` with accessible inputs |
+| P4-B2 | Create useReducedMotion | None | B | Create `src/hooks/useReducedMotion.js` |
+| P4-B3 | Create useFocusTrap | None | B | Create `src/hooks/useFocusTrap.js` |
+| P4-B4 | Add Reduced Motion CSS | None | B | Update `src/styles/base.css` with @media prefers-reduced-motion |
+| P4-C1 | Audit Icon Buttons | P4-A2 | C | Add aria-labels to all icon-only buttons |
+| P4-C2 | Audit Form Labels | P4-A2 | C | Associate all form inputs with labels |
+| P4-C3 | Audit Tables | P4-A2 | C | Add captions/aria-labels to data tables |
+| P4-C4 | Audit Images | P4-A2 | C | Add alt text to all images |
+| P4-C5 | Audit Color Indicators | P4-A2 | C | Add text/icon alternatives for color-only meaning |
+| P4-D1 | Add Loading Announcements | P4-C* | D | Add aria-live regions for loading states |
+| P4-D2 | Add Error Announcements | P4-C* | D | Add role="alert" to error messages |
+| P4-D3 | Update Motion System | P4-B2 | D | Add reduced motion variants to motion.js |
+| P4-E1 | Run Full A11y Audit | P4-D* | E | Run eslint, axe, manual keyboard testing |
+
+**Parallel Execution Plan:**
+```bash
+# Wave A (parallel) - ~3 min
+Agent-1: P4-A1, P4-A2 (install + config)
+Agent-2: P4-A3 (a11y utils)
+
+# Wave B (parallel) - ~8 min
+Agent-1: P4-B1 (form components)
+Agent-2: P4-B2 (useReducedMotion)
+Agent-3: P4-B3 (useFocusTrap)
+Agent-4: P4-B4 (reduced motion CSS)
+
+# Wave C (parallel) - ~15 min - largest wave
+Agent-1: P4-C1 (icon buttons audit)
+Agent-2: P4-C2 (form labels audit)
+Agent-3: P4-C3 (tables audit)
+Agent-4: P4-C4 (images audit)
+Agent-5: P4-C5 (color indicators audit)
+
+# Wave D (parallel) - ~5 min
+Agent-1: P4-D1 (loading)
+Agent-2: P4-D2 (errors)
+Agent-3: P4-D3 (motion update)
+
+# Wave E - ~5 min
+Agent-1: P4-E1 (full audit)
+```
+
+---
+
+### Phase 5 Agent Tasks: TypeScript Migration
+
+| Task ID | Task Name | Dependencies | Parallel Group | Description |
+|---------|-----------|--------------|----------------|-------------|
+| P5-A1 | Install TypeScript | None | A | Install typescript, @types/react, @types/react-dom |
+| P5-A2 | Create tsconfig.json | P5-A1 | A | Create TypeScript configuration with strict mode |
+| P5-A3 | Create tsconfig.node.json | P5-A1 | A | Create Node TypeScript configuration |
+| P5-A4 | Create Type Definitions | None | A | Create `src/types/index.ts` with all domain types |
+| P5-B1 | Convert vite.config | P5-A2 | B | Rename to vite.config.ts, add types |
+| P5-B2 | Convert tokens.js | P5-A2 | B | Convert `src/design-system/tokens.js` → `.ts` |
+| P5-B3 | Convert motion.js | P5-A2 | B | Convert `src/design-system/motion.js` → `.ts` |
+| P5-B4 | Convert cn.js | P5-A2 | B | Convert `src/components/ui/cn.js` → `.ts` |
+| P5-C1 | Convert badge.jsx | P5-B4 | C | Convert to TypeScript with proper prop types |
+| P5-C2 | Convert metric-card.jsx | P5-B4 | C | Convert to TypeScript |
+| P5-C3 | Convert dialog.jsx | P5-B4 | C | Convert to TypeScript |
+| P5-C4 | Convert alert-dialog.jsx | P5-B4 | C | Convert to TypeScript |
+| P5-C5 | Convert tabs.jsx | P5-B4 | C | Convert to TypeScript |
+| P5-C6 | Convert select.jsx | P5-B4 | C | Convert to TypeScript |
+| P5-C7 | Convert switch.jsx | P5-B4 | C | Convert to TypeScript |
+| P5-C8 | Convert tooltip.jsx | P5-B4 | C | Convert to TypeScript |
+| P5-C9 | Convert form.jsx | P5-B4 | C | Convert to TypeScript |
+| P5-D1 | Convert api.js | P5-A4 | D | Convert `src/lib/api.js` → `.ts` with full types |
+| P5-D2 | Convert Query Hooks | P5-A4, P5-D1 | D | Convert all hooks/queries/*.js to .ts |
+| P5-E1 | Update UI Index | P5-C* | E | Update index to export .tsx files |
+| P5-E2 | Add Type Check Script | P5-A2 | E | Add "type-check" script to package.json |
+| P5-E3 | Run Type Check | P5-E* | E | Verify no TypeScript errors |
+
+**Parallel Execution Plan:**
+```bash
+# Wave A (parallel) - ~5 min
+Agent-1: P5-A1, P5-A2, P5-A3 (install + configs)
+Agent-2: P5-A4 (type definitions)
+
+# Wave B (parallel) - ~5 min
+Agent-1: P5-B1 (vite.config)
+Agent-2: P5-B2 (tokens)
+Agent-3: P5-B3 (motion)
+Agent-4: P5-B4 (cn)
+
+# Wave C (parallel) - ~20 min - largest wave
+Agent-1: P5-C1 (badge)
+Agent-2: P5-C2 (metric-card)
+Agent-3: P5-C3 (dialog)
+Agent-4: P5-C4 (alert-dialog)
+Agent-5: P5-C5 (tabs)
+Agent-6: P5-C6 (select)
+Agent-7: P5-C7 (switch)
+Agent-8: P5-C8 (tooltip)
+Agent-9: P5-C9 (form)
+
+# Wave D (parallel) - ~10 min
+Agent-1: P5-D1 (api.ts)
+Agent-2: P5-D2 (query hooks)
+
+# Wave E - ~3 min
+Agent-1: P5-E1, P5-E2, P5-E3
+```
+
+---
+
+### Phase 6 Agent Tasks: Performance Optimization
+
+| Task ID | Task Name | Dependencies | Parallel Group | Description |
+|---------|-----------|--------------|----------------|-------------|
+| P6-A1 | Install Visualizer | None | A | Install rollup-plugin-visualizer |
+| P6-A2 | Configure Bundle Splitting | P6-A1 | A | Update vite.config.ts with manualChunks |
+| P6-B1 | Create Icons Index | None | B | Create `src/components/icons/index.tsx` with tree-shakeable exports |
+| P6-B2 | Create VirtualList | None | B | Create `src/components/common/VirtualList.tsx` |
+| P6-B3 | Create Performance Utils | None | B | Create `src/utils/performance.ts` |
+| P6-B4 | Create Image Utils | None | B | Create `src/utils/images.ts` |
+| P6-C1 | Lazy Load MapView | P6-A2 | C | Convert MapView to lazy import |
+| P6-C2 | Lazy Load HistoryView | P6-A2 | C | Convert HistoryView to lazy import |
+| P6-C3 | Lazy Load AlertsView | P6-A2 | C | Convert AlertsView to lazy import |
+| P6-C4 | Lazy Load StatsView | P6-A2 | C | Convert StatsView to lazy import |
+| P6-C5 | Lazy Load AcarsView | P6-A2 | C | Convert AcarsView to lazy import |
+| P6-C6 | Lazy Load SafetyView | P6-A2 | C | Convert SafetyView to lazy import |
+| P6-C7 | Lazy Load SettingsView | P6-A2 | C | Convert SettingsView to lazy import |
+| P6-C8 | Create Views Index | P6-C* | C | Create `src/views/index.tsx` with Suspense wrappers |
+| P6-D1 | Update Icon Imports | P6-B1 | D | Update all files to import from icons/index |
+| P6-D2 | Add React.memo | P6-B* | D | Add React.memo to AircraftRow, MapMarker, etc. |
+| P6-D3 | Add useMemo/useCallback | P6-B* | D | Optimize expensive computations in components |
+| P6-E1 | Build & Analyze | P6-D* | E | Run build, check bundle sizes, verify targets |
+
+**Parallel Execution Plan:**
+```bash
+# Wave A - ~3 min
+Agent-1: P6-A1, P6-A2 (install + config)
+
+# Wave B (parallel) - ~10 min
+Agent-1: P6-B1 (icons index)
+Agent-2: P6-B2 (VirtualList)
+Agent-3: P6-B3 (performance utils)
+Agent-4: P6-B4 (image utils)
+
+# Wave C (parallel) - ~12 min
+Agent-1: P6-C1 (MapView)
+Agent-2: P6-C2 (HistoryView)
+Agent-3: P6-C3 (AlertsView)
+Agent-4: P6-C4 (StatsView)
+Agent-5: P6-C5 (AcarsView)
+Agent-6: P6-C6 (SafetyView)
+Agent-7: P6-C7 (SettingsView)
+Agent-8: P6-C8 (views index)
+
+# Wave D (parallel) - ~15 min
+Agent-1: P6-D1 (update imports)
+Agent-2: P6-D2 (React.memo)
+Agent-3: P6-D3 (useMemo/useCallback)
+
+# Wave E - ~5 min
+Agent-1: P6-E1 (build + analyze)
+```
+
+---
+
+### Phase 7 Agent Tasks: Admin Settings Page
+
+| Task ID | Task Name | Dependencies | Parallel Group | Description |
+|---------|-----------|--------------|----------------|-------------|
+| P7-A1 | Create Admin Types | None | A | Create `src/types/admin.ts` with all config types |
+| P7-A2 | Add Admin API Endpoints | None | A | Add admin config endpoints to `src/lib/api.ts` |
+| P7-B1 | Create AdminSettingsView | P7-A1, P7-A2 | B | Create main view with tabs |
+| P7-B2 | Create AdminConfigSettings | P7-A1 | B | Create category navigation component |
+| P7-B3 | Create AdminConfigForm | P7-A1 | B | Create configuration form with field types |
+| P7-B4 | Create AdminAuditLog | P7-A1, P7-A2 | B | Create audit log viewer with filtering |
+| P7-B5 | Create AdminConfigExport | P7-A1, P7-A2 | B | Create export/import UI |
+| P7-C1 | Add View to Router | P7-B1 | C | Add AdminSettingsView to app routing |
+| P7-C2 | Add Lazy Loading | P7-B1 | C | Add lazy import for AdminSettingsView |
+| P7-C3 | Create Admin Stories | P7-B* | C | Create Storybook stories for admin components |
+| P7-D1 | Add Admin Nav Link | P7-C1 | D | Add admin settings link to sidebar (role-gated) |
+| P7-D2 | Integration Testing | P7-C* | D | Test full admin config workflow |
+
+**Parallel Execution Plan:**
+```bash
+# Wave A (parallel) - ~5 min
+Agent-1: P7-A1 (types)
+Agent-2: P7-A2 (api endpoints)
+
+# Wave B (parallel) - ~20 min
+Agent-1: P7-B1 (AdminSettingsView)
+Agent-2: P7-B2 (AdminConfigSettings)
+Agent-3: P7-B3 (AdminConfigForm)
+Agent-4: P7-B4 (AdminAuditLog)
+Agent-5: P7-B5 (AdminConfigExport)
+
+# Wave C (parallel) - ~8 min
+Agent-1: P7-C1 (router)
+Agent-2: P7-C2 (lazy loading)
+Agent-3: P7-C3 (stories)
+
+# Wave D (parallel) - ~5 min
+Agent-1: P7-D1 (nav link)
+Agent-2: P7-D2 (testing)
+```
+
+---
+
+### Complete Execution Timeline
+
+```
+┌────────────────────────────────────────────────────────────────────────────────┐
+│ PHASE 1: Design System (~18 min with 5 agents)                                 │
+│ ████████████████████                                                           │
+├────────────────────────────────────────────────────────────────────────────────┤
+│ PHASE 2: Radix UI (~30 min with 8 agents)                                      │
+│ ██████████████████████████████████████████                                     │
+├────────────────────────────────────────────────────────────────────────────────┤
+│ PHASE 3: TanStack Query (~30 min with 7 agents)                                │
+│ ██████████████████████████████████████████                                     │
+├────────────────────────────────────────────────────────────────────────────────┤
+│ PHASE 4: Accessibility (~36 min with 5 agents)                                 │
+│ ████████████████████████████████████████████████████                           │
+├────────────────────────────────────────────────────────────────────────────────┤
+│ PHASE 5: TypeScript (~43 min with 9 agents)                                    │
+│ ██████████████████████████████████████████████████████████████                 │
+├────────────────────────────────────────────────────────────────────────────────┤
+│ PHASE 6: Performance (~45 min with 8 agents)                                   │
+│ ████████████████████████████████████████████████████████████████               │
+├────────────────────────────────────────────────────────────────────────────────┤
+│ PHASE 7: Admin Settings (~38 min with 5 agents)                                │
+│ ██████████████████████████████████████████████████████                         │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+TOTAL: ~240 min sequential → ~45 min with max parallelization
+```
+
+### Task Summary by Phase
+
+| Phase | Total Tasks | Parallel Waves | Max Agents Needed |
+|-------|-------------|----------------|-------------------|
+| Phase 1 | 12 | 3 | 5 |
+| Phase 2 | 14 | 4 | 8 |
+| Phase 3 | 14 | 4 | 7 |
+| Phase 4 | 15 | 5 | 5 |
+| Phase 5 | 18 | 5 | 9 |
+| Phase 6 | 17 | 5 | 8 |
+| Phase 7 | 12 | 4 | 5 |
+| **Total** | **102** | - | **9 (peak)** |
+
+### Agent Assignment Commands
+
+For each wave, spawn agents with these prompts:
+
+```bash
+# Example: Phase 1, Wave A
+claude --task "P1-A1: Create src/design-system/tokens.js with color, spacing, typography, shadow, and z-index tokens. Export all as named exports."
+claude --task "P1-A2: Create src/design-system/motion.js with Framer Motion animation presets including fadeIn, slideUp, scaleIn, and stagger variants."
+claude --task "P1-A3: Initialize Storybook with npx storybook@latest init --type react. Configure .storybook/preview.js with dark theme and a11y addon."
+claude --task "P1-A4: Create src/design-system/index.js that re-exports all from tokens.js and motion.js."
+```
+
+---
+
 ## Phase 1: Design System Foundation
 
 **Goal:** Establish a centralized, documented design system with Storybook.

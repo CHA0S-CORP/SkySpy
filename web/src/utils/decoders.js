@@ -181,7 +181,7 @@ export const decodePirep = (pirep) => {
     
     const taMatch = rawStr.match(/\/TA\s*(M?\d+)/);
     if (taMatch) {
-      let temp = taMatch[1];
+      const temp = taMatch[1];
       parsed.temp = temp.startsWith('M') ? -parseInt(temp.substring(1), 10) : parseInt(temp, 10);
     }
     

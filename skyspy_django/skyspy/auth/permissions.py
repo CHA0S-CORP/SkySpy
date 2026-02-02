@@ -258,10 +258,9 @@ class FeatureBasedPermission(permissions.BasePermission):
             return obj.owner == user
 
         # Check shared status (if object has is_shared field)
-        if hasattr(obj, "is_shared"):
-            # Can view shared objects but not edit
-            if request.method in permissions.SAFE_METHODS:
-                return True
+        # Can view shared objects but not edit
+        if hasattr(obj, "is_shared") and request.method in permissions.SAFE_METHODS:
+            return True
 
         # No owner = system object, check for action-specific permission
         # For unknown features, deny access (require ownership or admin)

@@ -7919,6 +7919,32 @@ body {
   transform: scale(0.98);
 }
 
+.pro-alert-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pro-alert-btn:disabled:hover {
+  background: rgba(74, 222, 128, 0.1);
+  border-color: rgba(74, 222, 128, 0.3);
+  transform: none;
+}
+
+.pro-alert-btn.created {
+  background: rgba(74, 222, 128, 0.2);
+  border-color: rgba(74, 222, 128, 0.5);
+  color: rgba(74, 222, 128, 1);
+}
+
+.pro-alert-btn .animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* Vertical Speed Colors */
 .pro-stat-value.climbing {
   color: #22c55e; /* Green for climbing */

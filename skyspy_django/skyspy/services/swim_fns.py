@@ -221,7 +221,7 @@ def parse_aixm_notam(xml_payload: str) -> dict[str, Any] | None:
         Parsed NOTAM dictionary or None if invalid
     """
     try:
-        root = ET.fromstring(xml_payload)
+        root = ET.fromstring(xml_payload)  # nosec B314 - XML from authenticated FAA SWIM feed
 
         # Extract NOTAM data from AIXM structure
         # The structure varies but typically includes:
@@ -349,11 +349,11 @@ def parse_aixm_notam(xml_payload: str) -> dict[str, Any] | None:
             ],
         )
         if radius:
-            try:
+            import contextlib
+
+            with contextlib.suppress(ValueError):
                 # Radius might be in various units
                 notam["radius_nm"] = float(radius)
-            except ValueError:
-                pass
 
         # Parse reason/purpose
         notam["reason"] = _get_text(

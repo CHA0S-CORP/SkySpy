@@ -231,12 +231,12 @@ class SafetyMonitor:
             expired_events = [
                 (eid, event) for eid, event in self._active_events.items() if event.get("last_seen", 0) < event_cutoff
             ]
-            for eid, event in expired_events:
+            for eid, _event in expired_events:
                 del self._active_events[eid]
                 self._acknowledged_events.discard(eid)
 
         # Broadcast event resolution for expired events (outside lock to avoid deadlock)
-        for eid, event in expired_events:
+        for _eid, event in expired_events:
             self.broadcast_event_resolved(event)
 
     def _generate_event_id(self, event_type: str, icao: str, icao_2: str | None = None) -> str:

@@ -37,8 +37,21 @@ ignore = [
 known-first-party = ["skyspy", "skyspy_common"]
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**" = ["ARG", "S101"]
+"**/tests/**" = ["ARG", "S101", "SIM105", "SIM117", "B017", "E402", "F401"]
 "**/migrations/**" = ["E501"]
+# Django patterns: imports after django.setup() or conditional imports
+"**/settings*.py" = ["E402", "F403", "F405", "E721"]
+"**/asgi.py" = ["E402"]
+"**/celery.py" = ["E402"]
+"**/urls.py" = ["E402"]
+"**/admin.py" = ["E402"]
+"**/tasks/__init__.py" = ["F401"]
+"**/tasks/cannonball.py" = ["E402"]
+# Services with conditional imports for optional dependencies
+"**/services/alerts.py" = ["E402"]
+"**/api/stats.py" = ["E402"]
+# Test helpers with conditional imports
+"**/e2e/**" = ["E402"]
 
 [tool.black]
 target-version = ["py312"]

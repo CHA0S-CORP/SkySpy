@@ -153,9 +153,9 @@ class TrackingQualityViewSet(viewsets.ViewSet):
         # Analyze gaps using iterator to avoid loading all into memory at once
         gaps = []
         prev_time = None
-        sighting_count = 0
-        for timestamp in sightings.values_list("timestamp", flat=True).iterator(chunk_size=1000):
-            sighting_count += 1
+        for sighting_count, timestamp in enumerate(
+            sightings.values_list("timestamp", flat=True).iterator(chunk_size=1000), start=1
+        ):
             if sighting_count > MAX_SIGHTINGS_FOR_GAP_ANALYSIS:
                 break
             if prev_time is not None:

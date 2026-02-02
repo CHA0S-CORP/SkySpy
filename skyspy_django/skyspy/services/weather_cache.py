@@ -57,7 +57,7 @@ def _make_metar_key(station: str, hours: int = 2) -> str:
 
 def _make_metar_bbox_key(bbox: str, hours: int = 2) -> str:
     """Create a cache key for METAR bbox query."""
-    bbox_hash = hashlib.md5(bbox.encode()).hexdigest()[:12]
+    bbox_hash = hashlib.md5(bbox.encode(), usedforsecurity=False).hexdigest()[:12]
     return f"metar:bbox:{bbox_hash}:{hours}"
 
 
@@ -123,7 +123,7 @@ def _generate_pirep_id(pirep: dict) -> str:
         str(pirep.get("obsTime", "")),
     ]
     content = "|".join(parts)
-    return hashlib.md5(content.encode()).hexdigest()
+    return hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
 
 
 def _parse_pirep_time(pirep: dict) -> datetime | None:
@@ -580,7 +580,7 @@ def fetch_and_cache_tafs(bbox: str = "24,-130,50,-60", ttl: int = 1800) -> list[
     Returns:
         List of TAF data
     """
-    cache_key = f"taf:bbox:{hashlib.md5(bbox.encode()).hexdigest()[:12]}"
+    cache_key = f"taf:bbox:{hashlib.md5(bbox.encode(), usedforsecurity=False).hexdigest()[:12]}"
 
     # Check cache first
     cached = cache.get(cache_key)
@@ -627,7 +627,7 @@ def record_metar_api_request(success: bool = True):
 
 def _make_aviation_cache_key(data_type: str, bbox: str) -> str:
     """Create a cache key for aviation data by type and bounding box."""
-    bbox_hash = hashlib.md5(bbox.encode()).hexdigest()[:12]
+    bbox_hash = hashlib.md5(bbox.encode(), usedforsecurity=False).hexdigest()[:12]
     return f"aviation:{data_type}:{bbox_hash}"
 
 

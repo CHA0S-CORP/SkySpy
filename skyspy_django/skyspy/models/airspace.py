@@ -67,11 +67,12 @@ class AirspaceAdvisory(models.Model):
         return f"{self.advisory_type} {self.hazard or ''} - {self.advisory_id}"
 
     def clean(self):
-        if self.lower_alt_ft is not None and self.upper_alt_ft is not None:
-            if self.upper_alt_ft < self.lower_alt_ft:
-                raise ValidationError(
-                    {"upper_alt_ft": "Upper altitude must be greater than or equal to lower altitude"}
-                )
+        if (
+            self.lower_alt_ft is not None
+            and self.upper_alt_ft is not None
+            and self.upper_alt_ft < self.lower_alt_ft
+        ):
+            raise ValidationError({"upper_alt_ft": "Upper altitude must be greater than or equal to lower altitude"})
 
 
 class AirspaceBoundary(models.Model):

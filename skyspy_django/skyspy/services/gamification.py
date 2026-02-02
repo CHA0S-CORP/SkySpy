@@ -513,9 +513,8 @@ class GamificationService:
             elif pattern["pattern_type"] == "exact":
                 if registration.upper() == pattern["pattern"].upper():
                     return pattern
-            elif pattern["pattern_type"] == "regex":
-                if re.match(pattern["pattern"], registration, re.IGNORECASE):
-                    return pattern
+            elif pattern["pattern_type"] == "regex" and re.match(pattern["pattern"], registration, re.IGNORECASE):
+                return pattern
 
         return None
 
@@ -524,18 +523,8 @@ class GamificationService:
         patterns = self._get_notable_callsigns()
 
         for pattern in patterns:
-            if pattern["pattern_type"] == "prefix":
-                if callsign.upper().startswith(pattern["pattern"].upper()):
-                    return pattern
-            elif pattern["pattern_type"] == "contains":
-                if pattern["pattern"].upper() in callsign.upper():
-                    return pattern
-            elif pattern["pattern_type"] == "exact":
-                if callsign.upper() == pattern["pattern"].upper():
-                    return pattern
-            elif pattern["pattern_type"] == "regex":
-                if re.match(pattern["pattern"], callsign, re.IGNORECASE):
-                    return pattern
+            if pattern["pattern_type"] == "prefix" and callsign.upper().startswith(pattern["pattern"].upper()) or pattern["pattern_type"] == "contains" and pattern["pattern"].upper() in callsign.upper() or pattern["pattern_type"] == "exact" and callsign.upper() == pattern["pattern"].upper() or pattern["pattern_type"] == "regex" and re.match(pattern["pattern"], callsign, re.IGNORECASE):
+                return pattern
 
         return None
 
@@ -823,19 +812,20 @@ class GamificationService:
                 spotted.total_positions += session.total_positions or 0
 
                 # Update maximums
-                if session.max_distance_nm:
-                    if spotted.max_distance_nm is None or session.max_distance_nm > spotted.max_distance_nm:
-                        spotted.max_distance_nm = session.max_distance_nm
-                if session.max_altitude:
-                    if spotted.max_altitude is None or session.max_altitude > spotted.max_altitude:
-                        spotted.max_altitude = session.max_altitude
+                if session.max_distance_nm and (
+                    spotted.max_distance_nm is None or session.max_distance_nm > spotted.max_distance_nm
+                ):
+                    spotted.max_distance_nm = session.max_distance_nm
+                if session.max_altitude and (
+                    spotted.max_altitude is None or session.max_altitude > spotted.max_altitude
+                ):
+                    spotted.max_altitude = session.max_altitude
 
                 # Update info if we have it now but didn't before
-                if aircraft_info:
-                    if not spotted.registration:
-                        spotted.registration = aircraft_info.registration
-                    if not spotted.operator:
-                        spotted.operator = aircraft_info.operator
+                if aircraft_info and not spotted.registration:
+                    spotted.registration = aircraft_info.registration
+                if aircraft_info and not spotted.operator:
+                    spotted.operator = aircraft_info.operator
 
                 spotted.save()
 

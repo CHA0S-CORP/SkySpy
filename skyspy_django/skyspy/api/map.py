@@ -178,7 +178,7 @@ class MapViewSet(viewsets.ViewSet):
 
         # Convert clusters to list
         result = []
-        for key, cluster in clusters.items():
+        for _key, cluster in clusters.items():
             if len(cluster["aircraft"]) == 1:
                 # Single aircraft - don't cluster
                 unclustered.append(cluster["aircraft"][0])

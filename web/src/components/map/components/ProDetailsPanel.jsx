@@ -3,12 +3,50 @@ import {
   Plane, AlertTriangle, Zap, X, ExternalLink, Crosshair, Pin, PinOff,
   Radio, TrendingUp, MapPin, Signal, Building2, Radar, RefreshCw,
   ArrowUpRight, ArrowDownRight, ArrowRight, LocateFixed, BellPlus,
-  ChevronDown, Image, LineChart
+  ChevronDown, Image, LineChart, Loader2, Check
 } from 'lucide-react';
 import { getTailInfo, getCategoryName, windDirToCardinal } from '../../../utils';
 import { getSeverityClass, getEventTypeName } from './ConflictBanner';
 import { CollapsibleSection } from '../../ui';
 import { PrimaryMetrics, SecondaryMetrics } from '../../ui/metric-card';
+
+/**
+ * Create an alert rule for a specific aircraft via WebSocket
+ */
+async function createQuickAlertRule(wsRequest, type, value, displayName) {
+  const payload = {
+    name: `Alert for ${displayName}`,
+    description: `Quick alert created for ${type === 'callsign' ? 'callsign' : 'registration'} ${value}`,
+    priority: 'info',
+    enabled: true,
+    conditions: {
+      logic: 'AND',
+      groups: [{
+        logic: 'AND',
+        conditions: [{
+          type,
+          operator: 'eq',
+          value,
+        }]
+      }]
+    },
+    cooldown: 300,
+    starts_at: null,
+    expires_at: null,
+    notification_channel_ids: [],
+    use_global_notifications: true,
+    // Legacy fields for compatibility
+    type,
+    operator: 'eq',
+    value,
+  };
+
+  const result = await wsRequest('alert-rule-create', payload);
+  if (result?.error) {
+    throw new Error(result.error);
+  }
+  return result;
+}
 
 // Helper to safely parse JSON from fetch response
 const safeJson = async (res) => {
@@ -184,8 +222,44 @@ const AircraftIdentity = memo(function AircraftIdentity({
   isEmergency,
   error,
   onClearError,
+  wsRequest,
+  wsConnected,
+  onToast,
 }) {
   const info = aircraftInfo[aircraft.hex];
+  const [creatingAlert, setCreatingAlert] = useState(null); // 'callsign' | 'registration' | null
+  const [createdAlerts, setCreatedAlerts] = useState({}); // Track which alerts were created
+
+  const handleCreateAlert = useCallback(async (type, value, displayName) => {
+    if (!wsRequest || !wsConnected) {
+      onToast?.('Not connected to server', 'error');
+      return;
+    }
+
+    // Check if already created
+    const key = `${type}:${value}`;
+    if (createdAlerts[key]) {
+      onToast?.(`Alert for ${displayName} already exists`, 'info');
+      return;
+    }
+
+    setCreatingAlert(type);
+    try {
+      await createQuickAlertRule(wsRequest, type, value, displayName);
+      setCreatedAlerts(prev => ({ ...prev, [key]: true }));
+      onToast?.(`Alert created for ${displayName}`, 'success');
+    } catch (err) {
+      console.error('Failed to create alert:', err);
+      onToast?.(err.message || 'Failed to create alert', 'error');
+    } finally {
+      setCreatingAlert(null);
+    }
+  }, [wsRequest, wsConnected, onToast, createdAlerts]);
+
+  const callsign = aircraft.flight?.trim();
+  const registration = tailInfo.tailNumber;
+  const callsignKey = `callsign:${callsign}`;
+  const registrationKey = `registration:${registration}`;
 
   return (
     <div className="pro-panel-header" role="region" aria-label="Aircraft identification">
@@ -241,30 +315,38 @@ const AircraftIdentity = memo(function AircraftIdentity({
 
       {/* Quick Alert Actions */}
       <div className="pro-quick-alerts">
-        {aircraft.flight?.trim() && (
+        {callsign && (
           <button
-            className="pro-alert-btn"
-            onClick={() => {
-              console.log('Add alert for callsign:', aircraft.flight?.trim());
-              alert(`Alert added for callsign: ${aircraft.flight?.trim()}`);
-            }}
-            title={`Add alert for ${aircraft.flight?.trim()}`}
+            className={`pro-alert-btn ${createdAlerts[callsignKey] ? 'created' : ''}`}
+            onClick={() => handleCreateAlert('callsign', callsign, callsign)}
+            disabled={creatingAlert !== null || createdAlerts[callsignKey]}
+            title={createdAlerts[callsignKey] ? `Alert exists for ${callsign}` : `Add alert for ${callsign}`}
           >
-            <BellPlus size={14} aria-hidden="true" />
-            <span>Alert {aircraft.flight?.trim()}</span>
+            {creatingAlert === 'callsign' ? (
+              <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+            ) : createdAlerts[callsignKey] ? (
+              <Check size={14} aria-hidden="true" />
+            ) : (
+              <BellPlus size={14} aria-hidden="true" />
+            )}
+            <span>{createdAlerts[callsignKey] ? 'Alert Set' : `Alert ${callsign}`}</span>
           </button>
         )}
-        {tailInfo.tailNumber && (
+        {registration && (
           <button
-            className="pro-alert-btn"
-            onClick={() => {
-              console.log('Add alert for tail:', tailInfo.tailNumber);
-              alert(`Alert added for tail: ${tailInfo.tailNumber}`);
-            }}
-            title={`Add alert for ${tailInfo.tailNumber}`}
+            className={`pro-alert-btn ${createdAlerts[registrationKey] ? 'created' : ''}`}
+            onClick={() => handleCreateAlert('registration', registration, registration)}
+            disabled={creatingAlert !== null || createdAlerts[registrationKey]}
+            title={createdAlerts[registrationKey] ? `Alert exists for ${registration}` : `Add alert for ${registration}`}
           >
-            <BellPlus size={14} aria-hidden="true" />
-            <span>Alert {tailInfo.tailNumber}</span>
+            {creatingAlert === 'registration' ? (
+              <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+            ) : createdAlerts[registrationKey] ? (
+              <Check size={14} aria-hidden="true" />
+            ) : (
+              <BellPlus size={14} aria-hidden="true" />
+            )}
+            <span>{createdAlerts[registrationKey] ? 'Alert Set' : `Alert ${registration}`}</span>
           </button>
         )}
       </div>
@@ -522,6 +604,7 @@ export function ProDetailsPanel({
   clearAircraftError,
   wsRequest,
   wsConnected,
+  onToast,
   altProfileCanvasRef,
   speedProfileCanvasRef,
   vsProfileCanvasRef,
@@ -638,6 +721,9 @@ export function ProDetailsPanel({
         isEmergency={isEmergency}
         error={getAircraftError(liveAircraft.hex)}
         onClearError={() => clearAircraftError(liveAircraft.hex)}
+        wsRequest={wsRequest}
+        wsConnected={wsConnected}
+        onToast={onToast}
       />
 
       {/* Primary Metrics - Always visible */}

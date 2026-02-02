@@ -3,14 +3,14 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
   Plane, Radio, MapPin, Activity, Clock, Filter, ChevronUp, ChevronDown,
-  ChevronLeft, ChevronRight, X, Eye, EyeOff, Settings, Trash2, Plus, Shield, 
-  Bell, Database, Zap, RefreshCw, TestTube2, AlertTriangle, BarChart3, History, 
+  ChevronLeft, ChevronRight, X, Eye, EyeOff, Settings, Trash2, Plus, Shield,
+  Bell, Database, Zap, RefreshCw, TestTube2, AlertTriangle, BarChart3, History,
   Map as MapIcon, Radar, Moon, Sun, BellRing, BellOff, Layers, ExternalLink,
   Ship, Radio as RadioIcon, LayoutDashboard, LineChart, MessageSquare, Anchor,
   Wind, Snowflake, CloudRain, Thermometer, Navigation, Info, HelpCircle, Compass,
   Volume2, VolumeX, Check, Menu, Search, Signal, Crosshair, BellPlus, TrendingUp, TrendingDown, Minus,
   ArrowUpRight, ArrowDownRight, ArrowRight, LocateFixed, Maximize2, Minimize2, Pin, PinOff, MessageCircle,
-  Camera, Calendar, Building2, Flag, Hash, Wifi, WifiOff
+  Camera, Calendar, Building2, Flag, Hash, Wifi, WifiOff, Loader2
 } from 'lucide-react';
 
 // Import utilities
@@ -33,6 +33,7 @@ const safeJson = async (res) => {
 // Import AircraftDetailPage
 import { AircraftDetailPage } from '../aircraft/AircraftDetailPage';
 import { useAircraftInfo } from '../../hooks/useAircraftInfo';
+import { useToastContextSafe } from '../../hooks/useToast';
 
 // Phase 5.1: Pro Radar Theme Color Presets
 const PRO_THEME_COLORS = {
@@ -214,6 +215,65 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     getAirframeError,
     clearAirframeError,
   });
+
+  // Toast context for notifications (gracefully handles if not in provider)
+  const toastContext = useToastContextSafe();
+
+  // Quick alert creation state for pro panel
+  const [quickAlertLoading, setQuickAlertLoading] = useState(null); // 'callsign' | 'registration' | null
+  const [quickAlertsCreated, setQuickAlertsCreated] = useState({}); // Track created alerts
+
+  // Create quick alert rule helper
+  const createQuickAlert = useCallback(async (type, value, displayName) => {
+    if (!wsRequest || !wsConnected) {
+      console.warn('[Quick Alert] Not connected to server');
+      toastContext?.error?.('Not connected to server');
+      return;
+    }
+
+    const key = `${type}:${value}`;
+    if (quickAlertsCreated[key]) {
+      console.info(`[Quick Alert] Alert for ${displayName} already exists`);
+      toastContext?.info?.(`Alert for ${displayName} already exists`);
+      return;
+    }
+
+    setQuickAlertLoading(type);
+    try {
+      const payload = {
+        name: `Alert for ${displayName}`,
+        description: `Quick alert created for ${type === 'callsign' ? 'callsign' : 'registration'} ${value}`,
+        priority: 'info',
+        enabled: true,
+        conditions: {
+          logic: 'AND',
+          groups: [{
+            logic: 'AND',
+            conditions: [{
+              type,
+              operator: 'eq',
+              value,
+            }]
+          }]
+        },
+        cooldown_minutes: 5,
+      };
+
+      const result = await wsRequest('alert-rule-create', payload);
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+
+      setQuickAlertsCreated(prev => ({ ...prev, [key]: true }));
+      console.info(`[Quick Alert] Alert created for ${displayName}`);
+      toastContext?.success?.(`Alert created for ${displayName}`);
+    } catch (err) {
+      console.error('[Quick Alert] Failed to create alert:', err);
+      toastContext?.error?.(err.message || 'Failed to create alert');
+    } finally {
+      setQuickAlertLoading(null);
+    }
+  }, [wsRequest, wsConnected, toastContext, quickAlertsCreated]);
   
   // Traffic filters state
   const [trafficFilters, setTrafficFilters] = useState(() => {
@@ -464,7 +524,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   // Sync map settings from URL hash params on mount
   const VALID_MODES = ['radar', 'crt', 'pro', 'map'];
   useEffect(() => {
-    let newConfig = { ...config };
+    const newConfig = { ...config };
     let configChanged = false;
 
     // Sync mode from URL
@@ -3499,7 +3559,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         
         // Calculate grid spacing based on range
         const degPerNm = 1/60;
-        let gridSpacingDeg = radarRange <= 30 ? 0.25 : radarRange <= 75 ? 0.5 : radarRange <= 150 ? 1 : 2;
+        const gridSpacingDeg = radarRange <= 30 ? 0.25 : radarRange <= 75 ? 0.5 : radarRange <= 150 ? 1 : 2;
         
         // Latitude lines (horizontal)
         const minGridLat = Math.floor((feederLat - radarRange * degPerNm) / gridSpacingDeg) * gridSpacingDeg;
@@ -4585,12 +4645,61 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       // Performance: Skip trails entirely when > 150 aircraft
       if (showShortTracks && overlays.aircraft && !perfMode.skipTrails) {
         ctx.save();
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
 
         // Performance: Limit trail length when > 100 aircraft
         const effectiveTrackLength = perfMode.reduceTrailLength ?
           Math.min(config.shortTrackLength || 15, 8) :
           (config.shortTrackLength || 15);
+
+        // Helper to get smooth altitude-based RGB color
+        const getAltitudeRGB = (alt) => {
+          if (!alt || alt <= 0) return { r: 50, g: 255, b: 100 }; // Ground level: bright green
+          // Smooth gradient: Green (0ft) -> Yellow (10000ft) -> Orange (25000ft) -> Red/Magenta (45000ft+)
+          const clampedAlt = Math.max(0, Math.min(alt, 45000));
+          if (clampedAlt < 10000) {
+            // Green to Yellow transition (0-10000ft)
+            const t = clampedAlt / 10000;
+            return {
+              r: Math.round(50 + 205 * t),
+              g: Math.round(255),
+              b: Math.round(100 - 100 * t)
+            };
+          } else if (clampedAlt < 25000) {
+            // Yellow to Orange transition (10000-25000ft)
+            const t = (clampedAlt - 10000) / 15000;
+            return {
+              r: Math.round(255),
+              g: Math.round(255 - 130 * t),
+              b: Math.round(0)
+            };
+          } else {
+            // Orange to Magenta transition (25000-45000ft)
+            const t = (clampedAlt - 25000) / 20000;
+            return {
+              r: Math.round(255),
+              g: Math.round(125 - 125 * t),
+              b: Math.round(0 + 255 * t)
+            };
+          }
+        };
+
+        // Target trail length in nm based on slider (5-60 positions maps to ~0.5-6nm)
+        const targetTrailNm = effectiveTrackLength * 0.1;
+
+        // Helper to calculate distance between two points in nm
+        const getSegmentDistanceNm = (lat1, lon1, lat2, lon2) => {
+          const R = 3440.065; // Earth radius in nm
+          const dLat = (lat2 - lat1) * Math.PI / 180;
+          const dLon = (lon2 - lon1) * Math.PI / 180;
+          const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          return R * c;
+        };
 
         sortedAircraft.forEach(ac => {
           if (!ac.hex || !ac.lat || !ac.lon) return;
@@ -4603,11 +4712,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           const historicPositions = shortTrackHistory[ac.hex] || [];
           const realtimePositions = trackHistory[ac.hex] || [];
 
-          // Merge: use historic for old data, realtime for recent
-          // Filter to keep only positions that would create ~5nm trail
+          // Merge and sort by time
           const now = Date.now();
-          const trackLength = effectiveTrackLength;
-          const maxAge = trackLength * 6000; // ~6 seconds per position
+          const maxAge = 300000; // 5 minutes max
           const allPositions = [
             ...historicPositions.filter(p => now - p.time < maxAge),
             ...realtimePositions.filter(p => now - p.time < maxAge)
@@ -4616,30 +4723,42 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           // Need at least 2 points to draw a line
           if (allPositions.length < 2) return;
 
-          // Keep only last N positions for short trail (configurable)
-          const positions = allPositions.slice(-trackLength);
+          // Select positions based on target distance (uniform length for all aircraft)
+          const positions = [];
+          let accumulatedDist = 0;
+          // Walk backward from most recent position
+          for (let i = allPositions.length - 1; i >= 0; i--) {
+            const p = allPositions[i];
+            if (positions.length === 0) {
+              positions.unshift(p);
+            } else {
+              const nextP = positions[0];
+              const segDist = getSegmentDistanceNm(p.lat, p.lon, nextP.lat, nextP.lon);
+              if (accumulatedDist + segDist <= targetTrailNm) {
+                positions.unshift(p);
+                accumulatedDist += segDist;
+              } else {
+                // Interpolate final point to hit exact target distance
+                const remaining = targetTrailNm - accumulatedDist;
+                const ratio = remaining / segDist;
+                const interpLat = nextP.lat + (p.lat - nextP.lat) * ratio;
+                const interpLon = nextP.lon + (p.lon - nextP.lon) * ratio;
+                const interpAlt = nextP.alt && p.alt ? nextP.alt + (p.alt - nextP.alt) * ratio : (p.alt || nextP.alt);
+                positions.unshift({ lat: interpLat, lon: interpLon, alt: interpAlt, time: p.time });
+                break;
+              }
+            }
+          }
+
+          // Need at least 2 points to draw
+          if (positions.length < 2) return;
 
           // Draw trail with fading opacity (older = more transparent)
           const isSelected = selectedAircraft?.hex === ac.hex;
 
-          // Helper to get altitude-based color (Phase 2.4)
-          const getAltitudeColor = (alt, opacity) => {
-            if (!showAltitudeTrails || !alt) return `rgba(255, 255, 255, ${opacity})`;
-            if (alt < 10000) {
-              // Low altitude: Green
-              return `rgba(100, 255, 150, ${opacity})`;
-            } else if (alt < 30000) {
-              // Medium altitude: Cyan
-              return `rgba(100, 220, 255, ${opacity})`;
-            } else {
-              // High altitude: Purple
-              return `rgba(200, 150, 255, ${opacity})`;
-            }
-          };
-
-          // Draw line segments with altitude coloring if enabled
-          if (showAltitudeTrails && isPro) {
-            // Draw individual segments with altitude-based colors
+          // Always draw altitude gradient in pro mode
+          if (isPro) {
+            // Draw individual segments with smooth altitude gradient
             for (let i = 1; i < positions.length; i++) {
               const p1 = positions[i - 1];
               const p2 = positions[i];
@@ -4649,20 +4768,27 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               if (pos1.x < -50 || pos1.x > width + 50 || pos1.y < -50 || pos1.y > height + 50) continue;
               if (pos2.x < -50 || pos2.x > width + 50 || pos2.y < -50 || pos2.y > height + 50) continue;
 
-              const segmentOpacity = (isSelected ? 0.4 : 0.25) + (i / positions.length) * 0.3;
+              // Create gradient for this segment
+              const gradient = ctx.createLinearGradient(pos1.x, pos1.y, pos2.x, pos2.y);
+              const opacity1 = (isSelected ? 0.5 : 0.3) + ((i - 1) / positions.length) * 0.5;
+              const opacity2 = (isSelected ? 0.5 : 0.3) + (i / positions.length) * 0.5;
+              const rgb1 = getAltitudeRGB(p1.alt);
+              const rgb2 = getAltitudeRGB(p2.alt);
+              gradient.addColorStop(0, `rgba(${rgb1.r}, ${rgb1.g}, ${rgb1.b}, ${opacity1})`);
+              gradient.addColorStop(1, `rgba(${rgb2.r}, ${rgb2.g}, ${rgb2.b}, ${opacity2})`);
+
               ctx.beginPath();
               ctx.moveTo(pos1.x, pos1.y);
               ctx.lineTo(pos2.x, pos2.y);
-              ctx.strokeStyle = getAltitudeColor(p2.alt, segmentOpacity);
+              ctx.strokeStyle = gradient;
               ctx.stroke();
             }
           } else {
-            // Standard white trail
-            const baseColor = 'rgba(255, 255, 255,';
+            // Standard white trail for non-pro mode
             ctx.beginPath();
             let started = false;
 
-            positions.forEach((point, i) => {
+            positions.forEach((point) => {
               const pos = latLonToScreen(point.lat, point.lon);
               if (pos.x < -50 || pos.x > width + 50 || pos.y < -50 || pos.y > height + 50) return;
 
@@ -4674,23 +4800,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               }
             });
 
-            // Use slightly brighter for selected aircraft
             const opacity = isSelected ? 0.6 : 0.35;
-            ctx.strokeStyle = `${baseColor} ${opacity})`;
+            ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
             ctx.stroke();
           }
-
-          // Draw small dots at each position for ATC-style display
-          positions.forEach((point, i) => {
-            const pos = latLonToScreen(point.lat, point.lon);
-            if (pos.x < -50 || pos.x > width + 50 || pos.y < -50 || pos.y > height + 50) return;
-
-            const dotOpacity = 0.15 + (i / positions.length) * 0.35;
-            ctx.beginPath();
-            ctx.arc(pos.x, pos.y, isPro ? 2 : 1.5, 0, Math.PI * 2);
-            ctx.fillStyle = getAltitudeColor(point.alt, dotOpacity);
-            ctx.fill();
-          });
         });
 
         ctx.restore();
@@ -5069,7 +5182,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
           if (dataBlockConfig.compact) {
             // Compact mode: single line with all enabled fields
-            let compactParts = [];
+            const compactParts = [];
             if (dataBlockConfig.showCallsign) compactParts.push(callsign);
             if (dataBlockConfig.showSpeed) compactParts.push(`${speed}kts`);
             if (dataBlockConfig.showAltitude) compactParts.push(`FL${altitude}`);
@@ -5089,7 +5202,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             }
 
             // Line 2: Speed and Altitude (combined if both enabled)
-            let line2Parts = [];
+            const line2Parts = [];
             if (dataBlockConfig.showSpeed) line2Parts.push(`${speed}kts`);
             if (dataBlockConfig.showAltitude) line2Parts.push(altitude);
             if (line2Parts.length > 0) {
@@ -8439,34 +8552,51 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             </div>
             {/* Quick Alert Actions */}
             <div className="pro-quick-alerts">
-              {liveAircraft.flight?.trim() && (
-                <button
-                  className="pro-alert-btn"
-                  onClick={() => {
-                    // Add callsign alert - this would integrate with your alerts system
-                    console.log('Add alert for callsign:', liveAircraft.flight?.trim());
-                    alert(`Alert added for callsign: ${liveAircraft.flight?.trim()}`);
-                  }}
-                  title={`Add alert for ${liveAircraft.flight?.trim()}`}
-                >
-                  <BellPlus size={12} />
-                  <span>Alert {liveAircraft.flight?.trim()}</span>
-                </button>
-              )}
-              {getTailInfo(liveAircraft.hex, liveAircraft.flight).tailNumber && (
-                <button
-                  className="pro-alert-btn"
-                  onClick={() => {
-                    const tail = getTailInfo(liveAircraft.hex, liveAircraft.flight).tailNumber;
-                    console.log('Add alert for tail:', tail);
-                    alert(`Alert added for tail: ${tail}`);
-                  }}
-                  title={`Add alert for ${getTailInfo(liveAircraft.hex, liveAircraft.flight).tailNumber}`}
-                >
-                  <BellPlus size={12} />
-                  <span>Alert {getTailInfo(liveAircraft.hex, liveAircraft.flight).tailNumber}</span>
-                </button>
-              )}
+              {liveAircraft.flight?.trim() && (() => {
+                const callsign = liveAircraft.flight.trim();
+                const callsignKey = `callsign:${callsign}`;
+                const isCreated = quickAlertsCreated[callsignKey];
+                return (
+                  <button
+                    className={`pro-alert-btn ${isCreated ? 'created' : ''}`}
+                    onClick={() => createQuickAlert('callsign', callsign, callsign)}
+                    disabled={quickAlertLoading !== null || isCreated}
+                    title={isCreated ? `Alert exists for ${callsign}` : `Add alert for ${callsign}`}
+                  >
+                    {quickAlertLoading === 'callsign' ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : isCreated ? (
+                      <Check size={12} />
+                    ) : (
+                      <BellPlus size={12} />
+                    )}
+                    <span>{isCreated ? 'Alert Set' : `Alert ${callsign}`}</span>
+                  </button>
+                );
+              })()}
+              {(() => {
+                const tail = getTailInfo(liveAircraft.hex, liveAircraft.flight).tailNumber;
+                if (!tail) return null;
+                const registrationKey = `registration:${tail}`;
+                const isCreated = quickAlertsCreated[registrationKey];
+                return (
+                  <button
+                    className={`pro-alert-btn ${isCreated ? 'created' : ''}`}
+                    onClick={() => createQuickAlert('registration', tail, tail)}
+                    disabled={quickAlertLoading !== null || isCreated}
+                    title={isCreated ? `Alert exists for ${tail}` : `Add alert for ${tail}`}
+                  >
+                    {quickAlertLoading === 'registration' ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : isCreated ? (
+                      <Check size={12} />
+                    ) : (
+                      <BellPlus size={12} />
+                    )}
+                    <span>{isCreated ? 'Alert Set' : `Alert ${tail}`}</span>
+                  </button>
+                );
+              })()}
             </div>
           </div>
 

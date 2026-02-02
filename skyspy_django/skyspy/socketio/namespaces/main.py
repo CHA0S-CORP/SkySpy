@@ -2253,7 +2253,6 @@ class MainNamespace(socketio.AsyncNamespace):
                     "enabled": rule.enabled,
                     "priority": rule.priority,
                     "conditions": rule.conditions,
-                    "actions": rule.actions,
                     "cooldown_minutes": rule.cooldown_minutes,
                     "created_at": rule.created_at.isoformat() if rule.created_at else None,
                     "updated_at": rule.updated_at.isoformat() if rule.updated_at else None,
@@ -2273,7 +2272,6 @@ class MainNamespace(socketio.AsyncNamespace):
             enabled=params.get("enabled", True),
             priority=params.get("priority", "info"),
             conditions=params.get("conditions", {}),
-            actions=params.get("actions", []),
             cooldown_minutes=params.get("cooldown_minutes", 5),
         )
         return {
@@ -2283,7 +2281,6 @@ class MainNamespace(socketio.AsyncNamespace):
             "enabled": rule.enabled,
             "priority": rule.priority,
             "conditions": rule.conditions,
-            "actions": rule.actions,
             "cooldown_minutes": rule.cooldown_minutes,
             "created_at": rule.created_at.isoformat() if rule.created_at else None,
         }
@@ -2314,9 +2311,6 @@ class MainNamespace(socketio.AsyncNamespace):
         if "conditions" in params:
             rule.conditions = params["conditions"]
             update_fields.append("conditions")
-        if "actions" in params:
-            rule.actions = params["actions"]
-            update_fields.append("actions")
         if "cooldown_minutes" in params:
             rule.cooldown_minutes = params["cooldown_minutes"]
             update_fields.append("cooldown_minutes")
@@ -2332,7 +2326,6 @@ class MainNamespace(socketio.AsyncNamespace):
             "enabled": rule.enabled,
             "priority": rule.priority,
             "conditions": rule.conditions,
-            "actions": rule.actions,
             "cooldown_minutes": rule.cooldown_minutes,
             "updated_at": rule.updated_at.isoformat() if rule.updated_at else None,
         }

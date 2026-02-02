@@ -56,10 +56,9 @@ class AuthModeMiddleware:
             # Everything is public, proceed
             return self.get_response(request)
 
-        elif self.auth_mode == "private":
+        elif self.auth_mode == "private" and not request.user.is_authenticated:
             # Everything requires authentication
-            if not request.user.is_authenticated:
-                return JsonResponse({"error": "Authentication required"}, status=401)
+            return JsonResponse({"error": "Authentication required"}, status=401)
 
         # For 'hybrid' mode, let the permission classes handle it
         return self.get_response(request)

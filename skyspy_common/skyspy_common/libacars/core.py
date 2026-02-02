@@ -154,7 +154,7 @@ def vstring_context() -> Generator[tuple[Any, str], None, None]:
     try:
         yield vstr, backend
     finally:
-        try:
+        import contextlib
+
+        with contextlib.suppress(Exception):
             local_lib.la_vstring_destroy(vstr, True)
-        except Exception:
-            pass  # Ignore cleanup errors (e.g., during interpreter shutdown)

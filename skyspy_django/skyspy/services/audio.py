@@ -1388,11 +1388,12 @@ def get_matched_radio_calls(
                 and af_callsign.upper() == callsign.upper()
                 or operator_icao
                 and af_airline_icao.upper() == operator_icao.upper()
+            ) or (
+                registration
+                and af_type == "general_aviation"
+                and af_callsign.upper() == registration.upper()
             ):
                 matched = True
-            elif registration and af_type == "general_aviation":
-                if af_callsign.upper() == registration.upper():
-                    matched = True
 
             if matched:
                 audio_url = get_audio_url(tx, signed=True)

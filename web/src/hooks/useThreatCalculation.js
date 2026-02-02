@@ -232,7 +232,7 @@ export function useThreatCalculation({
       }
 
       // Track position history for behavior detection
-      let behavior = { isCircling: false, isLoitering: false };
+      const behavior = { isCircling: false, isLoitering: false };
       if (ac.hex) {
         const history = threatHistoryRef.current.get(ac.hex) || [];
         history.push({ lat: ac.lat, lon: ac.lon, timestamp: Date.now() });

@@ -72,7 +72,7 @@ class Command(BaseCommand):
                 schedule_type = "crontab"
 
                 # Extract crontab values - handle celery's internal representation
-                def get_crontab_value(attr):
+                def get_crontab_value(attr, schedule=schedule):
                     val = getattr(schedule, attr, "*")
                     # Celery stores these as sets or special objects
                     if hasattr(val, "__iter__") and not isinstance(val, str):

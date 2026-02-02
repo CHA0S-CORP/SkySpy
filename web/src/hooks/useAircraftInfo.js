@@ -320,8 +320,8 @@ export function useAircraftInfo({
           try {
             // Django API: use /api/v1/airframes/bulk/?icao=A,B,C endpoint
             const icaoList = batch.join(',');
-            let res = await fetch(`${apiBaseUrl}/api/v1/airframes/bulk/?icao=${icaoList}`);
-            let data = await safeJson(res);
+            const res = await fetch(`${apiBaseUrl}/api/v1/airframes/bulk/?icao=${icaoList}`);
+            const data = await safeJson(res);
 
             // If that fails, try individual lookups for each ICAO
             if (!data || res.status === 400 || res.status === 404) {

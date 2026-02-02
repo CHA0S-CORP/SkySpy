@@ -523,8 +523,12 @@ def upgrade_aircraft_photo(icao_hex: str):
             logger.debug(f"HexDB photo check failed for {icao}: {e}")
 
         # If no hexdb photo and we have a planespotters URL without page link, get page link
-        if not new_photo_url and not photo_page_link and old_photo_url:
-            if "plnspttrs.net" in old_photo_url or photo_source == "planespotters.net":
+        if (
+            not new_photo_url
+            and not photo_page_link
+            and old_photo_url
+            and ("plnspttrs.net" in old_photo_url or photo_source == "planespotters.net")
+        ):
                 try:
                     ps_url = f"https://api.planespotters.net/pub/photos/hex/{icao}"
                     response = httpx.get(ps_url, timeout=10.0)
@@ -790,7 +794,7 @@ def update_cached_photo_set():
         # This task is mainly for local filesystem caching
         return {"cached": 0, "s3_mode": True}
 
-    cache_dir = Path(getattr(settings, "PHOTO_CACHE_DIR", "/tmp/photo_cache"))
+    cache_dir = Path(getattr(settings, "PHOTO_CACHE_DIR", "/tmp/photo_cache"))  # nosec B108
     if not cache_dir.exists():
         cache.set("cached_photo_icaos", [], timeout=600)
         return {"cached": 0, "dir_missing": True}

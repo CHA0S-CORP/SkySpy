@@ -95,12 +95,12 @@ class Command(BaseCommand):
             logger.info("Received shutdown signal")
             stop_event.set()
 
+        import contextlib
+
         for sig in (signal.SIGINT, signal.SIGTERM):
-            try:
-                loop.add_signal_handler(sig, signal_handler)
-            except NotImplementedError:
+            with contextlib.suppress(NotImplementedError):
                 # Windows doesn't support add_signal_handler
-                pass
+                loop.add_signal_handler(sig, signal_handler)
 
         # Start the service
         await acars_service.start(acars_port=acars_port, vdlm2_port=vdlm2_port)

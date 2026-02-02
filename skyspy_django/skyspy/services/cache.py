@@ -164,7 +164,7 @@ _rate_limit_lock = threading.Lock()
 def generate_cache_key(*args, **kwargs) -> str:
     """Generate MD5-based cache key from arguments."""
     key_data = str(args) + str(sorted(kwargs.items()))
-    return hashlib.md5(key_data.encode()).hexdigest()
+    return hashlib.md5(key_data.encode(), usedforsecurity=False).hexdigest()
 
 
 def get_from_memory_cache(key: str) -> tuple[bool, Any]:

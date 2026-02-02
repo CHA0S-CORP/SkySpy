@@ -378,7 +378,7 @@ class MetricsView(APIView):
 
         try:
             from django.http import HttpResponse
-            from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
+            from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
             # Get standard prometheus metrics
             metrics_output = generate_latest().decode("utf-8")

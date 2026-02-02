@@ -209,11 +209,9 @@ class UserCreateSerializer(serializers.ModelSerializer):
         for role_id in role_ids:
             try:
                 role = Role.objects.get(id=role_id)
-                # Check if the requesting user can assign this role
-                if self._can_assign_role(role):
-                    # Check if this role assignment already exists (to avoid duplicates)
-                    if not UserRole.objects.filter(user=user, role=role).exists():
-                        UserRole.objects.create(user=user, role=role)
+                # Check if the requesting user can assign this role and assignment doesn't exist
+                if self._can_assign_role(role) and not UserRole.objects.filter(user=user, role=role).exists():
+                    UserRole.objects.create(user=user, role=role)
             except Role.DoesNotExist:
                 pass
 

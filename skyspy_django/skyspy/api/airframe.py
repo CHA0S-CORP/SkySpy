@@ -61,7 +61,7 @@ class PhotoServeView(APIView):
         if not photo_path.exists() or photo_path.stat().st_size == 0:
             raise Http404("Photo not found")
 
-        response = FileResponse(open(photo_path, "rb"), content_type="image/jpeg")
+        response = FileResponse(open(photo_path, "rb"), content_type="image/jpeg")  # noqa: SIM115
         response["Cache-Control"] = "public, max-age=86400"  # 1 day cache
         return response
 

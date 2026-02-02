@@ -218,7 +218,7 @@ def calculate_acars_airline_stats(hours: int = 24, limit: int = 20) -> dict:
 
     # Convert to list and sort
     airlines = []
-    for key, data in airline_stats.items():
+    for _key, data in airline_stats.items():
         airlines.append(
             {
                 "airline_icao": data["icao"],

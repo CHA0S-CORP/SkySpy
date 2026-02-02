@@ -185,11 +185,7 @@ def fetch_with_retry(url: str, timeout: float = 60, stream: bool = False, **kwar
         httpx.HTTPStatusError: If the request fails after all retries
     """
     with httpx.Client(timeout=timeout, follow_redirects=True, **kwargs) as client:
-        if stream:
-            # For streaming, we return the response and caller must handle it
-            response = client.get(url)
-        else:
-            response = client.get(url)
+        response = client.get(url)
         response.raise_for_status()
         return response
 
@@ -215,12 +211,14 @@ def stream_with_retry(
         httpx.HTTPStatusError: If the request fails after all retries
     """
     target_path.parent.mkdir(parents=True, exist_ok=True)
-    with httpx.Client(timeout=timeout, follow_redirects=True, **kwargs) as client:
-        with client.stream("GET", url) as response:
-            response.raise_for_status()
-            with open(target_path, "wb") as f:
-                for chunk in response.iter_bytes(chunk_size=chunk_size):
-                    f.write(chunk)
+    with (
+        httpx.Client(timeout=timeout, follow_redirects=True, **kwargs) as client,
+        client.stream("GET", url) as response,
+    ):
+        response.raise_for_status()
+        with open(target_path, "wb") as f:
+            for chunk in response.iter_bytes(chunk_size=chunk_size):
+                f.write(chunk)
     return target_path
 
 
