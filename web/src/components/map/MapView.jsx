@@ -4636,8 +4636,9 @@ function MapView({
             });
           }
           // Draw simple radius circle (when only radius_nm is provided)
-          else if (as.radius_nm && as.center) {
-            const pos = latLonToScreen(as.center.lat, as.center.lon);
+          else if (as.radius_nm && (as.center || (as.center_lat && as.center_lon))) {
+            const asCenter = as.center || { lat: as.center_lat, lon: as.center_lon };
+            const pos = latLonToScreen(asCenter.lat, asCenter.lon);
             const pixelsPerNm = isPro
               ? (Math.min(width, height) * 0.45) / radarRange
               : maxRadius / radarRange;
