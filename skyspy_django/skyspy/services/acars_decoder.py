@@ -101,14 +101,44 @@ MESSAGE_LABELS = {
 
 
 def find_airline_by_icao(icao_code: str) -> tuple[str, str]:
-    """Look up airline by ICAO code. Returns (iata_code, name) or (icao_code, 'Unknown Airline')."""
+    """
+    Look up airline by ICAO code. Returns (iata_code, name) or (icao_code, 'Unknown Airline').
+
+    First checks the cached database (from OpenFlights), then falls back to hardcoded dictionary.
+    """
+    # Try database lookup first (from OpenFlights data)
+    try:
+        from skyspy.services.openflights import get_airline_by_icao
+
+        airline = get_airline_by_icao(icao_code)
+        if airline:
+            return (airline.get("iata_code") or icao_code, airline.get("name", "Unknown Airline"))
+    except Exception:
+        pass  # Fall back to hardcoded dictionary
+
+    # Fallback to hardcoded dictionary
     if icao_code in ICAO_TO_AIRLINE:
         return ICAO_TO_AIRLINE[icao_code]
     return (icao_code, "Unknown Airline")
 
 
 def find_airline_by_iata(iata_code: str) -> tuple[str, str]:
-    """Look up airline by IATA code. Returns (icao_code, name) or (iata_code, 'Unknown Airline')."""
+    """
+    Look up airline by IATA code. Returns (icao_code, name) or (iata_code, 'Unknown Airline').
+
+    First checks the cached database (from OpenFlights), then falls back to hardcoded dictionary.
+    """
+    # Try database lookup first (from OpenFlights data)
+    try:
+        from skyspy.models.notams import CachedAirline
+
+        airline = CachedAirline.objects.filter(iata_code__iexact=iata_code).first()
+        if airline:
+            return (airline.icao_code, airline.name)
+    except Exception:
+        pass  # Fall back to hardcoded dictionary
+
+    # Fallback to hardcoded dictionary
     if iata_code in IATA_TO_AIRLINE:
         return IATA_TO_AIRLINE[iata_code]
     return (iata_code, "Unknown Airline")

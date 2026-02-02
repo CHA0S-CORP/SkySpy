@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 @shared_task(bind=True, max_retries=3)
 def refresh_all_geodata(self):
     """
-    Refresh all geographic data (airports, navaids, GeoJSON).
+    Refresh all geographic data (airports, navaids, GeoJSON, airlines, aircraft types).
 
     Runs daily at 3 AM.
     """
@@ -29,9 +29,16 @@ def refresh_all_geodata(self):
     logger.info("Starting geographic data refresh")
 
     try:
-        from skyspy.services import geodata
+        from skyspy.services import geodata, openflights
 
         results = geodata.refresh_all_geodata()
+
+        # Also refresh OpenFlights data (airlines and aircraft types) if stale
+        if openflights.should_refresh():
+            openflights_results = openflights.refresh_all_openflights_data()
+            results["airlines"] = openflights_results.get("airlines", 0)
+            results["aircraft_types"] = openflights_results.get("aircraft_types", 0)
+
         logger.info(f"Geographic data refresh complete: {results}")
 
         # Broadcast update to WebSocket clients via Socket.IO
@@ -130,15 +137,25 @@ def check_and_refresh_geodata():
     Runs every hour.
     """
     try:
-        from skyspy.services import geodata
+        from skyspy.services import geodata, openflights
+
+        refreshed = False
 
         if geodata.should_refresh():
             logger.info("Geographic data is stale, triggering refresh")
             refresh_all_geodata.delay()
-            return True
-        else:
+            refreshed = True
+
+        # Also check OpenFlights data (airlines/aircraft types)
+        if openflights.should_refresh():
+            logger.info("OpenFlights data is stale, triggering refresh")
+            refresh_openflights_data.delay()
+            refreshed = True
+
+        if not refreshed:
             logger.debug("Geographic data is fresh")
-            return False
+
+        return refreshed
 
     except Exception as e:
         logger.error(f"Error checking geodata freshness: {e}")

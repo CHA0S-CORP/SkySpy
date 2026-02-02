@@ -435,7 +435,7 @@ func TestCallbackServer_Stop(t *testing.T) {
 
 	// Verify server is stopped (connection should be refused)
 	client := &http.Client{Timeout: 500 * time.Millisecond}
-	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/", port))
+	resp, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/", port))
 	if resp != nil {
 		resp.Body.Close()
 	}

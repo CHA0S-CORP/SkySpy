@@ -151,6 +151,16 @@ app.conf.beat_schedule = {
         "task": "skyspy.tasks.geodata.cleanup_old_pireps",
         "schedule": 3600.0,  # 1 hour
     },
+    # OpenFlights data refresh (airlines and aircraft types) - weekly on Sundays at 4 AM UTC
+    "refresh-openflights-weekly": {
+        "task": "skyspy.tasks.geodata.refresh_openflights_data",
+        "schedule": crontab(hour=4, minute=0, day_of_week="sunday"),
+    },
+    # Check and refresh OpenFlights data if stale - every 6 hours
+    "check-openflights-freshness-every-6h": {
+        "task": "skyspy.tasks.geodata.check_and_refresh_openflights",
+        "schedule": 21600.0,  # 6 hours
+    },
     # PIREP refresh - every 10 minutes
     "refresh-pireps-every-10m": {
         "task": "skyspy.tasks.geodata.refresh_pireps",

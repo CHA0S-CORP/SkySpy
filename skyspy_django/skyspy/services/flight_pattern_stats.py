@@ -494,6 +494,21 @@ def calculate_duration_by_type(hours: int = 24, limit: int = 25) -> list:
         AircraftInfo.objects.filter(type_code__in=type_codes).values_list("type_code", "type_name").distinct()[:100]
     )
 
+    # Also check CachedAircraftType from OpenFlights for missing type names
+    missing_codes = [code for code in type_codes if not type_names.get(code)]
+    if missing_codes:
+        try:
+            from skyspy.models.notams import CachedAircraftType
+
+            cached_types = CachedAircraftType.objects.filter(icao_code__in=missing_codes).values_list(
+                "icao_code", "name"
+            )
+            for icao_code, name in cached_types:
+                if icao_code not in type_names:
+                    type_names[icao_code] = name
+        except Exception:
+            pass  # Silently ignore if table doesn't exist
+
     for item in result:
         item["type_name"] = type_names.get(item["aircraft_type"])
 
@@ -549,6 +564,26 @@ def calculate_common_aircraft_types(hours: int = 24, limit: int = 30) -> list:
     ):
         if info["type_code"] not in type_info:
             type_info[info["type_code"]] = {"type_name": info["type_name"], "manufacturer": info["manufacturer"]}
+
+    # Also check CachedAircraftType from OpenFlights for missing type names
+    missing_codes = [code for code in type_codes if code not in type_info or not type_info[code].get("type_name")]
+    if missing_codes:
+        try:
+            from skyspy.models.notams import CachedAircraftType
+
+            cached_types = CachedAircraftType.objects.filter(icao_code__in=missing_codes).values(
+                "icao_code", "name", "manufacturer"
+            )
+            for cached in cached_types:
+                icao_code = cached["icao_code"]
+                if icao_code not in type_info:
+                    type_info[icao_code] = {}
+                if not type_info[icao_code].get("type_name"):
+                    type_info[icao_code]["type_name"] = cached["name"]
+                if not type_info[icao_code].get("manufacturer"):
+                    type_info[icao_code]["manufacturer"] = cached["manufacturer"]
+        except Exception:
+            pass  # Silently ignore if table doesn't exist
 
     for item in result:
         info = type_info.get(item["type_code"], {})

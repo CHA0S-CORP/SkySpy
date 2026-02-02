@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, memo } from 'react';
-import { Layers, X, Radio, Plane, Cloud, AlertTriangle, MapPin, Wind } from 'lucide-react';
+import { Layers, X, Radio, Plane, Cloud, AlertTriangle, MapPin, Wind, FileWarning } from 'lucide-react';
 
 /**
  * Menu for toggling aviation data overlays
@@ -115,6 +115,16 @@ export const OverlayMenu = memo(function OverlayMenu({
             <input type="checkbox" checked={overlays.tfrs} onChange={() => handleToggle('tfrs')} />
             <AlertTriangle size={14} />
             <span>TFRs</span>
+          </label>
+
+          <label className="overlay-toggle">
+            <input
+              type="checkbox"
+              checked={overlays.notams}
+              onChange={() => handleToggle('notams')}
+            />
+            <FileWarning size={14} />
+            <span>NOTAMs</span>
           </label>
         </div>
 

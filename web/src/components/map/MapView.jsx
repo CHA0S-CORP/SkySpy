@@ -77,6 +77,7 @@ import {
   Wifi,
   WifiOff,
   Loader2,
+  FileWarning,
 } from 'lucide-react';
 
 // Import utilities
@@ -4725,6 +4726,98 @@ function MapView({
               ctx.fillText(`${lower}-${upper}`, labelPos.x, labelPos.y + 14);
             }
             ctx.setLineDash([6, 4]);
+          }
+        });
+
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+
+      // Draw NOTAMs when overlay enabled (Pro mode)
+      if (overlays.notams && mapNotams?.length > 0 && isPro) {
+        ctx.save();
+
+        mapNotams.forEach((notam) => {
+          // Skip NOTAMs without location data
+          if (!notam.latitude || !notam.longitude) return;
+
+          const pos = latLonToScreen(notam.latitude, notam.longitude);
+          if (pos.x < -50 || pos.x > width + 50 || pos.y < -50 || pos.y > height + 50) return;
+
+          // Get color from NOTAM type
+          const typeConfig = NOTAM_TYPE_CONFIG[notam.type] || { color: '#6b7280' };
+          const isSelected = selectedNotamId === (notam.notam_id || notam.id);
+          const isAck = acknowledgedNotams?.has(notam.notam_id || notam.id);
+          const isTfr = notam.type === 'TFR';
+
+          // Dimmed if acknowledged
+          const baseAlpha = isAck ? 0.3 : 0.8;
+
+          // Calculate radius in pixels (if radius_nm is available)
+          const pixelsPerNm = (Math.min(width, height) * 0.45) / radarRange;
+          const radiusPx = notam.radius_nm ? notam.radius_nm * pixelsPerNm : 12;
+
+          // Draw circle/radius for NOTAM
+          ctx.strokeStyle = isSelected
+            ? typeConfig.color
+            : `${typeConfig.color}${Math.round(baseAlpha * 255)
+                .toString(16)
+                .padStart(2, '0')}`;
+          ctx.fillStyle = `${typeConfig.color}${Math.round(baseAlpha * 0.2 * 255)
+            .toString(16)
+            .padStart(2, '0')}`;
+          ctx.lineWidth = isSelected ? 2.5 : isTfr ? 2 : 1.5;
+
+          // TFRs get dashed lines, others solid
+          if (isTfr) {
+            ctx.setLineDash([6, 3]);
+          } else {
+            ctx.setLineDash([]);
+          }
+
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, Math.max(radiusPx, 8), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // Draw NOTAM marker icon
+          ctx.fillStyle = typeConfig.color;
+          ctx.beginPath();
+          ctx.moveTo(pos.x, pos.y - 6);
+          ctx.lineTo(pos.x - 4, pos.y + 4);
+          ctx.lineTo(pos.x + 4, pos.y + 4);
+          ctx.closePath();
+          ctx.fill();
+
+          // Draw label for selected or TFR NOTAMs
+          if (isSelected || isTfr) {
+            ctx.setLineDash([]);
+            ctx.fillStyle = typeConfig.color;
+            ctx.font = isSelected
+              ? 'bold 11px "JetBrains Mono", monospace'
+              : '10px "JetBrains Mono", monospace';
+            ctx.textAlign = 'center';
+
+            // Show type and location
+            const label = isTfr ? 'TFR' : notam.type || 'NOTAM';
+            ctx.fillText(label, pos.x, pos.y - radiusPx - 8);
+
+            if (isSelected && notam.location) {
+              ctx.font = '9px "JetBrains Mono", monospace';
+              ctx.fillText(notam.location, pos.x, pos.y - radiusPx - 20);
+            }
+
+            // Show altitude info if available
+            if (isSelected && (notam.floor_ft != null || notam.ceiling_ft != null)) {
+              ctx.font = '9px "JetBrains Mono", monospace';
+              const altText =
+                notam.floor_ft != null && notam.ceiling_ft != null
+                  ? `${notam.floor_ft}-${notam.ceiling_ft}ft`
+                  : notam.ceiling_ft != null
+                    ? `≤${notam.ceiling_ft}ft`
+                    : `≥${notam.floor_ft}ft`;
+              ctx.fillText(altText, pos.x, pos.y + radiusPx + 14);
+            }
           }
         });
 
@@ -9559,6 +9652,19 @@ function MapView({
               )}
             </button>
             <button
+              className={`pro-header-btn ${showNotamPanel ? 'active' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowNotamPanel(!showNotamPanel);
+              }}
+              title="NOTAMs"
+            >
+              <FileWarning size={18} />
+              {notamUnacknowledgedCount > 0 && (
+                <span className="notam-badge">{notamUnacknowledgedCount}</span>
+              )}
+            </button>
+            <button
               className={`pro-header-btn ${showFilterMenu ? 'active' : ''}`}
               onClick={(e) => {
                 e.stopPropagation();
@@ -10424,6 +10530,37 @@ function MapView({
           setHazardFilter={setAdvisoryHazardFilter}
           selectedAdvisoryId={selectedAdvisoryId}
           unacknowledgedCount={advisoryUnacknowledgedCount}
+        />
+      )}
+
+      {/* NOTAM Panel */}
+      {config.mapMode === 'pro' && (
+        <NotamPanel
+          show={showNotamPanel}
+          onClose={() => setShowNotamPanel(false)}
+          notams={mapNotams}
+          loading={notamsLoading}
+          error={notamsError}
+          acknowledged={acknowledgedNotams}
+          onAcknowledge={acknowledgeNotam}
+          onUnacknowledge={unacknowledgeNotam}
+          onShowOnMap={(notam) => {
+            setSelectedNotamId(notam.notam_id || notam.id);
+            // Center map on NOTAM location if available
+            if (notam.latitude && notam.longitude) {
+              // Pan pro mode to show the NOTAM
+              if (setProPanOffset) {
+                const dx = (notam.longitude - feederLon) * 60; // rough nm conversion
+                const dy = (feederLat - notam.latitude) * 60;
+                setProPanOffset({ x: dx * 2, y: dy * 2 });
+              }
+            }
+          }}
+          onRefresh={refreshNotams}
+          typeFilter={notamTypeFilter}
+          setTypeFilter={setNotamTypeFilter}
+          selectedNotamId={selectedNotamId}
+          unacknowledgedCount={notamUnacknowledgedCount}
         />
       )}
 

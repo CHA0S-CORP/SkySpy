@@ -1,5 +1,5 @@
 ---
-title: Socket.IO Overview
+title: Realtime API
 slug: socketio-overview
 content:
   excerpt: >-
@@ -7,7 +7,7 @@ content:
     and capabilities
 ---
 
-# Socket.IO Overview
+# Realtime API
 
 > 📘 Real-time aviation data at your fingertips
 >
@@ -110,7 +110,7 @@ socket.on('response', (data) => {
 
 | Metric | Typical Value | Notes |
 |--------|---------------|-------|
-| **Latency** | <100ms | From receiver to client |
+| **Latency** | Under 100ms | From receiver to client |
 | **Update Frequency** | 10 Hz (aircraft) | Rate limited per topic |
 | **Batch Window** | ~200ms | Max 50 messages or 1MB |
 | **Reconnect Delay** | 1s-30s | Exponential backoff with jitter |
