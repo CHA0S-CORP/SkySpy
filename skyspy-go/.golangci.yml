@@ -24,9 +24,6 @@ output:
   # Print linter name in the end of issue text
   print-linter-name: true
 
-  # Make issues output unique by line
-  uniq-by-line: true
-
   # Sort results by: filepath, line and column
   sort-results: true
 
@@ -82,8 +79,6 @@ linters-settings:
       - (net/http.ResponseWriter).Write
 
   govet:
-    # Report about shadowed variables
-    check-shadowing: true
     # Enable all analyzers
     enable-all: true
     disable:
@@ -201,8 +196,6 @@ linters-settings:
     require-specific: true
 
   stylecheck:
-    # Select the Go version to target
-    go: "1.21"
     # Checks to enable
     checks:
       - "all"
