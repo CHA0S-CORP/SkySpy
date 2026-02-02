@@ -20,6 +20,13 @@ export function useReplayState({
   const replayMarkersRef = useRef({});
   const replayTracksRef = useRef({});
   const animationFrameRef = useRef({});
+  const abortControllersRef = useRef({});
+
+  // Ref to track latest replay state for animation callbacks (avoid stale closures)
+  const replayStateRef = useRef(replayState);
+  useEffect(() => {
+    replayStateRef.current = replayState;
+  }, [replayState]);
 
   // Get interpolated position along a track
   const getInterpolatedPosition = useCallback((track, percentage) => {
@@ -118,39 +125,64 @@ export function useReplayState({
       [eventKey]: !prev[eventKey]
     }));
 
+    // Cancel any pending fetch for this event
+    if (abortControllersRef.current[eventKey]) {
+      abortControllersRef.current[eventKey].abort();
+      delete abortControllersRef.current[eventKey];
+    }
+
     // If opening, fetch track data for involved aircraft
     if (isOpening && event) {
       const icaos = [event.icao, event.icao_2].filter(Boolean);
+      const abortController = new AbortController();
+      abortControllersRef.current[eventKey] = abortController;
 
       for (const icao of icaos) {
+        if (abortController.signal.aborted) break;
+
         if (!trackData[icao]) {
           try {
             let data;
             if (wsRequest && wsConnected) {
               const result = await wsRequest('sightings', { icao_hex: icao, hours: 2, limit: 500 });
+              if (abortController.signal.aborted) break;
               if (result && (result.sightings || result.results)) {
                 data = result;
               } else {
                 throw new Error('Invalid sightings response');
               }
             } else {
-              const res = await fetch(`${apiBase}/api/v1/sightings?icao_hex=${icao}&hours=2&limit=500`);
+              const res = await fetch(`${apiBase}/api/v1/sightings?icao_hex=${icao}&hours=2&limit=500`, {
+                signal: abortController.signal
+              });
+              if (abortController.signal.aborted) break;
               data = await safeJson(res);
               if (!data) throw new Error('HTTP request failed');
             }
-            const sightings = data?.sightings || data?.results || [];
-            setTrackData(prev => ({ ...prev, [icao]: sightings }));
+            if (!abortController.signal.aborted) {
+              const sightings = data?.sightings || data?.results || [];
+              setTrackData(prev => ({ ...prev, [icao]: sightings }));
+            }
           } catch (err) {
+            if (err.name === 'AbortError') {
+              // Request was cancelled, ignore
+              break;
+            }
             console.error('Failed to fetch track data:', err);
           }
         }
       }
 
-      // Initialize replay state for this event
-      setReplayState(prev => ({
-        ...prev,
-        [eventKey]: { position: 100, isPlaying: false, speed: 1 }
-      }));
+      // Initialize replay state for this event (only if not aborted)
+      if (!abortController.signal.aborted) {
+        setReplayState(prev => ({
+          ...prev,
+          [eventKey]: { position: 100, isPlaying: false, speed: 1 }
+        }));
+      }
+
+      // Clean up abort controller
+      delete abortControllersRef.current[eventKey];
     }
   }, [expandedMaps, trackData, apiBase, wsRequest, wsConnected]);
 
@@ -179,7 +211,14 @@ export function useReplayState({
       let lastTime = performance.now();
 
       const animate = (currentTime) => {
-        const currentState = replayState[eventKey];
+        // Use ref to get latest state (avoid stale closure)
+        const currentState = replayStateRef.current[eventKey];
+
+        // Check if animation should stop (user paused or component unmounted)
+        if (!currentState?.isPlaying) {
+          return;
+        }
+
         const speed = currentState?.speed || 1;
 
         const deltaTime = currentTime - lastTime;
@@ -426,9 +465,14 @@ export function useReplayState({
       Object.values(animationFrameRef.current).forEach(id => {
         cancelAnimationFrame(id);
       });
+      // Cancel any pending fetch requests
+      Object.values(abortControllersRef.current).forEach(controller => {
+        controller.abort();
+      });
       mapRefs.current = {};
       replayMarkersRef.current = {};
       replayTracksRef.current = {};
+      abortControllersRef.current = {};
     };
   }, []);
 
@@ -451,6 +495,11 @@ export function useReplayState({
         if (animationFrameRef.current[key]) {
           cancelAnimationFrame(animationFrameRef.current[key]);
           delete animationFrameRef.current[key];
+        }
+        // Cancel any pending fetch for this event
+        if (abortControllersRef.current[key]) {
+          abortControllersRef.current[key].abort();
+          delete abortControllersRef.current[key];
         }
       }
     });

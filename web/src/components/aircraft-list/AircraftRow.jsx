@@ -59,6 +59,11 @@ export const AircraftRow = memo(function AircraftRow({
   visibleColumns,
   density = 'comfortable',
 }) {
+  // Defensive null check - return null if aircraft is undefined
+  if (!aircraft) {
+    return null;
+  }
+
   const ac = aircraft;
   const isClimbing = (ac.vr || 0) > 500;
   const isDescending = (ac.vr || 0) < -500;

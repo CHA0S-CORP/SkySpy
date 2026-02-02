@@ -28,6 +28,11 @@ export function VirtualList({
   const containerRef = useRef(null);
   const [containerHeight, setContainerHeight] = useState(height === 'auto' ? 400 : height);
 
+  // Validate itemHeight to prevent division by zero and invalid calculations
+  const safeItemHeight = typeof itemHeight === 'number' && itemHeight > 0 && isFinite(itemHeight)
+    ? itemHeight
+    : 50; // Default fallback height
+
   // Update container height when 'auto' or on resize
   useEffect(() => {
     if (height === 'auto' && containerRef.current) {
@@ -47,18 +52,18 @@ export function VirtualList({
   }, [height]);
 
   // Calculate total height
-  const totalHeight = items.length * itemHeight;
+  const totalHeight = items.length * safeItemHeight;
 
   // Calculate visible range with overscan
   const visibleRange = useMemo(() => {
-    const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - overscan);
+    const startIndex = Math.max(0, Math.floor(scrollTop / safeItemHeight) - overscan);
     const endIndex = Math.min(
       items.length - 1,
-      Math.ceil((scrollTop + containerHeight) / itemHeight) + overscan
+      Math.ceil((scrollTop + containerHeight) / safeItemHeight) + overscan
     );
 
     return { startIndex, endIndex };
-  }, [scrollTop, containerHeight, itemHeight, items.length, overscan]);
+  }, [scrollTop, containerHeight, safeItemHeight, items.length, overscan]);
 
   // Get visible items
   const visibleItems = useMemo(() => {
@@ -70,16 +75,16 @@ export function VirtualList({
           index: i,
           style: {
             position: 'absolute',
-            top: i * itemHeight,
+            top: i * safeItemHeight,
             left: 0,
             right: 0,
-            height: itemHeight,
+            height: safeItemHeight,
           },
         });
       }
     }
     return result;
-  }, [items, visibleRange, itemHeight]);
+  }, [items, visibleRange, safeItemHeight]);
 
   // Handle scroll
   const handleScroll = useCallback((e) => {
@@ -101,15 +106,15 @@ export function VirtualList({
 
     let targetScrollTop;
     if (align === 'start') {
-      targetScrollTop = index * itemHeight;
+      targetScrollTop = index * safeItemHeight;
     } else if (align === 'center') {
-      targetScrollTop = index * itemHeight - containerHeight / 2 + itemHeight / 2;
+      targetScrollTop = index * safeItemHeight - containerHeight / 2 + safeItemHeight / 2;
     } else if (align === 'end') {
-      targetScrollTop = (index + 1) * itemHeight - containerHeight;
+      targetScrollTop = (index + 1) * safeItemHeight - containerHeight;
     }
 
     containerRef.current.scrollTop = Math.max(0, Math.min(totalHeight - containerHeight, targetScrollTop));
-  }, [itemHeight, containerHeight, totalHeight]);
+  }, [safeItemHeight, containerHeight, totalHeight]);
 
   // Get item key
   const getKey = useCallback((item, index) => {
@@ -162,17 +167,22 @@ export function useVirtualList({
 }) {
   const [scrollTop, setScrollTop] = useState(0);
 
-  const totalHeight = itemCount * itemHeight;
+  // Validate itemHeight to prevent division by zero and invalid calculations
+  const safeItemHeight = typeof itemHeight === 'number' && itemHeight > 0 && isFinite(itemHeight)
+    ? itemHeight
+    : 50; // Default fallback height
+
+  const totalHeight = itemCount * safeItemHeight;
 
   const visibleRange = useMemo(() => {
-    const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - overscan);
+    const startIndex = Math.max(0, Math.floor(scrollTop / safeItemHeight) - overscan);
     const endIndex = Math.min(
       itemCount - 1,
-      Math.ceil((scrollTop + containerHeight) / itemHeight) + overscan
+      Math.ceil((scrollTop + containerHeight) / safeItemHeight) + overscan
     );
 
     return { startIndex, endIndex };
-  }, [scrollTop, containerHeight, itemHeight, itemCount, overscan]);
+  }, [scrollTop, containerHeight, safeItemHeight, itemCount, overscan]);
 
   const handleScroll = useCallback((e) => {
     setScrollTop(e.target.scrollTop);
@@ -181,16 +191,16 @@ export function useVirtualList({
   const scrollToIndex = useCallback((index, align = 'start') => {
     let targetScrollTop;
     if (align === 'start') {
-      targetScrollTop = index * itemHeight;
+      targetScrollTop = index * safeItemHeight;
     } else if (align === 'center') {
-      targetScrollTop = index * itemHeight - containerHeight / 2 + itemHeight / 2;
+      targetScrollTop = index * safeItemHeight - containerHeight / 2 + safeItemHeight / 2;
     } else if (align === 'end') {
-      targetScrollTop = (index + 1) * itemHeight - containerHeight;
+      targetScrollTop = (index + 1) * safeItemHeight - containerHeight;
     }
 
     setScrollTop(Math.max(0, Math.min(totalHeight - containerHeight, targetScrollTop)));
     return targetScrollTop;
-  }, [itemHeight, containerHeight, totalHeight]);
+  }, [safeItemHeight, containerHeight, totalHeight]);
 
   return {
     visibleRange,

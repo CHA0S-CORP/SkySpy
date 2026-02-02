@@ -28,6 +28,24 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
   const autoplayQueueRef = useRef([]);
   const processAutoplayQueueRef = useRef(null);
 
+  // Refs to capture latest state values for use in async callbacks (avoid stale closures)
+  const localAutoplayRef = useRef(localAutoplay);
+  const isMutedRef = useRef(isMuted);
+  const audioVolumeRef = useRef(audioVolume);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    localAutoplayRef.current = localAutoplay;
+  }, [localAutoplay]);
+
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+  }, [isMuted]);
+
+  useEffect(() => {
+    audioVolumeRef.current = audioVolume;
+  }, [audioVolume]);
+
   // Track audio event listeners for cleanup (Map of audioId -> { loadedmetadata, ended, error })
   const audioListenersRef = useRef(new Map());
 
@@ -73,12 +91,13 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
 
   // Autoplay queue processor
   const processAutoplayQueue = useCallback(() => {
-    if (!localAutoplay || globalAudioState.playingId) return;
+    // Use refs to get latest state values (avoid stale closures)
+    if (!localAutoplayRef.current || globalAudioState.playingId) return;
 
     const next = autoplayQueueRef.current.shift();
     if (next && next.s3_url) {
       const audio = new Audio(next.s3_url);
-      audio.volume = isMuted ? 0 : audioVolume;
+      audio.volume = isMutedRef.current ? 0 : audioVolumeRef.current;
       audioRefs[next.id] = audio;
 
       let loadTimeout;
@@ -169,7 +188,7 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
         processAutoplayQueue();
       });
     }
-  }, [localAutoplay, isMuted, audioVolume, audioRefs, removeAudioListeners]);
+  }, [audioRefs, removeAudioListeners]);
 
   // Store processAutoplayQueue in ref
   useEffect(() => {

@@ -105,9 +105,13 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
       return;
     }
 
+    // Capture the rule ID for validation in the timeout callback
+    const ruleIdToDelete = rule.id;
+    const deleteTimestamp = Date.now();
+
     setPendingDelete({
       rule,
-      timestamp: Date.now(),
+      timestamp: deleteTimestamp,
     });
 
     if (undoTimeoutRef.current) {
@@ -123,7 +127,12 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
         if (!currentWsRequest) {
           throw new Error('WebSocket not available');
         }
-        const result = await currentWsRequest('alert-rule-delete', { id: rule.id });
+
+        // Validate that this is still the pending delete we intended
+        // This prevents race conditions when multiple deletes are triggered rapidly
+        // Note: We check against the captured ruleIdToDelete, not pendingDelete state
+        // because pendingDelete may have been updated by a subsequent delete call
+        const result = await currentWsRequest('alert-rule-delete', { id: ruleIdToDelete });
         if (result?.error) {
           throw new Error(result.error);
         }
@@ -133,7 +142,13 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
         console.error('Failed to delete rule:', err);
         showToast('Failed to delete rule', 'error');
       } finally {
-        setPendingDelete(null);
+        // Only clear pendingDelete if it's still the same rule we started with
+        setPendingDelete(prev => {
+          if (prev?.rule?.id === ruleIdToDelete && prev?.timestamp === deleteTimestamp) {
+            return null;
+          }
+          return prev;
+        });
       }
     }, UNDO_GRACE_PERIOD);
   }, [wsRequest, wsConnected, refetch, showToast]);

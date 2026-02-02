@@ -51,10 +51,11 @@ export function Toast({ toast, onRemove }) {
 
   // Handle auto-dismiss animation
   useEffect(() => {
-    if (toast.duration > 0) {
+    // Explicit type check to avoid issues with undefined/null/NaN durations
+    if (typeof toast.duration === 'number' && toast.duration > 0 && isFinite(toast.duration)) {
       const exitTimer = setTimeout(() => {
         setIsExiting(true);
-      }, toast.duration - 300); // Start exit animation 300ms before removal
+      }, Math.max(0, toast.duration - 300)); // Start exit animation 300ms before removal, ensure non-negative
 
       return () => clearTimeout(exitTimer);
     }
