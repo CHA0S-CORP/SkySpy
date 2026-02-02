@@ -247,6 +247,16 @@ function MapView({
     const saved = localStorage.getItem('adsb-show-airspace-labels');
     return saved === null ? true : saved === 'true';
   });
+  const [airspaceTypeFilters, setAirspaceTypeFilters] = useState(() => {
+    try {
+      const saved = localStorage.getItem('adsb-airspace-type-filters');
+      return saved
+        ? JSON.parse(saved)
+        : { B: true, C: true, D: true, E: false, MOA: true, RESTRICTED: true, WARNING: true, PROHIBITED: true, TFR: true, ALERT: true };
+    } catch {
+      return { B: true, C: true, D: true, E: false, MOA: true, RESTRICTED: true, WARNING: true, PROHIBITED: true, TFR: true, ALERT: true };
+    }
+  });
   const [radarRange, setRadarRange] = useState(50); // nm
   const [showOverlayMenu, setShowOverlayMenu] = useState(false);
   const [safetyEvents, setSafetyEvents] = useState([]); // Safety events from API/WebSocket
@@ -3872,7 +3882,7 @@ function MapView({
           ];
 
     // Combine airspace advisories and boundaries from API, or use static fallback
-    const airspaceData =
+    const rawAirspaceData =
       aviationData.airspaces.length > 0 || aviationData.boundaries.length > 0
         ? [...aviationData.airspaces, ...aviationData.boundaries]
         : [
@@ -3889,6 +3899,19 @@ function MapView({
               ],
             },
           ];
+
+    // Filter airspace by type based on user preferences
+    const airspaceData = rawAirspaceData.filter((as) => {
+      const asClass = as.class || as.airspace_class || as.type?.replace('CLASS_', '') || '';
+      // Check if this airspace type is enabled
+      if (airspaceTypeFilters[asClass] !== undefined) {
+        return airspaceTypeFilters[asClass];
+      }
+      // For G-AIRMETs and other advisories, always show
+      if (as.isAdvisory) return true;
+      // Default to showing unknown types
+      return true;
+    });
 
     // Animation loop
     const isPro = config.mapMode === 'pro';
@@ -9741,6 +9764,93 @@ function MapView({
                 </a>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Airspace Popup */}
+      {selectedAirspace && (
+        <div
+          className={`weather-popup airspace-popup ${config.mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''}`}
+          style={{ left: popupPosition.x, top: popupPosition.y }}
+          onMouseDown={handlePopupMouseDown}
+        >
+          <button className="popup-close" onClick={() => setSelectedAirspace(null)}>
+            <X size={16} />
+          </button>
+          <div className="popup-header">
+            <Layers size={20} />
+            <span className="popup-callsign">{selectedAirspace.name || 'Airspace'}</span>
+            <span
+              className={`airport-class-badge class-${(selectedAirspace.class || selectedAirspace.airspace_class || '').toLowerCase()}`}
+            >
+              {selectedAirspace.class || selectedAirspace.airspace_class || selectedAirspace.type || 'Airspace'}
+            </span>
+          </div>
+
+          <div className="popup-details">
+            {selectedAirspace.name && (
+              <div className="detail-row">
+                <span>Name</span>
+                <span>{selectedAirspace.name}</span>
+              </div>
+            )}
+
+            <div className="detail-row">
+              <span>Class/Type</span>
+              <span>
+                {selectedAirspace.class || selectedAirspace.airspace_class || selectedAirspace.type || 'Unknown'}
+              </span>
+            </div>
+
+            {(selectedAirspace.floor_ft !== undefined || selectedAirspace.lower_alt_ft !== undefined) && (
+              <div className="detail-row">
+                <span>Floor</span>
+                <span>
+                  {(selectedAirspace.floor_ft ?? selectedAirspace.lower_alt_ft)?.toLocaleString() || 'SFC'} ft
+                </span>
+              </div>
+            )}
+
+            {(selectedAirspace.ceiling_ft !== undefined || selectedAirspace.upper_alt_ft !== undefined) && (
+              <div className="detail-row">
+                <span>Ceiling</span>
+                <span>
+                  {(selectedAirspace.ceiling_ft ?? selectedAirspace.upper_alt_ft)?.toLocaleString() || 'UNL'} ft
+                </span>
+              </div>
+            )}
+
+            {selectedAirspace.controlling_agency && (
+              <div className="detail-row">
+                <span>Agency</span>
+                <span>{selectedAirspace.controlling_agency}</span>
+              </div>
+            )}
+
+            {selectedAirspace.schedule && (
+              <div className="detail-row">
+                <span>Schedule</span>
+                <span>{selectedAirspace.schedule}</span>
+              </div>
+            )}
+
+            {(selectedAirspace.center_lat || selectedAirspace.lat) && (
+              <div className="detail-row">
+                <span>Center</span>
+                <span>
+                  {(selectedAirspace.center_lat || selectedAirspace.lat)?.toFixed(4)}°,{' '}
+                  {(selectedAirspace.center_lon || selectedAirspace.lon)?.toFixed(4)}°
+                </span>
+              </div>
+            )}
+
+            {selectedAirspace.source && (
+              <div className="detail-row">
+                <span>Source</span>
+                <span>{selectedAirspace.source}</span>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -1,4 +1,6 @@
 // Package geo provides geographic overlay support for SkySpy radar display
+//
+//nolint:revive,gocyclo // Geo* type names are intentional; complex parsing functions are necessary
 package geo
 
 import (
@@ -504,7 +506,7 @@ func RenderOverlayToRadar(overlay *GeoOverlay, centerLat, centerLon, maxRange fl
 
 	centerX := radarWidth / 2
 	centerY := radarHeight / 2
-	maxRadius := min(radarWidth/2, radarHeight) - 1
+	maxRadius := minInt(radarWidth/2, radarHeight) - 1
 
 	for _, feature := range overlay.Features {
 		switch feature.Type {
@@ -588,7 +590,7 @@ func CreateRangeRingOverlay(centerLat, centerLon float64, ranges []float64, poin
 	return overlay
 }
 
-func min(a, b int) int {
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}

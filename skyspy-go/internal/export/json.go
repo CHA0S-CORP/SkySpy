@@ -274,6 +274,7 @@ func ExportACARSJSONToFile(messages []ACARSMessage, filename string) error {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
+	//nolint:gosec // G306: Export files are non-sensitive and can be world-readable
 	if err := os.WriteFile(filename, jsonData, 0o644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}

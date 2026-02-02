@@ -1,4 +1,6 @@
 // Package export provides export functionality for SkySpy CLI
+//
+//nolint:gocritic,gocyclo // paramTypeCombine style preference; processCodes complexity is necessary
 package export
 
 import (
@@ -295,6 +297,7 @@ func SaveAsText(content string, filename string) error {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
+	//nolint:gosec // G306: Screenshot exports are non-sensitive
 	if err := os.WriteFile(filename, []byte(plainText), 0o644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
@@ -314,6 +317,7 @@ func SaveAsHTML(content string, filename string) error {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
+	//nolint:gosec // G306: Screenshot exports are non-sensitive
 	if err := os.WriteFile(filename, []byte(htmlContent), 0o644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
