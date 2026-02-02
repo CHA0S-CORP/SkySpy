@@ -1187,28 +1187,30 @@ func (m *Model) renderSpectrumBar() string {
 
 		if level > 0.05 {
 			// Determine color based on level
-			if level < 0.3 {
+			switch {
+			case level < 0.3:
 				style = successStyle
-			} else if level < 0.6 {
+			case level < 0.6:
 				style = warningStyle
-			} else {
+			default:
 				style = errorStyle
 			}
 
 			// Choose bar character based on height
-			if level < 0.15 {
+			switch {
+			case level < 0.15:
 				barChar = "▁"
-			} else if level < 0.3 {
+			case level < 0.3:
 				barChar = "▂"
-			} else if level < 0.45 {
+			case level < 0.45:
 				barChar = "▃"
-			} else if level < 0.6 {
+			case level < 0.6:
 				barChar = "▄"
-			} else if level < 0.75 {
+			case level < 0.75:
 				barChar = "▅"
-			} else if level < 0.9 {
+			case level < 0.9:
 				barChar = "▆"
-			} else {
+			default:
 				barChar = "▇"
 			}
 

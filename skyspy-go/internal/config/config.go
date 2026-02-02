@@ -250,11 +250,13 @@ func Load() (*Config, error) {
 
 	data, err := os.ReadFile(ConfigFile)
 	if err != nil {
+		//nolint:nilerr // Intentional: return default config on read error
 		return DefaultConfig(), nil
 	}
 
 	config := DefaultConfig()
 	if err := json.Unmarshal(data, config); err != nil {
+		//nolint:nilerr // Intentional: return default config on parse error
 		return DefaultConfig(), nil
 	}
 
@@ -272,6 +274,7 @@ func Save(config *Config) error {
 		return err
 	}
 
+	//nolint:gosec // G306: Config file is non-sensitive and can be world-readable
 	return os.WriteFile(ConfigFile, data, 0o644)
 }
 

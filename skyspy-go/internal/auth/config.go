@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+//nolint:revive // AuthConfig name is intentional for clarity
 // AuthConfig represents the authentication configuration from the API
 type AuthConfig struct {
 	AuthMode         string                   `json:"auth_mode"`
@@ -102,7 +103,7 @@ func GetOIDCAuthorizationURL(baseURL, redirectURI string) (*OIDCAuthorizeRespons
 func RefreshAccessToken(baseURL, refreshToken string) (*TokenResponse, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 
-	req, err := http.NewRequest("POST", baseURL+"/api/v1/auth/refresh", nil)
+	req, err := http.NewRequest("POST", baseURL+"/api/v1/auth/refresh", http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +132,7 @@ func RefreshAccessToken(baseURL, refreshToken string) (*TokenResponse, error) {
 func FetchUserProfile(baseURL, accessToken string) (*UserProfile, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 
-	req, err := http.NewRequest("GET", baseURL+"/api/v1/auth/profile", nil)
+	req, err := http.NewRequest("GET", baseURL+"/api/v1/auth/profile", http.NoBody)
 	if err != nil {
 		return nil, err
 	}

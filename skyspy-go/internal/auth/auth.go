@@ -144,7 +144,8 @@ func (m *Manager) loginOIDC(ctx context.Context) error {
 	}
 	defer func() { _ = callbackServer.Stop() }()
 
-	if err := callbackServer.Start(); err != nil {
+	err = callbackServer.Start()
+	if err != nil {
 		return fmt.Errorf("failed to start callback server: %w", err)
 	}
 
@@ -158,7 +159,7 @@ func (m *Manager) loginOIDC(ctx context.Context) error {
 	// Open browser
 	fmt.Printf("Opening browser for authentication...\n")
 	if CanOpenBrowser() {
-		if err := OpenBrowser(authResp.AuthorizationURL); err != nil {
+		if browserErr := OpenBrowser(authResp.AuthorizationURL); browserErr != nil {
 			fmt.Printf("Could not open browser automatically.\n")
 			fmt.Printf("Please open this URL in your browser:\n\n%s\n\n", authResp.AuthorizationURL)
 		}

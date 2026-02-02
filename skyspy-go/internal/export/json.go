@@ -117,6 +117,7 @@ func ExportAircraftJSON(aircraft map[string]*radar.Target, directory string) (st
 		return "", fmt.Errorf("failed to create directory: %w", err)
 	}
 
+	//nolint:gosec // G306: Export files are non-sensitive and can be world-readable
 	if err := os.WriteFile(filename, jsonData, 0o644); err != nil {
 		return "", fmt.Errorf("failed to write file: %w", err)
 	}
@@ -124,6 +125,7 @@ func ExportAircraftJSON(aircraft map[string]*radar.Target, directory string) (st
 	return filename, nil
 }
 
+//nolint:revive // Function name is intentional for API clarity
 // ExportAircraftJSONToFile exports aircraft data to a specific JSON file
 func ExportAircraftJSONToFile(aircraft map[string]*radar.Target, filename string) error {
 	data := AircraftExportData{

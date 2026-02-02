@@ -4580,7 +4580,10 @@ function MapView({
 
             // Draw label at center
             if (as.name) {
-              const asCenter = as.center || { lat: as.lat, lon: as.lon };
+              const asCenter = as.center || {
+                lat: as.center_lat || as.lat,
+                lon: as.center_lon || as.lon,
+              };
               if (asCenter?.lat && asCenter?.lon) {
                 const labelPos = latLonToScreen(asCenter.lat, asCenter.lon);
                 ctx.fillStyle = asColor.replace(/[\d.]+\)$/, '0.8)');
@@ -4600,7 +4603,10 @@ function MapView({
           }
           // Draw circular rings (fallback for simple boundaries)
           else if (as.rings) {
-            const asCenter = as.center || { lat: as.lat, lon: as.lon };
+            const asCenter = as.center || {
+              lat: as.center_lat || as.lat,
+              lon: as.center_lon || as.lon,
+            };
             const pos = latLonToScreen(asCenter.lat, asCenter.lon);
 
             as.rings.forEach((ring, idx) => {
@@ -4690,10 +4696,8 @@ function MapView({
           // Estimate advisory size on screen (rough approximation)
           const corner1 = latLonToScreen(maxLat, maxLon);
           const corner2 = latLonToScreen(minLat, minLon);
-          const advisoryScreenRadius = Math.max(
-            Math.abs(corner1.x - corner2.x),
-            Math.abs(corner1.y - corner2.y)
-          ) / 2;
+          const advisoryScreenRadius =
+            Math.max(Math.abs(corner1.x - corner2.x), Math.abs(corner1.y - corner2.y)) / 2;
 
           // Skip if center is too far outside viewport (with advisory radius as margin)
           const margin = advisoryScreenRadius + 100;
