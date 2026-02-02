@@ -1,6 +1,7 @@
 """
 Aircraft-related models for position tracking, sessions, and cached aircraft information.
 """
+
 from django.db import models
 
 
@@ -24,14 +25,14 @@ class AircraftSighting(models.Model):
     aircraft_type = models.CharField(max_length=10, blank=True, null=True)
     is_military = models.BooleanField(default=False)
     is_emergency = models.BooleanField(default=False)
-    source = models.CharField(max_length=10, default='1090')
+    source = models.CharField(max_length=10, default="1090")
 
     class Meta:
-        db_table = 'aircraft_sightings'
+        db_table = "aircraft_sightings"
         indexes = [
-            models.Index(fields=['icao_hex', 'timestamp'], name='idx_sightings_icao_time'),
+            models.Index(fields=["icao_hex", "timestamp"], name="idx_sightings_icao_time"),
         ]
-        ordering = ['-timestamp']
+        ordering = ["-timestamp"]
 
     def __str__(self):
         return f"{self.icao_hex} @ {self.timestamp}"
@@ -57,11 +58,11 @@ class AircraftSession(models.Model):
     aircraft_type = models.CharField(max_length=10, blank=True, null=True)
 
     class Meta:
-        db_table = 'aircraft_sessions'
+        db_table = "aircraft_sessions"
         indexes = [
-            models.Index(fields=['last_seen', 'icao_hex'], name='idx_sessions_last_seen_icao'),
+            models.Index(fields=["last_seen", "icao_hex"], name="idx_sessions_last_seen_icao"),
         ]
-        ordering = ['-last_seen']
+        ordering = ["-last_seen"]
 
     def __str__(self):
         return f"{self.icao_hex} session ({self.first_seen} - {self.last_seen})"
@@ -128,10 +129,10 @@ class AircraftInfo(models.Model):
     fetch_failed = models.BooleanField(default=False)
 
     class Meta:
-        db_table = 'aircraft_info'
+        db_table = "aircraft_info"
         indexes = [
-            models.Index(fields=['registration'], name='idx_aircraft_info_reg'),
-            models.Index(fields=['operator_icao'], name='idx_aircraft_info_operator'),
+            models.Index(fields=["registration"], name="idx_aircraft_info_reg"),
+            models.Index(fields=["operator_icao"], name="idx_aircraft_info_operator"),
         ]
 
     def __str__(self):
@@ -147,20 +148,16 @@ class AirframeSourceData(models.Model):
     """
 
     SOURCE_CHOICES = [
-        ('faa', 'FAA Registry'),
-        ('adsbx', 'ADS-B Exchange'),
-        ('tar1090', 'tar1090-db'),
-        ('opensky', 'OpenSky Network'),
-        ('hexdb', 'HexDB API'),
-        ('adsblol', 'adsb.lol API'),
-        ('planespotters', 'Planespotters API'),
+        ("faa", "FAA Registry"),
+        ("adsbx", "ADS-B Exchange"),
+        ("tar1090", "tar1090-db"),
+        ("opensky", "OpenSky Network"),
+        ("hexdb", "HexDB API"),
+        ("adsblol", "adsb.lol API"),
+        ("planespotters", "Planespotters API"),
     ]
 
-    aircraft_info = models.ForeignKey(
-        AircraftInfo,
-        on_delete=models.CASCADE,
-        related_name='source_data'
-    )
+    aircraft_info = models.ForeignKey(AircraftInfo, on_delete=models.CASCADE, related_name="source_data")
     source = models.CharField(max_length=20, choices=SOURCE_CHOICES, db_index=True)
 
     # Store the complete raw data as JSON for full preservation
@@ -191,10 +188,10 @@ class AirframeSourceData(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'airframe_source_data'
-        unique_together = [['aircraft_info', 'source']]
+        db_table = "airframe_source_data"
+        unique_together = [["aircraft_info", "source"]]
         indexes = [
-            models.Index(fields=['source', 'registration'], name='idx_source_data_src_reg'),
+            models.Index(fields=["source", "registration"], name="idx_source_data_src_reg"),
         ]
 
     def __str__(self):

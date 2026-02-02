@@ -3,7 +3,9 @@ Authentication classes for SkySpy REST API.
 
 Provides API key authentication and JWT token authentication.
 """
+
 import logging
+
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import authentication
@@ -26,13 +28,13 @@ class APIKeyAuthentication(authentication.BaseAuthentication):
     API keys are user-scoped and can have limited permissions.
     """
 
-    keyword = 'ApiKey'
-    header_name = 'X-API-Key'
+    keyword = "ApiKey"
+    header_name = "X-API-Key"
 
     def authenticate(self, request):
         """Authenticate the request using API key."""
         # Check if API key auth is enabled
-        if not getattr(settings, 'API_KEY_ENABLED', True):
+        if not getattr(settings, "API_KEY_ENABLED", True):
             return None
 
         # Try to get API key from various sources
@@ -58,12 +60,12 @@ class APIKeyAuthentication(authentication.BaseAuthentication):
         API key leakage via referrer headers, browser history, and server logs.
         """
         # Check Authorization header
-        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-        if auth_header.startswith(f'{self.keyword} '):
-            return auth_header[len(self.keyword) + 1:]
+        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+        if auth_header.startswith(f"{self.keyword} "):
+            return auth_header[len(self.keyword) + 1 :]
 
         # Check X-API-Key header
-        api_key_header = request.META.get(f'HTTP_{self.header_name.upper().replace("-", "_")}')
+        api_key_header = request.META.get(f"HTTP_{self.header_name.upper().replace('-', '_')}")
         if api_key_header:
             return api_key_header
 
@@ -77,24 +79,24 @@ class APIKeyAuthentication(authentication.BaseAuthentication):
         key_hash = APIKey.hash_key(api_key)
 
         try:
-            api_key_obj = APIKey.objects.select_related('user').get(key_hash=key_hash)
+            api_key_obj = APIKey.objects.select_related("user").get(key_hash=key_hash)
         except APIKey.DoesNotExist:
             logger.warning(f"Invalid API key attempted: {api_key[:4]}...")
-            raise AuthenticationFailed('Invalid API key')
+            raise AuthenticationFailed("Invalid API key")
 
         # Check if key is valid
         if not api_key_obj.is_valid():
             if not api_key_obj.is_active:
-                raise AuthenticationFailed('API key is disabled')
+                raise AuthenticationFailed("API key is disabled")
             if api_key_obj.is_expired:
-                raise AuthenticationFailed('API key has expired')
-            raise AuthenticationFailed('Invalid API key')
+                raise AuthenticationFailed("API key has expired")
+            raise AuthenticationFailed("Invalid API key")
 
         # Update last used
         client_ip = self._get_client_ip(request)
         api_key_obj.last_used_at = timezone.now()
         api_key_obj.last_used_ip = client_ip
-        api_key_obj.save(update_fields=['last_used_at', 'last_used_ip'])
+        api_key_obj.save(update_fields=["last_used_at", "last_used_ip"])
 
         # Attach API key scopes to request for permission checking
         request.api_key_scopes = api_key_obj.scopes
@@ -103,10 +105,10 @@ class APIKeyAuthentication(authentication.BaseAuthentication):
 
     def _get_client_ip(self, request):
         """Get client IP address from request."""
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
         if x_forwarded_for:
-            return x_forwarded_for.split(',')[0].strip()
-        return request.META.get('REMOTE_ADDR')
+            return x_forwarded_for.split(",")[0].strip()
+        return request.META.get("REMOTE_ADDR")
 
 
 class JWTCookieAuthentication(authentication.BaseAuthentication):
@@ -120,8 +122,8 @@ class JWTCookieAuthentication(authentication.BaseAuthentication):
     This provides CSRF-protected cookie-based auth for web clients.
     """
 
-    keyword = 'Bearer'
-    cookie_name = 'access_token'
+    keyword = "Bearer"
+    cookie_name = "access_token"
 
     def authenticate(self, request):
         """Authenticate using JWT token."""
@@ -129,9 +131,9 @@ class JWTCookieAuthentication(authentication.BaseAuthentication):
         from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
         # Try Authorization header first
-        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-        if auth_header.startswith(f'{self.keyword} '):
-            token = auth_header[len(self.keyword) + 1:]
+        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+        if auth_header.startswith(f"{self.keyword} "):
+            token = auth_header[len(self.keyword) + 1 :]
         else:
             # Fall back to cookie
             token = request.COOKIES.get(self.cookie_name)
@@ -147,7 +149,7 @@ class JWTCookieAuthentication(authentication.BaseAuthentication):
             return (user, validated_token)
         except (InvalidToken, TokenError) as e:
             logger.debug(f"JWT validation failed: {e}")
-            raise AuthenticationFailed('Invalid or expired token')
+            raise AuthenticationFailed("Invalid or expired token")
 
     def authenticate_header(self, request):
         """Return authentication header for 401 responses."""
@@ -162,8 +164,8 @@ class OptionalJWTAuthentication(authentication.BaseAuthentication):
     Used for endpoints that work with or without authentication.
     """
 
-    keyword = 'Bearer'
-    cookie_name = 'access_token'
+    keyword = "Bearer"
+    cookie_name = "access_token"
 
     def authenticate(self, request):
         """Authenticate using JWT token, but don't fail if missing."""
@@ -171,9 +173,9 @@ class OptionalJWTAuthentication(authentication.BaseAuthentication):
         from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
         # Get token from header or cookie
-        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-        if auth_header.startswith(f'{self.keyword} '):
-            token = auth_header[len(self.keyword) + 1:]
+        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+        if auth_header.startswith(f"{self.keyword} "):
+            token = auth_header[len(self.keyword) + 1 :]
         else:
             token = request.COOKIES.get(self.cookie_name)
 

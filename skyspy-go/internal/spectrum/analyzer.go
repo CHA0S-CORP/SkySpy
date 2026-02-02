@@ -254,6 +254,16 @@ func (a *Analyzer) GetSpectrum(bins int) []float64 {
 
 	spectrum := make([]float64, bins)
 
+	// Handle single bin case - return average of all bands
+	if bins == 1 {
+		var total float64
+		for _, band := range a.bands {
+			total += a.normalizeRSSI(band)
+		}
+		spectrum[0] = total / float64(len(a.bands))
+		return spectrum
+	}
+
 	// If bins match bands, direct mapping
 	if bins == len(a.bands) {
 		for i, band := range a.bands {

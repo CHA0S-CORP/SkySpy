@@ -4,17 +4,19 @@ NOTAM (Notice to Air Missions) service.
 Fetches, parses, and caches NOTAM data from FAA Aviation Weather API.
 Includes support for TFR (Temporary Flight Restriction) boundaries.
 """
+
+import contextlib
 import json
 import logging
 from datetime import datetime, timedelta
-from math import radians, cos, sin, sqrt, atan2
-from typing import Optional, List, Dict, Any
+from math import atan2, cos, radians, sin, sqrt
+from typing import Any
 
 import httpx
 from django.db import transaction
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from django.db.models import Q
 from django.utils import timezone
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from skyspy.models.notams import CachedNotam
 from skyspy.services.cache import cached_with_ttl
@@ -38,12 +40,13 @@ TFR_DATA_URL = "https://tfr.faa.gov/tfr2/list.json"
 REFRESH_INTERVAL_SECONDS = 900
 
 # In-memory cache metadata
-_last_refresh: Optional[datetime] = None
+_last_refresh: datetime | None = None
 
 
 # =============================================================================
 # Retry Helpers for External API Calls
 # =============================================================================
+
 
 @retry(
     stop=stop_after_attempt(3),
@@ -80,12 +83,12 @@ def haversine_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 
 def fetch_notams_from_api(
-    icao: Optional[str] = None,
-    lat: Optional[float] = None,
-    lon: Optional[float] = None,
+    icao: str | None = None,
+    lat: float | None = None,
+    lon: float | None = None,
     radius_nm: float = 100,
-    notam_type: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+    notam_type: str | None = None,
+) -> list[dict[str, Any]]:
     """
     Fetch NOTAMs from FAA NOTAM Search API.
 
@@ -146,18 +149,20 @@ def fetch_notams_from_api(
         if isinstance(data, dict):
             notam_list = data.get("notamList", [])
             for item in notam_list:
-                notams.append({
-                    "id": item.get("notamNumber") or item.get("id"),
-                    "notamId": item.get("notamNumber"),
-                    "type": item.get("classification", "D"),
-                    "icaoId": item.get("facilityDesignator") or icao,
-                    "location": item.get("facilityDesignator") or icao,
-                    "text": item.get("traditionalMessage") or item.get("text", ""),
-                    "effectiveStart": item.get("effectiveStart") or item.get("startValidity"),
-                    "effectiveEnd": item.get("effectiveEnd") or item.get("endValidity"),
-                    "lat": item.get("coordinates", {}).get("latitude"),
-                    "lon": item.get("coordinates", {}).get("longitude"),
-                })
+                notams.append(
+                    {
+                        "id": item.get("notamNumber") or item.get("id"),
+                        "notamId": item.get("notamNumber"),
+                        "type": item.get("classification", "D"),
+                        "icaoId": item.get("facilityDesignator") or icao,
+                        "location": item.get("facilityDesignator") or icao,
+                        "text": item.get("traditionalMessage") or item.get("text", ""),
+                        "effectiveStart": item.get("effectiveStart") or item.get("startValidity"),
+                        "effectiveEnd": item.get("effectiveEnd") or item.get("endValidity"),
+                        "lat": item.get("coordinates", {}).get("latitude"),
+                        "lon": item.get("coordinates", {}).get("longitude"),
+                    }
+                )
             return notams
         elif isinstance(data, list):
             return data
@@ -173,10 +178,10 @@ def fetch_notams_from_api(
 
 
 def fetch_tfrs_from_api(
-    lat: Optional[float] = None,
-    lon: Optional[float] = None,
+    lat: float | None = None,
+    lon: float | None = None,
     radius_nm: float = 500,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Fetch TFRs from FAA TFR data feed.
 
@@ -254,7 +259,7 @@ def fetch_tfrs_from_api(
         return []
 
 
-def parse_notam(raw_notam: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def parse_notam(raw_notam: dict[str, Any]) -> dict[str, Any] | None:
     """
     Parse a raw NOTAM from the API into a normalized format.
 
@@ -308,10 +313,8 @@ def parse_notam(raw_notam: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             if end_str.upper() in ("PERM", "PERMANENT"):
                 is_permanent = True
             else:
-                try:
+                with contextlib.suppress(ValueError, TypeError):
                     effective_end = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
-                except (ValueError, TypeError):
-                    pass
 
         # Parse altitude restrictions
         floor_ft = raw_notam.get("floorFt") or raw_notam.get("floor")
@@ -355,8 +358,8 @@ def parse_notam(raw_notam: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 @transaction.atomic
 def refresh_notams(
-    bbox: Optional[str] = None,
-    icao_list: Optional[List[str]] = None,
+    bbox: str | None = None,
+    icao_list: list[str] | None = None,
 ) -> int:
     """
     Refresh cached NOTAMs from the API.
@@ -400,7 +403,7 @@ def refresh_notams(
         all_notams.extend(tfrs)
 
         # Fetch NOTAMs for major airports
-        major_airports = ['KJFK', 'KLAX', 'KORD', 'KDFW', 'KDEN', 'KSFO', 'KSEA', 'KATL', 'KMIA', 'KBOS']
+        major_airports = ["KJFK", "KLAX", "KORD", "KDFW", "KDEN", "KSFO", "KSEA", "KATL", "KMIA", "KBOS"]
         for airport in major_airports:
             try:
                 notams = fetch_notams_from_api(icao=airport)
@@ -435,15 +438,15 @@ def refresh_notams(
             defaults={
                 **notam_data,
                 "fetched_at": now,
-            }
+            },
         )
         updated_count += 1
 
         # Track for broadcasting
         notam_broadcast_data = {
-            'notam_id': notam_id,
+            "notam_id": notam_id,
             **notam_data,
-            'timestamp': now.isoformat().replace('+00:00', 'Z'),
+            "timestamp": now.isoformat().replace("+00:00", "Z"),
         }
         if created:
             new_notams.append(notam_broadcast_data)
@@ -453,19 +456,21 @@ def refresh_notams(
     # Broadcast new NOTAMs
     if new_notams:
         from skyspy.socketio.utils import sync_emit
+
         for notam in new_notams[:20]:  # Limit broadcasts to avoid flooding
             try:
-                event_name = 'notam:tfr_new' if notam.get('notam_type') == 'TFR' else 'notam:new'
-                sync_emit(event_name, notam, room='topic_notams')
+                event_name = "notam:tfr_new" if notam.get("notam_type") == "TFR" else "notam:new"
+                sync_emit(event_name, notam, room="topic_notams")
             except Exception as e:
                 logger.warning(f"Failed to broadcast new NOTAM: {e}")
 
     # Broadcast updated NOTAMs
     if updated_notams:
         from skyspy.socketio.utils import sync_emit
+
         for notam in updated_notams[:20]:  # Limit broadcasts
             try:
-                sync_emit('notam:update', notam, room='topic_notams')
+                sync_emit("notam:update", notam, room="topic_notams")
             except Exception as e:
                 logger.warning(f"Failed to broadcast NOTAM update: {e}")
 
@@ -473,11 +478,13 @@ def refresh_notams(
     archive_cutoff = now - timedelta(days=7)
 
     # Get NOTAMs that will be archived for broadcasting
-    expiring_notams = list(CachedNotam.objects.filter(
-        effective_end__lt=archive_cutoff,
-        is_permanent=False,
-        is_archived=False,
-    ).values_list('notam_id', 'notam_type'))
+    expiring_notams = list(
+        CachedNotam.objects.filter(
+            effective_end__lt=archive_cutoff,
+            is_permanent=False,
+            is_archived=False,
+        ).values_list("notam_id", "notam_type")
+    )
 
     archived_count = CachedNotam.objects.filter(
         effective_end__lt=archive_cutoff,
@@ -486,7 +493,7 @@ def refresh_notams(
     ).update(
         is_archived=True,
         archived_at=now,
-        archive_reason='expired',
+        archive_reason="expired",
     )
 
     if archived_count:
@@ -494,13 +501,18 @@ def refresh_notams(
 
         # Broadcast expired NOTAMs
         from skyspy.socketio.utils import sync_emit
+
         for notam_id, notam_type in expiring_notams[:20]:  # Limit broadcasts
             try:
-                event_name = 'notam:tfr_expired' if notam_type == 'TFR' else 'notam:expired'
-                sync_emit(event_name, {
-                    'notam_id': notam_id,
-                    'timestamp': now.isoformat().replace('+00:00', 'Z'),
-                }, room='topic_notams')
+                event_name = "notam:tfr_expired" if notam_type == "TFR" else "notam:expired"
+                sync_emit(
+                    event_name,
+                    {
+                        "notam_id": notam_id,
+                        "timestamp": now.isoformat().replace("+00:00", "Z"),
+                    },
+                    room="topic_notams",
+                )
             except Exception as e:
                 logger.warning(f"Failed to broadcast expired NOTAM: {e}")
 
@@ -522,15 +534,15 @@ def refresh_notams(
 
 @cached_with_ttl(ttl=60)
 def get_notams(
-    icao: Optional[str] = None,
-    lat: Optional[float] = None,
-    lon: Optional[float] = None,
+    icao: str | None = None,
+    lat: float | None = None,
+    lon: float | None = None,
     radius_nm: float = 100,
-    notam_type: Optional[str] = None,
+    notam_type: str | None = None,
     active_only: bool = True,
     limit: int = 100,
     include_archived: bool = False,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Get cached NOTAMs with optional filters.
 
@@ -563,9 +575,7 @@ def get_notams(
     if active_only:
         queryset = queryset.filter(
             effective_start__lte=now,
-        ).filter(
-            Q(effective_end__gte=now) | Q(effective_end__isnull=True) | Q(is_permanent=True)
-        )
+        ).filter(Q(effective_end__gte=now) | Q(effective_end__isnull=True) | Q(is_permanent=True))
 
     # Filter by location if coordinates provided
     if lat is not None and lon is not None:
@@ -580,7 +590,7 @@ def get_notams(
             longitude__range=(lon - lon_delta, lon + lon_delta),
         )
 
-    notams = list(queryset.order_by('-effective_start')[:limit * 2])
+    notams = list(queryset.order_by("-effective_start")[: limit * 2])
 
     # Calculate distances and filter
     results = []
@@ -624,12 +634,12 @@ def get_notams(
 
 @cached_with_ttl(ttl=60)
 def get_tfrs(
-    lat: Optional[float] = None,
-    lon: Optional[float] = None,
+    lat: float | None = None,
+    lon: float | None = None,
     radius_nm: float = 500,
     active_only: bool = True,
     include_archived: bool = False,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Get active TFRs (Temporary Flight Restrictions).
 
@@ -644,9 +654,7 @@ def get_tfrs(
         List of TFR dictionaries with GeoJSON geometry
     """
     now = timezone.now()
-    queryset = CachedNotam.objects.filter(
-        Q(notam_type='TFR') | Q(geometry__isnull=False)
-    )
+    queryset = CachedNotam.objects.filter(Q(notam_type="TFR") | Q(geometry__isnull=False))
 
     # Exclude archived by default
     if not include_archived:
@@ -655,9 +663,7 @@ def get_tfrs(
     if active_only:
         queryset = queryset.filter(
             effective_start__lte=now,
-        ).filter(
-            Q(effective_end__gte=now) | Q(effective_end__isnull=True) | Q(is_permanent=True)
-        )
+        ).filter(Q(effective_end__gte=now) | Q(effective_end__isnull=True) | Q(is_permanent=True))
 
     # Filter by location if coordinates provided
     if lat is not None and lon is not None:
@@ -665,14 +671,14 @@ def get_tfrs(
         lon_delta = radius_nm / (60 * abs(cos(radians(lat))))
 
         queryset = queryset.filter(
-            Q(latitude__isnull=True) |  # Include TFRs without coords
-            Q(
+            Q(latitude__isnull=True)  # Include TFRs without coords
+            | Q(
                 latitude__range=(lat - lat_delta, lat + lat_delta),
                 longitude__range=(lon - lon_delta, lon + lon_delta),
             )
         )
 
-    tfrs = list(queryset.order_by('-effective_start')[:100])
+    tfrs = list(queryset.order_by("-effective_start")[:100])
 
     results = []
     for tfr in tfrs:
@@ -693,16 +699,14 @@ def get_tfrs(
         }
 
         if lat is not None and lon is not None and tfr.latitude and tfr.longitude:
-            data["distance_nm"] = round(
-                haversine_nm(lat, lon, tfr.latitude, tfr.longitude), 1
-            )
+            data["distance_nm"] = round(haversine_nm(lat, lon, tfr.latitude, tfr.longitude), 1)
 
         results.append(data)
 
     return results
 
 
-def get_notams_for_airport(icao: str, active_only: bool = True) -> List[Dict[str, Any]]:
+def get_notams_for_airport(icao: str, active_only: bool = True) -> list[dict[str, Any]]:
     """
     Get all NOTAMs for a specific airport.
 
@@ -717,7 +721,7 @@ def get_notams_for_airport(icao: str, active_only: bool = True) -> List[Dict[str
 
 
 @cached_with_ttl(ttl=60)
-def get_notam_stats() -> Dict[str, Any]:
+def get_notam_stats() -> dict[str, Any]:
     """
     Get statistics about cached NOTAMs.
 
@@ -729,27 +733,28 @@ def get_notam_stats() -> Dict[str, Any]:
     total_count = CachedNotam.objects.count()
     now = timezone.now()
 
-    active_count = CachedNotam.objects.filter(
-        effective_start__lte=now,
-    ).filter(
-        Q(effective_end__gte=now) | Q(effective_end__isnull=True) | Q(is_permanent=True)
-    ).count()
-
-    tfr_count = CachedNotam.objects.filter(
-        Q(notam_type='TFR') | Q(geometry__isnull=False)
-    ).filter(
-        effective_start__lte=now,
-    ).filter(
-        Q(effective_end__gte=now) | Q(effective_end__isnull=True)
-    ).count()
-
-    by_type = dict(
-        CachedNotam.objects.values('notam_type')
-        .annotate(count=Count('id'))
-        .values_list('notam_type', 'count')
+    active_count = (
+        CachedNotam.objects.filter(
+            effective_start__lte=now,
+        )
+        .filter(Q(effective_end__gte=now) | Q(effective_end__isnull=True) | Q(is_permanent=True))
+        .count()
     )
 
-    last_refresh = CachedNotam.objects.aggregate(Max('fetched_at'))['fetched_at__max']
+    tfr_count = (
+        CachedNotam.objects.filter(Q(notam_type="TFR") | Q(geometry__isnull=False))
+        .filter(
+            effective_start__lte=now,
+        )
+        .filter(Q(effective_end__gte=now) | Q(effective_end__isnull=True))
+        .count()
+    )
+
+    by_type = dict(
+        CachedNotam.objects.values("notam_type").annotate(count=Count("id")).values_list("notam_type", "count")
+    )
+
+    last_refresh = CachedNotam.objects.aggregate(Max("fetched_at"))["fetched_at__max"]
 
     return {
         "total_notams": total_count,
@@ -768,7 +773,8 @@ def should_refresh() -> bool:
     if _last_refresh is None:
         # Check database
         from django.db.models import Max
-        last_fetch = CachedNotam.objects.aggregate(Max('fetched_at'))['fetched_at__max']
+
+        last_fetch = CachedNotam.objects.aggregate(Max("fetched_at"))["fetched_at__max"]
         if last_fetch:
             _last_refresh = last_fetch
         else:
@@ -782,13 +788,13 @@ def should_refresh() -> bool:
 
 
 def get_archived_notams(
-    icao: Optional[str] = None,
-    notam_type: Optional[str] = None,
+    icao: str | None = None,
+    notam_type: str | None = None,
     days: int = 30,
-    search: Optional[str] = None,
+    search: str | None = None,
     limit: int = 100,
     offset: int = 0,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Get archived NOTAMs with filters.
 
@@ -803,7 +809,6 @@ def get_archived_notams(
     Returns:
         Dictionary with archived NOTAMs and count
     """
-    from django.db.models import Count
 
     now = timezone.now()
     cutoff = now - timedelta(days=days)
@@ -821,35 +826,35 @@ def get_archived_notams(
 
     if search:
         queryset = queryset.filter(
-            Q(text__icontains=search) |
-            Q(notam_id__icontains=search) |
-            Q(location__icontains=search)
+            Q(text__icontains=search) | Q(notam_id__icontains=search) | Q(location__icontains=search)
         )
 
     total_count = queryset.count()
-    notams = list(queryset.order_by('-archived_at')[offset:offset + limit])
+    notams = list(queryset.order_by("-archived_at")[offset : offset + limit])
 
     results = []
     for notam in notams:
-        results.append({
-            "notam_id": notam.notam_id,
-            "notam_type": notam.notam_type,
-            "classification": notam.classification,
-            "location": notam.location,
-            "latitude": notam.latitude,
-            "longitude": notam.longitude,
-            "radius_nm": notam.radius_nm,
-            "floor_ft": notam.floor_ft,
-            "ceiling_ft": notam.ceiling_ft,
-            "effective_start": notam.effective_start.isoformat() if notam.effective_start else None,
-            "effective_end": notam.effective_end.isoformat() if notam.effective_end else None,
-            "is_permanent": notam.is_permanent,
-            "text": notam.text,
-            "geometry": notam.geometry,
-            "reason": notam.reason,
-            "archived_at": notam.archived_at.isoformat() if notam.archived_at else None,
-            "archive_reason": notam.archive_reason,
-        })
+        results.append(
+            {
+                "notam_id": notam.notam_id,
+                "notam_type": notam.notam_type,
+                "classification": notam.classification,
+                "location": notam.location,
+                "latitude": notam.latitude,
+                "longitude": notam.longitude,
+                "radius_nm": notam.radius_nm,
+                "floor_ft": notam.floor_ft,
+                "ceiling_ft": notam.ceiling_ft,
+                "effective_start": notam.effective_start.isoformat() if notam.effective_start else None,
+                "effective_end": notam.effective_end.isoformat() if notam.effective_end else None,
+                "is_permanent": notam.is_permanent,
+                "text": notam.text,
+                "geometry": notam.geometry,
+                "reason": notam.reason,
+                "archived_at": notam.archived_at.isoformat() if notam.archived_at else None,
+                "archive_reason": notam.archive_reason,
+            }
+        )
 
     return {
         "notams": results,
@@ -859,14 +864,14 @@ def get_archived_notams(
     }
 
 
-def get_archive_stats() -> Dict[str, Any]:
+def get_archive_stats() -> dict[str, Any]:
     """
     Get archive statistics.
 
     Returns:
         Dictionary with archive statistics
     """
-    from django.db.models import Count, Min, Max
+    from django.db.models import Count, Max, Min
 
     now = timezone.now()
 
@@ -876,23 +881,23 @@ def get_archive_stats() -> Dict[str, Any]:
     # Archived by type
     by_type = dict(
         CachedNotam.objects.filter(is_archived=True)
-        .values('notam_type')
-        .annotate(count=Count('id'))
-        .values_list('notam_type', 'count')
+        .values("notam_type")
+        .annotate(count=Count("id"))
+        .values_list("notam_type", "count")
     )
 
     # Archived by reason
     by_reason = dict(
         CachedNotam.objects.filter(is_archived=True)
-        .values('archive_reason')
-        .annotate(count=Count('id'))
-        .values_list('archive_reason', 'count')
+        .values("archive_reason")
+        .annotate(count=Count("id"))
+        .values_list("archive_reason", "count")
     )
 
     # Date range of archived items
     date_range = CachedNotam.objects.filter(is_archived=True).aggregate(
-        oldest=Min('archived_at'),
-        newest=Max('archived_at'),
+        oldest=Min("archived_at"),
+        newest=Max("archived_at"),
     )
 
     # Archive counts by time period
@@ -900,24 +905,18 @@ def get_archive_stats() -> Dict[str, Any]:
     days_30 = now - timedelta(days=30)
     days_90 = now - timedelta(days=90)
 
-    archived_last_7_days = CachedNotam.objects.filter(
-        is_archived=True, archived_at__gte=days_7
-    ).count()
+    archived_last_7_days = CachedNotam.objects.filter(is_archived=True, archived_at__gte=days_7).count()
 
-    archived_last_30_days = CachedNotam.objects.filter(
-        is_archived=True, archived_at__gte=days_30
-    ).count()
+    archived_last_30_days = CachedNotam.objects.filter(is_archived=True, archived_at__gte=days_30).count()
 
-    archived_last_90_days = CachedNotam.objects.filter(
-        is_archived=True, archived_at__gte=days_90
-    ).count()
+    archived_last_90_days = CachedNotam.objects.filter(is_archived=True, archived_at__gte=days_90).count()
 
     return {
         "total_archived": archived_count,
         "by_type": by_type,
         "by_reason": by_reason,
-        "oldest_archive": date_range['oldest'].isoformat() if date_range['oldest'] else None,
-        "newest_archive": date_range['newest'].isoformat() if date_range['newest'] else None,
+        "oldest_archive": date_range["oldest"].isoformat() if date_range["oldest"] else None,
+        "newest_archive": date_range["newest"].isoformat() if date_range["newest"] else None,
         "archived_last_7_days": archived_last_7_days,
         "archived_last_30_days": archived_last_30_days,
         "archived_last_90_days": archived_last_90_days,

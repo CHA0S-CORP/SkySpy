@@ -15,6 +15,7 @@ Retention periods are configurable via environment variables:
 - SAFETY_EVENT_RETENTION_DAYS (default: 90, RPi: 14)
 - ANTENNA_SNAPSHOT_RETENTION_DAYS (default: 7, RPi: 3)
 """
+
 import logging
 import os
 from datetime import timedelta
@@ -56,18 +57,16 @@ def cleanup_old_sightings():
     """
     from skyspy.models import AircraftSighting
 
-    retention_days = _get_retention_days('SIGHTING_RETENTION_DAYS', 30)
+    retention_days = _get_retention_days("SIGHTING_RETENTION_DAYS", 30)
     cutoff = timezone.now() - timedelta(days=retention_days)
 
     try:
         # Count first for logging
-        count_to_delete = AircraftSighting.objects.filter(
-            timestamp__lt=cutoff
-        ).count()
+        count_to_delete = AircraftSighting.objects.filter(timestamp__lt=cutoff).count()
 
         if count_to_delete == 0:
             logger.debug(f"No sightings older than {retention_days} days to delete")
-            return {'deleted': 0, 'retention_days': retention_days}
+            return {"deleted": 0, "retention_days": retention_days}
 
         # Delete in batches to avoid long-running transactions
         batch_size = 10000
@@ -76,8 +75,7 @@ def cleanup_old_sightings():
         while True:
             # Get IDs of records to delete
             ids_to_delete = list(
-                AircraftSighting.objects.filter(timestamp__lt=cutoff)
-                .values_list('id', flat=True)[:batch_size]
+                AircraftSighting.objects.filter(timestamp__lt=cutoff).values_list("id", flat=True)[:batch_size]
             )
 
             if not ids_to_delete:
@@ -91,15 +89,11 @@ def cleanup_old_sightings():
 
         logger.info(f"Sighting cleanup: deleted {total_deleted} records older than {retention_days} days")
 
-        return {
-            'deleted': total_deleted,
-            'retention_days': retention_days,
-            'cutoff': cutoff.isoformat()
-        }
+        return {"deleted": total_deleted, "retention_days": retention_days, "cutoff": cutoff.isoformat()}
 
     except Exception as e:
         logger.error(f"Error cleaning up old sightings: {e}")
-        return {'error': str(e)}
+        return {"error": str(e)}
 
 
 @shared_task
@@ -111,26 +105,20 @@ def cleanup_old_sessions():
     """
     from skyspy.models import AircraftSession
 
-    retention_days = _get_retention_days('SESSION_RETENTION_DAYS', 90)
+    retention_days = _get_retention_days("SESSION_RETENTION_DAYS", 90)
     cutoff = timezone.now() - timedelta(days=retention_days)
 
     try:
-        deleted, _ = AircraftSession.objects.filter(
-            last_seen__lt=cutoff
-        ).delete()
+        deleted, _ = AircraftSession.objects.filter(last_seen__lt=cutoff).delete()
 
         if deleted > 0:
             logger.info(f"Session cleanup: deleted {deleted} records older than {retention_days} days")
 
-        return {
-            'deleted': deleted,
-            'retention_days': retention_days,
-            'cutoff': cutoff.isoformat()
-        }
+        return {"deleted": deleted, "retention_days": retention_days, "cutoff": cutoff.isoformat()}
 
     except Exception as e:
         logger.error(f"Error cleaning up old sessions: {e}")
-        return {'error': str(e)}
+        return {"error": str(e)}
 
 
 @shared_task
@@ -142,26 +130,20 @@ def cleanup_old_alert_history():
     """
     from skyspy.models import AlertHistory
 
-    retention_days = _get_retention_days('ALERT_HISTORY_DAYS', 30)
+    retention_days = _get_retention_days("ALERT_HISTORY_DAYS", 30)
     cutoff = timezone.now() - timedelta(days=retention_days)
 
     try:
-        deleted, _ = AlertHistory.objects.filter(
-            triggered_at__lt=cutoff
-        ).delete()
+        deleted, _ = AlertHistory.objects.filter(triggered_at__lt=cutoff).delete()
 
         if deleted > 0:
             logger.info(f"Alert history cleanup: deleted {deleted} records older than {retention_days} days")
 
-        return {
-            'deleted': deleted,
-            'retention_days': retention_days,
-            'cutoff': cutoff.isoformat()
-        }
+        return {"deleted": deleted, "retention_days": retention_days, "cutoff": cutoff.isoformat()}
 
     except Exception as e:
         logger.error(f"Error cleaning up old alert history: {e}")
-        return {'error': str(e)}
+        return {"error": str(e)}
 
 
 @shared_task
@@ -173,26 +155,20 @@ def cleanup_old_safety_events():
     """
     from skyspy.models import SafetyEvent
 
-    retention_days = _get_retention_days('SAFETY_EVENT_RETENTION_DAYS', 90)
+    retention_days = _get_retention_days("SAFETY_EVENT_RETENTION_DAYS", 90)
     cutoff = timezone.now() - timedelta(days=retention_days)
 
     try:
-        deleted, _ = SafetyEvent.objects.filter(
-            timestamp__lt=cutoff
-        ).delete()
+        deleted, _ = SafetyEvent.objects.filter(timestamp__lt=cutoff).delete()
 
         if deleted > 0:
             logger.info(f"Safety event cleanup: deleted {deleted} records older than {retention_days} days")
 
-        return {
-            'deleted': deleted,
-            'retention_days': retention_days,
-            'cutoff': cutoff.isoformat()
-        }
+        return {"deleted": deleted, "retention_days": retention_days, "cutoff": cutoff.isoformat()}
 
     except Exception as e:
         logger.error(f"Error cleaning up old safety events: {e}")
-        return {'error': str(e)}
+        return {"error": str(e)}
 
 
 @shared_task
@@ -204,26 +180,20 @@ def cleanup_old_notification_logs():
     """
     from skyspy.models import NotificationLog
 
-    retention_days = _get_retention_days('ALERT_HISTORY_DAYS', 30)
+    retention_days = _get_retention_days("ALERT_HISTORY_DAYS", 30)
     cutoff = timezone.now() - timedelta(days=retention_days)
 
     try:
-        deleted, _ = NotificationLog.objects.filter(
-            timestamp__lt=cutoff
-        ).delete()
+        deleted, _ = NotificationLog.objects.filter(timestamp__lt=cutoff).delete()
 
         if deleted > 0:
             logger.info(f"Notification log cleanup: deleted {deleted} records older than {retention_days} days")
 
-        return {
-            'deleted': deleted,
-            'retention_days': retention_days,
-            'cutoff': cutoff.isoformat()
-        }
+        return {"deleted": deleted, "retention_days": retention_days, "cutoff": cutoff.isoformat()}
 
     except Exception as e:
         logger.error(f"Error cleaning up old notification logs: {e}")
-        return {'error': str(e)}
+        return {"error": str(e)}
 
 
 @shared_task
@@ -238,7 +208,7 @@ def cleanup_old_antenna_snapshots():
     """
     from skyspy.models import AntennaAnalyticsSnapshot
 
-    retention_days = _get_retention_days('ANTENNA_SNAPSHOT_RETENTION_DAYS', 7)
+    retention_days = _get_retention_days("ANTENNA_SNAPSHOT_RETENTION_DAYS", 7)
 
     try:
         now = timezone.now()
@@ -246,22 +216,19 @@ def cleanup_old_antenna_snapshots():
         # Delete scheduled snapshots older than retention_days
         scheduled_cutoff = now - timedelta(days=retention_days)
         deleted_scheduled, _ = AntennaAnalyticsSnapshot.objects.filter(
-            timestamp__lt=scheduled_cutoff,
-            snapshot_type='scheduled'
+            timestamp__lt=scheduled_cutoff, snapshot_type="scheduled"
         ).delete()
 
         # Delete hourly snapshots older than 30 days
         hourly_cutoff = now - timedelta(days=30)
         deleted_hourly, _ = AntennaAnalyticsSnapshot.objects.filter(
-            timestamp__lt=hourly_cutoff,
-            snapshot_type='hourly'
+            timestamp__lt=hourly_cutoff, snapshot_type="hourly"
         ).delete()
 
         # Delete daily snapshots older than 365 days
         daily_cutoff = now - timedelta(days=365)
         deleted_daily, _ = AntennaAnalyticsSnapshot.objects.filter(
-            timestamp__lt=daily_cutoff,
-            snapshot_type='daily'
+            timestamp__lt=daily_cutoff, snapshot_type="daily"
         ).delete()
 
         total_deleted = deleted_scheduled + deleted_hourly + deleted_daily
@@ -273,16 +240,16 @@ def cleanup_old_antenna_snapshots():
             )
 
         return {
-            'scheduled_deleted': deleted_scheduled,
-            'hourly_deleted': deleted_hourly,
-            'daily_deleted': deleted_daily,
-            'total_deleted': total_deleted,
-            'retention_days': retention_days
+            "scheduled_deleted": deleted_scheduled,
+            "hourly_deleted": deleted_hourly,
+            "daily_deleted": deleted_daily,
+            "total_deleted": total_deleted,
+            "retention_days": retention_days,
         }
 
     except Exception as e:
         logger.error(f"Error cleaning up old antenna snapshots: {e}")
-        return {'error': str(e)}
+        return {"error": str(e)}
 
 
 @shared_task
@@ -298,22 +265,16 @@ def cleanup_old_acars_messages():
     cutoff = timezone.now() - timedelta(days=retention_days)
 
     try:
-        deleted, _ = AcarsMessage.objects.filter(
-            timestamp__lt=cutoff
-        ).delete()
+        deleted, _ = AcarsMessage.objects.filter(timestamp__lt=cutoff).delete()
 
         if deleted > 0:
             logger.info(f"ACARS message cleanup: deleted {deleted} records older than {retention_days} days")
 
-        return {
-            'deleted': deleted,
-            'retention_days': retention_days,
-            'cutoff': cutoff.isoformat()
-        }
+        return {"deleted": deleted, "retention_days": retention_days, "cutoff": cutoff.isoformat()}
 
     except Exception as e:
         logger.error(f"Error cleaning up old ACARS messages: {e}")
-        return {'error': str(e)}
+        return {"error": str(e)}
 
 
 @shared_task
@@ -328,51 +289,51 @@ def run_all_cleanup_tasks():
 
     # Run each cleanup task
     try:
-        results['sightings'] = cleanup_old_sightings()
+        results["sightings"] = cleanup_old_sightings()
     except Exception as e:
-        results['sightings'] = {'error': str(e)}
+        results["sightings"] = {"error": str(e)}
 
     try:
-        results['sessions'] = cleanup_old_sessions()
+        results["sessions"] = cleanup_old_sessions()
     except Exception as e:
-        results['sessions'] = {'error': str(e)}
+        results["sessions"] = {"error": str(e)}
 
     try:
-        results['alert_history'] = cleanup_old_alert_history()
+        results["alert_history"] = cleanup_old_alert_history()
     except Exception as e:
-        results['alert_history'] = {'error': str(e)}
+        results["alert_history"] = {"error": str(e)}
 
     try:
-        results['safety_events'] = cleanup_old_safety_events()
+        results["safety_events"] = cleanup_old_safety_events()
     except Exception as e:
-        results['safety_events'] = {'error': str(e)}
+        results["safety_events"] = {"error": str(e)}
 
     try:
-        results['notification_logs'] = cleanup_old_notification_logs()
+        results["notification_logs"] = cleanup_old_notification_logs()
     except Exception as e:
-        results['notification_logs'] = {'error': str(e)}
+        results["notification_logs"] = {"error": str(e)}
 
     try:
-        results['antenna_snapshots'] = cleanup_old_antenna_snapshots()
+        results["antenna_snapshots"] = cleanup_old_antenna_snapshots()
     except Exception as e:
-        results['antenna_snapshots'] = {'error': str(e)}
+        results["antenna_snapshots"] = {"error": str(e)}
 
     try:
-        results['acars_messages'] = cleanup_old_acars_messages()
+        results["acars_messages"] = cleanup_old_acars_messages()
     except Exception as e:
-        results['acars_messages'] = {'error': str(e)}
+        results["acars_messages"] = {"error": str(e)}
 
     # Calculate totals
     total_deleted = sum(
-        r.get('deleted', 0) or r.get('total_deleted', 0)
+        r.get("deleted", 0) or r.get("total_deleted", 0)
         for r in results.values()
-        if isinstance(r, dict) and 'error' not in r
+        if isinstance(r, dict) and "error" not in r
     )
 
     logger.info(f"Total cleanup: deleted {total_deleted} records across all tables")
 
-    results['total_deleted'] = total_deleted
-    results['timestamp'] = timezone.now().isoformat()
+    results["total_deleted"] = total_deleted
+    results["timestamp"] = timezone.now().isoformat()
 
     return results
 
@@ -388,11 +349,11 @@ def vacuum_analyze_tables():
     Note: This is PostgreSQL-specific.
     """
     tables = [
-        'skyspy_aircraftsighting',
-        'skyspy_aircraftsession',
-        'skyspy_alerthistory',
-        'skyspy_safetyevent',
-        'skyspy_antennaanalyticssnapshot',
+        "skyspy_aircraftsighting",
+        "skyspy_aircraftsession",
+        "skyspy_alerthistory",
+        "skyspy_safetyevent",
+        "skyspy_antennaanalyticssnapshot",
     ]
 
     results = {}
@@ -402,10 +363,10 @@ def vacuum_analyze_tables():
             with connection.cursor() as cursor:
                 # VACUUM ANALYZE must run outside a transaction
                 cursor.execute(f"VACUUM ANALYZE {table}")
-            results[table] = 'success'
+            results[table] = "success"
             logger.debug(f"VACUUM ANALYZE completed for {table}")
         except Exception as e:
-            results[table] = f'error: {str(e)}'
+            results[table] = f"error: {str(e)}"
             logger.warning(f"VACUUM ANALYZE failed for {table}: {e}")
 
     logger.info(f"VACUUM ANALYZE completed for {len([r for r in results.values() if r == 'success'])} tables")

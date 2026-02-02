@@ -1,33 +1,34 @@
 """
 Alert rules, subscriptions, and history API views.
 """
+
 import logging
 from datetime import timedelta
 
-from django.db.models import Q, Count
+from django.db.models import Count, Q
 from django.utils import timezone
-from rest_framework import viewsets, status
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import OpenApiParameter, extend_schema
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from skyspy.api.throttles import AuthRateThrottle
-from skyspy.models import AlertRule, AlertHistory, AlertSubscription, AlertAggregate
+from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
+from skyspy.auth.permissions import CanAccessAlert, IsOwnerOrAdmin
+from skyspy.models import AlertAggregate, AlertHistory, AlertRule, AlertSubscription
 from skyspy.serializers.alerts import (
-    AlertRuleSerializer,
-    AlertRuleCreateSerializer,
-    AlertRuleUpdateSerializer,
-    AlertHistorySerializer,
-    AlertSubscriptionSerializer,
     AlertAggregateSerializer,
+    AlertHistorySerializer,
+    AlertRuleCreateSerializer,
+    AlertRuleSerializer,
     AlertRuleTestSerializer,
+    AlertRuleUpdateSerializer,
+    AlertSubscriptionSerializer,
     BulkRuleIdsSerializer,
 )
-from skyspy.services.alerts import alert_service
 from skyspy.services.alert_metrics import alert_metrics
-from skyspy.auth.authentication import OptionalJWTAuthentication, APIKeyAuthentication
-from skyspy.auth.permissions import CanAccessAlert, IsOwnerOrAdmin
+from skyspy.services.alerts import alert_service
 
 logger = logging.getLogger(__name__)
 
@@ -41,25 +42,27 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
 
     queryset = AlertRule.objects.all()
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['enabled', 'priority', 'rule_type', 'visibility']
+    filterset_fields = ["enabled", "priority", "rule_type", "visibility"]
 
     def get_serializer_class(self):
-        if self.action == 'create':
+        if self.action == "create":
             return AlertRuleCreateSerializer
-        elif self.action in ['update', 'partial_update']:
+        elif self.action in ["update", "partial_update"]:
             return AlertRuleUpdateSerializer
-        elif self.action in ['test', 'test_rule']:
+        elif self.action in ["test", "test_rule"]:
             return AlertRuleTestSerializer
-        elif self.action in ['bulk_create', 'bulk_delete', 'bulk_toggle']:
+        elif self.action in ["bulk_create", "bulk_delete", "bulk_toggle"]:
             return BulkRuleIdsSerializer
         return AlertRuleSerializer
 
     def get_queryset(self):
         """Filter rules by ownership and visibility."""
-        queryset = super().get_queryset().select_related('owner').prefetch_related(
-            'notification_channels'
-        ).annotate(
-            _subscriber_count=Count('subscriptions')
+        queryset = (
+            super()
+            .get_queryset()
+            .select_related("owner")
+            .prefetch_related("notification_channels")
+            .annotate(_subscriber_count=Count("subscriptions"))
         )
         user = self.request.user
 
@@ -74,14 +77,10 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
                 return queryset
             else:
                 # Users see: their own rules + shared + public rules
-                return queryset.filter(
-                    Q(owner=user) |
-                    Q(visibility='public') |
-                    Q(visibility='shared')
-                ).distinct()
+                return queryset.filter(Q(owner=user) | Q(visibility="public") | Q(visibility="shared")).distinct()
         else:
             # Anonymous users only see public rules
-            return queryset.filter(visibility='public')
+            return queryset.filter(visibility="public")
 
     def _user_has_manage_all_permission(self, user):
         """Check if user has alerts.manage_all permission or superadmin role.
@@ -92,19 +91,19 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
             return False
 
         # Cache the result on the request object to avoid N+1 queries
-        request = getattr(self, 'request', None)
-        if request is not None:
-            if hasattr(request, '_manage_all_permission'):
-                return request._manage_all_permission
+        request = getattr(self, "request", None)
+        if request is not None and hasattr(request, "_manage_all_permission"):
+            return request._manage_all_permission
 
         # Check if user has admin/superadmin role or explicit permission
         from skyspy.models.auth import UserRole
-        user_roles = UserRole.objects.filter(user=user).select_related('role')
+
+        user_roles = UserRole.objects.filter(user=user).select_related("role")
         result = False
         for user_role in user_roles:
             permissions = user_role.role.permissions or []
             role_name = user_role.role.name.lower()
-            if 'alerts.manage_all' in permissions or role_name in ('admin', 'superadmin'):
+            if "alerts.manage_all" in permissions or role_name in ("admin", "superadmin"):
                 result = True
                 break
 
@@ -121,11 +120,12 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
         if user.is_superuser:
             return True
         from skyspy.models.auth import UserRole
-        return UserRole.objects.filter(user=user, role__name='superadmin').exists()
+
+        return UserRole.objects.filter(user=user, role__name="superadmin").exists()
 
     def get_object_for_permission_check(self):
         """Get object without queryset filtering for permission checks."""
-        pk = self.kwargs.get('pk')
+        pk = self.kwargs.get("pk")
         try:
             return AlertRule.objects.get(pk=pk)
         except AlertRule.DoesNotExist:
@@ -133,22 +133,16 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         """Update with proper permission checking (403 vs 404)."""
-        partial = kwargs.pop('partial', False)
+        partial = kwargs.pop("partial", False)
 
         # First check if the rule exists at all
         rule = self.get_object_for_permission_check()
         if rule is None:
-            return Response(
-                {'error': 'Rule not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Rule not found"}, status=status.HTTP_404_NOT_FOUND)
 
         # Check if user can edit this rule
         if not rule.can_be_edited_by(request.user) and not self._user_has_manage_all_permission(request.user):
-            return Response(
-                {'error': 'You do not have permission to edit this rule'},
-                status=status.HTTP_403_FORBIDDEN
-            )
+            return Response({"error": "You do not have permission to edit this rule"}, status=status.HTTP_403_FORBIDDEN)
 
         # Perform the update directly using the rule we already fetched
         # (avoids re-fetching via get_queryset which may filter out the object)
@@ -156,7 +150,7 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
 
-        if getattr(rule, '_prefetched_objects_cache', None):
+        if getattr(rule, "_prefetched_objects_cache", None):
             # If 'prefetch_related' has been applied to a queryset, we need to
             # forcibly invalidate the prefetch cache on the instance.
             rule._prefetched_objects_cache = {}
@@ -168,10 +162,7 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
         # First check if the rule exists at all
         rule = self.get_object_for_permission_check()
         if rule is None:
-            return Response(
-                {'error': 'Rule not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Rule not found"}, status=status.HTTP_404_NOT_FOUND)
 
         # Check if user can delete this rule
         # Superadmin role users can delete any rule including system rules
@@ -180,8 +171,7 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
 
         if not can_delete:
             return Response(
-                {'error': 'You do not have permission to delete this rule'},
-                status=status.HTTP_403_FORBIDDEN
+                {"error": "You do not have permission to delete this rule"}, status=status.HTTP_403_FORBIDDEN
             )
 
         # Use normal destroy flow (skip perform_destroy permission check for superadmin)
@@ -194,42 +184,26 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
 
         return super().destroy(request, *args, **kwargs)
 
-    @extend_schema(
-        summary="List alert rules",
-        responses={200: AlertRuleSerializer(many=True)}
-    )
+    @extend_schema(summary="List alert rules", responses={200: AlertRuleSerializer(many=True)})
     def list(self, request, *args, **kwargs):
         """List all alert rules (filtered by ownership/visibility)."""
         queryset = self.filter_queryset(self.get_queryset())
-        serializer = AlertRuleSerializer(queryset, many=True, context={'request': request})
-        return Response({
-            'rules': serializer.data,
-            'count': len(serializer.data)
-        })
+        serializer = AlertRuleSerializer(queryset, many=True, context={"request": request})
+        return Response({"rules": serializer.data, "count": len(serializer.data)})
 
-    @extend_schema(
-        summary="Create alert rule",
-        request=AlertRuleCreateSerializer,
-        responses={201: AlertRuleSerializer}
-    )
+    @extend_schema(summary="Create alert rule", request=AlertRuleCreateSerializer, responses={201: AlertRuleSerializer})
     def create(self, request, *args, **kwargs):
         """Create a new alert rule."""
         serializer = AlertRuleCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         # Set owner if user is authenticated
-        if request.user.is_authenticated:
-            rule = serializer.save(owner=request.user)
-        else:
-            rule = serializer.save()
+        rule = serializer.save(owner=request.user) if request.user.is_authenticated else serializer.save()
 
         # Invalidate cache
         alert_service.invalidate_cache()
 
-        return Response(
-            AlertRuleSerializer(rule).data,
-            status=status.HTTP_201_CREATED
-        )
+        return Response(AlertRuleSerializer(rule).data, status=status.HTTP_201_CREATED)
 
     def perform_update(self, serializer):
         """Update and invalidate cache."""
@@ -240,6 +214,7 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
         """Check permissions before delete."""
         if not instance.can_be_deleted_by(self.request.user):
             from rest_framework.exceptions import PermissionDenied
+
             raise PermissionDenied("Cannot delete this rule")
 
         # Clear cooldowns for this rule
@@ -248,11 +223,9 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
         alert_service.invalidate_cache()
 
     @extend_schema(
-        summary="Toggle alert rule",
-        description="Enable or disable an alert rule",
-        responses={200: AlertRuleSerializer}
+        summary="Toggle alert rule", description="Enable or disable an alert rule", responses={200: AlertRuleSerializer}
     )
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def toggle(self, request, pk=None):
         """Toggle rule enabled status."""
         rule = self.get_object()
@@ -261,96 +234,79 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
         alert_service.invalidate_cache()
         return Response(AlertRuleSerializer(rule).data)
 
-    @extend_schema(
-        summary="Get user's own rules",
-        responses={200: AlertRuleSerializer(many=True)}
-    )
-    @action(detail=False, methods=['get'], url_path='my-rules')
+    @extend_schema(summary="Get user's own rules", responses={200: AlertRuleSerializer(many=True)})
+    @action(detail=False, methods=["get"], url_path="my-rules")
     def my_rules(self, request):
         """Get rules owned by the current user."""
         if not request.user.is_authenticated:
-            return Response({'rules': [], 'count': 0})
+            return Response({"rules": [], "count": 0})
 
         queryset = AlertRule.objects.filter(owner=request.user)
-        serializer = AlertRuleSerializer(queryset, many=True, context={'request': request})
-        return Response({
-            'rules': serializer.data,
-            'count': queryset.count()
-        })
+        serializer = AlertRuleSerializer(queryset, many=True, context={"request": request})
+        return Response({"rules": serializer.data, "count": queryset.count()})
 
-    @extend_schema(
-        summary="Get shared rules for subscription",
-        responses={200: AlertRuleSerializer(many=True)}
-    )
-    @action(detail=False, methods=['get'])
+    @extend_schema(summary="Get shared rules for subscription", responses={200: AlertRuleSerializer(many=True)})
+    @action(detail=False, methods=["get"])
     def shared(self, request):
         """Get shared rules available for subscription."""
-        queryset = AlertRule.objects.filter(
-            visibility__in=['shared', 'public'],
-            enabled=True
-        ).exclude(owner=request.user if request.user.is_authenticated else None)
+        queryset = AlertRule.objects.filter(visibility__in=["shared", "public"], enabled=True).exclude(
+            owner=request.user if request.user.is_authenticated else None
+        )
 
-        serializer = AlertRuleSerializer(queryset, many=True, context={'request': request})
-        return Response({
-            'rules': serializer.data,
-            'count': queryset.count()
-        })
+        serializer = AlertRuleSerializer(queryset, many=True, context={"request": request})
+        return Response({"rules": serializer.data, "count": queryset.count()})
 
     @extend_schema(
-        summary="Test a rule against sample aircraft",
-        request=AlertRuleTestSerializer,
-        responses={200: dict}
+        summary="Test a rule against sample aircraft", request=AlertRuleTestSerializer, responses={200: dict}
     )
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=["post"])
     def test(self, request):
         """Test a rule configuration against sample aircraft data."""
-        rule_data = request.data.get('rule', {})
-        sample_aircraft = request.data.get('aircraft', [])
+        rule_data = request.data.get("rule", {})
+        sample_aircraft = request.data.get("aircraft", [])
 
         # If no aircraft provided, could fetch current live aircraft
         if not sample_aircraft:
-            return Response({
-                'would_match': 0,
-                'matched_aircraft': [],
-                'rule_valid': True,
-                'aircraft_tested': 0,
-                'message': 'No aircraft data provided for testing'
-            })
+            return Response(
+                {
+                    "would_match": 0,
+                    "matched_aircraft": [],
+                    "rule_valid": True,
+                    "aircraft_tested": 0,
+                    "message": "No aircraft data provided for testing",
+                }
+            )
 
         result = alert_service.test_rule_against_aircraft(rule_data, sample_aircraft)
         return Response(result)
 
     @extend_schema(
-        summary="Test an existing rule against sample aircraft",
-        request=AlertRuleTestSerializer,
-        responses={200: dict}
+        summary="Test an existing rule against sample aircraft", request=AlertRuleTestSerializer, responses={200: dict}
     )
-    @action(detail=True, methods=['post'], url_path='test')
+    @action(detail=True, methods=["post"], url_path="test")
     def test_rule(self, request, pk=None):
         """Test an existing rule against sample aircraft data."""
         rule = self.get_object()
-        aircraft_data = request.data.get('aircraft', {})
-        trigger_notifications = request.data.get('trigger_notifications', False)
+        aircraft_data = request.data.get("aircraft", {})
+        request.data.get("trigger_notifications", False)
 
         # Normalize aircraft data to list
-        if isinstance(aircraft_data, dict):
-            aircraft_list = [aircraft_data]
-        else:
-            aircraft_list = aircraft_data
+        aircraft_list = [aircraft_data] if isinstance(aircraft_data, dict) else aircraft_data
 
         # Check if rule is currently active (scheduling)
         from django.utils import timezone
+
         now = timezone.now()
         is_active = True
         active_reason = None
 
         if rule.starts_at and now < rule.starts_at:
             is_active = False
-            active_reason = 'not_started'
+            active_reason = "not_started"
 
         if rule.expires_at and now > rule.expires_at:
             is_active = False
-            active_reason = 'expired'
+            active_reason = "expired"
 
         # Check cooldown
         cooldown_active = False
@@ -361,68 +317,62 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
 
         # Build rule data from the model
         rule_data = {
-            'type': rule.rule_type,
-            'operator': rule.operator,
-            'value': rule.value,
-            'conditions': rule.conditions,
+            "type": rule.rule_type,
+            "operator": rule.operator,
+            "value": rule.value,
+            "conditions": rule.conditions,
         }
 
         # Test against aircraft
         match = False
         if aircraft_list:
             result = alert_service.test_rule_against_aircraft(rule_data, aircraft_list)
-            match = result.get('would_match', 0) > 0 or result.get('match', False)
+            match = result.get("would_match", 0) > 0 or result.get("match", False)
         else:
-            result = {'would_match': 0, 'matched_aircraft': []}
+            result = {"would_match": 0, "matched_aircraft": []}
 
-        return Response({
-            'match': match and is_active and not cooldown_active,
-            'active': is_active,
-            'active_reason': active_reason,
-            'cooldown_active': cooldown_active,
-            'rule': {
-                'id': rule.id,
-                'name': rule.name,
-                'enabled': rule.enabled,
-                'type': rule.rule_type,
-                'operator': rule.operator,
-                'value': rule.value,
-            },
-            'aircraft': aircraft_data,
-            'result': result,
-        })
+        return Response(
+            {
+                "match": match and is_active and not cooldown_active,
+                "active": is_active,
+                "active_reason": active_reason,
+                "cooldown_active": cooldown_active,
+                "rule": {
+                    "id": rule.id,
+                    "name": rule.name,
+                    "enabled": rule.enabled,
+                    "type": rule.rule_type,
+                    "operator": rule.operator,
+                    "value": rule.value,
+                },
+                "aircraft": aircraft_data,
+                "result": result,
+            }
+        )
 
-    @extend_schema(
-        summary="Get alert service status and metrics",
-        responses={200: dict}
-    )
-    @action(detail=False, methods=['get'])
+    @extend_schema(summary="Get alert service status and metrics", responses={200: dict})
+    @action(detail=False, methods=["get"])
     def metrics(self, request):
         """Get alert service metrics."""
-        return Response({
-            'service_status': alert_service.get_status(),
-            'metrics_summary': alert_metrics.get_summary(),
-            'rule_metrics': alert_metrics.get_rule_metrics(limit=20),
-            'timing_histogram': alert_metrics.get_timing_histogram(),
-        })
+        return Response(
+            {
+                "service_status": alert_service.get_status(),
+                "metrics_summary": alert_metrics.get_summary(),
+                "rule_metrics": alert_metrics.get_rule_metrics(limit=20),
+                "timing_histogram": alert_metrics.get_timing_histogram(),
+            }
+        )
 
     # Bulk operations
 
-    @extend_schema(
-        summary="Bulk create rules",
-        request=AlertRuleCreateSerializer(many=True),
-        responses={201: dict}
-    )
-    @action(detail=False, methods=['post'], url_path='bulk_create')
+    @extend_schema(summary="Bulk create rules", request=AlertRuleCreateSerializer(many=True), responses={201: dict})
+    @action(detail=False, methods=["post"], url_path="bulk_create")
     def bulk_create(self, request):
         """Create multiple rules at once (up to 100)."""
-        rules_data = request.data.get('rules', [])
+        rules_data = request.data.get("rules", [])
 
         if len(rules_data) > 100:
-            return Response(
-                {'error': 'Maximum 100 rules per request'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Maximum 100 rules per request"}, status=status.HTTP_400_BAD_REQUEST)
 
         created = []
         errors = []
@@ -430,36 +380,32 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
         for i, rule_data in enumerate(rules_data):
             serializer = AlertRuleCreateSerializer(data=rule_data)
             if serializer.is_valid():
-                if request.user.is_authenticated:
-                    rule = serializer.save(owner=request.user)
-                else:
-                    rule = serializer.save()
+                rule = serializer.save(owner=request.user) if request.user.is_authenticated else serializer.save()
                 created.append(AlertRuleSerializer(rule).data)
             else:
-                errors.append({'index': i, 'errors': serializer.errors})
+                errors.append({"index": i, "errors": serializer.errors})
 
         if created:
             alert_service.invalidate_cache()
 
-        return Response({
-            'created': len(created),
-            'rules': created,
-            'errors': errors,
-        }, status=status.HTTP_201_CREATED if created else status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                "created": len(created),
+                "rules": created,
+                "errors": errors,
+            },
+            status=status.HTTP_201_CREATED if created else status.HTTP_400_BAD_REQUEST,
+        )
 
-    @extend_schema(
-        summary="Bulk delete rules",
-        request=BulkRuleIdsSerializer,
-        responses={200: dict}
-    )
-    @action(detail=False, methods=['delete', 'post'], url_path='bulk_delete')
+    @extend_schema(summary="Bulk delete rules", request=BulkRuleIdsSerializer, responses={200: dict})
+    @action(detail=False, methods=["delete", "post"], url_path="bulk_delete")
     def bulk_delete(self, request):
         """Delete multiple rules by ID."""
         # Support both 'rule_ids' and 'ids' keys
-        rule_ids = request.data.get('rule_ids', []) or request.data.get('ids', [])
+        rule_ids = request.data.get("rule_ids", []) or request.data.get("ids", [])
 
         if not rule_ids:
-            return Response({'error': 'No rule_ids provided'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "No rule_ids provided"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Filter to rules user can delete
         queryset = AlertRule.objects.filter(id__in=rule_ids)
@@ -476,24 +422,22 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
         if deleted_count:
             alert_service.invalidate_cache()
 
-        return Response({
-            'deleted': deleted_count,
-            'requested': len(rule_ids),
-        })
+        return Response(
+            {
+                "deleted": deleted_count,
+                "requested": len(rule_ids),
+            }
+        )
 
-    @extend_schema(
-        summary="Bulk toggle rules",
-        request=BulkRuleIdsSerializer,
-        responses={200: dict}
-    )
-    @action(detail=False, methods=['post'], url_path='bulk_toggle')
+    @extend_schema(summary="Bulk toggle rules", request=BulkRuleIdsSerializer, responses={200: dict})
+    @action(detail=False, methods=["post"], url_path="bulk_toggle")
     def bulk_toggle(self, request):
         """Enable or disable multiple rules."""
-        rule_ids = request.data.get('rule_ids', [])
-        enabled = request.data.get('enabled', True)
+        rule_ids = request.data.get("rule_ids", [])
+        enabled = request.data.get("enabled", True)
 
         if not rule_ids:
-            return Response({'error': 'No rule_ids provided'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "No rule_ids provided"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Filter to rules user can edit
         queryset = AlertRule.objects.filter(id__in=rule_ids)
@@ -505,25 +449,27 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
         if updated:
             alert_service.invalidate_cache()
 
-        return Response({
-            'updated': updated,
-            'requested': len(rule_ids),
-            'enabled': enabled,
-        })
+        return Response(
+            {
+                "updated": updated,
+                "requested": len(rule_ids),
+                "enabled": enabled,
+            }
+        )
 
     @extend_schema(
         summary="Export all rules as JSON",
         parameters=[
-            OpenApiParameter(name='limit', type=int, description='Maximum rules to export (default: 500)'),
+            OpenApiParameter(name="limit", type=int, description="Maximum rules to export (default: 500)"),
         ],
-        responses={200: dict}
+        responses={200: dict},
     )
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def export(self, request):
         """Export all user's rules as JSON."""
         # Get limit parameter with default of 500
         try:
-            limit = int(request.query_params.get('limit', 500))
+            limit = int(request.query_params.get("limit", 500))
         except (ValueError, TypeError):
             limit = 500
         # Cap at reasonable maximum
@@ -532,25 +478,24 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
         if request.user.is_authenticated:
             queryset = AlertRule.objects.filter(owner=request.user)[:limit]
         else:
-            queryset = AlertRule.objects.filter(visibility='public')[:limit]
+            queryset = AlertRule.objects.filter(visibility="public")[:limit]
 
         serializer = AlertRuleSerializer(queryset, many=True)
-        return Response({
-            'rules': serializer.data,
-            'count': len(serializer.data),
-            'limit': limit,
-            'exported_at': timezone.now().isoformat(),
-        })
+        return Response(
+            {
+                "rules": serializer.data,
+                "count": len(serializer.data),
+                "limit": limit,
+                "exported_at": timezone.now().isoformat(),
+            }
+        )
 
-    @extend_schema(
-        summary="Import rules from JSON",
-        responses={201: dict}
-    )
-    @action(detail=False, methods=['post'], url_path='import')
+    @extend_schema(summary="Import rules from JSON", responses={201: dict})
+    @action(detail=False, methods=["post"], url_path="import")
     def import_rules(self, request):
         """Import rules from JSON (optionally replace all existing)."""
-        rules_data = request.data.get('rules', [])
-        replace_all = request.data.get('replace_all', False)
+        rules_data = request.data.get("rules", [])
+        replace_all = request.data.get("replace_all", False)
 
         if replace_all and request.user.is_authenticated:
             # Delete user's existing rules (except system rules)
@@ -561,30 +506,30 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
 
         for i, rule_data in enumerate(rules_data):
             # Remove fields that shouldn't be imported
-            rule_data.pop('id', None)
-            rule_data.pop('created_at', None)
-            rule_data.pop('updated_at', None)
-            rule_data.pop('last_triggered', None)
+            rule_data.pop("id", None)
+            rule_data.pop("created_at", None)
+            rule_data.pop("updated_at", None)
+            rule_data.pop("last_triggered", None)
 
             serializer = AlertRuleCreateSerializer(data=rule_data)
             if serializer.is_valid():
-                if request.user.is_authenticated:
-                    rule = serializer.save(owner=request.user)
-                else:
-                    rule = serializer.save()
+                rule = serializer.save(owner=request.user) if request.user.is_authenticated else serializer.save()
                 created.append(AlertRuleSerializer(rule).data)
             else:
-                errors.append({'index': i, 'errors': serializer.errors})
+                errors.append({"index": i, "errors": serializer.errors})
 
         if created:
             alert_service.invalidate_cache()
 
-        return Response({
-            'imported': len(created),
-            'rules': created,
-            'errors': errors,
-            'replaced_all': replace_all,
-        }, status=status.HTTP_201_CREATED)
+        return Response(
+            {
+                "imported": len(created),
+                "rules": created,
+                "errors": errors,
+                "replaced_all": replace_all,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class AlertSubscriptionViewSet(viewsets.ModelViewSet):
@@ -599,68 +544,45 @@ class AlertSubscriptionViewSet(viewsets.ModelViewSet):
     queryset = AlertSubscription.objects.all()
     serializer_class = AlertSubscriptionSerializer
     # Use rule_id as the lookup field for DELETE
-    lookup_field = 'rule_id'
+    lookup_field = "rule_id"
 
     def get_queryset(self):
         """Filter subscriptions to current user."""
         if self.request.user.is_authenticated:
-            return AlertSubscription.objects.filter(user=self.request.user).select_related('rule')
+            return AlertSubscription.objects.filter(user=self.request.user).select_related("rule")
         return AlertSubscription.objects.none()
 
-    @extend_schema(
-        summary="List user's subscriptions",
-        responses={200: AlertSubscriptionSerializer(many=True)}
-    )
+    @extend_schema(summary="List user's subscriptions", responses={200: AlertSubscriptionSerializer(many=True)})
     def list(self, request, *args, **kwargs):
         """List all subscriptions for the current user."""
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
-        return Response({
-            'subscriptions': serializer.data,
-            'count': queryset.count()
-        })
+        return Response({"subscriptions": serializer.data, "count": queryset.count()})
 
-    @extend_schema(
-        summary="Subscribe to a rule",
-        responses={201: AlertSubscriptionSerializer}
-    )
+    @extend_schema(summary="Subscribe to a rule", responses={201: AlertSubscriptionSerializer})
     def create(self, request, *args, **kwargs):
         """Subscribe to a shared/public rule."""
-        rule_id = request.data.get('rule_id')
-        notify = request.data.get('notify_on_trigger', True)
+        rule_id = request.data.get("rule_id")
+        notify = request.data.get("notify_on_trigger", True)
 
         if not rule_id:
-            return Response(
-                {'error': 'rule_id is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "rule_id is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             rule = AlertRule.objects.get(id=rule_id)
         except AlertRule.DoesNotExist:
-            return Response(
-                {'error': 'Rule not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Rule not found"}, status=status.HTTP_404_NOT_FOUND)
 
         # Check if rule is subscribable
-        if rule.visibility == 'private' and rule.owner != request.user:
-            return Response(
-                {'error': 'Cannot subscribe to private rule'},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        if rule.visibility == "private" and rule.owner != request.user:
+            return Response({"error": "Cannot subscribe to private rule"}, status=status.HTTP_403_FORBIDDEN)
 
         # Check if user is authenticated
         if not request.user.is_authenticated:
-            return Response(
-                {'error': 'Authentication required'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
+            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
 
         subscription, created = AlertSubscription.objects.get_or_create(
-            rule=rule,
-            user=request.user,
-            defaults={'notify_on_trigger': notify}
+            rule=rule, user=request.user, defaults={"notify_on_trigger": notify}
         )
 
         if not created:
@@ -670,75 +592,50 @@ class AlertSubscriptionViewSet(viewsets.ModelViewSet):
 
         return Response(
             AlertSubscriptionSerializer(subscription).data,
-            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
-    @extend_schema(
-        summary="Unsubscribe from a rule",
-        responses={204: None}
-    )
+    @extend_schema(summary="Unsubscribe from a rule", responses={204: None})
     def destroy(self, request, *args, **kwargs):
         """Unsubscribe from a rule by rule_id."""
-        rule_id = kwargs.get('rule_id')
+        rule_id = kwargs.get("rule_id")
 
         if not request.user.is_authenticated:
-            return Response(
-                {'error': 'Authentication required'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
+            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
-            subscription = AlertSubscription.objects.get(
-                rule_id=rule_id,
-                user=request.user
-            )
+            subscription = AlertSubscription.objects.get(rule_id=rule_id, user=request.user)
             subscription.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
         except AlertSubscription.DoesNotExist:
-            return Response(
-                {'error': 'Subscription not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Subscription not found"}, status=status.HTTP_404_NOT_FOUND)
 
-    @extend_schema(
-        summary="Subscribe to a rule (alternative endpoint)",
-        responses={201: AlertSubscriptionSerializer}
-    )
-    @action(detail=False, methods=['post'])
+    @extend_schema(summary="Subscribe to a rule (alternative endpoint)", responses={201: AlertSubscriptionSerializer})
+    @action(detail=False, methods=["post"])
     def subscribe(self, request):
         """Subscribe to a shared/public rule."""
         return self.create(request)
 
-    @extend_schema(
-        summary="Unsubscribe from a rule (alternative endpoint)",
-        responses={200: dict}
-    )
-    @action(detail=False, methods=['post'])
+    @extend_schema(summary="Unsubscribe from a rule (alternative endpoint)", responses={200: dict})
+    @action(detail=False, methods=["post"])
     def unsubscribe(self, request):
         """Unsubscribe from a rule."""
-        rule_id = request.data.get('rule_id')
+        rule_id = request.data.get("rule_id")
 
         if not rule_id:
-            return Response(
-                {'error': 'rule_id is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "rule_id is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         if not request.user.is_authenticated:
-            return Response(
-                {'error': 'Authentication required'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
+            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
 
-        deleted, _ = AlertSubscription.objects.filter(
-            rule_id=rule_id,
-            user=request.user
-        ).delete()
+        deleted, _ = AlertSubscription.objects.filter(rule_id=rule_id, user=request.user).delete()
 
-        return Response({
-            'unsubscribed': deleted > 0,
-            'rule_id': rule_id,
-        })
+        return Response(
+            {
+                "unsubscribed": deleted > 0,
+                "rule_id": rule_id,
+            }
+        )
 
 
 class AlertHistoryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -750,15 +647,15 @@ class AlertHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AlertHistory.objects.all()
     serializer_class = AlertHistorySerializer
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['rule_id', 'icao_hex', 'priority', 'acknowledged']
+    filterset_fields = ["rule_id", "icao_hex", "priority", "acknowledged"]
 
     def get_queryset(self):
         """Filter history by ownership and time range."""
-        queryset = super().get_queryset().select_related('rule', 'rule__owner', 'acknowledged_by')
+        queryset = super().get_queryset().select_related("rule", "rule__owner", "acknowledged_by")
         user = self.request.user
 
         # Time range filter
-        hours = self.request.query_params.get('hours', 24)
+        hours = self.request.query_params.get("hours", 24)
         try:
             hours = int(hours)
         except ValueError:
@@ -770,29 +667,24 @@ class AlertHistoryViewSet(viewsets.ReadOnlyModelViewSet):
         # Ownership filter
         if user.is_authenticated and not user.is_superuser:
             # User sees alerts from their rules or subscribed rules
-            subscribed_rule_ids = AlertSubscription.objects.filter(
-                user=user
-            ).values_list('rule_id', flat=True)
+            subscribed_rule_ids = AlertSubscription.objects.filter(user=user).values_list("rule_id", flat=True)
 
             queryset = queryset.filter(
-                Q(user=user) |
-                Q(rule__owner=user) |
-                Q(rule_id__in=subscribed_rule_ids) |
-                Q(rule__visibility='public')
+                Q(user=user) | Q(rule__owner=user) | Q(rule_id__in=subscribed_rule_ids) | Q(rule__visibility="public")
             )
         elif not user.is_authenticated:
             # Anonymous users see public alerts only
-            queryset = queryset.filter(rule__visibility='public')
+            queryset = queryset.filter(rule__visibility="public")
 
-        return queryset.order_by('-triggered_at')
+        return queryset.order_by("-triggered_at")
 
     @extend_schema(
         summary="List alert history",
         parameters=[
-            OpenApiParameter(name='hours', type=int, description='Time range in hours'),
-            OpenApiParameter(name='rule_id', type=int, description='Filter by rule ID'),
-            OpenApiParameter(name='icao_hex', type=str, description='Filter by ICAO hex'),
-        ]
+            OpenApiParameter(name="hours", type=int, description="Time range in hours"),
+            OpenApiParameter(name="rule_id", type=int, description="Filter by rule ID"),
+            OpenApiParameter(name="icao_hex", type=str, description="Filter by ICAO hex"),
+        ],
     )
     def list(self, request, *args, **kwargs):
         """List alert history entries."""
@@ -805,80 +697,58 @@ class AlertHistoryViewSet(viewsets.ReadOnlyModelViewSet):
             return self.get_paginated_response(serializer.data)
 
         serializer = self.get_serializer(queryset, many=True)
-        return Response({
-            'history': serializer.data,
-            'count': queryset.count()
-        })
+        return Response({"history": serializer.data, "count": queryset.count()})
 
-    @extend_schema(
-        summary="Get aggregated alert history",
-        responses={200: AlertAggregateSerializer(many=True)}
-    )
-    @action(detail=False, methods=['get'])
+    @extend_schema(summary="Get aggregated alert history", responses={200: AlertAggregateSerializer(many=True)})
+    @action(detail=False, methods=["get"])
     def aggregated(self, request):
         """Get alert history aggregated by rule and time window."""
-        hours = int(request.query_params.get('hours', 24))
-        window_minutes = int(request.query_params.get('window_minutes', 60))
+        hours = int(request.query_params.get("hours", 24))
+        int(request.query_params.get("window_minutes", 60))
 
         cutoff = timezone.now() - timedelta(hours=hours)
-        aggregates = AlertAggregate.objects.filter(
-            window_start__gte=cutoff
-        ).select_related('rule').order_by('-window_start')
+        aggregates = (
+            AlertAggregate.objects.filter(window_start__gte=cutoff).select_related("rule").order_by("-window_start")
+        )
 
         serializer = AlertAggregateSerializer(aggregates, many=True)
-        return Response({
-            'aggregates': serializer.data,
-            'count': aggregates.count(),
-        })
+        return Response(
+            {
+                "aggregates": serializer.data,
+                "count": aggregates.count(),
+            }
+        )
 
-    @extend_schema(
-        summary="Acknowledge an alert",
-        responses={200: AlertHistorySerializer}
-    )
-    @action(detail=True, methods=['post'])
+    @extend_schema(summary="Acknowledge an alert", responses={200: AlertHistorySerializer})
+    @action(detail=True, methods=["post"])
     def acknowledge(self, request, pk=None):
         """Mark an alert as acknowledged."""
         alert = self.get_object()
 
         if not request.user.is_authenticated:
-            return Response(
-                {'error': 'Authentication required'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
+            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
 
         alert.acknowledge(request.user)
         return Response(AlertHistorySerializer(alert).data)
 
-    @extend_schema(
-        summary="Acknowledge all unacknowledged alerts",
-        responses={200: dict}
-    )
-    @action(detail=False, methods=['post'], url_path='acknowledge-all')
+    @extend_schema(summary="Acknowledge all unacknowledged alerts", responses={200: dict})
+    @action(detail=False, methods=["post"], url_path="acknowledge-all")
     def acknowledge_all(self, request):
         """Acknowledge all unacknowledged alerts visible to user."""
         if not request.user.is_authenticated:
-            return Response(
-                {'error': 'Authentication required'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
+            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
 
         queryset = self.get_queryset().filter(acknowledged=False)
-        updated = queryset.update(
-            acknowledged=True,
-            acknowledged_by=request.user,
-            acknowledged_at=timezone.now()
+        updated = queryset.update(acknowledged=True, acknowledged_by=request.user, acknowledged_at=timezone.now())
+
+        return Response(
+            {
+                "acknowledged": updated,
+            }
         )
 
-        return Response({
-            'acknowledged': updated,
-        })
-
-    @extend_schema(
-        summary="Clear alert history",
-        description="Delete all alert history entries",
-        responses={200: None}
-    )
-    @action(detail=False, methods=['delete'])
+    @extend_schema(summary="Clear alert history", description="Delete all alert history entries", responses={200: None})
+    @action(detail=False, methods=["delete"])
     def clear(self, request):
         """Clear all alert history (admin only or own alerts)."""
         if request.user.is_superuser:
@@ -888,12 +758,6 @@ class AlertHistoryViewSet(viewsets.ReadOnlyModelViewSet):
             count = AlertHistory.objects.filter(user=request.user).count()
             AlertHistory.objects.filter(user=request.user).delete()
         else:
-            return Response(
-                {'error': 'Authentication required'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
+            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
 
-        return Response({
-            'deleted': count,
-            'message': f'Deleted {count} alert history entries'
-        })
+        return Response({"deleted": count, "message": f"Deleted {count} alert history entries"})

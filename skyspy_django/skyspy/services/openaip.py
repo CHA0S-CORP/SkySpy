@@ -6,15 +6,14 @@ OpenAIP API: https://www.openaip.net/
 
 Free tier: Unlimited with API key registration
 """
+
 import logging
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List
+from typing import Any
 
 import httpx
 from django.conf import settings
 from django.core.cache import cache
-from django.db import transaction
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
 
@@ -27,51 +26,51 @@ AIRPORTS_CACHE_TTL = 86400  # 24 hours
 
 # Airspace types mapping
 AIRSPACE_TYPES = {
-    0: 'OTHER',
-    1: 'RESTRICTED',
-    2: 'DANGER',
-    3: 'PROHIBITED',
-    4: 'CTR',
-    5: 'TMZ',
-    6: 'RMZ',
-    7: 'TMA',
-    8: 'TRA',
-    9: 'TSA',
-    10: 'FIR',
-    11: 'UIR',
-    12: 'ADIZ',
-    13: 'ATZ',
-    14: 'MATZ',
-    15: 'AIRWAY',
-    16: 'MTR',
-    17: 'ALERT',
-    18: 'WARNING',
-    19: 'PROTECTED',
-    20: 'HTZ',
-    21: 'GLIDING',
-    22: 'TRP',
-    23: 'TIZ',
-    24: 'TIA',
-    25: 'MTA',
-    26: 'CTA',
-    27: 'ACC',
-    28: 'SECTOR',
-    29: 'OCA',
-    30: 'MORA',
-    31: 'PARACHUTE',
-    32: 'WILDLIFE',
-    33: 'LMA',
+    0: "OTHER",
+    1: "RESTRICTED",
+    2: "DANGER",
+    3: "PROHIBITED",
+    4: "CTR",
+    5: "TMZ",
+    6: "RMZ",
+    7: "TMA",
+    8: "TRA",
+    9: "TSA",
+    10: "FIR",
+    11: "UIR",
+    12: "ADIZ",
+    13: "ATZ",
+    14: "MATZ",
+    15: "AIRWAY",
+    16: "MTR",
+    17: "ALERT",
+    18: "WARNING",
+    19: "PROTECTED",
+    20: "HTZ",
+    21: "GLIDING",
+    22: "TRP",
+    23: "TIZ",
+    24: "TIA",
+    25: "MTA",
+    26: "CTA",
+    27: "ACC",
+    28: "SECTOR",
+    29: "OCA",
+    30: "MORA",
+    31: "PARACHUTE",
+    32: "WILDLIFE",
+    33: "LMA",
 }
 
 
-def _get_api_key() -> Optional[str]:
+def _get_api_key() -> str | None:
     """Get OpenAIP API key from settings."""
-    return getattr(settings, 'OPENAIP_API_KEY', None)
+    return getattr(settings, "OPENAIP_API_KEY", None)
 
 
 def _is_enabled() -> bool:
     """Check if OpenAIP is enabled."""
-    return getattr(settings, 'OPENAIP_ENABLED', False) and _get_api_key()
+    return getattr(settings, "OPENAIP_ENABLED", False) and _get_api_key()
 
 
 @retry(
@@ -79,12 +78,7 @@ def _is_enabled() -> bool:
     wait=wait_exponential(multiplier=1, min=1, max=10),
     retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
 )
-def _http_get_openaip(
-    url: str,
-    params: Optional[Dict],
-    api_key: str,
-    timeout: float = 15.0
-) -> httpx.Response:
+def _http_get_openaip(url: str, params: dict | None, api_key: str, timeout: float = 15.0) -> httpx.Response:
     """HTTP GET with retry logic for OpenAIP API."""
     with httpx.Client(timeout=timeout) as client:
         response = client.get(
@@ -93,17 +87,13 @@ def _http_get_openaip(
             headers={
                 "x-openaip-api-key": api_key,
                 "Accept": "application/json",
-            }
+            },
         )
         response.raise_for_status()
         return response
 
 
-def _make_request(
-    endpoint: str,
-    params: Optional[Dict] = None,
-    timeout: int = 15
-) -> Optional[Dict[str, Any]]:
+def _make_request(endpoint: str, params: dict | None = None, timeout: int = 15) -> dict[str, Any] | None:
     """
     Make a request to the OpenAIP API with retry logic.
 
@@ -121,12 +111,7 @@ def _make_request(
         return None
 
     try:
-        response = _http_get_openaip(
-            f"{OPENAIP_API_BASE}/{endpoint}",
-            params,
-            api_key,
-            timeout=float(timeout)
-        )
+        response = _http_get_openaip(f"{OPENAIP_API_BASE}/{endpoint}", params, api_key, timeout=float(timeout))
         return response.json()
 
     except httpx.HTTPStatusError as e:
@@ -146,8 +131,8 @@ def get_airspaces(
     lat: float,
     lon: float,
     radius_nm: float = 100,
-    airspace_types: Optional[List[int]] = None,
-) -> List[Dict[str, Any]]:
+    airspace_types: list[int] | None = None,
+) -> list[dict[str, Any]]:
     """
     Get airspace data for a region.
 
@@ -172,20 +157,20 @@ def get_airspaces(
     radius_km = radius_nm * 1.852
 
     params = {
-        'pos': f"{lat},{lon}",
-        'dist': int(radius_km * 1000),  # API expects meters
-        'limit': 200,
+        "pos": f"{lat},{lon}",
+        "dist": int(radius_km * 1000),  # API expects meters
+        "limit": 200,
     }
 
     if airspace_types:
-        params['type'] = ','.join(str(t) for t in airspace_types)
+        params["type"] = ",".join(str(t) for t in airspace_types)
 
-    result = _make_request('airspaces', params)
+    result = _make_request("airspaces", params)
 
     if not result:
         return []
 
-    items = result.get('items', [])
+    items = result.get("items", [])
     airspaces = []
 
     for item in items:
@@ -197,7 +182,7 @@ def get_airspaces(
     return airspaces
 
 
-def _parse_airspace(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _parse_airspace(item: dict[str, Any]) -> dict[str, Any] | None:
     """
     Parse an airspace item from the API response.
 
@@ -208,49 +193,43 @@ def _parse_airspace(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         Parsed airspace dictionary or None if invalid
     """
     try:
-        airspace_type_id = item.get('type', 0)
-        airspace_type = AIRSPACE_TYPES.get(airspace_type_id, 'OTHER')
+        airspace_type_id = item.get("type", 0)
+        airspace_type = AIRSPACE_TYPES.get(airspace_type_id, "OTHER")
 
         # Parse altitude limits
-        lower_limit = item.get('lowerLimit', {})
-        upper_limit = item.get('upperLimit', {})
+        lower_limit = item.get("lowerLimit", {})
+        upper_limit = item.get("upperLimit", {})
 
         floor_ft = None
         ceiling_ft = None
 
         if isinstance(lower_limit, dict):
-            floor_value = lower_limit.get('value', 0)
-            floor_unit = lower_limit.get('unit', 'ft')
-            if floor_unit == 'm':
-                floor_ft = int(floor_value * 3.281)
-            else:
-                floor_ft = int(floor_value)
+            floor_value = lower_limit.get("value", 0)
+            floor_unit = lower_limit.get("unit", "ft")
+            floor_ft = int(floor_value * 3.281) if floor_unit == "m" else int(floor_value)
 
         if isinstance(upper_limit, dict):
-            ceiling_value = upper_limit.get('value', 0)
-            ceiling_unit = upper_limit.get('unit', 'ft')
-            if ceiling_unit == 'm':
-                ceiling_ft = int(ceiling_value * 3.281)
-            else:
-                ceiling_ft = int(ceiling_value)
+            ceiling_value = upper_limit.get("value", 0)
+            ceiling_unit = upper_limit.get("unit", "ft")
+            ceiling_ft = int(ceiling_value * 3.281) if ceiling_unit == "m" else int(ceiling_value)
 
         # Parse geometry
-        geometry = item.get('geometry')
+        geometry = item.get("geometry")
         if not geometry:
             return None
 
         return {
-            'id': item.get('_id', ''),
-            'name': item.get('name', 'Unknown'),
-            'type': airspace_type,
-            'type_id': airspace_type_id,
-            'country': item.get('country', ''),
-            'floor_ft': floor_ft,
-            'ceiling_ft': ceiling_ft,
-            'floor_ref': lower_limit.get('referenceDatum', 'MSL') if isinstance(lower_limit, dict) else 'MSL',
-            'ceiling_ref': upper_limit.get('referenceDatum', 'MSL') if isinstance(upper_limit, dict) else 'MSL',
-            'geometry': geometry,
-            'source': 'openaip',
+            "id": item.get("_id", ""),
+            "name": item.get("name", "Unknown"),
+            "type": airspace_type,
+            "type_id": airspace_type_id,
+            "country": item.get("country", ""),
+            "floor_ft": floor_ft,
+            "ceiling_ft": ceiling_ft,
+            "floor_ref": lower_limit.get("referenceDatum", "MSL") if isinstance(lower_limit, dict) else "MSL",
+            "ceiling_ref": upper_limit.get("referenceDatum", "MSL") if isinstance(upper_limit, dict) else "MSL",
+            "geometry": geometry,
+            "source": "openaip",
         }
 
     except Exception as e:
@@ -262,8 +241,8 @@ def get_airports(
     lat: float,
     lon: float,
     radius_nm: float = 100,
-    airport_types: Optional[List[int]] = None,
-) -> List[Dict[str, Any]]:
+    airport_types: list[int] | None = None,
+) -> list[dict[str, Any]]:
     """
     Get airport data for a region.
 
@@ -287,20 +266,20 @@ def get_airports(
     radius_km = radius_nm * 1.852
 
     params = {
-        'pos': f"{lat},{lon}",
-        'dist': int(radius_km * 1000),
-        'limit': 200,
+        "pos": f"{lat},{lon}",
+        "dist": int(radius_km * 1000),
+        "limit": 200,
     }
 
     if airport_types:
-        params['type'] = ','.join(str(t) for t in airport_types)
+        params["type"] = ",".join(str(t) for t in airport_types)
 
-    result = _make_request('airports', params)
+    result = _make_request("airports", params)
 
     if not result:
         return []
 
-    items = result.get('items', [])
+    items = result.get("items", [])
     airports = []
 
     for item in items:
@@ -312,7 +291,7 @@ def get_airports(
     return airports
 
 
-def _parse_airport(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _parse_airport(item: dict[str, Any]) -> dict[str, Any] | None:
     """
     Parse an airport item from the API response.
 
@@ -324,8 +303,8 @@ def _parse_airport(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     try:
         # Parse location
-        geometry = item.get('geometry', {})
-        coordinates = geometry.get('coordinates', [])
+        geometry = item.get("geometry", {})
+        coordinates = geometry.get("coordinates", [])
 
         if len(coordinates) < 2:
             return None
@@ -333,18 +312,18 @@ def _parse_airport(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         lon, lat = coordinates[0], coordinates[1]
 
         return {
-            'id': item.get('_id', ''),
-            'name': item.get('name', 'Unknown'),
-            'icao': item.get('icaoCode', ''),
-            'iata': item.get('iataCode', ''),
-            'country': item.get('country', ''),
-            'latitude': lat,
-            'longitude': lon,
-            'elevation_ft': item.get('elevation', {}).get('value'),
-            'type': item.get('type', 0),
-            'runways': item.get('runways', []),
-            'frequencies': item.get('frequencies', []),
-            'source': 'openaip',
+            "id": item.get("_id", ""),
+            "name": item.get("name", "Unknown"),
+            "icao": item.get("icaoCode", ""),
+            "iata": item.get("iataCode", ""),
+            "country": item.get("country", ""),
+            "latitude": lat,
+            "longitude": lon,
+            "elevation_ft": item.get("elevation", {}).get("value"),
+            "type": item.get("type", 0),
+            "runways": item.get("runways", []),
+            "frequencies": item.get("frequencies", []),
+            "source": "openaip",
         }
 
     except Exception as e:
@@ -356,7 +335,7 @@ def get_navaids(
     lat: float,
     lon: float,
     radius_nm: float = 100,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Get navaid data for a region.
 
@@ -379,17 +358,17 @@ def get_navaids(
     radius_km = radius_nm * 1.852
 
     params = {
-        'pos': f"{lat},{lon}",
-        'dist': int(radius_km * 1000),
-        'limit': 200,
+        "pos": f"{lat},{lon}",
+        "dist": int(radius_km * 1000),
+        "limit": 200,
     }
 
-    result = _make_request('navaids', params)
+    result = _make_request("navaids", params)
 
     if not result:
         return []
 
-    items = result.get('items', [])
+    items = result.get("items", [])
     navaids = []
 
     for item in items:
@@ -401,7 +380,7 @@ def get_navaids(
     return navaids
 
 
-def _parse_navaid(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _parse_navaid(item: dict[str, Any]) -> dict[str, Any] | None:
     """
     Parse a navaid item from the API response.
 
@@ -412,8 +391,8 @@ def _parse_navaid(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         Parsed navaid dictionary or None if invalid
     """
     try:
-        geometry = item.get('geometry', {})
-        coordinates = geometry.get('coordinates', [])
+        geometry = item.get("geometry", {})
+        coordinates = geometry.get("coordinates", [])
 
         if len(coordinates) < 2:
             return None
@@ -421,29 +400,29 @@ def _parse_navaid(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         lon, lat = coordinates[0], coordinates[1]
 
         navaid_types = {
-            0: 'OTHER',
-            1: 'NDB',
-            2: 'VOR',
-            3: 'VOR-DME',
-            4: 'VORTAC',
-            5: 'TACAN',
-            6: 'DME',
-            7: 'NDB-DME',
+            0: "OTHER",
+            1: "NDB",
+            2: "VOR",
+            3: "VOR-DME",
+            4: "VORTAC",
+            5: "TACAN",
+            6: "DME",
+            7: "NDB-DME",
         }
 
-        type_id = item.get('type', 0)
+        type_id = item.get("type", 0)
 
         return {
-            'id': item.get('_id', ''),
-            'ident': item.get('identifier', ''),
-            'name': item.get('name', 'Unknown'),
-            'type': navaid_types.get(type_id, 'OTHER'),
-            'type_id': type_id,
-            'latitude': lat,
-            'longitude': lon,
-            'frequency': item.get('frequency', {}).get('value'),
-            'country': item.get('country', ''),
-            'source': 'openaip',
+            "id": item.get("_id", ""),
+            "ident": item.get("identifier", ""),
+            "name": item.get("name", "Unknown"),
+            "type": navaid_types.get(type_id, "OTHER"),
+            "type_id": type_id,
+            "latitude": lat,
+            "longitude": lon,
+            "frequency": item.get("frequency", {}).get("value"),
+            "country": item.get("country", ""),
+            "source": "openaip",
         }
 
     except Exception as e:
@@ -455,7 +434,7 @@ def get_reporting_points(
     lat: float,
     lon: float,
     radius_nm: float = 100,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Get reporting points for a region.
 
@@ -478,39 +457,41 @@ def get_reporting_points(
     radius_km = radius_nm * 1.852
 
     params = {
-        'pos': f"{lat},{lon}",
-        'dist': int(radius_km * 1000),
-        'limit': 200,
+        "pos": f"{lat},{lon}",
+        "dist": int(radius_km * 1000),
+        "limit": 200,
     }
 
-    result = _make_request('reporting-points', params)
+    result = _make_request("reporting-points", params)
 
     if not result:
         return []
 
-    items = result.get('items', [])
+    items = result.get("items", [])
     points = []
 
     for item in items:
-        geometry = item.get('geometry', {})
-        coordinates = geometry.get('coordinates', [])
+        geometry = item.get("geometry", {})
+        coordinates = geometry.get("coordinates", [])
 
         if len(coordinates) >= 2:
-            points.append({
-                'id': item.get('_id', ''),
-                'ident': item.get('identifier', ''),
-                'name': item.get('name', 'Unknown'),
-                'latitude': coordinates[1],
-                'longitude': coordinates[0],
-                'country': item.get('country', ''),
-                'source': 'openaip',
-            })
+            points.append(
+                {
+                    "id": item.get("_id", ""),
+                    "ident": item.get("identifier", ""),
+                    "name": item.get("name", "Unknown"),
+                    "latitude": coordinates[1],
+                    "longitude": coordinates[0],
+                    "country": item.get("country", ""),
+                    "source": "openaip",
+                }
+            )
 
     cache.set(cache_key, points, AIRPORTS_CACHE_TTL)
     return points
 
 
-def get_api_status() -> Dict[str, Any]:
+def get_api_status() -> dict[str, Any]:
     """
     Get OpenAIP API status and configuration.
 
@@ -518,8 +499,8 @@ def get_api_status() -> Dict[str, Any]:
         API status dictionary
     """
     return {
-        'enabled': _is_enabled(),
-        'api_key_configured': bool(_get_api_key()),
-        'cache_ttl_airspace': AIRSPACE_CACHE_TTL,
-        'cache_ttl_airports': AIRPORTS_CACHE_TTL,
+        "enabled": _is_enabled(),
+        "api_key_configured": bool(_get_api_key()),
+        "cache_ttl_airspace": AIRSPACE_CACHE_TTL,
+        "cache_ttl_airports": AIRPORTS_CACHE_TTL,
     }

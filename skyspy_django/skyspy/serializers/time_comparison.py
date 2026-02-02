@@ -8,12 +8,13 @@ Serializers for time-based comparison endpoints:
 - Weekend/weekday patterns
 - Daily, weekly, monthly totals
 """
-from rest_framework import serializers
 
+from rest_framework import serializers
 
 # =============================================================================
 # Week-over-Week Comparison
 # =============================================================================
+
 
 class WeekStatsSerializer(serializers.Serializer):
     """Statistics for a single week."""
@@ -59,6 +60,7 @@ class WeekComparisonSerializer(serializers.Serializer):
 # Seasonal Trends
 # =============================================================================
 
+
 class MonthlyDataEntrySerializer(serializers.Serializer):
     """Single month data entry."""
 
@@ -87,7 +89,7 @@ class SeasonalTrendsSerializer(serializers.Serializer):
     monthly_data = MonthlyDataEntrySerializer(many=True, help_text="Monthly data points")
     by_month_name = serializers.DictField(
         child=YearlyComparisonEntrySerializer(many=True),
-        help_text="Data grouped by month name for year-over-year comparison"
+        help_text="Data grouped by month name for year-over-year comparison",
     )
     months_included = serializers.IntegerField(help_text="Number of months included")
     timestamp = serializers.CharField(help_text="Calculation timestamp")
@@ -96,6 +98,7 @@ class SeasonalTrendsSerializer(serializers.Serializer):
 # =============================================================================
 # Day/Night Ratio
 # =============================================================================
+
 
 class DayNightPeriodSerializer(serializers.Serializer):
     """Statistics for day or night period."""
@@ -140,6 +143,7 @@ class DayNightRatioSerializer(serializers.Serializer):
 # =============================================================================
 # Weekend/Weekday Patterns
 # =============================================================================
+
 
 class WeekendWeekdayStatsSerializer(serializers.Serializer):
     """Statistics for weekend or weekday periods."""
@@ -186,6 +190,7 @@ class WeekendWeekdaySerializer(serializers.Serializer):
 # Daily Totals
 # =============================================================================
 
+
 class DailyTotalEntrySerializer(serializers.Serializer):
     """Single day total entry."""
 
@@ -224,6 +229,7 @@ class DailyTotalsSerializer(serializers.Serializer):
 # =============================================================================
 # Weekly Totals
 # =============================================================================
+
 
 class WeeklyTotalEntrySerializer(serializers.Serializer):
     """Single week total entry."""
@@ -264,6 +270,7 @@ class WeeklyTotalsSerializer(serializers.Serializer):
 # =============================================================================
 # Monthly Totals
 # =============================================================================
+
 
 class MonthlyTotalEntrySerializer(serializers.Serializer):
     """Single month total entry."""
@@ -306,6 +313,7 @@ class MonthlyTotalsSerializer(serializers.Serializer):
 # =============================================================================
 # Combined Time Comparison Stats
 # =============================================================================
+
 
 class TimeComparisonStatsSerializer(serializers.Serializer):
     """Combined time comparison statistics response."""

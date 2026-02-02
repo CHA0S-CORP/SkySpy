@@ -9,10 +9,8 @@ import hashlib
 import threading
 import time
 from collections import OrderedDict
-from dataclasses import dataclass, field
-from typing import Any, Optional
-
-from .exceptions import LibacarsError
+from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -134,7 +132,7 @@ class DecodeCache:
         label: str,
         text: str,
         direction: int,
-    ) -> Optional[Any]:
+    ) -> Any | None:
         """
         Get a cached decode result.
 
@@ -260,11 +258,7 @@ class DecodeCache:
             Number of entries removed
         """
         with self._lock:
-            expired_keys = [
-                key
-                for key, entry in self._cache.items()
-                if entry.is_expired(self._ttl)
-            ]
+            expired_keys = [key for key, entry in self._cache.items() if entry.is_expired(self._ttl)]
 
             for key in expired_keys:
                 del self._cache[key]
@@ -342,7 +336,7 @@ class LabelFormatCache:
             "unknown": 0,
         }
 
-    def is_supported(self, label: str) -> Optional[bool]:
+    def is_supported(self, label: str) -> bool | None:
         """
         Check if a label is known to be supported or unsupported.
 
@@ -386,7 +380,7 @@ class LabelFormatCache:
             if len(self._unsupported) < self._maxsize:
                 self._unsupported.add(label)
 
-    def get_format(self, label: str) -> Optional[str]:
+    def get_format(self, label: str) -> str | None:
         """Get the format name for a supported label."""
         with self._lock:
             return self._supported.get(label)
@@ -413,8 +407,8 @@ class LabelFormatCache:
 
 
 # Global cache instances (can be replaced/configured)
-_decode_cache: Optional[DecodeCache] = None
-_label_cache: Optional[LabelFormatCache] = None
+_decode_cache: DecodeCache | None = None
+_label_cache: LabelFormatCache | None = None
 
 
 def get_decode_cache(

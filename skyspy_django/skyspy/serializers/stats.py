@@ -1,33 +1,50 @@
 """
 Serializers for gamification and stats API endpoints.
 """
-from rest_framework import serializers
-from skyspy.models.stats import (
-    PersonalRecord, RareSighting, SpottedCount, SpottedAircraft,
-    SightingStreak, DailyStats, NotableRegistration, NotableCallsign, RareAircraftType,
-)
 
+from rest_framework import serializers
+
+from skyspy.models.stats import (
+    DailyStats,
+    NotableCallsign,
+    NotableRegistration,
+    PersonalRecord,
+    RareAircraftType,
+    RareSighting,
+    SightingStreak,
+    SpottedAircraft,
+    SpottedCount,
+)
 
 # ==========================================================================
 # Personal Records Serializers
 # ==========================================================================
 
+
 class PersonalRecordSerializer(serializers.ModelSerializer):
     """Serializer for personal record entries."""
 
-    record_type_display = serializers.CharField(
-        source='get_record_type_display',
-        read_only=True
-    )
+    record_type_display = serializers.CharField(source="get_record_type_display", read_only=True)
 
     class Meta:
         model = PersonalRecord
         fields = [
-            'id', 'record_type', 'record_type_display',
-            'icao_hex', 'callsign', 'aircraft_type', 'registration', 'operator',
-            'value', 'session_id', 'achieved_at',
-            'previous_value', 'previous_icao_hex', 'previous_achieved_at',
-            'created_at', 'updated_at',
+            "id",
+            "record_type",
+            "record_type_display",
+            "icao_hex",
+            "callsign",
+            "aircraft_type",
+            "registration",
+            "operator",
+            "value",
+            "session_id",
+            "achieved_at",
+            "previous_value",
+            "previous_icao_hex",
+            "previous_achieved_at",
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = fields
 
@@ -46,32 +63,39 @@ class NewRecordSerializer(serializers.Serializer):
     record_type_display = serializers.CharField(help_text="Human-readable record type")
     value = serializers.FloatField(help_text="New record value")
     icao_hex = serializers.CharField(help_text="Aircraft that set the record")
-    previous_value = serializers.FloatField(
-        allow_null=True,
-        help_text="Previous record value"
-    )
+    previous_value = serializers.FloatField(allow_null=True, help_text="Previous record value")
 
 
 # ==========================================================================
 # Rare Sightings Serializers
 # ==========================================================================
 
+
 class RareSightingSerializer(serializers.ModelSerializer):
     """Serializer for rare sighting entries."""
 
-    rarity_type_display = serializers.CharField(
-        source='get_rarity_type_display',
-        read_only=True
-    )
+    rarity_type_display = serializers.CharField(source="get_rarity_type_display", read_only=True)
 
     class Meta:
         model = RareSighting
         fields = [
-            'id', 'rarity_type', 'rarity_type_display',
-            'icao_hex', 'callsign', 'registration', 'aircraft_type', 'operator',
-            'sighted_at', 'session_id', 'description', 'rarity_score',
-            'times_seen', 'last_seen', 'is_acknowledged',
-            'created_at', 'updated_at',
+            "id",
+            "rarity_type",
+            "rarity_type_display",
+            "icao_hex",
+            "callsign",
+            "registration",
+            "aircraft_type",
+            "operator",
+            "sighted_at",
+            "session_id",
+            "description",
+            "rarity_score",
+            "times_seen",
+            "last_seen",
+            "is_acknowledged",
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = fields
 
@@ -95,16 +119,29 @@ class RareSightingAcknowledgeSerializer(serializers.Serializer):
 # Collection Stats Serializers
 # ==========================================================================
 
+
 class SpottedAircraftSerializer(serializers.ModelSerializer):
     """Serializer for spotted aircraft entries."""
 
     class Meta:
         model = SpottedAircraft
         fields = [
-            'icao_hex', 'registration', 'aircraft_type', 'manufacturer', 'model',
-            'operator', 'operator_icao', 'country', 'is_military',
-            'first_seen', 'last_seen', 'times_seen', 'total_positions',
-            'max_distance_nm', 'max_altitude', 'max_speed',
+            "icao_hex",
+            "registration",
+            "aircraft_type",
+            "manufacturer",
+            "model",
+            "operator",
+            "operator_icao",
+            "country",
+            "is_military",
+            "first_seen",
+            "last_seen",
+            "times_seen",
+            "total_positions",
+            "max_distance_nm",
+            "max_altitude",
+            "max_speed",
         ]
         read_only_fields = fields
 
@@ -112,17 +149,20 @@ class SpottedAircraftSerializer(serializers.ModelSerializer):
 class SpottedCountSerializer(serializers.ModelSerializer):
     """Serializer for spotted count aggregations."""
 
-    count_type_display = serializers.CharField(
-        source='get_count_type_display',
-        read_only=True
-    )
+    count_type_display = serializers.CharField(source="get_count_type_display", read_only=True)
 
     class Meta:
         model = SpottedCount
         fields = [
-            'count_type', 'count_type_display', 'identifier', 'display_name',
-            'unique_aircraft', 'total_sightings', 'total_sessions',
-            'first_seen', 'last_seen',
+            "count_type",
+            "count_type_display",
+            "identifier",
+            "display_name",
+            "unique_aircraft",
+            "total_sightings",
+            "total_sessions",
+            "first_seen",
+            "last_seen",
         ]
         read_only_fields = fields
 
@@ -153,14 +193,8 @@ class CollectionStatsResponseSerializer(serializers.Serializer):
     unique_types = serializers.IntegerField(help_text="Unique aircraft types")
     unique_operators = serializers.IntegerField(help_text="Unique operators")
     unique_countries = serializers.IntegerField(help_text="Unique countries")
-    first_aircraft = FirstLastAircraftSerializer(
-        allow_null=True,
-        help_text="First aircraft ever spotted"
-    )
-    last_aircraft = FirstLastAircraftSerializer(
-        allow_null=True,
-        help_text="Most recently spotted aircraft"
-    )
+    first_aircraft = FirstLastAircraftSerializer(allow_null=True, help_text="First aircraft ever spotted")
+    last_aircraft = FirstLastAircraftSerializer(allow_null=True, help_text="Most recently spotted aircraft")
     most_seen = MostSeenAircraftSerializer(many=True, help_text="Most frequently seen aircraft")
     timestamp = serializers.CharField(help_text="Response timestamp")
 
@@ -209,21 +243,25 @@ class SpottedByOperatorResponseSerializer(serializers.Serializer):
 # Streak Serializers
 # ==========================================================================
 
+
 class SightingStreakSerializer(serializers.ModelSerializer):
     """Serializer for sighting streak entries."""
 
-    streak_type_display = serializers.CharField(
-        source='get_streak_type_display',
-        read_only=True
-    )
+    streak_type_display = serializers.CharField(source="get_streak_type_display", read_only=True)
 
     class Meta:
         model = SightingStreak
         fields = [
-            'streak_type', 'streak_type_display',
-            'current_streak_days', 'current_streak_start', 'last_qualifying_date',
-            'best_streak_days', 'best_streak_start', 'best_streak_end',
-            'created_at', 'updated_at',
+            "streak_type",
+            "streak_type_display",
+            "current_streak_days",
+            "current_streak_start",
+            "last_qualifying_date",
+            "best_streak_days",
+            "best_streak_start",
+            "best_streak_end",
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = fields
 
@@ -239,6 +277,7 @@ class StreaksResponseSerializer(serializers.Serializer):
 # Daily Stats Serializers
 # ==========================================================================
 
+
 class DailyStatsSerializer(serializers.ModelSerializer):
     """Serializer for daily stats entries."""
 
@@ -248,10 +287,17 @@ class DailyStatsSerializer(serializers.ModelSerializer):
     class Meta:
         model = DailyStats
         fields = [
-            'date', 'unique_aircraft', 'new_aircraft', 'total_sessions',
-            'total_positions', 'military_count',
-            'max_distance_nm', 'max_altitude', 'max_speed',
-            'top_types', 'top_operators',
+            "date",
+            "unique_aircraft",
+            "new_aircraft",
+            "total_sessions",
+            "total_positions",
+            "military_count",
+            "max_distance_nm",
+            "max_altitude",
+            "max_speed",
+            "top_types",
+            "top_operators",
         ]
         read_only_fields = fields
 
@@ -296,6 +342,7 @@ class DailyStatsResponseSerializer(serializers.Serializer):
 # Lifetime Stats Serializers
 # ==========================================================================
 
+
 class AllTimeRecordSerializer(serializers.Serializer):
     """All-time record entry."""
 
@@ -324,14 +371,8 @@ class LifetimeStatsResponseSerializer(serializers.Serializer):
     unique_countries = serializers.IntegerField(help_text="Unique countries")
     active_tracking_days = serializers.IntegerField(help_text="Days with activity")
     total_rare_sightings = serializers.IntegerField(help_text="Total rare sightings logged")
-    all_time_records = serializers.DictField(
-        child=AllTimeRecordSerializer(),
-        help_text="All-time records by type"
-    )
-    first_sighting = FirstSightingSerializer(
-        allow_null=True,
-        help_text="First ever sighting"
-    )
+    all_time_records = serializers.DictField(child=AllTimeRecordSerializer(), help_text="All-time records by type")
+    first_sighting = FirstSightingSerializer(allow_null=True, help_text="First ever sighting")
     timestamp = serializers.CharField(help_text="Response timestamp")
 
 
@@ -339,37 +380,48 @@ class LifetimeStatsResponseSerializer(serializers.Serializer):
 # Configuration Serializers
 # ==========================================================================
 
+
 class NotableRegistrationSerializer(serializers.ModelSerializer):
     """Serializer for notable registration patterns."""
 
-    pattern_type_display = serializers.CharField(
-        source='get_pattern_type_display',
-        read_only=True
-    )
+    pattern_type_display = serializers.CharField(source="get_pattern_type_display", read_only=True)
 
     class Meta:
         model = NotableRegistration
         fields = [
-            'id', 'name', 'pattern_type', 'pattern_type_display', 'pattern',
-            'category', 'description', 'rarity_score', 'is_active',
-            'created_at', 'updated_at',
+            "id",
+            "name",
+            "pattern_type",
+            "pattern_type_display",
+            "pattern",
+            "category",
+            "description",
+            "rarity_score",
+            "is_active",
+            "created_at",
+            "updated_at",
         ]
 
 
 class NotableCallsignSerializer(serializers.ModelSerializer):
     """Serializer for notable callsign patterns."""
 
-    pattern_type_display = serializers.CharField(
-        source='get_pattern_type_display',
-        read_only=True
-    )
+    pattern_type_display = serializers.CharField(source="get_pattern_type_display", read_only=True)
 
     class Meta:
         model = NotableCallsign
         fields = [
-            'id', 'name', 'pattern_type', 'pattern_type_display', 'pattern',
-            'category', 'description', 'rarity_score', 'is_active',
-            'created_at', 'updated_at',
+            "id",
+            "name",
+            "pattern_type",
+            "pattern_type_display",
+            "pattern",
+            "category",
+            "description",
+            "rarity_score",
+            "is_active",
+            "created_at",
+            "updated_at",
         ]
 
 
@@ -379,16 +431,25 @@ class RareAircraftTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = RareAircraftType
         fields = [
-            'id', 'type_code', 'type_name', 'manufacturer',
-            'category', 'description', 'rarity_score',
-            'total_produced', 'currently_active', 'is_active',
-            'created_at', 'updated_at',
+            "id",
+            "type_code",
+            "type_name",
+            "manufacturer",
+            "category",
+            "description",
+            "rarity_score",
+            "total_produced",
+            "currently_active",
+            "is_active",
+            "created_at",
+            "updated_at",
         ]
 
 
 # ==========================================================================
 # Combined Dashboard Serializer
 # ==========================================================================
+
 
 class GamificationDashboardSerializer(serializers.Serializer):
     """Combined gamification dashboard response."""

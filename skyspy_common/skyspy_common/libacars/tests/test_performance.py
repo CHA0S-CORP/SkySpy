@@ -10,14 +10,11 @@ These tests measure:
 
 import statistics
 import time
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 from skyspy_common.libacars.cache import DecodeCache, LabelFormatCache
-from skyspy_common.libacars.circuit_breaker import CircuitBreaker, ErrorCategory
-from skyspy_common.libacars.pool import ObjectPool, ThreadLocalPool, BufferPool
-from skyspy_common.libacars.metrics import MetricsCollector, TimingContext
+from skyspy_common.libacars.circuit_breaker import CircuitBreaker
+from skyspy_common.libacars.metrics import MetricsCollector
+from skyspy_common.libacars.pool import BufferPool, ObjectPool, ThreadLocalPool
 
 
 def measure_time(func, iterations=1000):
@@ -236,7 +233,7 @@ class TestObjectPoolPerformance:
         )
 
         def with_context():
-            with pool.acquire_context() as obj:
+            with pool.acquire_context():
                 pass
 
         def manual():
@@ -282,6 +279,7 @@ class TestBufferPoolPerformance:
 
         sizes = [32, 100, 200, 500, 1000, 2000, 5000]
         for size in sizes:
+
             def get_buffer(s=size):
                 buf = pool.get_buffer(s)
                 pool.release_buffer(buf)

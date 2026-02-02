@@ -4,8 +4,8 @@ Socket.IO permission middleware for SkySpy.
 Provides permission checking for Socket.IO topic subscriptions
 and request types.
 """
+
 import logging
-from typing import Union
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
@@ -16,54 +16,48 @@ logger = logging.getLogger(__name__)
 
 # Map WebSocket/Socket.IO topics to feature permissions
 TOPIC_PERMISSIONS = {
-    'aircraft': 'aircraft.view',
-    'military': 'aircraft.view_military',
-    'alerts': 'alerts.view',
-    'safety': 'safety.view',
-    'acars': 'acars.view',
-    'audio': 'audio.view',
-    'system': 'system.view_status',
-    'stats': 'stats.view',
-    'airspace': 'airspace.view',
-    'notams': 'notams.view',
+    "aircraft": "aircraft.view",
+    "military": "aircraft.view_military",
+    "alerts": "alerts.view",
+    "safety": "safety.view",
+    "acars": "acars.view",
+    "audio": "audio.view",
+    "system": "system.view_status",
+    "stats": "stats.view",
+    "airspace": "airspace.view",
+    "notams": "notams.view",
 }
 
 # Map request types to permissions
 REQUEST_PERMISSIONS = {
     # Aircraft requests
-    'get_aircraft': 'aircraft.view',
-    'get_aircraft_details': 'aircraft.view_details',
-    'get_military': 'aircraft.view_military',
-
+    "get_aircraft": "aircraft.view",
+    "get_aircraft_details": "aircraft.view_details",
+    "get_military": "aircraft.view_military",
     # Alert requests
-    'get_alerts': 'alerts.view',
-    'create_alert': 'alerts.create',
-    'update_alert': 'alerts.edit',
-    'delete_alert': 'alerts.delete',
-
+    "get_alerts": "alerts.view",
+    "create_alert": "alerts.create",
+    "update_alert": "alerts.edit",
+    "delete_alert": "alerts.delete",
     # Safety requests
-    'get_safety_events': 'safety.view',
-    'acknowledge_safety': 'safety.acknowledge',
-
+    "get_safety_events": "safety.view",
+    "acknowledge_safety": "safety.acknowledge",
     # ACARS requests
-    'get_acars': 'acars.view',
-    'get_acars_details': 'acars.view_full',
-
+    "get_acars": "acars.view",
+    "get_acars_details": "acars.view_full",
     # Audio requests
-    'get_audio': 'audio.view',
-    'upload_audio': 'audio.upload',
-
+    "get_audio": "audio.view",
+    "upload_audio": "audio.upload",
     # History requests
-    'get_history': 'history.view',
-    'export_history': 'history.export',
-
+    "get_history": "history.view",
+    "export_history": "history.export",
     # System requests
-    'get_system_status': 'system.view_status',
-    'get_metrics': 'system.view_metrics',
+    "get_system_status": "system.view_status",
+    "get_metrics": "system.view_metrics",
 }
 
 
-async def check_topic_permission(user: Union[User, AnonymousUser], topic: str) -> bool:
+async def check_topic_permission(user: User | AnonymousUser, topic: str) -> bool:
     """
     Check if user has permission to subscribe to a topic.
 
@@ -74,10 +68,10 @@ async def check_topic_permission(user: Union[User, AnonymousUser], topic: str) -
     Returns:
         True if user has permission, False otherwise
     """
-    auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
+    auth_mode = getattr(settings, "AUTH_MODE", "hybrid")
 
     # Public mode - all permissions granted
-    if auth_mode == 'public':
+    if auth_mode == "public":
         return True
 
     # Get the permission required for this topic
@@ -91,7 +85,7 @@ async def check_topic_permission(user: Union[User, AnonymousUser], topic: str) -
     return await _check_permission(user, permission)
 
 
-async def check_request_permission(user: Union[User, AnonymousUser], request_type: str) -> bool:
+async def check_request_permission(user: User | AnonymousUser, request_type: str) -> bool:
     """
     Check if user has permission to make a specific request.
 
@@ -102,10 +96,10 @@ async def check_request_permission(user: Union[User, AnonymousUser], request_typ
     Returns:
         True if user has permission, False otherwise
     """
-    auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
+    auth_mode = getattr(settings, "AUTH_MODE", "hybrid")
 
     # Public mode - all permissions granted
-    if auth_mode == 'public':
+    if auth_mode == "public":
         return True
 
     # Get the permission required for this request
@@ -119,7 +113,7 @@ async def check_request_permission(user: Union[User, AnonymousUser], request_typ
     return await _check_permission(user, permission)
 
 
-async def _check_permission(user: Union[User, AnonymousUser], permission: str) -> bool:
+async def _check_permission(user: User | AnonymousUser, permission: str) -> bool:
     """
     Check if user has a specific permission.
 
@@ -158,11 +152,11 @@ def _is_feature_public(permission: str) -> bool:
     from skyspy.models.auth import FeatureAccess
 
     # Extract feature from permission (e.g., 'aircraft.view' -> 'aircraft')
-    feature = permission.split('.')[0]
+    feature = permission.split(".")[0]
 
     try:
         config = FeatureAccess.objects.get(feature=feature)
-        return config.read_access == 'public'
+        return config.read_access == "public"
     except FeatureAccess.DoesNotExist:
         # Default to not public if no config exists
         return False
@@ -188,7 +182,7 @@ def _check_user_permission(user: User, permission: str) -> bool:
         return False
 
 
-async def get_allowed_topics(user: Union[User, AnonymousUser]) -> list:
+async def get_allowed_topics(user: User | AnonymousUser) -> list:
     """
     Get list of topics the user is allowed to subscribe to.
 
@@ -200,7 +194,7 @@ async def get_allowed_topics(user: Union[User, AnonymousUser]) -> list:
     """
     allowed = []
 
-    for topic in TOPIC_PERMISSIONS.keys():
+    for topic in TOPIC_PERMISSIONS:
         if await check_topic_permission(user, topic):
             allowed.append(topic)
 

@@ -1,8 +1,10 @@
 """
 Serializers for system configuration management.
 """
+
 from rest_framework import serializers
-from skyspy.models.config import SystemConfig, ConfigAuditLog, CATEGORY_CHOICES, VALUE_TYPE_CHOICES
+
+from skyspy.models.config import ConfigAuditLog, SystemConfig
 
 
 class ConfigSerializer(serializers.ModelSerializer):
@@ -10,20 +12,42 @@ class ConfigSerializer(serializers.ModelSerializer):
 
     value = serializers.SerializerMethodField()
     has_env_override = serializers.SerializerMethodField()
-    updated_by_username = serializers.CharField(source='updated_by.username', read_only=True, allow_null=True)
+    updated_by_username = serializers.CharField(source="updated_by.username", read_only=True, allow_null=True)
 
     class Meta:
         model = SystemConfig
         fields = [
-            'key', 'category', 'value', 'value_type', 'display_name', 'description',
-            'validation_rules', 'env_var', 'default_value', 'requires_restart',
-            'is_sensitive', 'is_readonly', 'sort_order', 'has_env_override',
-            'updated_at', 'updated_by_username'
+            "key",
+            "category",
+            "value",
+            "value_type",
+            "display_name",
+            "description",
+            "validation_rules",
+            "env_var",
+            "default_value",
+            "requires_restart",
+            "is_sensitive",
+            "is_readonly",
+            "sort_order",
+            "has_env_override",
+            "updated_at",
+            "updated_by_username",
         ]
         read_only_fields = [
-            'key', 'category', 'value_type', 'display_name', 'description',
-            'validation_rules', 'env_var', 'default_value', 'requires_restart',
-            'is_sensitive', 'is_readonly', 'sort_order', 'updated_at'
+            "key",
+            "category",
+            "value_type",
+            "display_name",
+            "description",
+            "validation_rules",
+            "env_var",
+            "default_value",
+            "requires_restart",
+            "is_sensitive",
+            "is_readonly",
+            "sort_order",
+            "updated_at",
         ]
 
     def get_value(self, obj) -> str:
@@ -45,11 +69,11 @@ class ConfigDetailSerializer(ConfigSerializer):
     actual_value = serializers.SerializerMethodField()
 
     class Meta(ConfigSerializer.Meta):
-        fields = ConfigSerializer.Meta.fields + ['actual_value']
+        fields = ConfigSerializer.Meta.fields + ["actual_value"]
 
     def get_actual_value(self, obj) -> str:
         """Return actual value (unmasked) - only for authorized reveal requests."""
-        reveal = self.context.get('reveal', False)
+        reveal = self.context.get("reveal", False)
         if reveal and obj.is_sensitive:
             return obj.value
         return None
@@ -58,14 +82,11 @@ class ConfigDetailSerializer(ConfigSerializer):
 class ConfigUpdateSerializer(serializers.Serializer):
     """Request body for updating a single configuration value."""
 
-    value = serializers.CharField(
-        allow_blank=True,
-        help_text='New value for the configuration'
-    )
+    value = serializers.CharField(allow_blank=True, help_text="New value for the configuration")
 
     def validate_value(self, value):
         """Validate against config's validation rules."""
-        config = self.context.get('config')
+        config = self.context.get("config")
         if config:
             errors = config.validate_value(value)
             if errors:
@@ -77,8 +98,7 @@ class ConfigBulkUpdateSerializer(serializers.Serializer):
     """Request body for updating multiple configurations at once."""
 
     updates = serializers.DictField(
-        child=serializers.CharField(allow_blank=True),
-        help_text='Dictionary of {key: value} pairs to update'
+        child=serializers.CharField(allow_blank=True), help_text="Dictionary of {key: value} pairs to update"
     )
 
     def validate_updates(self, updates):
@@ -89,7 +109,7 @@ class ConfigBulkUpdateSerializer(serializers.Serializer):
             try:
                 config = SystemConfig.objects.get(key=key)
                 if config.is_readonly:
-                    errors[key] = ['Configuration is read-only']
+                    errors[key] = ["Configuration is read-only"]
                     continue
 
                 validation_errors = config.validate_value(value)
@@ -97,7 +117,7 @@ class ConfigBulkUpdateSerializer(serializers.Serializer):
                     errors[key] = validation_errors
 
             except SystemConfig.DoesNotExist:
-                errors[key] = ['Configuration does not exist']
+                errors[key] = ["Configuration does not exist"]
 
         if errors:
             raise serializers.ValidationError(errors)
@@ -111,44 +131,33 @@ class ConfigResetSerializer(serializers.Serializer):
     keys = serializers.ListField(
         child=serializers.CharField(max_length=100),
         min_length=1,
-        help_text='List of configuration keys to reset to defaults'
+        help_text="List of configuration keys to reset to defaults",
     )
 
 
 class ConfigExportSerializer(serializers.Serializer):
     """Response for configuration export."""
 
-    configs = serializers.DictField(
-        help_text='Dictionary of configuration key-value pairs'
-    )
-    exported_at = serializers.DateTimeField(help_text='Export timestamp')
-    version = serializers.CharField(help_text='Export format version')
+    configs = serializers.DictField(help_text="Dictionary of configuration key-value pairs")
+    exported_at = serializers.DateTimeField(help_text="Export timestamp")
+    version = serializers.CharField(help_text="Export format version")
 
 
 class ConfigImportSerializer(serializers.Serializer):
     """Request body for importing configurations."""
 
-    configs = serializers.DictField(
-        help_text='Dictionary of {key: value} or {key: {value, ...}} pairs'
-    )
-    skip_readonly = serializers.BooleanField(
-        default=True,
-        help_text='Skip read-only configs instead of erroring'
-    )
-    dry_run = serializers.BooleanField(
-        default=False,
-        help_text='Validate without actually importing'
-    )
+    configs = serializers.DictField(help_text="Dictionary of {key: value} or {key: {value, ...}} pairs")
+    skip_readonly = serializers.BooleanField(default=True, help_text="Skip read-only configs instead of erroring")
+    dry_run = serializers.BooleanField(default=False, help_text="Validate without actually importing")
 
 
 class ConfigImportResultSerializer(serializers.Serializer):
     """Response for configuration import."""
 
-    imported = serializers.IntegerField(help_text='Number of configs imported')
-    skipped = serializers.IntegerField(help_text='Number of configs skipped')
+    imported = serializers.IntegerField(help_text="Number of configs imported")
+    skipped = serializers.IntegerField(help_text="Number of configs skipped")
     errors = serializers.DictField(
-        child=serializers.CharField(),
-        help_text='Dictionary of {key: error_message} for failed imports'
+        child=serializers.CharField(), help_text="Dictionary of {key: error_message} for failed imports"
     )
 
 
@@ -157,20 +166,21 @@ class ConfigAuditLogSerializer(serializers.ModelSerializer):
 
     old_value = serializers.SerializerMethodField()
     new_value = serializers.SerializerMethodField()
-    changed_by_username = serializers.CharField(
-        source='changed_by.username',
-        read_only=True,
-        allow_null=True
-    )
+    changed_by_username = serializers.CharField(source="changed_by.username", read_only=True, allow_null=True)
     config_display_name = serializers.SerializerMethodField()
 
     class Meta:
         model = ConfigAuditLog
         fields = [
-            'id', 'config_key', 'config_display_name',
-            'old_value', 'new_value',
-            'changed_by', 'changed_by_username',
-            'changed_at', 'ip_address'
+            "id",
+            "config_key",
+            "config_display_name",
+            "old_value",
+            "new_value",
+            "changed_by",
+            "changed_by_username",
+            "changed_at",
+            "ip_address",
         ]
 
     def get_old_value(self, obj) -> str:
@@ -195,48 +205,38 @@ class ConfigAuditLogSerializer(serializers.ModelSerializer):
 class ConfigSchemaSerializer(serializers.Serializer):
     """Schema information for frontend form generation."""
 
-    categories = serializers.ListField(
-        child=serializers.DictField(),
-        help_text='Available categories with labels'
-    )
-    value_types = serializers.ListField(
-        child=serializers.DictField(),
-        help_text='Available value types with labels'
-    )
-    configs = ConfigSerializer(many=True, help_text='All configuration definitions')
+    categories = serializers.ListField(child=serializers.DictField(), help_text="Available categories with labels")
+    value_types = serializers.ListField(child=serializers.DictField(), help_text="Available value types with labels")
+    configs = ConfigSerializer(many=True, help_text="All configuration definitions")
 
 
 class ConfigCategorySerializer(serializers.Serializer):
     """Grouped configurations by category."""
 
-    category = serializers.CharField(help_text='Category key')
-    category_display = serializers.CharField(help_text='Category display name')
-    configs = ConfigSerializer(many=True, help_text='Configurations in this category')
+    category = serializers.CharField(help_text="Category key")
+    category_display = serializers.CharField(help_text="Category display name")
+    configs = ConfigSerializer(many=True, help_text="Configurations in this category")
     has_changes = serializers.BooleanField(
-        default=False,
-        help_text='Whether any config in this category requires restart'
+        default=False, help_text="Whether any config in this category requires restart"
     )
 
 
 class ConfigListResponseSerializer(serializers.Serializer):
     """Response for listing all configurations grouped by category."""
 
-    categories = ConfigCategorySerializer(many=True, help_text='Configs grouped by category')
-    total_count = serializers.IntegerField(help_text='Total number of configurations')
+    categories = ConfigCategorySerializer(many=True, help_text="Configs grouped by category")
+    total_count = serializers.IntegerField(help_text="Total number of configurations")
 
 
 class ConfigValidateSerializer(serializers.Serializer):
     """Request body for validating a configuration value."""
 
-    key = serializers.CharField(max_length=100, help_text='Configuration key to validate')
-    value = serializers.CharField(allow_blank=True, help_text='Value to validate')
+    key = serializers.CharField(max_length=100, help_text="Configuration key to validate")
+    value = serializers.CharField(allow_blank=True, help_text="Value to validate")
 
 
 class ConfigValidateResponseSerializer(serializers.Serializer):
     """Response for configuration validation."""
 
-    valid = serializers.BooleanField(help_text='Whether the value is valid')
-    errors = serializers.ListField(
-        child=serializers.CharField(),
-        help_text='List of validation error messages'
-    )
+    valid = serializers.BooleanField(help_text="Whether the value is valid")
+    errors = serializers.ListField(child=serializers.CharField(), help_text="List of validation error messages")

@@ -10,12 +10,14 @@ Configures Socket.IO for WebSocket support with namespaces for:
 
 Socket.IO handles /socket.io/ path, everything else goes to Django.
 """
+
 import logging
 import os
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'skyspy.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "skyspy.settings")
 
 import django
+
 django.setup()
 
 from django.core.asgi import get_asgi_application
@@ -35,6 +37,7 @@ django_asgi_app = get_asgi_application()
 # Create combined ASGI app - Socket.IO wraps Django app
 # Socket.IO handles /socket.io/ path, everything else goes to Django
 import socketio
+
 application = socketio.ASGIApp(sio, django_asgi_app)
 
 
@@ -50,7 +53,7 @@ def _ensure_aviation_data():
     it queues Celery tasks to populate the data asynchronously.
     """
     try:
-        from skyspy.models import AirspaceBoundary, AirspaceAdvisory
+        from skyspy.models import AirspaceAdvisory, AirspaceBoundary
 
         # Check airspace boundaries
         boundary_count = AirspaceBoundary.objects.count()
@@ -58,6 +61,7 @@ def _ensure_aviation_data():
             logger.info("Airspace boundaries empty - queuing initial population")
             try:
                 from skyspy.tasks.airspace import refresh_airspace_boundaries
+
                 refresh_airspace_boundaries.delay()
                 logger.info("Queued refresh_airspace_boundaries task")
             except Exception as e:
@@ -71,6 +75,7 @@ def _ensure_aviation_data():
             logger.info("Airspace advisories empty - queuing initial fetch")
             try:
                 from skyspy.tasks.airspace import refresh_airspace_advisories
+
                 refresh_airspace_advisories.delay()
                 logger.info("Queued refresh_airspace_advisories task")
             except Exception as e:
@@ -79,10 +84,12 @@ def _ensure_aviation_data():
         # Check geodata (airports, navaids)
         try:
             from skyspy.services import geodata
+
             if geodata.should_refresh():
                 logger.info("Geodata needs refresh - queuing initial population")
                 try:
                     from skyspy.tasks.geodata import refresh_all_geodata
+
                     refresh_all_geodata.delay()
                     logger.info("Queued refresh_all_geodata task")
                 except Exception as e:

@@ -7,25 +7,24 @@ and reduce bandwidth usage.
 Thread-safe: Uses threading.Lock to protect internal state from
 concurrent access in multi-threaded async environments.
 """
+
 import time
 from threading import Lock
-from typing import Optional
-
 
 # Default rate limits (messages per second)
 DEFAULT_RATE_LIMITS = {
-    'aircraft:update': 10,    # Max 10 Hz
-    'aircraft:position': 5,   # Max 5 Hz
-    'stats:update': 0.5,      # Max 0.5 Hz (2 second minimum)
-    'default': 5,             # Default rate limit
-    'request': 10,            # Max 10 requests per second
+    "aircraft:update": 10,  # Max 10 Hz
+    "aircraft:position": 5,  # Max 5 Hz
+    "stats:update": 0.5,  # Max 0.5 Hz (2 second minimum)
+    "default": 5,  # Default rate limit
+    "request": 10,  # Max 10 requests per second
 }
 
 
 class RateLimiter:
     """Per-topic rate limiter for Socket.IO messages (thread-safe)."""
 
-    def __init__(self, rate_limits: Optional[dict[str, float]] = None):
+    def __init__(self, rate_limits: dict[str, float] | None = None):
         """
         Initialize the rate limiter.
 
@@ -50,7 +49,7 @@ class RateLimiter:
         now = time.monotonic()  # Use monotonic clock for duration tracking
 
         with self._lock:
-            rate_limit = self._rate_limits.get(topic, self._rate_limits.get('default', 5))
+            rate_limit = self._rate_limits.get(topic, self._rate_limits.get("default", 5))
 
             if rate_limit <= 0:
                 return True  # No limit
@@ -77,7 +76,7 @@ class RateLimiter:
         now = time.monotonic()
 
         with self._lock:
-            rate_limit = self._rate_limits.get(topic, self._rate_limits.get('default', 5))
+            rate_limit = self._rate_limits.get(topic, self._rate_limits.get("default", 5))
 
             if rate_limit <= 0:
                 return 0
@@ -87,7 +86,7 @@ class RateLimiter:
             wait = min_interval - (now - last_send)
             return max(0, wait)
 
-    def reset(self, topic: Optional[str] = None):
+    def reset(self, topic: str | None = None):
         """
         Reset rate limiting state (thread-safe).
 

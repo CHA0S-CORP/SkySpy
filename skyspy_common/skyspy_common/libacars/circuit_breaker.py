@@ -12,9 +12,10 @@ import logging
 import threading
 import time
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Callable, Optional, TypeVar
+from typing import TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -76,8 +77,8 @@ class CircuitBreakerStats:
     current_state: str = "CLOSED"
     time_in_current_state: float = 0.0
     failure_counts: dict = field(default_factory=dict)
-    last_failure_time: Optional[float] = None
-    last_success_time: Optional[float] = None
+    last_failure_time: float | None = None
+    last_success_time: float | None = None
     recovery_attempts: int = 0
     successful_recoveries: int = 0
 
@@ -97,9 +98,7 @@ class CircuitBreakerStats:
             "recovery_attempts": self.recovery_attempts,
             "successful_recoveries": self.successful_recoveries,
             "success_rate": round(
-                (self.successful_calls / self.total_calls * 100)
-                if self.total_calls > 0
-                else 0.0,
+                (self.successful_calls / self.total_calls * 100) if self.total_calls > 0 else 0.0,
                 2,
             ),
         }
@@ -166,7 +165,7 @@ class CircuitBreaker:
         self._failure_categories: Counter = Counter()
 
         self._state_change_time = time.time()
-        self._last_failure_time: Optional[float] = None
+        self._last_failure_time: float | None = None
         self._backoff_multiplier = 1
 
         self._lock = threading.Lock()
@@ -281,8 +280,8 @@ class CircuitBreaker:
 
     def record_failure(
         self,
-        error: Optional[Exception] = None,
-        category: Optional[ErrorCategory] = None,
+        error: Exception | None = None,
+        category: ErrorCategory | None = None,
     ) -> None:
         """
         Record a failed operation.
@@ -401,8 +400,8 @@ class CircuitBreaker:
     def execute(
         self,
         func: Callable[[], T],
-        fallback: Optional[Callable[[], T]] = None,
-    ) -> Optional[T]:
+        fallback: Callable[[], T] | None = None,
+    ) -> T | None:
         """
         Execute a function with circuit breaker protection.
 
@@ -430,7 +429,7 @@ class CircuitBreaker:
 
 
 # Global circuit breaker instance
-_circuit_breaker: Optional[CircuitBreaker] = None
+_circuit_breaker: CircuitBreaker | None = None
 
 
 def get_circuit_breaker(

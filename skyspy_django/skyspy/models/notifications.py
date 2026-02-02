@@ -1,20 +1,21 @@
 """
 Notification-related models for configuration, channels, templates, and logging.
 """
-from django.db import models, transaction
+
 from django.contrib.auth.models import User
+from django.db import models, transaction
 
 
 class NotificationConfig(models.Model):
     """Notification configuration (singleton)."""
 
-    apprise_urls = models.TextField(default='', blank=True)
+    apprise_urls = models.TextField(default="", blank=True)
     cooldown_seconds = models.IntegerField(default=300)
     enabled = models.BooleanField(default=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'notification_config'
+        db_table = "notification_config"
 
     def __str__(self):
         return f"Notification Config (enabled={self.enabled})"
@@ -41,56 +42,43 @@ class NotificationChannel(models.Model):
     """
 
     CHANNEL_TYPES = [
-        ('discord', 'Discord'),
-        ('slack', 'Slack'),
-        ('pushover', 'Pushover'),
-        ('telegram', 'Telegram'),
-        ('email', 'Email'),
-        ('webhook', 'Generic Webhook'),
-        ('ntfy', 'ntfy'),
-        ('gotify', 'Gotify'),
-        ('home_assistant', 'Home Assistant'),
-        ('twilio', 'Twilio SMS'),
-        ('custom', 'Custom Apprise URL'),
+        ("discord", "Discord"),
+        ("slack", "Slack"),
+        ("pushover", "Pushover"),
+        ("telegram", "Telegram"),
+        ("email", "Email"),
+        ("webhook", "Generic Webhook"),
+        ("ntfy", "ntfy"),
+        ("gotify", "Gotify"),
+        ("home_assistant", "Home Assistant"),
+        ("twilio", "Twilio SMS"),
+        ("custom", "Custom Apprise URL"),
     ]
 
     name = models.CharField(max_length=100, help_text="Friendly name for this channel")
-    channel_type = models.CharField(
-        max_length=30,
-        choices=CHANNEL_TYPES,
-        help_text="Type of notification service"
-    )
-    apprise_url = models.TextField(
-        help_text="Apprise-compatible URL for this channel"
-    )
+    channel_type = models.CharField(max_length=30, choices=CHANNEL_TYPES, help_text="Type of notification service")
+    apprise_url = models.TextField(help_text="Apprise-compatible URL for this channel")
     description = models.CharField(max_length=200, blank=True, null=True)
 
     # Rich content support
     supports_rich = models.BooleanField(
-        default=False,
-        help_text="Whether this channel supports rich formatting (embeds, blocks)"
+        default=False, help_text="Whether this channel supports rich formatting (embeds, blocks)"
     )
 
     # Ownership
-    is_global = models.BooleanField(
-        default=True,
-        help_text="If true, this channel is available to all users"
-    )
+    is_global = models.BooleanField(default=True, help_text="If true, this channel is available to all users")
     owner = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         null=True,
         blank=True,
-        related_name='notification_channels',
-        help_text="Owner of this channel (for non-global channels)"
+        related_name="notification_channels",
+        help_text="Owner of this channel (for non-global channels)",
     )
 
     # Status
     enabled = models.BooleanField(default=True)
-    verified = models.BooleanField(
-        default=False,
-        help_text="Whether a test notification has succeeded"
-    )
+    verified = models.BooleanField(default=False, help_text="Whether a test notification has succeeded")
     last_success = models.DateTimeField(null=True, blank=True)
     last_failure = models.DateTimeField(null=True, blank=True)
     last_error = models.TextField(blank=True, null=True)
@@ -99,11 +87,11 @@ class NotificationChannel(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'notification_channels'
-        ordering = ['name']
+        db_table = "notification_channels"
+        ordering = ["name"]
         indexes = [
-            models.Index(fields=['channel_type', 'enabled'], name='idx_notif_chan_type'),
-            models.Index(fields=['is_global', 'enabled'], name='idx_notif_chan_global'),
+            models.Index(fields=["channel_type", "enabled"], name="idx_notif_chan_type"),
+            models.Index(fields=["is_global", "enabled"], name="idx_notif_chan_global"),
         ]
 
     def __str__(self):
@@ -119,49 +107,37 @@ class NotificationTemplate(models.Model):
     """
 
     PRIORITY_CHOICES = [
-        ('info', 'Info'),
-        ('warning', 'Warning'),
-        ('critical', 'Critical'),
+        ("info", "Info"),
+        ("warning", "Warning"),
+        ("critical", "Critical"),
     ]
 
     EVENT_TYPES = [
-        ('alert', 'Alert'),
-        ('safety', 'Safety Event'),
-        ('military', 'Military Aircraft'),
-        ('emergency', 'Emergency'),
-        ('proximity', 'Proximity Alert'),
-        ('tcas', 'TCAS Event'),
+        ("alert", "Alert"),
+        ("safety", "Safety Event"),
+        ("military", "Military Aircraft"),
+        ("emergency", "Emergency"),
+        ("proximity", "Proximity Alert"),
+        ("tcas", "TCAS Event"),
     ]
 
-    name = models.CharField(
-        max_length=100,
-        unique=True,
-        help_text="Unique identifier for this template"
-    )
+    name = models.CharField(max_length=100, unique=True, help_text="Unique identifier for this template")
     description = models.CharField(max_length=200, blank=True, null=True)
 
     # Basic text templates
     title_template = models.CharField(
         max_length=200,
         default="Alert: {rule_name}",
-        help_text="Template for notification title. Use {variable} syntax."
+        help_text="Template for notification title. Use {variable} syntax.",
     )
     body_template = models.TextField(
         default="{callsign} at {altitude}ft triggered {rule_name}",
-        help_text="Template for notification body. Use {variable} syntax."
+        help_text="Template for notification body. Use {variable} syntax.",
     )
 
     # Rich formatting templates (channel-specific)
-    discord_embed = models.JSONField(
-        null=True,
-        blank=True,
-        help_text="Discord embed JSON template"
-    )
-    slack_blocks = models.JSONField(
-        null=True,
-        blank=True,
-        help_text="Slack Block Kit JSON template"
-    )
+    discord_embed = models.JSONField(null=True, blank=True, help_text="Discord embed JSON template")
+    slack_blocks = models.JSONField(null=True, blank=True, help_text="Slack Block Kit JSON template")
 
     # Matching criteria
     event_type = models.CharField(
@@ -169,28 +145,25 @@ class NotificationTemplate(models.Model):
         choices=EVENT_TYPES,
         null=True,
         blank=True,
-        help_text="If set, only use this template for specific event types"
+        help_text="If set, only use this template for specific event types",
     )
     priority = models.CharField(
         max_length=20,
         choices=PRIORITY_CHOICES,
         null=True,
         blank=True,
-        help_text="If set, only use this template for specific priorities"
+        help_text="If set, only use this template for specific priorities",
     )
 
     # Default selection
-    is_default = models.BooleanField(
-        default=False,
-        help_text="Use this template when no other template matches"
-    )
+    is_default = models.BooleanField(default=False, help_text="Use this template when no other template matches")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'notification_templates'
-        ordering = ['name']
+        db_table = "notification_templates"
+        ordering = ["name"]
 
     def __str__(self):
         return self.name
@@ -207,24 +180,29 @@ class NotificationTemplate(models.Model):
         4. Default template
         5. Fallback (None)
         """
-        from django.db.models import Q, Case, When, IntegerField
+        from django.db.models import Case, IntegerField, Q, When
 
         # Combine all matching criteria into a single query with priority ordering
-        template = cls.objects.filter(
-            Q(event_type=event_type, priority=priority) |  # Exact match
-            Q(event_type=event_type, priority__isnull=True) |  # Event type only
-            Q(event_type__isnull=True, priority=priority) |  # Priority only
-            Q(is_default=True)  # Default template
-        ).annotate(
-            match_priority=Case(
-                When(event_type=event_type, priority=priority, then=0),
-                When(event_type=event_type, priority__isnull=True, then=1),
-                When(event_type__isnull=True, priority=priority, then=2),
-                When(is_default=True, then=3),
-                default=4,
-                output_field=IntegerField()
+        template = (
+            cls.objects.filter(
+                Q(event_type=event_type, priority=priority)  # Exact match
+                | Q(event_type=event_type, priority__isnull=True)  # Event type only
+                | Q(event_type__isnull=True, priority=priority)  # Priority only
+                | Q(is_default=True)  # Default template
             )
-        ).order_by('match_priority').first()
+            .annotate(
+                match_priority=Case(
+                    When(event_type=event_type, priority=priority, then=0),
+                    When(event_type=event_type, priority__isnull=True, then=1),
+                    When(event_type__isnull=True, priority=priority, then=2),
+                    When(is_default=True, then=3),
+                    default=4,
+                    output_field=IntegerField(),
+                )
+            )
+            .order_by("match_priority")
+            .first()
+        )
 
         return template
 
@@ -235,29 +213,25 @@ class NotificationLog(models.Model):
     """
 
     STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('sent', 'Sent'),
-        ('failed', 'Failed'),
-        ('retrying', 'Retrying'),
+        ("pending", "Pending"),
+        ("sent", "Sent"),
+        ("failed", "Failed"),
+        ("retrying", "Retrying"),
     ]
 
     NOTIFICATION_TYPES = [
-        ('alert', 'Alert'),
-        ('safety', 'Safety Event'),
-        ('military', 'Military Aircraft'),
-        ('emergency', 'Emergency'),
-        ('proximity', 'Proximity Alert'),
-        ('tcas', 'TCAS Event'),
-        ('test', 'Test'),
+        ("alert", "Alert"),
+        ("safety", "Safety Event"),
+        ("military", "Military Aircraft"),
+        ("emergency", "Emergency"),
+        ("proximity", "Proximity Alert"),
+        ("tcas", "TCAS Event"),
+        ("test", "Test"),
     ]
 
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
     notification_type = models.CharField(
-        max_length=50,
-        choices=NOTIFICATION_TYPES,
-        db_index=True,
-        blank=True,
-        null=True
+        max_length=50, choices=NOTIFICATION_TYPES, db_index=True, blank=True, null=True
     )
     icao_hex = models.CharField(max_length=10, blank=True, null=True)
     callsign = models.CharField(max_length=10, blank=True, null=True)
@@ -266,24 +240,14 @@ class NotificationLog(models.Model):
 
     # Channel tracking
     channel = models.ForeignKey(
-        NotificationChannel,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='logs'
+        NotificationChannel, on_delete=models.SET_NULL, null=True, blank=True, related_name="logs"
     )
     channel_url = models.TextField(
-        blank=True,
-        null=True,
-        help_text="The actual URL used (may differ from channel if overridden)"
+        blank=True, null=True, help_text="The actual URL used (may differ from channel if overridden)"
     )
 
     # Status tracking
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default='pending'
-    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
 
     # Retry handling
     retry_count = models.IntegerField(default=0)
@@ -293,17 +257,13 @@ class NotificationLog(models.Model):
 
     # Timing
     sent_at = models.DateTimeField(null=True, blank=True)
-    duration_ms = models.IntegerField(
-        null=True,
-        blank=True,
-        help_text="Time taken to send notification"
-    )
+    duration_ms = models.IntegerField(null=True, blank=True, help_text="Time taken to send notification")
 
     class Meta:
-        db_table = 'notification_logs'
-        ordering = ['-timestamp']
+        db_table = "notification_logs"
+        ordering = ["-timestamp"]
         indexes = [
-            models.Index(fields=['status', 'next_retry_at'], name='idx_notif_log_retry'),
+            models.Index(fields=["status", "next_retry_at"], name="idx_notif_log_retry"),
         ]
 
     def __str__(self):
@@ -311,35 +271,37 @@ class NotificationLog(models.Model):
 
     def can_retry(self) -> bool:
         """Check if this notification can be retried."""
-        return self.status in ('failed', 'retrying') and self.retry_count < self.max_retries
+        return self.status in ("failed", "retrying") and self.retry_count < self.max_retries
 
     def mark_sent(self, duration_ms: int = None):
         """Mark notification as successfully sent."""
         from django.utils import timezone
-        self.status = 'sent'
+
+        self.status = "sent"
         self.sent_at = timezone.now()
         if duration_ms is not None:
             self.duration_ms = duration_ms
-        self.save(update_fields=['status', 'sent_at', 'duration_ms'])
+        self.save(update_fields=["status", "sent_at", "duration_ms"])
 
     def mark_failed(self, error: str):
         """Mark notification as failed and schedule retry if possible."""
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
 
         self.last_error = error
         self.retry_count += 1
 
         if self.can_retry():
-            self.status = 'retrying'
+            self.status = "retrying"
             # Exponential backoff: 30s, 60s, 120s, 240s, ...
             delay_seconds = 30 * (2 ** (self.retry_count - 1))
             self.next_retry_at = timezone.now() + timedelta(seconds=delay_seconds)
         else:
-            self.status = 'failed'
+            self.status = "failed"
             self.next_retry_at = None
 
-        self.save(update_fields=['status', 'last_error', 'retry_count', 'next_retry_at'])
+        self.save(update_fields=["status", "last_error", "retry_count", "next_retry_at"])
 
 
 class UserNotificationPreference(models.Model):
@@ -351,65 +313,42 @@ class UserNotificationPreference(models.Model):
     """
 
     PRIORITY_CHOICES = [
-        ('info', 'Info'),
-        ('warning', 'Warning'),
-        ('critical', 'Critical'),
+        ("info", "Info"),
+        ("warning", "Warning"),
+        ("critical", "Critical"),
     ]
 
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='notification_preferences'
-    )
-    channel = models.ForeignKey(
-        NotificationChannel,
-        on_delete=models.CASCADE,
-        related_name='user_preferences'
-    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notification_preferences")
+    channel = models.ForeignKey(NotificationChannel, on_delete=models.CASCADE, related_name="user_preferences")
 
     # Filtering
     min_priority = models.CharField(
         max_length=20,
         choices=PRIORITY_CHOICES,
-        default='info',
-        help_text="Minimum priority level to receive notifications"
+        default="info",
+        help_text="Minimum priority level to receive notifications",
     )
     event_types = models.JSONField(
-        default=list,
-        blank=True,
-        help_text="List of event types to receive. Empty = all types."
+        default=list, blank=True, help_text="List of event types to receive. Empty = all types."
     )
 
     # Quiet hours
-    quiet_hours_start = models.TimeField(
-        null=True,
-        blank=True,
-        help_text="Start of quiet hours (notifications muted)"
-    )
-    quiet_hours_end = models.TimeField(
-        null=True,
-        blank=True,
-        help_text="End of quiet hours"
-    )
+    quiet_hours_start = models.TimeField(null=True, blank=True, help_text="Start of quiet hours (notifications muted)")
+    quiet_hours_end = models.TimeField(null=True, blank=True, help_text="End of quiet hours")
     critical_overrides_quiet = models.BooleanField(
-        default=True,
-        help_text="If true, critical notifications ignore quiet hours"
+        default=True, help_text="If true, critical notifications ignore quiet hours"
     )
 
     # Timezone for quiet hours
-    timezone = models.CharField(
-        max_length=50,
-        default='UTC',
-        help_text="Timezone for quiet hours calculation"
-    )
+    timezone = models.CharField(max_length=50, default="UTC", help_text="Timezone for quiet hours calculation")
 
     enabled = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'user_notification_preferences'
-        unique_together = [['user', 'channel']]
+        db_table = "user_notification_preferences"
+        unique_together = [["user", "channel"]]
 
     def __str__(self):
         return f"{self.user.username} - {self.channel.name}"
@@ -420,8 +359,9 @@ class UserNotificationPreference(models.Model):
             return False
 
         try:
-            import pytz
             from datetime import datetime
+
+            import pytz
 
             tz = pytz.timezone(self.timezone)
             now = datetime.now(tz).time()
@@ -443,7 +383,7 @@ class UserNotificationPreference(models.Model):
             return False
 
         # Check priority
-        priority_order = {'info': 0, 'warning': 1, 'critical': 2}
+        priority_order = {"info": 0, "warning": 1, "critical": 2}
         min_level = priority_order.get(self.min_priority, 0)
         msg_level = priority_order.get(priority, 0)
 
@@ -456,8 +396,6 @@ class UserNotificationPreference(models.Model):
 
         # Check quiet hours
         if self.is_in_quiet_hours():
-            if priority == 'critical' and self.critical_overrides_quiet:
-                return True
-            return False
+            return bool(priority == "critical" and self.critical_overrides_quiet)
 
         return True

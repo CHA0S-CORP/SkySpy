@@ -6,17 +6,18 @@ OpenFlights: https://github.com/jpatokal/openflights
 
 This is free static data - no API key required.
 """
+
 import csv
 import io
 import logging
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List
+from datetime import datetime
+from typing import Any
 
 import httpx
 from django.db import transaction
-from django.db.models import Max, Count
+from django.db.models import Max
 
-from skyspy.models.notams import CachedAirline, CachedAircraftType
+from skyspy.models.notams import CachedAircraftType, CachedAirline
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ ROUTES_URL = "https://raw.githubusercontent.com/jpatokal/openflights/master/data
 REFRESH_INTERVAL_DAYS = 7
 
 
-def _fetch_csv_data(url: str) -> Optional[List[List[str]]]:
+def _fetch_csv_data(url: str) -> list[list[str]] | None:
     """
     Fetch CSV data from a URL.
 
@@ -41,10 +42,7 @@ def _fetch_csv_data(url: str) -> Optional[List[List[str]]]:
     """
     try:
         with httpx.Client(timeout=60) as client:
-            response = client.get(
-                url,
-                headers={"User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)"}
-            )
+            response = client.get(url, headers={"User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)"})
             response.raise_for_status()
 
             # Parse CSV
@@ -87,7 +85,7 @@ def refresh_airlines() -> int:
 
     airlines = []
     seen_icao = set()
-    now = datetime.utcnow()
+    datetime.utcnow()
 
     for row in rows:
         if len(row) < 8:
@@ -95,7 +93,7 @@ def refresh_airlines() -> int:
 
         try:
             icao_code = row[4].strip() if row[4] else None
-            if not icao_code or icao_code == '\\N' or icao_code == '-':
+            if not icao_code or icao_code == "\\N" or icao_code == "-":
                 continue
 
             # Skip duplicates
@@ -103,21 +101,23 @@ def refresh_airlines() -> int:
                 continue
             seen_icao.add(icao_code)
 
-            iata_code = row[3].strip() if row[3] and row[3] != '\\N' else None
-            name = row[1].strip() if row[1] else 'Unknown'
-            callsign = row[5].strip() if row[5] and row[5] != '\\N' else None
-            country = row[6].strip() if row[6] and row[6] != '\\N' else None
-            active = row[7].strip().upper() == 'Y' if row[7] else True
+            iata_code = row[3].strip() if row[3] and row[3] != "\\N" else None
+            name = row[1].strip() if row[1] else "Unknown"
+            callsign = row[5].strip() if row[5] and row[5] != "\\N" else None
+            country = row[6].strip() if row[6] and row[6] != "\\N" else None
+            active = row[7].strip().upper() == "Y" if row[7] else True
 
-            airlines.append(CachedAirline(
-                icao_code=icao_code[:4],
-                iata_code=iata_code[:3] if iata_code else None,
-                name=name[:200],
-                callsign=callsign[:100] if callsign else None,
-                country=country[:100] if country else None,
-                active=active,
-                source_data={'openflights_row': row},
-            ))
+            airlines.append(
+                CachedAirline(
+                    icao_code=icao_code[:4],
+                    iata_code=iata_code[:3] if iata_code else None,
+                    name=name[:200],
+                    callsign=callsign[:100] if callsign else None,
+                    country=country[:100] if country else None,
+                    active=active,
+                    source_data={"openflights_row": row},
+                )
+            )
 
         except Exception as e:
             logger.warning(f"Failed to parse airline row: {e}")
@@ -155,7 +155,7 @@ def refresh_aircraft_types() -> int:
 
     aircraft_types = []
     seen_icao = set()
-    now = datetime.utcnow()
+    datetime.utcnow()
 
     for row in rows:
         if len(row) < 3:
@@ -163,7 +163,7 @@ def refresh_aircraft_types() -> int:
 
         try:
             icao_code = row[2].strip() if row[2] else None
-            if not icao_code or icao_code == '\\N':
+            if not icao_code or icao_code == "\\N":
                 continue
 
             # Skip duplicates
@@ -171,29 +171,45 @@ def refresh_aircraft_types() -> int:
                 continue
             seen_icao.add(icao_code)
 
-            name = row[0].strip() if row[0] else 'Unknown'
-            iata_code = row[1].strip() if row[1] and row[1] != '\\N' else None
+            name = row[0].strip() if row[0] else "Unknown"
+            iata_code = row[1].strip() if row[1] and row[1] != "\\N" else None
 
             # Try to extract manufacturer from name
             manufacturer = None
             common_manufacturers = [
-                'Boeing', 'Airbus', 'Embraer', 'Bombardier', 'Cessna',
-                'Beechcraft', 'Piper', 'Lockheed', 'McDonnell Douglas',
-                'Fokker', 'ATR', 'Saab', 'de Havilland', 'BAe',
-                'Gulfstream', 'Dassault', 'Hawker', 'Learjet',
+                "Boeing",
+                "Airbus",
+                "Embraer",
+                "Bombardier",
+                "Cessna",
+                "Beechcraft",
+                "Piper",
+                "Lockheed",
+                "McDonnell Douglas",
+                "Fokker",
+                "ATR",
+                "Saab",
+                "de Havilland",
+                "BAe",
+                "Gulfstream",
+                "Dassault",
+                "Hawker",
+                "Learjet",
             ]
             for mfr in common_manufacturers:
                 if mfr.lower() in name.lower():
                     manufacturer = mfr
                     break
 
-            aircraft_types.append(CachedAircraftType(
-                icao_code=icao_code[:10],
-                iata_code=iata_code[:5] if iata_code else None,
-                name=name[:200],
-                manufacturer=manufacturer,
-                source_data={'openflights_row': row},
-            ))
+            aircraft_types.append(
+                CachedAircraftType(
+                    icao_code=icao_code[:10],
+                    iata_code=iata_code[:5] if iata_code else None,
+                    name=name[:200],
+                    manufacturer=manufacturer,
+                    source_data={"openflights_row": row},
+                )
+            )
 
         except Exception as e:
             logger.warning(f"Failed to parse aircraft type row: {e}")
@@ -206,7 +222,7 @@ def refresh_aircraft_types() -> int:
     return len(aircraft_types)
 
 
-def refresh_all_openflights_data() -> Dict[str, int]:
+def refresh_all_openflights_data() -> dict[str, int]:
     """
     Refresh all OpenFlights data (airlines and aircraft types).
 
@@ -214,15 +230,15 @@ def refresh_all_openflights_data() -> Dict[str, int]:
         Dictionary with counts of refreshed data
     """
     results = {
-        'airlines': refresh_airlines(),
-        'aircraft_types': refresh_aircraft_types(),
+        "airlines": refresh_airlines(),
+        "aircraft_types": refresh_aircraft_types(),
     }
 
     logger.info(f"OpenFlights data refresh complete: {results}")
     return results
 
 
-def get_airline_by_icao(icao_code: str) -> Optional[Dict[str, Any]]:
+def get_airline_by_icao(icao_code: str) -> dict[str, Any] | None:
     """
     Get airline by ICAO code.
 
@@ -235,18 +251,18 @@ def get_airline_by_icao(icao_code: str) -> Optional[Dict[str, Any]]:
     try:
         airline = CachedAirline.objects.get(icao_code__iexact=icao_code)
         return {
-            'icao_code': airline.icao_code,
-            'iata_code': airline.iata_code,
-            'name': airline.name,
-            'callsign': airline.callsign,
-            'country': airline.country,
-            'active': airline.active,
+            "icao_code": airline.icao_code,
+            "iata_code": airline.iata_code,
+            "name": airline.name,
+            "callsign": airline.callsign,
+            "country": airline.country,
+            "active": airline.active,
         }
     except CachedAirline.DoesNotExist:
         return None
 
 
-def get_airline_by_callsign(callsign: str) -> Optional[Dict[str, Any]]:
+def get_airline_by_callsign(callsign: str) -> dict[str, Any] | None:
     """
     Get airline by radio callsign.
 
@@ -259,18 +275,18 @@ def get_airline_by_callsign(callsign: str) -> Optional[Dict[str, Any]]:
     try:
         airline = CachedAirline.objects.get(callsign__iexact=callsign)
         return {
-            'icao_code': airline.icao_code,
-            'iata_code': airline.iata_code,
-            'name': airline.name,
-            'callsign': airline.callsign,
-            'country': airline.country,
-            'active': airline.active,
+            "icao_code": airline.icao_code,
+            "iata_code": airline.iata_code,
+            "name": airline.name,
+            "callsign": airline.callsign,
+            "country": airline.country,
+            "active": airline.active,
         }
     except CachedAirline.DoesNotExist:
         return None
 
 
-def get_airline_from_flight_callsign(flight_callsign: str) -> Optional[Dict[str, Any]]:
+def get_airline_from_flight_callsign(flight_callsign: str) -> dict[str, Any] | None:
     """
     Extract airline from a flight callsign.
 
@@ -297,12 +313,12 @@ def get_airline_from_flight_callsign(flight_callsign: str) -> Optional[Dict[str,
     try:
         airline = CachedAirline.objects.get(iata_code__iexact=iata_prefix)
         return {
-            'icao_code': airline.icao_code,
-            'iata_code': airline.iata_code,
-            'name': airline.name,
-            'callsign': airline.callsign,
-            'country': airline.country,
-            'active': airline.active,
+            "icao_code": airline.icao_code,
+            "iata_code": airline.iata_code,
+            "name": airline.name,
+            "callsign": airline.callsign,
+            "country": airline.country,
+            "active": airline.active,
         }
     except CachedAirline.DoesNotExist:
         pass
@@ -310,7 +326,7 @@ def get_airline_from_flight_callsign(flight_callsign: str) -> Optional[Dict[str,
     return None
 
 
-def get_aircraft_type_by_icao(icao_code: str) -> Optional[Dict[str, Any]]:
+def get_aircraft_type_by_icao(icao_code: str) -> dict[str, Any] | None:
     """
     Get aircraft type by ICAO code.
 
@@ -323,16 +339,16 @@ def get_aircraft_type_by_icao(icao_code: str) -> Optional[Dict[str, Any]]:
     try:
         ac_type = CachedAircraftType.objects.get(icao_code__iexact=icao_code)
         return {
-            'icao_code': ac_type.icao_code,
-            'iata_code': ac_type.iata_code,
-            'name': ac_type.name,
-            'manufacturer': ac_type.manufacturer,
+            "icao_code": ac_type.icao_code,
+            "iata_code": ac_type.iata_code,
+            "name": ac_type.name,
+            "manufacturer": ac_type.manufacturer,
         }
     except CachedAircraftType.DoesNotExist:
         return None
 
 
-def search_airlines(query: str, limit: int = 20) -> List[Dict[str, Any]]:
+def search_airlines(query: str, limit: int = 20) -> list[dict[str, Any]]:
     """
     Search airlines by name, ICAO, IATA, or callsign.
 
@@ -346,26 +362,26 @@ def search_airlines(query: str, limit: int = 20) -> List[Dict[str, Any]]:
     from django.db.models import Q
 
     airlines = CachedAirline.objects.filter(
-        Q(name__icontains=query) |
-        Q(icao_code__icontains=query) |
-        Q(iata_code__icontains=query) |
-        Q(callsign__icontains=query)
+        Q(name__icontains=query)
+        | Q(icao_code__icontains=query)
+        | Q(iata_code__icontains=query)
+        | Q(callsign__icontains=query)
     )[:limit]
 
     return [
         {
-            'icao_code': a.icao_code,
-            'iata_code': a.iata_code,
-            'name': a.name,
-            'callsign': a.callsign,
-            'country': a.country,
-            'active': a.active,
+            "icao_code": a.icao_code,
+            "iata_code": a.iata_code,
+            "name": a.name,
+            "callsign": a.callsign,
+            "country": a.country,
+            "active": a.active,
         }
         for a in airlines
     ]
 
 
-def search_aircraft_types(query: str, limit: int = 20) -> List[Dict[str, Any]]:
+def search_aircraft_types(query: str, limit: int = 20) -> list[dict[str, Any]]:
     """
     Search aircraft types by name, ICAO, or IATA code.
 
@@ -379,24 +395,24 @@ def search_aircraft_types(query: str, limit: int = 20) -> List[Dict[str, Any]]:
     from django.db.models import Q
 
     types = CachedAircraftType.objects.filter(
-        Q(name__icontains=query) |
-        Q(icao_code__icontains=query) |
-        Q(iata_code__icontains=query) |
-        Q(manufacturer__icontains=query)
+        Q(name__icontains=query)
+        | Q(icao_code__icontains=query)
+        | Q(iata_code__icontains=query)
+        | Q(manufacturer__icontains=query)
     )[:limit]
 
     return [
         {
-            'icao_code': t.icao_code,
-            'iata_code': t.iata_code,
-            'name': t.name,
-            'manufacturer': t.manufacturer,
+            "icao_code": t.icao_code,
+            "iata_code": t.iata_code,
+            "name": t.name,
+            "manufacturer": t.manufacturer,
         }
         for t in types
     ]
 
 
-def get_cache_stats() -> Dict[str, Any]:
+def get_cache_stats() -> dict[str, Any]:
     """
     Get statistics about cached OpenFlights data.
 
@@ -406,19 +422,19 @@ def get_cache_stats() -> Dict[str, Any]:
     airline_count = CachedAirline.objects.count()
     aircraft_type_count = CachedAircraftType.objects.count()
 
-    airline_last = CachedAirline.objects.aggregate(Max('fetched_at'))['fetched_at__max']
-    type_last = CachedAircraftType.objects.aggregate(Max('fetched_at'))['fetched_at__max']
+    airline_last = CachedAirline.objects.aggregate(Max("fetched_at"))["fetched_at__max"]
+    type_last = CachedAircraftType.objects.aggregate(Max("fetched_at"))["fetched_at__max"]
 
     return {
-        'airlines': {
-            'count': airline_count,
-            'last_refresh': airline_last.isoformat() if airline_last else None,
+        "airlines": {
+            "count": airline_count,
+            "last_refresh": airline_last.isoformat() if airline_last else None,
         },
-        'aircraft_types': {
-            'count': aircraft_type_count,
-            'last_refresh': type_last.isoformat() if type_last else None,
+        "aircraft_types": {
+            "count": aircraft_type_count,
+            "last_refresh": type_last.isoformat() if type_last else None,
         },
-        'refresh_interval_days': REFRESH_INTERVAL_DAYS,
+        "refresh_interval_days": REFRESH_INTERVAL_DAYS,
     }
 
 
@@ -427,11 +443,11 @@ def should_refresh() -> bool:
     stats = get_cache_stats()
 
     # Refresh if no data
-    if stats['airlines']['count'] == 0 or stats['aircraft_types']['count'] == 0:
+    if stats["airlines"]["count"] == 0 or stats["aircraft_types"]["count"] == 0:
         return True
 
     # Check last refresh time
-    last_refresh = stats['airlines'].get('last_refresh')
+    last_refresh = stats["airlines"].get("last_refresh")
     if not last_refresh:
         return True
 

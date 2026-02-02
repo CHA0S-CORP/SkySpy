@@ -1,16 +1,17 @@
 """
 Aviation weather and data API views.
 """
+
 import logging
 from datetime import timedelta
 
 from django.core.cache import cache
 from django.utils import timezone
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from skyspy.models import (
     AirspaceAdvisory,
@@ -22,10 +23,10 @@ from skyspy.models import (
 from skyspy.serializers.aviation import (
     AirspaceAdvisorySerializer,
     AirspaceBoundarySerializer,
+    AviationDataSerializer,
     CachedAirportSerializer,
     CachedNavaidSerializer,
     CachedPirepSerializer,
-    AviationDataSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,22 +43,22 @@ class AviationViewSet(viewsets.ViewSet):
         summary="Get GeoJSON overlay data",
         description="Get GeoJSON data for map overlays (ARTCC, refueling areas, etc.)",
         parameters=[
-            OpenApiParameter(name='data_type', type=str, location='path', description='Data type'),
-            OpenApiParameter(name='lat', type=float, description='Center latitude'),
-            OpenApiParameter(name='lon', type=float, description='Center longitude'),
-            OpenApiParameter(name='radius_nm', type=float, description='Search radius in nm'),
+            OpenApiParameter(name="data_type", type=str, location="path", description="Data type"),
+            OpenApiParameter(name="lat", type=float, description="Center latitude"),
+            OpenApiParameter(name="lon", type=float, description="Center longitude"),
+            OpenApiParameter(name="radius_nm", type=float, description="Search radius in nm"),
         ],
-        responses={200: AviationDataSerializer}
+        responses={200: AviationDataSerializer},
     )
-    @action(detail=False, methods=['get'], url_path='geojson/(?P<data_type>[^/]+)')
+    @action(detail=False, methods=["get"], url_path="geojson/(?P<data_type>[^/]+)")
     def geojson(self, request, data_type=None):
         """Get GeoJSON overlay data by type."""
         from skyspy.services import geodata
 
-        lat = request.query_params.get('lat')
-        lon = request.query_params.get('lon')
+        lat = request.query_params.get("lat")
+        lon = request.query_params.get("lon")
         try:
-            radius_nm = float(request.query_params.get('radius_nm', 500))
+            radius_nm = float(request.query_params.get("radius_nm", 500))
             radius_nm = min(radius_nm, 1000)  # Cap at 1000nm
         except (ValueError, TypeError):
             radius_nm = 500
@@ -69,43 +70,40 @@ class AviationViewSet(viewsets.ViewSet):
             lat = None
             lon = None
 
-        features = geodata.get_cached_geojson(
-            data_type=data_type,
-            lat=lat,
-            lon=lon,
-            radius_nm=radius_nm
-        )
+        features = geodata.get_cached_geojson(data_type=data_type, lat=lat, lon=lon, radius_nm=radius_nm)
 
-        return Response({
-            'type': 'FeatureCollection',
-            'features': features,
-            'metadata': {
-                'data_type': data_type,
-                'count': len(features),
-                'source': 'skyspy',
+        return Response(
+            {
+                "type": "FeatureCollection",
+                "features": features,
+                "metadata": {
+                    "data_type": data_type,
+                    "count": len(features),
+                    "source": "skyspy",
+                },
             }
-        })
+        )
 
     @extend_schema(
         summary="Get METAR data",
         description="Get current METAR weather reports for airports",
         parameters=[
-            OpenApiParameter(name='lat', type=float, description='Center latitude'),
-            OpenApiParameter(name='lon', type=float, description='Center longitude'),
-            OpenApiParameter(name='radius_nm', type=float, description='Search radius in nm'),
-            OpenApiParameter(name='icao', type=str, description='Airport ICAO code'),
-            OpenApiParameter(name='hours', type=int, description='Hours of history'),
+            OpenApiParameter(name="lat", type=float, description="Center latitude"),
+            OpenApiParameter(name="lon", type=float, description="Center longitude"),
+            OpenApiParameter(name="radius_nm", type=float, description="Search radius in nm"),
+            OpenApiParameter(name="icao", type=str, description="Airport ICAO code"),
+            OpenApiParameter(name="hours", type=int, description="Hours of history"),
         ],
-        responses={200: AviationDataSerializer}
+        responses={200: AviationDataSerializer},
     )
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def metars(self, request):
         """Get METAR data."""
         from skyspy.services import weather_cache
 
-        icao = request.query_params.get('icao')
+        icao = request.query_params.get("icao")
         try:
-            hours = int(request.query_params.get('hours', 2))
+            hours = int(request.query_params.get("hours", 2))
             hours = min(hours, 720)  # Cap at 30 days
         except (ValueError, TypeError):
             hours = 2
@@ -115,11 +113,11 @@ class AviationViewSet(viewsets.ViewSet):
             metars = weather_cache.fetch_metar_by_station(icao, hours=hours)
         else:
             # Fetch METARs for bounding box (default CONUS)
-            lat = request.query_params.get('lat')
-            lon = request.query_params.get('lon')
+            lat = request.query_params.get("lat")
+            lon = request.query_params.get("lon")
             try:
                 # Accept both 'radius' and 'radius_nm' for frontend compatibility
-                radius_nm = float(request.query_params.get('radius', request.query_params.get('radius_nm', 200)))
+                radius_nm = float(request.query_params.get("radius", request.query_params.get("radius_nm", 200)))
                 radius_nm = min(radius_nm, 1000)  # Cap at 1000nm
             except (ValueError, TypeError):
                 radius_nm = 200
@@ -141,33 +139,35 @@ class AviationViewSet(viewsets.ViewSet):
 
             metars = weather_cache.fetch_and_cache_metars(bbox=bbox, hours=hours)
 
-        return Response({
-            'data': metars,
-            'count': len(metars),
-            'source': 'aviationweather.gov',
-            'cached': True,
-        })
+        return Response(
+            {
+                "data": metars,
+                "count": len(metars),
+                "source": "aviationweather.gov",
+                "cached": True,
+            }
+        )
 
     @extend_schema(
         summary="Get TAF data",
         description="Get TAF forecasts for airports",
         parameters=[
-            OpenApiParameter(name='lat', type=float, description='Center latitude'),
-            OpenApiParameter(name='lon', type=float, description='Center longitude'),
-            OpenApiParameter(name='radius_nm', type=float, description='Search radius in nm'),
+            OpenApiParameter(name="lat", type=float, description="Center latitude"),
+            OpenApiParameter(name="lon", type=float, description="Center longitude"),
+            OpenApiParameter(name="radius_nm", type=float, description="Search radius in nm"),
         ],
-        responses={200: AviationDataSerializer}
+        responses={200: AviationDataSerializer},
     )
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def tafs(self, request):
         """Get TAF forecast data."""
         from skyspy.services import weather_cache
 
-        lat = request.query_params.get('lat')
-        lon = request.query_params.get('lon')
+        lat = request.query_params.get("lat")
+        lon = request.query_params.get("lon")
         try:
             # Accept both 'radius' and 'radius_nm' for frontend compatibility
-            radius_nm = float(request.query_params.get('radius', request.query_params.get('radius_nm', 200)))
+            radius_nm = float(request.query_params.get("radius", request.query_params.get("radius_nm", 200)))
             radius_nm = min(radius_nm, 1000)  # Cap at 1000nm
         except (ValueError, TypeError):
             radius_nm = 200
@@ -189,37 +189,39 @@ class AviationViewSet(viewsets.ViewSet):
 
         tafs = weather_cache.fetch_and_cache_tafs(bbox=bbox)
 
-        return Response({
-            'data': tafs,
-            'count': len(tafs),
-            'source': 'aviationweather.gov',
-            'cached': True,
-        })
+        return Response(
+            {
+                "data": tafs,
+                "count": len(tafs),
+                "source": "aviationweather.gov",
+                "cached": True,
+            }
+        )
 
     @extend_schema(
         summary="Get PIREP data",
         description="Get pilot reports (PIREPs)",
         parameters=[
-            OpenApiParameter(name='lat', type=float, description='Center latitude'),
-            OpenApiParameter(name='lon', type=float, description='Center longitude'),
-            OpenApiParameter(name='radius_nm', type=float, description='Search radius in nm'),
-            OpenApiParameter(name='hours', type=int, description='Time range in hours'),
+            OpenApiParameter(name="lat", type=float, description="Center latitude"),
+            OpenApiParameter(name="lon", type=float, description="Center longitude"),
+            OpenApiParameter(name="radius_nm", type=float, description="Search radius in nm"),
+            OpenApiParameter(name="hours", type=int, description="Time range in hours"),
         ],
-        responses={200: CachedPirepSerializer(many=True)}
+        responses={200: CachedPirepSerializer(many=True)},
     )
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def pireps(self, request):
         """Get PIREP data with optional spatial filtering."""
         from math import cos, pi
 
         try:
-            hours = int(request.query_params.get('hours', 6))
+            hours = int(request.query_params.get("hours", 6))
             hours = min(hours, 720)  # Cap at 30 days
         except (ValueError, TypeError):
             hours = 6
-        lat_str = request.query_params.get('lat')
-        lon_str = request.query_params.get('lon')
-        radius_str = request.query_params.get('radius', request.query_params.get('radius_nm', '500'))
+        lat_str = request.query_params.get("lat")
+        lon_str = request.query_params.get("lon")
+        radius_str = request.query_params.get("radius", request.query_params.get("radius_nm", "500"))
 
         # Build cache key from query params
         cache_key = f"pireps:{hours}:{lat_str}:{lon_str}:{radius_str}"
@@ -229,9 +231,7 @@ class AviationViewSet(viewsets.ViewSet):
 
         cutoff = timezone.now() - timedelta(hours=hours)
 
-        query = CachedPirep.objects.filter(
-            observation_time__gte=cutoff
-        )
+        query = CachedPirep.objects.filter(observation_time__gte=cutoff)
 
         # Add spatial filtering if lat/lon/radius provided
         if lat_str and lon_str:
@@ -255,13 +255,13 @@ class AviationViewSet(viewsets.ViewSet):
                 # Invalid coordinates - skip spatial filtering
                 pass
 
-        pireps = query.order_by('-observation_time')[:100]
+        pireps = query.order_by("-observation_time")[:100]
 
         response_data = {
-            'data': CachedPirepSerializer(pireps, many=True).data,
-            'count': pireps.count(),
-            'source': 'aviationweather.gov',
-            'cached': True,
+            "data": CachedPirepSerializer(pireps, many=True).data,
+            "count": pireps.count(),
+            "source": "aviationweather.gov",
+            "cached": True,
         }
 
         # Cache for 2 minutes (PIREPs refresh every 10 minutes)
@@ -272,70 +272,65 @@ class AviationViewSet(viewsets.ViewSet):
     @extend_schema(
         summary="Get SIGMET data",
         description="Get active SIGMETs and AIRMETs",
-        responses={200: AirspaceAdvisorySerializer(many=True)}
+        responses={200: AirspaceAdvisorySerializer(many=True)},
     )
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def sigmets(self, request):
         """Get SIGMET/AIRMET data."""
         now = timezone.now()
-        advisories = AirspaceAdvisory.objects.filter(
-            valid_from__lte=now,
-            valid_to__gte=now
-        ).order_by('-fetched_at')
+        advisories = AirspaceAdvisory.objects.filter(valid_from__lte=now, valid_to__gte=now).order_by("-fetched_at")
 
-        return Response({
-            'data': AirspaceAdvisorySerializer(advisories, many=True).data,
-            'count': advisories.count(),
-            'source': 'aviationweather.gov',
-            'cached': True,
-        })
+        return Response(
+            {
+                "data": AirspaceAdvisorySerializer(advisories, many=True).data,
+                "count": advisories.count(),
+                "source": "aviationweather.gov",
+                "cached": True,
+            }
+        )
 
-    @extend_schema(
-        summary="Get active airspace advisories",
-        responses={200: AirspaceAdvisorySerializer(many=True)}
-    )
-    @action(detail=False, methods=['get'], url_path='airspace/advisories')
+    @extend_schema(summary="Get active airspace advisories", responses={200: AirspaceAdvisorySerializer(many=True)})
+    @action(detail=False, methods=["get"], url_path="airspace/advisories")
     def airspace_advisories(self, request):
         """Get active airspace advisories."""
         now = timezone.now()
-        advisories = AirspaceAdvisory.objects.filter(
-            valid_from__lte=now,
-            valid_to__gte=now
-        )
+        advisories = AirspaceAdvisory.objects.filter(valid_from__lte=now, valid_to__gte=now)
 
-        hazard = request.query_params.get('hazard')
+        hazard = request.query_params.get("hazard")
         if hazard:
             advisories = advisories.filter(hazard=hazard)
 
-        return Response({
-            'advisories': AirspaceAdvisorySerializer(advisories, many=True).data,
-            'count': advisories.count(),
-        })
+        return Response(
+            {
+                "advisories": AirspaceAdvisorySerializer(advisories, many=True).data,
+                "count": advisories.count(),
+            }
+        )
 
     @extend_schema(
         summary="Get airspace boundaries",
         parameters=[
-            OpenApiParameter(name='lat', type=float, description='Center latitude'),
-            OpenApiParameter(name='lon', type=float, description='Center longitude'),
-            OpenApiParameter(name='radius_nm', type=float, description='Search radius'),
-            OpenApiParameter(name='airspace_class', type=str, description='Filter by class'),
+            OpenApiParameter(name="lat", type=float, description="Center latitude"),
+            OpenApiParameter(name="lon", type=float, description="Center longitude"),
+            OpenApiParameter(name="radius_nm", type=float, description="Search radius"),
+            OpenApiParameter(name="airspace_class", type=str, description="Filter by class"),
         ],
-        responses={200: AirspaceBoundarySerializer(many=True)}
+        responses={200: AirspaceBoundarySerializer(many=True)},
     )
-    @action(detail=False, methods=['get'], url_path='airspace/boundaries')
+    @action(detail=False, methods=["get"], url_path="airspace/boundaries")
     def airspace_boundaries(self, request):
         """Get airspace boundaries."""
         queryset = AirspaceBoundary.objects.all()
 
-        airspace_class = request.query_params.get('airspace_class')
+        airspace_class = request.query_params.get("airspace_class")
         if airspace_class:
             queryset = queryset.filter(airspace_class=airspace_class)
 
-        lat = request.query_params.get('lat')
-        lon = request.query_params.get('lon')
+        lat = request.query_params.get("lat")
+        lon = request.query_params.get("lon")
         try:
             # Accept both 'radius' and 'radius_nm' for frontend compatibility
-            radius_nm = float(request.query_params.get('radius', request.query_params.get('radius_nm', 100)))
+            radius_nm = float(request.query_params.get("radius", request.query_params.get("radius_nm", 100)))
             radius_nm = min(radius_nm, 1000)  # Cap at 1000nm
         except (ValueError, TypeError):
             radius_nm = 100
@@ -358,35 +353,37 @@ class AviationViewSet(viewsets.ViewSet):
 
         boundaries = queryset[:200]
 
-        return Response({
-            'boundaries': AirspaceBoundarySerializer(boundaries, many=True).data,
-            'count': boundaries.count(),
-        })
+        return Response(
+            {
+                "boundaries": AirspaceBoundarySerializer(boundaries, many=True).data,
+                "count": boundaries.count(),
+            }
+        )
 
     @extend_schema(
         summary="Get airports",
         parameters=[
-            OpenApiParameter(name='lat', type=float, description='Center latitude'),
-            OpenApiParameter(name='lon', type=float, description='Center longitude'),
-            OpenApiParameter(name='radius_nm', type=float, description='Search radius'),
-            OpenApiParameter(name='type', type=str, description='Airport type filter'),
+            OpenApiParameter(name="lat", type=float, description="Center latitude"),
+            OpenApiParameter(name="lon", type=float, description="Center longitude"),
+            OpenApiParameter(name="radius_nm", type=float, description="Search radius"),
+            OpenApiParameter(name="type", type=str, description="Airport type filter"),
         ],
-        responses={200: CachedAirportSerializer(many=True)}
+        responses={200: CachedAirportSerializer(many=True)},
     )
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def airports(self, request):
         """Get airport data."""
-        airport_type = request.query_params.get('type')
-        lat = request.query_params.get('lat')
-        lon = request.query_params.get('lon')
+        airport_type = request.query_params.get("type")
+        lat = request.query_params.get("lat")
+        lon = request.query_params.get("lon")
         try:
             # Accept both 'radius' and 'radius_nm' for frontend compatibility
-            radius_nm = float(request.query_params.get('radius', request.query_params.get('radius_nm', 100)))
+            radius_nm = float(request.query_params.get("radius", request.query_params.get("radius_nm", 100)))
             radius_nm = min(radius_nm, 1000)  # Cap at 1000nm
         except (ValueError, TypeError):
             radius_nm = 100
         try:
-            limit = int(request.query_params.get('limit', 500))
+            limit = int(request.query_params.get("limit", 500))
             limit = min(limit, 1000)  # Cap at 1000
         except (ValueError, TypeError):
             limit = 500
@@ -429,8 +426,8 @@ class AviationViewSet(viewsets.ViewSet):
         airports = queryset[:limit]
 
         response_data = {
-            'airports': CachedAirportSerializer(airports, many=True).data,
-            'count': airports.count(),
+            "airports": CachedAirportSerializer(airports, many=True).data,
+            "count": airports.count(),
         }
 
         # Cache for 5 minutes (airport data rarely changes)
@@ -441,27 +438,27 @@ class AviationViewSet(viewsets.ViewSet):
     @extend_schema(
         summary="Get navaids",
         parameters=[
-            OpenApiParameter(name='lat', type=float, description='Center latitude'),
-            OpenApiParameter(name='lon', type=float, description='Center longitude'),
-            OpenApiParameter(name='radius_nm', type=float, description='Search radius'),
-            OpenApiParameter(name='type', type=str, description='Navaid type filter'),
+            OpenApiParameter(name="lat", type=float, description="Center latitude"),
+            OpenApiParameter(name="lon", type=float, description="Center longitude"),
+            OpenApiParameter(name="radius_nm", type=float, description="Search radius"),
+            OpenApiParameter(name="type", type=str, description="Navaid type filter"),
         ],
-        responses={200: CachedNavaidSerializer(many=True)}
+        responses={200: CachedNavaidSerializer(many=True)},
     )
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def navaids(self, request):
         """Get navaid data."""
         queryset = CachedNavaid.objects.all()
 
-        navaid_type = request.query_params.get('type')
+        navaid_type = request.query_params.get("type")
         if navaid_type:
             queryset = queryset.filter(navaid_type=navaid_type)
 
-        lat = request.query_params.get('lat')
-        lon = request.query_params.get('lon')
+        lat = request.query_params.get("lat")
+        lon = request.query_params.get("lon")
         try:
             # Accept both 'radius' and 'radius_nm' for frontend compatibility
-            radius_nm = float(request.query_params.get('radius', request.query_params.get('radius_nm', 100)))
+            radius_nm = float(request.query_params.get("radius", request.query_params.get("radius_nm", 100)))
             radius_nm = min(radius_nm, 1000)  # Cap at 1000nm
         except (ValueError, TypeError):
             radius_nm = 100
@@ -484,7 +481,9 @@ class AviationViewSet(viewsets.ViewSet):
 
         navaids = queryset[:500]
 
-        return Response({
-            'navaids': CachedNavaidSerializer(navaids, many=True).data,
-            'count': navaids.count(),
-        })
+        return Response(
+            {
+                "navaids": CachedNavaidSerializer(navaids, many=True).data,
+                "count": navaids.count(),
+            }
+        )

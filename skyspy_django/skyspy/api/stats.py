@@ -1,44 +1,30 @@
 """
 Stats API views for tracking quality, engagement analytics, and gamification.
 """
+
 import logging
 from datetime import timedelta
 
 from django.utils import timezone
-from rest_framework import viewsets, status
+from drf_spectacular.utils import OpenApiParameter, extend_schema
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema, OpenApiParameter
 
-from skyspy.models import AircraftFavorite, AircraftSession, AircraftInfo
+from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
+from skyspy.models import AircraftFavorite, AircraftInfo, AircraftSession
 from skyspy.services.stats_cache import (
-    get_tracking_quality_stats,
-    get_engagement_stats,
-    get_coverage_gaps_analysis,
-    get_flight_patterns_stats,
-    get_geographic_stats,
-    calculate_tracking_quality_stats,
     calculate_engagement_stats,
     calculate_flight_patterns_stats,
     calculate_geographic_stats,
+    calculate_tracking_quality_stats,
+    get_coverage_gaps_analysis,
+    get_engagement_stats,
+    get_flight_patterns_stats,
+    get_geographic_stats,
+    get_tracking_quality_stats,
 )
-from skyspy.services.gamification import gamification_service
-from skyspy.models.stats import (
-    PersonalRecord, RareSighting, SpottedAircraft, SpottedCount,
-    SightingStreak, DailyStats, NotableRegistration, NotableCallsign, RareAircraftType,
-)
-from skyspy.serializers.stats import (
-    PersonalRecordSerializer, PersonalRecordsResponseSerializer,
-    RareSightingSerializer, RareSightingsResponseSerializer, RareSightingAcknowledgeSerializer,
-    SpottedAircraftSerializer, SpottedCountSerializer,
-    CollectionStatsResponseSerializer, SpottedByTypeResponseSerializer, SpottedByOperatorResponseSerializer,
-    SightingStreakSerializer, StreaksResponseSerializer,
-    DailyStatsSerializer, DailyStatsResponseSerializer,
-    LifetimeStatsResponseSerializer, GamificationDashboardSerializer,
-    NotableRegistrationSerializer, NotableCallsignSerializer, RareAircraftTypeSerializer,
-)
-from skyspy.auth.authentication import OptionalJWTAuthentication, APIKeyAuthentication
-from skyspy.auth.permissions import FeatureBasedPermission
 
 logger = logging.getLogger(__name__)
 
@@ -59,18 +45,18 @@ class TrackingQualityViewSet(viewsets.ViewSet):
         - Top and worst quality sessions
         """,
         parameters=[
-            OpenApiParameter(name='hours', type=int, description='Time range in hours (default: 24)'),
-            OpenApiParameter(name='refresh', type=bool, description='Force cache refresh'),
-        ]
+            OpenApiParameter(name="hours", type=int, description="Time range in hours (default: 24)"),
+            OpenApiParameter(name="refresh", type=bool, description="Force cache refresh"),
+        ],
     )
     def list(self, request):
         """Get tracking quality statistics."""
         try:
-            hours = int(request.query_params.get('hours', 24))
+            hours = int(request.query_params.get("hours", 24))
             hours = min(hours, 720)  # Cap at 30 days
         except (ValueError, TypeError):
             hours = 24
-        refresh = request.query_params.get('refresh', 'false').lower() == 'true'
+        refresh = request.query_params.get("refresh", "false").lower() == "true"
 
         if refresh or hours != 24:
             # Calculate fresh stats for custom time range
@@ -80,9 +66,9 @@ class TrackingQualityViewSet(viewsets.ViewSet):
             stats = get_tracking_quality_stats()
 
         if stats is None:
-            return Response({
-                "error": "Unable to calculate tracking quality stats"
-            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                {"error": "Unable to calculate tracking quality stats"}, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
 
         return Response(stats)
 
@@ -98,20 +84,20 @@ class TrackingQualityViewSet(viewsets.ViewSet):
         - Average and maximum gap times
         """,
         parameters=[
-            OpenApiParameter(name='hours', type=int, description='Time range in hours (default: 24)'),
-            OpenApiParameter(name='limit', type=int, description='Max sessions to analyze (default: 100)'),
-        ]
+            OpenApiParameter(name="hours", type=int, description="Time range in hours (default: 24)"),
+            OpenApiParameter(name="limit", type=int, description="Max sessions to analyze (default: 100)"),
+        ],
     )
-    @action(detail=False, methods=['get'], url_path='gaps')
+    @action(detail=False, methods=["get"], url_path="gaps")
     def coverage_gaps(self, request):
         """Get detailed coverage gaps analysis."""
         try:
-            hours = int(request.query_params.get('hours', 24))
+            hours = int(request.query_params.get("hours", 24))
             hours = min(hours, 720)  # Cap at 30 days
         except (ValueError, TypeError):
             hours = 24
         try:
-            limit = int(request.query_params.get('limit', 100))
+            limit = int(request.query_params.get("limit", 100))
             limit = min(limit, 1000)  # Cap at 1000
         except (ValueError, TypeError):
             limit = 100
@@ -121,45 +107,40 @@ class TrackingQualityViewSet(viewsets.ViewSet):
             return Response(gaps)
         except Exception as e:
             logger.error(f"Error calculating coverage gaps: {e}")
-            return Response({
-                "error": "Unable to calculate coverage gaps"
-            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response({"error": "Unable to calculate coverage gaps"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
     @extend_schema(
         summary="Get session quality details",
         description="Get quality metrics for a specific aircraft session",
         parameters=[
-            OpenApiParameter(name='icao_hex', type=str, description='Aircraft ICAO hex', location='path'),
-            OpenApiParameter(name='hours', type=int, description='Time range to search (default: 24)'),
-        ]
+            OpenApiParameter(name="icao_hex", type=str, description="Aircraft ICAO hex", location="path"),
+            OpenApiParameter(name="hours", type=int, description="Time range to search (default: 24)"),
+        ],
     )
-    @action(detail=False, methods=['get'], url_path=r'session/(?P<icao_hex>[A-Za-z0-9]+)')
+    @action(detail=False, methods=["get"], url_path=r"session/(?P<icao_hex>[A-Za-z0-9]+)")
     def session_quality(self, request, icao_hex=None):
         """Get quality metrics for a specific aircraft's recent session."""
         from skyspy.models import AircraftSighting
-        from skyspy.services.stats_cache import DEFAULT_EXPECTED_UPDATE_INTERVAL, COVERAGE_GAP_THRESHOLD
+        from skyspy.services.stats_cache import COVERAGE_GAP_THRESHOLD, DEFAULT_EXPECTED_UPDATE_INTERVAL
 
-        hours = int(request.query_params.get('hours', 24))
+        hours = int(request.query_params.get("hours", 24))
         cutoff = timezone.now() - timedelta(hours=hours)
 
         # Get the most recent session for this aircraft
-        session = AircraftSession.objects.filter(
-            icao_hex__iexact=icao_hex,
-            last_seen__gt=cutoff
-        ).order_by('-last_seen').first()
+        session = (
+            AircraftSession.objects.filter(icao_hex__iexact=icao_hex, last_seen__gt=cutoff)
+            .order_by("-last_seen")
+            .first()
+        )
 
         if not session:
-            return Response({
-                "error": f"No recent session found for {icao_hex}"
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": f"No recent session found for {icao_hex}"}, status=status.HTTP_404_NOT_FOUND)
 
         # Get all sightings for this session (limit to prevent memory issues)
         MAX_SIGHTINGS_FOR_GAP_ANALYSIS = 10000
         sightings = AircraftSighting.objects.filter(
-            icao_hex__iexact=icao_hex,
-            timestamp__gte=session.first_seen,
-            timestamp__lte=session.last_seen
-        ).order_by('timestamp')
+            icao_hex__iexact=icao_hex, timestamp__gte=session.first_seen, timestamp__lte=session.last_seen
+        ).order_by("timestamp")
 
         # Calculate metrics
         duration_seconds = (session.last_seen - session.first_seen).total_seconds()
@@ -173,69 +154,74 @@ class TrackingQualityViewSet(viewsets.ViewSet):
         gaps = []
         prev_time = None
         sighting_count = 0
-        for timestamp in sightings.values_list('timestamp', flat=True).iterator(chunk_size=1000):
+        for timestamp in sightings.values_list("timestamp", flat=True).iterator(chunk_size=1000):
             sighting_count += 1
             if sighting_count > MAX_SIGHTINGS_FOR_GAP_ANALYSIS:
                 break
             if prev_time is not None:
                 gap_seconds = (timestamp - prev_time).total_seconds()
                 if gap_seconds > COVERAGE_GAP_THRESHOLD:
-                    gaps.append({
-                        'start': prev_time.isoformat() + "Z",
-                        'end': timestamp.isoformat() + "Z",
-                        'duration_seconds': int(gap_seconds),
-                    })
+                    gaps.append(
+                        {
+                            "start": prev_time.isoformat() + "Z",
+                            "end": timestamp.isoformat() + "Z",
+                            "duration_seconds": int(gap_seconds),
+                        }
+                    )
             prev_time = timestamp
 
-        total_gap_time = sum(g['duration_seconds'] for g in gaps)
+        total_gap_time = sum(g["duration_seconds"] for g in gaps)
         gap_percentage = (total_gap_time / duration_seconds * 100) if duration_seconds > 0 else 0
 
         # Determine quality grade
         if completeness >= 90 and update_rate >= 10:
-            grade = 'excellent'
+            grade = "excellent"
         elif completeness >= 70 and update_rate >= 6:
-            grade = 'good'
+            grade = "good"
         elif completeness >= 50:
-            grade = 'fair'
+            grade = "fair"
         else:
-            grade = 'poor'
+            grade = "poor"
 
         # RSSI stats
-        from django.db.models import Avg, Min, Max
+        from django.db.models import Avg, Max, Min
+
         rssi_stats = sightings.filter(rssi__isnull=False).aggregate(
-            avg_rssi=Avg('rssi'),
-            min_rssi=Min('rssi'),
-            max_rssi=Max('rssi'),
+            avg_rssi=Avg("rssi"),
+            min_rssi=Min("rssi"),
+            max_rssi=Max("rssi"),
         )
 
-        return Response({
-            'icao_hex': session.icao_hex,
-            'callsign': session.callsign,
-            'session': {
-                'first_seen': session.first_seen.isoformat() + "Z",
-                'last_seen': session.last_seen.isoformat() + "Z",
-                'duration_minutes': round(duration_min, 1),
-                'total_positions': session.total_positions,
-            },
-            'quality': {
-                'grade': grade,
-                'update_rate_per_min': round(update_rate, 2),
-                'expected_positions': int(expected_positions),
-                'completeness_pct': round(completeness, 1),
-            },
-            'gaps': {
-                'total_count': len(gaps),
-                'total_time_seconds': int(total_gap_time),
-                'gap_percentage': round(gap_percentage, 1),
-                'max_gap_seconds': max(g['duration_seconds'] for g in gaps) if gaps else 0,
-                'gaps': gaps[:10],  # Limit to 10 gaps
-            },
-            'signal': {
-                'avg_rssi': round(rssi_stats['avg_rssi'], 1) if rssi_stats['avg_rssi'] else None,
-                'min_rssi': round(rssi_stats['min_rssi'], 1) if rssi_stats['min_rssi'] else None,
-                'max_rssi': round(rssi_stats['max_rssi'], 1) if rssi_stats['max_rssi'] else None,
+        return Response(
+            {
+                "icao_hex": session.icao_hex,
+                "callsign": session.callsign,
+                "session": {
+                    "first_seen": session.first_seen.isoformat() + "Z",
+                    "last_seen": session.last_seen.isoformat() + "Z",
+                    "duration_minutes": round(duration_min, 1),
+                    "total_positions": session.total_positions,
+                },
+                "quality": {
+                    "grade": grade,
+                    "update_rate_per_min": round(update_rate, 2),
+                    "expected_positions": int(expected_positions),
+                    "completeness_pct": round(completeness, 1),
+                },
+                "gaps": {
+                    "total_count": len(gaps),
+                    "total_time_seconds": int(total_gap_time),
+                    "gap_percentage": round(gap_percentage, 1),
+                    "max_gap_seconds": max(g["duration_seconds"] for g in gaps) if gaps else 0,
+                    "gaps": gaps[:10],  # Limit to 10 gaps
+                },
+                "signal": {
+                    "avg_rssi": round(rssi_stats["avg_rssi"], 1) if rssi_stats["avg_rssi"] else None,
+                    "min_rssi": round(rssi_stats["min_rssi"], 1) if rssi_stats["min_rssi"] else None,
+                    "max_rssi": round(rssi_stats["max_rssi"], 1) if rssi_stats["max_rssi"] else None,
+                },
             }
-        })
+        )
 
 
 # Need to import models at module level for the aggregate
@@ -258,28 +244,25 @@ class EngagementViewSet(viewsets.ViewSet):
         - Favorite activity statistics
         """,
         parameters=[
-            OpenApiParameter(name='hours', type=int, description='Time range in hours (default: 24)'),
-            OpenApiParameter(name='refresh', type=bool, description='Force cache refresh'),
-        ]
+            OpenApiParameter(name="hours", type=int, description="Time range in hours (default: 24)"),
+            OpenApiParameter(name="refresh", type=bool, description="Force cache refresh"),
+        ],
     )
     def list(self, request):
         """Get engagement statistics."""
         try:
-            hours = int(request.query_params.get('hours', 24))
+            hours = int(request.query_params.get("hours", 24))
             hours = min(hours, 720)  # Cap at 30 days
         except (ValueError, TypeError):
             hours = 24
-        refresh = request.query_params.get('refresh', 'false').lower() == 'true'
+        refresh = request.query_params.get("refresh", "false").lower() == "true"
 
-        if refresh or hours != 24:
-            stats = calculate_engagement_stats(hours=hours)
-        else:
-            stats = get_engagement_stats()
+        stats = calculate_engagement_stats(hours=hours) if refresh or hours != 24 else get_engagement_stats()
 
         if stats is None:
-            return Response({
-                "error": "Unable to calculate engagement stats"
-            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                {"error": "Unable to calculate engagement stats"}, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
 
         return Response(stats)
 
@@ -287,84 +270,85 @@ class EngagementViewSet(viewsets.ViewSet):
         summary="Get most watched aircraft",
         description="Get the most favorited/watched aircraft with engagement details",
         parameters=[
-            OpenApiParameter(name='limit', type=int, description='Number of results (default: 20)'),
-        ]
+            OpenApiParameter(name="limit", type=int, description="Number of results (default: 20)"),
+        ],
     )
-    @action(detail=False, methods=['get'], url_path='most-watched')
+    @action(detail=False, methods=["get"], url_path="most-watched")
     def most_watched(self, request):
         """Get most watched aircraft."""
         from django.db.models import Count, Sum
 
         try:
-            limit = int(request.query_params.get('limit', 20))
+            limit = int(request.query_params.get("limit", 20))
             limit = min(limit, 1000)  # Cap at 1000
         except (ValueError, TypeError):
             limit = 20
 
         most_favorited = list(
-            AircraftFavorite.objects.values('icao_hex', 'registration')
+            AircraftFavorite.objects.values("icao_hex", "registration")
             .annotate(
-                favorite_count=Count('id'),
-                total_times_seen=Sum('times_seen'),
-                total_tracking_minutes=Sum('total_tracking_minutes'),
+                favorite_count=Count("id"),
+                total_times_seen=Sum("times_seen"),
+                total_tracking_minutes=Sum("total_tracking_minutes"),
             )
-            .order_by('-favorite_count')[:limit]
+            .order_by("-favorite_count")[:limit]
         )
 
         # Enrich with aircraft info
-        icao_hexes = [f['icao_hex'] for f in most_favorited]
-        aircraft_infos = {
-            info.icao_hex: info
-            for info in AircraftInfo.objects.filter(icao_hex__in=icao_hexes)
-        }
+        icao_hexes = [f["icao_hex"] for f in most_favorited]
+        aircraft_infos = {info.icao_hex: info for info in AircraftInfo.objects.filter(icao_hex__in=icao_hexes)}
 
         result = []
         for fav in most_favorited:
-            info = aircraft_infos.get(fav['icao_hex'])
-            result.append({
-                'icao_hex': fav['icao_hex'],
-                'registration': fav['registration'] or (info.registration if info else None),
-                'favorite_count': fav['favorite_count'],
-                'total_times_seen': fav['total_times_seen'] or 0,
-                'total_tracking_minutes': round(fav['total_tracking_minutes'] or 0, 1),
-                'aircraft_type': info.type_code if info else None,
-                'type_name': info.type_name if info else None,
-                'operator': info.operator if info else None,
-                'country': info.country if info else None,
-                'photo_url': info.photo_thumbnail_url or info.photo_url if info else None,
-            })
+            info = aircraft_infos.get(fav["icao_hex"])
+            result.append(
+                {
+                    "icao_hex": fav["icao_hex"],
+                    "registration": fav["registration"] or (info.registration if info else None),
+                    "favorite_count": fav["favorite_count"],
+                    "total_times_seen": fav["total_times_seen"] or 0,
+                    "total_tracking_minutes": round(fav["total_tracking_minutes"] or 0, 1),
+                    "aircraft_type": info.type_code if info else None,
+                    "type_name": info.type_name if info else None,
+                    "operator": info.operator if info else None,
+                    "country": info.country if info else None,
+                    "photo_url": info.photo_thumbnail_url or info.photo_url if info else None,
+                }
+            )
 
-        return Response({
-            'most_watched': result,
-            'total_count': len(result),
-        })
+        return Response(
+            {
+                "most_watched": result,
+                "total_count": len(result),
+            }
+        )
 
     @extend_schema(
         summary="Get return visitors",
         description="Get aircraft that have been seen in multiple tracking sessions",
         parameters=[
-            OpenApiParameter(name='hours', type=int, description='Time range in hours (default: 24)'),
-            OpenApiParameter(name='min_sessions', type=int, description='Minimum sessions (default: 2)'),
-            OpenApiParameter(name='limit', type=int, description='Number of results (default: 30)'),
-        ]
+            OpenApiParameter(name="hours", type=int, description="Time range in hours (default: 24)"),
+            OpenApiParameter(name="min_sessions", type=int, description="Minimum sessions (default: 2)"),
+            OpenApiParameter(name="limit", type=int, description="Number of results (default: 30)"),
+        ],
     )
-    @action(detail=False, methods=['get'], url_path='return-visitors')
+    @action(detail=False, methods=["get"], url_path="return-visitors")
     def return_visitors(self, request):
         """Get aircraft that have returned multiple times."""
-        from django.db.models import Count, Sum, Min, Max
+        from django.db.models import Count, Max, Min, Sum
 
         try:
-            hours = int(request.query_params.get('hours', 24))
+            hours = int(request.query_params.get("hours", 24))
             hours = min(hours, 720)  # Cap at 30 days
         except (ValueError, TypeError):
             hours = 24
         try:
-            min_sessions = int(request.query_params.get('min_sessions', 2))
+            min_sessions = int(request.query_params.get("min_sessions", 2))
             min_sessions = min(min_sessions, 100)  # Cap at 100
         except (ValueError, TypeError):
             min_sessions = 2
         try:
-            limit = int(request.query_params.get('limit', 30))
+            limit = int(request.query_params.get("limit", 30))
             limit = min(limit, 1000)  # Cap at 1000
         except (ValueError, TypeError):
             limit = 30
@@ -373,75 +357,75 @@ class EngagementViewSet(viewsets.ViewSet):
 
         return_visitors = list(
             AircraftSession.objects.filter(last_seen__gt=cutoff)
-            .values('icao_hex')
+            .values("icao_hex")
             .annotate(
-                session_count=Count('id'),
-                total_positions=Sum('total_positions'),
-                first_session=Min('first_seen'),
-                last_session=Max('last_seen'),
+                session_count=Count("id"),
+                total_positions=Sum("total_positions"),
+                first_session=Min("first_seen"),
+                last_session=Max("last_seen"),
             )
             .filter(session_count__gte=min_sessions)
-            .order_by('-session_count')[:limit]
+            .order_by("-session_count")[:limit]
         )
 
         # Enrich with aircraft info
-        icao_hexes = [rv['icao_hex'] for rv in return_visitors]
-        aircraft_infos = {
-            info.icao_hex: info
-            for info in AircraftInfo.objects.filter(icao_hex__in=icao_hexes)
-        }
+        icao_hexes = [rv["icao_hex"] for rv in return_visitors]
+        aircraft_infos = {info.icao_hex: info for info in AircraftInfo.objects.filter(icao_hex__in=icao_hexes)}
 
         result = []
         for rv in return_visitors:
-            info = aircraft_infos.get(rv['icao_hex'])
-            result.append({
-                'icao_hex': rv['icao_hex'],
-                'registration': info.registration if info else None,
-                'session_count': rv['session_count'],
-                'total_positions': rv['total_positions'],
-                'first_session': rv['first_session'].isoformat() + "Z" if rv['first_session'] else None,
-                'last_session': rv['last_session'].isoformat() + "Z" if rv['last_session'] else None,
-                'aircraft_type': info.type_code if info else None,
-                'operator': info.operator if info else None,
-            })
+            info = aircraft_infos.get(rv["icao_hex"])
+            result.append(
+                {
+                    "icao_hex": rv["icao_hex"],
+                    "registration": info.registration if info else None,
+                    "session_count": rv["session_count"],
+                    "total_positions": rv["total_positions"],
+                    "first_session": rv["first_session"].isoformat() + "Z" if rv["first_session"] else None,
+                    "last_session": rv["last_session"].isoformat() + "Z" if rv["last_session"] else None,
+                    "aircraft_type": info.type_code if info else None,
+                    "operator": info.operator if info else None,
+                }
+            )
 
         # Calculate stats
-        total_unique = AircraftSession.objects.filter(
-            last_seen__gt=cutoff
-        ).values('icao_hex').distinct().count()
+        total_unique = AircraftSession.objects.filter(last_seen__gt=cutoff).values("icao_hex").distinct().count()
 
-        return Response({
-            'return_visitors': result,
-            'stats': {
-                'total_unique_aircraft': total_unique,
-                'returning_aircraft': len(return_visitors),
-                'return_rate_pct': round(len(return_visitors) / total_unique * 100, 1) if total_unique > 0 else 0,
-            },
-            'time_range_hours': hours,
-        })
+        return Response(
+            {
+                "return_visitors": result,
+                "stats": {
+                    "total_unique_aircraft": total_unique,
+                    "returning_aircraft": len(return_visitors),
+                    "return_rate_pct": round(len(return_visitors) / total_unique * 100, 1) if total_unique > 0 else 0,
+                },
+                "time_range_hours": hours,
+            }
+        )
 
     @extend_schema(
         summary="Get peak tracking periods",
         description="Get periods with the most concurrent aircraft being tracked",
         parameters=[
-            OpenApiParameter(name='hours', type=int, description='Time range in hours (default: 24)'),
-            OpenApiParameter(name='limit', type=int, description='Number of peak periods to return (default: 10)'),
-        ]
+            OpenApiParameter(name="hours", type=int, description="Time range in hours (default: 24)"),
+            OpenApiParameter(name="limit", type=int, description="Number of peak periods to return (default: 10)"),
+        ],
     )
-    @action(detail=False, methods=['get'], url_path='peak-tracking')
+    @action(detail=False, methods=["get"], url_path="peak-tracking")
     def peak_tracking(self, request):
         """Get peak concurrent tracking periods."""
         from django.db.models import Count
         from django.db.models.functions import TruncHour
+
         from skyspy.models import AircraftSighting
 
         try:
-            hours = int(request.query_params.get('hours', 24))
+            hours = int(request.query_params.get("hours", 24))
             hours = min(hours, 720)  # Cap at 30 days
         except (ValueError, TypeError):
             hours = 24
         try:
-            limit = int(request.query_params.get('limit', 10))
+            limit = int(request.query_params.get("limit", 10))
             limit = min(limit, 1000)  # Cap at 1000
         except (ValueError, TypeError):
             limit = 10
@@ -450,43 +434,49 @@ class EngagementViewSet(viewsets.ViewSet):
 
         hourly_data = list(
             AircraftSighting.objects.filter(timestamp__gt=cutoff)
-            .annotate(hour=TruncHour('timestamp'))
-            .values('hour')
+            .annotate(hour=TruncHour("timestamp"))
+            .values("hour")
             .annotate(
-                unique_aircraft=Count('icao_hex', distinct=True),
-                position_count=Count('id'),
-                military_count=Count('id', filter=django_models.Q(is_military=True)),
+                unique_aircraft=Count("icao_hex", distinct=True),
+                position_count=Count("id"),
+                military_count=Count("id", filter=django_models.Q(is_military=True)),
             )
-            .order_by('-unique_aircraft')[:limit]
+            .order_by("-unique_aircraft")[:limit]
         )
 
         peak_periods = []
         for h in hourly_data:
-            peak_periods.append({
-                'hour': h['hour'].isoformat() + "Z" if h['hour'] else None,
-                'unique_aircraft': h['unique_aircraft'],
-                'position_count': h['position_count'],
-                'military_count': h['military_count'],
-            })
+            peak_periods.append(
+                {
+                    "hour": h["hour"].isoformat() + "Z" if h["hour"] else None,
+                    "unique_aircraft": h["unique_aircraft"],
+                    "position_count": h["position_count"],
+                    "military_count": h["military_count"],
+                }
+            )
 
         # Calculate overall stats
-        overall = AircraftSighting.objects.filter(timestamp__gt=cutoff).annotate(
-            hour=TruncHour('timestamp')
-        ).values('hour').annotate(
-            unique=Count('icao_hex', distinct=True)
-        ).aggregate(
-            avg_aircraft=django_models.Avg('unique'),
-            max_aircraft=django_models.Max('unique'),
+        overall = (
+            AircraftSighting.objects.filter(timestamp__gt=cutoff)
+            .annotate(hour=TruncHour("timestamp"))
+            .values("hour")
+            .annotate(unique=Count("icao_hex", distinct=True))
+            .aggregate(
+                avg_aircraft=django_models.Avg("unique"),
+                max_aircraft=django_models.Max("unique"),
+            )
         )
 
-        return Response({
-            'peak_periods': peak_periods,
-            'summary': {
-                'avg_aircraft_per_hour': round(overall['avg_aircraft'], 1) if overall['avg_aircraft'] else 0,
-                'max_aircraft_in_hour': overall['max_aircraft'] or 0,
-            },
-            'time_range_hours': hours,
-        })
+        return Response(
+            {
+                "peak_periods": peak_periods,
+                "summary": {
+                    "avg_aircraft_per_hour": round(overall["avg_aircraft"], 1) if overall["avg_aircraft"] else 0,
+                    "max_aircraft_in_hour": overall["max_aircraft"] or 0,
+                },
+                "time_range_hours": hours,
+            }
+        )
 
 
 class FavoritesViewSet(viewsets.ViewSet):
@@ -496,8 +486,7 @@ class FavoritesViewSet(viewsets.ViewSet):
     permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
-        summary="List user favorites",
-        description="Get list of favorited aircraft for the current user/session"
+        summary="List user favorites", description="Get list of favorited aircraft for the current user/session"
     )
     def list(self, request):
         """List user's favorite aircraft."""
@@ -505,51 +494,51 @@ class FavoritesViewSet(viewsets.ViewSet):
         session_key = request.session.session_key if not user else None
 
         if not user and not session_key:
-            return Response({'favorites': [], 'count': 0})
+            return Response({"favorites": [], "count": 0})
 
-        filters = {'user': user} if user else {'session_key': session_key}
-        favorites = AircraftFavorite.objects.filter(**filters).order_by('-updated_at')
+        filters = {"user": user} if user else {"session_key": session_key}
+        favorites = AircraftFavorite.objects.filter(**filters).order_by("-updated_at")
 
         # Enrich with aircraft info
         icao_hexes = [f.icao_hex for f in favorites]
-        aircraft_infos = {
-            info.icao_hex: info
-            for info in AircraftInfo.objects.filter(icao_hex__in=icao_hexes)
-        }
+        aircraft_infos = {info.icao_hex: info for info in AircraftInfo.objects.filter(icao_hex__in=icao_hexes)}
 
         result = []
         for fav in favorites:
             info = aircraft_infos.get(fav.icao_hex)
-            result.append({
-                'id': fav.id,
-                'icao_hex': fav.icao_hex,
-                'registration': fav.registration or (info.registration if info else None),
-                'callsign': fav.callsign,
-                'notes': fav.notes,
-                'times_seen': fav.times_seen,
-                'last_seen_at': fav.last_seen_at.isoformat() + "Z" if fav.last_seen_at else None,
-                'total_tracking_minutes': round(fav.total_tracking_minutes, 1),
-                'notify_on_detection': fav.notify_on_detection,
-                'created_at': fav.created_at.isoformat() + "Z",
-                'aircraft_info': {
-                    'type_code': info.type_code if info else None,
-                    'type_name': info.type_name if info else None,
-                    'operator': info.operator if info else None,
-                    'country': info.country if info else None,
-                    'photo_url': info.photo_thumbnail_url or info.photo_url if info else None,
-                } if info else None,
-            })
+            result.append(
+                {
+                    "id": fav.id,
+                    "icao_hex": fav.icao_hex,
+                    "registration": fav.registration or (info.registration if info else None),
+                    "callsign": fav.callsign,
+                    "notes": fav.notes,
+                    "times_seen": fav.times_seen,
+                    "last_seen_at": fav.last_seen_at.isoformat() + "Z" if fav.last_seen_at else None,
+                    "total_tracking_minutes": round(fav.total_tracking_minutes, 1),
+                    "notify_on_detection": fav.notify_on_detection,
+                    "created_at": fav.created_at.isoformat() + "Z",
+                    "aircraft_info": {
+                        "type_code": info.type_code if info else None,
+                        "type_name": info.type_name if info else None,
+                        "operator": info.operator if info else None,
+                        "country": info.country if info else None,
+                        "photo_url": info.photo_thumbnail_url or info.photo_url if info else None,
+                    }
+                    if info
+                    else None,
+                }
+            )
 
-        return Response({
-            'favorites': result,
-            'count': len(result),
-        })
+        return Response(
+            {
+                "favorites": result,
+                "count": len(result),
+            }
+        )
 
-    @extend_schema(
-        summary="Toggle aircraft favorite",
-        description="Add or remove an aircraft from favorites"
-    )
-    @action(detail=False, methods=['post'], url_path=r'toggle/(?P<icao_hex>[A-Za-z0-9]+)')
+    @extend_schema(summary="Toggle aircraft favorite", description="Add or remove an aircraft from favorites")
+    @action(detail=False, methods=["post"], url_path=r"toggle/(?P<icao_hex>[A-Za-z0-9]+)")
     def toggle(self, request, icao_hex=None):
         """Toggle favorite status for an aircraft."""
         user = request.user if request.user.is_authenticated else None
@@ -574,18 +563,17 @@ class FavoritesViewSet(viewsets.ViewSet):
             registration=registration,
         )
 
-        return Response({
-            'icao_hex': icao_hex.upper(),
-            'is_favorite': created,
-            'action': 'added' if created else 'removed',
-            'favorite_id': favorite.id if favorite else None,
-        })
+        return Response(
+            {
+                "icao_hex": icao_hex.upper(),
+                "is_favorite": created,
+                "action": "added" if created else "removed",
+                "favorite_id": favorite.id if favorite else None,
+            }
+        )
 
-    @extend_schema(
-        summary="Check if aircraft is favorite",
-        description="Check if an aircraft is in user's favorites"
-    )
-    @action(detail=False, methods=['get'], url_path=r'check/(?P<icao_hex>[A-Za-z0-9]+)')
+    @extend_schema(summary="Check if aircraft is favorite", description="Check if an aircraft is in user's favorites")
+    @action(detail=False, methods=["get"], url_path=r"check/(?P<icao_hex>[A-Za-z0-9]+)")
     def check(self, request, icao_hex=None):
         """Check if aircraft is favorited."""
         user = request.user if request.user.is_authenticated else None
@@ -597,36 +585,35 @@ class FavoritesViewSet(viewsets.ViewSet):
             session_key=session_key,
         )
 
-        return Response({
-            'icao_hex': icao_hex.upper(),
-            'is_favorite': is_favorite,
-        })
+        return Response(
+            {
+                "icao_hex": icao_hex.upper(),
+                "is_favorite": is_favorite,
+            }
+        )
 
-    @extend_schema(
-        summary="Update favorite notes",
-        description="Update notes for a favorited aircraft"
-    )
-    @action(detail=True, methods=['patch'])
+    @extend_schema(summary="Update favorite notes", description="Update notes for a favorited aircraft")
+    @action(detail=True, methods=["patch"])
     def notes(self, request, pk=None):
         """Update notes for a favorite."""
         user = request.user if request.user.is_authenticated else None
         session_key = request.session.session_key if not user else None
 
-        filters = {'pk': pk}
+        filters = {"pk": pk}
         if user:
-            filters['user'] = user
+            filters["user"] = user
         elif session_key:
-            filters['session_key'] = session_key
+            filters["session_key"] = session_key
         else:
-            return Response({'error': 'Not authenticated'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({"error": "Not authenticated"}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
             favorite = AircraftFavorite.objects.get(**filters)
         except AircraftFavorite.DoesNotExist:
-            return Response({'error': 'Favorite not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Favorite not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        notes = request.data.get('notes', '')
-        notify = request.data.get('notify_on_detection')
+        notes = request.data.get("notes", "")
+        notify = request.data.get("notify_on_detection")
 
         if notes is not None:
             favorite.notes = notes
@@ -635,12 +622,14 @@ class FavoritesViewSet(viewsets.ViewSet):
 
         favorite.save()
 
-        return Response({
-            'id': favorite.id,
-            'icao_hex': favorite.icao_hex,
-            'notes': favorite.notes,
-            'notify_on_detection': favorite.notify_on_detection,
-        })
+        return Response(
+            {
+                "id": favorite.id,
+                "icao_hex": favorite.icao_hex,
+                "notes": favorite.notes,
+                "notify_on_detection": favorite.notify_on_detection,
+            }
+        )
 
 
 class FlightPatternsViewSet(viewsets.ViewSet):
@@ -666,36 +655,36 @@ class FlightPatternsViewSet(viewsets.ViewSet):
         """,
         parameters=[
             OpenApiParameter(
-                name='hours',
+                name="hours",
                 type=int,
                 location=OpenApiParameter.QUERY,
-                description='Time range in hours (default: 24)',
-                default=24
+                description="Time range in hours (default: 24)",
+                default=24,
             ),
             OpenApiParameter(
-                name='refresh',
+                name="refresh",
                 type=bool,
                 location=OpenApiParameter.QUERY,
-                description='Force refresh from database instead of using cache',
-                default=False
+                description="Force refresh from database instead of using cache",
+                default=False,
             ),
         ],
     )
     def list(self, request):
         """Get flight patterns statistics."""
         try:
-            hours = int(request.query_params.get('hours', 24))
+            hours = int(request.query_params.get("hours", 24))
             hours = min(hours, 720)  # Cap at 30 days
         except (ValueError, TypeError):
             hours = 24
-        refresh = request.query_params.get('refresh', 'false').lower() == 'true'
+        refresh = request.query_params.get("refresh", "false").lower() == "true"
 
         if refresh:
             stats = calculate_flight_patterns_stats(hours=hours)
         else:
             stats = get_flight_patterns_stats()
             # If cached stats have a different time range, recalculate
-            if stats and stats.get('time_range_hours') != hours:
+            if stats and stats.get("time_range_hours") != hours:
                 stats = calculate_flight_patterns_stats(hours=hours)
 
         if stats is None:
@@ -711,34 +700,36 @@ class FlightPatternsViewSet(viewsets.ViewSet):
         """,
         parameters=[
             OpenApiParameter(
-                name='hours',
+                name="hours",
                 type=int,
                 location=OpenApiParameter.QUERY,
-                description='Time range in hours (default: 24)',
-                default=24
+                description="Time range in hours (default: 24)",
+                default=24,
             ),
         ],
     )
-    @action(detail=False, methods=['get'], url_path='busiest-hours')
+    @action(detail=False, methods=["get"], url_path="busiest-hours")
     def busiest_hours(self, request):
         """Get busiest hours data for heatmap."""
         try:
-            hours = int(request.query_params.get('hours', 24))
+            hours = int(request.query_params.get("hours", 24))
             hours = min(hours, 720)  # Cap at 30 days
         except (ValueError, TypeError):
             hours = 24
         stats = get_flight_patterns_stats()
 
-        if stats is None or stats.get('time_range_hours') != hours:
+        if stats is None or stats.get("time_range_hours") != hours:
             stats = calculate_flight_patterns_stats(hours=hours)
 
-        return Response({
-            'busiest_hours': stats.get('busiest_hours', []),
-            'peak_hour': stats.get('peak_hour'),
-            'peak_aircraft_count': stats.get('peak_aircraft_count'),
-            'time_range_hours': hours,
-            'timestamp': stats.get('timestamp'),
-        })
+        return Response(
+            {
+                "busiest_hours": stats.get("busiest_hours", []),
+                "peak_hour": stats.get("peak_hour"),
+                "peak_aircraft_count": stats.get("peak_aircraft_count"),
+                "time_range_hours": hours,
+                "timestamp": stats.get("timestamp"),
+            }
+        )
 
     @extend_schema(
         summary="Get aircraft types breakdown",
@@ -748,47 +739,49 @@ class FlightPatternsViewSet(viewsets.ViewSet):
         """,
         parameters=[
             OpenApiParameter(
-                name='hours',
+                name="hours",
                 type=int,
                 location=OpenApiParameter.QUERY,
-                description='Time range in hours (default: 24)',
-                default=24
+                description="Time range in hours (default: 24)",
+                default=24,
             ),
             OpenApiParameter(
-                name='limit',
+                name="limit",
                 type=int,
                 location=OpenApiParameter.QUERY,
-                description='Maximum number of types to return (default: 25)',
-                default=25
+                description="Maximum number of types to return (default: 25)",
+                default=25,
             ),
         ],
     )
-    @action(detail=False, methods=['get'], url_path='aircraft-types')
+    @action(detail=False, methods=["get"], url_path="aircraft-types")
     def aircraft_types(self, request):
         """Get aircraft types breakdown."""
         try:
-            hours = int(request.query_params.get('hours', 24))
+            hours = int(request.query_params.get("hours", 24))
             hours = min(hours, 720)  # Cap at 30 days
         except (ValueError, TypeError):
             hours = 24
         try:
-            limit = int(request.query_params.get('limit', 25))
+            limit = int(request.query_params.get("limit", 25))
             limit = min(limit, 1000)  # Cap at 1000
         except (ValueError, TypeError):
             limit = 25
         stats = get_flight_patterns_stats()
 
-        if stats is None or stats.get('time_range_hours') != hours:
+        if stats is None or stats.get("time_range_hours") != hours:
             stats = calculate_flight_patterns_stats(hours=hours)
 
-        types = stats.get('common_aircraft_types', [])[:limit]
+        types = stats.get("common_aircraft_types", [])[:limit]
 
-        return Response({
-            'aircraft_types': types,
-            'total_types': len(stats.get('common_aircraft_types', [])),
-            'time_range_hours': hours,
-            'timestamp': stats.get('timestamp'),
-        })
+        return Response(
+            {
+                "aircraft_types": types,
+                "total_types": len(stats.get("common_aircraft_types", [])),
+                "time_range_hours": hours,
+                "timestamp": stats.get("timestamp"),
+            }
+        )
 
     @extend_schema(
         summary="Get flight duration by type",
@@ -798,28 +791,30 @@ class FlightPatternsViewSet(viewsets.ViewSet):
         """,
         parameters=[
             OpenApiParameter(
-                name='hours',
+                name="hours",
                 type=int,
                 location=OpenApiParameter.QUERY,
-                description='Time range in hours (default: 24)',
-                default=24
+                description="Time range in hours (default: 24)",
+                default=24,
             ),
         ],
     )
-    @action(detail=False, methods=['get'], url_path='duration-by-type')
+    @action(detail=False, methods=["get"], url_path="duration-by-type")
     def duration_by_type(self, request):
         """Get flight duration by aircraft type."""
-        hours = int(request.query_params.get('hours', 24))
+        hours = int(request.query_params.get("hours", 24))
         stats = get_flight_patterns_stats()
 
-        if stats is None or stats.get('time_range_hours') != hours:
+        if stats is None or stats.get("time_range_hours") != hours:
             stats = calculate_flight_patterns_stats(hours=hours)
 
-        return Response({
-            'duration_by_type': stats.get('avg_duration_by_type', []),
-            'time_range_hours': hours,
-            'timestamp': stats.get('timestamp'),
-        })
+        return Response(
+            {
+                "duration_by_type": stats.get("avg_duration_by_type", []),
+                "time_range_hours": hours,
+                "timestamp": stats.get("timestamp"),
+            }
+        )
 
     @extend_schema(
         summary="Get frequent routes/airlines",
@@ -829,32 +824,34 @@ class FlightPatternsViewSet(viewsets.ViewSet):
         """,
         parameters=[
             OpenApiParameter(
-                name='hours',
+                name="hours",
                 type=int,
                 location=OpenApiParameter.QUERY,
-                description='Time range in hours (default: 24)',
-                default=24
+                description="Time range in hours (default: 24)",
+                default=24,
             ),
         ],
     )
-    @action(detail=False, methods=['get'], url_path='routes')
+    @action(detail=False, methods=["get"], url_path="routes")
     def routes(self, request):
         """Get frequent routes/airlines."""
         try:
-            hours = int(request.query_params.get('hours', 24))
+            hours = int(request.query_params.get("hours", 24))
             hours = min(hours, 720)  # Cap at 30 days
         except (ValueError, TypeError):
             hours = 24
         stats = get_flight_patterns_stats()
 
-        if stats is None or stats.get('time_range_hours') != hours:
+        if stats is None or stats.get("time_range_hours") != hours:
             stats = calculate_flight_patterns_stats(hours=hours)
 
-        return Response({
-            'routes': stats.get('frequent_routes', []),
-            'time_range_hours': hours,
-            'timestamp': stats.get('timestamp'),
-        })
+        return Response(
+            {
+                "routes": stats.get("frequent_routes", []),
+                "time_range_hours": hours,
+                "timestamp": stats.get("timestamp"),
+            }
+        )
 
 
 class GeographicStatsViewSet(viewsets.ViewSet):
@@ -882,36 +879,36 @@ class GeographicStatsViewSet(viewsets.ViewSet):
         """,
         parameters=[
             OpenApiParameter(
-                name='hours',
+                name="hours",
                 type=int,
                 location=OpenApiParameter.QUERY,
-                description='Time range in hours (default: 24)',
-                default=24
+                description="Time range in hours (default: 24)",
+                default=24,
             ),
             OpenApiParameter(
-                name='refresh',
+                name="refresh",
                 type=bool,
                 location=OpenApiParameter.QUERY,
-                description='Force refresh from database instead of using cache',
-                default=False
+                description="Force refresh from database instead of using cache",
+                default=False,
             ),
         ],
     )
     def list(self, request):
         """Get geographic statistics."""
         try:
-            hours = int(request.query_params.get('hours', 24))
+            hours = int(request.query_params.get("hours", 24))
             hours = min(hours, 720)  # Cap at 30 days
         except (ValueError, TypeError):
             hours = 24
-        refresh = request.query_params.get('refresh', 'false').lower() == 'true'
+        refresh = request.query_params.get("refresh", "false").lower() == "true"
 
         if refresh:
             stats = calculate_geographic_stats(hours=hours)
         else:
             stats = get_geographic_stats()
             # If cached stats have a different time range, recalculate
-            if stats and stats.get('time_range_hours') != hours:
+            if stats and stats.get("time_range_hours") != hours:
                 stats = calculate_geographic_stats(hours=hours)
 
         if stats is None:
@@ -927,29 +924,31 @@ class GeographicStatsViewSet(viewsets.ViewSet):
         """,
         parameters=[
             OpenApiParameter(
-                name='hours',
+                name="hours",
                 type=int,
                 location=OpenApiParameter.QUERY,
-                description='Time range in hours (default: 24)',
-                default=24
+                description="Time range in hours (default: 24)",
+                default=24,
             ),
         ],
     )
-    @action(detail=False, methods=['get'], url_path='countries')
+    @action(detail=False, methods=["get"], url_path="countries")
     def countries(self, request):
         """Get countries of origin breakdown."""
-        hours = int(request.query_params.get('hours', 24))
+        hours = int(request.query_params.get("hours", 24))
         stats = get_geographic_stats()
 
-        if stats is None or stats.get('time_range_hours') != hours:
+        if stats is None or stats.get("time_range_hours") != hours:
             stats = calculate_geographic_stats(hours=hours)
 
-        return Response({
-            'countries': stats.get('countries_breakdown', []),
-            'total_countries': stats.get('summary', {}).get('total_countries', 0),
-            'time_range_hours': hours,
-            'timestamp': stats.get('timestamp'),
-        })
+        return Response(
+            {
+                "countries": stats.get("countries_breakdown", []),
+                "total_countries": stats.get("summary", {}).get("total_countries", 0),
+                "time_range_hours": hours,
+                "timestamp": stats.get("timestamp"),
+            }
+        )
 
     @extend_schema(
         summary="Get operators/airlines frequency",
@@ -959,29 +958,31 @@ class GeographicStatsViewSet(viewsets.ViewSet):
         """,
         parameters=[
             OpenApiParameter(
-                name='hours',
+                name="hours",
                 type=int,
                 location=OpenApiParameter.QUERY,
-                description='Time range in hours (default: 24)',
-                default=24
+                description="Time range in hours (default: 24)",
+                default=24,
             ),
         ],
     )
-    @action(detail=False, methods=['get'], url_path='operators')
+    @action(detail=False, methods=["get"], url_path="operators")
     def operators(self, request):
         """Get operators/airlines frequency."""
-        hours = int(request.query_params.get('hours', 24))
+        hours = int(request.query_params.get("hours", 24))
         stats = get_geographic_stats()
 
-        if stats is None or stats.get('time_range_hours') != hours:
+        if stats is None or stats.get("time_range_hours") != hours:
             stats = calculate_geographic_stats(hours=hours)
 
-        return Response({
-            'operators': stats.get('operators_frequency', []),
-            'total_operators': stats.get('summary', {}).get('total_operators', 0),
-            'time_range_hours': hours,
-            'timestamp': stats.get('timestamp'),
-        })
+        return Response(
+            {
+                "operators": stats.get("operators_frequency", []),
+                "total_operators": stats.get("summary", {}).get("total_operators", 0),
+                "time_range_hours": hours,
+                "timestamp": stats.get("timestamp"),
+            }
+        )
 
     @extend_schema(
         summary="Get military vs civilian breakdown",
@@ -991,28 +992,30 @@ class GeographicStatsViewSet(viewsets.ViewSet):
         """,
         parameters=[
             OpenApiParameter(
-                name='hours',
+                name="hours",
                 type=int,
                 location=OpenApiParameter.QUERY,
-                description='Time range in hours (default: 24)',
-                default=24
+                description="Time range in hours (default: 24)",
+                default=24,
             ),
         ],
     )
-    @action(detail=False, methods=['get'], url_path='military-breakdown')
+    @action(detail=False, methods=["get"], url_path="military-breakdown")
     def military_breakdown(self, request):
         """Get military vs civilian breakdown by country."""
-        hours = int(request.query_params.get('hours', 24))
+        hours = int(request.query_params.get("hours", 24))
         stats = get_geographic_stats()
 
-        if stats is None or stats.get('time_range_hours') != hours:
+        if stats is None or stats.get("time_range_hours") != hours:
             stats = calculate_geographic_stats(hours=hours)
 
-        return Response({
-            'military_breakdown': stats.get('military_breakdown', []),
-            'time_range_hours': hours,
-            'timestamp': stats.get('timestamp'),
-        })
+        return Response(
+            {
+                "military_breakdown": stats.get("military_breakdown", []),
+                "time_range_hours": hours,
+                "timestamp": stats.get("timestamp"),
+            }
+        )
 
     @extend_schema(
         summary="Get connected locations",
@@ -1021,28 +1024,30 @@ class GeographicStatsViewSet(viewsets.ViewSet):
         """,
         parameters=[
             OpenApiParameter(
-                name='hours',
+                name="hours",
                 type=int,
                 location=OpenApiParameter.QUERY,
-                description='Time range in hours (default: 24)',
-                default=24
+                description="Time range in hours (default: 24)",
+                default=24,
             ),
         ],
     )
-    @action(detail=False, methods=['get'], url_path='locations')
+    @action(detail=False, methods=["get"], url_path="locations")
     def locations(self, request):
         """Get connected locations."""
-        hours = int(request.query_params.get('hours', 24))
+        hours = int(request.query_params.get("hours", 24))
         stats = get_geographic_stats()
 
-        if stats is None or stats.get('time_range_hours') != hours:
+        if stats is None or stats.get("time_range_hours") != hours:
             stats = calculate_geographic_stats(hours=hours)
 
-        return Response({
-            'locations': stats.get('connected_locations', []),
-            'time_range_hours': hours,
-            'timestamp': stats.get('timestamp'),
-        })
+        return Response(
+            {
+                "locations": stats.get("connected_locations", []),
+                "time_range_hours": hours,
+                "timestamp": stats.get("timestamp"),
+            }
+        )
 
     @extend_schema(
         summary="Get all stats summary",
@@ -1051,30 +1056,32 @@ class GeographicStatsViewSet(viewsets.ViewSet):
         """,
         parameters=[
             OpenApiParameter(
-                name='hours',
+                name="hours",
                 type=int,
                 location=OpenApiParameter.QUERY,
-                description='Time range in hours (default: 24)',
-                default=24
+                description="Time range in hours (default: 24)",
+                default=24,
             ),
         ],
     )
-    @action(detail=False, methods=['get'], url_path='summary')
+    @action(detail=False, methods=["get"], url_path="summary")
     def summary(self, request):
         """Get all stats summary."""
-        hours = int(request.query_params.get('hours', 24))
+        hours = int(request.query_params.get("hours", 24))
 
         flight_patterns = get_flight_patterns_stats()
         geographic = get_geographic_stats()
 
-        if flight_patterns is None or flight_patterns.get('time_range_hours') != hours:
+        if flight_patterns is None or flight_patterns.get("time_range_hours") != hours:
             flight_patterns = calculate_flight_patterns_stats(hours=hours)
 
-        if geographic is None or geographic.get('time_range_hours') != hours:
+        if geographic is None or geographic.get("time_range_hours") != hours:
             geographic = calculate_geographic_stats(hours=hours)
 
-        return Response({
-            'flight_patterns': flight_patterns,
-            'geographic': geographic,
-            'time_range_hours': hours,
-        })
+        return Response(
+            {
+                "flight_patterns": flight_patterns,
+                "geographic": geographic,
+                "time_range_hours": hours,
+            }
+        )

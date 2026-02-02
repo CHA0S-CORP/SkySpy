@@ -4,17 +4,16 @@ Tests for the validation module.
 
 import pytest
 
+from skyspy_common.libacars.exceptions import LibacarsValidationError
 from skyspy_common.libacars.validation import (
-    validate_label,
-    validate_text,
+    MAX_LABEL_LENGTH,
+    MAX_MESSAGE_LENGTH,
+    ValidationResult,
     validate_acars_message,
     validate_and_raise,
-    ValidationResult,
-    MAX_MESSAGE_LENGTH,
-    MAX_LABEL_LENGTH,
-    MIN_LABEL_LENGTH,
+    validate_label,
+    validate_text,
 )
-from skyspy_common.libacars.exceptions import LibacarsValidationError
 
 
 class TestValidateLabel:

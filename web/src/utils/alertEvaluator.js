@@ -281,11 +281,12 @@ export function getRelevantValues(rule, aircraft) {
         case 'aircraft_type': values.type = aircraft.t || aircraft.type; break;
         case 'military': values.military = isAircraftMilitary(aircraft); break;
         case 'emergency': values.emergency = isAircraftEmergency(aircraft); break;
-        case 'law_enforcement':
+        case 'law_enforcement': {
           const leInfo = identifyLawEnforcement(aircraft);
           values.lawEnforcement = leInfo.isLawEnforcement;
           values.leCategory = leInfo.category;
           break;
+        }
         case 'helicopter':
           values.helicopter = checkIsHelicopter(aircraft.category || '', aircraft.t || aircraft.type || '');
           break;

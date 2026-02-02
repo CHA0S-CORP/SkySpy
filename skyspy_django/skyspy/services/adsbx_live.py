@@ -7,14 +7,14 @@ ADS-B Exchange: https://www.adsbexchange.com/
 Access via RapidAPI with various tier options.
 Advantage: Unfiltered data (no LADD/PIA blocking)
 """
+
 import logging
-from datetime import datetime
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Any
 
 import httpx
 from django.conf import settings
 from django.core.cache import cache
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
 
@@ -26,14 +26,14 @@ ADSBX_RAPIDAPI_BASE = f"https://{ADSBX_RAPIDAPI_HOST}"
 AIRCRAFT_CACHE_TTL = 5  # 5 seconds
 
 
-def _get_api_key() -> Optional[str]:
+def _get_api_key() -> str | None:
     """Get ADS-B Exchange RapidAPI key from settings."""
-    return getattr(settings, 'ADSBX_RAPIDAPI_KEY', None)
+    return getattr(settings, "ADSBX_RAPIDAPI_KEY", None)
 
 
 def _is_enabled() -> bool:
     """Check if ADS-B Exchange Live API is enabled."""
-    return getattr(settings, 'ADSBX_LIVE_ENABLED', False) and _get_api_key()
+    return getattr(settings, "ADSBX_LIVE_ENABLED", False) and _get_api_key()
 
 
 @retry(
@@ -41,12 +41,7 @@ def _is_enabled() -> bool:
     wait=wait_exponential(multiplier=1, min=1, max=10),
     retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
 )
-def _http_get_adsbx(
-    url: str,
-    params: Optional[Dict],
-    api_key: str,
-    timeout: float = 15.0
-) -> httpx.Response:
+def _http_get_adsbx(url: str, params: dict | None, api_key: str, timeout: float = 15.0) -> httpx.Response:
     """HTTP GET with retry logic for ADS-B Exchange API."""
     with httpx.Client(timeout=timeout) as client:
         response = client.get(
@@ -56,17 +51,13 @@ def _http_get_adsbx(
                 "X-RapidAPI-Key": api_key,
                 "X-RapidAPI-Host": ADSBX_RAPIDAPI_HOST,
                 "Accept": "application/json",
-            }
+            },
         )
         response.raise_for_status()
         return response
 
 
-def _make_request(
-    endpoint: str,
-    params: Optional[Dict] = None,
-    timeout: int = 15
-) -> Optional[Dict[str, Any]]:
+def _make_request(endpoint: str, params: dict | None = None, timeout: int = 15) -> dict[str, Any] | None:
     """
     Make a request to the ADS-B Exchange API via RapidAPI with retry logic.
 
@@ -84,12 +75,7 @@ def _make_request(
         return None
 
     try:
-        response = _http_get_adsbx(
-            f"{ADSBX_RAPIDAPI_BASE}/{endpoint}",
-            params,
-            api_key,
-            timeout=float(timeout)
-        )
+        response = _http_get_adsbx(f"{ADSBX_RAPIDAPI_BASE}/{endpoint}", params, api_key, timeout=float(timeout))
         return response.json()
 
     except httpx.HTTPStatusError as e:
@@ -107,7 +93,7 @@ def _make_request(
         return None
 
 
-def get_aircraft_by_icao(icao_hex: str) -> Optional[Dict[str, Any]]:
+def get_aircraft_by_icao(icao_hex: str) -> dict[str, Any] | None:
     """
     Get current position for a specific aircraft.
 
@@ -127,12 +113,12 @@ def get_aircraft_by_icao(icao_hex: str) -> Optional[Dict[str, Any]]:
     if cached:
         return cached
 
-    result = _make_request(f'v2/icao/{icao_hex}/')
+    result = _make_request(f"v2/icao/{icao_hex}/")
 
     if not result:
         return None
 
-    aircraft_list = result.get('ac', [])
+    aircraft_list = result.get("ac", [])
     if not aircraft_list:
         return None
 
@@ -143,7 +129,7 @@ def get_aircraft_by_icao(icao_hex: str) -> Optional[Dict[str, Any]]:
     return parsed
 
 
-def get_aircraft_by_callsign(callsign: str) -> List[Dict[str, Any]]:
+def get_aircraft_by_callsign(callsign: str) -> list[dict[str, Any]]:
     """
     Get aircraft by callsign.
 
@@ -163,12 +149,12 @@ def get_aircraft_by_callsign(callsign: str) -> List[Dict[str, Any]]:
     if cached:
         return cached
 
-    result = _make_request(f'v2/callsign/{callsign}/')
+    result = _make_request(f"v2/callsign/{callsign}/")
 
     if not result:
         return []
 
-    aircraft_list = result.get('ac', [])
+    aircraft_list = result.get("ac", [])
     parsed_list = []
 
     for ac in aircraft_list:
@@ -180,7 +166,7 @@ def get_aircraft_by_callsign(callsign: str) -> List[Dict[str, Any]]:
     return parsed_list
 
 
-def get_aircraft_by_registration(registration: str) -> Optional[Dict[str, Any]]:
+def get_aircraft_by_registration(registration: str) -> dict[str, Any] | None:
     """
     Get aircraft by registration number.
 
@@ -200,12 +186,12 @@ def get_aircraft_by_registration(registration: str) -> Optional[Dict[str, Any]]:
     if cached:
         return cached
 
-    result = _make_request(f'v2/registration/{registration}/')
+    result = _make_request(f"v2/registration/{registration}/")
 
     if not result:
         return None
 
-    aircraft_list = result.get('ac', [])
+    aircraft_list = result.get("ac", [])
     if not aircraft_list:
         return None
 
@@ -216,7 +202,7 @@ def get_aircraft_by_registration(registration: str) -> Optional[Dict[str, Any]]:
     return parsed
 
 
-def get_aircraft_by_squawk(squawk: str) -> List[Dict[str, Any]]:
+def get_aircraft_by_squawk(squawk: str) -> list[dict[str, Any]]:
     """
     Get aircraft by squawk code.
 
@@ -235,12 +221,12 @@ def get_aircraft_by_squawk(squawk: str) -> List[Dict[str, Any]]:
     if cached:
         return cached
 
-    result = _make_request(f'v2/sqk/{squawk}/')
+    result = _make_request(f"v2/sqk/{squawk}/")
 
     if not result:
         return []
 
-    aircraft_list = result.get('ac', [])
+    aircraft_list = result.get("ac", [])
     parsed_list = []
 
     for ac in aircraft_list:
@@ -252,7 +238,7 @@ def get_aircraft_by_squawk(squawk: str) -> List[Dict[str, Any]]:
     return parsed_list
 
 
-def get_aircraft_by_type(type_code: str) -> List[Dict[str, Any]]:
+def get_aircraft_by_type(type_code: str) -> list[dict[str, Any]]:
     """
     Get all aircraft of a specific type.
 
@@ -272,12 +258,12 @@ def get_aircraft_by_type(type_code: str) -> List[Dict[str, Any]]:
     if cached:
         return cached
 
-    result = _make_request(f'v2/type/{type_code}/')
+    result = _make_request(f"v2/type/{type_code}/")
 
     if not result:
         return []
 
-    aircraft_list = result.get('ac', [])
+    aircraft_list = result.get("ac", [])
     parsed_list = []
 
     for ac in aircraft_list:
@@ -289,11 +275,7 @@ def get_aircraft_by_type(type_code: str) -> List[Dict[str, Any]]:
     return parsed_list
 
 
-def get_aircraft_in_area(
-    lat: float,
-    lon: float,
-    radius_nm: float = 100
-) -> List[Dict[str, Any]]:
+def get_aircraft_in_area(lat: float, lon: float, radius_nm: float = 100) -> list[dict[str, Any]]:
     """
     Get aircraft within a radius of a point.
 
@@ -314,12 +296,12 @@ def get_aircraft_in_area(
     if cached:
         return cached
 
-    result = _make_request(f'v2/lat/{lat}/lon/{lon}/dist/{int(radius_nm)}/')
+    result = _make_request(f"v2/lat/{lat}/lon/{lon}/dist/{int(radius_nm)}/")
 
     if not result:
         return []
 
-    aircraft_list = result.get('ac', [])
+    aircraft_list = result.get("ac", [])
     parsed_list = []
 
     for ac in aircraft_list:
@@ -331,7 +313,7 @@ def get_aircraft_in_area(
     return parsed_list
 
 
-def get_military_aircraft() -> List[Dict[str, Any]]:
+def get_military_aircraft() -> list[dict[str, Any]]:
     """
     Get all military aircraft currently tracked.
 
@@ -347,25 +329,25 @@ def get_military_aircraft() -> List[Dict[str, Any]]:
     if cached:
         return cached
 
-    result = _make_request('v2/mil/')
+    result = _make_request("v2/mil/")
 
     if not result:
         return []
 
-    aircraft_list = result.get('ac', [])
+    aircraft_list = result.get("ac", [])
     parsed_list = []
 
     for ac in aircraft_list:
         parsed = _parse_aircraft(ac)
         if parsed:
-            parsed['is_military'] = True
+            parsed["is_military"] = True
             parsed_list.append(parsed)
 
     cache.set(cache_key, parsed_list, AIRCRAFT_CACHE_TTL)
     return parsed_list
 
 
-def get_ladd_aircraft() -> List[Dict[str, Any]]:
+def get_ladd_aircraft() -> list[dict[str, Any]]:
     """
     Get aircraft on the LADD (Limiting Aircraft Data Displayed) list.
 
@@ -384,25 +366,25 @@ def get_ladd_aircraft() -> List[Dict[str, Any]]:
     if cached:
         return cached
 
-    result = _make_request('v2/ladd/')
+    result = _make_request("v2/ladd/")
 
     if not result:
         return []
 
-    aircraft_list = result.get('ac', [])
+    aircraft_list = result.get("ac", [])
     parsed_list = []
 
     for ac in aircraft_list:
         parsed = _parse_aircraft(ac)
         if parsed:
-            parsed['is_ladd'] = True
+            parsed["is_ladd"] = True
             parsed_list.append(parsed)
 
     cache.set(cache_key, parsed_list, AIRCRAFT_CACHE_TTL)
     return parsed_list
 
 
-def get_pia_aircraft() -> List[Dict[str, Any]]:
+def get_pia_aircraft() -> list[dict[str, Any]]:
     """
     Get aircraft using PIA (Privacy ICAO Address).
 
@@ -421,25 +403,25 @@ def get_pia_aircraft() -> List[Dict[str, Any]]:
     if cached:
         return cached
 
-    result = _make_request('v2/pia/')
+    result = _make_request("v2/pia/")
 
     if not result:
         return []
 
-    aircraft_list = result.get('ac', [])
+    aircraft_list = result.get("ac", [])
     parsed_list = []
 
     for ac in aircraft_list:
         parsed = _parse_aircraft(ac)
         if parsed:
-            parsed['is_pia'] = True
+            parsed["is_pia"] = True
             parsed_list.append(parsed)
 
     cache.set(cache_key, parsed_list, AIRCRAFT_CACHE_TTL)
     return parsed_list
 
 
-def _parse_aircraft(ac: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _parse_aircraft(ac: dict[str, Any]) -> dict[str, Any] | None:
     """
     Parse an ADS-B Exchange aircraft record.
 
@@ -450,40 +432,40 @@ def _parse_aircraft(ac: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         Parsed aircraft dictionary or None if invalid
     """
     try:
-        icao_hex = ac.get('hex', ac.get('icao', ''))
+        icao_hex = ac.get("hex", ac.get("icao", ""))
         if not icao_hex:
             return None
 
-        lat = ac.get('lat')
-        lon = ac.get('lon')
+        lat = ac.get("lat")
+        lon = ac.get("lon")
 
         return {
-            'icao_hex': icao_hex.upper(),
-            'callsign': ac.get('flight', '').strip() if ac.get('flight') else None,
-            'registration': ac.get('r'),
-            'aircraft_type': ac.get('t'),
-            'latitude': lat,
-            'longitude': lon,
-            'altitude_baro_ft': ac.get('alt_baro'),
-            'altitude_geo_ft': ac.get('alt_geom'),
-            'ground_speed_kt': ac.get('gs'),
-            'track': ac.get('track'),
-            'vertical_rate_fpm': ac.get('baro_rate'),
-            'squawk': ac.get('squawk'),
-            'emergency': ac.get('emergency'),
-            'category': ac.get('category'),
-            'nav_modes': ac.get('nav_modes'),
-            'nav_altitude_fms': ac.get('nav_altitude_fms'),
-            'nav_altitude_mcp': ac.get('nav_altitude_mcp'),
-            'nav_heading': ac.get('nav_heading'),
-            'on_ground': ac.get('alt_baro') == 'ground',
-            'seen': ac.get('seen'),
-            'seen_pos': ac.get('seen_pos'),
-            'rssi': ac.get('rssi'),
-            'source': 'adsbexchange',
-            'is_military': ac.get('mil', False),
-            'is_ladd': ac.get('ladd', False),
-            'is_pia': ac.get('pia', False),
+            "icao_hex": icao_hex.upper(),
+            "callsign": ac.get("flight", "").strip() if ac.get("flight") else None,
+            "registration": ac.get("r"),
+            "aircraft_type": ac.get("t"),
+            "latitude": lat,
+            "longitude": lon,
+            "altitude_baro_ft": ac.get("alt_baro"),
+            "altitude_geo_ft": ac.get("alt_geom"),
+            "ground_speed_kt": ac.get("gs"),
+            "track": ac.get("track"),
+            "vertical_rate_fpm": ac.get("baro_rate"),
+            "squawk": ac.get("squawk"),
+            "emergency": ac.get("emergency"),
+            "category": ac.get("category"),
+            "nav_modes": ac.get("nav_modes"),
+            "nav_altitude_fms": ac.get("nav_altitude_fms"),
+            "nav_altitude_mcp": ac.get("nav_altitude_mcp"),
+            "nav_heading": ac.get("nav_heading"),
+            "on_ground": ac.get("alt_baro") == "ground",
+            "seen": ac.get("seen"),
+            "seen_pos": ac.get("seen_pos"),
+            "rssi": ac.get("rssi"),
+            "source": "adsbexchange",
+            "is_military": ac.get("mil", False),
+            "is_ladd": ac.get("ladd", False),
+            "is_pia": ac.get("pia", False),
         }
 
     except Exception as e:
@@ -491,7 +473,7 @@ def _parse_aircraft(ac: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return None
 
 
-def track_aircraft_globally(icao_hex: str) -> Optional[Dict[str, Any]]:
+def track_aircraft_globally(icao_hex: str) -> dict[str, Any] | None:
     """
     Track an aircraft globally via ADS-B Exchange.
 
@@ -506,7 +488,7 @@ def track_aircraft_globally(icao_hex: str) -> Optional[Dict[str, Any]]:
     return get_aircraft_by_icao(icao_hex)
 
 
-def get_api_status() -> Dict[str, Any]:
+def get_api_status() -> dict[str, Any]:
     """
     Get ADS-B Exchange API status and configuration.
 
@@ -514,13 +496,13 @@ def get_api_status() -> Dict[str, Any]:
         API status dictionary
     """
     return {
-        'enabled': _is_enabled(),
-        'api_key_configured': bool(_get_api_key()),
-        'cache_ttl': AIRCRAFT_CACHE_TTL,
-        'features': [
-            'unfiltered_data',
-            'ladd_aircraft',
-            'pia_aircraft',
-            'military_filter',
+        "enabled": _is_enabled(),
+        "api_key_configured": bool(_get_api_key()),
+        "cache_ttl": AIRCRAFT_CACHE_TTL,
+        "features": [
+            "unfiltered_data",
+            "ladd_aircraft",
+            "pia_aircraft",
+            "military_filter",
         ],
     }

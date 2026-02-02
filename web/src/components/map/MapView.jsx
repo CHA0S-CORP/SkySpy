@@ -4488,6 +4488,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         ctx.save();
         const wedgeAngle = 5; // ±5 degrees heading uncertainty
         const lookaheadMinutes = 2; // 2-minute lookahead
+        const wedgePixelsPerNm = (Math.min(width, height) * 0.45) / radarRange;
 
         // Draw wedges for aircraft in conflicts (or all aircraft if toggled)
         const wedgesToDraw = conflictAircraft.size > 0
@@ -4502,7 +4503,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
           // Calculate lookahead distance in nm (speed in kts * time in hours)
           const lookaheadNm = ac.gs * (lookaheadMinutes / 60);
-          const lookaheadPx = lookaheadNm * pixelsPerNm;
+          const lookaheadPx = lookaheadNm * wedgePixelsPerNm;
 
           // Heading in radians (canvas 0° is right, aircraft track 0° is north)
           const headingRad = (ac.track - 90) * Math.PI / 180;

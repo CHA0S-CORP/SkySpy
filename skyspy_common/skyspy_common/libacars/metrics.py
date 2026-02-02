@@ -11,8 +11,9 @@ Provides:
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, TypeVar
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ class CounterStats:
 
     value: int = 0
     last_increment: int = 0
-    last_increment_time: Optional[float] = None
+    last_increment_time: float | None = None
 
     def increment(self, delta: int = 1) -> int:
         """Increment the counter."""
@@ -191,7 +192,7 @@ class MetricsCollector:
         with self._lock:
             return self._gauges.get(name, 0.0)
 
-    def get_timing(self, name: str) -> Optional[dict]:
+    def get_timing(self, name: str) -> dict | None:
         """Get timing statistics for an operation."""
         with self._lock:
             timing = self._timings.get(name)
@@ -207,14 +208,8 @@ class MetricsCollector:
         with self._lock:
             return {
                 "uptime_seconds": round(time.time() - self._start_time, 2),
-                "counters": {
-                    name: counter.to_dict()
-                    for name, counter in self._counters.items()
-                },
-                "timings": {
-                    name: timing.to_dict()
-                    for name, timing in self._timings.items()
-                },
+                "counters": {name: counter.to_dict() for name, counter in self._counters.items()},
+                "timings": {name: timing.to_dict() for name, timing in self._timings.items()},
                 "gauges": dict(self._gauges),
             }
 
@@ -287,7 +282,7 @@ class TimingContext:
     def __init__(self, collector: MetricsCollector, name: str):
         self._collector = collector
         self._name = name
-        self._start_time: Optional[float] = None
+        self._start_time: float | None = None
 
     def __enter__(self) -> "TimingContext":
         self._start_time = time.perf_counter()
@@ -370,7 +365,7 @@ class HealthChecker:
 
 
 # Global metrics collector instance
-_metrics: Optional[MetricsCollector] = None
+_metrics: MetricsCollector | None = None
 
 
 def get_metrics_collector(prefix: str = "libacars") -> MetricsCollector:

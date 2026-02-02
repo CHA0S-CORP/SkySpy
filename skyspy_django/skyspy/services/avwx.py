@@ -6,9 +6,10 @@ AVWX API: https://avwx.rest/
 
 Free tier: Unlimited basic requests
 """
+
 import logging
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Any
 
 import httpx
 from django.conf import settings
@@ -24,17 +25,17 @@ METAR_CACHE_TTL = 300  # 5 minutes
 TAF_CACHE_TTL = 1800  # 30 minutes
 
 
-def _get_api_key() -> Optional[str]:
+def _get_api_key() -> str | None:
     """Get AVWX API key from settings (optional for basic access)."""
-    return getattr(settings, 'AVWX_API_KEY', None)
+    return getattr(settings, "AVWX_API_KEY", None)
 
 
 def _is_enabled() -> bool:
     """Check if AVWX is enabled."""
-    return getattr(settings, 'AVWX_ENABLED', True)  # Enabled by default
+    return getattr(settings, "AVWX_ENABLED", True)  # Enabled by default
 
 
-def _make_request(endpoint: str, params: Optional[Dict] = None) -> Optional[Dict[str, Any]]:
+def _make_request(endpoint: str, params: dict | None = None) -> dict[str, Any] | None:
     """
     Make a request to the AVWX API.
 
@@ -79,7 +80,7 @@ def _make_request(endpoint: str, params: Optional[Dict] = None) -> Optional[Dict
         return None
 
 
-def get_metar(icao: str) -> Optional[Dict[str, Any]]:
+def get_metar(icao: str) -> dict[str, Any] | None:
     """
     Get decoded METAR data for an airport.
 
@@ -100,8 +101,8 @@ def get_metar(icao: str) -> Optional[Dict[str, Any]]:
     result = _make_request(f"metar/{icao}")
 
     if result:
-        result['source'] = 'avwx'
-        result['fetched_at'] = datetime.utcnow().isoformat() + 'Z'
+        result["source"] = "avwx"
+        result["fetched_at"] = datetime.utcnow().isoformat() + "Z"
 
         # Normalize the response
         normalized = _normalize_metar(result)
@@ -111,7 +112,7 @@ def get_metar(icao: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def get_taf(icao: str) -> Optional[Dict[str, Any]]:
+def get_taf(icao: str) -> dict[str, Any] | None:
     """
     Get decoded TAF forecast for an airport.
 
@@ -132,15 +133,15 @@ def get_taf(icao: str) -> Optional[Dict[str, Any]]:
     result = _make_request(f"taf/{icao}")
 
     if result:
-        result['source'] = 'avwx'
-        result['fetched_at'] = datetime.utcnow().isoformat() + 'Z'
+        result["source"] = "avwx"
+        result["fetched_at"] = datetime.utcnow().isoformat() + "Z"
         cache.set(cache_key, result, TAF_CACHE_TTL)
         return result
 
     return None
 
 
-def get_station(icao: str) -> Optional[Dict[str, Any]]:
+def get_station(icao: str) -> dict[str, Any] | None:
     """
     Get station/airport information.
 
@@ -161,14 +162,14 @@ def get_station(icao: str) -> Optional[Dict[str, Any]]:
     result = _make_request(f"station/{icao}")
 
     if result:
-        result['source'] = 'avwx'
+        result["source"] = "avwx"
         cache.set(cache_key, result, 86400)  # 24 hour cache
         return result
 
     return None
 
 
-def _normalize_metar(metar: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_metar(metar: dict[str, Any]) -> dict[str, Any]:
     """
     Normalize AVWX METAR response to standard format.
 
@@ -179,125 +180,123 @@ def _normalize_metar(metar: Dict[str, Any]) -> Dict[str, Any]:
         Normalized weather data dictionary
     """
     result = {
-        'icao': metar.get('station', ''),
-        'raw_text': metar.get('raw', ''),
-        'source': 'avwx',
-        'fetched_at': metar.get('fetched_at'),
+        "icao": metar.get("station", ""),
+        "raw_text": metar.get("raw", ""),
+        "source": "avwx",
+        "fetched_at": metar.get("fetched_at"),
     }
 
     # Time
-    time_data = metar.get('time', {})
+    time_data = metar.get("time", {})
     if isinstance(time_data, dict):
-        result['observed'] = time_data.get('dt')
+        result["observed"] = time_data.get("dt")
 
     # Temperature
-    temp = metar.get('temperature', {})
+    temp = metar.get("temperature", {})
     if isinstance(temp, dict):
-        result['temperature_c'] = temp.get('value')
+        result["temperature_c"] = temp.get("value")
 
-    dewpoint = metar.get('dewpoint', {})
+    dewpoint = metar.get("dewpoint", {})
     if isinstance(dewpoint, dict):
-        result['dewpoint_c'] = dewpoint.get('value')
+        result["dewpoint_c"] = dewpoint.get("value")
 
     # Wind
-    wind_dir = metar.get('wind_direction', {})
-    wind_speed = metar.get('wind_speed', {})
-    wind_gust = metar.get('wind_gust', {})
+    wind_dir = metar.get("wind_direction", {})
+    wind_speed = metar.get("wind_speed", {})
+    wind_gust = metar.get("wind_gust", {})
 
     if isinstance(wind_dir, dict):
-        result['wind_direction'] = wind_dir.get('value')
+        result["wind_direction"] = wind_dir.get("value")
     if isinstance(wind_speed, dict):
-        result['wind_speed_kt'] = wind_speed.get('value')
+        result["wind_speed_kt"] = wind_speed.get("value")
     if isinstance(wind_gust, dict):
-        result['wind_gust_kt'] = wind_gust.get('value')
+        result["wind_gust_kt"] = wind_gust.get("value")
 
     # Visibility
-    visibility = metar.get('visibility', {})
+    visibility = metar.get("visibility", {})
     if isinstance(visibility, dict):
-        vis_value = visibility.get('value')
+        vis_value = visibility.get("value")
         if vis_value is not None:
             # AVWX returns visibility in meters by default
-            result['visibility_meters'] = vis_value
+            result["visibility_meters"] = vis_value
             # Convert to statute miles
             if vis_value >= 9999:
-                result['visibility_sm'] = 10
+                result["visibility_sm"] = 10
             else:
-                result['visibility_sm'] = round(vis_value / 1609.34, 1)
+                result["visibility_sm"] = round(vis_value / 1609.34, 1)
 
     # Clouds and ceiling
-    clouds = metar.get('clouds', [])
+    clouds = metar.get("clouds", [])
     ceiling = None
     cloud_list = []
 
     if isinstance(clouds, list):
         for cloud in clouds:
             if isinstance(cloud, dict):
-                cloud_type = cloud.get('type', '')
-                altitude = cloud.get('altitude')
+                cloud_type = cloud.get("type", "")
+                altitude = cloud.get("altitude")
                 if altitude is not None:
                     cloud_entry = {
-                        'code': cloud_type,
-                        'base_feet_agl': altitude * 100 if altitude else None,
+                        "code": cloud_type,
+                        "base_feet_agl": altitude * 100 if altitude else None,
                     }
                     cloud_list.append(cloud_entry)
 
-                    if cloud_type in ('BKN', 'OVC', 'VV'):
+                    if cloud_type in ("BKN", "OVC", "VV"):
                         base_ft = altitude * 100 if altitude else 0
                         if ceiling is None or base_ft < ceiling:
                             ceiling = base_ft
 
-    result['clouds'] = cloud_list
-    result['ceiling_ft'] = ceiling
+    result["clouds"] = cloud_list
+    result["ceiling_ft"] = ceiling
 
     # Flight category
-    flight_cat = metar.get('flight_rules')
+    flight_cat = metar.get("flight_rules")
     if not flight_cat:
-        flight_cat = _calculate_flight_category(
-            result.get('ceiling_ft'),
-            result.get('visibility_sm')
-        )
-    result['flight_category'] = flight_cat
+        flight_cat = _calculate_flight_category(result.get("ceiling_ft"), result.get("visibility_sm"))
+    result["flight_category"] = flight_cat
 
     # Altimeter
-    altimeter = metar.get('altimeter', {})
+    altimeter = metar.get("altimeter", {})
     if isinstance(altimeter, dict):
-        result['altimeter_hg'] = altimeter.get('value')
+        result["altimeter_hg"] = altimeter.get("value")
 
     # Humidity (calculate if we have temp and dewpoint)
-    if result.get('temperature_c') is not None and result.get('dewpoint_c') is not None:
-        temp_c = result['temperature_c']
-        dewpoint_c = result['dewpoint_c']
+    if result.get("temperature_c") is not None and result.get("dewpoint_c") is not None:
+        temp_c = result["temperature_c"]
+        dewpoint_c = result["dewpoint_c"]
         # Magnus formula approximation
         try:
             import math
-            rh = 100 * math.exp((17.625 * dewpoint_c) / (243.04 + dewpoint_c)) / \
-                 math.exp((17.625 * temp_c) / (243.04 + temp_c))
-            result['humidity_percent'] = round(rh, 1)
+
+            rh = (
+                100
+                * math.exp((17.625 * dewpoint_c) / (243.04 + dewpoint_c))
+                / math.exp((17.625 * temp_c) / (243.04 + temp_c))
+            )
+            result["humidity_percent"] = round(rh, 1)
         except (ValueError, ZeroDivisionError):
             pass
 
     # Weather conditions
-    wx_codes = metar.get('wx_codes', [])
+    wx_codes = metar.get("wx_codes", [])
     if wx_codes:
         conditions = []
         for wx in wx_codes:
             if isinstance(wx, dict):
-                conditions.append({
-                    'code': wx.get('repr', ''),
-                    'text': wx.get('value', ''),
-                })
-        result['conditions'] = conditions
-        result['weather'] = ', '.join(
-            c.get('text', c.get('code', '')) for c in conditions
-        )
+                conditions.append(
+                    {
+                        "code": wx.get("repr", ""),
+                        "text": wx.get("value", ""),
+                    }
+                )
+        result["conditions"] = conditions
+        result["weather"] = ", ".join(c.get("text", c.get("code", "")) for c in conditions)
 
     return result
 
 
-def _calculate_flight_category(
-    ceiling_ft: Optional[int],
-    visibility_sm: Optional[float]
-) -> str:
+def _calculate_flight_category(ceiling_ft: int | None, visibility_sm: float | None) -> str:
     """
     Calculate flight category based on ceiling and visibility.
 
@@ -312,16 +311,16 @@ def _calculate_flight_category(
     visibility = visibility_sm if visibility_sm is not None else 99
 
     if ceiling < 500 or visibility < 1:
-        return 'LIFR'
+        return "LIFR"
     elif ceiling < 1000 or visibility < 3:
-        return 'IFR'
+        return "IFR"
     elif ceiling < 3000 or visibility < 5:
-        return 'MVFR'
+        return "MVFR"
     else:
-        return 'VFR'
+        return "VFR"
 
 
-def get_api_status() -> Dict[str, Any]:
+def get_api_status() -> dict[str, Any]:
     """
     Get AVWX API status and configuration.
 
@@ -329,8 +328,8 @@ def get_api_status() -> Dict[str, Any]:
         API status dictionary
     """
     return {
-        'enabled': _is_enabled(),
-        'api_key_configured': bool(_get_api_key()),
-        'cache_ttl_metar': METAR_CACHE_TTL,
-        'cache_ttl_taf': TAF_CACHE_TTL,
+        "enabled": _is_enabled(),
+        "api_key_configured": bool(_get_api_key()),
+        "cache_ttl_metar": METAR_CACHE_TTL,
+        "cache_ttl_taf": TAF_CACHE_TTL,
     }

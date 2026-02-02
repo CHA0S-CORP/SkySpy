@@ -3,6 +3,7 @@ OpenAIP data refresh tasks.
 
 Provides Celery tasks for refreshing global airspace data from OpenAIP.
 """
+
 import logging
 from datetime import datetime
 
@@ -31,7 +32,7 @@ def refresh_openaip_data(self):
         # Check if OpenAIP is enabled
         if not openaip._is_enabled():
             logger.info("OpenAIP is not enabled, skipping refresh")
-            return {'status': 'disabled'}
+            return {"status": "disabled"}
 
         # Get API status
         status = openaip.get_api_status()
@@ -45,12 +46,12 @@ def refresh_openaip_data(self):
             (33.0, -112.0, 200),  # Arizona/New Mexico
             (40.0, -105.0, 200),  # Colorado
             # Central US
-            (35.0, -97.0, 200),   # Texas/Oklahoma
-            (41.0, -95.0, 200),   # Midwest
+            (35.0, -97.0, 200),  # Texas/Oklahoma
+            (41.0, -95.0, 200),  # Midwest
             # Eastern US
-            (33.0, -84.0, 200),   # Southeast
-            (40.0, -75.0, 200),   # Northeast
-            (28.0, -82.0, 200),   # Florida
+            (33.0, -84.0, 200),  # Southeast
+            (40.0, -75.0, 200),  # Northeast
+            (28.0, -82.0, 200),  # Florida
         ]
 
         total_airspaces = 0
@@ -71,34 +72,38 @@ def refresh_openaip_data(self):
                 navaids = openaip.get_navaids(lat, lon, radius_nm)
                 total_navaids += len(navaids)
 
-                logger.debug(f"Prefetched region ({lat}, {lon}): {len(airspaces)} airspaces, {len(airports)} airports, {len(navaids)} navaids")
+                logger.debug(
+                    f"Prefetched region ({lat}, {lon}): {len(airspaces)} airspaces, {len(airports)} airports, {len(navaids)} navaids"
+                )
             except Exception as e:
                 logger.warning(f"Failed to prefetch region ({lat}, {lon}): {e}")
                 continue
 
-        logger.info(f"OpenAIP prefetch complete: {total_airspaces} airspaces, {total_airports} airports, {total_navaids} navaids")
+        logger.info(
+            f"OpenAIP prefetch complete: {total_airspaces} airspaces, {total_airports} airports, {total_navaids} navaids"
+        )
 
         # Broadcast update notification via Socket.IO
         try:
             sync_emit(
-                'openaip:refresh',
+                "openaip:refresh",
                 {
-                    'status': 'complete',
-                    'airspaces': total_airspaces,
-                    'airports': total_airports,
-                    'navaids': total_navaids,
-                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                    "status": "complete",
+                    "airspaces": total_airspaces,
+                    "airports": total_airports,
+                    "navaids": total_navaids,
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
                 },
-                room='topic_aircraft'
+                room="topic_aircraft",
             )
         except Exception as e:
             logger.warning(f"Failed to broadcast OpenAIP refresh: {e}")
 
         return {
-            'status': 'complete',
-            'airspaces': total_airspaces,
-            'airports': total_airports,
-            'navaids': total_navaids,
+            "status": "complete",
+            "airspaces": total_airspaces,
+            "airports": total_airports,
+            "navaids": total_navaids,
         }
 
     except Exception as e:
@@ -122,19 +127,19 @@ def prefetch_openaip_airspaces(lat: float, lon: float, radius_nm: float = 200):
         from skyspy.services import openaip
 
         if not openaip._is_enabled():
-            return {'status': 'disabled'}
+            return {"status": "disabled"}
 
         airspaces = openaip.get_airspaces(lat, lon, radius_nm)
         logger.info(f"Prefetched {len(airspaces)} airspaces")
 
         return {
-            'status': 'complete',
-            'count': len(airspaces),
+            "status": "complete",
+            "count": len(airspaces),
         }
 
     except Exception as e:
         logger.error(f"Failed to prefetch OpenAIP airspaces: {e}")
-        return {'status': 'error', 'error': str(e)}
+        return {"status": "error", "error": str(e)}
 
 
 @shared_task
@@ -149,4 +154,4 @@ def get_openaip_stats():
 
     except Exception as e:
         logger.error(f"Error getting OpenAIP stats: {e}")
-        return {'error': str(e)}
+        return {"error": str(e)}

@@ -535,6 +535,11 @@ export function ProDetailsPanel({
     graphs: false,
   });
 
+  // Distance trend tracking - hooks must be called before any conditional returns
+  const proPrevDistanceRef = useRef(null);
+  const proDistanceTrendRef = useRef(null);
+  const proTrackedAircraftRef = useRef(null);
+
   // Don't render if not in pro mode or no aircraft selected
   if (config.mapMode !== 'pro' || !liveAircraft) return null;
 
@@ -552,11 +557,6 @@ export function ProDetailsPanel({
   const isInConflict = !!safetyEvent;
   const conflictSeverity = safetyEvent?.severity || null;
   const conflictTitle = safetyEvent ? getEventTypeName(safetyEvent.event_type) : null;
-
-  // Distance trend tracking
-  const proPrevDistanceRef = useRef(null);
-  const proDistanceTrendRef = useRef(null);
-  const proTrackedAircraftRef = useRef(null);
 
   // Calculate flight data values
   const proAltitude = liveAircraft.alt_baro || liveAircraft.alt_geom || liveAircraft.alt || 0;

@@ -3,6 +3,7 @@ Test-specific Django settings for SkysPy.
 
 These settings override the main settings for running tests in isolation.
 """
+
 import os
 from datetime import timedelta
 from pathlib import Path
@@ -10,88 +11,88 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'rest_framework',
-    'rest_framework_simplejwt',
-    'rest_framework_simplejwt.token_blacklist',
-    'django_filters',
-    'corsheaders',
-    'drf_spectacular',
-    'django_celery_beat',
-    'skyspy',
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "rest_framework",
+    "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
+    "django_filters",
+    "corsheaders",
+    "drf_spectacular",
+    "django_celery_beat",
+    "skyspy",
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = 'skyspy.urls'
-WSGI_APPLICATION = 'skyspy.wsgi.application'
-ASGI_APPLICATION = 'skyspy.asgi.application'
+ROOT_URLCONF = "skyspy.urls"
+WSGI_APPLICATION = "skyspy.wsgi.application"
+ASGI_APPLICATION = "skyspy.asgi.application"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = 'static/'
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+STATIC_URL = "static/"
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # REST Framework
 # Use FeatureBasedPermission which dynamically checks AUTH_MODE and FeatureAccess at request time
 # This allows tests to use override_settings(AUTH_MODE=...) and feature_access fixtures
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'skyspy.auth.authentication.APIKeyAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "skyspy.auth.authentication.APIKeyAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
     ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'skyspy.auth.permissions.FeatureBasedPermission',
+    "DEFAULT_PERMISSION_CLASSES": [
+        "skyspy.auth.permissions.FeatureBasedPermission",
     ],
-    'DEFAULT_RENDERER_CLASSES': [
-        'rest_framework.renderers.JSONRenderer',
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
     ],
-    'DEFAULT_FILTER_BACKENDS': [
-        'django_filters.rest_framework.DjangoFilterBackend',
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
     ],
 }
 
 # Simple JWT
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-    'AUTH_HEADER_TYPES': ('Bearer',),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
 }
 
 # Enable API key authentication
@@ -99,7 +100,7 @@ API_KEY_ENABLED = True
 
 # Auth mode for tests - 'public' allows all access without authentication
 # This is appropriate for tests that aren't specifically testing authentication
-AUTH_MODE = 'public'
+AUTH_MODE = "public"
 
 # =============================================================================
 # Test Environment Configuration
@@ -109,60 +110,62 @@ AUTH_MODE = 'public'
 DEBUG = False
 
 # Use a separate test secret key
-SECRET_KEY = 'test-secret-key-for-skyspy-testing-only'
+SECRET_KEY = "test-secret-key-for-skyspy-testing-only"
 
 # =============================================================================
 # Database Configuration
 # =============================================================================
 
+
 def parse_database_url(url):
     """Parse DATABASE_URL into Django database config."""
     import re
-    pattern = r'postgresql://(?P<user>[^:]+):(?P<password>[^@]+)@(?P<host>[^:]+):(?P<port>\d+)/(?P<name>.+)'
+
+    pattern = r"postgresql://(?P<user>[^:]+):(?P<password>[^@]+)@(?P<host>[^:]+):(?P<port>\d+)/(?P<name>.+)"
     match = re.match(pattern, url)
     if not match:
         raise ValueError(f"Invalid DATABASE_URL format: {url}")
 
     return {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': match.group('name'),
-        'USER': match.group('user'),
-        'PASSWORD': match.group('password'),
-        'HOST': match.group('host'),
-        'PORT': match.group('port'),
-        'ATOMIC_REQUESTS': False,
-        'AUTOCOMMIT': True,
-        'CONN_MAX_AGE': 0,
-        'CONN_HEALTH_CHECKS': False,
-        'TIME_ZONE': 'UTC',
-        'OPTIONS': {},
-        'TEST': {
-            'NAME': match.group('name'),
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": match.group("name"),
+        "USER": match.group("user"),
+        "PASSWORD": match.group("password"),
+        "HOST": match.group("host"),
+        "PORT": match.group("port"),
+        "ATOMIC_REQUESTS": False,
+        "AUTOCOMMIT": True,
+        "CONN_MAX_AGE": 0,
+        "CONN_HEALTH_CHECKS": False,
+        "TIME_ZONE": "UTC",
+        "OPTIONS": {},
+        "TEST": {
+            "NAME": match.group("name"),
         },
     }
 
+
 # Use DATABASE_URL from environment if available, otherwise use SQLite file for local testing
-DATABASE_URL = os.environ.get('DATABASE_URL')
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 if DATABASE_URL:
-    DATABASES = {
-        'default': parse_database_url(DATABASE_URL)
-    }
+    DATABASES = {"default": parse_database_url(DATABASE_URL)}
 else:
     # Use SQLite file for local testing (not in-memory to persist across connections)
     import tempfile
-    _test_db_file = os.path.join(tempfile.gettempdir(), 'skyspy_test.sqlite3')
+
+    _test_db_file = os.path.join(tempfile.gettempdir(), "skyspy_test.sqlite3")
     DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': _test_db_file,
-            'TIME_ZONE': 'UTC',
-            'ATOMIC_REQUESTS': False,
-            'AUTOCOMMIT': True,
-            'CONN_MAX_AGE': 0,
-            'CONN_HEALTH_CHECKS': False,
-            'OPTIONS': {},
-            'TEST': {'NAME': _test_db_file},
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": _test_db_file,
+            "TIME_ZONE": "UTC",
+            "ATOMIC_REQUESTS": False,
+            "AUTOCOMMIT": True,
+            "CONN_MAX_AGE": 0,
+            "CONN_HEALTH_CHECKS": False,
+            "OPTIONS": {},
+            "TEST": {"NAME": _test_db_file},
         }
     }
 
@@ -172,9 +175,9 @@ else:
 
 # Use local memory cache for tests
 CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'skyspy-test-cache',
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "skyspy-test-cache",
     }
 }
 
@@ -193,18 +196,18 @@ CACHES = {
 # Execute tasks synchronously in tests
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
-CELERY_BROKER_URL = 'memory://'
-CELERY_RESULT_BACKEND = 'cache+memory://'
+CELERY_BROKER_URL = "memory://"
+CELERY_RESULT_BACKEND = "cache+memory://"
 
 # =============================================================================
 # SkysPy Application Settings (Test Defaults)
 # =============================================================================
 
 # ADS-B Sources - use mock URLs for tests
-ULTRAFEEDER_HOST = 'localhost'
-ULTRAFEEDER_PORT = '18080'
-DUMP978_HOST = 'localhost'
-DUMP978_PORT = '18081'
+ULTRAFEEDER_HOST = "localhost"
+ULTRAFEEDER_PORT = "18080"
+DUMP978_HOST = "localhost"
+DUMP978_PORT = "18081"
 
 ULTRAFEEDER_URL = f"http://{ULTRAFEEDER_HOST}:{ULTRAFEEDER_PORT}"
 DUMP978_URL = f"http://{DUMP978_HOST}:{DUMP978_PORT}"
@@ -219,7 +222,7 @@ DB_STORE_INTERVAL = 1
 
 # Aircraft Streaming - disabled by default for tests
 AIRCRAFT_STREAM_ENABLED = False
-AIRCRAFT_STREAM_HOST = 'localhost'
+AIRCRAFT_STREAM_HOST = "localhost"
 AIRCRAFT_STREAM_PORT = 30047
 AIRCRAFT_STREAM_RECONNECT_DELAY = 1
 AIRCRAFT_STREAM_BATCH_MS = 100
@@ -238,8 +241,8 @@ SAFETY_TCAS_VS_THRESHOLD = 1500
 
 # Default Alerts
 PROXIMITY_ALERT_NM = 5.0
-WATCH_ICAO_LIST = ''
-WATCH_FLIGHT_LIST = ''
+WATCH_ICAO_LIST = ""
+WATCH_FLIGHT_LIST = ""
 ALERT_MILITARY = True
 ALERT_EMERGENCY = True
 
@@ -249,7 +252,7 @@ VDLM2_PORT = 15556
 ACARS_ENABLED = True
 
 # Notifications - disabled for tests
-APPRISE_URLS = ''
+APPRISE_URLS = ""
 NOTIFICATION_COOLDOWN = 60
 
 # Caching - short TTL for tests
@@ -258,25 +261,25 @@ UPSTREAM_API_MIN_INTERVAL = 5
 
 # Photo Cache - disabled for tests
 PHOTO_CACHE_ENABLED = False
-PHOTO_CACHE_DIR = '/tmp/skyspy-test-photos'
+PHOTO_CACHE_DIR = "/tmp/skyspy-test-photos"
 PHOTO_AUTO_DOWNLOAD = False
 
 # S3 Storage - disabled for tests
 S3_ENABLED = False
-S3_BUCKET = ''
-S3_REGION = 'us-east-1'
+S3_BUCKET = ""
+S3_REGION = "us-east-1"
 S3_ACCESS_KEY = None
 S3_SECRET_KEY = None
 S3_ENDPOINT_URL = None
-S3_PREFIX = 'test-aircraft-photos'
+S3_PREFIX = "test-aircraft-photos"
 S3_PUBLIC_URL = None
 
 # Radio/Audio - use temp directory
 RADIO_ENABLED = True
-RADIO_AUDIO_DIR = '/tmp/skyspy-test-radio'
+RADIO_AUDIO_DIR = "/tmp/skyspy-test-radio"
 RADIO_MAX_FILE_SIZE_MB = 10
 RADIO_RETENTION_DAYS = 1
-RADIO_S3_PREFIX = 'test-radio-transmissions'
+RADIO_S3_PREFIX = "test-radio-transmissions"
 
 # Transcription - disabled for tests
 TRANSCRIPTION_ENABLED = False
@@ -286,7 +289,7 @@ TRANSCRIPTION_API_KEY = None
 
 # Whisper - disabled for tests
 WHISPER_ENABLED = False
-WHISPER_URL = 'http://localhost:19000'
+WHISPER_URL = "http://localhost:19000"
 
 # ATC Whisper - disabled for tests
 ATC_WHISPER_ENABLED = False
@@ -297,14 +300,14 @@ ATC_WHISPER_NOISE_REDUCE = True
 ATC_WHISPER_POSTPROCESS = True
 
 # OpenSky Database - disabled for tests
-OPENSKY_DB_PATH = '/tmp/skyspy-test-opensky/aircraft-database.csv'
+OPENSKY_DB_PATH = "/tmp/skyspy-test-opensky/aircraft-database.csv"
 OPENSKY_DB_ENABLED = False
 
 # LLM - disabled for tests
 LLM_ENABLED = False
-LLM_API_URL = 'http://localhost:11434'
-LLM_API_KEY = ''
-LLM_MODEL = 'test-model'
+LLM_API_URL = "http://localhost:11434"
+LLM_API_KEY = ""
+LLM_MODEL = "test-model"
 LLM_TIMEOUT = 30
 LLM_MAX_RETRIES = 3
 LLM_CACHE_TTL = 300
@@ -313,20 +316,20 @@ LLM_TEMPERATURE = 0.7
 
 # Sentry - disabled for tests
 SENTRY_DSN = None
-SENTRY_ENVIRONMENT = 'test'
+SENTRY_ENVIRONMENT = "test"
 SENTRY_TRACES_SAMPLE_RATE = 0.0
 
 # Prometheus - disabled for tests
 PROMETHEUS_ENABLED = False
 
 # Redis - disabled for tests
-REDIS_URL = ''
+REDIS_URL = ""
 
 # Version
-VERSION = '1.0.0-test'
+VERSION = "1.0.0-test"
 
 # Celery heartbeat
-CELERY_HEARTBEAT_KEY = 'celery_heartbeat'
+CELERY_HEARTBEAT_KEY = "celery_heartbeat"
 
 # ACARS UDP ports
 ACARS_UDP_PORT = 5550
@@ -334,46 +337,46 @@ VDLM2_UDP_PORT = 5555
 
 # CORS
 CORS_ALLOW_ALL_ORIGINS = True
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ["*"]
 
 # =============================================================================
 # Logging Configuration
 # =============================================================================
 
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
-            'style': '{',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {message}",
+            "style": "{",
         },
     },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
         },
     },
-    'root': {
-        'handlers': ['console'],
-        'level': 'WARNING',  # Reduce noise in tests
+    "root": {
+        "handlers": ["console"],
+        "level": "WARNING",  # Reduce noise in tests
     },
-    'loggers': {
-        'django': {
-            'handlers': ['console'],
-            'level': 'WARNING',
-            'propagate': False,
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
         },
-        'skyspy': {
-            'handlers': ['console'],
-            'level': 'WARNING',  # Can set to DEBUG for test debugging
-            'propagate': False,
+        "skyspy": {
+            "handlers": ["console"],
+            "level": "WARNING",  # Can set to DEBUG for test debugging
+            "propagate": False,
         },
-        'sio': {
-            'handlers': ['console'],
-            'level': 'WARNING',
-            'propagate': False,
+        "sio": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
         },
     },
 }
@@ -383,7 +386,7 @@ LOGGING = {
 # =============================================================================
 
 PASSWORD_HASHERS = [
-    'django.contrib.auth.hashers.MD5PasswordHasher',
+    "django.contrib.auth.hashers.MD5PasswordHasher",
 ]
 
 # =============================================================================
@@ -400,4 +403,4 @@ PASSWORD_HASHERS = [
 # MIGRATION_MODULES = DisableMigrations()
 
 # Test runner configuration
-TEST_RUNNER = 'django.test.runner.DiscoverRunner'
+TEST_RUNNER = "django.test.runner.DiscoverRunner"

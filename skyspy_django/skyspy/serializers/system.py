@@ -1,6 +1,7 @@
 """
 System health and status serializers.
 """
+
 from rest_framework import serializers
 
 
@@ -8,26 +9,15 @@ class ServiceHealthSerializer(serializers.Serializer):
     """Individual service health status."""
 
     status = serializers.CharField(help_text="Service status (up, down, degraded)")
-    latency_ms = serializers.FloatField(
-        required=False,
-        allow_null=True,
-        help_text="Latency in milliseconds"
-    )
-    message = serializers.CharField(
-        required=False,
-        allow_null=True,
-        help_text="Additional status message"
-    )
+    latency_ms = serializers.FloatField(required=False, allow_null=True, help_text="Latency in milliseconds")
+    message = serializers.CharField(required=False, allow_null=True, help_text="Additional status message")
 
 
 class HealthResponseSerializer(serializers.Serializer):
     """Health check response."""
 
     status = serializers.CharField(help_text="Overall health status")
-    services = serializers.DictField(
-        child=ServiceHealthSerializer(),
-        help_text="Individual service health status"
-    )
+    services = serializers.DictField(child=ServiceHealthSerializer(), help_text="Individual service health status")
     timestamp = serializers.CharField(help_text="Health check timestamp")
 
 
@@ -42,33 +32,18 @@ class StatusResponseSerializer(serializers.Serializer):
     active_rules = serializers.IntegerField(help_text="Active alert rules")
     alert_history_count = serializers.IntegerField(help_text="Total alert history entries")
     safety_event_count = serializers.IntegerField(help_text="Total safety events")
-    safety_monitoring_enabled = serializers.BooleanField(
-        help_text="Safety monitoring active"
-    )
-    safety_tracked_aircraft = serializers.IntegerField(
-        help_text="Aircraft tracked for safety"
-    )
-    notifications_configured = serializers.BooleanField(
-        help_text="Notifications configured"
-    )
+    safety_monitoring_enabled = serializers.BooleanField(help_text="Safety monitoring active")
+    safety_tracked_aircraft = serializers.IntegerField(help_text="Aircraft tracked for safety")
+    notifications_configured = serializers.BooleanField(help_text="Notifications configured")
     redis_enabled = serializers.BooleanField(help_text="Redis available")
-    websocket_connections = serializers.IntegerField(
-        help_text="WebSocket connection count"
-    )
+    websocket_connections = serializers.IntegerField(help_text="WebSocket connection count")
     sse_subscribers = serializers.IntegerField(help_text="SSE subscriber count")
     acars_enabled = serializers.BooleanField(help_text="ACARS service enabled")
     acars_running = serializers.BooleanField(help_text="ACARS service running")
-    polling_interval_seconds = serializers.IntegerField(
-        help_text="Aircraft polling interval"
-    )
-    db_store_interval_seconds = serializers.IntegerField(
-        help_text="Database write interval"
-    )
+    polling_interval_seconds = serializers.IntegerField(help_text="Aircraft polling interval")
+    db_store_interval_seconds = serializers.IntegerField(help_text="Database write interval")
     celery_running = serializers.BooleanField(help_text="Celery workers running")
-    celery_tasks = serializers.ListField(
-        child=serializers.DictField(),
-        help_text="Scheduled Celery tasks"
-    )
+    celery_tasks = serializers.ListField(child=serializers.DictField(), help_text="Scheduled Celery tasks")
     worker_pid = serializers.IntegerField(help_text="Worker process ID")
     location = serializers.DictField(help_text="Feeder location")
 
@@ -81,11 +56,7 @@ class SSEStatusSerializer(serializers.Serializer):
     subscribers = serializers.IntegerField(help_text="Total subscribers")
     subscribers_local = serializers.IntegerField(help_text="Local worker subscribers")
     tracked_aircraft = serializers.IntegerField(help_text="Aircraft in state cache")
-    last_publish = serializers.CharField(
-        required=False,
-        allow_null=True,
-        help_text="Last publish time"
-    )
+    last_publish = serializers.CharField(required=False, allow_null=True, help_text="Last publish time")
     history = serializers.DictField(help_text="History buffer info")
     timestamp = serializers.CharField(help_text="Status timestamp")
 

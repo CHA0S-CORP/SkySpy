@@ -6,6 +6,7 @@ Provides Celery tasks for:
 - Refreshing cached NOTAMs (legacy fallback)
 - Broadcasting TFR updates via WebSocket
 """
+
 import logging
 from datetime import datetime
 
@@ -30,7 +31,7 @@ def consume_swim_notams(self, max_messages: int = 1000, timeout_seconds: int = 3
 
     if not swim_fns.is_enabled():
         logger.info("SWIM FNS is disabled, skipping")
-        return {'status': 'disabled'}
+        return {"status": "disabled"}
 
     logger.info(f"Starting SWIM FNS consumer (max_messages={max_messages})")
 
@@ -64,27 +65,27 @@ def consume_swim_notams(self, max_messages: int = 1000, timeout_seconds: int = 3
         logger.info(f"SWIM FNS consumer finished: {stats}")
 
         # Broadcast update
-        from skyspy.socketio.utils import sync_emit
         from skyspy.services import notams
+        from skyspy.socketio.utils import sync_emit
 
         notam_stats = notams.get_notam_stats()
         sync_emit(
-            'notam:refresh',
+            "notam:refresh",
             {
-                'count': stats.get('messages_processed', 0),
-                'active_notams': notam_stats.get('active_notams', 0),
-                'active_tfrs': notam_stats.get('active_tfrs', 0),
-                'source': 'swim_fns',
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
+                "count": stats.get("messages_processed", 0),
+                "active_notams": notam_stats.get("active_notams", 0),
+                "active_tfrs": notam_stats.get("active_tfrs", 0),
+                "source": "swim_fns",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
             },
-            room='topic_aircraft'
+            room="topic_aircraft",
         )
 
         return {
-            'status': 'complete',
-            'messages_received': stats.get('messages_received', 0),
-            'messages_processed': stats.get('messages_processed', 0),
-            'errors': stats.get('errors', 0),
+            "status": "complete",
+            "messages_received": stats.get("messages_received", 0),
+            "messages_processed": stats.get("messages_processed", 0),
+            "errors": stats.get("errors", 0),
         }
 
     except Exception as e:
@@ -100,7 +101,7 @@ def check_swim_status():
     status = swim_fns.get_status()
     logger.info(f"SWIM FNS status: {status}")
 
-    if status['enabled'] and not status['connected']:
+    if status["enabled"] and not status["connected"]:
         logger.info("SWIM FNS not connected, queueing consumer task")
         consume_swim_notams.delay()
 
@@ -128,30 +129,26 @@ def refresh_notams(self):
         try:
             stats = notams.get_notam_stats()
             update_data = {
-                'count': count,
-                'active_notams': stats.get('active_notams', 0),
-                'active_tfrs': stats.get('active_tfrs', 0),
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
+                "count": count,
+                "active_notams": stats.get("active_notams", 0),
+                "active_tfrs": stats.get("active_tfrs", 0),
+                "timestamp": datetime.utcnow().isoformat() + "Z",
             }
 
             # Broadcast to topic_aircraft room (general aviation updates)
-            sync_emit(
-                'notam:refresh',
-                update_data,
-                room='topic_aircraft'
-            )
+            sync_emit("notam:refresh", update_data, room="topic_aircraft")
 
             # Broadcast to notams room
             sync_emit(
-                'notam:stats',
+                "notam:stats",
                 {
-                    'total_active': stats.get('active_notams', 0),
-                    'tfr_count': stats.get('active_tfrs', 0),
-                    'by_type': stats.get('by_type', {}),
-                    'last_update': datetime.utcnow().isoformat() + 'Z',
-                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                    "total_active": stats.get("active_notams", 0),
+                    "tfr_count": stats.get("active_tfrs", 0),
+                    "by_type": stats.get("by_type", {}),
+                    "last_update": datetime.utcnow().isoformat() + "Z",
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
                 },
-                room='topic_notams'
+                room="topic_notams",
             )
         except Exception as e:
             logger.warning(f"Failed to broadcast NOTAM refresh: {e}")
@@ -216,35 +213,21 @@ def broadcast_new_tfr(tfr_data: dict):
     Args:
         tfr_data: TFR data dictionary
     """
-    from skyspy.socketio.utils import sync_emit
     from datetime import datetime
 
+    from skyspy.socketio.utils import sync_emit
+
     try:
-        tfr_message = {
-            'tfr': tfr_data,
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
-        }
+        tfr_message = {"tfr": tfr_data, "timestamp": datetime.utcnow().isoformat() + "Z"}
 
         # Broadcast to topic_aircraft room (general aviation updates)
-        sync_emit(
-            'notam:tfr_new',
-            tfr_message,
-            room='topic_aircraft'
-        )
+        sync_emit("notam:tfr_new", tfr_message, room="topic_aircraft")
 
         # Broadcast to notams room
-        sync_emit(
-            'notam:tfr_new',
-            tfr_data,
-            room='topic_notams'
-        )
+        sync_emit("notam:tfr_new", tfr_data, room="topic_notams")
 
         # Broadcast to TFR-specific room
-        sync_emit(
-            'notam:tfr_new',
-            tfr_data,
-            room='topic_tfrs'
-        )
+        sync_emit("notam:tfr_new", tfr_data, room="topic_tfrs")
 
         logger.info(f"Broadcast new TFR: {tfr_data.get('notam_id')}")
     except Exception as e:
@@ -265,7 +248,9 @@ def cleanup_expired_notams(archive_days: int = 7, delete_days: int = 90):
         delete_days: Days after archival to hard delete (default 90)
     """
     from datetime import timedelta
+
     from django.utils import timezone
+
     from skyspy.models.notams import CachedNotam
 
     logger.info(f"Running NOTAM cleanup (archive after {archive_days}d, delete after {delete_days}d)")
@@ -282,7 +267,7 @@ def cleanup_expired_notams(archive_days: int = 7, delete_days: int = 90):
         ).update(
             is_archived=True,
             archived_at=now,
-            archive_reason='expired',
+            archive_reason="expired",
         )
 
         if archived_count:
@@ -298,11 +283,11 @@ def cleanup_expired_notams(archive_days: int = 7, delete_days: int = 90):
         if deleted:
             logger.info(f"Hard deleted {deleted} old archived NOTAMs")
 
-        return {'archived': archived_count, 'deleted': deleted}
+        return {"archived": archived_count, "deleted": deleted}
 
     except Exception as e:
         logger.error(f"Failed to cleanup NOTAMs: {e}")
-        return {'archived': 0, 'deleted': 0}
+        return {"archived": 0, "deleted": 0}
 
 
 @shared_task

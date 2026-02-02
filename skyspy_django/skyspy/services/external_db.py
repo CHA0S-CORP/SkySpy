@@ -10,6 +10,7 @@ Provides multi-source aircraft database lookups:
 
 Data is loaded into memory for fast lookups and periodically synced to PostgreSQL.
 """
+
 import atexit
 import csv
 import gzip
@@ -22,13 +23,11 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
 from threading import Lock
-from typing import Dict, Optional, List, Set
 
 import httpx
 from django.conf import settings
-from tenacity import retry, stop_after_attempt, wait_exponential
 from django.db import transaction
-from django.core.cache import cache
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from skyspy.models import AircraftInfo, AirframeSourceData
 
@@ -43,10 +42,10 @@ atexit.register(_executor.shutdown, wait=False)
 DATA_DIR = Path(os.environ.get("EXTERNAL_DB_DIR", "/data/external_db"))
 
 # In-memory databases indexed by ICAO hex
-_adsbx_db: Dict[str, dict] = {}
-_tar1090_db: Dict[str, dict] = {}
-_faa_db: Dict[str, dict] = {}
-_opensky_db: Dict[str, dict] = {}
+_adsbx_db: dict[str, dict] = {}
+_tar1090_db: dict[str, dict] = {}
+_faa_db: dict[str, dict] = {}
+_opensky_db: dict[str, dict] = {}
 
 # Database locks for thread safety
 _adsbx_lock = Lock()
@@ -60,13 +59,13 @@ _opensky_loading = False
 _opensky_downloading = False
 
 # Route cache (callsign -> route info)
-_route_cache: Dict[str, dict] = {}
-_route_cache_ttl: Dict[str, float] = {}
+_route_cache: dict[str, dict] = {}
+_route_cache_ttl: dict[str, float] = {}
 _route_lock = Lock()
 MAX_ROUTE_CACHE_SIZE = 5000  # Max cached routes
 
 # Database metadata
-_db_metadata: Dict[str, dict] = {
+_db_metadata: dict[str, dict] = {
     "adsbx": {"loaded": False, "count": 0, "updated": None, "path": None},
     "tar1090": {"loaded": False, "count": 0, "updated": None, "path": None},
     "faa": {"loaded": False, "count": 0, "updated": None, "path": None},
@@ -167,6 +166,7 @@ REGISTRATION_PREFIXES = {
 # Retry Helper for External API Calls
 # =============================================================================
 
+
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=30))
 def fetch_with_retry(url: str, timeout: float = 60, stream: bool = False, **kwargs) -> httpx.Response:
     """
@@ -195,7 +195,9 @@ def fetch_with_retry(url: str, timeout: float = 60, stream: bool = False, **kwar
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=30))
-def stream_with_retry(url: str, target_path: Path, timeout: float = 60, chunk_size: int = 8192 * 1024, **kwargs) -> Path:
+def stream_with_retry(
+    url: str, target_path: Path, timeout: float = 60, chunk_size: int = 8192 * 1024, **kwargs
+) -> Path:
     """
     Stream download a URL with retry logic for large files.
 
@@ -222,7 +224,7 @@ def stream_with_retry(url: str, target_path: Path, timeout: float = 60, chunk_si
     return target_path
 
 
-def _trunc(value: Optional[str], length: int) -> Optional[str]:
+def _trunc(value: str | None, length: int) -> str | None:
     """Truncate a string to max length."""
     if value is None:
         return None
@@ -230,7 +232,7 @@ def _trunc(value: Optional[str], length: int) -> Optional[str]:
     return value[:length] if len(value) > length else value
 
 
-def _safe_int(value) -> Optional[int]:
+def _safe_int(value) -> int | None:
     """Safely convert a value to int, returning None on failure."""
     if value is None:
         return None
@@ -242,7 +244,7 @@ def _safe_int(value) -> Optional[int]:
         return None
 
 
-def _extract_country_from_registration(registration: str) -> Optional[str]:
+def _extract_country_from_registration(registration: str) -> str | None:
     """Extract country from registration prefix."""
     if not registration:
         return None
@@ -257,6 +259,7 @@ def _extract_country_from_registration(registration: str) -> Optional[str]:
 # Database Path Helpers
 # =============================================================================
 
+
 def _get_adsbx_path() -> Path:
     return DATA_DIR / "adsbx-db.json.gz"
 
@@ -269,9 +272,9 @@ def _get_faa_path() -> Path:
     return DATA_DIR / "faa-master.csv"
 
 
-def _get_opensky_path() -> Optional[Path]:
+def _get_opensky_path() -> Path | None:
     """Find the OpenSky database file."""
-    env_path = getattr(settings, 'OPENSKY_DB_PATH', None)
+    env_path = getattr(settings, "OPENSKY_DB_PATH", None)
     if env_path:
         p = Path(env_path)
         if p.exists():
@@ -289,7 +292,8 @@ def _get_opensky_path() -> Optional[Path]:
 # ADS-B Exchange Database
 # =============================================================================
 
-def download_adsbx_database() -> Optional[Path]:
+
+def download_adsbx_database() -> Path | None:
     """Download ADS-B Exchange database."""
     target_path = _get_adsbx_path()
     start_time = time.time()
@@ -322,7 +326,7 @@ def _load_adsbx_json(path: Path) -> int:
             first_char = f.read(1)
             f.seek(0)
 
-            if first_char == '[':
+            if first_char == "[":
                 data = json.load(f)
             else:
                 data = []
@@ -385,7 +389,7 @@ def load_adsbx_database(auto_download: bool = True) -> bool:
         return False
 
 
-def lookup_adsbx(icao_hex: str) -> Optional[dict]:
+def lookup_adsbx(icao_hex: str) -> dict | None:
     """Look up aircraft in ADSBX database."""
     if not _db_metadata["adsbx"]["loaded"]:
         return None
@@ -396,7 +400,8 @@ def lookup_adsbx(icao_hex: str) -> Optional[dict]:
 # tar1090-db (Mictronics) Database
 # =============================================================================
 
-def download_tar1090_database() -> Optional[Path]:
+
+def download_tar1090_database() -> Path | None:
     """Download tar1090 database."""
     target_path = _get_tar1090_path()
     start_time = time.time()
@@ -426,7 +431,7 @@ def _load_tar1090_csv(path: Path) -> int:
         _tar1090_db.clear()
 
         with gzip.open(path, "rt", encoding="utf-8", errors="replace") as f:
-            reader = csv.reader(f, delimiter=';')
+            reader = csv.reader(f, delimiter=";")
             for row in reader:
                 if len(row) < 2:
                     continue
@@ -487,7 +492,7 @@ def load_tar1090_database(auto_download: bool = True) -> bool:
         return False
 
 
-def lookup_tar1090(icao_hex: str) -> Optional[dict]:
+def lookup_tar1090(icao_hex: str) -> dict | None:
     """Look up aircraft in tar1090 database."""
     if not _db_metadata["tar1090"]["loaded"]:
         return None
@@ -498,7 +503,8 @@ def lookup_tar1090(icao_hex: str) -> Optional[dict]:
 # FAA Registry Database
 # =============================================================================
 
-def download_faa_database() -> Optional[Path]:
+
+def download_faa_database() -> Path | None:
     """Download FAA Registry database."""
     target_path = _get_faa_path()
     zip_path = DATA_DIR / "faa-releasable.zip"
@@ -549,14 +555,14 @@ def _load_faa_master(path: Path) -> int:
         _faa_db.clear()
 
         try:
-            with open(path, "r", encoding="utf-8-sig", errors="replace") as f:
+            with open(path, encoding="utf-8-sig", errors="replace") as f:
                 reader = csv.DictReader(f)
                 reader.fieldnames = [name.strip() for name in reader.fieldnames]
 
                 hex_col = next((c for c in reader.fieldnames if "MODE S" in c and "HEX" in c), None)
 
                 if not hex_col:
-                    logger.error(f"Could not find 'MODE S CODE HEX' column in FAA headers")
+                    logger.error("Could not find 'MODE S CODE HEX' column in FAA headers")
                     return 0
 
                 for row in reader:
@@ -616,7 +622,7 @@ def load_faa_database(auto_download: bool = True) -> bool:
         return False
 
 
-def lookup_faa(icao_hex: str) -> Optional[dict]:
+def lookup_faa(icao_hex: str) -> dict | None:
     """Look up aircraft in FAA database."""
     if not _db_metadata["faa"]["loaded"]:
         return None
@@ -627,7 +633,8 @@ def lookup_faa(icao_hex: str) -> Optional[dict]:
 # OpenSky Network Database
 # =============================================================================
 
-def download_opensky_database() -> Optional[Path]:
+
+def download_opensky_database() -> Path | None:
     """Download the OpenSky aircraft database."""
     global _opensky_downloading
 
@@ -641,7 +648,7 @@ def download_opensky_database() -> Optional[Path]:
 
     try:
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Downloading OpenSky database (~150MB)...")
+        logger.info("Downloading OpenSky database (~150MB)...")
 
         stream_with_retry(OPENSKY_DB_URL, target_path, timeout=60, chunk_size=1024 * 1024)
 
@@ -670,9 +677,19 @@ def _is_opensky_military(row: dict) -> bool:
     combined = f"{operator} {owner} {notes}"
 
     military_keywords = [
-        "air force", "airforce", "navy", "army", "military",
-        "usaf", "raf", "luftwaffe", "marines", "coast guard",
-        "national guard", "defense", "defence"
+        "air force",
+        "airforce",
+        "navy",
+        "army",
+        "military",
+        "usaf",
+        "raf",
+        "luftwaffe",
+        "marines",
+        "coast guard",
+        "national guard",
+        "defense",
+        "defence",
     ]
     return any(kw in combined for kw in military_keywords)
 
@@ -737,7 +754,7 @@ def load_opensky_database(auto_download: bool = True) -> bool:
     if _opensky_loading:
         return False
 
-    if not getattr(settings, 'OPENSKY_DB_ENABLED', True):
+    if not getattr(settings, "OPENSKY_DB_ENABLED", True):
         logger.info("OpenSky database disabled in settings")
         return False
 
@@ -777,7 +794,7 @@ def load_opensky_database(auto_download: bool = True) -> bool:
         _opensky_loading = False
 
 
-def lookup_opensky(icao_hex: str) -> Optional[dict]:
+def lookup_opensky(icao_hex: str) -> dict | None:
     """Look up aircraft by ICAO hex code in OpenSky database."""
     if not _opensky_loaded:
         return None
@@ -788,7 +805,8 @@ def lookup_opensky(icao_hex: str) -> Optional[dict]:
 # Route Lookup (adsb.im API)
 # =============================================================================
 
-def fetch_route(callsign: str) -> Optional[dict]:
+
+def fetch_route(callsign: str) -> dict | None:
     """Fetch route info from adsb.im API. Cached for 1 hour."""
     callsign = callsign.upper().strip()
     if not callsign:
@@ -797,16 +815,13 @@ def fetch_route(callsign: str) -> Optional[dict]:
     now = time.time()
 
     with _route_lock:
-        if callsign in _route_cache:
-            if _route_cache_ttl.get(callsign, 0) > now:
-                return _route_cache[callsign]
+        if callsign in _route_cache and _route_cache_ttl.get(callsign, 0) > now:
+            return _route_cache[callsign]
 
     try:
         with httpx.Client(timeout=10.0) as client:
             response = client.post(
-                ADSB_IM_ROUTE_API,
-                json={"callsigns": [callsign]},
-                headers={"User-Agent": "SkySpyAPI/2.6"}
+                ADSB_IM_ROUTE_API, json={"callsigns": [callsign]}, headers={"User-Agent": "SkySpyAPI/2.6"}
             )
 
             if response.status_code == 200:
@@ -838,22 +853,19 @@ def _cleanup_route_cache(now: float):
     # If still too large, remove oldest entries
     if len(_route_cache) > MAX_ROUTE_CACHE_SIZE:
         sorted_keys = sorted(_route_cache_ttl.items(), key=lambda x: x[1])
-        to_remove = sorted_keys[:len(sorted_keys) // 4]  # Remove oldest 25%
+        to_remove = sorted_keys[: len(sorted_keys) // 4]  # Remove oldest 25%
         for k, _ in to_remove:
             _route_cache.pop(k, None)
             _route_cache_ttl.pop(k, None)
 
 
-def fetch_aircraft_from_adsb_lol(icao_hex: str) -> Optional[dict]:
+def fetch_aircraft_from_adsb_lol(icao_hex: str) -> dict | None:
     """Fetch live aircraft data from adsb.lol API."""
     icao_hex = icao_hex.upper().strip()
 
     try:
         with httpx.Client(timeout=10.0) as client:
-            response = client.get(
-                f"{ADSB_LOL_API_BASE}/v2/hex/{icao_hex}",
-                headers={"User-Agent": "SkySpyAPI/2.6"}
-            )
+            response = client.get(f"{ADSB_LOL_API_BASE}/v2/hex/{icao_hex}", headers={"User-Agent": "SkySpyAPI/2.6"})
 
             if response.status_code == 200:
                 data = response.json()
@@ -870,7 +882,8 @@ def fetch_aircraft_from_adsb_lol(icao_hex: str) -> Optional[dict]:
 # Aggregated Lookup
 # =============================================================================
 
-def lookup_all(icao_hex: str) -> Optional[dict]:
+
+def lookup_all(icao_hex: str) -> dict | None:
     """
     Look up aircraft in all databases and merge into a single record.
 
@@ -922,7 +935,7 @@ def lookup_all(icao_hex: str) -> Optional[dict]:
     return None
 
 
-def lookup_all_by_source(icao_hex: str) -> Dict[str, dict]:
+def lookup_all_by_source(icao_hex: str) -> dict[str, dict]:
     """
     Look up aircraft in all databases and return data from each source separately.
 
@@ -975,6 +988,7 @@ def is_any_loaded() -> bool:
 # Initialization
 # =============================================================================
 
+
 def init_databases(auto_download: bool = True):
     """Initialize all external databases."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -985,11 +999,13 @@ def init_databases(auto_download: bool = True):
     load_faa_database(auto_download=auto_download)
     load_opensky_database(auto_download=auto_download)
 
-    logger.info(f"External databases initialized: "
-                f"ADSBX={_db_metadata['adsbx']['count']:,}, "
-                f"tar1090={_db_metadata['tar1090']['count']:,}, "
-                f"FAA={_db_metadata['faa']['count']:,}, "
-                f"OpenSky={_db_metadata['opensky']['count']:,}")
+    logger.info(
+        f"External databases initialized: "
+        f"ADSBX={_db_metadata['adsbx']['count']:,}, "
+        f"tar1090={_db_metadata['tar1090']['count']:,}, "
+        f"FAA={_db_metadata['faa']['count']:,}, "
+        f"OpenSky={_db_metadata['opensky']['count']:,}"
+    )
 
 
 def update_databases_if_stale():
@@ -1029,6 +1045,7 @@ def update_databases_if_stale():
 # PostgreSQL Sync
 # =============================================================================
 
+
 def sync_databases_to_postgres():
     """Sync external databases to PostgreSQL AircraftInfo and AirframeSourceData tables."""
     if not is_any_loaded():
@@ -1039,7 +1056,7 @@ def sync_databases_to_postgres():
     start_time = time.time()
 
     try:
-        all_icaos: Set[str] = set()
+        all_icaos: set[str] = set()
         all_icaos.update(_faa_db.keys())
         all_icaos.update(_adsbx_db.keys())
         all_icaos.update(_tar1090_db.keys())
@@ -1085,29 +1102,31 @@ def sync_databases_to_postgres():
             # Collect per-source data
             source_records = lookup_all_by_source(icao)
             for source_name, source_data in source_records.items():
-                source_data_batch.append({
-                    "icao_hex": icao_truncated,
-                    "source": source_name,
-                    "raw_data": source_data,
-                    "registration": _trunc(source_data.get("registration"), 20),
-                    "type_code": _trunc(source_data.get("type_code"), 10),
-                    "type_name": _trunc(source_data.get("type_name"), 100),
-                    "manufacturer": _trunc(source_data.get("manufacturer"), 100),
-                    "model": _trunc(source_data.get("model"), 100),
-                    "serial_number": _trunc(source_data.get("serial_number"), 50),
-                    "year_built": _safe_int(source_data.get("year_built")),
-                    "operator": _trunc(source_data.get("operator"), 100),
-                    "operator_icao": _trunc(source_data.get("operator_icao"), 4),
-                    "owner": _trunc(source_data.get("owner"), 200),
-                    "country": _trunc(source_data.get("country"), 100),
-                    "city": _trunc(source_data.get("city"), 100),
-                    "state": _trunc(source_data.get("state"), 10),
-                    "category": _trunc(source_data.get("category"), 20),
-                    "is_military": source_data.get("is_military", False),
-                    "is_interesting": source_data.get("is_interesting", False),
-                    "is_pia": source_data.get("is_pia", False),
-                    "is_ladd": source_data.get("is_ladd", False),
-                })
+                source_data_batch.append(
+                    {
+                        "icao_hex": icao_truncated,
+                        "source": source_name,
+                        "raw_data": source_data,
+                        "registration": _trunc(source_data.get("registration"), 20),
+                        "type_code": _trunc(source_data.get("type_code"), 10),
+                        "type_name": _trunc(source_data.get("type_name"), 100),
+                        "manufacturer": _trunc(source_data.get("manufacturer"), 100),
+                        "model": _trunc(source_data.get("model"), 100),
+                        "serial_number": _trunc(source_data.get("serial_number"), 50),
+                        "year_built": _safe_int(source_data.get("year_built")),
+                        "operator": _trunc(source_data.get("operator"), 100),
+                        "operator_icao": _trunc(source_data.get("operator_icao"), 4),
+                        "owner": _trunc(source_data.get("owner"), 200),
+                        "country": _trunc(source_data.get("country"), 100),
+                        "city": _trunc(source_data.get("city"), 100),
+                        "state": _trunc(source_data.get("state"), 10),
+                        "category": _trunc(source_data.get("category"), 20),
+                        "is_military": source_data.get("is_military", False),
+                        "is_interesting": source_data.get("is_interesting", False),
+                        "is_pia": source_data.get("is_pia", False),
+                        "is_ladd": source_data.get("is_ladd", False),
+                    }
+                )
 
             if len(current_batch) >= BATCH_SIZE:
                 _bulk_upsert_batch(current_batch)
@@ -1131,7 +1150,7 @@ def sync_databases_to_postgres():
         logger.error(f"Error syncing external databases to Postgres: {e}")
 
 
-def _bulk_upsert_batch(batch: List[dict]):
+def _bulk_upsert_batch(batch: list[dict]):
     """Perform a bulk upsert of aircraft data using Django ORM."""
     if not batch:
         return
@@ -1139,22 +1158,33 @@ def _bulk_upsert_batch(batch: List[dict]):
     # Create model instances
     instances = []
     for info in batch:
-        icao_hex = info.pop('icao_hex')
+        icao_hex = info.pop("icao_hex")
         instances.append(AircraftInfo(icao_hex=icao_hex, **info))
 
     # Use bulk_create with update_conflicts for efficient upsert
     update_fields = [
-        'registration', 'type_code', 'manufacturer', 'model', 'serial_number',
-        'year_built', 'operator', 'operator_icao', 'country', 'category',
-        'is_military', 'city', 'state', 'is_interesting', 'is_pia', 'is_ladd', 'source'
+        "registration",
+        "type_code",
+        "manufacturer",
+        "model",
+        "serial_number",
+        "year_built",
+        "operator",
+        "operator_icao",
+        "country",
+        "category",
+        "is_military",
+        "city",
+        "state",
+        "is_interesting",
+        "is_pia",
+        "is_ladd",
+        "source",
     ]
 
     try:
         AircraftInfo.objects.bulk_create(
-            instances,
-            update_conflicts=True,
-            unique_fields=['icao_hex'],
-            update_fields=update_fields
+            instances, update_conflicts=True, unique_fields=["icao_hex"], update_fields=update_fields
         )
     except Exception as e:
         # Fallback to individual updates if bulk_create fails
@@ -1162,53 +1192,57 @@ def _bulk_upsert_batch(batch: List[dict]):
         with transaction.atomic():
             for instance in instances:
                 AircraftInfo.objects.update_or_create(
-                    icao_hex=instance.icao_hex,
-                    defaults={f: getattr(instance, f) for f in update_fields}
+                    icao_hex=instance.icao_hex, defaults={f: getattr(instance, f) for f in update_fields}
                 )
 
 
-def _bulk_upsert_source_data_batch(batch: List[dict]):
+def _bulk_upsert_source_data_batch(batch: list[dict]):
     """Bulk upsert per-source airframe data using Django ORM."""
     if not batch:
         return
 
     # Group by icao_hex to get aircraft_info FKs efficiently
-    icao_set = {item['icao_hex'] for item in batch}
-    aircraft_map = {
-        ai.icao_hex: ai for ai in
-        AircraftInfo.objects.filter(icao_hex__in=icao_set)
-    }
+    icao_set = {item["icao_hex"] for item in batch}
+    aircraft_map = {ai.icao_hex: ai for ai in AircraftInfo.objects.filter(icao_hex__in=icao_set)}
 
     instances = []
     for item in batch:
-        aircraft_info = aircraft_map.get(item['icao_hex'])
+        aircraft_info = aircraft_map.get(item["icao_hex"])
         if not aircraft_info:
             continue
 
-        icao_hex = item.pop('icao_hex')
-        source = item.pop('source')
-        instances.append(AirframeSourceData(
-            aircraft_info=aircraft_info,
-            source=source,
-            **item
-        ))
+        item.pop("icao_hex")
+        source = item.pop("source")
+        instances.append(AirframeSourceData(aircraft_info=aircraft_info, source=source, **item))
 
     if not instances:
         return
 
     update_fields = [
-        'raw_data', 'registration', 'type_code', 'type_name', 'manufacturer',
-        'model', 'serial_number', 'year_built', 'operator', 'operator_icao',
-        'owner', 'country', 'city', 'state', 'category', 'is_military',
-        'is_interesting', 'is_pia', 'is_ladd'
+        "raw_data",
+        "registration",
+        "type_code",
+        "type_name",
+        "manufacturer",
+        "model",
+        "serial_number",
+        "year_built",
+        "operator",
+        "operator_icao",
+        "owner",
+        "country",
+        "city",
+        "state",
+        "category",
+        "is_military",
+        "is_interesting",
+        "is_pia",
+        "is_ladd",
     ]
 
     try:
         AirframeSourceData.objects.bulk_create(
-            instances,
-            update_conflicts=True,
-            unique_fields=['aircraft_info', 'source'],
-            update_fields=update_fields
+            instances, update_conflicts=True, unique_fields=["aircraft_info", "source"], update_fields=update_fields
         )
     except Exception as e:
         # Fallback to individual updates
@@ -1218,5 +1252,5 @@ def _bulk_upsert_source_data_batch(batch: List[dict]):
                 AirframeSourceData.objects.update_or_create(
                     aircraft_info=instance.aircraft_info,
                     source=instance.source,
-                    defaults={f: getattr(instance, f) for f in update_fields}
+                    defaults={f: getattr(instance, f) for f in update_fields},
                 )

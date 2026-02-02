@@ -7,6 +7,7 @@ Provides Celery tasks for:
 - Refreshing GeoJSON boundaries
 - PIREP cleanup
 """
+
 import logging
 
 from celery import shared_task
@@ -22,6 +23,7 @@ def refresh_all_geodata(self):
     Runs daily at 3 AM.
     """
     from datetime import datetime
+
     from skyspy.socketio.utils import sync_emit
 
     logger.info("Starting geographic data refresh")
@@ -35,14 +37,14 @@ def refresh_all_geodata(self):
         # Broadcast update to WebSocket clients via Socket.IO
         try:
             sync_emit(
-                'geodata:refresh',
+                "geodata:refresh",
                 {
-                    'airports': results.get('airports', 0),
-                    'navaids': results.get('navaids', 0),
-                    'geojson': results.get('geojson', 0),
-                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                    "airports": results.get("airports", 0),
+                    "navaids": results.get("navaids", 0),
+                    "geojson": results.get("geojson", 0),
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
                 },
-                room='topic_aircraft'
+                room="topic_aircraft",
             )
         except Exception as e:
             logger.warning(f"Failed to broadcast geodata refresh: {e}")
@@ -173,6 +175,7 @@ def refresh_pireps(self, bbox: str = "24,-130,50,-60", hours: int = 6):
     Runs every 10 minutes.
     """
     from datetime import datetime
+
     from skyspy.socketio.utils import sync_emit
 
     logger.info("Fetching PIREPs from Aviation Weather Center")
@@ -187,12 +190,9 @@ def refresh_pireps(self, bbox: str = "24,-130,50,-60", hours: int = 6):
         if stored > 0:
             try:
                 sync_emit(
-                    'pirep:update',
-                    {
-                        'new_count': stored,
-                        'timestamp': datetime.utcnow().isoformat() + 'Z'
-                    },
-                    room='topic_aircraft'
+                    "pirep:update",
+                    {"new_count": stored, "timestamp": datetime.utcnow().isoformat() + "Z"},
+                    room="topic_aircraft",
                 )
             except Exception as e:
                 logger.warning(f"Failed to broadcast PIREP update: {e}")
@@ -212,6 +212,7 @@ def refresh_metars(self, bbox: str = "24,-130,50,-60", hours: int = 2):
     Runs every 10 minutes.
     """
     from datetime import datetime
+
     from skyspy.socketio.utils import sync_emit
 
     logger.info("Fetching METARs from Aviation Weather Center")
@@ -227,12 +228,9 @@ def refresh_metars(self, bbox: str = "24,-130,50,-60", hours: int = 2):
         if count > 0:
             try:
                 sync_emit(
-                    'metar:update',
-                    {
-                        'count': count,
-                        'timestamp': datetime.utcnow().isoformat() + 'Z'
-                    },
-                    room='topic_aircraft'
+                    "metar:update",
+                    {"count": count, "timestamp": datetime.utcnow().isoformat() + "Z"},
+                    room="topic_aircraft",
                 )
             except Exception as e:
                 logger.warning(f"Failed to broadcast METAR update: {e}")
@@ -301,7 +299,7 @@ def refresh_openflights_data(self):
             return results
         else:
             logger.info("OpenFlights data is still fresh, skipping refresh")
-            return {'status': 'skipped', 'reason': 'data still fresh'}
+            return {"status": "skipped", "reason": "data still fresh"}
 
     except Exception as e:
         logger.error(f"Failed to refresh OpenFlights data: {e}")

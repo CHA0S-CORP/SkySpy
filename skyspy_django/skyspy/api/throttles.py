@@ -3,6 +3,7 @@ Custom throttle classes for rate limiting.
 
 Provides stricter rate limits for sensitive endpoints.
 """
+
 from rest_framework.throttling import UserRateThrottle
 
 
@@ -12,8 +13,9 @@ class AuthRateThrottle(UserRateThrottle):
 
     Limits login attempts to prevent brute-force attacks.
     """
-    scope = 'auth'
-    rate = '5/minute'
+
+    scope = "auth"
+    rate = "5/minute"
 
 
 class UploadRateThrottle(UserRateThrottle):
@@ -22,5 +24,6 @@ class UploadRateThrottle(UserRateThrottle):
 
     Prevents abuse of upload functionality.
     """
-    scope = 'upload'
-    rate = '10/minute'
+
+    scope = "upload"
+    rate = "10/minute"

@@ -1,31 +1,29 @@
 """
 System health, status, and info API views.
 """
+
+import contextlib
+import logging
 import os
 import time
-import logging
-from datetime import datetime
 
 from django.conf import settings
-from django.utils import timezone
 from django.core.cache import cache
 from django.db import connection
-from rest_framework import status
-from rest_framework.views import APIView
-from rest_framework.response import Response
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from skyspy.models import (
-    AircraftSighting, AircraftSession, AlertRule, AlertHistory,
-    SafetyEvent, NotificationConfig
-)
+from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
+from skyspy.models import AircraftSession, AircraftSighting, AlertHistory, AlertRule, NotificationConfig, SafetyEvent
 from skyspy.serializers.system import (
+    ApiInfoSerializer,
     HealthResponseSerializer,
     StatusResponseSerializer,
-    ApiInfoSerializer,
 )
-from skyspy.auth.authentication import OptionalJWTAuthentication, APIKeyAuthentication
-from skyspy.auth.permissions import FeatureBasedPermission
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +37,7 @@ class HealthCheckView(APIView):
     @extend_schema(
         summary="Health check",
         description="Simple health check endpoint for load balancers and monitoring",
-        responses={200: HealthResponseSerializer}
+        responses={200: HealthResponseSerializer},
     )
     def get(self, request):
         """Return health status of all services."""
@@ -52,10 +50,7 @@ class HealthCheckView(APIView):
             with connection.cursor() as cursor:
                 cursor.execute("SELECT 1")
             db_latency = (time.time() - start) * 1000
-            services["database"] = {
-                "status": "up",
-                "latency_ms": round(db_latency, 2)
-            }
+            services["database"] = {"status": "up", "latency_ms": round(db_latency, 2)}
         except Exception as e:
             services["database"] = {"status": "down", "message": str(e)}
             overall_status = "unhealthy"
@@ -86,6 +81,7 @@ class HealthCheckView(APIView):
         # Check libacars
         try:
             from skyspy.services.libacars_binding import get_health
+
             libacars_health = get_health()
             services["libacars"] = {
                 "status": "up" if libacars_health.get("available") else "unavailable",
@@ -97,11 +93,13 @@ class HealthCheckView(APIView):
         except Exception as e:
             services["libacars"] = {"status": "error", "message": str(e)}
 
-        return Response({
-            "status": overall_status,
-            "services": services,
-            "timestamp": timezone.now().isoformat().replace("+00:00", "Z")
-        })
+        return Response(
+            {
+                "status": overall_status,
+                "services": services,
+                "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
+            }
+        )
 
 
 def _get_cached_table_counts():
@@ -110,43 +108,33 @@ def _get_cached_table_counts():
 
     Caches counts for 60 seconds (RPi optimization).
     """
-    cache_key = 'system_table_counts'
+    cache_key = "system_table_counts"
     cached = cache.get(cache_key)
     if cached:
         return cached
 
     counts = {
-        'total_sightings': 0,
-        'total_sessions': 0,
-        'active_rules': 0,
-        'alert_history_count': 0,
-        'safety_event_count': 0,
+        "total_sightings": 0,
+        "total_sessions": 0,
+        "active_rules": 0,
+        "alert_history_count": 0,
+        "safety_event_count": 0,
     }
 
-    try:
-        counts['total_sightings'] = AircraftSighting.objects.count()
-    except Exception:
-        pass
+    with contextlib.suppress(Exception):
+        counts["total_sightings"] = AircraftSighting.objects.count()
 
-    try:
-        counts['total_sessions'] = AircraftSession.objects.count()
-    except Exception:
-        pass
+    with contextlib.suppress(Exception):
+        counts["total_sessions"] = AircraftSession.objects.count()
 
-    try:
-        counts['active_rules'] = AlertRule.objects.filter(enabled=True).count()
-    except Exception:
-        pass
+    with contextlib.suppress(Exception):
+        counts["active_rules"] = AlertRule.objects.filter(enabled=True).count()
 
-    try:
-        counts['alert_history_count'] = AlertHistory.objects.count()
-    except Exception:
-        pass
+    with contextlib.suppress(Exception):
+        counts["alert_history_count"] = AlertHistory.objects.count()
 
-    try:
-        counts['safety_event_count'] = SafetyEvent.objects.count()
-    except Exception:
-        pass
+    with contextlib.suppress(Exception):
+        counts["safety_event_count"] = SafetyEvent.objects.count()
 
     # Cache for 60 seconds
     cache.set(cache_key, counts, timeout=60)
@@ -162,7 +150,7 @@ class StatusView(APIView):
     @extend_schema(
         summary="System status",
         description="Comprehensive status of all system components",
-        responses={200: StatusResponseSerializer}
+        responses={200: StatusResponseSerializer},
     )
     def get(self, request):
         """Return comprehensive system status."""
@@ -170,11 +158,11 @@ class StatusView(APIView):
 
         # Get cached counts (RPi optimization)
         counts = _get_cached_table_counts()
-        total_sightings = counts['total_sightings']
-        total_sessions = counts['total_sessions']
-        active_rules = counts['active_rules']
-        alert_history_count = counts['alert_history_count']
-        safety_event_count = counts['safety_event_count']
+        total_sightings = counts["total_sightings"]
+        total_sessions = counts["total_sessions"]
+        active_rules = counts["active_rules"]
+        alert_history_count = counts["alert_history_count"]
+        safety_event_count = counts["safety_event_count"]
 
         # Check notification config
         try:
@@ -197,6 +185,7 @@ class StatusView(APIView):
         safety_tracked_aircraft = 0
         try:
             from skyspy.services.safety import safety_monitor
+
             safety_stats = safety_monitor.get_stats()
             safety_tracked_aircraft = safety_stats.get("tracked_aircraft", 0)
         except Exception:
@@ -209,14 +198,15 @@ class StatusView(APIView):
         sse_subscribers = cache.get("sse_subscriber_count", 0)
 
         # Get scheduled Celery tasks (cached to reduce DB load)
-        celery_tasks = cache.get('celery_periodic_tasks')
+        celery_tasks = cache.get("celery_periodic_tasks")
         if celery_tasks is None:
             celery_tasks = []
             try:
                 from django_celery_beat.models import PeriodicTask
-                active_tasks = PeriodicTask.objects.filter(enabled=True).values_list('name', flat=True)
+
+                active_tasks = PeriodicTask.objects.filter(enabled=True).values_list("name", flat=True)
                 celery_tasks = list(active_tasks)
-                cache.set('celery_periodic_tasks', celery_tasks, timeout=300)  # Cache for 5 minutes
+                cache.set("celery_periodic_tasks", celery_tasks, timeout=300)  # Cache for 5 minutes
             except Exception:
                 pass
 
@@ -240,6 +230,7 @@ class StatusView(APIView):
         libacars_status = None
         try:
             from skyspy.services.libacars_binding import get_stats, is_available
+
             libacars_status = {
                 "available": is_available(),
                 "stats": get_stats(),
@@ -247,35 +238,34 @@ class StatusView(APIView):
         except Exception:
             libacars_status = {"available": False, "error": "Could not load libacars"}
 
-        return Response({
-            "version": __version__,
-            "adsb_online": adsb_online,
-            "aircraft_count": aircraft_count,
-            "total_sightings": total_sightings,
-            "total_sessions": total_sessions,
-            "active_rules": active_rules,
-            "alert_history_count": alert_history_count,
-            "safety_event_count": safety_event_count,
-            "safety_monitoring_enabled": settings.SAFETY_MONITORING_ENABLED,
-            "safety_tracked_aircraft": safety_tracked_aircraft,
-            "notifications_configured": notifications_configured,
-            "redis_enabled": bool(settings.REDIS_URL),
-            "websocket_connections": websocket_connections,
-            "sse_subscribers": sse_subscribers,
-            "acars_enabled": settings.ACARS_ENABLED,
-            "acars_running": bool(cache.get("acars_running")),
-            "polling_interval_seconds": settings.POLLING_INTERVAL,
-            "db_store_interval_seconds": settings.DB_STORE_INTERVAL,
-            "celery_running": celery_running,
-            "celery_tasks": celery_tasks,
-            "worker_pid": os.getpid(),
-            "location": {
-                "latitude": settings.FEEDER_LAT,
-                "longitude": settings.FEEDER_LON
-            },
-            "antenna": antenna_summary,
-            "libacars": libacars_status,
-        })
+        return Response(
+            {
+                "version": __version__,
+                "adsb_online": adsb_online,
+                "aircraft_count": aircraft_count,
+                "total_sightings": total_sightings,
+                "total_sessions": total_sessions,
+                "active_rules": active_rules,
+                "alert_history_count": alert_history_count,
+                "safety_event_count": safety_event_count,
+                "safety_monitoring_enabled": settings.SAFETY_MONITORING_ENABLED,
+                "safety_tracked_aircraft": safety_tracked_aircraft,
+                "notifications_configured": notifications_configured,
+                "redis_enabled": bool(settings.REDIS_URL),
+                "websocket_connections": websocket_connections,
+                "sse_subscribers": sse_subscribers,
+                "acars_enabled": settings.ACARS_ENABLED,
+                "acars_running": bool(cache.get("acars_running")),
+                "polling_interval_seconds": settings.POLLING_INTERVAL,
+                "db_store_interval_seconds": settings.DB_STORE_INTERVAL,
+                "celery_running": celery_running,
+                "celery_tasks": celery_tasks,
+                "worker_pid": os.getpid(),
+                "location": {"latitude": settings.FEEDER_LAT, "longitude": settings.FEEDER_LON},
+                "antenna": antenna_summary,
+                "libacars": libacars_status,
+            }
+        )
 
 
 class SystemInfoView(APIView):
@@ -287,90 +277,92 @@ class SystemInfoView(APIView):
     @extend_schema(
         summary="API information",
         description="Information about the API and available endpoints",
-        responses={200: ApiInfoSerializer}
+        responses={200: ApiInfoSerializer},
     )
     def get(self, request):
         """Return API information."""
         from skyspy import __version__
 
-        return Response({
-            "version": __version__,
-            "name": "SkysPy ADS-B Tracking API",
-            "description": "Real-time ADS-B aircraft tracking, ACARS messaging, and aviation data",
-            "endpoints": {
-                "aircraft": {
-                    "list": "/api/v1/aircraft/",
-                    "detail": "/api/v1/aircraft/{hex}/",
-                    "top": "/api/v1/aircraft/top/",
-                    "stats": "/api/v1/aircraft/stats/",
+        return Response(
+            {
+                "version": __version__,
+                "name": "SkysPy ADS-B Tracking API",
+                "description": "Real-time ADS-B aircraft tracking, ACARS messaging, and aviation data",
+                "endpoints": {
+                    "aircraft": {
+                        "list": "/api/v1/aircraft/",
+                        "detail": "/api/v1/aircraft/{hex}/",
+                        "top": "/api/v1/aircraft/top/",
+                        "stats": "/api/v1/aircraft/stats/",
+                    },
+                    "history": {
+                        "sightings": "/api/v1/sightings/",
+                        "sessions": "/api/v1/sessions/",
+                        "stats": "/api/v1/history/stats/",
+                        "trends": "/api/v1/history/trends/",
+                        "time_comparison": "/api/v1/history/time-comparison/",
+                        "time_comparison_week": "/api/v1/history/time-comparison/week/",
+                        "time_comparison_seasonal": "/api/v1/history/time-comparison/seasonal/",
+                        "time_comparison_day_night": "/api/v1/history/time-comparison/day-night/",
+                        "time_comparison_weekend_weekday": "/api/v1/history/time-comparison/weekend-weekday/",
+                        "time_comparison_daily": "/api/v1/history/time-comparison/daily/",
+                        "time_comparison_weekly": "/api/v1/history/time-comparison/weekly/",
+                        "time_comparison_monthly": "/api/v1/history/time-comparison/monthly/",
+                    },
+                    "alerts": {
+                        "rules": "/api/v1/alerts/rules/",
+                        "history": "/api/v1/alerts/history/",
+                    },
+                    "safety": {
+                        "events": "/api/v1/safety/events/",
+                        "stats": "/api/v1/safety/events/stats/",
+                    },
+                    "acars": {
+                        "messages": "/api/v1/acars/",
+                        "stats": "/api/v1/acars/stats/",
+                    },
+                    "audio": {
+                        "transmissions": "/api/v1/audio/",
+                        "upload": "/api/v1/audio/upload/",
+                        "stats": "/api/v1/audio/stats/",
+                    },
+                    "aviation": {
+                        "metars": "/api/v1/aviation/metars/",
+                        "tafs": "/api/v1/aviation/tafs/",
+                        "pireps": "/api/v1/aviation/pireps/",
+                        "airports": "/api/v1/aviation/airports/",
+                    },
+                    "map": {
+                        "geojson": "/api/v1/map/geojson/",
+                    },
+                    "system": {
+                        "health": "/health",
+                        "status": "/api/v1/system/status",
+                        "info": "/api/v1/system/info",
+                        "databases": "/api/v1/system/databases",
+                        "geodata": "/api/v1/system/geodata",
+                        "weather": "/api/v1/system/weather",
+                    },
+                    "lookup": {
+                        "aircraft": "/api/v1/lookup/aircraft/{icao_hex}",
+                        "opensky": "/api/v1/lookup/opensky/{icao_hex}",
+                        "route": "/api/v1/lookup/route/{callsign}",
+                    },
+                    "websocket": {
+                        "aircraft": "ws://host/ws/aircraft/",
+                        "airspace": "ws://host/ws/airspace/",
+                        "safety": "ws://host/ws/safety/",
+                        "acars": "ws://host/ws/acars/",
+                        "audio": "ws://host/ws/audio/",
+                    },
+                    "docs": {
+                        "openapi": "/api/schema/",
+                        "swagger": "/api/docs/",
+                        "redoc": "/api/redoc/",
+                    },
                 },
-                "history": {
-                    "sightings": "/api/v1/sightings/",
-                    "sessions": "/api/v1/sessions/",
-                    "stats": "/api/v1/history/stats/",
-                    "trends": "/api/v1/history/trends/",
-                    "time_comparison": "/api/v1/history/time-comparison/",
-                    "time_comparison_week": "/api/v1/history/time-comparison/week/",
-                    "time_comparison_seasonal": "/api/v1/history/time-comparison/seasonal/",
-                    "time_comparison_day_night": "/api/v1/history/time-comparison/day-night/",
-                    "time_comparison_weekend_weekday": "/api/v1/history/time-comparison/weekend-weekday/",
-                    "time_comparison_daily": "/api/v1/history/time-comparison/daily/",
-                    "time_comparison_weekly": "/api/v1/history/time-comparison/weekly/",
-                    "time_comparison_monthly": "/api/v1/history/time-comparison/monthly/",
-                },
-                "alerts": {
-                    "rules": "/api/v1/alerts/rules/",
-                    "history": "/api/v1/alerts/history/",
-                },
-                "safety": {
-                    "events": "/api/v1/safety/events/",
-                    "stats": "/api/v1/safety/events/stats/",
-                },
-                "acars": {
-                    "messages": "/api/v1/acars/",
-                    "stats": "/api/v1/acars/stats/",
-                },
-                "audio": {
-                    "transmissions": "/api/v1/audio/",
-                    "upload": "/api/v1/audio/upload/",
-                    "stats": "/api/v1/audio/stats/",
-                },
-                "aviation": {
-                    "metars": "/api/v1/aviation/metars/",
-                    "tafs": "/api/v1/aviation/tafs/",
-                    "pireps": "/api/v1/aviation/pireps/",
-                    "airports": "/api/v1/aviation/airports/",
-                },
-                "map": {
-                    "geojson": "/api/v1/map/geojson/",
-                },
-                "system": {
-                    "health": "/health",
-                    "status": "/api/v1/system/status",
-                    "info": "/api/v1/system/info",
-                    "databases": "/api/v1/system/databases",
-                    "geodata": "/api/v1/system/geodata",
-                    "weather": "/api/v1/system/weather",
-                },
-                "lookup": {
-                    "aircraft": "/api/v1/lookup/aircraft/{icao_hex}",
-                    "opensky": "/api/v1/lookup/opensky/{icao_hex}",
-                    "route": "/api/v1/lookup/route/{callsign}",
-                },
-                "websocket": {
-                    "aircraft": "ws://host/ws/aircraft/",
-                    "airspace": "ws://host/ws/airspace/",
-                    "safety": "ws://host/ws/safety/",
-                    "acars": "ws://host/ws/acars/",
-                    "audio": "ws://host/ws/audio/",
-                },
-                "docs": {
-                    "openapi": "/api/schema/",
-                    "swagger": "/api/docs/",
-                    "redoc": "/api/redoc/",
-                }
             }
-        })
+        )
 
 
 class MetricsView(APIView):
@@ -382,39 +374,28 @@ class MetricsView(APIView):
     def get(self, request):
         """Return Prometheus metrics including libacars metrics."""
         if not settings.PROMETHEUS_ENABLED:
-            return Response(
-                {"error": "Metrics disabled"},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
-            )
+            return Response({"error": "Metrics disabled"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         try:
-            from prometheus_client import (
-                generate_latest, CONTENT_TYPE_LATEST,
-                Counter, Gauge, Histogram
-            )
             from django.http import HttpResponse
+            from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 
             # Get standard prometheus metrics
-            metrics_output = generate_latest().decode('utf-8')
+            metrics_output = generate_latest().decode("utf-8")
 
             # Add libacars metrics
             try:
                 from skyspy.services.libacars_binding import export_prometheus_metrics
+
                 libacars_metrics = export_prometheus_metrics()
                 if libacars_metrics:
                     metrics_output += "\n# libacars metrics\n" + libacars_metrics
             except Exception as e:
                 logger.debug(f"Could not get libacars metrics: {e}")
 
-            return HttpResponse(
-                metrics_output,
-                content_type=CONTENT_TYPE_LATEST
-            )
+            return HttpResponse(metrics_output, content_type=CONTENT_TYPE_LATEST)
         except ImportError:
-            return Response(
-                {"error": "prometheus_client not installed"},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
-            )
+            return Response({"error": "prometheus_client not installed"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 class ExternalDatabaseStatsView(APIView):
@@ -423,11 +404,12 @@ class ExternalDatabaseStatsView(APIView):
     def get_permissions(self):
         """Require authentication based on AUTH_MODE."""
         from skyspy.auth.permissions import IsAuthenticatedOrPublic
+
         return [IsAuthenticatedOrPublic()]
 
     @extend_schema(
         summary="External database stats",
-        description="Statistics about loaded external aircraft databases (ADSBX, tar1090, FAA, OpenSky)"
+        description="Statistics about loaded external aircraft databases (ADSBX, tar1090, FAA, OpenSky)",
     )
     def get(self, request):
         """Return external database statistics."""
@@ -436,17 +418,15 @@ class ExternalDatabaseStatsView(APIView):
 
             stats = external_db.get_database_stats()
 
-            return Response({
-                "databases": stats,
-                "any_loaded": external_db.is_any_loaded(),
-            })
+            return Response(
+                {
+                    "databases": stats,
+                    "any_loaded": external_db.is_any_loaded(),
+                }
+            )
         except Exception as e:
             logger.error(f"Error getting database stats: {e}")
-            return Response({
-                "databases": {},
-                "any_loaded": False,
-                "error": str(e)
-            })
+            return Response({"databases": {}, "any_loaded": False, "error": str(e)})
 
 
 class OpenSkyLookupView(APIView):
@@ -457,7 +437,7 @@ class OpenSkyLookupView(APIView):
 
     @extend_schema(
         summary="OpenSky aircraft lookup",
-        description="Look up aircraft information by ICAO hex code in the OpenSky Network database"
+        description="Look up aircraft information by ICAO hex code in the OpenSky Network database",
     )
     def get(self, request, icao_hex):
         """Look up aircraft by ICAO hex code."""
@@ -467,33 +447,32 @@ class OpenSkyLookupView(APIView):
             # Try OpenSky first
             data = external_db.lookup_opensky(icao_hex)
             if data:
-                return Response({
-                    "icao_hex": icao_hex.upper(),
-                    "source": "opensky",
-                    "data": data
-                })
+                return Response({"icao_hex": icao_hex.upper(), "source": "opensky", "data": data})
 
             # Fall back to aggregated lookup
             data = external_db.lookup_all(icao_hex)
             if data:
-                return Response({
-                    "icao_hex": icao_hex.upper(),
-                    "source": data.get("sources", ["unknown"])[0] if data.get("sources") else "unknown",
-                    "data": data
-                })
+                return Response(
+                    {
+                        "icao_hex": icao_hex.upper(),
+                        "source": data.get("sources", ["unknown"])[0] if data.get("sources") else "unknown",
+                        "data": data,
+                    }
+                )
 
-            return Response({
-                "icao_hex": icao_hex.upper(),
-                "source": None,
-                "data": None,
-                "message": "Aircraft not found in any database"
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {
+                    "icao_hex": icao_hex.upper(),
+                    "source": None,
+                    "data": None,
+                    "message": "Aircraft not found in any database",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         except Exception as e:
             logger.error(f"Error looking up {icao_hex}: {e}")
-            return Response({
-                "error": str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class AircraftLookupView(APIView):
@@ -504,7 +483,7 @@ class AircraftLookupView(APIView):
 
     @extend_schema(
         summary="Aggregated aircraft lookup",
-        description="Look up aircraft information across all external databases (ADSBX, tar1090, FAA, OpenSky)"
+        description="Look up aircraft information across all external databases (ADSBX, tar1090, FAA, OpenSky)",
     )
     def get(self, request, icao_hex):
         """Look up aircraft in all databases and merge results."""
@@ -513,24 +492,21 @@ class AircraftLookupView(APIView):
 
             data = external_db.lookup_all(icao_hex)
             if data:
-                return Response({
-                    "icao_hex": icao_hex.upper(),
-                    "sources": data.pop("sources", []),
-                    "data": data
-                })
+                return Response({"icao_hex": icao_hex.upper(), "sources": data.pop("sources", []), "data": data})
 
-            return Response({
-                "icao_hex": icao_hex.upper(),
-                "sources": [],
-                "data": None,
-                "message": "Aircraft not found in any database"
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {
+                    "icao_hex": icao_hex.upper(),
+                    "sources": [],
+                    "data": None,
+                    "message": "Aircraft not found in any database",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         except Exception as e:
             logger.error(f"Error looking up {icao_hex}: {e}")
-            return Response({
-                "error": str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class RouteLookupView(APIView):
@@ -539,10 +515,7 @@ class RouteLookupView(APIView):
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
     permission_classes = [FeatureBasedPermission]
 
-    @extend_schema(
-        summary="Route lookup",
-        description="Look up flight route information by callsign from adsb.im"
-    )
+    @extend_schema(summary="Route lookup", description="Look up flight route information by callsign from adsb.im")
     def get(self, request, callsign):
         """Look up flight route by callsign."""
         try:
@@ -550,22 +523,16 @@ class RouteLookupView(APIView):
 
             route = external_db.fetch_route(callsign)
             if route:
-                return Response({
-                    "callsign": callsign.upper(),
-                    "route": route
-                })
+                return Response({"callsign": callsign.upper(), "route": route})
 
-            return Response({
-                "callsign": callsign.upper(),
-                "route": None,
-                "message": "Route not found"
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"callsign": callsign.upper(), "route": None, "message": "Route not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         except Exception as e:
             logger.error(f"Error looking up route for {callsign}: {e}")
-            return Response({
-                "error": str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class GeodataStatsView(APIView):
@@ -576,7 +543,7 @@ class GeodataStatsView(APIView):
 
     @extend_schema(
         summary="Geodata cache stats",
-        description="Statistics about cached geographic data (airports, navaids, GeoJSON)"
+        description="Statistics about cached geographic data (airports, navaids, GeoJSON)",
     )
     def get(self, request):
         """Return geodata cache statistics."""
@@ -588,9 +555,7 @@ class GeodataStatsView(APIView):
             return Response(stats)
         except Exception as e:
             logger.error(f"Error getting geodata stats: {e}")
-            return Response({
-                "error": str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class WeatherCacheStatsView(APIView):
@@ -599,10 +564,7 @@ class WeatherCacheStatsView(APIView):
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
     permission_classes = [FeatureBasedPermission]
 
-    @extend_schema(
-        summary="Weather cache stats",
-        description="Statistics about cached weather data (METAR, PIREP)"
-    )
+    @extend_schema(summary="Weather cache stats", description="Statistics about cached weather data (METAR, PIREP)")
     def get(self, request):
         """Return weather cache statistics."""
         try:
@@ -611,15 +573,15 @@ class WeatherCacheStatsView(APIView):
             metar_stats = weather_cache.get_metar_stats()
             pirep_stats = weather_cache.get_pirep_stats()
 
-            return Response({
-                "metar": metar_stats,
-                "pirep": pirep_stats,
-                # Add legacy keys for test compatibility
-                "metar_count": metar_stats.get("cache_hits", 0) + metar_stats.get("cache_misses", 0),
-                "taf_count": 0,  # TAF stats not separately tracked
-            })
+            return Response(
+                {
+                    "metar": metar_stats,
+                    "pirep": pirep_stats,
+                    # Add legacy keys for test compatibility
+                    "metar_count": metar_stats.get("cache_hits", 0) + metar_stats.get("cache_misses", 0),
+                    "taf_count": 0,  # TAF stats not separately tracked
+                }
+            )
         except Exception as e:
             logger.error(f"Error getting weather stats: {e}")
-            return Response({
-                "error": str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -6,9 +6,10 @@ CheckWX API: https://www.checkwxapi.com/
 
 Free tier: 3,000 requests/day
 """
+
 import logging
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List
+from datetime import datetime
+from typing import Any
 
 import httpx
 from django.conf import settings
@@ -25,24 +26,24 @@ TAF_CACHE_TTL = 1800  # 30 minutes
 
 # Flight categories
 FLIGHT_CATEGORIES = {
-    'VFR': {'ceiling': 3000, 'visibility': 5},   # >3000ft AGL, >5SM
-    'MVFR': {'ceiling': 1000, 'visibility': 3},  # 1000-3000ft, 3-5SM
-    'IFR': {'ceiling': 500, 'visibility': 1},    # 500-1000ft, 1-3SM
-    'LIFR': {'ceiling': 0, 'visibility': 0},     # <500ft, <1SM
+    "VFR": {"ceiling": 3000, "visibility": 5},  # >3000ft AGL, >5SM
+    "MVFR": {"ceiling": 1000, "visibility": 3},  # 1000-3000ft, 3-5SM
+    "IFR": {"ceiling": 500, "visibility": 1},  # 500-1000ft, 1-3SM
+    "LIFR": {"ceiling": 0, "visibility": 0},  # <500ft, <1SM
 }
 
 
-def _get_api_key() -> Optional[str]:
+def _get_api_key() -> str | None:
     """Get CheckWX API key from settings."""
-    return getattr(settings, 'CHECKWX_API_KEY', None)
+    return getattr(settings, "CHECKWX_API_KEY", None)
 
 
 def _is_enabled() -> bool:
     """Check if CheckWX is enabled."""
-    return getattr(settings, 'CHECKWX_ENABLED', False) and _get_api_key()
+    return getattr(settings, "CHECKWX_ENABLED", False) and _get_api_key()
 
 
-def _make_request(endpoint: str, params: Optional[Dict] = None) -> Optional[Dict[str, Any]]:
+def _make_request(endpoint: str, params: dict | None = None) -> dict[str, Any] | None:
     """
     Make a request to the CheckWX API.
 
@@ -66,7 +67,7 @@ def _make_request(endpoint: str, params: Optional[Dict] = None) -> Optional[Dict
                 headers={
                     "X-API-Key": api_key,
                     "Accept": "application/json",
-                }
+                },
             )
             response.raise_for_status()
             return response.json()
@@ -82,7 +83,7 @@ def _make_request(endpoint: str, params: Optional[Dict] = None) -> Optional[Dict
         return None
 
 
-def get_metar(icao: str, decoded: bool = True) -> Optional[Dict[str, Any]]:
+def get_metar(icao: str, decoded: bool = True) -> dict[str, Any] | None:
     """
     Get METAR data for an airport.
 
@@ -107,19 +108,19 @@ def get_metar(icao: str, decoded: bool = True) -> Optional[Dict[str, Any]]:
     endpoint = f"metar/{icao}/decoded" if decoded else f"metar/{icao}"
     result = _make_request(endpoint)
 
-    if result and result.get('results', 0) > 0:
-        data = result.get('data', [])
+    if result and result.get("results", 0) > 0:
+        data = result.get("data", [])
         if data:
             metar = data[0] if isinstance(data, list) else data
-            metar['source'] = 'checkwx'
-            metar['fetched_at'] = datetime.utcnow().isoformat() + 'Z'
+            metar["source"] = "checkwx"
+            metar["fetched_at"] = datetime.utcnow().isoformat() + "Z"
             cache.set(cache_key, metar, METAR_CACHE_TTL)
             return metar
 
     return None
 
 
-def get_metar_bulk(icao_list: List[str], decoded: bool = True) -> Dict[str, Dict[str, Any]]:
+def get_metar_bulk(icao_list: list[str], decoded: bool = True) -> dict[str, dict[str, Any]]:
     """
     Get METAR data for multiple airports.
 
@@ -150,27 +151,27 @@ def get_metar_bulk(icao_list: List[str], decoded: bool = True) -> Dict[str, Dict
     if uncached:
         batch_size = 10  # Limit batch size
         for i in range(0, len(uncached), batch_size):
-            batch = uncached[i:i + batch_size]
-            icao_str = ','.join(batch)
+            batch = uncached[i : i + batch_size]
+            icao_str = ",".join(batch)
 
             endpoint = f"metar/{icao_str}/decoded" if decoded else f"metar/{icao_str}"
             result = _make_request(endpoint)
 
-            if result and result.get('results', 0) > 0:
-                data = result.get('data', [])
+            if result and result.get("results", 0) > 0:
+                data = result.get("data", [])
                 if isinstance(data, list):
                     for metar in data:
-                        icao = metar.get('icao', '').upper()
+                        icao = metar.get("icao", "").upper()
                         if icao:
-                            metar['source'] = 'checkwx'
-                            metar['fetched_at'] = datetime.utcnow().isoformat() + 'Z'
+                            metar["source"] = "checkwx"
+                            metar["fetched_at"] = datetime.utcnow().isoformat() + "Z"
                             results[icao] = metar
                             cache.set(f"checkwx_metar_{icao}", metar, METAR_CACHE_TTL)
 
     return results
 
 
-def get_taf(icao: str, decoded: bool = True) -> Optional[Dict[str, Any]]:
+def get_taf(icao: str, decoded: bool = True) -> dict[str, Any] | None:
     """
     Get TAF forecast for an airport.
 
@@ -195,19 +196,19 @@ def get_taf(icao: str, decoded: bool = True) -> Optional[Dict[str, Any]]:
     endpoint = f"taf/{icao}/decoded" if decoded else f"taf/{icao}"
     result = _make_request(endpoint)
 
-    if result and result.get('results', 0) > 0:
-        data = result.get('data', [])
+    if result and result.get("results", 0) > 0:
+        data = result.get("data", [])
         if data:
             taf = data[0] if isinstance(data, list) else data
-            taf['source'] = 'checkwx'
-            taf['fetched_at'] = datetime.utcnow().isoformat() + 'Z'
+            taf["source"] = "checkwx"
+            taf["fetched_at"] = datetime.utcnow().isoformat() + "Z"
             cache.set(cache_key, taf, TAF_CACHE_TTL)
             return taf
 
     return None
 
 
-def get_station(icao: str) -> Optional[Dict[str, Any]]:
+def get_station(icao: str) -> dict[str, Any] | None:
     """
     Get station/airport information.
 
@@ -230,21 +231,18 @@ def get_station(icao: str) -> Optional[Dict[str, Any]]:
 
     result = _make_request(f"station/{icao}")
 
-    if result and result.get('results', 0) > 0:
-        data = result.get('data', [])
+    if result and result.get("results", 0) > 0:
+        data = result.get("data", [])
         if data:
             station = data[0] if isinstance(data, list) else data
-            station['source'] = 'checkwx'
+            station["source"] = "checkwx"
             cache.set(cache_key, station, 86400)  # 24 hour cache
             return station
 
     return None
 
 
-def calculate_flight_category(
-    ceiling_ft: Optional[int],
-    visibility_sm: Optional[float]
-) -> str:
+def calculate_flight_category(ceiling_ft: int | None, visibility_sm: float | None) -> str:
     """
     Calculate flight category based on ceiling and visibility.
 
@@ -257,23 +255,23 @@ def calculate_flight_category(
     """
     # Default to VFR if no data
     if ceiling_ft is None and visibility_sm is None:
-        return 'VFR'
+        return "VFR"
 
     # Assume unlimited if not specified
     ceiling = ceiling_ft if ceiling_ft is not None else 99999
     visibility = visibility_sm if visibility_sm is not None else 99
 
     if ceiling < 500 or visibility < 1:
-        return 'LIFR'
+        return "LIFR"
     elif ceiling < 1000 or visibility < 3:
-        return 'IFR'
+        return "IFR"
     elif ceiling < 3000 or visibility < 5:
-        return 'MVFR'
+        return "MVFR"
     else:
-        return 'VFR'
+        return "VFR"
 
 
-def parse_decoded_metar(metar: Dict[str, Any]) -> Dict[str, Any]:
+def parse_decoded_metar(metar: dict[str, Any]) -> dict[str, Any]:
     """
     Parse decoded METAR into normalized format.
 
@@ -284,86 +282,77 @@ def parse_decoded_metar(metar: Dict[str, Any]) -> Dict[str, Any]:
         Normalized weather data dictionary
     """
     result = {
-        'icao': metar.get('icao', ''),
-        'observed': metar.get('observed'),
-        'raw_text': metar.get('raw_text', ''),
-        'source': 'checkwx',
+        "icao": metar.get("icao", ""),
+        "observed": metar.get("observed"),
+        "raw_text": metar.get("raw_text", ""),
+        "source": "checkwx",
     }
 
     # Temperature and dewpoint
-    temp = metar.get('temperature', {})
+    temp = metar.get("temperature", {})
     if isinstance(temp, dict):
-        result['temperature_c'] = temp.get('celsius')
-        result['temperature_f'] = temp.get('fahrenheit')
+        result["temperature_c"] = temp.get("celsius")
+        result["temperature_f"] = temp.get("fahrenheit")
 
-    dewpoint = metar.get('dewpoint', {})
+    dewpoint = metar.get("dewpoint", {})
     if isinstance(dewpoint, dict):
-        result['dewpoint_c'] = dewpoint.get('celsius')
-        result['dewpoint_f'] = dewpoint.get('fahrenheit')
+        result["dewpoint_c"] = dewpoint.get("celsius")
+        result["dewpoint_f"] = dewpoint.get("fahrenheit")
 
     # Wind
-    wind = metar.get('wind', {})
+    wind = metar.get("wind", {})
     if isinstance(wind, dict):
-        result['wind_direction'] = wind.get('degrees')
-        result['wind_speed_kt'] = wind.get('speed_kts')
-        result['wind_gust_kt'] = wind.get('gust_kts')
+        result["wind_direction"] = wind.get("degrees")
+        result["wind_speed_kt"] = wind.get("speed_kts")
+        result["wind_gust_kt"] = wind.get("gust_kts")
 
     # Visibility
-    visibility = metar.get('visibility', {})
+    visibility = metar.get("visibility", {})
     if isinstance(visibility, dict):
-        result['visibility_sm'] = visibility.get('miles')
-        result['visibility_meters'] = visibility.get('meters')
+        result["visibility_sm"] = visibility.get("miles")
+        result["visibility_meters"] = visibility.get("meters")
     elif isinstance(visibility, (int, float)):
-        result['visibility_sm'] = visibility
+        result["visibility_sm"] = visibility
 
     # Ceiling
-    clouds = metar.get('clouds', [])
+    clouds = metar.get("clouds", [])
     ceiling = None
     if isinstance(clouds, list):
         for cloud in clouds:
             if isinstance(cloud, dict):
-                code = cloud.get('code', '').upper()
-                if code in ('BKN', 'OVC', 'VV'):
-                    base = cloud.get('base_feet_agl')
+                code = cloud.get("code", "").upper()
+                if code in ("BKN", "OVC", "VV"):
+                    base = cloud.get("base_feet_agl")
                     if base is not None and (ceiling is None or base < ceiling):
                         ceiling = base
-        result['ceiling_ft'] = ceiling
-        result['clouds'] = clouds
+        result["ceiling_ft"] = ceiling
+        result["clouds"] = clouds
 
     # Flight category
-    flight_cat = metar.get('flight_category')
+    flight_cat = metar.get("flight_category")
     if not flight_cat:
-        flight_cat = calculate_flight_category(
-            result.get('ceiling_ft'),
-            result.get('visibility_sm')
-        )
-    result['flight_category'] = flight_cat
+        flight_cat = calculate_flight_category(result.get("ceiling_ft"), result.get("visibility_sm"))
+    result["flight_category"] = flight_cat
 
     # Barometer
-    barometer = metar.get('barometer', {})
+    barometer = metar.get("barometer", {})
     if isinstance(barometer, dict):
-        result['altimeter_hg'] = barometer.get('hg')
-        result['altimeter_mb'] = barometer.get('mb')
+        result["altimeter_hg"] = barometer.get("hg")
+        result["altimeter_mb"] = barometer.get("mb")
 
     # Humidity
-    result['humidity_percent'] = metar.get('humidity', {}).get('percent')
+    result["humidity_percent"] = metar.get("humidity", {}).get("percent")
 
     # Conditions/weather
-    conditions = metar.get('conditions', [])
+    conditions = metar.get("conditions", [])
     if conditions:
-        result['conditions'] = conditions
-        result['weather'] = ', '.join(
-            c.get('text', '') for c in conditions if isinstance(c, dict)
-        )
+        result["conditions"] = conditions
+        result["weather"] = ", ".join(c.get("text", "") for c in conditions if isinstance(c, dict))
 
     return result
 
 
-def get_weather_for_aircraft(
-    lat: float,
-    lon: float,
-    radius_nm: float = 50
-) -> Dict[str, Any]:
+def get_weather_for_aircraft(lat: float, lon: float, radius_nm: float = 50) -> dict[str, Any]:
     """
     Get weather data for aircraft location.
 
@@ -380,13 +369,13 @@ def get_weather_for_aircraft(
     # This would typically query for nearby airports and get their METAR
     # For now, return empty as we'd need airport lookup
     return {
-        'source': 'checkwx',
-        'enabled': _is_enabled(),
-        'nearby_stations': [],
+        "source": "checkwx",
+        "enabled": _is_enabled(),
+        "nearby_stations": [],
     }
 
 
-def get_api_status() -> Dict[str, Any]:
+def get_api_status() -> dict[str, Any]:
     """
     Get CheckWX API status and usage info.
 
@@ -394,9 +383,9 @@ def get_api_status() -> Dict[str, Any]:
         API status dictionary
     """
     return {
-        'enabled': _is_enabled(),
-        'api_key_configured': bool(_get_api_key()),
-        'cache_ttl_metar': METAR_CACHE_TTL,
-        'cache_ttl_taf': TAF_CACHE_TTL,
-        'daily_limit': 3000,
+        "enabled": _is_enabled(),
+        "api_key_configured": bool(_get_api_key()),
+        "cache_ttl_metar": METAR_CACHE_TTL,
+        "cache_ttl_taf": TAF_CACHE_TTL,
+        "daily_limit": 3000,
     }

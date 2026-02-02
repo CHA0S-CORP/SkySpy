@@ -14,6 +14,7 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+
 # Determine CORS allowed origins from settings
 def _get_cors_origins():
     """
@@ -22,16 +23,16 @@ def _get_cors_origins():
     Returns a list of allowed origins, '*' for all origins,
     or an empty list if CORS is not configured.
     """
-    if getattr(settings, 'CORS_ALLOW_ALL_ORIGINS', False):
-        return '*'
+    if getattr(settings, "CORS_ALLOW_ALL_ORIGINS", False):
+        return "*"
 
-    origins = getattr(settings, 'CORS_ALLOWED_ORIGINS', [])
+    origins = getattr(settings, "CORS_ALLOWED_ORIGINS", [])
     if origins:
         return origins
 
     # Fallback for development: allow all origins
-    if getattr(settings, 'DEBUG', False):
-        return '*'
+    if getattr(settings, "DEBUG", False):
+        return "*"
 
     return []
 
@@ -43,8 +44,8 @@ def _create_client_manager():
     Uses Redis for production (multi-process support) or
     in-memory for development/testing.
     """
-    redis_url = getattr(settings, 'REDIS_URL', None)
-    build_mode = getattr(settings, 'BUILD_MODE', False)
+    redis_url = getattr(settings, "REDIS_URL", None)
+    build_mode = getattr(settings, "BUILD_MODE", False)
 
     if build_mode or not redis_url:
         logger.info("Socket.IO using in-memory client manager")
@@ -64,17 +65,17 @@ cors_origins = _get_cors_origins()
 client_manager = _create_client_manager()
 
 sio = socketio.AsyncServer(
-    async_mode='asgi',
+    async_mode="asgi",
     cors_allowed_origins=cors_origins,
     client_manager=client_manager,
     logger=logger,
-    engineio_logger=logger if getattr(settings, 'DEBUG', False) else False,
+    engineio_logger=logger if getattr(settings, "DEBUG", False) else False,
 )
 
 # Create ASGI application for mounting in Django ASGI config
 socket_app = socketio.ASGIApp(
     sio,
-    socketio_path='socket.io',
+    socketio_path="socket.io",
 )
 
 logger.info(f"Socket.IO server initialized (CORS origins: {cors_origins})")

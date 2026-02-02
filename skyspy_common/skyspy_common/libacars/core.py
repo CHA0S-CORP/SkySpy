@@ -1,15 +1,16 @@
 """
 Core library loading and raw binding management.
 """
+
 import ctypes
 import ctypes.util
 import logging
 import threading
-import os
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Callable, Generator, Optional
+from typing import Any
 
-from .c_defs import CFFI_CDEF, la_vstring, la_proto_node, la_reasm_ctx, timeval
+from .c_defs import CFFI_CDEF, la_proto_node, la_reasm_ctx, la_vstring, timeval
 from .exceptions import LibacarsMemoryError
 
 logger = logging.getLogger(__name__)
@@ -19,19 +20,22 @@ _ffi = None
 _backend = "unavailable"  # Fixed: Default matches API expectation
 _load_lock = threading.Lock()
 
+
 def load_libacars() -> bool:
     """Load the libacars library (CFFI with ctypes fallback)."""
     global _lib, _ffi, _backend
-    
+
     with _load_lock:
         if _backend != "unavailable":
             return True
 
         paths = [
-            "libacars-2.so", "libacars-2.so.2",
-            "/usr/local/lib/libacars-2.so", "/usr/lib/libacars-2.so",
+            "libacars-2.so",
+            "libacars-2.so.2",
+            "/usr/local/lib/libacars-2.so",
+            "/usr/lib/libacars-2.so",
             "/usr/lib/x86_64-linux-gnu/libacars-2.so",
-            "/opt/homebrew/lib/libacars-2.dylib"
+            "/opt/homebrew/lib/libacars-2.dylib",
         ]
         found = ctypes.util.find_library("acars-2")
         if found:
@@ -40,6 +44,7 @@ def load_libacars() -> bool:
         # 1. Try CFFI
         try:
             from cffi import FFI
+
             ffi = FFI()
             ffi.cdef(CFFI_CDEF)
             for path in paths:
@@ -64,8 +69,9 @@ def load_libacars() -> bool:
                 return True
             except OSError:
                 continue
-                
+
         return False
+
 
 def _setup_ctypes(lib):
     """Configure ctypes argument types."""
@@ -76,8 +82,12 @@ def _setup_ctypes(lib):
     lib.la_reasm_ctx_destroy.argtypes = [ctypes.POINTER(la_reasm_ctx)]
 
     lib.la_acars_apps_parse_and_reassemble.argtypes = [
-        ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, 
-        ctypes.c_int, ctypes.POINTER(la_reasm_ctx), timeval
+        ctypes.c_char_p,
+        ctypes.c_char_p,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.POINTER(la_reasm_ctx),
+        timeval,
     ]
     lib.la_acars_apps_parse_and_reassemble.restype = ctypes.POINTER(la_proto_node)
 
@@ -88,7 +98,7 @@ def _setup_ctypes(lib):
     lib.la_proto_tree_format_text.restype = ctypes.POINTER(la_vstring)
 
     lib.la_proto_tree_destroy.argtypes = [ctypes.POINTER(la_proto_node)]
-    
+
     lib.la_vstring_new.restype = ctypes.POINTER(la_vstring)
     lib.la_vstring_destroy.argtypes = [ctypes.POINTER(la_vstring), ctypes.c_bool]
 
@@ -97,15 +107,21 @@ def _setup_ctypes(lib):
     lib.la_config_set_str.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
 
     lib.la_acars_extract_sublabel_and_mfi.argtypes = [
-        ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, 
-        ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_char_p,
     ]
     lib.la_acars_extract_sublabel_and_mfi.restype = ctypes.c_int
+
 
 def get_lib():
     if _backend == "unavailable":
         load_libacars()
     return _lib, _ffi, _backend
+
 
 @contextmanager
 def vstring_context() -> Generator[tuple[Any, str], None, None]:

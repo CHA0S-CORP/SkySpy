@@ -8,19 +8,6 @@ run:
   # Include test files
   tests: true
 
-  # Which dirs to skip
-  skip-dirs:
-    - vendor
-    - third_party
-    - testdata
-    - examples
-    - bin
-
-  # Which files to skip
-  skip-files:
-    - ".*\\.pb\\.go$"
-    - ".*_generated\\.go$"
-
   # Number of CPUs to use
   concurrency: 4
 
@@ -61,7 +48,7 @@ linters:
     - bodyclose      # Check HTTP response body is closed
     - dogsled        # Check for too many blank identifiers in assignments
     - dupl           # Check for duplicated code
-    - exportloopref  # Check for pointers to loop variables
+    - copyloopvar    # Check for pointers to loop variables (replaces deprecated exportloopref)
     - gochecknoinits # Check that no init functions are present
     - goconst        # Find repeated strings that could be constants
     - gocritic       # Comprehensive Go linter
@@ -228,13 +215,12 @@ linters-settings:
 
 # Issues configuration
 issues:
-  # List of regexps of issue texts to exclude
-  exclude:
-    # False positives for table-driven tests
-    - "G404: Use of weak random number generator"
-
   # Excluding configuration per-path, per-linter, per-text and per-source
   exclude-rules:
+    # False positives for table-driven tests
+    - text: "G404: Use of weak random number generator"
+      linters:
+        - gosec
     # Exclude some linters from running on tests files
     - path: _test\.go
       linters:

@@ -118,6 +118,7 @@ export const ToastContext = createContext(null);
 /**
  * Hook to access toast context from anywhere in the app
  * @returns {Object} Toast context value
+ * @throws {Error} If not used within a ToastProvider
  */
 export function useToastContext() {
   const context = useContext(ToastContext);
@@ -125,6 +126,14 @@ export function useToastContext() {
     throw new Error('useToastContext must be used within a ToastProvider');
   }
   return context;
+}
+
+/**
+ * Safe hook to access toast context - returns null if not in a ToastProvider
+ * @returns {Object|null} Toast context value or null
+ */
+export function useToastContextSafe() {
+  return useContext(ToastContext);
 }
 
 export default useToast;

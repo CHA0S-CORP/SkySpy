@@ -1,83 +1,63 @@
 """
 ACARS/VDL2 message serializers.
 """
+
 from rest_framework import serializers
+
 from skyspy.models import AcarsMessage
 
 
 class AcarsAirlineInfoSerializer(serializers.Serializer):
     """Decoded airline information from callsign."""
 
-    icao = serializers.CharField(
-        required=False,
-        allow_null=True,
-        help_text="Airline ICAO code (3 letters)"
-    )
-    iata = serializers.CharField(
-        required=False,
-        allow_null=True,
-        help_text="Airline IATA code (2 letters)"
-    )
-    name = serializers.CharField(
-        required=False,
-        allow_null=True,
-        help_text="Full airline name"
-    )
+    icao = serializers.CharField(required=False, allow_null=True, help_text="Airline ICAO code (3 letters)")
+    iata = serializers.CharField(required=False, allow_null=True, help_text="Airline IATA code (2 letters)")
+    name = serializers.CharField(required=False, allow_null=True, help_text="Full airline name")
     flight_number = serializers.CharField(
-        required=False,
-        allow_null=True,
-        help_text="Flight number portion of callsign"
+        required=False, allow_null=True, help_text="Flight number portion of callsign"
     )
 
 
 class AcarsLabelInfoSerializer(serializers.Serializer):
     """Decoded ACARS message label information."""
 
-    name = serializers.CharField(
-        required=False,
-        allow_null=True,
-        help_text="Human-readable label name"
-    )
-    description = serializers.CharField(
-        required=False,
-        allow_null=True,
-        help_text="Detailed label description"
-    )
+    name = serializers.CharField(required=False, allow_null=True, help_text="Human-readable label name")
+    description = serializers.CharField(required=False, allow_null=True, help_text="Detailed label description")
 
 
 class AcarsMessageSerializer(serializers.ModelSerializer):
     """Single ACARS/VDL2 message."""
 
-    airline = AcarsAirlineInfoSerializer(
-        required=False,
-        allow_null=True,
-        help_text="Decoded airline information"
-    )
-    label_info = AcarsLabelInfoSerializer(
-        required=False,
-        allow_null=True,
-        help_text="Decoded label information"
-    )
-    decoded_text = serializers.JSONField(
-        required=False,
-        allow_null=True,
-        help_text="Decoded message text fields"
-    )
-    formatted_text = serializers.CharField(
-        required=False,
-        allow_null=True,
-        help_text="Human-readable formatted text"
-    )
+    airline = AcarsAirlineInfoSerializer(required=False, allow_null=True, help_text="Decoded airline information")
+    label_info = AcarsLabelInfoSerializer(required=False, allow_null=True, help_text="Decoded label information")
+    decoded_text = serializers.JSONField(required=False, allow_null=True, help_text="Decoded message text fields")
+    formatted_text = serializers.CharField(required=False, allow_null=True, help_text="Human-readable formatted text")
 
     class Meta:
         model = AcarsMessage
         fields = [
-            'id', 'timestamp', 'source', 'channel', 'frequency',
-            'icao_hex', 'registration', 'callsign', 'label',
-            'block_id', 'msg_num', 'ack', 'mode', 'text',
-            'decoded', 'decoded_text', 'formatted_text',
-            'signal_level', 'error_count', 'station_id',
-            'airline', 'label_info'
+            "id",
+            "timestamp",
+            "source",
+            "channel",
+            "frequency",
+            "icao_hex",
+            "registration",
+            "callsign",
+            "label",
+            "block_id",
+            "msg_num",
+            "ack",
+            "mode",
+            "text",
+            "decoded",
+            "decoded_text",
+            "formatted_text",
+            "signal_level",
+            "error_count",
+            "station_id",
+            "airline",
+            "label_info",
         ]
 
 
@@ -96,10 +76,7 @@ class AcarsStatsSerializer(serializers.Serializer):
     last_hour = serializers.IntegerField(help_text="Messages in last hour")
     last_24h = serializers.IntegerField(help_text="Messages in last 24 hours")
     by_source = serializers.DictField(help_text="Count by source")
-    top_labels = serializers.ListField(
-        child=serializers.DictField(),
-        help_text="Most common labels"
-    )
+    top_labels = serializers.ListField(child=serializers.DictField(), help_text="Most common labels")
     service_stats = serializers.DictField(help_text="Receiver service stats")
 
 
@@ -122,6 +99,7 @@ class AcarsLabelsReferenceSerializer(serializers.Serializer):
 # ==============================================================================
 # ACARS Stats Serializers
 # ==============================================================================
+
 
 class AcarsLabelStatsSerializer(serializers.Serializer):
     """Statistics for a single message label."""
@@ -235,9 +213,7 @@ class AcarsHourlyCategoryTrendSerializer(serializers.Serializer):
 class AcarsCategoryTrendsSerializer(serializers.Serializer):
     """Message category distribution over time."""
 
-    hourly_category_trends = AcarsHourlyCategoryTrendSerializer(
-        many=True, help_text="Category breakdown by hour"
-    )
+    hourly_category_trends = AcarsHourlyCategoryTrendSerializer(many=True, help_text="Category breakdown by hour")
     category_totals = serializers.DictField(help_text="Total count per category")
     time_range_hours = serializers.IntegerField(help_text="Time range in hours")
     timestamp = serializers.CharField(help_text="Stats generation timestamp")
@@ -253,9 +229,7 @@ class AcarsAirportMentionSerializer(serializers.Serializer):
 class AcarsFreeTextAnalysisSerializer(serializers.Serializer):
     """Free text message analysis results."""
 
-    top_airports_mentioned = AcarsAirportMentionSerializer(
-        many=True, help_text="Most mentioned airports"
-    )
+    top_airports_mentioned = AcarsAirportMentionSerializer(many=True, help_text="Most mentioned airports")
     weather_content = serializers.DictField(help_text="Weather content breakdown")
     message_patterns = serializers.DictField(help_text="Detected message patterns")
     total_analyzed = serializers.IntegerField(help_text="Messages analyzed")

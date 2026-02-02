@@ -41,6 +41,7 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
   const [systemEvents, setSystemEvents] = useState([]);
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
+  const eventIdCounter = useRef(0);
 
   // Socket options for useSocketApi
   const socketOpts = { wsRequest, wsConnected };
@@ -149,8 +150,9 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
 
   // Track system events for timeline
   const addSystemEvent = useCallback((type, message, severity = 'info') => {
+    eventIdCounter.current += 1;
     const event = {
-      id: Date.now(),
+      id: eventIdCounter.current,
       type,
       message,
       severity,

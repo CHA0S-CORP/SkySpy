@@ -1161,7 +1161,8 @@ func TestClient_ChannelBuffer(t *testing.T) {
 	host, port := ts.getHostPort()
 	client := NewClient(host, port, 1)
 
-	messageCount := 0
+	var messageCount int
+	var messageMu sync.Mutex
 	ts.onMessage = func(conn *websocket.Conn, data []byte) {
 		var msg map[string]interface{}
 		if err := json.Unmarshal(data, &msg); err == nil {
@@ -1174,7 +1175,9 @@ func TestClient_ChannelBuffer(t *testing.T) {
 					}
 					msgBytes, _ := json.Marshal(update)
 					conn.WriteMessage(websocket.TextMessage, msgBytes)
+					messageMu.Lock()
 					messageCount++
+					messageMu.Unlock()
 				}
 			}
 		}

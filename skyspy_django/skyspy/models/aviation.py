@@ -1,6 +1,7 @@
 """
 Aviation data models for airports, navaids, GeoJSON overlays, and PIREPs.
 """
+
 from django.db import models
 
 
@@ -8,13 +9,13 @@ class CachedAirport(models.Model):
     """Cached airport data from Aviation Weather Center."""
 
     AIRPORT_TYPES = [
-        ('large_airport', 'Large Airport'),
-        ('medium_airport', 'Medium Airport'),
-        ('small_airport', 'Small Airport'),
-        ('closed', 'Closed'),
-        ('heliport', 'Heliport'),
-        ('seaplane_base', 'Seaplane Base'),
-        ('balloonport', 'Balloonport'),
+        ("large_airport", "Large Airport"),
+        ("medium_airport", "Medium Airport"),
+        ("small_airport", "Small Airport"),
+        ("closed", "Closed"),
+        ("heliport", "Heliport"),
+        ("seaplane_base", "Seaplane Base"),
+        ("balloonport", "Balloonport"),
     ]
 
     fetched_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -37,9 +38,9 @@ class CachedAirport(models.Model):
     source_data = models.JSONField(blank=True, null=True)
 
     class Meta:
-        db_table = 'cached_airports'
+        db_table = "cached_airports"
         indexes = [
-            models.Index(fields=['latitude', 'longitude'], name='idx_cached_airport_location'),
+            models.Index(fields=["latitude", "longitude"], name="idx_cached_airport_location"),
         ]
 
     def __str__(self):
@@ -50,19 +51,19 @@ class CachedNavaid(models.Model):
     """Cached navigation aid data from Aviation Weather Center."""
 
     NAVAID_TYPES = [
-        ('VOR', 'VOR'),
-        ('VORTAC', 'VORTAC'),
-        ('VOR-DME', 'VOR-DME'),
-        ('TACAN', 'TACAN'),
-        ('NDB', 'NDB'),
-        ('NDB-DME', 'NDB-DME'),
-        ('DME', 'DME'),
-        ('ILS', 'ILS'),
-        ('LOC', 'Localizer'),
-        ('GS', 'Glideslope'),
-        ('OM', 'Outer Marker'),
-        ('MM', 'Middle Marker'),
-        ('IM', 'Inner Marker'),
+        ("VOR", "VOR"),
+        ("VORTAC", "VORTAC"),
+        ("VOR-DME", "VOR-DME"),
+        ("TACAN", "TACAN"),
+        ("NDB", "NDB"),
+        ("NDB-DME", "NDB-DME"),
+        ("DME", "DME"),
+        ("ILS", "ILS"),
+        ("LOC", "Localizer"),
+        ("GS", "Glideslope"),
+        ("OM", "Outer Marker"),
+        ("MM", "Middle Marker"),
+        ("IM", "Inner Marker"),
     ]
 
     fetched_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -84,10 +85,10 @@ class CachedNavaid(models.Model):
     source_data = models.JSONField(blank=True, null=True)
 
     class Meta:
-        db_table = 'cached_navaids'
+        db_table = "cached_navaids"
         indexes = [
-            models.Index(fields=['latitude', 'longitude'], name='idx_cached_navaid_location'),
-            models.Index(fields=['ident', 'navaid_type'], name='idx_cached_navaid_ident_type'),
+            models.Index(fields=["latitude", "longitude"], name="idx_cached_navaid_location"),
+            models.Index(fields=["ident", "navaid_type"], name="idx_cached_navaid_ident_type"),
         ]
 
     def __str__(self):
@@ -98,11 +99,11 @@ class CachedGeoJSON(models.Model):
     """Cached GeoJSON data for map overlays (states, countries, water bodies)."""
 
     DATA_TYPES = [
-        ('states', 'US States'),
-        ('countries', 'Countries'),
-        ('water', 'Water Bodies'),
-        ('roads', 'Roads'),
-        ('terrain', 'Terrain'),
+        ("states", "US States"),
+        ("countries", "Countries"),
+        ("water", "Water Bodies"),
+        ("roads", "Roads"),
+        ("terrain", "Terrain"),
     ]
 
     fetched_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -123,12 +124,11 @@ class CachedGeoJSON(models.Model):
     properties = models.JSONField(blank=True, null=True)  # Feature properties
 
     class Meta:
-        db_table = 'cached_geojson'
+        db_table = "cached_geojson"
         indexes = [
-            models.Index(fields=['data_type', 'name'], name='idx_cached_geojson_type_name'),
+            models.Index(fields=["data_type", "name"], name="idx_cached_geojson_type_name"),
             models.Index(
-                fields=['bbox_min_lat', 'bbox_max_lat', 'bbox_min_lon', 'bbox_max_lon'],
-                name='idx_cached_geojson_bbox'
+                fields=["bbox_min_lat", "bbox_max_lat", "bbox_min_lon", "bbox_max_lon"], name="idx_cached_geojson_bbox"
             ),
         ]
 
@@ -140,36 +140,36 @@ class CachedPirep(models.Model):
     """Cached Pilot Reports (PIREPs) from Aviation Weather Center."""
 
     REPORT_TYPES = [
-        ('UA', 'Routine'),
-        ('UUA', 'Urgent'),
+        ("UA", "Routine"),
+        ("UUA", "Urgent"),
     ]
 
     TURBULENCE_TYPES = [
-        ('NEG', 'Negative'),
-        ('LGT', 'Light'),
-        ('LGT-MOD', 'Light to Moderate'),
-        ('MOD', 'Moderate'),
-        ('MOD-SEV', 'Moderate to Severe'),
-        ('SEV', 'Severe'),
-        ('EXTRM', 'Extreme'),
+        ("NEG", "Negative"),
+        ("LGT", "Light"),
+        ("LGT-MOD", "Light to Moderate"),
+        ("MOD", "Moderate"),
+        ("MOD-SEV", "Moderate to Severe"),
+        ("SEV", "Severe"),
+        ("EXTRM", "Extreme"),
     ]
 
     ICING_TYPES = [
-        ('NEG', 'Negative'),
-        ('TRC', 'Trace'),
-        ('TRC-LGT', 'Trace to Light'),
-        ('LGT', 'Light'),
-        ('LGT-MOD', 'Light to Moderate'),
-        ('MOD', 'Moderate'),
-        ('MOD-SEV', 'Moderate to Severe'),
-        ('SEV', 'Severe'),
+        ("NEG", "Negative"),
+        ("TRC", "Trace"),
+        ("TRC-LGT", "Trace to Light"),
+        ("LGT", "Light"),
+        ("LGT-MOD", "Light to Moderate"),
+        ("MOD", "Moderate"),
+        ("MOD-SEV", "Moderate to Severe"),
+        ("SEV", "Severe"),
     ]
 
     fetched_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     # PIREP identification
     pirep_id = models.CharField(max_length=100, unique=True, db_index=True)
-    report_type = models.CharField(max_length=10, choices=REPORT_TYPES, default='UA', db_index=True)
+    report_type = models.CharField(max_length=10, choices=REPORT_TYPES, default="UA", db_index=True)
 
     # Location
     latitude = models.FloatField(blank=True, null=True, db_index=True)
@@ -187,22 +187,12 @@ class CachedPirep(models.Model):
     aircraft_type = models.CharField(max_length=10, blank=True, null=True)
 
     # Weather conditions
-    turbulence_type = models.CharField(
-        max_length=20,
-        choices=TURBULENCE_TYPES,
-        blank=True, null=True,
-        db_index=True
-    )
+    turbulence_type = models.CharField(max_length=20, choices=TURBULENCE_TYPES, blank=True, null=True, db_index=True)
     turbulence_freq = models.CharField(max_length=20, blank=True, null=True)
     turbulence_base_ft = models.IntegerField(blank=True, null=True)
     turbulence_top_ft = models.IntegerField(blank=True, null=True)
 
-    icing_type = models.CharField(
-        max_length=20,
-        choices=ICING_TYPES,
-        blank=True, null=True,
-        db_index=True
-    )
+    icing_type = models.CharField(max_length=20, choices=ICING_TYPES, blank=True, null=True, db_index=True)
     icing_intensity = models.CharField(max_length=20, blank=True, null=True)
     icing_base_ft = models.IntegerField(blank=True, null=True)
     icing_top_ft = models.IntegerField(blank=True, null=True)
@@ -224,14 +214,14 @@ class CachedPirep(models.Model):
     archive_reason = models.CharField(max_length=50, blank=True, null=True)
 
     class Meta:
-        db_table = 'cached_pireps'
+        db_table = "cached_pireps"
         indexes = [
-            models.Index(fields=['latitude', 'longitude'], name='idx_cached_pirep_location'),
-            models.Index(fields=['observation_time'], name='idx_cached_pirep_time'),
-            models.Index(fields=['turbulence_type', 'icing_type'], name='idx_cached_pirep_conditions'),
-            models.Index(fields=['is_archived', 'archived_at'], name='idx_pirep_archive'),
+            models.Index(fields=["latitude", "longitude"], name="idx_cached_pirep_location"),
+            models.Index(fields=["observation_time"], name="idx_cached_pirep_time"),
+            models.Index(fields=["turbulence_type", "icing_type"], name="idx_cached_pirep_conditions"),
+            models.Index(fields=["is_archived", "archived_at"], name="idx_pirep_archive"),
         ]
-        ordering = ['-observation_time']
+        ordering = ["-observation_time"]
 
     def __str__(self):
         return f"{self.report_type} {self.pirep_id}"

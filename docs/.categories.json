@@ -24,14 +24,27 @@
       "slug": "api-reference",
       "order": 3,
       "pages": [
-        "rest-api",
-        "socketio-api"
+        "rest-api"
+      ]
+    },
+    {
+      "title": "Socket.IO API",
+      "slug": "socketio",
+      "order": 4,
+      "pages": [
+        "socketio-overview",
+        "socketio-connection",
+        "socketio-message-protocol",
+        "socketio-main-namespace",
+        "socketio-specialized-namespaces",
+        "socketio-client-implementation",
+        "socketio-troubleshooting"
       ]
     },
     {
       "title": "Components",
       "slug": "components",
-      "order": 4,
+      "order": 5,
       "pages": [
         "go-services",
         "frontend",
@@ -41,7 +54,7 @@
     {
       "title": "Features",
       "slug": "features",
-      "order": 5,
+      "order": 6,
       "pages": [
         "map-aviation",
         "safety-alerts",
@@ -53,16 +66,17 @@
     {
       "title": "Operations",
       "slug": "operations",
-      "order": 6,
+      "order": 7,
       "pages": [
         "deployment",
-        "testing"
+        "testing",
+        "admin-configuration"
       ]
     },
     {
       "title": "Development",
       "slug": "development",
-      "order": 7,
+      "order": 8,
       "pages": [
         "contributing",
         "troubleshooting"

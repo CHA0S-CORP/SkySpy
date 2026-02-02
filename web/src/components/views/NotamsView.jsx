@@ -110,13 +110,14 @@ export function NotamsView({ apiBase }) {
         // Backend triggered a refresh - request new snapshot
         emit('request', { type: 'notam-snapshot', request_id: `notam-refresh-${Date.now()}` });
         break;
-      case 'response':
+      case 'response': {
         const resolver = pendingRequestsRef.current.get(data.request_id);
         if (resolver) {
           resolver.resolve(data.data);
           pendingRequestsRef.current.delete(data.request_id);
         }
         break;
+      }
       case 'error':
         if (data.request_id) {
           const resolver = pendingRequestsRef.current.get(data.request_id);

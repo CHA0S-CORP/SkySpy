@@ -7,24 +7,18 @@ Storage backends:
 - Local filesystem (default): /data/photos/
 - S3/MinIO/Wasabi: s3://bucket/prefix/
 """
+
 import logging
 import re
 import threading
 import time
 from pathlib import Path
-from typing import Optional, Tuple
 
 import httpx
 from django.conf import settings
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from skyspy.models import AircraftInfo
-from skyspy.services.storage import (
-    upload_to_s3,
-    check_s3_exists,
-    generate_signed_url,
-    get_s3_key,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -49,16 +43,14 @@ RETRY_DELAY = 0.5
 # Retry Helpers for HTTP Requests
 # =============================================================================
 
+
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=1, max=10),
     retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
 )
 def _http_get_with_retry(
-    url: str,
-    headers: dict,
-    timeout: float = 15.0,
-    follow_redirects: bool = True
+    url: str, headers: dict, timeout: float = 15.0, follow_redirects: bool = True
 ) -> httpx.Response:
     """HTTP GET with retry logic for photo downloads."""
     with httpx.Client(timeout=timeout) as client:
@@ -96,7 +88,7 @@ def _get_s3_photo_url(icao_hex: str, is_thumbnail: bool = False) -> str:
         base = settings.S3_PUBLIC_URL.rstrip("/")
         prefix_with_slash = settings.S3_PREFIX.strip("/") + "/"
         if key.startswith(prefix_with_slash):
-            key = key[len(prefix_with_slash):]
+            key = key[len(prefix_with_slash) :]
         return f"{base}/{key}"
 
     if settings.S3_ENDPOINT_URL:
@@ -121,19 +113,21 @@ def _check_s3_photo_exists(icao_hex: str, is_thumbnail: bool = False) -> bool:
 
     # Use storage module's check
     from skyspy.services.storage import _get_s3_client
+
     client = _get_s3_client()
     if not client:
         return False
 
     try:
         from botocore.exceptions import ClientError
+
         client.head_object(Bucket=settings.S3_BUCKET, Key=key)
         with _s3_exists_cache_lock:
             _s3_exists_cache[cache_key] = (True, now)
         return True
     except ClientError as e:
-        error_code = e.response.get('Error', {}).get('Code', '')
-        if error_code in ('404', 'NoSuchKey'):
+        error_code = e.response.get("Error", {}).get("Code", "")
+        if error_code in ("404", "NoSuchKey"):
             with _s3_exists_cache_lock:
                 _s3_exists_cache[cache_key] = (False, now)
         return False
@@ -141,11 +135,12 @@ def _check_s3_photo_exists(icao_hex: str, is_thumbnail: bool = False) -> bool:
         return False
 
 
-def _upload_photo_to_s3(data: bytes, icao_hex: str, is_thumbnail: bool = False) -> Optional[str]:
+def _upload_photo_to_s3(data: bytes, icao_hex: str, is_thumbnail: bool = False) -> str | None:
     """Upload photo to S3 with retry logic."""
     key = _get_s3_photo_key(icao_hex, is_thumbnail)
 
     from skyspy.services.storage import _get_s3_client
+
     client = _get_s3_client()
     if not client:
         return None
@@ -157,8 +152,8 @@ def _upload_photo_to_s3(data: bytes, icao_hex: str, is_thumbnail: bool = False) 
                 Bucket=settings.S3_BUCKET,
                 Key=key,
                 Body=data,
-                ContentType='image/jpeg',
-                CacheControl='max-age=31536000',  # 1 year cache
+                ContentType="image/jpeg",
+                CacheControl="max-age=31536000",  # 1 year cache
             )
 
             url = _get_s3_photo_url(icao_hex, is_thumbnail)
@@ -181,9 +176,10 @@ def _upload_photo_to_s3(data: bytes, icao_hex: str, is_thumbnail: bool = False) 
     return None
 
 
-def get_signed_photo_url(icao_hex: str, is_thumbnail: bool = False, expires_in: int = 3600) -> Optional[str]:
+def get_signed_photo_url(icao_hex: str, is_thumbnail: bool = False, expires_in: int = 3600) -> str | None:
     """Generate a signed URL for S3 photo access."""
     from skyspy.services.storage import _get_s3_client
+
     client = _get_s3_client()
     if not client:
         return None
@@ -192,10 +188,10 @@ def get_signed_photo_url(icao_hex: str, is_thumbnail: bool = False, expires_in: 
 
     try:
         url = client.generate_presigned_url(
-            'get_object',
+            "get_object",
             Params={
-                'Bucket': settings.S3_BUCKET,
-                'Key': key,
+                "Bucket": settings.S3_BUCKET,
+                "Key": key,
             },
             ExpiresIn=expires_in,
         )
@@ -206,11 +202,8 @@ def get_signed_photo_url(icao_hex: str, is_thumbnail: bool = False, expires_in: 
 
 
 def get_photo_url(
-    icao_hex: str,
-    is_thumbnail: bool = False,
-    signed: bool = True,
-    verify_exists: bool = False
-) -> Optional[str]:
+    icao_hex: str, is_thumbnail: bool = False, signed: bool = True, verify_exists: bool = False
+) -> str | None:
     """
     Get accessible URL for a cached photo.
 
@@ -226,9 +219,8 @@ def get_photo_url(
     icao_hex = icao_hex.upper()
 
     if settings.S3_ENABLED:
-        if verify_exists:
-            if not _check_s3_photo_exists(icao_hex, is_thumbnail):
-                return None
+        if verify_exists and not _check_s3_photo_exists(icao_hex, is_thumbnail):
+            return None
 
         if signed:
             return get_signed_photo_url(icao_hex, is_thumbnail)
@@ -241,7 +233,7 @@ def get_photo_url(
         return None
 
 
-def _scrape_planespotters_full_size(page_url: str) -> Optional[str]:
+def _scrape_planespotters_full_size(page_url: str) -> str | None:
     """
     Scrape a Planespotters photo page to find the full-size image URL.
 
@@ -291,9 +283,9 @@ def download_photo(
     icao_hex: str,
     is_thumbnail: bool = False,
     timeout: float = 15.0,
-    photo_page_link: Optional[str] = None,
-    force: bool = False
-) -> Optional[str]:
+    photo_page_link: str | None = None,
+    force: bool = False,
+) -> str | None:
     """
     Download a photo and save to cache (local or S3).
 
@@ -395,11 +387,11 @@ def download_photo(
 
 def cache_aircraft_photos(
     icao_hex: str,
-    photo_url: Optional[str] = None,
-    thumbnail_url: Optional[str] = None,
-    photo_page_link: Optional[str] = None,
-    force: bool = False
-) -> Tuple[Optional[str], Optional[str]]:
+    photo_url: str | None = None,
+    thumbnail_url: str | None = None,
+    photo_page_link: str | None = None,
+    force: bool = False,
+) -> tuple[str | None, str | None]:
     """
     Download and cache both full-size and thumbnail photos.
 
@@ -422,10 +414,7 @@ def cache_aircraft_photos(
 
     # Download full-size photo
     if photo_url:
-        result = download_photo(
-            photo_url, icao_hex, is_thumbnail=False,
-            photo_page_link=photo_page_link, force=force
-        )
+        result = download_photo(photo_url, icao_hex, is_thumbnail=False, photo_page_link=photo_page_link, force=force)
         if result:
             photo_path = result
 
@@ -442,22 +431,17 @@ def cache_aircraft_photos(
     return photo_path, thumb_path
 
 
-def update_photo_paths(
-    icao_hex: str,
-    photo_path: Optional[str] = None,
-    thumb_path: Optional[str] = None
-):
+def update_photo_paths(icao_hex: str, photo_path: str | None = None, thumb_path: str | None = None):
     """Update database with cached photo paths."""
     try:
         AircraftInfo.objects.filter(icao_hex=icao_hex).update(
-            photo_local_path=photo_path,
-            photo_thumbnail_local_path=thumb_path
+            photo_local_path=photo_path, photo_thumbnail_local_path=thumb_path
         )
     except Exception as e:
         logger.error(f"Error updating photo cache paths for {icao_hex}: {e}")
 
 
-def get_cached_photo(icao_hex: str, thumbnail: bool = False) -> Optional[Path]:
+def get_cached_photo(icao_hex: str, thumbnail: bool = False) -> Path | None:
     """Get path to cached photo if it exists locally."""
     if settings.S3_ENABLED:
         return None

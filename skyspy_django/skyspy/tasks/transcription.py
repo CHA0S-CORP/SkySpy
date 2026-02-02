@@ -6,18 +6,18 @@ Uses the comprehensive audio service for:
 - Callsign extraction from transcripts
 - S3 and local storage integration
 """
+
 import logging
 from datetime import datetime
 
 from celery import shared_task
 from django.conf import settings
-from django.utils import timezone
 
 from skyspy.models import AudioTransmission
 from skyspy.services.audio import (
-    process_transcription,
-    identify_airframes_from_transcript,
     get_audio_url,
+    identify_airframes_from_transcript,
+    process_transcription,
 )
 from skyspy.socketio.utils import sync_emit
 
@@ -36,9 +36,7 @@ def process_transcription_queue():
         return
 
     # Get queued transcriptions (batch of 5)
-    queued = AudioTransmission.objects.filter(
-        transcription_status='queued'
-    ).order_by('transcription_queued_at')[:5]
+    queued = AudioTransmission.objects.filter(transcription_status="queued").order_by("transcription_queued_at")[:5]
 
     for transmission in queued:
         transcribe_audio.delay(transmission.id)
@@ -61,11 +59,11 @@ def transcribe_audio(self, transmission_id: int):
         logger.error(f"Transmission {transmission_id} not found")
         return
 
-    if transmission.transcription_status == 'completed':
+    if transmission.transcription_status == "completed":
         return
 
     # Broadcast status update
-    _broadcast_transcription_update(transmission, 'started')
+    _broadcast_transcription_update(transmission, "started")
 
     try:
         # Use audio service for transcription
@@ -74,11 +72,11 @@ def transcribe_audio(self, transmission_id: int):
         if success:
             # Refresh from database
             transmission.refresh_from_db()
-            _broadcast_transcription_update(transmission, 'completed')
+            _broadcast_transcription_update(transmission, "completed")
             logger.info(f"Transcribed transmission {transmission_id}")
         else:
             transmission.refresh_from_db()
-            _broadcast_transcription_update(transmission, 'failed')
+            _broadcast_transcription_update(transmission, "failed")
             # Retry if appropriate
             if self.request.retries < self.max_retries:
                 raise Exception(transmission.transcription_error or "Transcription failed")
@@ -87,12 +85,12 @@ def transcribe_audio(self, transmission_id: int):
         logger.error(f"Failed to transcribe {transmission_id}: {e}")
 
         # Update status if not already failed
-        if transmission.transcription_status != 'failed':
-            transmission.transcription_status = 'failed'
+        if transmission.transcription_status != "failed":
+            transmission.transcription_status = "failed"
             transmission.transcription_error = str(e)
             transmission.save()
 
-        _broadcast_transcription_update(transmission, 'failed')
+        _broadcast_transcription_update(transmission, "failed")
 
         # Retry if appropriate
         if self.request.retries < self.max_retries:
@@ -104,27 +102,27 @@ def _broadcast_transcription_update(transmission, status: str):
     Broadcast transcription status update to WebSocket clients via Socket.IO.
     """
     try:
-        event_type = f'audio:transcription_{status}'
+        event_type = f"audio:transcription_{status}"
 
         # Get audio URL for completed transcriptions
         audio_url = None
-        if status == 'completed':
+        if status == "completed":
             audio_url = get_audio_url(transmission, signed=True)
 
         sync_emit(
             event_type,
             {
-                'id': transmission.id,
-                'filename': transmission.filename,
-                'audio_url': audio_url,
-                'status': transmission.transcription_status,
-                'transcript': transmission.transcript if status == 'completed' else None,
-                'identified_airframes': transmission.identified_airframes if status == 'completed' else None,
-                'error': transmission.transcription_error if status == 'failed' else None,
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
+                "id": transmission.id,
+                "filename": transmission.filename,
+                "audio_url": audio_url,
+                "status": transmission.transcription_status,
+                "transcript": transmission.transcript if status == "completed" else None,
+                "identified_airframes": transmission.identified_airframes if status == "completed" else None,
+                "error": transmission.transcription_error if status == "failed" else None,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
             },
-            room='audio_transmissions',
-            namespace='/audio'
+            room="audio_transmissions",
+            namespace="/audio",
         )
     except Exception as e:
         logger.warning(f"Failed to broadcast transcription update: {e}")
@@ -163,7 +161,7 @@ def extract_callsigns(transmission_id: int):
         logger.info(f"Extracted {len(identified)} callsigns from transmission {transmission_id}")
 
         # Broadcast update with identified airframes
-        _broadcast_transcription_update(transmission, 'completed')
+        _broadcast_transcription_update(transmission, "completed")
     else:
         logger.debug(f"No callsigns found in transmission {transmission_id}")
 
@@ -175,10 +173,9 @@ def reprocess_all_transcripts():
 
     Useful when the callsign extraction algorithm is updated.
     """
-    completed = AudioTransmission.objects.filter(
-        transcription_status='completed',
-        transcript__isnull=False
-    ).exclude(transcript='')
+    completed = AudioTransmission.objects.filter(transcription_status="completed", transcript__isnull=False).exclude(
+        transcript=""
+    )
 
     count = 0
     for transmission in completed:

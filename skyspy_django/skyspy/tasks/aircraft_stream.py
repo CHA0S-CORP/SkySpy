@@ -14,14 +14,13 @@ Architecture for low latency:
 - Hot path: normalize -> broadcast (no database, minimal cache)
 - Cold path: periodic flush to database (async, non-blocking)
 """
+
 import json
 import logging
 import socket
 import time
 from collections import deque
-from datetime import datetime
 from threading import Lock
-from typing import Deque, Dict, List, Optional, Set
 
 import requests
 from celery import shared_task
@@ -38,36 +37,37 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 # Current aircraft state (hot path - updated on every message)
-_aircraft_state: Dict[str, dict] = {}  # icao -> aircraft data
+_aircraft_state: dict[str, dict] = {}  # icao -> aircraft data
 _aircraft_state_lock = Lock()
 
 # Buffer for database writes (cold path - flushed periodically)
-_db_write_buffer: Deque[dict] = deque(maxlen=10000)
+_db_write_buffer: deque[dict] = deque(maxlen=10000)
 _db_buffer_lock = Lock()
 
 # Track seen aircraft for info lookups (avoid redundant queries)
-_seen_aircraft: Set[str] = set()
+_seen_aircraft: set[str] = set()
 _seen_aircraft_lock = Lock()
 
 # Track new aircraft for batch lookup (thread-safe with lock)
-_new_aircraft_queue: Deque[str] = deque(maxlen=500)
+_new_aircraft_queue: deque[str] = deque(maxlen=500)
 _new_aircraft_queue_lock = Lock()
 
 # Last state snapshot for change detection (thread-safe with lock)
-_previous_icaos: Set[str] = set()
+_previous_icaos: set[str] = set()
 _previous_icaos_lock = Lock()
 
 # Cache keys
-CACHE_KEY_AIRCRAFT = 'current_aircraft'
-CACHE_KEY_TIMESTAMP = 'aircraft_timestamp'
-CACHE_KEY_ONLINE = 'adsb_online'
-CACHE_KEY_STREAM_ACTIVE = 'aircraft_stream_active'
-CACHE_KEY_LAST_BROADCAST = 'last_aircraft_broadcast'
+CACHE_KEY_AIRCRAFT = "current_aircraft"
+CACHE_KEY_TIMESTAMP = "aircraft_timestamp"
+CACHE_KEY_ONLINE = "adsb_online"
+CACHE_KEY_STREAM_ACTIVE = "aircraft_stream_active"
+CACHE_KEY_LAST_BROADCAST = "last_aircraft_broadcast"
 
 
 # ============================================================================
 # Hot Path Functions (optimized for latency)
 # ============================================================================
+
 
 def normalize_aircraft_fast(ac: dict, feeder_lat: float, feeder_lon: float) -> dict:
     """
@@ -75,36 +75,37 @@ def normalize_aircraft_fast(ac: dict, feeder_lat: float, feeder_lon: float) -> d
 
     Pre-computed feeder coordinates passed in to avoid settings lookup.
     """
-    lat = ac.get('lat')
-    lon = ac.get('lon')
+    lat = ac.get("lat")
+    lon = ac.get("lon")
 
     # Distance calculation (inline for speed)
     if lat is not None and lon is not None:
         import math
+
         lat1_rad = math.radians(feeder_lat)
         lat2_rad = math.radians(lat)
         dlat = math.radians(lat - feeder_lat)
         dlon = math.radians(lon - feeder_lon)
         a = math.sin(dlat / 2) ** 2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2) ** 2
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-        ac['distance_nm'] = round(3440.065 * c, 1)
+        ac["distance_nm"] = round(3440.065 * c, 1)
 
     # Normalize fields (minimal operations)
-    hex_val = ac.get('hex', '')
-    ac['hex'] = hex_val.upper() if hex_val else ''
+    hex_val = ac.get("hex", "")
+    ac["hex"] = hex_val.upper() if hex_val else ""
 
-    flight = ac.get('flight')
-    ac['flight'] = flight.strip() if flight else None
+    flight = ac.get("flight")
+    ac["flight"] = flight.strip() if flight else None
 
-    ac['alt'] = ac.get('alt_baro') or ac.get('alt_geom')
-    ac['vr'] = ac.get('baro_rate') or ac.get('geom_rate')
-    ac['military'] = (ac.get('dbFlags', 0) & 1) == 1
-    ac['emergency'] = ac.get('squawk') in ('7500', '7600', '7700')
+    ac["alt"] = ac.get("alt_baro") or ac.get("alt_geom")
+    ac["vr"] = ac.get("baro_rate") or ac.get("geom_rate")
+    ac["military"] = (ac.get("dbFlags", 0) & 1) == 1
+    ac["emergency"] = ac.get("squawk") in ("7500", "7600", "7700")
 
     return ac
 
 
-def broadcast_positions_fast(batch: List[dict], removed: List[str], timestamp: str):
+def broadcast_positions_fast(batch: list[dict], removed: list[str], timestamp: str):
     """
     Fast position-only broadcast for map updates.
 
@@ -117,55 +118,50 @@ def broadcast_positions_fast(batch: List[dict], removed: List[str], timestamp: s
     """
     positions = [
         {
-            'hex': ac.get('hex'),
-            'lat': ac.get('lat'),
-            'lon': ac.get('lon'),
-            'alt': ac.get('alt'),
-            'track': ac.get('track'),
-            'gs': ac.get('gs'),
-            'vr': ac.get('vr'),
+            "hex": ac.get("hex"),
+            "lat": ac.get("lat"),
+            "lon": ac.get("lon"),
+            "alt": ac.get("alt"),
+            "track": ac.get("track"),
+            "gs": ac.get("gs"),
+            "vr": ac.get("vr"),
         }
         for ac in batch
-        if ac.get('lat') is not None and ac.get('lon') is not None
+        if ac.get("lat") is not None and ac.get("lon") is not None
     ]
 
     if positions or removed:
         sync_emit(
-            'positions:update',
-            {
-                'positions': positions,
-                'removed': removed,
-                'count': len(positions),
-                'timestamp': timestamp
-            },
-            room='topic_aircraft'
+            "positions:update",
+            {"positions": positions, "removed": removed, "count": len(positions), "timestamp": timestamp},
+            room="topic_aircraft",
         )
 
 
-def broadcast_aircraft_update(batch: List[dict], timestamp: str):
+def broadcast_aircraft_update(batch: list[dict], timestamp: str):
     """
     Broadcast full aircraft update for clients needing complete data.
     """
     sync_emit(
-        'aircraft:update',
-        {'aircraft': batch, 'count': len(batch), 'timestamp': timestamp, 'stream': True},
-        room='topic_aircraft'
+        "aircraft:update",
+        {"aircraft": batch, "count": len(batch), "timestamp": timestamp, "stream": True},
+        room="topic_aircraft",
     )
 
 
-def broadcast_new_aircraft(new_aircraft: List[dict], timestamp: str):
+def broadcast_new_aircraft(new_aircraft: list[dict], timestamp: str):
     """
     Broadcast new aircraft events.
     """
     if new_aircraft:
         sync_emit(
-            'aircraft:new',
-            {'aircraft': new_aircraft, 'count': len(new_aircraft), 'timestamp': timestamp},
-            room='topic_aircraft'
+            "aircraft:new",
+            {"aircraft": new_aircraft, "count": len(new_aircraft), "timestamp": timestamp},
+            room="topic_aircraft",
         )
 
 
-def broadcast_removed_aircraft(removed_icaos: List[str], timestamp: str):
+def broadcast_removed_aircraft(removed_icaos: list[str], timestamp: str):
     """
     Broadcast aircraft removal events.
 
@@ -175,9 +171,9 @@ def broadcast_removed_aircraft(removed_icaos: List[str], timestamp: str):
     """
     if removed_icaos:
         sync_emit(
-            'aircraft:remove',
-            {'icaos': removed_icaos, 'count': len(removed_icaos), 'timestamp': timestamp},
-            room='topic_aircraft'
+            "aircraft:remove",
+            {"icaos": removed_icaos, "count": len(removed_icaos), "timestamp": timestamp},
+            room="topic_aircraft",
         )
 
 
@@ -192,17 +188,17 @@ def broadcast_heartbeat(aircraft_count: int, timestamp: str):
         timestamp: ISO timestamp string
     """
     sync_emit(
-        'aircraft:heartbeat',
+        "aircraft:heartbeat",
         {
-            'count': aircraft_count,
-            'aircraft_count': aircraft_count,  # Alias for frontend compatibility
-            'timestamp': timestamp
+            "count": aircraft_count,
+            "aircraft_count": aircraft_count,  # Alias for frontend compatibility
+            "timestamp": timestamp,
         },
-        room='topic_aircraft'
+        room="topic_aircraft",
     )
 
 
-def update_state_and_broadcast(batch: List[dict]):
+def update_state_and_broadcast(batch: list[dict]):
     """
     Hot path: Update in-memory state and broadcast to clients.
 
@@ -214,10 +210,10 @@ def update_state_and_broadcast(batch: List[dict]):
     if not batch:
         return
 
-    timestamp = timezone.now().isoformat().replace('+00:00', 'Z')
+    timestamp = timezone.now().isoformat().replace("+00:00", "Z")
 
     # Build batch lookup
-    batch_by_icao = {ac['hex']: ac for ac in batch if ac.get('hex')}
+    batch_by_icao = {ac["hex"]: ac for ac in batch if ac.get("hex")}
     current_icaos = set(batch_by_icao.keys())
 
     # Detect new and removed aircraft (thread-safe read of previous state)
@@ -232,10 +228,7 @@ def update_state_and_broadcast(batch: List[dict]):
 
         # Prune stale aircraft (not seen in 60s)
         # Check all aircraft in state, not just when > 500
-        stale_icaos = [
-            icao for icao, ac in _aircraft_state.items()
-            if ac.get('seen', 0) > 60
-        ]
+        stale_icaos = [icao for icao, ac in _aircraft_state.items() if ac.get("seen", 0) > 60]
         for icao in stale_icaos:
             _aircraft_state.pop(icao, None)
 
@@ -284,7 +277,7 @@ def update_state_and_broadcast(batch: List[dict]):
     # Buffer for database write (non-blocking append)
     with _db_buffer_lock:
         for ac in batch:
-            if ac.get('lat') is not None and ac.get('lon') is not None:
+            if ac.get("lat") is not None and ac.get("lon") is not None:
                 _db_write_buffer.append(ac.copy())
 
 
@@ -297,14 +290,17 @@ def sync_cache_state():
     with _aircraft_state_lock:
         aircraft_list = list(_aircraft_state.values())
 
-    timestamp = timezone.now().isoformat().replace('+00:00', 'Z')
+    timestamp = timezone.now().isoformat().replace("+00:00", "Z")
 
-    cache.set_many({
-        CACHE_KEY_AIRCRAFT: aircraft_list,
-        CACHE_KEY_TIMESTAMP: time.time(),
-        CACHE_KEY_ONLINE: True,
-        CACHE_KEY_LAST_BROADCAST: timestamp,
-    }, timeout=30)
+    cache.set_many(
+        {
+            CACHE_KEY_AIRCRAFT: aircraft_list,
+            CACHE_KEY_TIMESTAMP: time.time(),
+            CACHE_KEY_ONLINE: True,
+            CACHE_KEY_LAST_BROADCAST: timestamp,
+        },
+        timeout=30,
+    )
 
     # Broadcast heartbeat with current aircraft count
     try:
@@ -317,6 +313,7 @@ def sync_cache_state():
 # Cold Path Functions (async database operations)
 # ============================================================================
 
+
 def _safe_altitude(value):
     """Convert altitude value to number, handling 'ground' string."""
     if value is None:
@@ -324,7 +321,7 @@ def _safe_altitude(value):
     if isinstance(value, (int, float)):
         return value
     if isinstance(value, str):
-        if value.lower() == 'ground':
+        if value.lower() == "ground":
             return 0
         try:
             return float(value)
@@ -341,6 +338,7 @@ def flush_stream_to_database(self):
     This runs on a separate schedule, not blocking the streaming hot path.
     """
     from django.db import transaction
+
     from skyspy.models import AircraftSighting
 
     # Grab all buffered data
@@ -360,23 +358,23 @@ def flush_stream_to_database(self):
             sightings = []
             for ac in to_write:
                 sighting = AircraftSighting(
-                    icao_hex=ac.get('hex', '').upper(),
-                    callsign=ac.get('flight'),
-                    squawk=ac.get('squawk'),
-                    latitude=ac.get('lat'),
-                    longitude=ac.get('lon'),
-                    altitude_baro=_safe_altitude(ac.get('alt_baro')),
-                    altitude_geom=_safe_altitude(ac.get('alt_geom')),
-                    ground_speed=ac.get('gs'),
-                    track=ac.get('track'),
-                    vertical_rate=ac.get('baro_rate') or ac.get('geom_rate'),
-                    distance_nm=ac.get('distance_nm'),
-                    rssi=ac.get('rssi'),
-                    category=ac.get('category'),
-                    aircraft_type=ac.get('t'),
-                    is_military=ac.get('military', False),
-                    is_emergency=ac.get('emergency', False),
-                    source='stream',
+                    icao_hex=ac.get("hex", "").upper(),
+                    callsign=ac.get("flight"),
+                    squawk=ac.get("squawk"),
+                    latitude=ac.get("lat"),
+                    longitude=ac.get("lon"),
+                    altitude_baro=_safe_altitude(ac.get("alt_baro")),
+                    altitude_geom=_safe_altitude(ac.get("alt_geom")),
+                    ground_speed=ac.get("gs"),
+                    track=ac.get("track"),
+                    vertical_rate=ac.get("baro_rate") or ac.get("geom_rate"),
+                    distance_nm=ac.get("distance_nm"),
+                    rssi=ac.get("rssi"),
+                    category=ac.get("category"),
+                    aircraft_type=ac.get("t"),
+                    is_military=ac.get("military", False),
+                    is_emergency=ac.get("emergency", False),
+                    source="stream",
                 )
                 sightings.append(sighting)
 
@@ -430,7 +428,8 @@ def process_new_aircraft_lookups(self):
 # SSE Streaming Functions
 # ============================================================================
 
-def parse_sse_event(lines: List[str]) -> Optional[dict]:
+
+def parse_sse_event(lines: list[str]) -> dict | None:
     """
     Parse an SSE event from accumulated lines.
 
@@ -440,22 +439,21 @@ def parse_sse_event(lines: List[str]) -> Optional[dict]:
 
     Returns the parsed JSON data or None if invalid.
     """
-    event_type = None
     data_lines = []
 
     for line in lines:
-        if line.startswith('event:'):
-            event_type = line[6:].strip()
-        elif line.startswith('data:'):
+        if line.startswith("event:"):
+            line[6:].strip()
+        elif line.startswith("data:"):
             data_lines.append(line[5:].strip())
-        elif line.startswith('id:'):
+        elif line.startswith("id:"):
             pass  # Ignore event ID for now
-        elif line.startswith('retry:'):
+        elif line.startswith("retry:"):
             pass  # Ignore retry hints
 
     if data_lines:
         try:
-            data_str = '\n'.join(data_lines)
+            data_str = "\n".join(data_lines)
             return json.loads(data_str)
         except json.JSONDecodeError:
             return None
@@ -480,8 +478,8 @@ def stream_sse(url: str, feeder_lat: float, feeder_lon: float, batch_ms: int):
             url,
             stream=True,
             headers={
-                'Accept': 'text/event-stream',
-                'Cache-Control': 'no-cache',
+                "Accept": "text/event-stream",
+                "Cache-Control": "no-cache",
             },
             timeout=(10, None),  # 10s connect timeout, no read timeout
         )
@@ -507,7 +505,7 @@ def stream_sse(url: str, feeder_lat: float, feeder_lon: float, batch_ms: int):
             if line is None:
                 continue
 
-            line = line.strip() if line else ''
+            line = line.strip() if line else ""
 
             # Empty line marks end of SSE event
             if not line:
@@ -515,12 +513,12 @@ def stream_sse(url: str, feeder_lat: float, feeder_lon: float, batch_ms: int):
                     event_data = parse_sse_event(sse_lines)
                     if event_data:
                         # Handle aircraft array in SSE data
-                        aircraft_list = event_data.get('aircraft', [])
+                        aircraft_list = event_data.get("aircraft", [])
                         if isinstance(event_data, list):
                             aircraft_list = event_data
 
                         for ac in aircraft_list:
-                            if isinstance(ac, dict) and ac.get('hex'):
+                            if isinstance(ac, dict) and ac.get("hex"):
                                 normalized = normalize_aircraft_fast(ac, feeder_lat, feeder_lon)
                                 batch.append(normalized)
                                 messages_received += 1
@@ -593,7 +591,7 @@ def stream_tcp(host: str, port: int, feeder_lat: float, feeder_lon: float, batch
     logger.info(f"TCP connection established: {host}:{port}")
     cache.set(CACHE_KEY_STREAM_ACTIVE, True, timeout=30)
 
-    sock_file = sock.makefile('r', encoding='utf-8', errors='replace', buffering=8192)
+    sock_file = sock.makefile("r", encoding="utf-8", errors="replace", buffering=8192)
 
     batch = []
     last_broadcast = time.time()
@@ -659,6 +657,7 @@ def stream_tcp(host: str, port: int, feeder_lat: float, feeder_lon: float, batch
 # ADSBexchange API Streaming (Polling)
 # ============================================================================
 
+
 def stream_adsbx(feeder_lat: float, feeder_lon: float, poll_interval: float, radius_nm: int):
     """
     Stream aircraft data from ADSBexchange API via polling.
@@ -674,7 +673,6 @@ def stream_adsbx(feeder_lat: float, feeder_lon: float, poll_interval: float, rad
     """
     from skyspy.services.adsbx_live import (
         _is_enabled,
-        _get_api_key,
         _make_request,
         _parse_aircraft,
     )
@@ -703,42 +701,42 @@ def stream_adsbx(feeder_lat: float, feeder_lon: float, poll_interval: float, rad
             poll_start = time.time()
 
             # Fetch aircraft from ADSBexchange API
-            endpoint = f'v2/lat/{feeder_lat}/lon/{feeder_lon}/dist/{radius_nm}/'
+            endpoint = f"v2/lat/{feeder_lat}/lon/{feeder_lon}/dist/{radius_nm}/"
             result = _make_request(endpoint)
 
             if result:
-                aircraft_list = result.get('ac', [])
+                aircraft_list = result.get("ac", [])
                 batch = []
 
                 for ac in aircraft_list:
                     parsed = _parse_aircraft(ac)
-                    if parsed and parsed.get('latitude') is not None:
+                    if parsed and parsed.get("latitude") is not None:
                         # Convert ADSBX format to standard stream format
                         normalized = {
-                            'hex': parsed.get('icao_hex', '').upper(),
-                            'flight': parsed.get('callsign'),
-                            'r': parsed.get('registration'),
-                            't': parsed.get('aircraft_type'),
-                            'lat': parsed.get('latitude'),
-                            'lon': parsed.get('longitude'),
-                            'alt_baro': parsed.get('altitude_baro_ft'),
-                            'alt_geom': parsed.get('altitude_geo_ft'),
-                            'gs': parsed.get('ground_speed_kt'),
-                            'track': parsed.get('track'),
-                            'baro_rate': parsed.get('vertical_rate_fpm'),
-                            'squawk': parsed.get('squawk'),
-                            'emergency': parsed.get('emergency'),
-                            'category': parsed.get('category'),
-                            'seen': parsed.get('seen', 0),
-                            'rssi': parsed.get('rssi'),
-                            'source': 'adsbexchange',
+                            "hex": parsed.get("icao_hex", "").upper(),
+                            "flight": parsed.get("callsign"),
+                            "r": parsed.get("registration"),
+                            "t": parsed.get("aircraft_type"),
+                            "lat": parsed.get("latitude"),
+                            "lon": parsed.get("longitude"),
+                            "alt_baro": parsed.get("altitude_baro_ft"),
+                            "alt_geom": parsed.get("altitude_geo_ft"),
+                            "gs": parsed.get("ground_speed_kt"),
+                            "track": parsed.get("track"),
+                            "baro_rate": parsed.get("vertical_rate_fpm"),
+                            "squawk": parsed.get("squawk"),
+                            "emergency": parsed.get("emergency"),
+                            "category": parsed.get("category"),
+                            "seen": parsed.get("seen", 0),
+                            "rssi": parsed.get("rssi"),
+                            "source": "adsbexchange",
                         }
                         # Normalize with distance calculation
                         normalized = normalize_aircraft_fast(normalized, feeder_lat, feeder_lon)
                         # Add ADSBX-specific flags
-                        normalized['military'] = parsed.get('is_military', False)
-                        normalized['is_ladd'] = parsed.get('is_ladd', False)
-                        normalized['is_pia'] = parsed.get('is_pia', False)
+                        normalized["military"] = parsed.get("is_military", False)
+                        normalized["is_ladd"] = parsed.get("is_ladd", False)
+                        normalized["is_pia"] = parsed.get("is_pia", False)
                         batch.append(normalized)
 
                 if batch:
@@ -781,6 +779,7 @@ def stream_adsbx(feeder_lat: float, feeder_lon: float, poll_interval: float, rad
 # Main Streaming Task
 # ============================================================================
 
+
 @shared_task(bind=True, max_retries=0, ignore_result=True)
 def stream_aircraft(self):
     """
@@ -805,16 +804,16 @@ def stream_aircraft(self):
     port = settings.AIRCRAFT_STREAM_PORT
     reconnect_delay = settings.AIRCRAFT_STREAM_RECONNECT_DELAY
     batch_ms = settings.AIRCRAFT_STREAM_BATCH_MS
-    stream_mode = getattr(settings, 'AIRCRAFT_STREAM_MODE', 'sse')
+    stream_mode = getattr(settings, "AIRCRAFT_STREAM_MODE", "sse")
 
     # SSE URL configuration
-    sse_port = getattr(settings, 'AIRCRAFT_STREAM_SSE_PORT', 80)
-    sse_path = getattr(settings, 'AIRCRAFT_STREAM_SSE_PATH', '/v2/sse')
+    sse_port = getattr(settings, "AIRCRAFT_STREAM_SSE_PORT", 80)
+    sse_path = getattr(settings, "AIRCRAFT_STREAM_SSE_PATH", "/v2/sse")
     sse_url = f"http://{host}:{sse_port}{sse_path}"
 
     # ADSBX configuration
-    adsbx_interval = getattr(settings, 'AIRCRAFT_STREAM_ADSBX_INTERVAL', 2.0)
-    adsbx_radius = getattr(settings, 'AIRCRAFT_STREAM_ADSBX_RADIUS', 250)
+    adsbx_interval = getattr(settings, "AIRCRAFT_STREAM_ADSBX_INTERVAL", 2.0)
+    adsbx_radius = getattr(settings, "AIRCRAFT_STREAM_ADSBX_RADIUS", 250)
 
     # Pre-fetch settings to avoid repeated lookups
     feeder_lat = settings.FEEDER_LAT
@@ -824,13 +823,15 @@ def stream_aircraft(self):
 
     consecutive_errors = 0
     max_consecutive_errors = 10
-    use_sse = stream_mode in ('sse', 'auto')
-    use_adsbx = stream_mode == 'adsbx'
+    use_sse = stream_mode in ("sse", "auto")
+    use_adsbx = stream_mode == "adsbx"
 
     while True:
         try:
             if use_adsbx:
-                logger.info(f"Starting ADSBexchange API stream (radius={adsbx_radius}nm, interval={adsbx_interval}s)...")
+                logger.info(
+                    f"Starting ADSBexchange API stream (radius={adsbx_radius}nm, interval={adsbx_interval}s)..."
+                )
                 stream_adsbx(feeder_lat, feeder_lon, adsbx_interval, adsbx_radius)
             elif use_sse:
                 logger.info(f"Attempting SSE connection to {sse_url}...")
@@ -846,21 +847,21 @@ def stream_aircraft(self):
             cache.set(CACHE_KEY_STREAM_ACTIVE, False, timeout=60)
 
             # In auto mode, try TCP fallback
-            if stream_mode == 'auto' and use_sse:
+            if stream_mode == "auto" and use_sse:
                 logger.info("Falling back to TCP mode")
                 use_sse = False
                 continue
 
-        except socket.timeout:
+        except TimeoutError:
             logger.warning("Aircraft stream connection timed out")
             cache.set(CACHE_KEY_STREAM_ACTIVE, False, timeout=60)
 
         except ConnectionRefusedError:
-            logger.warning(f"Aircraft stream connection refused")
+            logger.warning("Aircraft stream connection refused")
             cache.set(CACHE_KEY_STREAM_ACTIVE, False, timeout=60)
 
             # In auto mode, try other mode
-            if stream_mode == 'auto':
+            if stream_mode == "auto":
                 use_sse = not use_sse
                 logger.info(f"Switching to {'SSE' if use_sse else 'TCP'} mode")
                 continue
@@ -923,6 +924,7 @@ def start_aircraft_stream(self):
 # Legacy compatibility
 # ============================================================================
 
+
 def normalize_aircraft(ac: dict) -> dict:
     """
     Legacy normalize function for compatibility.
@@ -946,9 +948,9 @@ def queue_new_aircraft_for_lookup(aircraft_list: list):
     Legacy function - now uses async queue (thread-safe).
     """
     icaos_to_add = [
-        ac.get('hex', '').upper()
+        ac.get("hex", "").upper()
         for ac in aircraft_list
-        if ac.get('hex', '').upper() and not ac.get('hex', '').upper().startswith('~')
+        if ac.get("hex", "").upper() and not ac.get("hex", "").upper().startswith("~")
     ]
     if icaos_to_add:
         with _new_aircraft_queue_lock:

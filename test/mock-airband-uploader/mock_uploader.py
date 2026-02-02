@@ -13,17 +13,15 @@ Features:
 - Realistic metadata (frequency, channel, timestamps)
 """
 
-import os
-import io
-import time
-import random
-import logging
 import argparse
-import threading
-from pathlib import Path
-from datetime import datetime, timedelta
+import io
+import logging
+import os
+import random
+import time
 from dataclasses import dataclass
-from typing import Optional, Dict, List, Tuple
+from datetime import datetime
+from pathlib import Path
 
 import requests
 from prometheus_client import (
@@ -38,6 +36,7 @@ from prometheus_client import (
 try:
     from pydub import AudioSegment
     from pydub.generators import Sine, WhiteNoise
+
     PYDUB_AVAILABLE = True
 except ImportError:
     PYDUB_AVAILABLE = False
@@ -69,26 +68,26 @@ logger = logging.getLogger(__name__)
 # Frequency Configuration - Seattle Area ATC
 # =============================================================================
 
+
 @dataclass
 class FrequencyConfig:
     """Configuration for a simulated radio frequency."""
+
     freq_hz: int
     channel_name: str
     category: str  # tower, approach, ground, departure, atis, emergency
     weight: float = 1.0  # Relative probability of transmission
-    busy_hours: Tuple[int, ...] = (6, 7, 8, 9, 10, 16, 17, 18, 19)  # Peak hours
+    busy_hours: tuple[int, ...] = (6, 7, 8, 9, 10, 16, 17, 18, 19)  # Peak hours
 
 
 # Seattle-area frequencies with realistic activity patterns
-FREQUENCIES: List[FrequencyConfig] = [
+FREQUENCIES: list[FrequencyConfig] = [
     # KSEA Tower - Very active
     FrequencyConfig(119900000, "SEA-Twr-16L34R", "tower", weight=3.0),
     FrequencyConfig(120950000, "SEA-Twr-16R34L", "tower", weight=2.5),
-
     # KSEA Ground
     FrequencyConfig(121700000, "SEA-Gnd-East", "ground", weight=2.0),
     FrequencyConfig(121900000, "SEA-Gnd-West", "ground", weight=2.0),
-
     # KSEA Approach - Very active
     FrequencyConfig(119200000, "SEA-App-Rwy16", "approach", weight=2.5),
     FrequencyConfig(120100000, "SEA-App-199-300", "approach", weight=2.0),
@@ -97,26 +96,21 @@ FREQUENCIES: List[FrequencyConfig] = [
     FrequencyConfig(125900000, "SEA-App-Rwy16-2", "approach", weight=1.5),
     FrequencyConfig(126500000, "SEA-App-161-198", "approach", weight=1.5),
     FrequencyConfig(133650000, "SEA-App-Rwy16-3", "approach", weight=1.0),
-
     # KSEA Departure
     FrequencyConfig(123900000, "SEA-Dep-South", "departure", weight=2.0),
     FrequencyConfig(127100000, "SEA-Dep-North", "departure", weight=2.0),
     FrequencyConfig(128500000, "SEA-Dep-East", "departure", weight=1.5),
-
     # KSEA ATIS
     FrequencyConfig(118000000, "SEA-ATIS", "atis", weight=0.5),
-
     # KBFI (Boeing Field)
     FrequencyConfig(118300000, "BFI-Twr-13L31R", "tower", weight=1.5),
     FrequencyConfig(120600000, "BFI-Twr-13R31L", "tower", weight=1.0),
     FrequencyConfig(128000000, "BFI-Gnd", "ground", weight=1.0),
-
     # Regional
     FrequencyConfig(124700000, "RNT-Tower", "tower", weight=1.0),
     FrequencyConfig(123550000, "Boeing-Ops", "ground", weight=0.5),
     FrequencyConfig(122700000, "Kenmore-Seaplane", "tower", weight=0.3),
     FrequencyConfig(122950000, "Seattle-FSS", "ground", weight=0.3),
-
     # Emergency - Rare
     FrequencyConfig(121500000, "Guard", "emergency", weight=0.1),
 ]
@@ -185,6 +179,7 @@ LAST_GENERATION_TIMESTAMP = Gauge(
 # Audio Generation
 # =============================================================================
 
+
 def generate_mock_mp3(duration_seconds: float, add_noise: bool = True) -> bytes:
     """
     Generate a mock MP3 file with realistic characteristics.
@@ -248,11 +243,14 @@ def _generate_minimal_mp3(duration_seconds: float) -> bytes:
 
     # Minimal MP3 frame (silent frame)
     # Format: sync word + header + padding + audio data
-    frame_header = bytes([
-        0xFF, 0xFB,  # Sync word + MPEG1 Layer3
-        0x50,        # 32kbps, 22050Hz
-        0x00,        # Mono, no padding, no private, no copyright, original
-    ])
+    frame_header = bytes(
+        [
+            0xFF,
+            0xFB,  # Sync word + MPEG1 Layer3
+            0x50,  # 32kbps, 22050Hz
+            0x00,  # Mono, no padding, no private, no copyright, original
+        ]
+    )
 
     # Minimal audio data (mostly zeros = silence)
     frame_data = bytes([0x00] * 205)  # Padding to approximate frame size
@@ -268,9 +266,11 @@ def _generate_minimal_mp3(duration_seconds: float) -> bytes:
 # Transmission Generator
 # =============================================================================
 
+
 @dataclass
 class MockTransmission:
     """A generated mock transmission."""
+
     filename: str
     filepath: Path
     frequency_hz: int
@@ -330,10 +330,7 @@ def generate_transmission(output_dir: Path) -> MockTransmission:
     file_data = generate_mock_mp3(duration, add_noise=add_noise)
 
     # Record metrics
-    TRANSMISSIONS_GENERATED.labels(
-        channel=freq_config.channel_name,
-        category=freq_config.category
-    ).inc()
+    TRANSMISSIONS_GENERATED.labels(channel=freq_config.channel_name, category=freq_config.category).inc()
     TRANSMISSION_DURATION.labels(category=freq_config.category).observe(duration)
     FILE_SIZE_BYTES.labels(category=freq_config.category).observe(len(file_data))
     LAST_GENERATION_TIMESTAMP.set(time.time())
@@ -354,6 +351,7 @@ def generate_transmission(output_dir: Path) -> MockTransmission:
 # =============================================================================
 # Upload Logic
 # =============================================================================
+
 
 def upload_transmission(transmission: MockTransmission, save_local: bool = False) -> bool:
     """
@@ -377,9 +375,7 @@ def upload_transmission(transmission: MockTransmission, save_local: bool = False
     start_time = time.time()
 
     try:
-        files = {
-            "file": (transmission.filename, io.BytesIO(transmission.file_data), "audio/mpeg")
-        }
+        files = {"file": (transmission.filename, io.BytesIO(transmission.file_data), "audio/mpeg")}
         data = {
             "queue_transcription": "false",  # Mock files won't transcribe meaningfully
             "channel_name": transmission.channel_name,
@@ -428,6 +424,7 @@ def upload_transmission(transmission: MockTransmission, save_local: bool = False
 # Main Loop
 # =============================================================================
 
+
 def run_generator(
     rate_per_minute: float = 2.0,
     save_local: bool = False,
@@ -468,10 +465,7 @@ def run_generator(
         return
 
     # Calculate interval from rate
-    if rate_per_minute > 0:
-        base_interval = 60.0 / rate_per_minute
-    else:
-        base_interval = 30.0
+    base_interval = 60.0 / rate_per_minute if rate_per_minute > 0 else 30.0
 
     logger.info(f"Starting mock generator at ~{rate_per_minute:.1f} transmissions/minute")
     logger.info(f"Base interval: {base_interval:.1f}s (with ±50% jitter)")
@@ -517,57 +511,40 @@ def main():
     parser = argparse.ArgumentParser(
         description="Mock Airband Transmission Uploader - Generate simulated radio transmissions"
     )
+    parser.add_argument("--rate", "-r", type=float, default=2.0, help="Transmissions per minute (default: 2.0)")
     parser.add_argument(
-        "--rate", "-r",
-        type=float,
-        default=2.0,
-        help="Transmissions per minute (default: 2.0)"
+        "--api-url", type=str, default=SKYSPY_API_URL, help=f"SkySpyAPI URL (default: {SKYSPY_API_URL})"
     )
     parser.add_argument(
-        "--api-url",
-        type=str,
-        default=SKYSPY_API_URL,
-        help=f"SkySpyAPI URL (default: {SKYSPY_API_URL})"
-    )
-    parser.add_argument(
-        "--metrics-port", "-p",
+        "--metrics-port",
+        "-p",
         type=int,
         default=METRICS_PORT,
-        help=f"Prometheus metrics port (default: {METRICS_PORT})"
+        help=f"Prometheus metrics port (default: {METRICS_PORT})",
     )
     parser.add_argument(
-        "--output-dir", "-o",
+        "--output-dir",
+        "-o",
         type=str,
         default=str(OUTPUT_DIR),
-        help=f"Output directory for local files (default: {OUTPUT_DIR})"
+        help=f"Output directory for local files (default: {OUTPUT_DIR})",
     )
     parser.add_argument(
-        "--save-local", "-s",
-        action="store_true",
-        help="Save generated files locally in addition to uploading"
+        "--save-local", "-s", action="store_true", help="Save generated files locally in addition to uploading"
     )
     parser.add_argument(
-        "--dry-run", "-n",
-        action="store_true",
-        help="Generate files without uploading (implies --save-local)"
+        "--dry-run", "-n", action="store_true", help="Generate files without uploading (implies --save-local)"
     )
     parser.add_argument(
-        "--burst", "-b",
+        "--burst",
+        "-b",
         type=int,
         default=0,
         metavar="COUNT",
-        help="Generate COUNT files quickly then exit (burst mode)"
+        help="Generate COUNT files quickly then exit (burst mode)",
     )
-    parser.add_argument(
-        "--no-metrics",
-        action="store_true",
-        help="Disable Prometheus metrics server"
-    )
-    parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Enable verbose/debug logging"
-    )
+    parser.add_argument("--no-metrics", action="store_true", help="Disable Prometheus metrics server")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose/debug logging")
 
     args = parser.parse_args()
 
@@ -581,12 +558,14 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
 
     # Service info
-    UPLOADER_INFO.info({
-        "version": "1.0.0",
-        "frequencies": str(len(FREQUENCIES)),
-        "pydub_available": str(PYDUB_AVAILABLE),
-        "api_url": SKYSPY_API_URL,
-    })
+    UPLOADER_INFO.info(
+        {
+            "version": "1.0.0",
+            "frequencies": str(len(FREQUENCIES)),
+            "pydub_available": str(PYDUB_AVAILABLE),
+            "api_url": SKYSPY_API_URL,
+        }
+    )
 
     logger.info("=" * 60)
     logger.info("Mock Airband Transmission Uploader v1.0.0")

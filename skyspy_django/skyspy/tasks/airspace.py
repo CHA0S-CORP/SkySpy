@@ -1,8 +1,10 @@
 """
 Airspace advisory and boundary refresh tasks.
 """
+
+import contextlib
 import logging
-from datetime import datetime, timezone as dt_timezone
+from datetime import UTC, datetime
 
 import httpx
 from celery import shared_task
@@ -26,10 +28,14 @@ def refresh_airspace_advisories():
     try:
         # Fetch G-AIRMETs
         url = "https://aviationweather.gov/api/data/gairmet"
-        response = httpx.get(url, timeout=30.0, params={
-            'format': 'json',
-            'type': 'all',
-        })
+        response = httpx.get(
+            url,
+            timeout=30.0,
+            params={
+                "format": "json",
+                "type": "all",
+            },
+        )
 
         if response.status_code == 200:
             data = response.json()
@@ -39,7 +45,7 @@ def refresh_airspace_advisories():
                 # Find and broadcast expired advisories before deleting
                 old_cutoff = timezone.now()
                 expired_advisories = AirspaceAdvisory.objects.filter(valid_to__lt=old_cutoff)
-                expired_ids = list(expired_advisories.values_list('advisory_id', flat=True))
+                expired_ids = list(expired_advisories.values_list("advisory_id", flat=True))
                 expired_count = expired_advisories.count()
                 expired_advisories.delete()
 
@@ -47,13 +53,13 @@ def refresh_airspace_advisories():
                 if expired_count > 0:
                     try:
                         sync_emit(
-                            'airspace:advisory_expired',
+                            "airspace:advisory_expired",
                             {
-                                'advisory_ids': expired_ids,
-                                'count': expired_count,
-                                'timestamp': datetime.utcnow().isoformat() + 'Z'
+                                "advisory_ids": expired_ids,
+                                "count": expired_count,
+                                "timestamp": datetime.utcnow().isoformat() + "Z",
                             },
-                            room='topic_aircraft'
+                            room="topic_aircraft",
                         )
                         logger.debug(f"Broadcast {expired_count} expired advisories")
                     except Exception as e:
@@ -62,7 +68,7 @@ def refresh_airspace_advisories():
                 # Process new advisories
                 for adv in advisories:
                     # Use 'tag' as identifier (new API format) or fall back to old format
-                    advisory_id = adv.get('tag') or adv.get('airSigmetId') or adv.get('gairmetId')
+                    advisory_id = adv.get("tag") or adv.get("airSigmetId") or adv.get("gairmetId")
                     if not advisory_id:
                         continue
 
@@ -71,96 +77,81 @@ def refresh_airspace_advisories():
                     valid_to = None
 
                     # New format: validTime (ISO string), expireTime (unix timestamp)
-                    if adv.get('validTime'):
+                    if adv.get("validTime"):
                         try:
                             valid_from = datetime.fromisoformat(
-                                adv['validTime'].replace('Z', '+00:00').replace('.000', '')
+                                adv["validTime"].replace("Z", "+00:00").replace(".000", "")
                             )
                         except (ValueError, TypeError) as e:
                             logger.debug(f"Invalid validTime format: {adv.get('validTime')} - {e}")
 
-                    if adv.get('expireTime'):
+                    if adv.get("expireTime"):
                         try:
                             # expireTime is unix timestamp
-                            valid_to = datetime.fromtimestamp(int(adv['expireTime']), tz=dt_timezone.utc)
+                            valid_to = datetime.fromtimestamp(int(adv["expireTime"]), tz=UTC)
                         except (ValueError, TypeError) as e:
                             logger.debug(f"Invalid expireTime format: {adv.get('expireTime')} - {e}")
 
                     # Fall back to old format
-                    if not valid_from and adv.get('validTimeFrom'):
-                        try:
-                            valid_from = datetime.fromisoformat(
-                                adv['validTimeFrom'].replace('Z', '+00:00')
-                            )
-                        except (ValueError, TypeError):
-                            pass
+                    if not valid_from and adv.get("validTimeFrom"):
+                        with contextlib.suppress(ValueError, TypeError):
+                            valid_from = datetime.fromisoformat(adv["validTimeFrom"].replace("Z", "+00:00"))
 
-                    if not valid_to and adv.get('validTimeTo'):
-                        try:
-                            valid_to = datetime.fromisoformat(
-                                adv['validTimeTo'].replace('Z', '+00:00')
-                            )
-                        except (ValueError, TypeError):
-                            pass
+                    if not valid_to and adv.get("validTimeTo"):
+                        with contextlib.suppress(ValueError, TypeError):
+                            valid_to = datetime.fromisoformat(adv["validTimeTo"].replace("Z", "+00:00"))
 
                     # Parse geometry - handle new 'coords' format
                     polygon = None
-                    coords = adv.get('coords')
+                    coords = adv.get("coords")
                     if coords and isinstance(coords, list):
                         # Convert coords array to GeoJSON polygon
                         try:
-                            ring = [[float(c['lon']), float(c['lat'])] for c in coords]
+                            ring = [[float(c["lon"]), float(c["lat"])] for c in coords]
                             # Close the ring if not already closed
                             if ring and ring[0] != ring[-1]:
                                 ring.append(ring[0])
-                            polygon = {
-                                'type': 'Polygon',
-                                'coordinates': [ring]
-                            }
+                            polygon = {"type": "Polygon", "coordinates": [ring]}
                         except (KeyError, ValueError, TypeError) as e:
                             logger.debug(f"Failed to parse coords: {e}")
 
                     # Fall back to old geometry format
-                    if not polygon and adv.get('geometry') and adv['geometry'].get('coordinates'):
+                    if not polygon and adv.get("geometry") and adv["geometry"].get("coordinates"):
                         polygon = {
-                            'type': adv['geometry'].get('type', 'Polygon'),
-                            'coordinates': adv['geometry']['coordinates']
+                            "type": adv["geometry"].get("type", "Polygon"),
+                            "coordinates": adv["geometry"]["coordinates"],
                         }
 
                     # Parse altitude - handle new format (base/top as strings) and old format
                     lower_alt = None
                     upper_alt = None
-                    if adv.get('base'):
-                        try:
-                            lower_alt = int(adv['base']) if adv['base'] else None
-                        except (ValueError, TypeError):
-                            pass
-                    if adv.get('top'):
-                        try:
-                            upper_alt = int(adv['top']) if adv['top'] else None
-                        except (ValueError, TypeError):
-                            pass
+                    if adv.get("base"):
+                        with contextlib.suppress(ValueError, TypeError):
+                            lower_alt = int(adv["base"]) if adv["base"] else None
+                    if adv.get("top"):
+                        with contextlib.suppress(ValueError, TypeError):
+                            upper_alt = int(adv["top"]) if adv["top"] else None
                     # Fall back to old format
                     if lower_alt is None:
-                        lower_alt = adv.get('altitudeLow1')
+                        lower_alt = adv.get("altitudeLow1")
                     if upper_alt is None:
-                        upper_alt = adv.get('altitudeHi1')
+                        upper_alt = adv.get("altitudeHi1")
 
                     AirspaceAdvisory.objects.update_or_create(
                         advisory_id=advisory_id,
                         defaults={
-                            'advisory_type': adv.get('hazard', 'GAIRMET'),
-                            'hazard': adv.get('hazard'),
-                            'severity': adv.get('severity'),
-                            'valid_from': valid_from,
-                            'valid_to': valid_to,
-                            'lower_alt_ft': lower_alt,
-                            'upper_alt_ft': upper_alt,
-                            'region': adv.get('region'),
-                            'polygon': polygon,
-                            'raw_text': adv.get('rawAirSigmet'),
-                            'source_data': adv,
-                        }
+                            "advisory_type": adv.get("hazard", "GAIRMET"),
+                            "hazard": adv.get("hazard"),
+                            "severity": adv.get("severity"),
+                            "valid_from": valid_from,
+                            "valid_to": valid_to,
+                            "lower_alt_ft": lower_alt,
+                            "upper_alt_ft": upper_alt,
+                            "region": adv.get("region"),
+                            "polygon": polygon,
+                            "raw_text": adv.get("rawAirSigmet"),
+                            "source_data": adv,
+                        },
                     )
 
             logger.info(f"Refreshed {len(advisories)} airspace advisories")
@@ -168,12 +159,9 @@ def refresh_airspace_advisories():
             # Broadcast update to WebSocket clients via Socket.IO
             try:
                 sync_emit(
-                    'airspace:advisory',
-                    {
-                        'count': len(advisories),
-                        'timestamp': datetime.utcnow().isoformat() + 'Z'
-                    },
-                    room='topic_aircraft'
+                    "airspace:advisory",
+                    {"count": len(advisories), "timestamp": datetime.utcnow().isoformat() + "Z"},
+                    room="topic_aircraft",
                 )
             except Exception as e:
                 logger.warning(f"Failed to broadcast advisory update: {e}")
@@ -203,7 +191,7 @@ def refresh_airspace_boundaries(self):
     if not openaip._is_enabled():
         logger.info("OpenAIP is not enabled, skipping boundary refresh")
         boundary_count = AirspaceBoundary.objects.count()
-        return {'status': 'disabled', 'count': boundary_count}
+        return {"status": "disabled", "count": boundary_count}
 
     try:
         # Define regions to fetch (CONUS grid for comprehensive coverage)
@@ -214,14 +202,14 @@ def refresh_airspace_boundaries(self):
             (33.0, -112.0, 300),  # Arizona/New Mexico
             (40.0, -105.0, 300),  # Colorado/Wyoming
             # Central US
-            (35.0, -97.0, 300),   # Texas/Oklahoma
-            (41.0, -95.0, 300),   # Midwest
-            (45.0, -93.0, 300),   # Upper Midwest
+            (35.0, -97.0, 300),  # Texas/Oklahoma
+            (41.0, -95.0, 300),  # Midwest
+            (45.0, -93.0, 300),  # Upper Midwest
             # Eastern US
-            (33.0, -84.0, 300),   # Southeast
-            (40.0, -75.0, 300),   # Northeast
-            (42.0, -83.0, 300),   # Great Lakes
-            (28.0, -82.0, 300),   # Florida
+            (33.0, -84.0, 300),  # Southeast
+            (40.0, -75.0, 300),  # Northeast
+            (42.0, -83.0, 300),  # Great Lakes
+            (28.0, -82.0, 300),  # Florida
         ]
 
         total_stored = 0
@@ -235,16 +223,16 @@ def refresh_airspace_boundaries(self):
 
                 for airspace in airspaces:
                     # Skip if no geometry
-                    geometry = airspace.get('geometry')
+                    geometry = airspace.get("geometry")
                     if not geometry:
                         continue
 
-                    airspace_id = airspace.get('id', '')
+                    airspace_id = airspace.get("id", "")
                     if not airspace_id:
                         continue
 
                     # Map OpenAIP type to airspace class
-                    airspace_type = airspace.get('type', 'OTHER')
+                    airspace_type = airspace.get("type", "OTHER")
                     airspace_class = _map_openaip_type_to_class(airspace_type)
 
                     # Calculate center from geometry
@@ -252,38 +240,36 @@ def refresh_airspace_boundaries(self):
 
                     # Create or update boundary
                     AirspaceBoundary.objects.update_or_create(
-                        source='openaip',
+                        source="openaip",
                         source_id=airspace_id,
                         defaults={
-                            'name': airspace.get('name', 'Unknown'),
-                            'airspace_class': airspace_class,
-                            'floor_ft': airspace.get('floor_ft') or 0,
-                            'ceiling_ft': airspace.get('ceiling_ft') or 0,
-                            'center_lat': center_lat,
-                            'center_lon': center_lon,
-                            'polygon': geometry,
-                        }
+                            "name": airspace.get("name", "Unknown"),
+                            "airspace_class": airspace_class,
+                            "floor_ft": airspace.get("floor_ft") or 0,
+                            "ceiling_ft": airspace.get("ceiling_ft") or 0,
+                            "center_lat": center_lat,
+                            "center_lon": center_lon,
+                            "polygon": geometry,
+                        },
                     )
                     total_stored += 1
 
         boundary_count = AirspaceBoundary.objects.count()
-        logger.info(f"Airspace boundary refresh complete. Processed {total_stored} airspaces, {boundary_count} total in database.")
+        logger.info(
+            f"Airspace boundary refresh complete. Processed {total_stored} airspaces, {boundary_count} total in database."
+        )
 
         # Broadcast update via Socket.IO
         try:
             sync_emit(
-                'airspace:boundary',
-                {
-                    'count': boundary_count,
-                    'new': total_stored,
-                    'timestamp': datetime.utcnow().isoformat() + 'Z'
-                },
-                room='topic_aircraft'
+                "airspace:boundary",
+                {"count": boundary_count, "new": total_stored, "timestamp": datetime.utcnow().isoformat() + "Z"},
+                room="topic_aircraft",
             )
         except Exception as e:
             logger.warning(f"Failed to broadcast boundary update: {e}")
 
-        return {'status': 'complete', 'processed': total_stored, 'total': boundary_count}
+        return {"status": "complete", "processed": total_stored, "total": boundary_count}
 
     except Exception as e:
         logger.error(f"Failed to refresh airspace boundaries: {e}")
@@ -293,27 +279,27 @@ def refresh_airspace_boundaries(self):
 def _map_openaip_type_to_class(airspace_type: str) -> str:
     """Map OpenAIP airspace type to standard class."""
     type_mapping = {
-        'CTR': 'D',
-        'TMA': 'C',
-        'CTA': 'C',
-        'ATZ': 'D',
-        'MATZ': 'D',
-        'RESTRICTED': 'RESTRICTED',
-        'PROHIBITED': 'PROHIBITED',
-        'DANGER': 'WARNING',
-        'WARNING': 'WARNING',
-        'ALERT': 'ALERT',
-        'MOA': 'MOA',
-        'TFR': 'TFR',
-        'FIR': 'E',
-        'UIR': 'E',
-        'ADIZ': 'E',
-        'GLIDING': 'E',
-        'PARACHUTE': 'E',
-        'MTR': 'E',
-        'AIRWAY': 'E',
+        "CTR": "D",
+        "TMA": "C",
+        "CTA": "C",
+        "ATZ": "D",
+        "MATZ": "D",
+        "RESTRICTED": "RESTRICTED",
+        "PROHIBITED": "PROHIBITED",
+        "DANGER": "WARNING",
+        "WARNING": "WARNING",
+        "ALERT": "ALERT",
+        "MOA": "MOA",
+        "TFR": "TFR",
+        "FIR": "E",
+        "UIR": "E",
+        "ADIZ": "E",
+        "GLIDING": "E",
+        "PARACHUTE": "E",
+        "MTR": "E",
+        "AIRWAY": "E",
     }
-    return type_mapping.get(airspace_type, 'E')
+    return type_mapping.get(airspace_type, "E")
 
 
 def _calculate_geometry_center(geometry: dict) -> tuple:
@@ -321,25 +307,25 @@ def _calculate_geometry_center(geometry: dict) -> tuple:
     coords = []
 
     def extract_coords(geom):
-        geom_type = geom.get('type', '')
-        coordinates = geom.get('coordinates', [])
+        geom_type = geom.get("type", "")
+        coordinates = geom.get("coordinates", [])
 
-        if geom_type == 'Point':
+        if geom_type == "Point":
             coords.append(coordinates)
-        elif geom_type in ('LineString', 'MultiPoint'):
+        elif geom_type in ("LineString", "MultiPoint"):
             coords.extend(coordinates)
-        elif geom_type in ('Polygon', 'MultiLineString'):
+        elif geom_type in ("Polygon", "MultiLineString"):
             for ring in coordinates:
                 if isinstance(ring, list):
                     coords.extend(ring)
-        elif geom_type == 'MultiPolygon':
+        elif geom_type == "MultiPolygon":
             for polygon in coordinates:
                 if isinstance(polygon, list):
                     for ring in polygon:
                         if isinstance(ring, list):
                             coords.extend(ring)
-        elif geom_type == 'GeometryCollection':
-            for g in geom.get('geometries', []):
+        elif geom_type == "GeometryCollection":
+            for g in geom.get("geometries", []):
                 extract_coords(g)
 
     extract_coords(geometry)

@@ -8,17 +8,17 @@ Fetches and caches long-term geographic data:
 
 Data is refreshed daily and stored in the database for fast local queries.
 """
+
 import logging
-from datetime import datetime, timedelta
-from math import radians, cos, sin, sqrt, atan2
-from typing import Optional, List
+from datetime import datetime
+from math import atan2, cos, radians, sin, sqrt
 
 import httpx
 from django.db import transaction
-from django.db.models import Max, Count
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from django.db.models import Max
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from skyspy.models import CachedAirport, CachedNavaid, CachedGeoJSON, CachedPirep
+from skyspy.models import CachedAirport, CachedGeoJSON, CachedNavaid
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ TAR1090_GEOJSON_SOURCES = {
 REFRESH_INTERVAL = 86400
 
 # In-memory cache metadata
-_last_refresh: Optional[datetime] = None
+_last_refresh: datetime | None = None
 
 
 def haversine_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -77,6 +77,7 @@ def haversine_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 # Retry Helpers for External API Calls
 # =============================================================================
 
+
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=1, max=10),
@@ -91,7 +92,7 @@ def _http_get_awc(url: str, params: dict, timeout: float = 15.0) -> httpx.Respon
             headers={
                 "User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)",
                 "Accept": "application/json",
-            }
+            },
         )
         response.raise_for_status()
         return response
@@ -105,10 +106,7 @@ def _http_get_awc(url: str, params: dict, timeout: float = 15.0) -> httpx.Respon
 def _http_get_geojson(url: str, timeout: float = 15.0) -> httpx.Response:
     """HTTP GET with retry logic for GeoJSON fetches."""
     with httpx.Client(timeout=timeout) as client:
-        response = client.get(
-            url,
-            headers={"User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)"}
-        )
+        response = client.get(url, headers={"User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)"})
         response.raise_for_status()
         return response
 
@@ -126,7 +124,7 @@ def fetch_awc_data(endpoint: str, params: dict) -> dict | list:
         return {"error": str(e)}
 
 
-def fetch_geojson(url: str) -> Optional[dict]:
+def fetch_geojson(url: str) -> dict | None:
     """Fetch GeoJSON data from a URL with retry logic."""
     try:
         response = _http_get_geojson(url, timeout=15.0)
@@ -174,12 +172,7 @@ def refresh_airports() -> int:
 
     bbox = "24,-130,50,-60"  # CONUS roughly
 
-    data = fetch_awc_data("airport", {
-        "bbox": bbox,
-        "zoom": 5,
-        "density": 5,
-        "format": "json"
-    })
+    data = fetch_awc_data("airport", {"bbox": bbox, "zoom": 5, "density": 5, "format": "json"})
 
     if isinstance(data, dict) and "error" in data:
         logger.warning(f"Failed to fetch airports: {data.get('error')}")
@@ -233,10 +226,7 @@ def refresh_navaids() -> int:
 
     bbox = "24,-130,50,-60"
 
-    data = fetch_awc_data("navaid", {
-        "bbox": bbox,
-        "format": "json"
-    })
+    data = fetch_awc_data("navaid", {"bbox": bbox, "format": "json"})
 
     if isinstance(data, dict) and "error" in data:
         logger.warning(f"Failed to fetch navaids: {data.get('error')}")
@@ -345,20 +335,20 @@ def refresh_geojson() -> int:
             else:
                 # tar1090 aviation GeoJSON
                 name = (
-                    properties.get("name") or
-                    properties.get("NAME") or
-                    properties.get("id") or
-                    properties.get("ID") or
-                    properties.get("title") or
-                    properties.get("designator") or
-                    feature.get("id") or
-                    f"{data_type}_{idx}"
+                    properties.get("name")
+                    or properties.get("NAME")
+                    or properties.get("id")
+                    or properties.get("ID")
+                    or properties.get("title")
+                    or properties.get("designator")
+                    or feature.get("id")
+                    or f"{data_type}_{idx}"
                 )
                 code = (
-                    properties.get("id") or
-                    properties.get("ID") or
-                    properties.get("icao") or
-                    properties.get("designator")
+                    properties.get("id")
+                    or properties.get("ID")
+                    or properties.get("icao")
+                    or properties.get("designator")
                 )
                 unique_key = f"{name}_{idx}"
 
@@ -371,18 +361,20 @@ def refresh_geojson() -> int:
             # Calculate bounding box
             bbox = calculate_bbox(geometry)
 
-            features.append(CachedGeoJSON(
-                fetched_at=now,
-                data_type=data_type,
-                name=str(name)[:100],
-                code=str(code)[:10] if code else None,
-                bbox_min_lat=bbox[0],
-                bbox_max_lat=bbox[1],
-                bbox_min_lon=bbox[2],
-                bbox_max_lon=bbox[3],
-                geometry=geometry,
-                properties=properties,
-            ))
+            features.append(
+                CachedGeoJSON(
+                    fetched_at=now,
+                    data_type=data_type,
+                    name=str(name)[:100],
+                    code=str(code)[:10] if code else None,
+                    bbox_min_lat=bbox[0],
+                    bbox_max_lat=bbox[1],
+                    bbox_min_lon=bbox[2],
+                    bbox_max_lon=bbox[3],
+                    geometry=geometry,
+                    properties=properties,
+                )
+            )
 
         if features:
             CachedGeoJSON.objects.bulk_create(features)
@@ -408,11 +400,11 @@ def refresh_all_geodata() -> dict:
 
 
 def get_cached_airports(
-    lat: Optional[float] = None,
-    lon: Optional[float] = None,
+    lat: float | None = None,
+    lon: float | None = None,
     radius_nm: float = 50,
     limit: int = 20,
-) -> List[dict]:
+) -> list[dict]:
     """Get cached airports, optionally filtered by location."""
     queryset = CachedAirport.objects.all()
 
@@ -429,7 +421,7 @@ def get_cached_airports(
             longitude__range=(lon - lon_range, lon + lon_range),
         )
 
-    airports = list(queryset[:limit * 2])
+    airports = list(queryset[: limit * 2])
 
     results = []
     for apt in airports:
@@ -454,12 +446,12 @@ def get_cached_airports(
 
 
 def get_cached_navaids(
-    lat: Optional[float] = None,
-    lon: Optional[float] = None,
+    lat: float | None = None,
+    lon: float | None = None,
     radius_nm: float = 50,
-    navaid_type: Optional[str] = None,
+    navaid_type: str | None = None,
     limit: int = 20,
-) -> List[dict]:
+) -> list[dict]:
     """Get cached navaids, optionally filtered by location and type."""
     queryset = CachedNavaid.objects.all()
 
@@ -478,7 +470,7 @@ def get_cached_navaids(
             longitude__range=(lon - lon_range, lon + lon_range),
         )
 
-    navaids = list(queryset[:limit * 2])
+    navaids = list(queryset[: limit * 2])
 
     results = []
     for nav in navaids:
@@ -503,10 +495,10 @@ def get_cached_navaids(
 
 def get_cached_geojson(
     data_type: str,
-    lat: Optional[float] = None,
-    lon: Optional[float] = None,
+    lat: float | None = None,
+    lon: float | None = None,
     radius_nm: float = 500,
-) -> List[dict]:
+) -> list[dict]:
     """Get cached GeoJSON features, optionally filtered by location."""
     queryset = CachedGeoJSON.objects.filter(data_type=data_type)
 
@@ -547,9 +539,9 @@ def get_cache_stats() -> dict:
     navaid_count = CachedNavaid.objects.count()
     geojson_count = CachedGeoJSON.objects.count()
 
-    airport_last = CachedAirport.objects.aggregate(Max('fetched_at'))['fetched_at__max']
-    navaid_last = CachedNavaid.objects.aggregate(Max('fetched_at'))['fetched_at__max']
-    geojson_last = CachedGeoJSON.objects.aggregate(Max('fetched_at'))['fetched_at__max']
+    airport_last = CachedAirport.objects.aggregate(Max("fetched_at"))["fetched_at__max"]
+    navaid_last = CachedNavaid.objects.aggregate(Max("fetched_at"))["fetched_at__max"]
+    geojson_last = CachedGeoJSON.objects.aggregate(Max("fetched_at"))["fetched_at__max"]
 
     return {
         "airports": {

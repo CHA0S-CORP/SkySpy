@@ -21,19 +21,17 @@ RPi Optimizations:
 - Lite mode: Sample data instead of processing all records
 - Configurable sample size via MAX_STATS_SAMPLE_SIZE setting
 """
+
 import logging
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import timedelta
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Count, Avg, Max, Min, Sum, F, Q
-from django.db.models import ExpressionWrapper, F
-from django.db.models.functions import TruncHour, TruncDay, ExtractHour, Extract
+from django.db.models import Avg, Count, F, Max, Min, Q, Sum
+from django.db.models.functions import Extract, ExtractHour, TruncDay, TruncHour
 from django.utils import timezone
 
-from skyspy.models import AircraftSighting, AircraftSession, SafetyEvent, AircraftInfo, AircraftFavorite
-
+from skyspy.models import AircraftFavorite, AircraftInfo, AircraftSession, AircraftSighting, SafetyEvent
 
 # =============================================================================
 # RPi Optimization: Lite Mode Configuration
@@ -41,8 +39,8 @@ from skyspy.models import AircraftSighting, AircraftSession, SafetyEvent, Aircra
 # When RPI_LITE_MODE is enabled, stats calculations will sample data
 # instead of processing all records, reducing CPU and memory usage.
 
-RPI_LITE_MODE = getattr(settings, 'RPI_LITE_MODE', False)
-MAX_STATS_SAMPLE_SIZE = getattr(settings, 'MAX_STATS_SAMPLE_SIZE', 5000)
+RPI_LITE_MODE = getattr(settings, "RPI_LITE_MODE", False)
+MAX_STATS_SAMPLE_SIZE = getattr(settings, "MAX_STATS_SAMPLE_SIZE", 5000)
 
 
 def _apply_lite_mode_sampling(queryset, sample_size: int = None):
@@ -66,24 +64,26 @@ def _apply_lite_mode_sampling(queryset, sample_size: int = None):
 
     # Just return limited queryset - no need to count first
     # The slice will be a no-op if there are fewer records than the limit
-    return queryset.order_by('-timestamp')[:size]
+    return queryset.order_by("-timestamp")[:size]
+
 
 class ExtractEpoch(Extract):
     lookup_name = "epoch"
 
+
 logger = logging.getLogger(__name__)
 
 # Cache keys
-CACHE_KEY_AIRCRAFT_STATS = 'stats:aircraft'
-CACHE_KEY_TOP_AIRCRAFT = 'stats:top'
-CACHE_KEY_HISTORY_STATS = 'stats:history'
-CACHE_KEY_HISTORY_TRENDS = 'stats:trends'
-CACHE_KEY_HISTORY_TOP = 'stats:top_performers'
-CACHE_KEY_SAFETY_STATS = 'stats:safety'
-CACHE_KEY_FLIGHT_PATTERNS = 'stats:flight_patterns'
-CACHE_KEY_GEOGRAPHIC_STATS = 'stats:geographic'
-CACHE_KEY_TRACKING_QUALITY = 'stats:tracking_quality'
-CACHE_KEY_ENGAGEMENT = 'stats:engagement'
+CACHE_KEY_AIRCRAFT_STATS = "stats:aircraft"
+CACHE_KEY_TOP_AIRCRAFT = "stats:top"
+CACHE_KEY_HISTORY_STATS = "stats:history"
+CACHE_KEY_HISTORY_TRENDS = "stats:trends"
+CACHE_KEY_HISTORY_TOP = "stats:top_performers"
+CACHE_KEY_SAFETY_STATS = "stats:safety"
+CACHE_KEY_FLIGHT_PATTERNS = "stats:flight_patterns"
+CACHE_KEY_GEOGRAPHIC_STATS = "stats:geographic"
+CACHE_KEY_TRACKING_QUALITY = "stats:tracking_quality"
+CACHE_KEY_ENGAGEMENT = "stats:engagement"
 
 # Cache timeouts (seconds)
 AIRCRAFT_STATS_TIMEOUT = 30
@@ -96,7 +96,7 @@ ENGAGEMENT_TIMEOUT = 300  # 5 minutes
 
 # Update intervals
 HISTORY_STATS_INTERVAL = 60  # 1 minute
-SAFETY_STATS_INTERVAL = 30   # 30 seconds
+SAFETY_STATS_INTERVAL = 30  # 30 seconds
 FLIGHT_PATTERNS_INTERVAL = 120  # 2 minutes
 GEOGRAPHIC_STATS_INTERVAL = 120  # 2 minutes
 TRACKING_QUALITY_INTERVAL = 120  # 2 minutes
@@ -210,7 +210,7 @@ def calculate_aircraft_stats(aircraft_list: list[dict]) -> dict:
         "altitude": {"ground": alt_ground, "low": alt_low, "medium": alt_med, "high": alt_high},
         "distance": {"close": dist_close, "near": dist_near, "mid": dist_mid, "far": dist_far},
         "speed": {"slow": speed_slow, "medium": speed_med, "fast": speed_fast},
-        "timestamp": now.isoformat() + "Z"
+        "timestamp": now.isoformat() + "Z",
     }
 
 
@@ -221,28 +221,22 @@ def calculate_top_aircraft(aircraft_list: list[dict]) -> dict:
     # Top 5 by closest
     closest = sorted(
         [a for a in aircraft_list if _is_valid_position(a.get("lat"), a.get("lon"))],
-        key=lambda x: x.get("distance_nm") if x.get("distance_nm") is not None else 99999
+        key=lambda x: x.get("distance_nm") if x.get("distance_nm") is not None else 99999,
     )[:5]
 
     # Top 5 by altitude
     highest = sorted(
         [a for a in aircraft_list if isinstance(a.get("alt_baro"), (int, float))],
         key=lambda x: x["alt_baro"],
-        reverse=True
+        reverse=True,
     )[:5]
 
     # Top 5 by speed
-    fastest = sorted(
-        [a for a in aircraft_list if a.get("gs")],
-        key=lambda x: x["gs"],
-        reverse=True
-    )[:5]
+    fastest = sorted([a for a in aircraft_list if a.get("gs")], key=lambda x: x["gs"], reverse=True)[:5]
 
     # Top 5 by vertical rate
     climbing = sorted(
-        [a for a in aircraft_list if a.get("baro_rate")],
-        key=lambda x: abs(x.get("baro_rate", 0)),
-        reverse=True
+        [a for a in aircraft_list if a.get("baro_rate")], key=lambda x: abs(x.get("baro_rate", 0)), reverse=True
     )[:5]
 
     # Military
@@ -255,7 +249,7 @@ def calculate_top_aircraft(aircraft_list: list[dict]) -> dict:
         "climbing": [_simplify_aircraft(a, a.get("distance_nm")) for a in climbing],
         "military": [_simplify_aircraft(a, a.get("distance_nm")) for a in military],
         "total": len(aircraft_list),
-        "timestamp": now.isoformat() + "Z"
+        "timestamp": now.isoformat() + "Z",
     }
 
 
@@ -269,8 +263,8 @@ def update_aircraft_stats_cache(aircraft_list: list[dict], broadcast: bool = Fal
 
     # Broadcast updates (optional, usually off for high-frequency updates)
     if broadcast:
-        broadcast_stats_update('aircraft', stats)
-        broadcast_stats_update('top', top)
+        broadcast_stats_update("aircraft", stats)
+        broadcast_stats_update("top", top)
 
 
 def calculate_history_stats(hours: int = 24) -> dict:
@@ -279,38 +273,38 @@ def calculate_history_stats(hours: int = 24) -> dict:
 
     # Combined sightings query - single query for all sighting stats
     sighting_stats = AircraftSighting.objects.filter(timestamp__gt=cutoff).aggregate(
-        sightings_count=Count('id'),
-        avg_alt=Avg('altitude_baro', filter=Q(altitude_baro__isnull=False)),
-        max_alt=Max('altitude_baro'),
-        min_alt=Min('altitude_baro'),
-        avg_dist=Avg('distance_nm', filter=Q(distance_nm__isnull=False)),
-        max_dist=Max('distance_nm'),
-        min_dist=Min('distance_nm'),
-        avg_speed=Avg('ground_speed', filter=Q(ground_speed__isnull=False)),
-        max_speed=Max('ground_speed'),
+        sightings_count=Count("id"),
+        avg_alt=Avg("altitude_baro", filter=Q(altitude_baro__isnull=False)),
+        max_alt=Max("altitude_baro"),
+        min_alt=Min("altitude_baro"),
+        avg_dist=Avg("distance_nm", filter=Q(distance_nm__isnull=False)),
+        max_dist=Max("distance_nm"),
+        min_dist=Min("distance_nm"),
+        avg_speed=Avg("ground_speed", filter=Q(ground_speed__isnull=False)),
+        max_speed=Max("ground_speed"),
     )
 
     # Combined session query - single query for all session stats
     session_stats = AircraftSession.objects.filter(last_seen__gt=cutoff).aggregate(
-        sessions_count=Count('id'),
-        unique_aircraft=Count('icao_hex', distinct=True),
-        military_sessions=Count('id', filter=Q(is_military=True)),
+        sessions_count=Count("id"),
+        unique_aircraft=Count("icao_hex", distinct=True),
+        military_sessions=Count("id", filter=Q(is_military=True)),
     )
 
     return {
-        "total_sightings": sighting_stats['sightings_count'] or 0,
-        "total_sessions": session_stats['sessions_count'] or 0,
-        "unique_aircraft": session_stats['unique_aircraft'] or 0,
-        "military_sessions": session_stats['military_sessions'] or 0,
+        "total_sightings": sighting_stats["sightings_count"] or 0,
+        "total_sessions": session_stats["sessions_count"] or 0,
+        "unique_aircraft": session_stats["unique_aircraft"] or 0,
+        "military_sessions": session_stats["military_sessions"] or 0,
         "time_range_hours": hours,
-        "avg_altitude": round(sighting_stats['avg_alt']) if sighting_stats['avg_alt'] else None,
-        "max_altitude": sighting_stats['max_alt'],
-        "min_altitude": sighting_stats['min_alt'],
-        "avg_distance_nm": round(sighting_stats['avg_dist'], 1) if sighting_stats['avg_dist'] else None,
-        "max_distance_nm": round(sighting_stats['max_dist'], 1) if sighting_stats['max_dist'] else None,
-        "avg_speed": round(sighting_stats['avg_speed']) if sighting_stats['avg_speed'] else None,
-        "max_speed": round(sighting_stats['max_speed']) if sighting_stats['max_speed'] else None,
-        "timestamp": timezone.now().isoformat() + "Z"
+        "avg_altitude": round(sighting_stats["avg_alt"]) if sighting_stats["avg_alt"] else None,
+        "max_altitude": sighting_stats["max_alt"],
+        "min_altitude": sighting_stats["min_alt"],
+        "avg_distance_nm": round(sighting_stats["avg_dist"], 1) if sighting_stats["avg_dist"] else None,
+        "max_distance_nm": round(sighting_stats["max_dist"], 1) if sighting_stats["max_dist"] else None,
+        "avg_speed": round(sighting_stats["avg_speed"]) if sighting_stats["avg_speed"] else None,
+        "max_speed": round(sighting_stats["max_speed"]) if sighting_stats["max_speed"] else None,
+        "timestamp": timezone.now().isoformat() + "Z",
     }
 
 
@@ -318,27 +312,24 @@ def calculate_history_trends(hours: int = 24, interval: str = "hour") -> dict:
     """Calculate time-series trend data."""
     cutoff = timezone.now() - timedelta(hours=hours)
 
-    if interval == "day":
-        trunc_func = TruncDay
-    else:
-        trunc_func = TruncHour
+    trunc_func = TruncDay if interval == "day" else TruncHour
 
     trends = (
         AircraftSighting.objects.filter(timestamp__gt=cutoff)
-        .annotate(interval_start=trunc_func('timestamp'))
-        .values('interval_start')
+        .annotate(interval_start=trunc_func("timestamp"))
+        .values("interval_start")
         .annotate(
-            position_count=Count('id'),
-            unique_aircraft=Count('icao_hex', distinct=True),
-            military_count=Count('id', filter=Q(is_military=True)),
-            avg_altitude=Avg('altitude_baro'),
-            max_altitude=Max('altitude_baro'),
-            avg_distance=Avg('distance_nm'),
-            max_distance=Max('distance_nm'),
-            avg_speed=Avg('ground_speed'),
-            max_speed=Max('ground_speed')
+            position_count=Count("id"),
+            unique_aircraft=Count("icao_hex", distinct=True),
+            military_count=Count("id", filter=Q(is_military=True)),
+            avg_altitude=Avg("altitude_baro"),
+            max_altitude=Max("altitude_baro"),
+            avg_distance=Avg("distance_nm"),
+            max_distance=Max("distance_nm"),
+            avg_speed=Avg("ground_speed"),
+            max_speed=Max("ground_speed"),
         )
-        .order_by('interval_start')
+        .order_by("interval_start")
     )
 
     intervals = []
@@ -346,27 +337,27 @@ def calculate_history_trends(hours: int = 24, interval: str = "hour") -> dict:
     peak_interval = None
 
     for row in trends:
-        unique = row['unique_aircraft'] or 0
+        unique = row["unique_aircraft"] or 0
         if unique > peak_concurrent:
             peak_concurrent = unique
-            peak_interval = row['interval_start']
+            peak_interval = row["interval_start"]
 
-        intervals.append({
-            "timestamp": row['interval_start'].isoformat() + "Z" if row['interval_start'] else None,
-            "position_count": row['position_count'] or 0,
-            "unique_aircraft": unique,
-            "military_count": row['military_count'] or 0,
-            "avg_altitude": round(row['avg_altitude']) if row['avg_altitude'] else None,
-            "max_altitude": row['max_altitude'],
-            "avg_distance_nm": round(row['avg_distance'], 1) if row['avg_distance'] else None,
-            "max_distance_nm": round(row['max_distance'], 1) if row['max_distance'] else None,
-            "avg_speed": round(row['avg_speed']) if row['avg_speed'] else None,
-            "max_speed": row['max_speed'],
-        })
+        intervals.append(
+            {
+                "timestamp": row["interval_start"].isoformat() + "Z" if row["interval_start"] else None,
+                "position_count": row["position_count"] or 0,
+                "unique_aircraft": unique,
+                "military_count": row["military_count"] or 0,
+                "avg_altitude": round(row["avg_altitude"]) if row["avg_altitude"] else None,
+                "max_altitude": row["max_altitude"],
+                "avg_distance_nm": round(row["avg_distance"], 1) if row["avg_distance"] else None,
+                "max_distance_nm": round(row["max_distance"], 1) if row["max_distance"] else None,
+                "avg_speed": round(row["avg_speed"]) if row["avg_speed"] else None,
+                "max_speed": row["max_speed"],
+            }
+        )
 
-    total_unique = AircraftSighting.objects.filter(
-        timestamp__gt=cutoff
-    ).values('icao_hex').distinct().count()
+    total_unique = AircraftSighting.objects.filter(timestamp__gt=cutoff).values("icao_hex").distinct().count()
 
     return {
         "intervals": intervals,
@@ -376,9 +367,9 @@ def calculate_history_trends(hours: int = 24, interval: str = "hour") -> dict:
             "total_unique_aircraft": total_unique,
             "peak_concurrent": peak_concurrent,
             "peak_interval": peak_interval.isoformat() + "Z" if peak_interval else None,
-            "total_intervals": len(intervals)
+            "total_intervals": len(intervals),
         },
-        "timestamp": timezone.now().isoformat() + "Z"
+        "timestamp": timezone.now().isoformat() + "Z",
     }
 
 
@@ -407,34 +398,26 @@ def calculate_history_top(hours: int = 24, limit: int = 10) -> dict:
 
     # Longest tracked (by duration)
     longest_tracked = [
-        format_session(s) for s in
-        base_qs.annotate(
-            duration=ExtractEpoch(F('last_seen') - F('first_seen'))
-        ).order_by('-duration')[:limit]
+        format_session(s)
+        for s in base_qs.annotate(duration=ExtractEpoch(F("last_seen") - F("first_seen"))).order_by("-duration")[:limit]
     ]
 
     # Furthest distance
     furthest_distance = [
-        format_session(s) for s in
-        base_qs.filter(max_distance_nm__isnull=False).order_by('-max_distance_nm')[:limit]
+        format_session(s) for s in base_qs.filter(max_distance_nm__isnull=False).order_by("-max_distance_nm")[:limit]
     ]
 
     # Highest altitude
     highest_altitude = [
-        format_session(s) for s in
-        base_qs.filter(max_altitude__isnull=False).order_by('-max_altitude')[:limit]
+        format_session(s) for s in base_qs.filter(max_altitude__isnull=False).order_by("-max_altitude")[:limit]
     ]
 
     # Most positions
-    most_positions = [
-        format_session(s) for s in
-        base_qs.order_by('-total_positions')[:limit]
-    ]
+    most_positions = [format_session(s) for s in base_qs.order_by("-total_positions")[:limit]]
 
     # Closest approach
     closest_approach = [
-        format_session(s) for s in
-        base_qs.filter(min_distance_nm__isnull=False).order_by('min_distance_nm')[:limit]
+        format_session(s) for s in base_qs.filter(min_distance_nm__isnull=False).order_by("min_distance_nm")[:limit]
     ]
 
     return {
@@ -445,7 +428,7 @@ def calculate_history_top(hours: int = 24, limit: int = 10) -> dict:
         "closest_approach": closest_approach,
         "time_range_hours": hours,
         "limit": limit,
-        "timestamp": timezone.now().isoformat() + "Z"
+        "timestamp": timezone.now().isoformat() + "Z",
     }
 
 
@@ -457,71 +440,67 @@ def calculate_safety_stats(hours: int = 24) -> dict:
     base_qs = SafetyEvent.objects.filter(timestamp__gt=cutoff)
 
     # Events by type
-    events_by_type = dict(
-        base_qs.values_list('event_type').annotate(count=Count('id'))
-    )
+    events_by_type = dict(base_qs.values_list("event_type").annotate(count=Count("id")))
 
     # Events by severity
-    events_by_severity = dict(
-        base_qs.values_list('severity').annotate(count=Count('id'))
-    )
+    events_by_severity = dict(base_qs.values_list("severity").annotate(count=Count("id")))
 
     # Events by type AND severity
-    type_severity = base_qs.values('event_type', 'severity').annotate(count=Count('id'))
+    type_severity = base_qs.values("event_type", "severity").annotate(count=Count("id"))
     events_by_type_severity = {}
     for row in type_severity:
-        event_type = row['event_type']
-        severity = row['severity']
-        count = row['count']
+        event_type = row["event_type"]
+        severity = row["severity"]
+        count = row["count"]
         if event_type not in events_by_type_severity:
             events_by_type_severity[event_type] = {}
         events_by_type_severity[event_type][severity] = count
 
     # Unique aircraft count
-    unique_aircraft = base_qs.values('icao_hex').distinct().count()
+    unique_aircraft = base_qs.values("icao_hex").distinct().count()
 
     # Hourly distribution
     events_by_hour = list(
-        base_qs.annotate(hour=TruncHour('timestamp'))
-        .values('hour')
+        base_qs.annotate(hour=TruncHour("timestamp"))
+        .values("hour")
         .annotate(
-            count=Count('id'),
-            critical=Count('id', filter=Q(severity='critical')),
-            warning=Count('id', filter=Q(severity='warning')),
-            low=Count('id', filter=Q(severity='low'))
+            count=Count("id"),
+            critical=Count("id", filter=Q(severity="critical")),
+            warning=Count("id", filter=Q(severity="warning")),
+            low=Count("id", filter=Q(severity="low")),
         )
-        .order_by('hour')
+        .order_by("hour")
     )
 
     events_by_hour_formatted = [
         {
-            "hour": row['hour'].isoformat() + "Z" if row['hour'] else None,
-            "count": row['count'] or 0,
-            "critical": row['critical'] or 0,
-            "warning": row['warning'] or 0,
-            "low": row['low'] or 0
+            "hour": row["hour"].isoformat() + "Z" if row["hour"] else None,
+            "count": row["count"] or 0,
+            "critical": row["critical"] or 0,
+            "warning": row["warning"] or 0,
+            "low": row["low"] or 0,
         }
         for row in events_by_hour
     ]
 
     # Top aircraft by event count
     top_aircraft_data = (
-        base_qs.values('icao_hex', 'callsign')
-        .annotate(count=Count('id'), worst_severity=Max('severity'))
-        .order_by('-count')[:10]
+        base_qs.values("icao_hex", "callsign")
+        .annotate(count=Count("id"), worst_severity=Max("severity"))
+        .order_by("-count")[:10]
     )
 
-    severity_order = {'critical': 3, 'warning': 2, 'low': 1}
+    severity_order = {"critical": 3, "warning": 2, "low": 1}
     top_aircraft = [
         {
-            "icao": row['icao_hex'],
-            "callsign": row['callsign'],
-            "count": row['count'],
-            "worst_severity": row['worst_severity']
+            "icao": row["icao_hex"],
+            "callsign": row["callsign"],
+            "count": row["count"],
+            "worst_severity": row["worst_severity"],
         }
         for row in top_aircraft_data
     ]
-    top_aircraft.sort(key=lambda x: (-severity_order.get(x['worst_severity'], 0), -x['count']))
+    top_aircraft.sort(key=lambda x: (-severity_order.get(x["worst_severity"], 0), -x["count"]))
 
     # Recent events
     recent_events = [
@@ -534,7 +513,7 @@ def calculate_safety_stats(hours: int = 24) -> dict:
             "message": e.message,
             "timestamp": e.timestamp.isoformat() + "Z",
         }
-        for e in base_qs.order_by('-timestamp')[:10]
+        for e in base_qs.order_by("-timestamp")[:10]
     ]
 
     total_events = sum(events_by_type.values())
@@ -572,119 +551,119 @@ def calculate_safety_stats(hours: int = 24) -> dict:
 
 REGISTRATION_PREFIXES = {
     # United States
-    'N': 'United States',
+    "N": "United States",
     # Canada
-    'C-': 'Canada',
-    'CF-': 'Canada',
+    "C-": "Canada",
+    "CF-": "Canada",
     # United Kingdom
-    'G-': 'United Kingdom',
+    "G-": "United Kingdom",
     # Germany
-    'D-': 'Germany',
+    "D-": "Germany",
     # France
-    'F-': 'France',
+    "F-": "France",
     # Australia
-    'VH-': 'Australia',
+    "VH-": "Australia",
     # Brazil
-    'PP-': 'Brazil',
-    'PR-': 'Brazil',
-    'PT-': 'Brazil',
-    'PU-': 'Brazil',
+    "PP-": "Brazil",
+    "PR-": "Brazil",
+    "PT-": "Brazil",
+    "PU-": "Brazil",
     # Mexico
-    'XA-': 'Mexico',
-    'XB-': 'Mexico',
-    'XC-': 'Mexico',
+    "XA-": "Mexico",
+    "XB-": "Mexico",
+    "XC-": "Mexico",
     # Japan
-    'JA': 'Japan',
+    "JA": "Japan",
     # China
-    'B-': 'China',
+    "B-": "China",
     # Russia
-    'RA-': 'Russia',
+    "RA-": "Russia",
     # India
-    'VT-': 'India',
+    "VT-": "India",
     # Italy
-    'I-': 'Italy',
+    "I-": "Italy",
     # Spain
-    'EC-': 'Spain',
+    "EC-": "Spain",
     # Netherlands
-    'PH-': 'Netherlands',
+    "PH-": "Netherlands",
     # Switzerland
-    'HB-': 'Switzerland',
+    "HB-": "Switzerland",
     # Austria
-    'OE-': 'Austria',
+    "OE-": "Austria",
     # Belgium
-    'OO-': 'Belgium',
+    "OO-": "Belgium",
     # Sweden
-    'SE-': 'Sweden',
+    "SE-": "Sweden",
     # Norway
-    'LN-': 'Norway',
+    "LN-": "Norway",
     # Denmark
-    'OY-': 'Denmark',
+    "OY-": "Denmark",
     # Finland
-    'OH-': 'Finland',
+    "OH-": "Finland",
     # Ireland
-    'EI-': 'Ireland',
+    "EI-": "Ireland",
     # Portugal
-    'CS-': 'Portugal',
+    "CS-": "Portugal",
     # Poland
-    'SP-': 'Poland',
+    "SP-": "Poland",
     # Czech Republic
-    'OK-': 'Czech Republic',
+    "OK-": "Czech Republic",
     # South Korea
-    'HL': 'South Korea',
+    "HL": "South Korea",
     # Singapore
-    '9V-': 'Singapore',
+    "9V-": "Singapore",
     # New Zealand
-    'ZK-': 'New Zealand',
+    "ZK-": "New Zealand",
     # South Africa
-    'ZS-': 'South Africa',
+    "ZS-": "South Africa",
     # UAE
-    'A6-': 'United Arab Emirates',
+    "A6-": "United Arab Emirates",
     # Israel
-    '4X-': 'Israel',
+    "4X-": "Israel",
     # Turkey
-    'TC-': 'Turkey',
+    "TC-": "Turkey",
     # Argentina
-    'LV-': 'Argentina',
+    "LV-": "Argentina",
     # Chile
-    'CC-': 'Chile',
+    "CC-": "Chile",
     # Colombia
-    'HK-': 'Colombia',
+    "HK-": "Colombia",
     # Thailand
-    'HS-': 'Thailand',
+    "HS-": "Thailand",
     # Malaysia
-    '9M-': 'Malaysia',
+    "9M-": "Malaysia",
     # Indonesia
-    'PK-': 'Indonesia',
+    "PK-": "Indonesia",
     # Philippines
-    'RP-': 'Philippines',
+    "RP-": "Philippines",
     # Vietnam
-    'VN-': 'Vietnam',
+    "VN-": "Vietnam",
     # Greece
-    'SX-': 'Greece',
+    "SX-": "Greece",
     # Hungary
-    'HA-': 'Hungary',
+    "HA-": "Hungary",
     # Romania
-    'YR-': 'Romania',
+    "YR-": "Romania",
     # Ukraine
-    'UR-': 'Ukraine',
+    "UR-": "Ukraine",
     # Saudi Arabia
-    'HZ-': 'Saudi Arabia',
+    "HZ-": "Saudi Arabia",
     # Qatar
-    'A7-': 'Qatar',
+    "A7-": "Qatar",
     # Kuwait
-    '9K-': 'Kuwait',
+    "9K-": "Kuwait",
     # Morocco
-    'CN-': 'Morocco',
+    "CN-": "Morocco",
     # Egypt
-    'SU-': 'Egypt',
+    "SU-": "Egypt",
     # Iceland
-    'TF-': 'Iceland',
+    "TF-": "Iceland",
     # Luxembourg
-    'LX-': 'Luxembourg',
+    "LX-": "Luxembourg",
 }
 
 
-def _get_country_from_registration(registration: str) -> Optional[str]:
+def _get_country_from_registration(registration: str) -> str | None:
     """Determine country of origin from aircraft registration prefix."""
     if not registration:
         return None
@@ -698,10 +677,10 @@ def _get_country_from_registration(registration: str) -> Optional[str]:
                 return country
 
     # Special case for US N-number (just starts with N followed by digit)
-    if registration and registration[0] == 'N' and len(registration) > 1 and registration[1].isdigit():
-        return 'United States'
+    if registration and registration[0] == "N" and len(registration) > 1 and registration[1].isdigit():
+        return "United States"
 
-    return 'Unknown'
+    return "Unknown"
 
 
 def calculate_flight_patterns_stats(hours: int = 24) -> dict:
@@ -722,16 +701,16 @@ def calculate_flight_patterns_stats(hours: int = 24) -> dict:
     # ==========================================================================
     hourly_data = (
         AircraftSighting.objects.filter(timestamp__gt=cutoff)
-        .annotate(hour=ExtractHour('timestamp'))
-        .values('hour')
+        .annotate(hour=ExtractHour("timestamp"))
+        .values("hour")
         .annotate(
-            position_count=Count('id'),
-            unique_aircraft=Count('icao_hex', distinct=True),
-            military_count=Count('id', filter=Q(is_military=True)),
-            avg_altitude=Avg('altitude_baro'),
-            avg_speed=Avg('ground_speed'),
+            position_count=Count("id"),
+            unique_aircraft=Count("icao_hex", distinct=True),
+            military_count=Count("id", filter=Q(is_military=True)),
+            avg_altitude=Avg("altitude_baro"),
+            avg_speed=Avg("ground_speed"),
         )
-        .order_by('hour')
+        .order_by("hour")
     )
 
     busiest_hours = []
@@ -739,110 +718,108 @@ def calculate_flight_patterns_stats(hours: int = 24) -> dict:
     peak_count = 0
 
     for row in hourly_data:
-        hour = row['hour'] if row['hour'] is not None else 0
-        unique = row['unique_aircraft'] or 0
+        hour = row["hour"] if row["hour"] is not None else 0
+        unique = row["unique_aircraft"] or 0
 
         if unique > peak_count:
             peak_count = unique
             peak_hour = hour
 
-        busiest_hours.append({
-            'hour': hour,
-            'position_count': row['position_count'] or 0,
-            'unique_aircraft': unique,
-            'military_count': row['military_count'] or 0,
-            'avg_altitude': round(row['avg_altitude']) if row['avg_altitude'] else None,
-            'avg_speed': round(row['avg_speed']) if row['avg_speed'] else None,
-        })
+        busiest_hours.append(
+            {
+                "hour": hour,
+                "position_count": row["position_count"] or 0,
+                "unique_aircraft": unique,
+                "military_count": row["military_count"] or 0,
+                "avg_altitude": round(row["avg_altitude"]) if row["avg_altitude"] else None,
+                "avg_speed": round(row["avg_speed"]) if row["avg_speed"] else None,
+            }
+        )
 
     # Fill in missing hours with zero values
-    existing_hours = {h['hour'] for h in busiest_hours}
+    existing_hours = {h["hour"] for h in busiest_hours}
     for hour in range(24):
         if hour not in existing_hours:
-            busiest_hours.append({
-                'hour': hour,
-                'position_count': 0,
-                'unique_aircraft': 0,
-                'military_count': 0,
-                'avg_altitude': None,
-                'avg_speed': None,
-            })
-    busiest_hours.sort(key=lambda x: x['hour'])
+            busiest_hours.append(
+                {
+                    "hour": hour,
+                    "position_count": 0,
+                    "unique_aircraft": 0,
+                    "military_count": 0,
+                    "avg_altitude": None,
+                    "avg_speed": None,
+                }
+            )
+    busiest_hours.sort(key=lambda x: x["hour"])
 
     # ==========================================================================
     # Average flight duration by aircraft type
     # ==========================================================================
     duration_by_type = (
-        AircraftSession.objects.filter(
-            last_seen__gt=cutoff,
-            aircraft_type__isnull=False
-        )
-        .exclude(aircraft_type='')
+        AircraftSession.objects.filter(last_seen__gt=cutoff, aircraft_type__isnull=False)
+        .exclude(aircraft_type="")
+        .annotate(duration_seconds=ExtractEpoch(F("last_seen") - F("first_seen")))
+        .values("aircraft_type")
         .annotate(
-            duration_seconds=ExtractEpoch(F('last_seen') - F('first_seen'))
+            count=Count("id"),
+            avg_duration=Avg("duration_seconds"),
+            max_duration=Max("duration_seconds"),
+            min_duration=Min("duration_seconds"),
+            total_positions=Sum("total_positions"),
         )
-        .values('aircraft_type')
-        .annotate(
-            count=Count('id'),
-            avg_duration=Avg('duration_seconds'),
-            max_duration=Max('duration_seconds'),
-            min_duration=Min('duration_seconds'),
-            total_positions=Sum('total_positions'),
-        )
-        .order_by('-count')[:20]
+        .order_by("-count")[:20]
     )
 
     avg_duration_by_type = []
     for row in duration_by_type:
-        if row['avg_duration']:
-            avg_duration_by_type.append({
-                'aircraft_type': row['aircraft_type'],
-                'count': row['count'],
-                'avg_duration_min': round(row['avg_duration'] / 60, 1),
-                'max_duration_min': round(row['max_duration'] / 60, 1) if row['max_duration'] else None,
-                'min_duration_min': round(row['min_duration'] / 60, 1) if row['min_duration'] else None,
-                'total_positions': row['total_positions'] or 0,
-            })
+        if row["avg_duration"]:
+            avg_duration_by_type.append(
+                {
+                    "aircraft_type": row["aircraft_type"],
+                    "count": row["count"],
+                    "avg_duration_min": round(row["avg_duration"] / 60, 1),
+                    "max_duration_min": round(row["max_duration"] / 60, 1) if row["max_duration"] else None,
+                    "min_duration_min": round(row["min_duration"] / 60, 1) if row["min_duration"] else None,
+                    "total_positions": row["total_positions"] or 0,
+                }
+            )
 
     # ==========================================================================
     # Most common aircraft types/models
     # ==========================================================================
     # From sessions (recent aircraft seen)
     session_types = (
-        AircraftSession.objects.filter(
-            last_seen__gt=cutoff,
-            aircraft_type__isnull=False
-        )
-        .exclude(aircraft_type='')
-        .values('aircraft_type')
+        AircraftSession.objects.filter(last_seen__gt=cutoff, aircraft_type__isnull=False)
+        .exclude(aircraft_type="")
+        .values("aircraft_type")
         .annotate(
-            session_count=Count('id'),
-            unique_icao=Count('icao_hex', distinct=True),
-            military_count=Count('id', filter=Q(is_military=True)),
+            session_count=Count("id"),
+            unique_icao=Count("icao_hex", distinct=True),
+            military_count=Count("id", filter=Q(is_military=True)),
         )
-        .order_by('-session_count')[:25]
+        .order_by("-session_count")[:25]
     )
 
     common_aircraft_types = [
         {
-            'type_code': row['aircraft_type'],
-            'session_count': row['session_count'],
-            'unique_aircraft': row['unique_icao'],
-            'military_count': row['military_count'],
-            'military_pct': round((row['military_count'] / row['session_count']) * 100, 1) if row['session_count'] > 0 else 0,
+            "type_code": row["aircraft_type"],
+            "session_count": row["session_count"],
+            "unique_aircraft": row["unique_icao"],
+            "military_count": row["military_count"],
+            "military_pct": round((row["military_count"] / row["session_count"]) * 100, 1)
+            if row["session_count"] > 0
+            else 0,
         }
         for row in session_types
     ]
 
     # Enrich with type names from AircraftInfo if available
-    type_codes = [t['type_code'] for t in common_aircraft_types]
+    type_codes = [t["type_code"] for t in common_aircraft_types]
     type_info = dict(
-        AircraftInfo.objects.filter(type_code__in=type_codes)
-        .values_list('type_code', 'type_name')
-        .distinct()[:50]
+        AircraftInfo.objects.filter(type_code__in=type_codes).values_list("type_code", "type_name").distinct()[:50]
     )
     for t in common_aircraft_types:
-        t['type_name'] = type_info.get(t['type_code'])
+        t["type_name"] = type_info.get(t["type_code"])
 
     # ==========================================================================
     # Route patterns (based on callsign prefixes - airline codes)
@@ -850,44 +827,37 @@ def calculate_flight_patterns_stats(hours: int = 24) -> dict:
     # ==========================================================================
     # Extract airline codes from callsigns (typically first 3 chars for ICAO codes)
     callsign_data = (
-        AircraftSession.objects.filter(
-            last_seen__gt=cutoff,
-            callsign__isnull=False
-        )
-        .exclude(callsign='')
-        .values('callsign')
-        .annotate(count=Count('id'))
-        .order_by('-count')[:100]
+        AircraftSession.objects.filter(last_seen__gt=cutoff, callsign__isnull=False)
+        .exclude(callsign="")
+        .values("callsign")
+        .annotate(count=Count("id"))
+        .order_by("-count")[:100]
     )
 
     # Group by airline code (first 3 chars)
     airline_flights = {}
     for row in callsign_data:
-        callsign = row['callsign'] or ''
+        callsign = row["callsign"] or ""
         # Extract airline code (typically first 3 letters for ICAO)
         if len(callsign) >= 3 and callsign[:3].isalpha():
             code = callsign[:3].upper()
             if code not in airline_flights:
-                airline_flights[code] = {'code': code, 'flight_count': 0, 'callsigns': []}
-            airline_flights[code]['flight_count'] += row['count']
-            if len(airline_flights[code]['callsigns']) < 5:
-                airline_flights[code]['callsigns'].append(callsign)
+                airline_flights[code] = {"code": code, "flight_count": 0, "callsigns": []}
+            airline_flights[code]["flight_count"] += row["count"]
+            if len(airline_flights[code]["callsigns"]) < 5:
+                airline_flights[code]["callsigns"].append(callsign)
 
-    frequent_routes = sorted(
-        airline_flights.values(),
-        key=lambda x: x['flight_count'],
-        reverse=True
-    )[:15]
+    frequent_routes = sorted(airline_flights.values(), key=lambda x: x["flight_count"], reverse=True)[:15]
 
     return {
-        'busiest_hours': busiest_hours,
-        'peak_hour': peak_hour,
-        'peak_aircraft_count': peak_count,
-        'avg_duration_by_type': avg_duration_by_type,
-        'common_aircraft_types': common_aircraft_types,
-        'frequent_routes': frequent_routes,
-        'time_range_hours': hours,
-        'timestamp': now.isoformat() + 'Z',
+        "busiest_hours": busiest_hours,
+        "peak_hour": peak_hour,
+        "peak_aircraft_count": peak_count,
+        "avg_duration_by_type": avg_duration_by_type,
+        "common_aircraft_types": common_aircraft_types,
+        "frequent_routes": frequent_routes,
+        "time_range_hours": hours,
+        "timestamp": now.isoformat() + "Z",
     }
 
 
@@ -908,21 +878,18 @@ def calculate_geographic_stats(hours: int = 24) -> dict:
     # ==========================================================================
     # Get registrations from AircraftInfo for aircraft seen recently
     recent_icaos = list(
-        AircraftSession.objects.filter(last_seen__gt=cutoff)
-        .values_list('icao_hex', flat=True)
-        .distinct()
+        AircraftSession.objects.filter(last_seen__gt=cutoff).values_list("icao_hex", flat=True).distinct()
     )
 
-    aircraft_with_reg = AircraftInfo.objects.filter(
-        icao_hex__in=recent_icaos,
-        registration__isnull=False
-    ).exclude(registration='')
+    aircraft_with_reg = AircraftInfo.objects.filter(icao_hex__in=recent_icaos, registration__isnull=False).exclude(
+        registration=""
+    )
 
     country_counts = {}
     total_with_reg = 0
 
-    for info in aircraft_with_reg.values('registration'):
-        reg = info['registration']
+    for info in aircraft_with_reg.values("registration"):
+        reg = info["registration"]
         country = _get_country_from_registration(reg)
         if country:
             country_counts[country] = country_counts.get(country, 0) + 1
@@ -931,37 +898,34 @@ def calculate_geographic_stats(hours: int = 24) -> dict:
     countries_breakdown = sorted(
         [
             {
-                'country': country,
-                'count': count,
-                'percentage': round((count / total_with_reg) * 100, 1) if total_with_reg > 0 else 0,
+                "country": country,
+                "count": count,
+                "percentage": round((count / total_with_reg) * 100, 1) if total_with_reg > 0 else 0,
             }
             for country, count in country_counts.items()
         ],
-        key=lambda x: x['count'],
-        reverse=True
+        key=lambda x: x["count"],
+        reverse=True,
     )[:20]
 
     # ==========================================================================
     # Airlines/Operators frequency
     # ==========================================================================
     operator_data = (
-        AircraftInfo.objects.filter(
-            icao_hex__in=recent_icaos,
-            operator__isnull=False
-        )
-        .exclude(operator='')
-        .values('operator', 'operator_icao')
+        AircraftInfo.objects.filter(icao_hex__in=recent_icaos, operator__isnull=False)
+        .exclude(operator="")
+        .values("operator", "operator_icao")
         .annotate(
-            count=Count('id'),
+            count=Count("id"),
         )
-        .order_by('-count')[:20]
+        .order_by("-count")[:20]
     )
 
     operators_frequency = [
         {
-            'operator': row['operator'],
-            'operator_icao': row['operator_icao'],
-            'aircraft_count': row['count'],
+            "operator": row["operator"],
+            "operator_icao": row["operator_icao"],
+            "aircraft_count": row["count"],
         }
         for row in operator_data
     ]
@@ -970,22 +934,19 @@ def calculate_geographic_stats(hours: int = 24) -> dict:
     # Most connected cities/regions (from AircraftInfo city/state fields)
     # ==========================================================================
     city_data = (
-        AircraftInfo.objects.filter(
-            icao_hex__in=recent_icaos,
-            city__isnull=False
-        )
-        .exclude(city='')
-        .values('city', 'state', 'country')
-        .annotate(count=Count('id'))
-        .order_by('-count')[:15]
+        AircraftInfo.objects.filter(icao_hex__in=recent_icaos, city__isnull=False)
+        .exclude(city="")
+        .values("city", "state", "country")
+        .annotate(count=Count("id"))
+        .order_by("-count")[:15]
     )
 
     connected_locations = [
         {
-            'city': row['city'],
-            'state': row['state'],
-            'country': row['country'],
-            'aircraft_count': row['count'],
+            "city": row["city"],
+            "state": row["state"],
+            "country": row["country"],
+            "aircraft_count": row["count"],
         }
         for row in city_data
     ]
@@ -999,27 +960,23 @@ def calculate_geographic_stats(hours: int = 24) -> dict:
     sessions_with_info = list(
         AircraftSession.objects.filter(
             last_seen__gt=cutoff,
-            icao_hex__in=AircraftInfo.objects.filter(
-                registration__isnull=False
-            ).values('icao_hex')
-        )
-        .values('icao_hex', 'is_military')
+            icao_hex__in=AircraftInfo.objects.filter(registration__isnull=False).values("icao_hex"),
+        ).values("icao_hex", "is_military")
     )
 
     # Map icao to registration for country lookup
     icao_to_reg = dict(
         AircraftInfo.objects.filter(
-            icao_hex__in=[s['icao_hex'] for s in sessions_with_info],
-            registration__isnull=False
-        ).values_list('icao_hex', 'registration')
+            icao_hex__in=[s["icao_hex"] for s in sessions_with_info], registration__isnull=False
+        ).values_list("icao_hex", "registration")
     )
 
     for session in sessions_with_info:
-        reg = icao_to_reg.get(session['icao_hex'])
+        reg = icao_to_reg.get(session["icao_hex"])
         if reg:
             country = _get_country_from_registration(reg)
             if country:
-                if session['is_military']:
+                if session["is_military"]:
                     military_by_country[country] = military_by_country.get(country, 0) + 1
                 else:
                     civilian_by_country[country] = civilian_by_country.get(country, 0) + 1
@@ -1030,15 +987,17 @@ def calculate_geographic_stats(hours: int = 24) -> dict:
         civ = civilian_by_country.get(country, 0)
         total = mil + civ
         if total > 0:
-            military_breakdown.append({
-                'country': country,
-                'military_count': mil,
-                'civilian_count': civ,
-                'total': total,
-                'military_pct': round((mil / total) * 100, 1),
-            })
+            military_breakdown.append(
+                {
+                    "country": country,
+                    "military_count": mil,
+                    "civilian_count": civ,
+                    "total": total,
+                    "military_pct": round((mil / total) * 100, 1),
+                }
+            )
 
-    military_breakdown.sort(key=lambda x: x['total'], reverse=True)
+    military_breakdown.sort(key=lambda x: x["total"], reverse=True)
     military_breakdown = military_breakdown[:15]
 
     # ==========================================================================
@@ -1050,19 +1009,21 @@ def calculate_geographic_stats(hours: int = 24) -> dict:
     total_operators = len(operators_frequency)
 
     return {
-        'countries_breakdown': countries_breakdown,
-        'operators_frequency': operators_frequency,
-        'connected_locations': connected_locations,
-        'military_breakdown': military_breakdown,
-        'summary': {
-            'total_unique_aircraft': total_unique_aircraft,
-            'aircraft_with_info': total_with_info,
-            'info_coverage_pct': round((total_with_info / total_unique_aircraft) * 100, 1) if total_unique_aircraft > 0 else 0,
-            'total_countries': total_countries,
-            'total_operators': total_operators,
+        "countries_breakdown": countries_breakdown,
+        "operators_frequency": operators_frequency,
+        "connected_locations": connected_locations,
+        "military_breakdown": military_breakdown,
+        "summary": {
+            "total_unique_aircraft": total_unique_aircraft,
+            "aircraft_with_info": total_with_info,
+            "info_coverage_pct": round((total_with_info / total_unique_aircraft) * 100, 1)
+            if total_unique_aircraft > 0
+            else 0,
+            "total_countries": total_countries,
+            "total_operators": total_operators,
         },
-        'time_range_hours': hours,
-        'timestamp': now.isoformat() + 'Z',
+        "time_range_hours": hours,
+        "timestamp": now.isoformat() + "Z",
     }
 
 
@@ -1071,10 +1032,7 @@ def broadcast_stats_update(stat_type: str, data: dict) -> None:
     from skyspy.socketio.utils import sync_emit
 
     try:
-        sync_emit('stats:update', {
-            'stat_type': stat_type,
-            'stats': data
-        }, room='topic_stats')
+        sync_emit("stats:update", {"stat_type": stat_type, "stats": data}, room="topic_stats")
         logger.debug(f"Broadcast stats update: {stat_type}")
     except Exception as e:
         logger.warning(f"Failed to broadcast stats update: {e}")
@@ -1097,9 +1055,9 @@ def refresh_history_cache(broadcast: bool = True) -> None:
 
         # Broadcast updates
         if broadcast:
-            broadcast_stats_update('history', stats)
-            broadcast_stats_update('trends', trends)
-            broadcast_stats_update('top_performers', top)
+            broadcast_stats_update("history", stats)
+            broadcast_stats_update("trends", trends)
+            broadcast_stats_update("top_performers", top)
 
     except Exception as e:
         logger.error(f"Error refreshing history cache: {e}")
@@ -1116,7 +1074,7 @@ def refresh_safety_cache(broadcast: bool = True) -> None:
 
         # Broadcast update
         if broadcast:
-            broadcast_stats_update('safety', stats)
+            broadcast_stats_update("safety", stats)
 
     except Exception as e:
         logger.error(f"Error refreshing safety cache: {e}")
@@ -1132,7 +1090,7 @@ def refresh_flight_patterns_cache(broadcast: bool = True) -> None:
         logger.debug("Flight patterns stats cache refreshed")
 
         if broadcast:
-            broadcast_stats_update('flight_patterns', stats)
+            broadcast_stats_update("flight_patterns", stats)
 
     except Exception as e:
         logger.error(f"Error refreshing flight patterns cache: {e}")
@@ -1148,7 +1106,7 @@ def refresh_geographic_cache(broadcast: bool = True) -> None:
         logger.debug("Geographic stats cache refreshed")
 
         if broadcast:
-            broadcast_stats_update('geographic', stats)
+            broadcast_stats_update("geographic", stats)
 
     except Exception as e:
         logger.error(f"Error refreshing geographic cache: {e}")
@@ -1156,17 +1114,18 @@ def refresh_geographic_cache(broadcast: bool = True) -> None:
 
 # Public API - Get Cached Data
 
-def get_aircraft_stats() -> Optional[dict]:
+
+def get_aircraft_stats() -> dict | None:
     """Get cached aircraft stats."""
     return cache.get(CACHE_KEY_AIRCRAFT_STATS)
 
 
-def get_top_aircraft() -> Optional[dict]:
+def get_top_aircraft() -> dict | None:
     """Get cached top aircraft."""
     return cache.get(CACHE_KEY_TOP_AIRCRAFT)
 
 
-def get_history_stats() -> Optional[dict]:
+def get_history_stats() -> dict | None:
     """Get cached history stats."""
     stats = cache.get(CACHE_KEY_HISTORY_STATS)
     if stats is None:
@@ -1175,7 +1134,7 @@ def get_history_stats() -> Optional[dict]:
     return stats
 
 
-def get_history_trends() -> Optional[dict]:
+def get_history_trends() -> dict | None:
     """Get cached history trends."""
     trends = cache.get(CACHE_KEY_HISTORY_TRENDS)
     if trends is None:
@@ -1184,7 +1143,7 @@ def get_history_trends() -> Optional[dict]:
     return trends
 
 
-def get_history_top() -> Optional[dict]:
+def get_history_top() -> dict | None:
     """Get cached history top performers."""
     top = cache.get(CACHE_KEY_HISTORY_TOP)
     if top is None:
@@ -1193,7 +1152,7 @@ def get_history_top() -> Optional[dict]:
     return top
 
 
-def get_safety_stats() -> Optional[dict]:
+def get_safety_stats() -> dict | None:
     """Get cached safety stats."""
     stats = cache.get(CACHE_KEY_SAFETY_STATS)
     if stats is None:
@@ -1202,7 +1161,7 @@ def get_safety_stats() -> Optional[dict]:
     return stats
 
 
-def get_flight_patterns_stats() -> Optional[dict]:
+def get_flight_patterns_stats() -> dict | None:
     """Get cached flight patterns stats."""
     stats = cache.get(CACHE_KEY_FLIGHT_PATTERNS)
     if stats is None:
@@ -1211,7 +1170,7 @@ def get_flight_patterns_stats() -> Optional[dict]:
     return stats
 
 
-def get_geographic_stats() -> Optional[dict]:
+def get_geographic_stats() -> dict | None:
     """Get cached geographic stats."""
     stats = cache.get(CACHE_KEY_GEOGRAPHIC_STATS)
     if stats is None:
@@ -1223,9 +1182,9 @@ def get_geographic_stats() -> Optional[dict]:
 def get_all_cached_stats() -> dict:
     """Get all cached stats with metadata."""
     from skyspy.services.acars_stats import (
+        get_cached_acars_airlines,
         get_cached_acars_stats,
         get_cached_acars_trends,
-        get_cached_acars_airlines,
     )
 
     return {
@@ -1249,6 +1208,7 @@ def get_all_cached_stats() -> dict:
 # Tracking Quality Stats
 # =============================================================================
 
+
 def calculate_tracking_quality_stats(hours: int = 24) -> dict:
     """
     Calculate tracking quality statistics for sessions.
@@ -1262,13 +1222,12 @@ def calculate_tracking_quality_stats(hours: int = 24) -> dict:
     cutoff = now - timedelta(hours=hours)
 
     # Get sessions with meaningful data (at least 2 positions and > 1 minute duration)
-    sessions = AircraftSession.objects.filter(
-        last_seen__gt=cutoff,
-        total_positions__gte=2
-    ).annotate(
-        duration_seconds=ExtractEpoch(F('last_seen') - F('first_seen'))
-    ).filter(
-        duration_seconds__gt=60  # At least 1 minute
+    sessions = (
+        AircraftSession.objects.filter(last_seen__gt=cutoff, total_positions__gte=2)
+        .annotate(duration_seconds=ExtractEpoch(F("last_seen") - F("first_seen")))
+        .filter(
+            duration_seconds__gt=60  # At least 1 minute
+        )
     )
 
     if not sessions.exists():
@@ -1308,7 +1267,7 @@ def calculate_tracking_quality_stats(hours: int = 24) -> dict:
     # Calculate update rates
     update_rates = []
     completeness_scores = []
-    quality_grades = {'excellent': 0, 'good': 0, 'fair': 0, 'poor': 0}
+    quality_grades = {"excellent": 0, "good": 0, "fair": 0, "poor": 0}
     session_details = []
 
     # RPi optimization: Use configurable sample size
@@ -1326,32 +1285,34 @@ def calculate_tracking_quality_stats(hours: int = 24) -> dict:
 
             # Determine quality grade
             if completeness >= 90 and rate >= 10:
-                grade = 'excellent'
+                grade = "excellent"
             elif completeness >= 70 and rate >= 6:
-                grade = 'good'
+                grade = "good"
             elif completeness >= 50:
-                grade = 'fair'
+                grade = "fair"
             else:
-                grade = 'poor'
+                grade = "poor"
 
             quality_grades[grade] += 1
 
-            session_details.append({
-                'icao_hex': session.icao_hex,
-                'callsign': session.callsign,
-                'duration_min': round(duration_min, 1),
-                'positions': session.total_positions,
-                'update_rate': round(rate, 2),
-                'completeness': round(completeness, 1),
-                'quality_grade': grade,
-                'first_seen': session.first_seen.isoformat() + "Z" if session.first_seen else None,
-                'last_seen': session.last_seen.isoformat() + "Z" if session.last_seen else None,
-            })
+            session_details.append(
+                {
+                    "icao_hex": session.icao_hex,
+                    "callsign": session.callsign,
+                    "duration_min": round(duration_min, 1),
+                    "positions": session.total_positions,
+                    "update_rate": round(rate, 2),
+                    "completeness": round(completeness, 1),
+                    "quality_grade": grade,
+                    "first_seen": session.first_seen.isoformat() + "Z" if session.first_seen else None,
+                    "last_seen": session.last_seen.isoformat() + "Z" if session.last_seen else None,
+                }
+            )
 
     # Calculate statistics
     total_analyzed = len(update_rates)
     sorted_rates = sorted(update_rates)
-    sorted_completeness = sorted(completeness_scores)
+    sorted(completeness_scores)
 
     avg_rate = sum(update_rates) / total_analyzed if total_analyzed else None
     median_rate = sorted_rates[total_analyzed // 2] if total_analyzed else None
@@ -1377,9 +1338,9 @@ def calculate_tracking_quality_stats(hours: int = 24) -> dict:
     }
 
     # Sort sessions by quality metrics
-    session_details.sort(key=lambda x: (-x['completeness'], -x['update_rate']))
+    session_details.sort(key=lambda x: (-x["completeness"], -x["update_rate"]))
     top_quality = session_details[:10]
-    session_details.sort(key=lambda x: (x['completeness'], x['update_rate']))
+    session_details.sort(key=lambda x: (x["completeness"], x["update_rate"]))
     worst_quality = session_details[:10]
 
     return {
@@ -1411,8 +1372,8 @@ def calculate_coverage_gaps_analysis(hours: int = 24, limit: int = 100) -> dict:
     # Get sessions with enough positions to analyze gaps
     sessions = AircraftSession.objects.filter(
         last_seen__gt=cutoff,
-        total_positions__gte=5  # Need enough positions to detect gaps
-    ).order_by('-total_positions')[:limit]
+        total_positions__gte=5,  # Need enough positions to detect gaps
+    ).order_by("-total_positions")[:limit]
 
     gap_analysis = []
     all_gaps = []
@@ -1420,11 +1381,13 @@ def calculate_coverage_gaps_analysis(hours: int = 24, limit: int = 100) -> dict:
 
     for session in sessions:
         # Get all sightings for this session
-        sightings = AircraftSighting.objects.filter(
-            icao_hex=session.icao_hex,
-            timestamp__gte=session.first_seen,
-            timestamp__lte=session.last_seen
-        ).order_by('timestamp').values_list('timestamp', flat=True)
+        sightings = (
+            AircraftSighting.objects.filter(
+                icao_hex=session.icao_hex, timestamp__gte=session.first_seen, timestamp__lte=session.last_seen
+            )
+            .order_by("timestamp")
+            .values_list("timestamp", flat=True)
+        )
 
         sighting_times = list(sightings)
         if len(sighting_times) < 2:
@@ -1433,33 +1396,37 @@ def calculate_coverage_gaps_analysis(hours: int = 24, limit: int = 100) -> dict:
         # Calculate gaps
         gaps = []
         for i in range(1, len(sighting_times)):
-            gap_seconds = (sighting_times[i] - sighting_times[i-1]).total_seconds()
+            gap_seconds = (sighting_times[i] - sighting_times[i - 1]).total_seconds()
             if gap_seconds > COVERAGE_GAP_THRESHOLD:
-                gaps.append({
-                    'start': sighting_times[i-1].isoformat() + "Z",
-                    'end': sighting_times[i].isoformat() + "Z",
-                    'duration_seconds': int(gap_seconds),
-                })
+                gaps.append(
+                    {
+                        "start": sighting_times[i - 1].isoformat() + "Z",
+                        "end": sighting_times[i].isoformat() + "Z",
+                        "duration_seconds": int(gap_seconds),
+                    }
+                )
                 all_gaps.append(gap_seconds)
 
         if gaps:
             sessions_with_gaps += 1
             duration_seconds = (session.last_seen - session.first_seen).total_seconds()
-            total_gap_time = sum(g['duration_seconds'] for g in gaps)
+            total_gap_time = sum(g["duration_seconds"] for g in gaps)
             gap_percentage = (total_gap_time / duration_seconds * 100) if duration_seconds > 0 else 0
 
-            gap_analysis.append({
-                'icao_hex': session.icao_hex,
-                'callsign': session.callsign,
-                'total_gaps': len(gaps),
-                'max_gap_seconds': max(g['duration_seconds'] for g in gaps),
-                'total_gap_time_seconds': int(total_gap_time),
-                'gap_percentage': round(gap_percentage, 1),
-                'gaps': gaps[:5],  # Limit to first 5 gaps
-            })
+            gap_analysis.append(
+                {
+                    "icao_hex": session.icao_hex,
+                    "callsign": session.callsign,
+                    "total_gaps": len(gaps),
+                    "max_gap_seconds": max(g["duration_seconds"] for g in gaps),
+                    "total_gap_time_seconds": int(total_gap_time),
+                    "gap_percentage": round(gap_percentage, 1),
+                    "gaps": gaps[:5],  # Limit to first 5 gaps
+                }
+            )
 
     # Sort by gap severity
-    gap_analysis.sort(key=lambda x: -x['max_gap_seconds'])
+    gap_analysis.sort(key=lambda x: -x["max_gap_seconds"])
 
     return {
         "time_range_hours": hours,
@@ -1486,6 +1453,7 @@ def calculate_coverage_gaps_analysis(hours: int = 24, limit: int = 100) -> dict:
 # Engagement Stats
 # =============================================================================
 
+
 def calculate_engagement_stats(hours: int = 24) -> dict:
     """
     Calculate engagement statistics.
@@ -1500,123 +1468,119 @@ def calculate_engagement_stats(hours: int = 24) -> dict:
 
     # === Most Favorited Aircraft ===
     most_favorited = list(
-        AircraftFavorite.objects.values('icao_hex', 'registration')
+        AircraftFavorite.objects.values("icao_hex", "registration")
         .annotate(
-            favorite_count=Count('id'),
-            total_times_seen=Sum('times_seen'),
-            total_tracking_minutes=Sum('total_tracking_minutes'),
+            favorite_count=Count("id"),
+            total_times_seen=Sum("times_seen"),
+            total_tracking_minutes=Sum("total_tracking_minutes"),
         )
-        .order_by('-favorite_count')[:20]
+        .order_by("-favorite_count")[:20]
     )
 
     # Enrich with aircraft info
     enriched_favorites = []
-    icao_hexes = [f['icao_hex'] for f in most_favorited]
-    aircraft_infos = {
-        info.icao_hex: info
-        for info in AircraftInfo.objects.filter(icao_hex__in=icao_hexes)
-    }
+    icao_hexes = [f["icao_hex"] for f in most_favorited]
+    aircraft_infos = {info.icao_hex: info for info in AircraftInfo.objects.filter(icao_hex__in=icao_hexes)}
 
     for fav in most_favorited:
-        info = aircraft_infos.get(fav['icao_hex'])
-        enriched_favorites.append({
-            'icao_hex': fav['icao_hex'],
-            'registration': fav['registration'] or (info.registration if info else None),
-            'favorite_count': fav['favorite_count'],
-            'total_times_seen': fav['total_times_seen'] or 0,
-            'total_tracking_minutes': round(fav['total_tracking_minutes'] or 0, 1),
-            'aircraft_type': info.type_code if info else None,
-            'operator': info.operator if info else None,
-        })
+        info = aircraft_infos.get(fav["icao_hex"])
+        enriched_favorites.append(
+            {
+                "icao_hex": fav["icao_hex"],
+                "registration": fav["registration"] or (info.registration if info else None),
+                "favorite_count": fav["favorite_count"],
+                "total_times_seen": fav["total_times_seen"] or 0,
+                "total_tracking_minutes": round(fav["total_tracking_minutes"] or 0, 1),
+                "aircraft_type": info.type_code if info else None,
+                "operator": info.operator if info else None,
+            }
+        )
 
     # === Peak Concurrent Tracking Sessions ===
     # Calculate from hourly trends
     hourly_data = (
         AircraftSighting.objects.filter(timestamp__gt=cutoff)
-        .annotate(hour=TruncHour('timestamp'))
-        .values('hour')
+        .annotate(hour=TruncHour("timestamp"))
+        .values("hour")
         .annotate(
-            unique_aircraft=Count('icao_hex', distinct=True),
-            position_count=Count('id'),
+            unique_aircraft=Count("icao_hex", distinct=True),
+            position_count=Count("id"),
         )
-        .order_by('-unique_aircraft')
+        .order_by("-unique_aircraft")
     )
 
     peak_data = hourly_data.first() if hourly_data.exists() else None
     peak_concurrent = {
-        'max_aircraft': peak_data['unique_aircraft'] if peak_data else 0,
-        'peak_hour': peak_data['hour'].isoformat() + "Z" if peak_data and peak_data['hour'] else None,
-        'positions_in_peak': peak_data['position_count'] if peak_data else 0,
+        "max_aircraft": peak_data["unique_aircraft"] if peak_data else 0,
+        "peak_hour": peak_data["hour"].isoformat() + "Z" if peak_data and peak_data["hour"] else None,
+        "positions_in_peak": peak_data["position_count"] if peak_data else 0,
     }
 
     # Calculate hourly averages
     hourly_stats = hourly_data.aggregate(
-        avg_aircraft=Avg('unique_aircraft'),
-        avg_positions=Avg('position_count'),
+        avg_aircraft=Avg("unique_aircraft"),
+        avg_positions=Avg("position_count"),
     )
 
     # === Return Visitors (Aircraft seen in multiple sessions) ===
     return_visitors = list(
         AircraftSession.objects.filter(last_seen__gt=cutoff)
-        .values('icao_hex')
+        .values("icao_hex")
         .annotate(
-            session_count=Count('id'),
-            total_positions=Sum('total_positions'),
-            first_session=Min('first_seen'),
-            last_session=Max('last_seen'),
+            session_count=Count("id"),
+            total_positions=Sum("total_positions"),
+            first_session=Min("first_seen"),
+            last_session=Max("last_seen"),
         )
         .filter(session_count__gte=2)  # Seen at least twice
-        .order_by('-session_count')[:30]
+        .order_by("-session_count")[:30]
     )
 
     # Get registration info for return visitors
-    return_visitor_icaos = [rv['icao_hex'] for rv in return_visitors]
-    visitor_infos = {
-        info.icao_hex: info
-        for info in AircraftInfo.objects.filter(icao_hex__in=return_visitor_icaos)
-    }
+    return_visitor_icaos = [rv["icao_hex"] for rv in return_visitors]
+    visitor_infos = {info.icao_hex: info for info in AircraftInfo.objects.filter(icao_hex__in=return_visitor_icaos)}
 
     enriched_return_visitors = []
     for rv in return_visitors:
-        info = visitor_infos.get(rv['icao_hex'])
-        enriched_return_visitors.append({
-            'icao_hex': rv['icao_hex'],
-            'registration': info.registration if info else None,
-            'session_count': rv['session_count'],
-            'total_positions': rv['total_positions'],
-            'first_session': rv['first_session'].isoformat() + "Z" if rv['first_session'] else None,
-            'last_session': rv['last_session'].isoformat() + "Z" if rv['last_session'] else None,
-            'aircraft_type': info.type_code if info else None,
-            'operator': info.operator if info else None,
-        })
+        info = visitor_infos.get(rv["icao_hex"])
+        enriched_return_visitors.append(
+            {
+                "icao_hex": rv["icao_hex"],
+                "registration": info.registration if info else None,
+                "session_count": rv["session_count"],
+                "total_positions": rv["total_positions"],
+                "first_session": rv["first_session"].isoformat() + "Z" if rv["first_session"] else None,
+                "last_session": rv["last_session"].isoformat() + "Z" if rv["last_session"] else None,
+                "aircraft_type": info.type_code if info else None,
+                "operator": info.operator if info else None,
+            }
+        )
 
     # Session return rate
-    total_unique_aircraft = AircraftSession.objects.filter(
-        last_seen__gt=cutoff
-    ).values('icao_hex').distinct().count()
+    total_unique_aircraft = AircraftSession.objects.filter(last_seen__gt=cutoff).values("icao_hex").distinct().count()
 
-    returning_aircraft = AircraftSession.objects.filter(
-        last_seen__gt=cutoff
-    ).values('icao_hex').annotate(
-        cnt=Count('id')
-    ).filter(cnt__gte=2).count()
+    returning_aircraft = (
+        AircraftSession.objects.filter(last_seen__gt=cutoff)
+        .values("icao_hex")
+        .annotate(cnt=Count("id"))
+        .filter(cnt__gte=2)
+        .count()
+    )
 
     return_rate = (returning_aircraft / total_unique_aircraft * 100) if total_unique_aircraft > 0 else 0
 
     # === Favorite Activity Stats ===
     total_favorites = AircraftFavorite.objects.count()
     recent_favorites = AircraftFavorite.objects.filter(created_at__gt=cutoff).count()
-    active_users = AircraftFavorite.objects.filter(
-        last_seen_at__gt=cutoff
-    ).values('user').distinct().count()
+    active_users = AircraftFavorite.objects.filter(last_seen_at__gt=cutoff).values("user").distinct().count()
 
     return {
         "time_range_hours": hours,
         "most_favorited_aircraft": enriched_favorites,
         "peak_concurrent": peak_concurrent,
         "hourly_averages": {
-            "avg_aircraft_per_hour": round(hourly_stats['avg_aircraft'], 1) if hourly_stats['avg_aircraft'] else 0,
-            "avg_positions_per_hour": round(hourly_stats['avg_positions'], 1) if hourly_stats['avg_positions'] else 0,
+            "avg_aircraft_per_hour": round(hourly_stats["avg_aircraft"], 1) if hourly_stats["avg_aircraft"] else 0,
+            "avg_positions_per_hour": round(hourly_stats["avg_positions"], 1) if hourly_stats["avg_positions"] else 0,
         },
         "return_visitors": enriched_return_visitors,
         "return_visitor_stats": {
@@ -1643,7 +1607,7 @@ def refresh_tracking_quality_cache(broadcast: bool = True) -> None:
         logger.debug("Tracking quality stats cache refreshed")
 
         if broadcast:
-            broadcast_stats_update('tracking_quality', stats)
+            broadcast_stats_update("tracking_quality", stats)
 
     except Exception as e:
         logger.error(f"Error refreshing tracking quality cache: {e}")
@@ -1659,13 +1623,13 @@ def refresh_engagement_cache(broadcast: bool = True) -> None:
         logger.debug("Engagement stats cache refreshed")
 
         if broadcast:
-            broadcast_stats_update('engagement', stats)
+            broadcast_stats_update("engagement", stats)
 
     except Exception as e:
         logger.error(f"Error refreshing engagement cache: {e}")
 
 
-def get_tracking_quality_stats() -> Optional[dict]:
+def get_tracking_quality_stats() -> dict | None:
     """Get cached tracking quality stats."""
     stats = cache.get(CACHE_KEY_TRACKING_QUALITY)
     if stats is None:
@@ -1674,7 +1638,7 @@ def get_tracking_quality_stats() -> Optional[dict]:
     return stats
 
 
-def get_engagement_stats() -> Optional[dict]:
+def get_engagement_stats() -> dict | None:
     """Get cached engagement stats."""
     stats = cache.get(CACHE_KEY_ENGAGEMENT)
     if stats is None:
@@ -1692,27 +1656,32 @@ def get_coverage_gaps_analysis(hours: int = 24) -> dict:
 # ACARS Stats Integration
 # =============================================================================
 
+
 def refresh_acars_stats_cache(broadcast: bool = True) -> None:
     """Refresh ACARS stats cache."""
     from skyspy.services.acars_stats import refresh_acars_stats_cache as _refresh_acars
+
     _refresh_acars(broadcast=broadcast)
 
 
-def get_acars_stats() -> Optional[dict]:
+def get_acars_stats() -> dict | None:
     """Get cached ACARS stats."""
     from skyspy.services.acars_stats import get_cached_acars_stats
+
     return get_cached_acars_stats()
 
 
-def get_acars_trends() -> Optional[dict]:
+def get_acars_trends() -> dict | None:
     """Get cached ACARS trends."""
     from skyspy.services.acars_stats import get_cached_acars_trends
+
     return get_cached_acars_trends()
 
 
-def get_acars_airlines() -> Optional[dict]:
+def get_acars_airlines() -> dict | None:
     """Get cached ACARS airline stats."""
     from skyspy.services.acars_stats import get_cached_acars_airlines
+
     return get_cached_acars_airlines()
 
 

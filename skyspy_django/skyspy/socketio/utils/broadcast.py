@@ -13,10 +13,10 @@ The Redis channel format for python-socketio with Redis manager is:
 
 Message format follows Socket.IO's internal protocol (msgpack serialized).
 """
+
 import json
 import logging
 from threading import Lock
-from typing import Any, Optional
 
 from django.conf import settings
 
@@ -43,6 +43,7 @@ def _get_redis_client():
     # Fast path: pool already exists
     if _redis_pool is not None:
         import redis
+
         return redis.Redis(connection_pool=_redis_pool)
 
     # Slow path: need to create pool with lock
@@ -50,8 +51,9 @@ def _get_redis_client():
         # Double-check after acquiring lock
         if _redis_pool is None:
             import redis
-            redis_url = getattr(settings, 'REDIS_URL', 'redis://localhost:6379/0')
-            pool_size = getattr(settings, 'SOCKETIO_REDIS_POOL_SIZE', 50)
+
+            redis_url = getattr(settings, "REDIS_URL", "redis://localhost:6379/0")
+            pool_size = getattr(settings, "SOCKETIO_REDIS_POOL_SIZE", 50)
             _redis_pool = redis.ConnectionPool.from_url(
                 redis_url,
                 max_connections=pool_size,
@@ -60,15 +62,16 @@ def _get_redis_client():
             logger.info(f"Created Redis connection pool with {pool_size} max connections")
 
     import redis
+
     return redis.Redis(connection_pool=_redis_pool)
 
 
 def _build_socketio_message(
     event: str,
     data: dict,
-    room: Optional[str] = None,
-    namespace: str = '/',
-    skip_sid: Optional[str] = None,
+    room: str | None = None,
+    namespace: str = "/",
+    skip_sid: str | None = None,
 ) -> dict:
     """
     Build a Socket.IO message in the format expected by the Redis manager.
@@ -99,13 +102,13 @@ def _build_socketio_message(
         The message dict ready for serialization
     """
     return {
-        'method': 'emit',
-        'event': event,
-        'data': data,
-        'namespace': namespace,
-        'room': room,
-        'skip_sid': skip_sid,
-        'callback': None,
+        "method": "emit",
+        "event": event,
+        "data": data,
+        "namespace": namespace,
+        "room": room,
+        "skip_sid": skip_sid,
+        "callback": None,
     }
 
 
@@ -122,10 +125,10 @@ def _serialize_message(message: dict) -> bytes:
     Returns:
         Serialized message as JSON bytes
     """
-    return json.dumps(message).encode('utf-8')
+    return json.dumps(message).encode("utf-8")
 
 
-def _get_channel_name(namespace: str = '/') -> str:
+def _get_channel_name(namespace: str = "/") -> str:
     """
     Get the Redis pub/sub channel name for Socket.IO.
 
@@ -140,15 +143,15 @@ def _get_channel_name(namespace: str = '/') -> str:
         The Redis channel name ('socketio')
     """
     # python-socketio uses 'socketio' as the channel for all namespaces
-    return 'socketio'
+    return "socketio"
 
 
 def sync_emit(
     event: str,
     data: dict,
-    room: Optional[str] = None,
-    namespace: str = '/',
-    skip_sid: Optional[str] = None,
+    room: str | None = None,
+    namespace: str = "/",
+    skip_sid: str | None = None,
 ) -> bool:
     """
     Synchronously emit a Socket.IO event via Redis pub/sub.
@@ -209,9 +212,7 @@ def sync_emit(
 
     except Exception as e:
         logger.warning(
-            f"Socket.IO sync_emit error: {e} "
-            f"(event={event}, room={room}, namespace={namespace})",
-            exc_info=True
+            f"Socket.IO sync_emit error: {e} (event={event}, room={room}, namespace={namespace})", exc_info=True
         )
         return False
 
@@ -220,8 +221,8 @@ def broadcast_to_room(
     room: str,
     event: str,
     data: dict,
-    namespace: str = '/',
-    skip_sid: Optional[str] = None,
+    namespace: str = "/",
+    skip_sid: str | None = None,
 ) -> bool:
     """
     Broadcast a Socket.IO event to a specific room.
@@ -258,8 +259,8 @@ def broadcast_to_room(
 def broadcast_to_all(
     event: str,
     data: dict,
-    namespace: str = '/',
-    skip_sid: Optional[str] = None,
+    namespace: str = "/",
+    skip_sid: str | None = None,
 ) -> bool:
     """
     Broadcast a Socket.IO event to all connected clients in a namespace.
@@ -295,8 +296,8 @@ def broadcast_to_all(
 
 def broadcast_aircraft_update(
     aircraft_data: dict,
-    room: str = 'aircraft:live',
-    namespace: str = '/',
+    room: str = "aircraft:live",
+    namespace: str = "/",
 ) -> bool:
     """
     Broadcast an aircraft update event.
@@ -314,7 +315,7 @@ def broadcast_aircraft_update(
     """
     return broadcast_to_room(
         room=room,
-        event='aircraft:update',
+        event="aircraft:update",
         data=aircraft_data,
         namespace=namespace,
     )
@@ -322,8 +323,8 @@ def broadcast_aircraft_update(
 
 def broadcast_alert(
     alert_data: dict,
-    room: str = 'alerts',
-    namespace: str = '/',
+    room: str = "alerts",
+    namespace: str = "/",
 ) -> bool:
     """
     Broadcast an alert event.
@@ -341,7 +342,7 @@ def broadcast_alert(
     """
     return broadcast_to_room(
         room=room,
-        event='alert:new',
+        event="alert:new",
         data=alert_data,
         namespace=namespace,
     )
@@ -349,8 +350,8 @@ def broadcast_alert(
 
 def broadcast_safety_event(
     event_data: dict,
-    room: str = 'safety',
-    namespace: str = '/',
+    room: str = "safety",
+    namespace: str = "/",
 ) -> bool:
     """
     Broadcast a safety event.
@@ -368,7 +369,7 @@ def broadcast_safety_event(
     """
     return broadcast_to_room(
         room=room,
-        event='safety:event',
+        event="safety:event",
         data=event_data,
         namespace=namespace,
     )

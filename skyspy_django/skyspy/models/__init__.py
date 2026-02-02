@@ -6,108 +6,129 @@ organized by domain area.
 """
 
 # Import all models for Django's model registry
-from skyspy.models.aircraft import AircraftSighting, AircraftSession, AircraftInfo, AirframeSourceData
-from skyspy.models.alerts import AlertRule, AlertHistory, AlertSubscription, AlertAggregate
+from skyspy.models.acars import AcarsMessage
+from skyspy.models.aircraft import AircraftInfo, AircraftSession, AircraftSighting, AirframeSourceData
+from skyspy.models.airspace import AirspaceAdvisory, AirspaceBoundary
+from skyspy.models.alerts import AlertAggregate, AlertHistory, AlertRule, AlertSubscription
+from skyspy.models.antenna import AntennaAnalyticsSnapshot
+from skyspy.models.audio import AudioTransmission
+from skyspy.models.auth import (
+    ALL_PERMISSIONS,
+    DEFAULT_ROLES,
+    FEATURE_PERMISSIONS,
+    APIKey,
+    FeatureAccess,
+    OIDCClaimMapping,
+    Role,
+    SkyspyUser,
+    UserRole,
+)
+from skyspy.models.aviation import CachedAirport, CachedGeoJSON, CachedNavaid, CachedPirep
+from skyspy.models.cannonball import (
+    CannonballAlert,
+    CannonballKnownAircraft,
+    CannonballPattern,
+    CannonballSession,
+    CannonballStats,
+)
+from skyspy.models.config import ConfigAuditLog, SystemConfig
+from skyspy.models.engagement import AircraftFavorite, SessionTrackingQuality
+from skyspy.models.notams import CachedAircraftType, CachedAirline, CachedNotam
 from skyspy.models.notifications import (
-    NotificationConfig, NotificationLog, NotificationChannel,
-    NotificationTemplate, UserNotificationPreference,
+    NotificationChannel,
+    NotificationConfig,
+    NotificationLog,
+    NotificationTemplate,
+    UserNotificationPreference,
 )
 from skyspy.models.safety import SafetyEvent
-from skyspy.models.acars import AcarsMessage
-from skyspy.models.airspace import AirspaceAdvisory, AirspaceBoundary
-from skyspy.models.aviation import CachedAirport, CachedNavaid, CachedGeoJSON, CachedPirep
-from skyspy.models.audio import AudioTransmission
-from skyspy.models.antenna import AntennaAnalyticsSnapshot
-from skyspy.models.auth import (
-    SkyspyUser, Role, UserRole, APIKey, FeatureAccess, OIDCClaimMapping,
-    FEATURE_PERMISSIONS, ALL_PERMISSIONS, DEFAULT_ROLES,
-)
-from skyspy.models.engagement import AircraftFavorite, SessionTrackingQuality
-from skyspy.models.notams import CachedNotam, CachedAirline, CachedAircraftType
 from skyspy.models.stats import (
-    PersonalRecord, RareSighting, SpottedCount, SpottedAircraft,
-    SightingStreak, DailyStats, NotableRegistration, NotableCallsign, RareAircraftType,
+    DailyStats,
+    NotableCallsign,
+    NotableRegistration,
+    PersonalRecord,
+    RareAircraftType,
+    RareSighting,
+    SightingStreak,
+    SpottedAircraft,
+    SpottedCount,
 )
-from skyspy.models.cannonball import (
-    CannonballPattern, CannonballSession, CannonballAlert,
-    CannonballKnownAircraft, CannonballStats,
-)
-from skyspy.models.config import SystemConfig, ConfigAuditLog
 
 __all__ = [
     # Aircraft
-    'AircraftSighting',
-    'AircraftSession',
-    'AircraftInfo',
-    'AirframeSourceData',
+    "AircraftSighting",
+    "AircraftSession",
+    "AircraftInfo",
+    "AirframeSourceData",
     # Alerts
-    'AlertRule',
-    'AlertHistory',
-    'AlertSubscription',
-    'AlertAggregate',
+    "AlertRule",
+    "AlertHistory",
+    "AlertSubscription",
+    "AlertAggregate",
     # Notifications
-    'NotificationConfig',
-    'NotificationLog',
-    'NotificationChannel',
-    'NotificationTemplate',
-    'UserNotificationPreference',
+    "NotificationConfig",
+    "NotificationLog",
+    "NotificationChannel",
+    "NotificationTemplate",
+    "UserNotificationPreference",
     # Safety
-    'SafetyEvent',
+    "SafetyEvent",
     # ACARS
-    'AcarsMessage',
+    "AcarsMessage",
     # Airspace
-    'AirspaceAdvisory',
-    'AirspaceBoundary',
+    "AirspaceAdvisory",
+    "AirspaceBoundary",
     # Aviation
-    'CachedAirport',
-    'CachedNavaid',
-    'CachedGeoJSON',
-    'CachedPirep',
+    "CachedAirport",
+    "CachedNavaid",
+    "CachedGeoJSON",
+    "CachedPirep",
     # Audio
-    'AudioTransmission',
+    "AudioTransmission",
     # Antenna
-    'AntennaAnalyticsSnapshot',
+    "AntennaAnalyticsSnapshot",
     # Auth
-    'SkyspyUser',
-    'Role',
-    'UserRole',
-    'APIKey',
-    'FeatureAccess',
-    'OIDCClaimMapping',
-    'FEATURE_PERMISSIONS',
-    'ALL_PERMISSIONS',
-    'DEFAULT_ROLES',
+    "SkyspyUser",
+    "Role",
+    "UserRole",
+    "APIKey",
+    "FeatureAccess",
+    "OIDCClaimMapping",
+    "FEATURE_PERMISSIONS",
+    "ALL_PERMISSIONS",
+    "DEFAULT_ROLES",
     # Engagement
-    'AircraftFavorite',
-    'SessionTrackingQuality',
+    "AircraftFavorite",
+    "SessionTrackingQuality",
     # NOTAMs and Static Data
-    'CachedNotam',
-    'CachedAirline',
-    'CachedAircraftType',
+    "CachedNotam",
+    "CachedAirline",
+    "CachedAircraftType",
     # Stats and Gamification
-    'PersonalRecord',
-    'RareSighting',
-    'SpottedCount',
-    'SpottedAircraft',
-    'SightingStreak',
-    'DailyStats',
-    'NotableRegistration',
-    'NotableCallsign',
-    'RareAircraftType',
+    "PersonalRecord",
+    "RareSighting",
+    "SpottedCount",
+    "SpottedAircraft",
+    "SightingStreak",
+    "DailyStats",
+    "NotableRegistration",
+    "NotableCallsign",
+    "RareAircraftType",
     # Cannonball
-    'CannonballPattern',
-    'CannonballSession',
-    'CannonballAlert',
-    'CannonballKnownAircraft',
-    'CannonballStats',
+    "CannonballPattern",
+    "CannonballSession",
+    "CannonballAlert",
+    "CannonballKnownAircraft",
+    "CannonballStats",
     # System Configuration
-    'SystemConfig',
-    'ConfigAuditLog',
+    "SystemConfig",
+    "ConfigAuditLog",
 ]
 
 # Connect cache invalidation signals after models are loaded
 try:
     from skyspy.signals import connect_cache_signals
+
     connect_cache_signals()
 except ImportError:
     pass  # Signals module may not exist in some configurations

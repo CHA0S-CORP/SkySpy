@@ -13,6 +13,40 @@ import {
  * - Trend charts (30-day, 12-week, 12-month)
  */
 export function TimeComparisonSection({ data, loading }) {
+  const {
+    week_over_week = {},
+    day_night_ratio = {},
+    weekend_weekday = {},
+    trends = {}
+  } = data || {};
+
+  // Normalize trend data for chart
+  const normalizeTrendData = (trendData, maxPoints) => {
+    if (!trendData || trendData.length === 0) return [];
+    const slicedData = trendData.slice(-maxPoints);
+    const max = Math.max(...slicedData.map(d => d.value || 0), 1);
+    return slicedData.map(d => ({
+      ...d,
+      normalized: ((d.value || 0) / max) * 100
+    }));
+  };
+
+  // Trend memos - must be called before any conditional returns
+  const thirtyDayTrend = useMemo(() =>
+    normalizeTrendData(trends.daily_30, 30),
+    [trends.daily_30]
+  );
+
+  const twelveWeekTrend = useMemo(() =>
+    normalizeTrendData(trends.weekly_12, 12),
+    [trends.weekly_12]
+  );
+
+  const twelveMonthTrend = useMemo(() =>
+    normalizeTrendData(trends.monthly_12, 12),
+    [trends.monthly_12]
+  );
+
   // Show loading skeleton when data is loading
   if (loading) {
     return (
@@ -30,13 +64,6 @@ export function TimeComparisonSection({ data, loading }) {
   }
 
   if (!data) return null;
-
-  const {
-    week_over_week = {},
-    day_night_ratio = {},
-    weekend_weekday = {},
-    trends = {}
-  } = data;
 
   // Calculate change indicators
   const getChangeIcon = (change) => {
@@ -91,32 +118,6 @@ export function TimeComparisonSection({ data, loading }) {
   const weekdayCount = weekend_weekday.weekday_count ?? 0;
   const weekendAvg = weekend_weekday.weekend_avg ?? 0;
   const weekdayAvg = weekend_weekday.weekday_avg ?? 0;
-
-  // Normalize trend data for chart
-  const normalizeTrendData = (trendData, maxPoints) => {
-    if (!trendData || trendData.length === 0) return [];
-    const data = trendData.slice(-maxPoints);
-    const max = Math.max(...data.map(d => d.value || 0), 1);
-    return data.map(d => ({
-      ...d,
-      normalized: ((d.value || 0) / max) * 100
-    }));
-  };
-
-  const thirtyDayTrend = useMemo(() =>
-    normalizeTrendData(trends.daily_30, 30),
-    [trends.daily_30]
-  );
-
-  const twelveWeekTrend = useMemo(() =>
-    normalizeTrendData(trends.weekly_12, 12),
-    [trends.weekly_12]
-  );
-
-  const twelveMonthTrend = useMemo(() =>
-    normalizeTrendData(trends.monthly_12, 12),
-    [trends.monthly_12]
-  );
 
   return (
     <div className="stats-section time-comparison-section">

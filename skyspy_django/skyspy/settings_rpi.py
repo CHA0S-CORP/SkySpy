@@ -15,6 +15,7 @@ Or in Docker Compose:
     environment:
       - DJANGO_SETTINGS_MODULE=skyspy.settings_rpi
 """
+
 from .settings import *
 
 # =============================================================================
@@ -56,20 +57,20 @@ WEBSOCKET_CAPACITY = 1000  # Was 1500 - limit channel layer capacity
 # Keep connections open longer to reduce connection overhead
 CONN_MAX_AGE = 120  # Was 60 - doubles connection lifetime
 DATABASE_OPTIONS = {
-    'connect_timeout': 5,  # Faster timeout for connection attempts
+    "connect_timeout": 5,  # Faster timeout for connection attempts
 }
 
 # Update database config with new options
-if not BUILD_MODE and 'default' in DATABASES:
-    DATABASES['default']['CONN_MAX_AGE'] = CONN_MAX_AGE
-    DATABASES['default'].setdefault('OPTIONS', {}).update(DATABASE_OPTIONS)
+if not BUILD_MODE and "default" in DATABASES:
+    DATABASES["default"]["CONN_MAX_AGE"] = CONN_MAX_AGE
+    DATABASES["default"].setdefault("OPTIONS", {}).update(DATABASE_OPTIONS)
 
 # =============================================================================
 # WebSocket/Channel Layer Optimization
 # =============================================================================
 # Reduce channel layer capacity for lower memory usage
 if not BUILD_MODE:
-    CHANNEL_LAYERS['default']['CONFIG']['capacity'] = WEBSOCKET_CAPACITY
+    CHANNEL_LAYERS["default"]["CONFIG"]["capacity"] = WEBSOCKET_CAPACITY
 
 # =============================================================================
 # Celery Beat Schedule Adjustments
@@ -80,16 +81,15 @@ if not BUILD_MODE:
 # Task interval overrides (in seconds or crontab)
 RPI_TASK_INTERVALS = {
     # Stats tasks - reduce frequency
-    'flight_pattern_geographic_stats': 600,  # Was 120s (2min) -> 10min
-    'time_comparison_stats': 900,  # Was 300s (5min) -> 15min
-    'tracking_quality_stats': 600,  # Was 120s (2min) -> 10min
-    'engagement_stats': 600,  # Was 120s (2min) -> 10min
-    'antenna_analytics': 600,  # Was 300s (5min) -> 10min
-
+    "flight_pattern_geographic_stats": 600,  # Was 120s (2min) -> 10min
+    "time_comparison_stats": 900,  # Was 300s (5min) -> 15min
+    "tracking_quality_stats": 600,  # Was 120s (2min) -> 10min
+    "engagement_stats": 600,  # Was 120s (2min) -> 10min
+    "antenna_analytics": 600,  # Was 300s (5min) -> 10min
     # Other expensive tasks
-    'acars_stats': 120,  # Was 60s -> 2min
-    'stats_cache': 90,  # Was 60s -> 90s
-    'safety_stats': 60,  # Was 30s -> 60s
+    "acars_stats": 120,  # Was 60s -> 2min
+    "stats_cache": 90,  # Was 60s -> 90s
+    "safety_stats": 60,  # Was 30s -> 60s
 }
 
 # =============================================================================
@@ -98,10 +98,10 @@ RPI_TASK_INTERVALS = {
 # Can be overridden via environment variables
 import os
 
-SIGHTING_RETENTION_DAYS = int(os.getenv('SIGHTING_RETENTION_DAYS', '7'))  # Was 30
-SESSION_RETENTION_DAYS = int(os.getenv('SESSION_RETENTION_DAYS', '14'))  # Was 90
-ALERT_HISTORY_DAYS = int(os.getenv('ALERT_HISTORY_DAYS', '7'))  # Was 30
-ANTENNA_SNAPSHOT_RETENTION_DAYS = int(os.getenv('ANTENNA_SNAPSHOT_RETENTION_DAYS', '3'))  # Was 7
+SIGHTING_RETENTION_DAYS = int(os.getenv("SIGHTING_RETENTION_DAYS", "7"))  # Was 30
+SESSION_RETENTION_DAYS = int(os.getenv("SESSION_RETENTION_DAYS", "14"))  # Was 90
+ALERT_HISTORY_DAYS = int(os.getenv("ALERT_HISTORY_DAYS", "7"))  # Was 30
+ANTENNA_SNAPSHOT_RETENTION_DAYS = int(os.getenv("ANTENNA_SNAPSHOT_RETENTION_DAYS", "3"))  # Was 7
 
 # =============================================================================
 # Query Limits
@@ -116,11 +116,11 @@ MAX_STATS_SAMPLE_SIZE = 1000  # Limit for stats calculations
 # =============================================================================
 # Rate limits for WebSocket broadcasts (messages per second)
 WS_RATE_LIMITS = {
-    'aircraft:update': 10,  # Max 10 Hz
-    'aircraft:position': 5,  # Max 5 Hz for position-only updates
-    'aircraft:delta': 10,  # Max 10 Hz for delta updates
-    'stats:update': 0.5,  # Max 0.5 Hz (2 second minimum)
-    'default': 5,  # Default rate limit
+    "aircraft:update": 10,  # Max 10 Hz
+    "aircraft:position": 5,  # Max 5 Hz for position-only updates
+    "aircraft:delta": 10,  # Max 10 Hz for delta updates
+    "stats:update": 0.5,  # Max 0.5 Hz (2 second minimum)
+    "default": 5,  # Default rate limit
 }
 
 # Message batching configuration
@@ -128,16 +128,20 @@ WS_BATCH_WINDOW_MS = 50  # Collect messages for 50ms before sending (reduced fro
 WS_MAX_BATCH_SIZE = 50  # Maximum messages per batch
 # Immediate types bypass batching entirely for real-time feel
 WS_IMMEDIATE_TYPES = [
-    'alert', 'safety', 'emergency',  # Critical events
-    'aircraft:update', 'aircraft:new', 'aircraft:position',  # Real-time aircraft updates
+    "alert",
+    "safety",
+    "emergency",  # Critical events
+    "aircraft:update",
+    "aircraft:new",
+    "aircraft:position",  # Real-time aircraft updates
 ]
 
 # =============================================================================
 # Logging (reduce verbosity for RPi)
 # =============================================================================
-LOGGING['root']['level'] = 'WARNING'
-LOGGING['loggers']['skyspy']['level'] = 'INFO'
-LOGGING['loggers']['django']['level'] = 'WARNING'
+LOGGING["root"]["level"] = "WARNING"
+LOGGING["loggers"]["skyspy"]["level"] = "INFO"
+LOGGING["loggers"]["django"]["level"] = "WARNING"
 
 # =============================================================================
 # Lite Mode Flag

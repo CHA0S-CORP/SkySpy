@@ -4,39 +4,36 @@ Tests for the binding module.
 Includes tests with mock library to allow testing without libacars installed.
 """
 
-import asyncio
-import json
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
 
 from skyspy_common.libacars import (
+    BatchMessage,
+    BatchResult,
+    # Exceptions
+    LibacarsDisabledError,
+    LibacarsStats,
+    LibacarsValidationError,
+    # Types
+    MsgDir,
     # Core functions
     decode_acars_apps,
-    decode_acars_apps_text,
-    extract_sublabel_mfi,
     # Async versions
     decode_acars_apps_async,
+    decode_acars_apps_text,
     decode_acars_apps_text_async,
     # Batch operations
     decode_batch,
     decode_batch_async,
-    BatchMessage,
-    BatchResult,
-    # Types
-    MsgDir,
-    DecodeResult,
-    LibacarsStats,
+    extract_sublabel_mfi,
     # State management
-    is_available,
     get_backend,
     get_stats,
-    reset_stats,
     reset_error_state,
-    # Exceptions
-    LibacarsDecodeError,
-    LibacarsDisabledError,
-    LibacarsValidationError,
+    reset_stats,
 )
+
 # Fixed: Import api as binding_module since logic was refactored there
 from skyspy_common.libacars import api as binding_module
 
@@ -222,6 +219,7 @@ class TestDecodeWithMockLibrary:
     def test_decode_when_circuit_open(self):
         """Test that decode returns None when circuit breaker is open."""
         from skyspy_common.libacars.circuit_breaker import get_circuit_breaker, reset_circuit_breaker
+
         reset_circuit_breaker()
         breaker = get_circuit_breaker()
         breaker.force_open()  # Force circuit to open state
@@ -232,6 +230,7 @@ class TestDecodeWithMockLibrary:
     def test_decode_raises_when_circuit_open(self):
         """Test that decode raises LibacarsDisabledError when circuit is open."""
         from skyspy_common.libacars.circuit_breaker import get_circuit_breaker, reset_circuit_breaker
+
         reset_circuit_breaker()
         breaker = get_circuit_breaker()
         breaker.force_open()  # Force circuit to open state
@@ -255,6 +254,7 @@ class TestStateManagement:
     def test_reset_error_state(self):
         """Test that reset_error_state re-enables library."""
         from skyspy_common.libacars.circuit_breaker import get_circuit_breaker, reset_circuit_breaker
+
         reset_circuit_breaker()
         breaker = get_circuit_breaker()
 
@@ -310,7 +310,7 @@ class TestBatchDecoding:
         """Test batch decode handles validation failures."""
         messages = [
             BatchMessage(label="", text="Test", id="msg-1"),  # Invalid label
-            BatchMessage(label="H1", text="", id="msg-2"),    # Invalid text
+            BatchMessage(label="H1", text="", id="msg-2"),  # Invalid text
         ]
         results = decode_batch(messages)
         assert len(results) == 2

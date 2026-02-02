@@ -1,33 +1,34 @@
 """
 Airspace models for advisories (G-AIRMETs, SIGMETs) and static boundaries (Class B/C/D).
 """
-from django.db import models
+
 from django.core.exceptions import ValidationError
+from django.db import models
 
 
 class AirspaceAdvisory(models.Model):
     """Active airspace advisories (G-AIRMETs, SIGMETs) from Aviation Weather Center."""
 
     ADVISORY_TYPES = [
-        ('GAIRMET', 'G-AIRMET'),
-        ('SIGMET', 'SIGMET'),
-        ('CONVECTIVE_SIGMET', 'Convective SIGMET'),
-        ('CWA', 'Center Weather Advisory'),
-        ('AIRMET', 'AIRMET'),
+        ("GAIRMET", "G-AIRMET"),
+        ("SIGMET", "SIGMET"),
+        ("CONVECTIVE_SIGMET", "Convective SIGMET"),
+        ("CWA", "Center Weather Advisory"),
+        ("AIRMET", "AIRMET"),
     ]
 
     HAZARD_TYPES = [
-        ('IFR', 'IFR Conditions'),
-        ('TURB', 'Turbulence'),
-        ('TURB-LO', 'Low-Level Turbulence'),
-        ('TURB-HI', 'High-Level Turbulence'),
-        ('ICE', 'Icing'),
-        ('MT_OBSC', 'Mountain Obscuration'),
-        ('SFC_WND', 'Surface Wind'),
-        ('LLWS', 'Low-Level Wind Shear'),
-        ('TS', 'Thunderstorm'),
-        ('VOLCANIC_ASH', 'Volcanic Ash'),
-        ('TROPICAL_CYCLONE', 'Tropical Cyclone'),
+        ("IFR", "IFR Conditions"),
+        ("TURB", "Turbulence"),
+        ("TURB-LO", "Low-Level Turbulence"),
+        ("TURB-HI", "High-Level Turbulence"),
+        ("ICE", "Icing"),
+        ("MT_OBSC", "Mountain Obscuration"),
+        ("SFC_WND", "Surface Wind"),
+        ("LLWS", "Low-Level Wind Shear"),
+        ("TS", "Thunderstorm"),
+        ("VOLCANIC_ASH", "Volcanic Ash"),
+        ("TROPICAL_CYCLONE", "Tropical Cyclone"),
     ]
 
     fetched_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -55,12 +56,12 @@ class AirspaceAdvisory(models.Model):
     source_data = models.JSONField(blank=True, null=True)
 
     class Meta:
-        db_table = 'airspace_advisories'
+        db_table = "airspace_advisories"
         indexes = [
-            models.Index(fields=['valid_from', 'valid_to'], name='idx_airspace_advisory_valid'),
-            models.Index(fields=['advisory_type', 'hazard'], name='idx_airspace_advisory_type'),
+            models.Index(fields=["valid_from", "valid_to"], name="idx_airspace_advisory_valid"),
+            models.Index(fields=["advisory_type", "hazard"], name="idx_airspace_advisory_type"),
         ]
-        ordering = ['-fetched_at']
+        ordering = ["-fetched_at"]
 
     def __str__(self):
         return f"{self.advisory_type} {self.hazard or ''} - {self.advisory_id}"
@@ -68,29 +69,31 @@ class AirspaceAdvisory(models.Model):
     def clean(self):
         if self.lower_alt_ft is not None and self.upper_alt_ft is not None:
             if self.upper_alt_ft < self.lower_alt_ft:
-                raise ValidationError({'upper_alt_ft': 'Upper altitude must be greater than or equal to lower altitude'})
+                raise ValidationError(
+                    {"upper_alt_ft": "Upper altitude must be greater than or equal to lower altitude"}
+                )
 
 
 class AirspaceBoundary(models.Model):
     """Static airspace boundary data (Class B/C/D, MOAs, Restricted)."""
 
     AIRSPACE_CLASSES = [
-        ('B', 'Class B'),
-        ('C', 'Class C'),
-        ('D', 'Class D'),
-        ('E', 'Class E'),
-        ('MOA', 'Military Operations Area'),
-        ('RESTRICTED', 'Restricted'),
-        ('PROHIBITED', 'Prohibited'),
-        ('WARNING', 'Warning'),
-        ('ALERT', 'Alert'),
-        ('TFR', 'Temporary Flight Restriction'),
+        ("B", "Class B"),
+        ("C", "Class C"),
+        ("D", "Class D"),
+        ("E", "Class E"),
+        ("MOA", "Military Operations Area"),
+        ("RESTRICTED", "Restricted"),
+        ("PROHIBITED", "Prohibited"),
+        ("WARNING", "Warning"),
+        ("ALERT", "Alert"),
+        ("TFR", "Temporary Flight Restriction"),
     ]
 
     SOURCE_CHOICES = [
-        ('faa', 'FAA'),
-        ('openaip', 'OpenAIP'),
-        ('embedded', 'Embedded'),
+        ("faa", "FAA"),
+        ("openaip", "OpenAIP"),
+        ("embedded", "Embedded"),
     ]
 
     fetched_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -115,17 +118,17 @@ class AirspaceBoundary(models.Model):
     schedule = models.CharField(max_length=200, blank=True, null=True)
 
     # Source tracking
-    source = models.CharField(max_length=50, choices=SOURCE_CHOICES, default='faa')
+    source = models.CharField(max_length=50, choices=SOURCE_CHOICES, default="faa")
     source_id = models.CharField(max_length=100, blank=True, null=True)  # External ID
 
     # Cache management
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'airspace_boundaries'
+        db_table = "airspace_boundaries"
         indexes = [
-            models.Index(fields=['airspace_class'], name='idx_airspace_boundary_class'),
-            models.Index(fields=['center_lat', 'center_lon'], name='idx_airspace_boundary_loc'),
+            models.Index(fields=["airspace_class"], name="idx_airspace_boundary_class"),
+            models.Index(fields=["center_lat", "center_lon"], name="idx_airspace_boundary_loc"),
         ]
 
     def __str__(self):
@@ -133,4 +136,4 @@ class AirspaceBoundary(models.Model):
 
     def clean(self):
         if self.ceiling_ft < self.floor_ft:
-            raise ValidationError({'ceiling_ft': 'Ceiling altitude must be greater than or equal to floor altitude'})
+            raise ValidationError({"ceiling_ft": "Ceiling altitude must be greater than or equal to floor altitude"})

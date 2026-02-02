@@ -11,6 +11,26 @@ import {
  * - Message trends over time
  */
 export function AcarsStatsSection({ data, loading }) {
+  const {
+    message_types = [],
+    top_airlines = [],
+    hourly_trend = [],
+    total_messages = 0,
+    last_24h = 0,
+    last_hour = 0,
+    service_stats = {}
+  } = data || {};
+
+  // Normalize hourly trend - must be called before any conditional returns
+  const trendData = useMemo(() => {
+    if (!hourly_trend.length) return [];
+    const max = Math.max(...hourly_trend.map(h => h.count || 0), 1);
+    return hourly_trend.map(h => ({
+      ...h,
+      normalized: ((h.count || 0) / max) * 100
+    }));
+  }, [hourly_trend]);
+
   // Show loading skeleton when data is loading
   if (loading) {
     return (
@@ -28,16 +48,6 @@ export function AcarsStatsSection({ data, loading }) {
   }
 
   if (!data) return null;
-
-  const {
-    message_types = [],
-    top_airlines = [],
-    hourly_trend = [],
-    total_messages = 0,
-    last_24h = 0,
-    last_hour = 0,
-    service_stats = {}
-  } = data;
 
   // ACARS label descriptions
   const labelDescriptions = {
@@ -75,16 +85,6 @@ export function AcarsStatsSection({ data, loading }) {
     '#00c8ff', '#00ff88', '#a371f7', '#ff9f43',
     '#f85149', '#f7d794', '#4ecdc4', '#95e1d3'
   ];
-
-  // Normalize hourly trend
-  const trendData = useMemo(() => {
-    if (!hourly_trend.length) return [];
-    const max = Math.max(...hourly_trend.map(h => h.count || 0), 1);
-    return hourly_trend.map(h => ({
-      ...h,
-      normalized: ((h.count || 0) / max) * 100
-    }));
-  }, [hourly_trend]);
 
   return (
     <div className="stats-section acars-stats-section">

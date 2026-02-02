@@ -5,12 +5,12 @@ Tests for the exceptions module.
 import pytest
 
 from skyspy_common.libacars.exceptions import (
+    LibacarsDecodeError,
+    LibacarsDisabledError,
     LibacarsError,
     LibacarsLoadError,
-    LibacarsDecodeError,
     LibacarsMemoryError,
     LibacarsValidationError,
-    LibacarsDisabledError,
 )
 
 

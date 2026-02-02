@@ -4,38 +4,45 @@ Gamification Service for SkysPy.
 Handles personal records, rare sightings detection, collection tracking, and streak management.
 All expensive queries are cached with configurable TTLs.
 """
+
 import logging
 import re
-from datetime import datetime, timedelta, date
-from typing import Optional
+from datetime import date, datetime, timedelta
 
-from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Count, Avg, Max, Min, Sum, F, Q
-from django.db.models.functions import TruncDate
+from django.db.models import Count, Max, Sum
 from django.utils import timezone
 
 from skyspy.models import (
-    AircraftSighting, AircraftSession, AircraftInfo,
+    AircraftInfo,
+    AircraftSession,
+    AircraftSighting,
 )
 from skyspy.models.stats import (
-    PersonalRecord, RareSighting, SpottedCount, SpottedAircraft,
-    SightingStreak, DailyStats, NotableRegistration, NotableCallsign, RareAircraftType,
+    DailyStats,
+    NotableCallsign,
+    NotableRegistration,
+    PersonalRecord,
+    RareAircraftType,
+    RareSighting,
+    SightingStreak,
+    SpottedAircraft,
+    SpottedCount,
 )
 
 logger = logging.getLogger(__name__)
 
 # Cache keys
-CACHE_KEY_PERSONAL_RECORDS = 'gamification:personal_records'
-CACHE_KEY_RARE_SIGHTINGS = 'gamification:rare_sightings'
-CACHE_KEY_COLLECTION_STATS = 'gamification:collection_stats'
-CACHE_KEY_SPOTTED_BY_TYPE = 'gamification:spotted_by_type'
-CACHE_KEY_SPOTTED_BY_OPERATOR = 'gamification:spotted_by_operator'
-CACHE_KEY_STREAKS = 'gamification:streaks'
-CACHE_KEY_DAILY_STATS = 'gamification:daily_stats'
-CACHE_KEY_ACHIEVEMENTS = 'gamification:achievements'
-CACHE_KEY_LIFETIME_STATS = 'gamification:lifetime_stats'
+CACHE_KEY_PERSONAL_RECORDS = "gamification:personal_records"
+CACHE_KEY_RARE_SIGHTINGS = "gamification:rare_sightings"
+CACHE_KEY_COLLECTION_STATS = "gamification:collection_stats"
+CACHE_KEY_SPOTTED_BY_TYPE = "gamification:spotted_by_type"
+CACHE_KEY_SPOTTED_BY_OPERATOR = "gamification:spotted_by_operator"
+CACHE_KEY_STREAKS = "gamification:streaks"
+CACHE_KEY_DAILY_STATS = "gamification:daily_stats"
+CACHE_KEY_ACHIEVEMENTS = "gamification:achievements"
+CACHE_KEY_LIFETIME_STATS = "gamification:lifetime_stats"
 
 # Cache timeouts (seconds)
 PERSONAL_RECORDS_TIMEOUT = 300  # 5 minutes
@@ -48,47 +55,107 @@ LIFETIME_STATS_TIMEOUT = 600  # 10 minutes
 # Default notable patterns
 DEFAULT_NOTABLE_REGISTRATIONS = [
     # US Government
-    {'name': 'US Government (N1xx)', 'pattern': r'^N1[0-9]{2}$', 'pattern_type': 'regex', 'category': 'government', 'rarity_score': 9},
-    {'name': 'Air Force One/Two', 'pattern': r'^(SAM|AF1|AF2)', 'pattern_type': 'regex', 'category': 'government', 'rarity_score': 10},
+    {
+        "name": "US Government (N1xx)",
+        "pattern": r"^N1[0-9]{2}$",
+        "pattern_type": "regex",
+        "category": "government",
+        "rarity_score": 9,
+    },
+    {
+        "name": "Air Force One/Two",
+        "pattern": r"^(SAM|AF1|AF2)",
+        "pattern_type": "regex",
+        "category": "government",
+        "rarity_score": 10,
+    },
     # Test Flights
-    {'name': 'Boeing Test (N7xx)', 'pattern': r'^N7[0-9]{2}', 'pattern_type': 'regex', 'category': 'test_flight', 'rarity_score': 7},
-    {'name': 'Airbus Test (F-WWxx)', 'pattern': 'F-WW', 'pattern_type': 'prefix', 'category': 'test_flight', 'rarity_score': 7},
+    {
+        "name": "Boeing Test (N7xx)",
+        "pattern": r"^N7[0-9]{2}",
+        "pattern_type": "regex",
+        "category": "test_flight",
+        "rarity_score": 7,
+    },
+    {
+        "name": "Airbus Test (F-WWxx)",
+        "pattern": "F-WW",
+        "pattern_type": "prefix",
+        "category": "test_flight",
+        "rarity_score": 7,
+    },
     # NASA
-    {'name': 'NASA Aircraft', 'pattern': 'NASA', 'pattern_type': 'contains', 'category': 'government', 'rarity_score': 8},
+    {
+        "name": "NASA Aircraft",
+        "pattern": "NASA",
+        "pattern_type": "contains",
+        "category": "government",
+        "rarity_score": 8,
+    },
 ]
 
 DEFAULT_NOTABLE_CALLSIGNS = [
     # Military
-    {'name': 'USAF Heavy', 'pattern': r'^RCH', 'pattern_type': 'regex', 'category': 'military', 'rarity_score': 6},
-    {'name': 'USAF Tanker', 'pattern': r'^PACK|^TREK', 'pattern_type': 'regex', 'category': 'military', 'rarity_score': 6},
-    {'name': 'Navy Aircraft', 'pattern': r'^NAVY', 'pattern_type': 'regex', 'category': 'military', 'rarity_score': 6},
+    {"name": "USAF Heavy", "pattern": r"^RCH", "pattern_type": "regex", "category": "military", "rarity_score": 6},
+    {
+        "name": "USAF Tanker",
+        "pattern": r"^PACK|^TREK",
+        "pattern_type": "regex",
+        "category": "military",
+        "rarity_score": 6,
+    },
+    {"name": "Navy Aircraft", "pattern": r"^NAVY", "pattern_type": "regex", "category": "military", "rarity_score": 6},
     # Special
-    {'name': 'Air Ambulance', 'pattern': r'^MEDEVAC|^EVAC|^LIFE', 'pattern_type': 'regex', 'category': 'air_ambulance', 'rarity_score': 5},
-    {'name': 'Coast Guard', 'pattern': r'^USCG|^COAST', 'pattern_type': 'regex', 'category': 'law_enforcement', 'rarity_score': 6},
-    {'name': 'Law Enforcement', 'pattern': r'^N\d+SP$|^POLICE', 'pattern_type': 'regex', 'category': 'law_enforcement', 'rarity_score': 5},
+    {
+        "name": "Air Ambulance",
+        "pattern": r"^MEDEVAC|^EVAC|^LIFE",
+        "pattern_type": "regex",
+        "category": "air_ambulance",
+        "rarity_score": 5,
+    },
+    {
+        "name": "Coast Guard",
+        "pattern": r"^USCG|^COAST",
+        "pattern_type": "regex",
+        "category": "law_enforcement",
+        "rarity_score": 6,
+    },
+    {
+        "name": "Law Enforcement",
+        "pattern": r"^N\d+SP$|^POLICE",
+        "pattern_type": "regex",
+        "category": "law_enforcement",
+        "rarity_score": 5,
+    },
     # Test
-    {'name': 'Boeing Test', 'pattern': r'^BOE|^BFT', 'pattern_type': 'regex', 'category': 'test_flight', 'rarity_score': 7},
-    {'name': 'Airbus Test', 'pattern': r'^AIB', 'pattern_type': 'regex', 'category': 'test_flight', 'rarity_score': 7},
+    {
+        "name": "Boeing Test",
+        "pattern": r"^BOE|^BFT",
+        "pattern_type": "regex",
+        "category": "test_flight",
+        "rarity_score": 7,
+    },
+    {"name": "Airbus Test", "pattern": r"^AIB", "pattern_type": "regex", "category": "test_flight", "rarity_score": 7},
 ]
 
 DEFAULT_RARE_TYPES = [
-    {'type_code': 'B748', 'type_name': 'Boeing 747-8', 'category': 'rare', 'rarity_score': 6},
-    {'type_code': 'A380', 'type_name': 'Airbus A380', 'category': 'rare', 'rarity_score': 6},
-    {'type_code': 'A225', 'type_name': 'Antonov An-225', 'category': 'historic', 'rarity_score': 10},
-    {'type_code': 'CONC', 'type_name': 'Concorde', 'category': 'historic', 'rarity_score': 10},
-    {'type_code': 'C5M', 'type_name': 'Lockheed C-5M Super Galaxy', 'category': 'military', 'rarity_score': 7},
-    {'type_code': 'B52', 'type_name': 'Boeing B-52 Stratofortress', 'category': 'military', 'rarity_score': 8},
-    {'type_code': 'E6B', 'type_name': 'Boeing E-6B Mercury', 'category': 'military', 'rarity_score': 9},
-    {'type_code': 'E4B', 'type_name': 'Boeing E-4B Nightwatch', 'category': 'military', 'rarity_score': 10},
-    {'type_code': 'B1', 'type_name': 'Rockwell B-1 Lancer', 'category': 'military', 'rarity_score': 8},
-    {'type_code': 'F22', 'type_name': 'Lockheed F-22 Raptor', 'category': 'military', 'rarity_score': 8},
-    {'type_code': 'F35', 'type_name': 'Lockheed F-35', 'category': 'military', 'rarity_score': 7},
-    {'type_code': 'SR71', 'type_name': 'Lockheed SR-71', 'category': 'historic', 'rarity_score': 10},
-    {'type_code': 'U2', 'type_name': 'Lockheed U-2', 'category': 'military', 'rarity_score': 9},
-    {'type_code': 'DC3', 'type_name': 'Douglas DC-3', 'category': 'historic', 'rarity_score': 7},
-    {'type_code': 'B17', 'type_name': 'Boeing B-17', 'category': 'historic', 'rarity_score': 8},
-    {'type_code': 'B29', 'type_name': 'Boeing B-29', 'category': 'historic', 'rarity_score': 9},
-    {'type_code': 'P51', 'type_name': 'North American P-51 Mustang', 'category': 'historic', 'rarity_score': 7},
+    {"type_code": "B748", "type_name": "Boeing 747-8", "category": "rare", "rarity_score": 6},
+    {"type_code": "A380", "type_name": "Airbus A380", "category": "rare", "rarity_score": 6},
+    {"type_code": "A225", "type_name": "Antonov An-225", "category": "historic", "rarity_score": 10},
+    {"type_code": "CONC", "type_name": "Concorde", "category": "historic", "rarity_score": 10},
+    {"type_code": "C5M", "type_name": "Lockheed C-5M Super Galaxy", "category": "military", "rarity_score": 7},
+    {"type_code": "B52", "type_name": "Boeing B-52 Stratofortress", "category": "military", "rarity_score": 8},
+    {"type_code": "E6B", "type_name": "Boeing E-6B Mercury", "category": "military", "rarity_score": 9},
+    {"type_code": "E4B", "type_name": "Boeing E-4B Nightwatch", "category": "military", "rarity_score": 10},
+    {"type_code": "B1", "type_name": "Rockwell B-1 Lancer", "category": "military", "rarity_score": 8},
+    {"type_code": "F22", "type_name": "Lockheed F-22 Raptor", "category": "military", "rarity_score": 8},
+    {"type_code": "F35", "type_name": "Lockheed F-35", "category": "military", "rarity_score": 7},
+    {"type_code": "SR71", "type_name": "Lockheed SR-71", "category": "historic", "rarity_score": 10},
+    {"type_code": "U2", "type_name": "Lockheed U-2", "category": "military", "rarity_score": 9},
+    {"type_code": "DC3", "type_name": "Douglas DC-3", "category": "historic", "rarity_score": 7},
+    {"type_code": "B17", "type_name": "Boeing B-17", "category": "historic", "rarity_score": 8},
+    {"type_code": "B29", "type_name": "Boeing B-29", "category": "historic", "rarity_score": 9},
+    {"type_code": "P51", "type_name": "North American P-51 Mustang", "category": "historic", "rarity_score": 7},
 ]
 
 
@@ -112,25 +179,24 @@ class GamificationService:
                 return cached
 
         records = PersonalRecord.objects.all()
-        result = {
-            'records': [],
-            'timestamp': timezone.now().isoformat() + 'Z'
-        }
+        result = {"records": [], "timestamp": timezone.now().isoformat() + "Z"}
 
         for record in records:
-            result['records'].append({
-                'record_type': record.record_type,
-                'record_type_display': record.get_record_type_display(),
-                'icao_hex': record.icao_hex,
-                'callsign': record.callsign,
-                'aircraft_type': record.aircraft_type,
-                'registration': record.registration,
-                'operator': record.operator,
-                'value': record.value,
-                'achieved_at': record.achieved_at.isoformat() + 'Z' if record.achieved_at else None,
-                'previous_value': record.previous_value,
-                'previous_icao_hex': record.previous_icao_hex,
-            })
+            result["records"].append(
+                {
+                    "record_type": record.record_type,
+                    "record_type_display": record.get_record_type_display(),
+                    "icao_hex": record.icao_hex,
+                    "callsign": record.callsign,
+                    "aircraft_type": record.aircraft_type,
+                    "registration": record.registration,
+                    "operator": record.operator,
+                    "value": record.value,
+                    "achieved_at": record.achieved_at.isoformat() + "Z" if record.achieved_at else None,
+                    "previous_value": record.previous_value,
+                    "previous_icao_hex": record.previous_icao_hex,
+                }
+            )
 
         cache.set(CACHE_KEY_PERSONAL_RECORDS, result, timeout=PERSONAL_RECORDS_TIMEOUT)
         return result
@@ -152,10 +218,7 @@ class GamificationService:
         # Check max distance
         if session.max_distance_nm:
             record = self._check_record(
-                record_type='max_distance',
-                value=session.max_distance_nm,
-                session=session,
-                aircraft_info=aircraft_info
+                record_type="max_distance", value=session.max_distance_nm, session=session, aircraft_info=aircraft_info
             )
             if record:
                 new_records.append(record)
@@ -163,10 +226,10 @@ class GamificationService:
         # Check max altitude
         if session.max_altitude:
             record = self._check_record(
-                record_type='max_altitude',
+                record_type="max_altitude",
                 value=float(session.max_altitude),
                 session=session,
-                aircraft_info=aircraft_info
+                aircraft_info=aircraft_info,
             )
             if record:
                 new_records.append(record)
@@ -176,10 +239,7 @@ class GamificationService:
             duration_min = (session.last_seen - session.first_seen).total_seconds() / 60
             if duration_min >= 1:  # At least 1 minute
                 record = self._check_record(
-                    record_type='longest_session',
-                    value=duration_min,
-                    session=session,
-                    aircraft_info=aircraft_info
+                    record_type="longest_session", value=duration_min, session=session, aircraft_info=aircraft_info
                 )
                 if record:
                     new_records.append(record)
@@ -187,10 +247,10 @@ class GamificationService:
         # Check most positions
         if session.total_positions:
             record = self._check_record(
-                record_type='most_positions',
+                record_type="most_positions",
                 value=float(session.total_positions),
                 session=session,
-                aircraft_info=aircraft_info
+                aircraft_info=aircraft_info,
             )
             if record:
                 new_records.append(record)
@@ -199,11 +259,11 @@ class GamificationService:
         if session.min_distance_nm and session.min_distance_nm > 0:
             # For closest approach, lower is better
             record = self._check_record(
-                record_type='closest_approach',
+                record_type="closest_approach",
                 value=session.min_distance_nm,
                 session=session,
                 aircraft_info=aircraft_info,
-                lower_is_better=True
+                lower_is_better=True,
             )
             if record:
                 new_records.append(record)
@@ -212,19 +272,19 @@ class GamificationService:
         if sighting and sighting.vertical_rate:
             if sighting.vertical_rate > 0:
                 record = self._check_record(
-                    record_type='max_vertical_rate',
+                    record_type="max_vertical_rate",
                     value=float(sighting.vertical_rate),
                     session=session,
-                    aircraft_info=aircraft_info
+                    aircraft_info=aircraft_info,
                 )
                 if record:
                     new_records.append(record)
             elif sighting.vertical_rate < 0:
                 record = self._check_record(
-                    record_type='max_descent_rate',
+                    record_type="max_descent_rate",
                     value=float(abs(sighting.vertical_rate)),
                     session=session,
-                    aircraft_info=aircraft_info
+                    aircraft_info=aircraft_info,
                 )
                 if record:
                     new_records.append(record)
@@ -232,10 +292,7 @@ class GamificationService:
         # Check fastest speed (from sighting)
         if sighting and sighting.ground_speed:
             record = self._check_record(
-                record_type='max_speed',
-                value=sighting.ground_speed,
-                session=session,
-                aircraft_info=aircraft_info
+                record_type="max_speed", value=sighting.ground_speed, session=session, aircraft_info=aircraft_info
             )
             if record:
                 new_records.append(record)
@@ -251,16 +308,14 @@ class GamificationService:
         record_type: str,
         value: float,
         session: AircraftSession,
-        aircraft_info: Optional[AircraftInfo] = None,
-        lower_is_better: bool = False
-    ) -> Optional[dict]:
+        aircraft_info: AircraftInfo | None = None,
+        lower_is_better: bool = False,
+    ) -> dict | None:
         """Check if value beats existing record and update if so."""
         try:
             with transaction.atomic():
                 # Lock the row during check-then-act to prevent race conditions
-                existing = PersonalRecord.objects.select_for_update().filter(
-                    record_type=record_type
-                ).first()
+                existing = PersonalRecord.objects.select_for_update().filter(record_type=record_type).first()
 
                 is_new_record = False
                 if existing is None:
@@ -299,11 +354,11 @@ class GamificationService:
                     )
 
                     return {
-                        'record_type': record_type,
-                        'record_type_display': record.get_record_type_display(),
-                        'value': value,
-                        'icao_hex': session.icao_hex,
-                        'previous_value': previous_value,
+                        "record_type": record_type,
+                        "record_type_display": record.get_record_type_display(),
+                        "value": value,
+                        "icao_hex": session.icao_hex,
+                        "previous_value": previous_value,
                     }
 
         except Exception as e:
@@ -316,11 +371,7 @@ class GamificationService:
     # ==========================================================================
 
     def get_rare_sightings(
-        self,
-        hours: int = 24,
-        limit: int = 50,
-        include_acknowledged: bool = False,
-        force_refresh: bool = False
+        self, hours: int = 24, limit: int = 50, include_acknowledged: bool = False, force_refresh: bool = False
     ) -> dict:
         """Get recent rare/notable sightings."""
         cache_key = f"{CACHE_KEY_RARE_SIGHTINGS}:{hours}:{limit}:{include_acknowledged}"
@@ -336,40 +387,38 @@ class GamificationService:
         if not include_acknowledged:
             qs = qs.filter(is_acknowledged=False)
 
-        qs = qs.order_by('-rarity_score', '-sighted_at')[:limit]
+        qs = qs.order_by("-rarity_score", "-sighted_at")[:limit]
 
         result = {
-            'sightings': [],
-            'total_count': qs.count(),
-            'time_range_hours': hours,
-            'timestamp': timezone.now().isoformat() + 'Z'
+            "sightings": [],
+            "total_count": qs.count(),
+            "time_range_hours": hours,
+            "timestamp": timezone.now().isoformat() + "Z",
         }
 
         for sighting in qs:
-            result['sightings'].append({
-                'id': sighting.id,
-                'rarity_type': sighting.rarity_type,
-                'rarity_type_display': sighting.get_rarity_type_display(),
-                'icao_hex': sighting.icao_hex,
-                'callsign': sighting.callsign,
-                'registration': sighting.registration,
-                'aircraft_type': sighting.aircraft_type,
-                'operator': sighting.operator,
-                'sighted_at': sighting.sighted_at.isoformat() + 'Z' if sighting.sighted_at else None,
-                'description': sighting.description,
-                'rarity_score': sighting.rarity_score,
-                'times_seen': sighting.times_seen,
-                'is_acknowledged': sighting.is_acknowledged,
-            })
+            result["sightings"].append(
+                {
+                    "id": sighting.id,
+                    "rarity_type": sighting.rarity_type,
+                    "rarity_type_display": sighting.get_rarity_type_display(),
+                    "icao_hex": sighting.icao_hex,
+                    "callsign": sighting.callsign,
+                    "registration": sighting.registration,
+                    "aircraft_type": sighting.aircraft_type,
+                    "operator": sighting.operator,
+                    "sighted_at": sighting.sighted_at.isoformat() + "Z" if sighting.sighted_at else None,
+                    "description": sighting.description,
+                    "rarity_score": sighting.rarity_score,
+                    "times_seen": sighting.times_seen,
+                    "is_acknowledged": sighting.is_acknowledged,
+                }
+            )
 
         cache.set(cache_key, result, timeout=RARE_SIGHTINGS_TIMEOUT)
         return result
 
-    def check_for_rare_sighting(
-        self,
-        session: AircraftSession,
-        aircraft_info: Optional[AircraftInfo] = None
-    ) -> list:
+    def check_for_rare_sighting(self, session: AircraftSession, aircraft_info: AircraftInfo | None = None) -> list:
         """
         Check if an aircraft qualifies as a rare/notable sighting.
         Returns list of rare sighting records created.
@@ -380,11 +429,11 @@ class GamificationService:
         existing_spotted = SpottedAircraft.objects.filter(icao_hex=session.icao_hex).exists()
         if not existing_spotted:
             sighting = self._create_rare_sighting(
-                rarity_type='first_hex',
+                rarity_type="first_hex",
                 session=session,
                 aircraft_info=aircraft_info,
                 description=f"First time tracking aircraft {session.icao_hex}",
-                rarity_score=3
+                rarity_score=3,
             )
             if sighting:
                 rare_sightings.append(sighting)
@@ -394,11 +443,11 @@ class GamificationService:
             reg_match = self._check_notable_registration(aircraft_info.registration)
             if reg_match:
                 sighting = self._create_rare_sighting(
-                    rarity_type=reg_match['category'],
+                    rarity_type=reg_match["category"],
                     session=session,
                     aircraft_info=aircraft_info,
                     description=f"Notable registration: {reg_match['name']}",
-                    rarity_score=reg_match['rarity_score']
+                    rarity_score=reg_match["rarity_score"],
                 )
                 if sighting:
                     rare_sightings.append(sighting)
@@ -408,11 +457,11 @@ class GamificationService:
             callsign_match = self._check_notable_callsign(session.callsign)
             if callsign_match:
                 sighting = self._create_rare_sighting(
-                    rarity_type=callsign_match['category'],
+                    rarity_type=callsign_match["category"],
                     session=session,
                     aircraft_info=aircraft_info,
                     description=f"Notable callsign: {callsign_match['name']}",
-                    rarity_score=callsign_match['rarity_score']
+                    rarity_score=callsign_match["rarity_score"],
                 )
                 if sighting:
                     rare_sightings.append(sighting)
@@ -423,23 +472,23 @@ class GamificationService:
             type_match = self._check_rare_type(aircraft_type)
             if type_match:
                 sighting = self._create_rare_sighting(
-                    rarity_type='rare_type',
+                    rarity_type="rare_type",
                     session=session,
                     aircraft_info=aircraft_info,
                     description=f"Rare aircraft type: {type_match['type_name'] or type_match['type_code']}",
-                    rarity_score=type_match['rarity_score']
+                    rarity_score=type_match["rarity_score"],
                 )
                 if sighting:
                     rare_sightings.append(sighting)
 
         # Check for military
-        if session.is_military and not any(s['rarity_type'] == 'military' for s in rare_sightings):
+        if session.is_military and not any(s["rarity_type"] == "military" for s in rare_sightings):
             sighting = self._create_rare_sighting(
-                rarity_type='military',
+                rarity_type="military",
                 session=session,
                 aircraft_info=aircraft_info,
                 description="Military aircraft detected",
-                rarity_score=4
+                rarity_score=4,
             )
             if sighting:
                 rare_sightings.append(sighting)
@@ -450,52 +499,52 @@ class GamificationService:
 
         return rare_sightings
 
-    def _check_notable_registration(self, registration: str) -> Optional[dict]:
+    def _check_notable_registration(self, registration: str) -> dict | None:
         """Check if registration matches any notable patterns."""
         patterns = self._get_notable_registrations()
 
         for pattern in patterns:
-            if pattern['pattern_type'] == 'prefix':
-                if registration.upper().startswith(pattern['pattern'].upper()):
+            if pattern["pattern_type"] == "prefix":
+                if registration.upper().startswith(pattern["pattern"].upper()):
                     return pattern
-            elif pattern['pattern_type'] == 'contains':
-                if pattern['pattern'].upper() in registration.upper():
+            elif pattern["pattern_type"] == "contains":
+                if pattern["pattern"].upper() in registration.upper():
                     return pattern
-            elif pattern['pattern_type'] == 'exact':
-                if registration.upper() == pattern['pattern'].upper():
+            elif pattern["pattern_type"] == "exact":
+                if registration.upper() == pattern["pattern"].upper():
                     return pattern
-            elif pattern['pattern_type'] == 'regex':
-                if re.match(pattern['pattern'], registration, re.IGNORECASE):
+            elif pattern["pattern_type"] == "regex":
+                if re.match(pattern["pattern"], registration, re.IGNORECASE):
                     return pattern
 
         return None
 
-    def _check_notable_callsign(self, callsign: str) -> Optional[dict]:
+    def _check_notable_callsign(self, callsign: str) -> dict | None:
         """Check if callsign matches any notable patterns."""
         patterns = self._get_notable_callsigns()
 
         for pattern in patterns:
-            if pattern['pattern_type'] == 'prefix':
-                if callsign.upper().startswith(pattern['pattern'].upper()):
+            if pattern["pattern_type"] == "prefix":
+                if callsign.upper().startswith(pattern["pattern"].upper()):
                     return pattern
-            elif pattern['pattern_type'] == 'contains':
-                if pattern['pattern'].upper() in callsign.upper():
+            elif pattern["pattern_type"] == "contains":
+                if pattern["pattern"].upper() in callsign.upper():
                     return pattern
-            elif pattern['pattern_type'] == 'exact':
-                if callsign.upper() == pattern['pattern'].upper():
+            elif pattern["pattern_type"] == "exact":
+                if callsign.upper() == pattern["pattern"].upper():
                     return pattern
-            elif pattern['pattern_type'] == 'regex':
-                if re.match(pattern['pattern'], callsign, re.IGNORECASE):
+            elif pattern["pattern_type"] == "regex":
+                if re.match(pattern["pattern"], callsign, re.IGNORECASE):
                     return pattern
 
         return None
 
-    def _check_rare_type(self, aircraft_type: str) -> Optional[dict]:
+    def _check_rare_type(self, aircraft_type: str) -> dict | None:
         """Check if aircraft type is considered rare."""
         rare_types = self._get_rare_types()
 
         for rt in rare_types:
-            if rt['type_code'].upper() == aircraft_type.upper():
+            if rt["type_code"].upper() == aircraft_type.upper():
                 return rt
 
         return None
@@ -503,9 +552,11 @@ class GamificationService:
     def _get_notable_registrations(self) -> list:
         """Get notable registration patterns (cached)."""
         if self._notable_registrations_cache is None:
-            db_patterns = list(NotableRegistration.objects.filter(is_active=True).values(
-                'name', 'pattern', 'pattern_type', 'category', 'rarity_score'
-            ))
+            db_patterns = list(
+                NotableRegistration.objects.filter(is_active=True).values(
+                    "name", "pattern", "pattern_type", "category", "rarity_score"
+                )
+            )
             if db_patterns:
                 self._notable_registrations_cache = db_patterns
             else:
@@ -515,9 +566,11 @@ class GamificationService:
     def _get_notable_callsigns(self) -> list:
         """Get notable callsign patterns (cached)."""
         if self._notable_callsigns_cache is None:
-            db_patterns = list(NotableCallsign.objects.filter(is_active=True).values(
-                'name', 'pattern', 'pattern_type', 'category', 'rarity_score'
-            ))
+            db_patterns = list(
+                NotableCallsign.objects.filter(is_active=True).values(
+                    "name", "pattern", "pattern_type", "category", "rarity_score"
+                )
+            )
             if db_patterns:
                 self._notable_callsigns_cache = db_patterns
             else:
@@ -527,9 +580,11 @@ class GamificationService:
     def _get_rare_types(self) -> list:
         """Get rare aircraft types (cached)."""
         if self._rare_types_cache is None:
-            db_types = list(RareAircraftType.objects.filter(is_active=True).values(
-                'type_code', 'type_name', 'category', 'rarity_score'
-            ))
+            db_types = list(
+                RareAircraftType.objects.filter(is_active=True).values(
+                    "type_code", "type_name", "category", "rarity_score"
+                )
+            )
             if db_types:
                 self._rare_types_cache = db_types
             else:
@@ -540,10 +595,10 @@ class GamificationService:
         self,
         rarity_type: str,
         session: AircraftSession,
-        aircraft_info: Optional[AircraftInfo],
+        aircraft_info: AircraftInfo | None,
         description: str,
-        rarity_score: int
-    ) -> Optional[dict]:
+        rarity_score: int,
+    ) -> dict | None:
         """Create a rare sighting record."""
         try:
             # Check if we've already recorded this exact sighting type for this aircraft recently
@@ -551,11 +606,11 @@ class GamificationService:
 
             with transaction.atomic():
                 # Lock the row during check-then-act to prevent race conditions
-                existing = RareSighting.objects.select_for_update().filter(
-                    icao_hex=session.icao_hex,
-                    rarity_type=rarity_type,
-                    sighted_at__gte=recent_cutoff
-                ).first()
+                existing = (
+                    RareSighting.objects.select_for_update()
+                    .filter(icao_hex=session.icao_hex, rarity_type=rarity_type, sighted_at__gte=recent_cutoff)
+                    .first()
+                )
 
                 if existing:
                     # Update times_seen and last_seen
@@ -578,11 +633,11 @@ class GamificationService:
                 )
 
             return {
-                'id': sighting.id,
-                'rarity_type': rarity_type,
-                'icao_hex': session.icao_hex,
-                'description': description,
-                'rarity_score': rarity_score,
+                "id": sighting.id,
+                "rarity_type": rarity_type,
+                "icao_hex": session.icao_hex,
+                "description": description,
+                "rarity_score": rarity_score,
             }
 
         except Exception as e:
@@ -623,53 +678,53 @@ class GamificationService:
         military_count = SpottedAircraft.objects.filter(is_military=True).count()
 
         # Types spotted
-        types_count = SpottedAircraft.objects.filter(
-            aircraft_type__isnull=False
-        ).values('aircraft_type').distinct().count()
+        types_count = (
+            SpottedAircraft.objects.filter(aircraft_type__isnull=False).values("aircraft_type").distinct().count()
+        )
 
         # Operators spotted
-        operators_count = SpottedAircraft.objects.filter(
-            operator__isnull=False
-        ).values('operator').distinct().count()
+        operators_count = SpottedAircraft.objects.filter(operator__isnull=False).values("operator").distinct().count()
 
         # Countries
-        countries_count = SpottedAircraft.objects.filter(
-            country__isnull=False
-        ).values('country').distinct().count()
+        countries_count = SpottedAircraft.objects.filter(country__isnull=False).values("country").distinct().count()
 
         # First and last
-        first_ever = SpottedAircraft.objects.order_by('first_seen').first()
-        last_seen = SpottedAircraft.objects.order_by('-last_seen').first()
+        first_ever = SpottedAircraft.objects.order_by("first_seen").first()
+        last_seen = SpottedAircraft.objects.order_by("-last_seen").first()
 
         # Most seen aircraft
-        most_seen = SpottedAircraft.objects.order_by('-times_seen')[:5]
+        most_seen = SpottedAircraft.objects.order_by("-times_seen")[:5]
 
         result = {
-            'total_unique_aircraft': total_unique,
-            'military_aircraft': military_count,
-            'unique_types': types_count,
-            'unique_operators': operators_count,
-            'unique_countries': countries_count,
-            'first_aircraft': {
-                'icao_hex': first_ever.icao_hex,
-                'registration': first_ever.registration,
-                'first_seen': first_ever.first_seen.isoformat() + 'Z' if first_ever.first_seen else None,
-            } if first_ever else None,
-            'last_aircraft': {
-                'icao_hex': last_seen.icao_hex,
-                'registration': last_seen.registration,
-                'last_seen': last_seen.last_seen.isoformat() + 'Z' if last_seen.last_seen else None,
-            } if last_seen else None,
-            'most_seen': [
+            "total_unique_aircraft": total_unique,
+            "military_aircraft": military_count,
+            "unique_types": types_count,
+            "unique_operators": operators_count,
+            "unique_countries": countries_count,
+            "first_aircraft": {
+                "icao_hex": first_ever.icao_hex,
+                "registration": first_ever.registration,
+                "first_seen": first_ever.first_seen.isoformat() + "Z" if first_ever.first_seen else None,
+            }
+            if first_ever
+            else None,
+            "last_aircraft": {
+                "icao_hex": last_seen.icao_hex,
+                "registration": last_seen.registration,
+                "last_seen": last_seen.last_seen.isoformat() + "Z" if last_seen.last_seen else None,
+            }
+            if last_seen
+            else None,
+            "most_seen": [
                 {
-                    'icao_hex': ac.icao_hex,
-                    'registration': ac.registration,
-                    'operator': ac.operator,
-                    'times_seen': ac.times_seen,
+                    "icao_hex": ac.icao_hex,
+                    "registration": ac.registration,
+                    "operator": ac.operator,
+                    "times_seen": ac.times_seen,
                 }
                 for ac in most_seen
             ],
-            'timestamp': timezone.now().isoformat() + 'Z'
+            "timestamp": timezone.now().isoformat() + "Z",
         }
 
         cache.set(CACHE_KEY_COLLECTION_STATS, result, timeout=COLLECTION_STATS_TIMEOUT)
@@ -684,25 +739,23 @@ class GamificationService:
             if cached:
                 return cached
 
-        counts = SpottedCount.objects.filter(
-            count_type='aircraft_type'
-        ).order_by('-unique_aircraft')[:limit]
+        counts = SpottedCount.objects.filter(count_type="aircraft_type").order_by("-unique_aircraft")[:limit]
 
         result = {
-            'types': [
+            "types": [
                 {
-                    'type_code': c.identifier,
-                    'type_name': c.display_name,
-                    'unique_aircraft': c.unique_aircraft,
-                    'total_sightings': c.total_sightings,
-                    'total_sessions': c.total_sessions,
-                    'first_seen': c.first_seen.isoformat() + 'Z' if c.first_seen else None,
-                    'last_seen': c.last_seen.isoformat() + 'Z' if c.last_seen else None,
+                    "type_code": c.identifier,
+                    "type_name": c.display_name,
+                    "unique_aircraft": c.unique_aircraft,
+                    "total_sightings": c.total_sightings,
+                    "total_sessions": c.total_sessions,
+                    "first_seen": c.first_seen.isoformat() + "Z" if c.first_seen else None,
+                    "last_seen": c.last_seen.isoformat() + "Z" if c.last_seen else None,
                 }
                 for c in counts
             ],
-            'total_types': SpottedCount.objects.filter(count_type='aircraft_type').count(),
-            'timestamp': timezone.now().isoformat() + 'Z'
+            "total_types": SpottedCount.objects.filter(count_type="aircraft_type").count(),
+            "timestamp": timezone.now().isoformat() + "Z",
         }
 
         cache.set(cache_key, result, timeout=COLLECTION_STATS_TIMEOUT)
@@ -717,52 +770,50 @@ class GamificationService:
             if cached:
                 return cached
 
-        counts = SpottedCount.objects.filter(
-            count_type='operator'
-        ).order_by('-unique_aircraft')[:limit]
+        counts = SpottedCount.objects.filter(count_type="operator").order_by("-unique_aircraft")[:limit]
 
         result = {
-            'operators': [
+            "operators": [
                 {
-                    'operator_code': c.identifier,
-                    'operator_name': c.display_name,
-                    'unique_aircraft': c.unique_aircraft,
-                    'total_sightings': c.total_sightings,
-                    'total_sessions': c.total_sessions,
-                    'first_seen': c.first_seen.isoformat() + 'Z' if c.first_seen else None,
-                    'last_seen': c.last_seen.isoformat() + 'Z' if c.last_seen else None,
+                    "operator_code": c.identifier,
+                    "operator_name": c.display_name,
+                    "unique_aircraft": c.unique_aircraft,
+                    "total_sightings": c.total_sightings,
+                    "total_sessions": c.total_sessions,
+                    "first_seen": c.first_seen.isoformat() + "Z" if c.first_seen else None,
+                    "last_seen": c.last_seen.isoformat() + "Z" if c.last_seen else None,
                 }
                 for c in counts
             ],
-            'total_operators': SpottedCount.objects.filter(count_type='operator').count(),
-            'timestamp': timezone.now().isoformat() + 'Z'
+            "total_operators": SpottedCount.objects.filter(count_type="operator").count(),
+            "timestamp": timezone.now().isoformat() + "Z",
         }
 
         cache.set(cache_key, result, timeout=COLLECTION_STATS_TIMEOUT)
         return result
 
-    def update_spotted_aircraft(self, session: AircraftSession, aircraft_info: Optional[AircraftInfo] = None):
+    def update_spotted_aircraft(self, session: AircraftSession, aircraft_info: AircraftInfo | None = None):
         """Update spotted aircraft and counts from a session."""
         try:
             # Update or create spotted aircraft
             spotted, created = SpottedAircraft.objects.get_or_create(
                 icao_hex=session.icao_hex,
                 defaults={
-                    'registration': aircraft_info.registration if aircraft_info else None,
-                    'aircraft_type': session.aircraft_type or (aircraft_info.type_code if aircraft_info else None),
-                    'manufacturer': aircraft_info.manufacturer if aircraft_info else None,
-                    'model': aircraft_info.model if aircraft_info else None,
-                    'operator': aircraft_info.operator if aircraft_info else None,
-                    'operator_icao': aircraft_info.operator_icao if aircraft_info else None,
-                    'country': aircraft_info.country if aircraft_info else None,
-                    'is_military': session.is_military,
-                    'first_seen': session.first_seen,
-                    'last_seen': session.last_seen,
-                    'times_seen': 1,
-                    'total_positions': session.total_positions,
-                    'max_distance_nm': session.max_distance_nm,
-                    'max_altitude': session.max_altitude,
-                }
+                    "registration": aircraft_info.registration if aircraft_info else None,
+                    "aircraft_type": session.aircraft_type or (aircraft_info.type_code if aircraft_info else None),
+                    "manufacturer": aircraft_info.manufacturer if aircraft_info else None,
+                    "model": aircraft_info.model if aircraft_info else None,
+                    "operator": aircraft_info.operator if aircraft_info else None,
+                    "operator_icao": aircraft_info.operator_icao if aircraft_info else None,
+                    "country": aircraft_info.country if aircraft_info else None,
+                    "is_military": session.is_military,
+                    "first_seen": session.first_seen,
+                    "last_seen": session.last_seen,
+                    "times_seen": 1,
+                    "total_positions": session.total_positions,
+                    "max_distance_nm": session.max_distance_nm,
+                    "max_altitude": session.max_altitude,
+                },
             )
 
             if not created:
@@ -797,12 +848,7 @@ class GamificationService:
         except Exception as e:
             logger.error(f"Error updating spotted aircraft: {e}")
 
-    def _update_spotted_counts(
-        self,
-        session: AircraftSession,
-        aircraft_info: Optional[AircraftInfo],
-        is_new: bool
-    ):
+    def _update_spotted_counts(self, session: AircraftSession, aircraft_info: AircraftInfo | None, is_new: bool):
         """Update spotted count aggregations."""
         now = timezone.now()
 
@@ -810,12 +856,12 @@ class GamificationService:
         aircraft_type = session.aircraft_type or (aircraft_info.type_code if aircraft_info else None)
         if aircraft_type:
             count, _ = SpottedCount.objects.get_or_create(
-                count_type='aircraft_type',
+                count_type="aircraft_type",
                 identifier=aircraft_type.upper(),
                 defaults={
-                    'display_name': aircraft_info.type_name if aircraft_info else None,
-                    'first_seen': session.first_seen,
-                }
+                    "display_name": aircraft_info.type_name if aircraft_info else None,
+                    "first_seen": session.first_seen,
+                },
             )
             if is_new:
                 count.unique_aircraft += 1
@@ -829,12 +875,12 @@ class GamificationService:
         operator_name = aircraft_info.operator if aircraft_info else None
         if operator:
             count, _ = SpottedCount.objects.get_or_create(
-                count_type='operator',
+                count_type="operator",
                 identifier=operator.upper(),
                 defaults={
-                    'display_name': operator_name,
-                    'first_seen': session.first_seen,
-                }
+                    "display_name": operator_name,
+                    "first_seen": session.first_seen,
+                },
             )
             if is_new:
                 count.unique_aircraft += 1
@@ -847,12 +893,12 @@ class GamificationService:
         manufacturer = aircraft_info.manufacturer if aircraft_info else None
         if manufacturer:
             count, _ = SpottedCount.objects.get_or_create(
-                count_type='manufacturer',
+                count_type="manufacturer",
                 identifier=manufacturer.upper()[:100],
                 defaults={
-                    'display_name': manufacturer,
-                    'first_seen': session.first_seen,
-                }
+                    "display_name": manufacturer,
+                    "first_seen": session.first_seen,
+                },
             )
             if is_new:
                 count.unique_aircraft += 1
@@ -865,12 +911,12 @@ class GamificationService:
         country = aircraft_info.country if aircraft_info else None
         if country:
             count, _ = SpottedCount.objects.get_or_create(
-                count_type='country',
+                count_type="country",
                 identifier=country.upper()[:100],
                 defaults={
-                    'display_name': country,
-                    'first_seen': session.first_seen,
-                }
+                    "display_name": country,
+                    "first_seen": session.first_seen,
+                },
             )
             if is_new:
                 count.unique_aircraft += 1
@@ -891,56 +937,57 @@ class GamificationService:
                 return cached
 
         streaks = SightingStreak.objects.all()
-        result = {
-            'streaks': [],
-            'timestamp': timezone.now().isoformat() + 'Z'
-        }
+        result = {"streaks": [], "timestamp": timezone.now().isoformat() + "Z"}
 
         for streak in streaks:
-            result['streaks'].append({
-                'streak_type': streak.streak_type,
-                'streak_type_display': streak.get_streak_type_display(),
-                'current_streak_days': streak.current_streak_days,
-                'current_streak_start': streak.current_streak_start.isoformat() if streak.current_streak_start else None,
-                'last_qualifying_date': streak.last_qualifying_date.isoformat() if streak.last_qualifying_date else None,
-                'best_streak_days': streak.best_streak_days,
-                'best_streak_start': streak.best_streak_start.isoformat() if streak.best_streak_start else None,
-                'best_streak_end': streak.best_streak_end.isoformat() if streak.best_streak_end else None,
-            })
+            result["streaks"].append(
+                {
+                    "streak_type": streak.streak_type,
+                    "streak_type_display": streak.get_streak_type_display(),
+                    "current_streak_days": streak.current_streak_days,
+                    "current_streak_start": streak.current_streak_start.isoformat()
+                    if streak.current_streak_start
+                    else None,
+                    "last_qualifying_date": streak.last_qualifying_date.isoformat()
+                    if streak.last_qualifying_date
+                    else None,
+                    "best_streak_days": streak.best_streak_days,
+                    "best_streak_start": streak.best_streak_start.isoformat() if streak.best_streak_start else None,
+                    "best_streak_end": streak.best_streak_end.isoformat() if streak.best_streak_end else None,
+                }
+            )
 
         cache.set(CACHE_KEY_STREAKS, result, timeout=STREAKS_TIMEOUT)
         return result
 
-    def update_streaks(self, session: AircraftSession, aircraft_info: Optional[AircraftInfo] = None):
+    def update_streaks(self, session: AircraftSession, aircraft_info: AircraftInfo | None = None):
         """Update streaks based on a new session."""
         today = timezone.now().date()
 
         # Check any_sighting streak
-        self._update_streak('any_sighting', today, qualifies=True)
+        self._update_streak("any_sighting", today, qualifies=True)
 
         # Check military streak
         if session.is_military:
-            self._update_streak('military', today, qualifies=True)
+            self._update_streak("military", today, qualifies=True)
 
         # Check if it's a new unique aircraft
-        is_new = not SpottedAircraft.objects.filter(icao_hex=session.icao_hex).exclude(
-            first_seen__date=today
-        ).exists()
+        is_new = not SpottedAircraft.objects.filter(icao_hex=session.icao_hex).exclude(first_seen__date=today).exists()
         if is_new:
-            self._update_streak('unique_new', today, qualifies=True)
+            self._update_streak("unique_new", today, qualifies=True)
 
         # Check high altitude
         if session.max_altitude and session.max_altitude >= 40000:
-            self._update_streak('high_altitude', today, qualifies=True)
+            self._update_streak("high_altitude", today, qualifies=True)
 
         # Check long range
         if session.max_distance_nm and session.max_distance_nm >= 100:
-            self._update_streak('long_range', today, qualifies=True)
+            self._update_streak("long_range", today, qualifies=True)
 
         # Check rare type
         aircraft_type = session.aircraft_type or (aircraft_info.type_code if aircraft_info else None)
         if aircraft_type and self._check_rare_type(aircraft_type):
-            self._update_streak('rare_type', today, qualifies=True)
+            self._update_streak("rare_type", today, qualifies=True)
 
         cache.delete(CACHE_KEY_STREAKS)
 
@@ -950,13 +997,13 @@ class GamificationService:
             streak, created = SightingStreak.objects.get_or_create(
                 streak_type=streak_type,
                 defaults={
-                    'current_streak_days': 1 if qualifies else 0,
-                    'current_streak_start': today if qualifies else None,
-                    'last_qualifying_date': today if qualifies else None,
-                    'best_streak_days': 1 if qualifies else 0,
-                    'best_streak_start': today if qualifies else None,
-                    'best_streak_end': today if qualifies else None,
-                }
+                    "current_streak_days": 1 if qualifies else 0,
+                    "current_streak_start": today if qualifies else None,
+                    "last_qualifying_date": today if qualifies else None,
+                    "best_streak_days": 1 if qualifies else 0,
+                    "best_streak_start": today if qualifies else None,
+                    "best_streak_end": today if qualifies else None,
+                },
             )
 
             if not created and qualifies:
@@ -999,27 +1046,27 @@ class GamificationService:
                 return cached
 
         cutoff = timezone.now().date() - timedelta(days=days)
-        stats = DailyStats.objects.filter(date__gte=cutoff).order_by('-date')
+        stats = DailyStats.objects.filter(date__gte=cutoff).order_by("-date")
 
         result = {
-            'days': [
+            "days": [
                 {
-                    'date': s.date.isoformat(),
-                    'unique_aircraft': s.unique_aircraft,
-                    'new_aircraft': s.new_aircraft,
-                    'total_sessions': s.total_sessions,
-                    'total_positions': s.total_positions,
-                    'military_count': s.military_count,
-                    'max_distance_nm': s.max_distance_nm,
-                    'max_altitude': s.max_altitude,
-                    'max_speed': s.max_speed,
-                    'top_types': dict(list(s.aircraft_types.items())[:5]) if s.aircraft_types else {},
-                    'top_operators': dict(list(s.operators.items())[:5]) if s.operators else {},
+                    "date": s.date.isoformat(),
+                    "unique_aircraft": s.unique_aircraft,
+                    "new_aircraft": s.new_aircraft,
+                    "total_sessions": s.total_sessions,
+                    "total_positions": s.total_positions,
+                    "military_count": s.military_count,
+                    "max_distance_nm": s.max_distance_nm,
+                    "max_altitude": s.max_altitude,
+                    "max_speed": s.max_speed,
+                    "top_types": dict(list(s.aircraft_types.items())[:5]) if s.aircraft_types else {},
+                    "top_operators": dict(list(s.operators.items())[:5]) if s.operators else {},
                 }
                 for s in stats
             ],
-            'total_days': stats.count(),
-            'timestamp': timezone.now().isoformat() + 'Z'
+            "total_days": stats.count(),
+            "timestamp": timezone.now().isoformat() + "Z",
         }
 
         cache.set(cache_key, result, timeout=DAILY_STATS_TIMEOUT)
@@ -1035,51 +1082,43 @@ class GamificationService:
             day_start = timezone.make_aware(datetime.combine(for_date, datetime.min.time()))
             day_end = day_start + timedelta(days=1)
 
-            sessions = AircraftSession.objects.filter(
-                first_seen__gte=day_start,
-                first_seen__lt=day_end
-            )
+            sessions = AircraftSession.objects.filter(first_seen__gte=day_start, first_seen__lt=day_end)
 
             # Calculate stats
-            unique_hexes = sessions.values('icao_hex').distinct().count()
+            unique_hexes = sessions.values("icao_hex").distinct().count()
             military_count = sessions.filter(is_military=True).count()
             total_sessions = sessions.count()
-            total_positions = sessions.aggregate(total=Sum('total_positions'))['total'] or 0
+            total_positions = sessions.aggregate(total=Sum("total_positions"))["total"] or 0
 
             # Count new aircraft (first ever seen) - batch query to avoid N+1
-            day_hexes = list(sessions.values_list('icao_hex', flat=True).distinct())
+            day_hexes = list(sessions.values_list("icao_hex", flat=True).distinct())
             # Batch fetch all SpottedAircraft records for these hexes
             spotted_map = {
-                s.icao_hex: s.first_seen
-                for s in SpottedAircraft.objects.filter(icao_hex__in=day_hexes)
-                if s.first_seen
+                s.icao_hex: s.first_seen for s in SpottedAircraft.objects.filter(icao_hex__in=day_hexes) if s.first_seen
             }
             new_aircraft = sum(
-                1 for hex_code in day_hexes
-                if hex_code in spotted_map and spotted_map[hex_code].date() == for_date
+                1 for hex_code in day_hexes if hex_code in spotted_map and spotted_map[hex_code].date() == for_date
             )
 
             # Get maximums
-            max_distance = sessions.aggregate(max=Max('max_distance_nm'))['max']
-            max_altitude = sessions.aggregate(max=Max('max_altitude'))['max']
+            max_distance = sessions.aggregate(max=Max("max_distance_nm"))["max"]
+            max_altitude = sessions.aggregate(max=Max("max_altitude"))["max"]
 
             # Get max speed from sightings
-            sightings = AircraftSighting.objects.filter(
-                timestamp__gte=day_start,
-                timestamp__lt=day_end
-            )
-            max_speed = sightings.aggregate(max=Max('ground_speed'))['max']
+            sightings = AircraftSighting.objects.filter(timestamp__gte=day_start, timestamp__lt=day_end)
+            max_speed = sightings.aggregate(max=Max("ground_speed"))["max"]
 
             # Aircraft type counts
-            type_counts = sessions.filter(
-                aircraft_type__isnull=False
-            ).values('aircraft_type').annotate(
-                count=Count('id')
-            ).order_by('-count')[:20]
-            aircraft_types = {t['aircraft_type']: t['count'] for t in type_counts}
+            type_counts = (
+                sessions.filter(aircraft_type__isnull=False)
+                .values("aircraft_type")
+                .annotate(count=Count("id"))
+                .order_by("-count")[:20]
+            )
+            aircraft_types = {t["aircraft_type"]: t["count"] for t in type_counts}
 
             # Operator counts (from aircraft info) - batch query to avoid N+1
-            session_icaos = list(sessions.values_list('icao_hex', flat=True))
+            session_icaos = list(sessions.values_list("icao_hex", flat=True))
             # Batch fetch all AircraftInfo records for these ICAOs
             info_map = {
                 info.icao_hex: info.operator
@@ -1100,17 +1139,17 @@ class GamificationService:
             stats, _ = DailyStats.objects.update_or_create(
                 date=for_date,
                 defaults={
-                    'unique_aircraft': unique_hexes,
-                    'new_aircraft': new_aircraft,
-                    'total_sessions': total_sessions,
-                    'total_positions': total_positions,
-                    'military_count': military_count,
-                    'max_distance_nm': max_distance,
-                    'max_altitude': max_altitude,
-                    'max_speed': max_speed,
-                    'aircraft_types': aircraft_types,
-                    'operators': operators,
-                }
+                    "unique_aircraft": unique_hexes,
+                    "new_aircraft": new_aircraft,
+                    "total_sessions": total_sessions,
+                    "total_positions": total_positions,
+                    "military_count": military_count,
+                    "max_distance_nm": max_distance,
+                    "max_altitude": max_altitude,
+                    "max_speed": max_speed,
+                    "aircraft_types": aircraft_types,
+                    "operators": operators,
+                },
             )
 
             # Invalidate cache
@@ -1139,37 +1178,37 @@ class GamificationService:
         total_positions = AircraftSighting.objects.count()
 
         # Unique counts
-        unique_types = SpottedAircraft.objects.filter(
-            aircraft_type__isnull=False
-        ).values('aircraft_type').distinct().count()
+        unique_types = (
+            SpottedAircraft.objects.filter(aircraft_type__isnull=False).values("aircraft_type").distinct().count()
+        )
 
-        unique_operators = SpottedAircraft.objects.filter(
-            operator__isnull=False
-        ).values('operator').distinct().count()
+        unique_operators = SpottedAircraft.objects.filter(operator__isnull=False).values("operator").distinct().count()
 
-        unique_countries = SpottedAircraft.objects.filter(
-            country__isnull=False
-        ).values('country').distinct().count()
+        unique_countries = SpottedAircraft.objects.filter(country__isnull=False).values("country").distinct().count()
 
         # All-time records from personal records
         records = PersonalRecord.objects.all()
         all_time_records = {
             r.record_type: {
-                'value': r.value,
-                'icao_hex': r.icao_hex,
-                'callsign': r.callsign,
-                'achieved_at': r.achieved_at.isoformat() + 'Z' if r.achieved_at else None,
+                "value": r.value,
+                "icao_hex": r.icao_hex,
+                "callsign": r.callsign,
+                "achieved_at": r.achieved_at.isoformat() + "Z" if r.achieved_at else None,
             }
             for r in records
         }
 
         # First ever sighting
-        first_session = AircraftSession.objects.order_by('first_seen').first()
-        first_sighting = {
-            'icao_hex': first_session.icao_hex,
-            'callsign': first_session.callsign,
-            'timestamp': first_session.first_seen.isoformat() + 'Z' if first_session else None,
-        } if first_session else None
+        first_session = AircraftSession.objects.order_by("first_seen").first()
+        first_sighting = (
+            {
+                "icao_hex": first_session.icao_hex,
+                "callsign": first_session.callsign,
+                "timestamp": first_session.first_seen.isoformat() + "Z" if first_session else None,
+            }
+            if first_session
+            else None
+        )
 
         # Active tracking days
         active_days = DailyStats.objects.filter(unique_aircraft__gt=0).count()
@@ -1178,17 +1217,17 @@ class GamificationService:
         total_rare = RareSighting.objects.count()
 
         result = {
-            'total_unique_aircraft': total_aircraft,
-            'total_sessions': total_sessions,
-            'total_positions': total_positions,
-            'unique_aircraft_types': unique_types,
-            'unique_operators': unique_operators,
-            'unique_countries': unique_countries,
-            'active_tracking_days': active_days,
-            'total_rare_sightings': total_rare,
-            'all_time_records': all_time_records,
-            'first_sighting': first_sighting,
-            'timestamp': timezone.now().isoformat() + 'Z'
+            "total_unique_aircraft": total_aircraft,
+            "total_sessions": total_sessions,
+            "total_positions": total_positions,
+            "unique_aircraft_types": unique_types,
+            "unique_operators": unique_operators,
+            "unique_countries": unique_countries,
+            "active_tracking_days": active_days,
+            "total_rare_sightings": total_rare,
+            "all_time_records": all_time_records,
+            "first_sighting": first_sighting,
+            "timestamp": timezone.now().isoformat() + "Z",
         }
 
         cache.set(CACHE_KEY_LIFETIME_STATS, result, timeout=LIFETIME_STATS_TIMEOUT)

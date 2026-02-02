@@ -10,11 +10,11 @@ To enable these tests, install libacars:
 """
 
 import pytest
-import asyncio
 
 # Check if libacars is actually available using the new public API
 try:
     from skyspy_common.libacars import is_available
+
     LIBACARS_AVAILABLE = is_available()
 except ImportError:
     LIBACARS_AVAILABLE = False
@@ -32,7 +32,7 @@ class TestRealLibacarsDecode:
 
     def test_decode_known_message(self):
         """Test decoding a known ACARS message format."""
-        from skyspy_common.libacars import decode_acars_apps, MsgDir
+        from skyspy_common.libacars import MsgDir, decode_acars_apps
 
         # H1 label is commonly used for position reports
         label = "H1"
@@ -48,29 +48,29 @@ class TestRealLibacarsDecode:
 
     def test_decode_arinc_622_message(self):
         """Test decoding an ARINC 622 format message."""
-        from skyspy_common.libacars import decode_acars_apps, MsgDir
+        from skyspy_common.libacars import MsgDir, decode_acars_apps
 
         # ARINC 622 uses specific message structure
         label = "AA"
         text = "#DFBA.A320/F.EGLL.LFPG,N12345,1234"
         direction = MsgDir.AIR2GND
 
-        result = decode_acars_apps(label, text, direction)
+        decode_acars_apps(label, text, direction)
 
     def test_decode_fans_message(self):
         """Test decoding a FANS-1/A message."""
-        from skyspy_common.libacars import decode_acars_apps, MsgDir
+        from skyspy_common.libacars import MsgDir, decode_acars_apps
 
         # FANS uses H1/H2 labels
         label = "H1"
         text = "FANS POSITION REPORT TEST"
         direction = MsgDir.AIR2GND
 
-        result = decode_acars_apps(label, text, direction)
+        decode_acars_apps(label, text, direction)
 
     def test_decode_returns_json_structure(self):
         """Test that successful decode returns expected JSON structure."""
-        from skyspy_common.libacars import decode_acars_apps, MsgDir
+        from skyspy_common.libacars import MsgDir, decode_acars_apps
 
         label = "SA"  # System address message
         text = ".XXXX TEST MESSAGE CONTENT"
@@ -84,7 +84,7 @@ class TestRealLibacarsDecode:
 
     def test_decode_text_returns_string(self):
         """Test that text decode returns a string."""
-        from skyspy_common.libacars import decode_acars_apps_text, MsgDir
+        from skyspy_common.libacars import MsgDir, decode_acars_apps_text
 
         label = "H1"
         text = "TEST MESSAGE"
@@ -102,7 +102,7 @@ class TestRealLibacarsAsync:
     @pytest.mark.asyncio
     async def test_async_decode(self):
         """Test async decode with real library."""
-        from skyspy_common.libacars import decode_acars_apps_async, MsgDir
+        from skyspy_common.libacars import MsgDir, decode_acars_apps_async
 
         label = "H1"
         text = "ASYNC TEST MESSAGE"
@@ -117,7 +117,7 @@ class TestRealLibacarsAsync:
     @pytest.mark.asyncio
     async def test_async_batch_decode(self):
         """Test async batch decode with real library."""
-        from skyspy_common.libacars import decode_batch_async, BatchMessage, MsgDir
+        from skyspy_common.libacars import BatchMessage, MsgDir, decode_batch_async
 
         messages = [
             BatchMessage(label="H1", text="Test 1", direction=MsgDir.AIR2GND, id="1"),
@@ -137,11 +137,10 @@ class TestRealLibacarsBatch:
 
     def test_batch_decode_multiple_messages(self):
         """Test batch decoding multiple messages."""
-        from skyspy_common.libacars import decode_batch, BatchMessage, MsgDir
+        from skyspy_common.libacars import BatchMessage, MsgDir, decode_batch
 
         messages = [
-            BatchMessage(label="H1", text=f"Message {i}", direction=MsgDir.AIR2GND, id=f"msg-{i}")
-            for i in range(10)
+            BatchMessage(label="H1", text=f"Message {i}", direction=MsgDir.AIR2GND, id=f"msg-{i}") for i in range(10)
         ]
 
         results = decode_batch(messages)
@@ -152,12 +151,11 @@ class TestRealLibacarsBatch:
 
     def test_batch_decode_mixed_labels(self):
         """Test batch with various message labels."""
-        from skyspy_common.libacars import decode_batch, BatchMessage, MsgDir
+        from skyspy_common.libacars import BatchMessage, MsgDir, decode_batch
 
         labels = ["H1", "SA", "AA", "Q0", "5Z", "_d", "B6"]
         messages = [
-            BatchMessage(label=label, text=f"Text for {label}", direction=MsgDir.AIR2GND, id=label)
-            for label in labels
+            BatchMessage(label=label, text=f"Text for {label}", direction=MsgDir.AIR2GND, id=label) for label in labels
         ]
 
         results = decode_batch(messages)
@@ -170,7 +168,7 @@ class TestRealLibacarsSubLabel:
 
     def test_extract_sublabel_mfi(self):
         """Test sublabel/MFI extraction."""
-        from skyspy_common.libacars import extract_sublabel_mfi, MsgDir
+        from skyspy_common.libacars import MsgDir, extract_sublabel_mfi
 
         # Test with various label formats
         test_cases = [
@@ -191,10 +189,10 @@ class TestRealLibacarsStatistics:
     def test_stats_tracking(self):
         """Test that statistics are tracked during real decodes."""
         from skyspy_common.libacars import (
+            MsgDir,
             decode_acars_apps,
             get_stats,
             reset_stats,
-            MsgDir,
         )
 
         reset_stats()
@@ -213,7 +211,7 @@ class TestRealLibacarsResilience:
 
     def test_malformed_message_handling(self):
         """Test that malformed messages are handled gracefully."""
-        from skyspy_common.libacars import decode_acars_apps, MsgDir
+        from skyspy_common.libacars import MsgDir, decode_acars_apps
 
         # Various potentially problematic inputs
         test_inputs = [
@@ -227,14 +225,14 @@ class TestRealLibacarsResilience:
         for label, text in test_inputs:
             # Should not raise unhandled exception
             try:
-                result = decode_acars_apps(label, text, MsgDir.AIR2GND)
+                decode_acars_apps(label, text, MsgDir.AIR2GND)
             except Exception as e:
                 # Only validation errors are acceptable
                 assert "validation" in str(type(e)).lower() or "libacars" in str(type(e)).lower()
 
     def test_rapid_sequential_decodes(self):
         """Test rapid sequential decodes don't cause issues."""
-        from skyspy_common.libacars import decode_acars_apps, MsgDir
+        from skyspy_common.libacars import MsgDir, decode_acars_apps
 
         for i in range(100):
             decode_acars_apps("H1", f"Message {i}", MsgDir.AIR2GND)
@@ -245,7 +243,7 @@ class TestRealLibacarsCache:
 
     def test_cache_integration(self):
         """Test cache works correctly with real decodes."""
-        from skyspy_common.libacars import decode_acars_apps, MsgDir
+        from skyspy_common.libacars import MsgDir, decode_acars_apps
         from skyspy_common.libacars.cache import get_decode_cache, reset_caches
 
         reset_caches()
@@ -264,7 +262,7 @@ class TestRealLibacarsCache:
         if result1 is not None:
             assert result1 == result2
 
-        stats = cache.get_stats()
+        cache.get_stats()
 
 
 class TestRealLibacarsCircuitBreaker:
@@ -272,7 +270,7 @@ class TestRealLibacarsCircuitBreaker:
 
     def test_circuit_breaker_integration(self):
         """Test circuit breaker doesn't interfere with normal operation."""
-        from skyspy_common.libacars import decode_acars_apps, MsgDir
+        from skyspy_common.libacars import MsgDir, decode_acars_apps
         from skyspy_common.libacars.circuit_breaker import get_circuit_breaker, reset_circuit_breaker
 
         reset_circuit_breaker()
@@ -283,7 +281,7 @@ class TestRealLibacarsCircuitBreaker:
         for i in range(10):
             decode_acars_apps("H1", f"Test {i}", MsgDir.AIR2GND)
 
-        stats = breaker.get_stats()
+        breaker.get_stats()
 
 
 class TestRealLibacarsMetrics:
@@ -291,7 +289,7 @@ class TestRealLibacarsMetrics:
 
     def test_metrics_collection(self):
         """Test metrics are collected during real operations."""
-        from skyspy_common.libacars import decode_acars_apps, MsgDir
+        from skyspy_common.libacars import MsgDir, decode_acars_apps
         from skyspy_common.libacars.metrics import get_metrics_collector, reset_metrics
 
         reset_metrics()
@@ -306,7 +304,7 @@ class TestRealLibacarsMetrics:
 
     def test_prometheus_export(self):
         """Test Prometheus export format."""
-        from skyspy_common.libacars import decode_acars_apps, MsgDir
+        from skyspy_common.libacars import MsgDir, decode_acars_apps
         from skyspy_common.libacars.metrics import get_metrics_collector, reset_metrics
 
         reset_metrics()

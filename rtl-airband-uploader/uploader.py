@@ -6,15 +6,13 @@ Watches for new radio recordings and uploads them to SkySpyAPI.
 Maps raw frequencies in filenames to human-readable channel labels.
 """
 
+import logging
 import os
 import re
 import time
-import logging
-import threading
-from pathlib import Path
-from datetime import datetime
 from dataclasses import dataclass
-from typing import Optional, Dict
+from datetime import datetime
+from pathlib import Path
 
 import requests
 from mutagen.mp3 import MP3
@@ -22,8 +20,8 @@ from prometheus_client import (
     Counter,
     Gauge,
     Histogram,
-    start_http_server,
     Info,
+    start_http_server,
 )
 
 # Configuration
@@ -43,11 +41,10 @@ FILE_STABILITY_SECONDS = int(os.environ.get("FILE_STABILITY_SECONDS", "2"))
 
 # Frequency Map: Hz -> Label
 # Matches the "Best Stuff" Optimized Config
-FREQ_MAP: Dict[int, str] = {
+FREQ_MAP: dict[int, str] = {
     # KSEA Tower
     119900000: "SEA-Twr-16L34R",
     120950000: "SEA-Twr-16R34L",
-    
     # KSEA Approach/Departure
     119200000: "SEA-App-Rwy16",
     120100000: "SEA-App-199-300",
@@ -59,18 +56,15 @@ FREQ_MAP: Dict[int, str] = {
     127100000: "SEA-App-Dep-2",
     128500000: "SEA-App-Dep-3",
     133650000: "SEA-App-Rwy16-3",
-    
     # KBFI (Boeing Field)
     118300000: "BFI-Twr-13L31R",
     120600000: "BFI-Twr-13R31L",
-    
     # Regional Highlights
     124700000: "RNT-Tower",
     123550000: "Boeing-Ops",
     122700000: "Kenmore-Seaplane",
-    
     # Emergency
-    121500000: "Guard"
+    121500000: "Guard",
 }
 
 # Logging setup
@@ -167,29 +161,29 @@ class FileMetadata:
     filepath: Path
     filename: str
     channel_name: str
-    frequency_mhz: Optional[float]
-    timestamp: Optional[datetime]
+    frequency_mhz: float | None
+    timestamp: datetime | None
     file_size: int
 
 
 def parse_filename(filepath: Path) -> FileMetadata:
     """
     Parse recording filename to extract metadata and map frequency to label.
-    
-    Expected format (scan mode + include_freq): 
+
+    Expected format (scan mode + include_freq):
     prefix_freqHz_YYYYMMDD_HHMMSS.mp3
     Example: airband_119900000_20260104_123005.mp3
     """
     filename = filepath.name
     file_size = filepath.stat().st_size if filepath.exists() else 0
-    
+
     # Regex for Prefix_Freq_Date_Time.mp3
     # Group 1: Prefix (e.g. "airband")
     # Group 2: Freq Hz (e.g. "119900000")
     # Group 3: Date (YYYYMMDD)
     # Group 4: Time (HHMMSS)
     match = re.match(r"^([^_]+)_(\d+)_(\d{8})_(\d{6})\.mp3$", filename)
-    
+
     # Fallback Regex (incase format is Prefix_Date_Time_Freq)
     match_alt = re.match(r"^(.+?)_(\d{8})_(\d{6})_(\d+)\.mp3$", filename)
 
@@ -203,13 +197,13 @@ def parse_filename(filepath: Path) -> FileMetadata:
         freq_hz = int(match.group(2))
         date_str = match.group(3)
         time_str = match.group(4)
-        
+
     elif match_alt:
         # Alt Format: prefix_20260104_120000_119900000.mp3
         freq_hz = int(match_alt.group(4))
         date_str = match_alt.group(2)
         time_str = match_alt.group(3)
-        
+
     else:
         # Completely unknown format
         return FileMetadata(
@@ -226,7 +220,7 @@ def parse_filename(filepath: Path) -> FileMetadata:
         frequency_mhz = freq_hz / 1_000_000
         # Lookup Label in Map
         channel_name = FREQ_MAP.get(freq_hz, f"Unknown-{frequency_mhz:.3f}")
-    
+
     try:
         timestamp = datetime.strptime(f"{date_str}{time_str}", "%Y%m%d%H%M%S")
     except ValueError:
@@ -259,7 +253,7 @@ def is_empty_transmission(filepath: Path) -> bool:
         return True
 
 
-def get_audio_duration(filepath: Path) -> Optional[float]:
+def get_audio_duration(filepath: Path) -> float | None:
     """Get the duration of an MP3 file in seconds."""
     try:
         audio = MP3(filepath)
@@ -279,9 +273,9 @@ def is_short_transmission(filepath: Path) -> bool:
 def save_metadata(metadata: FileMetadata) -> None:
     """Save metadata to a .meta file for retry scenarios."""
     meta_path = metadata.filepath.with_suffix(".meta")
-    content = f"""frequency_mhz={metadata.frequency_mhz or ''}
+    content = f"""frequency_mhz={metadata.frequency_mhz or ""}
 channel_name={metadata.channel_name}
-timestamp={metadata.timestamp.isoformat() if metadata.timestamp else ''}
+timestamp={metadata.timestamp.isoformat() if metadata.timestamp else ""}
 file_size={metadata.file_size}
 created={datetime.now().isoformat()}
 """
@@ -343,12 +337,12 @@ def upload_file(metadata: FileMetadata) -> bool:
                 files = {"file": (metadata.filename, f, "audio/mpeg")}
                 data = {
                     "queue_transcription": "true",
-                    "channel_name": metadata.channel_name, # Critical: Send mapped name
+                    "channel_name": metadata.channel_name,  # Critical: Send mapped name
                 }
-                
+
                 if metadata.frequency_mhz:
                     data["frequency_mhz"] = str(metadata.frequency_mhz)
-                
+
                 # Send explicit timestamp if we have it
                 if metadata.timestamp:
                     data["timestamp_utc"] = metadata.timestamp.isoformat()
@@ -425,8 +419,7 @@ def process_file(filepath: Path) -> bool:
     if is_empty_transmission(filepath):
         UPLOADS_DISCARDED.labels(channel=channel, reason="too_small").inc()
         logger.info(
-            f"Discarding empty transmission: {filepath.name} "
-            f"({metadata.file_size} bytes < {MIN_FILE_SIZE} min)"
+            f"Discarding empty transmission: {filepath.name} ({metadata.file_size} bytes < {MIN_FILE_SIZE} min)"
         )
         cleanup_files(filepath)
         return True
@@ -435,10 +428,7 @@ def process_file(filepath: Path) -> bool:
     duration = get_audio_duration(filepath)
     if duration is not None and duration < MIN_DURATION_SECONDS:
         UPLOADS_DISCARDED.labels(channel=channel, reason="too_short").inc()
-        logger.info(
-            f"Discarding short transmission: {filepath.name} "
-            f"({duration:.2f}s < {MIN_DURATION_SECONDS}s min)"
-        )
+        logger.info(f"Discarding short transmission: {filepath.name} ({duration:.2f}s < {MIN_DURATION_SECONDS}s min)")
         cleanup_files(filepath)
         return True
 
@@ -489,7 +479,7 @@ def retry_failed_uploads() -> None:
     """Retry uploads from the failed directory."""
     if not FAILED_DIR.exists():
         return
-    
+
     files = list(FAILED_DIR.glob("*.mp3"))
     if not files:
         return
@@ -505,26 +495,26 @@ def retry_failed_uploads() -> None:
 def main() -> None:
     """Main entry point."""
     UPLOADER_INFO.info({"version": "1.1.0", "map_size": str(len(FREQ_MAP))})
-    
+
     RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
     FAILED_DIR.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"Starting RTL-Airband Uploader v1.1.0")
+    logger.info("Starting RTL-Airband Uploader v1.1.0")
     logger.info(f"Loaded {len(FREQ_MAP)} frequency mappings")
-    
+
     start_http_server(METRICS_PORT)
-    
+
     # Process backlog
     existing = len(list(RECORDINGS_DIR.glob("*.mp3")))
     if existing > 0:
         logger.info(f"Processing {existing} backlog files...")
 
     last_retry = 0
-    
+
     while True:
         try:
             update_queue_metrics()
-            
+
             for filepath in RECORDINGS_DIR.glob("*.mp3"):
                 process_file(filepath)
 
@@ -536,6 +526,7 @@ def main() -> None:
             logger.error(f"Loop error: {e}")
 
         time.sleep(POLL_INTERVAL)
+
 
 if __name__ == "__main__":
     main()

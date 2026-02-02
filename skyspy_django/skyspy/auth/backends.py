@@ -4,7 +4,9 @@ Authentication backends for SkySpy.
 Provides OIDC authentication backend that integrates with the SkyspyUser model
 and supports automatic role assignment based on claim mappings.
 """
+
 import logging
+
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import transaction
@@ -28,18 +30,18 @@ class OIDCAuthenticationBackend:
         OIDC authentication. It receives the user info claims.
         """
         # Extract claims from kwargs (set by mozilla-django-oidc)
-        claims = kwargs.get('claims', {})
+        claims = kwargs.get("claims", {})
         if not claims:
             return None
 
         # Required claims
-        subject = claims.get('sub')
+        subject = claims.get("sub")
         if not subject:
             logger.warning("OIDC authentication failed: no 'sub' claim")
             return None
 
         # Get issuer from claims or settings
-        issuer = claims.get('iss', getattr(settings, 'OIDC_PROVIDER_URL', ''))
+        issuer = claims.get("iss", getattr(settings, "OIDC_PROVIDER_URL", ""))
 
         try:
             with transaction.atomic():
@@ -68,25 +70,22 @@ class OIDCAuthenticationBackend:
 
         # Try to find existing user by OIDC subject
         try:
-            profile = SkyspyUser.objects.select_related('user').get(
-                oidc_subject=subject,
-                oidc_issuer=issuer
-            )
+            profile = SkyspyUser.objects.select_related("user").get(oidc_subject=subject, oidc_issuer=issuer)
             return profile.user
         except SkyspyUser.DoesNotExist:
             pass
 
         # Create new user
-        email = claims.get('email', '')
+        email = claims.get("email", "")
         username = self._generate_username(claims, subject)
 
         # Check if user with same email exists (link accounts)
         # Only if OIDC_ALLOW_EMAIL_LINKING is explicitly enabled
         # WARNING: Email linking can be a security vulnerability if an attacker
         # controls an OIDC provider and uses matching email addresses to take over accounts
-        allow_email_linking = getattr(settings, 'OIDC_ALLOW_EMAIL_LINKING', False)
+        allow_email_linking = getattr(settings, "OIDC_ALLOW_EMAIL_LINKING", False)
         # Require email_verified claim to be True before linking to prevent account takeover
-        email_verified = claims.get('email_verified') is True
+        email_verified = claims.get("email_verified") is True
         if allow_email_linking and email and email_verified:
             try:
                 user = User.objects.get(email=email)
@@ -103,8 +102,8 @@ class OIDCAuthenticationBackend:
         user = User.objects.create_user(
             username=username,
             email=email,
-            first_name=claims.get('given_name', ''),
-            last_name=claims.get('family_name', ''),
+            first_name=claims.get("given_name", ""),
+            last_name=claims.get("family_name", ""),
         )
         user.set_unusable_password()  # OIDC users don't use password
         user.save()
@@ -118,14 +117,14 @@ class OIDCAuthenticationBackend:
     def _generate_username(self, claims, subject):
         """Generate a unique username from OIDC claims."""
         # Try preferred_username first
-        username = claims.get('preferred_username')
+        username = claims.get("preferred_username")
         if username and not User.objects.filter(username=username).exists():
             return username
 
         # Try email prefix
-        email = claims.get('email', '')
+        email = claims.get("email", "")
         if email:
-            email_prefix = email.split('@')[0]
+            email_prefix = email.split("@")[0]
             if not User.objects.filter(username=email_prefix).exists():
                 return email_prefix
 
@@ -146,13 +145,13 @@ class OIDCAuthenticationBackend:
         profile, created = SkyspyUser.objects.update_or_create(
             user=user,
             defaults={
-                'auth_provider': 'oidc',
-                'oidc_subject': subject,
-                'oidc_issuer': issuer,
-                'oidc_claims': claims,
-                'display_name': claims.get('name') or claims.get('preferred_username'),
-                'avatar_url': claims.get('picture'),
-            }
+                "auth_provider": "oidc",
+                "oidc_subject": subject,
+                "oidc_issuer": issuer,
+                "oidc_claims": claims,
+                "display_name": claims.get("name") or claims.get("preferred_username"),
+                "avatar_url": claims.get("picture"),
+            },
         )
         return profile
 
@@ -160,16 +159,16 @@ class OIDCAuthenticationBackend:
         """Update user fields from OIDC claims."""
         updated = False
 
-        if claims.get('email') and user.email != claims['email']:
-            user.email = claims['email']
+        if claims.get("email") and user.email != claims["email"]:
+            user.email = claims["email"]
             updated = True
 
-        if claims.get('given_name') and user.first_name != claims['given_name']:
-            user.first_name = claims['given_name']
+        if claims.get("given_name") and user.first_name != claims["given_name"]:
+            user.first_name = claims["given_name"]
             updated = True
 
-        if claims.get('family_name') and user.last_name != claims['family_name']:
-            user.last_name = claims['family_name']
+        if claims.get("family_name") and user.last_name != claims["family_name"]:
+            user.last_name = claims["family_name"]
             updated = True
 
         if updated:
@@ -179,10 +178,10 @@ class OIDCAuthenticationBackend:
         try:
             profile = user.skyspy_profile
             profile.oidc_claims = claims
-            if claims.get('name'):
-                profile.display_name = claims['name']
-            if claims.get('picture'):
-                profile.avatar_url = claims['picture']
+            if claims.get("name"):
+                profile.display_name = claims["name"]
+            if claims.get("picture"):
+                profile.avatar_url = claims["picture"]
             profile.save()
         except Exception as e:
             logger.debug(f"Could not update OIDC profile for {user.username}: {e}")
@@ -194,12 +193,10 @@ class OIDCAuthenticationBackend:
         Evaluates all active OIDCClaimMapping rules and assigns
         matching roles to the user.
         """
-        from skyspy.models.auth import OIDCClaimMapping, UserRole, Role
+        from skyspy.models.auth import OIDCClaimMapping, Role, UserRole
 
         # Get all active claim mappings
-        mappings = OIDCClaimMapping.objects.filter(
-            is_active=True
-        ).select_related('role').order_by('-priority')
+        mappings = OIDCClaimMapping.objects.filter(is_active=True).select_related("role").order_by("-priority")
 
         matched_roles = set()
         for mapping in mappings:
@@ -209,7 +206,7 @@ class OIDCAuthenticationBackend:
 
         if not matched_roles:
             # Assign default role if no mappings matched
-            default_role_name = getattr(settings, 'OIDC_DEFAULT_ROLE', 'viewer')
+            default_role_name = getattr(settings, "OIDC_DEFAULT_ROLE", "viewer")
             try:
                 default_role = Role.objects.get(name=default_role_name)
                 matched_roles.add(default_role)
@@ -221,7 +218,7 @@ class OIDCAuthenticationBackend:
             UserRole.objects.get_or_create(
                 user=user,
                 role=role,
-                defaults={'assigned_by': None}  # System-assigned
+                defaults={"assigned_by": None},  # System-assigned
             )
 
         logger.info(f"Assigned {len(matched_roles)} roles to user {user.username} from OIDC claims")
@@ -269,7 +266,7 @@ class LocalAuthenticationBackend:
         SkyspyUser.objects.get_or_create(
             user=user,
             defaults={
-                'auth_provider': 'local',
-                'display_name': user.get_full_name() or user.username,
-            }
+                "auth_provider": "local",
+                "display_name": user.get_full_name() or user.username,
+            },
         )

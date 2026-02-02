@@ -10,24 +10,24 @@ Features:
 - Performance metrics collection
 - Suppression window support
 """
+
 import logging
 import re
 import time
 from datetime import datetime
-from typing import Optional, List
 
 import httpx
 from django.db import transaction
 from django.utils import timezone
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 # Maximum allowed regex pattern length to prevent ReDoS attacks
 MAX_REGEX_PATTERN_LENGTH = 500
-from skyspy.models import AlertRule, AlertHistory, NotificationConfig, NotificationLog, NotificationChannel
-from skyspy.socketio.utils import sync_emit
+from skyspy.models import AlertHistory, AlertRule, NotificationConfig, NotificationLog
 from skyspy.services.alert_cooldowns import cooldown_manager
-from skyspy.services.alert_rule_cache import rule_cache, CompiledRule
-from skyspy.services.alert_metrics import alert_metrics, EvaluationTimer
+from skyspy.services.alert_metrics import EvaluationTimer, alert_metrics
+from skyspy.services.alert_rule_cache import CompiledRule, rule_cache
+from skyspy.socketio.utils import sync_emit
 
 logger = logging.getLogger(__name__)
 
@@ -44,25 +44,25 @@ class AlertService:
 
     # Field mapping from rule types to aircraft data keys
     TYPE_MAPPING = {
-        'icao': 'hex',
-        'callsign': 'flight',
-        'squawk': 'squawk',
-        'altitude': 'alt',
-        'distance': 'distance_nm',
-        'proximity': 'distance_nm',  # Alias for distance
-        'speed': 'gs',
-        'vertical_rate': 'vr',
-        'type': 't',
-        'aircraft_type': 't',  # Alias
-        'category': 'category',
-        'military': 'military',
-        'emergency': 'squawk',  # Special handling
-        'registration': 'r',
-        'operator': 'ownOp',
+        "icao": "hex",
+        "callsign": "flight",
+        "squawk": "squawk",
+        "altitude": "alt",
+        "distance": "distance_nm",
+        "proximity": "distance_nm",  # Alias for distance
+        "speed": "gs",
+        "vertical_rate": "vr",
+        "type": "t",
+        "aircraft_type": "t",  # Alias
+        "category": "category",
+        "military": "military",
+        "emergency": "squawk",  # Special handling
+        "registration": "r",
+        "operator": "ownOp",
     }
 
     # Emergency squawk codes
-    EMERGENCY_SQUAWKS = {'7500', '7600', '7700'}
+    EMERGENCY_SQUAWKS = {"7500", "7600", "7700"}
 
     def __init__(self):
         self._legacy_cooldowns: dict = {}  # Fallback for testing
@@ -100,14 +100,16 @@ class AlertService:
             for rule in active_rules:
                 # Pre-filter aircraft using optimization hints
                 if rule.requires_military:
-                    candidates = [ac for ac in aircraft_list if ac.get('military')]
+                    candidates = [ac for ac in aircraft_list if ac.get("military")]
                 elif rule.requires_position:
-                    candidates = [ac for ac in aircraft_list if ac.get('distance_nm') is not None]
+                    candidates = [ac for ac in aircraft_list if ac.get("distance_nm") is not None]
                 elif rule.requires_altitude:
                     # Check both 'alt' and 'alt_baro' since ADS-B data uses alt_baro
-                    candidates = [ac for ac in aircraft_list if ac.get('alt') is not None or ac.get('alt_baro') is not None]
+                    candidates = [
+                        ac for ac in aircraft_list if ac.get("alt") is not None or ac.get("alt_baro") is not None
+                    ]
                 elif rule.requires_speed:
-                    candidates = [ac for ac in aircraft_list if ac.get('gs') is not None]
+                    candidates = [ac for ac in aircraft_list if ac.get("gs") is not None]
                 else:
                     candidates = aircraft_list
 
@@ -125,9 +127,9 @@ class AlertService:
 
             return triggered
 
-    def _get_rules_from_db(self) -> List[CompiledRule]:
+    def _get_rules_from_db(self) -> list[CompiledRule]:
         """Fallback: get rules directly from database."""
-        db_rules = AlertRule.objects.filter(enabled=True).select_related('owner')
+        db_rules = AlertRule.objects.filter(enabled=True).select_related("owner")
         return [CompiledRule.from_db_rule(r) for r in db_rules]
 
     def _check_rule(self, rule: CompiledRule, aircraft: dict) -> bool:
@@ -137,27 +139,16 @@ class AlertService:
         Evaluates both simple conditions and complex AND/OR conditions.
         """
         # Check simple conditions
-        if rule.rule_type and rule.value:
-            if not self._evaluate_simple_condition(
-                aircraft, rule.rule_type, rule.operator, rule.value,
-                compiled_regex=rule.compiled_regex
-            ):
-                return False
+        if rule.rule_type and rule.value and not self._evaluate_simple_condition(
+            aircraft, rule.rule_type, rule.operator, rule.value, compiled_regex=rule.compiled_regex
+        ):
+            return False
 
         # Check complex conditions
-        if rule.conditions:
-            if not self._evaluate_complex_conditions(aircraft, rule.conditions):
-                return False
-
-        return True
+        return not (rule.conditions and not self._evaluate_complex_conditions(aircraft, rule.conditions))
 
     def _evaluate_simple_condition(
-        self,
-        aircraft: dict,
-        rule_type: str,
-        operator: str,
-        value: str,
-        compiled_regex: Optional[re.Pattern] = None
+        self, aircraft: dict, rule_type: str, operator: str, value: str, compiled_regex: re.Pattern | None = None
     ) -> bool:
         """
         Evaluate a simple condition against an aircraft.
@@ -167,7 +158,7 @@ class AlertService:
 
         if ac_value is None:
             # For boolean types (emergency, military), allow None to be treated as False
-            if rule_type in ('emergency', 'military'):
+            if rule_type in ("emergency", "military"):
                 ac_value = False
             else:
                 return False
@@ -179,19 +170,19 @@ class AlertService:
         Get the relevant value from aircraft data.
         """
         # Special handling for military type - check both 'military' key and 'dbFlags'
-        if rule_type == 'military':
+        if rule_type == "military":
             # First check explicit 'military' key
-            if 'military' in aircraft:
-                return aircraft['military']
+            if "military" in aircraft:
+                return aircraft["military"]
             # Fall back to dbFlags (bit 0 = military)
-            db_flags = aircraft.get('dbFlags', 0)
+            db_flags = aircraft.get("dbFlags", 0)
             if isinstance(db_flags, int):
                 return bool(db_flags & 1)
             return False
 
         # Special handling for altitude - check both 'alt' and 'alt_baro'
-        if rule_type == 'altitude':
-            return aircraft.get('alt') or aircraft.get('alt_baro')
+        if rule_type == "altitude":
+            return aircraft.get("alt") or aircraft.get("alt_baro")
 
         field = self.TYPE_MAPPING.get(rule_type)
         if not field:
@@ -204,44 +195,44 @@ class AlertService:
         ac_value,
         operator: str,
         rule_value: str,
-        compiled_regex: Optional[re.Pattern] = None,
-        rule_type: Optional[str] = None
+        compiled_regex: re.Pattern | None = None,
+        rule_type: str | None = None,
     ) -> bool:
         """
         Compare aircraft value with rule value using operator.
         """
         try:
             # Special handling for emergency type
-            if rule_type == 'emergency':
+            if rule_type == "emergency":
                 is_emergency = str(ac_value) in self.EMERGENCY_SQUAWKS
-                expected = rule_value.lower() in ('true', '1', 'yes')
+                expected = rule_value.lower() in ("true", "1", "yes")
                 return is_emergency == expected
 
             # Special handling for military type
-            if rule_type == 'military':
+            if rule_type == "military":
                 is_military = bool(ac_value)
-                expected = rule_value.lower() in ('true', '1', 'yes')
+                expected = rule_value.lower() in ("true", "1", "yes")
                 return is_military == expected
 
-            if operator == 'eq':
+            if operator == "eq":
                 return str(ac_value).upper() == str(rule_value).upper()
-            elif operator == 'neq':
+            elif operator == "neq":
                 return str(ac_value).upper() != str(rule_value).upper()
-            elif operator == 'lt':
+            elif operator == "lt":
                 return float(ac_value) < float(rule_value)
-            elif operator in ('le', 'lte'):
+            elif operator in ("le", "lte"):
                 return float(ac_value) <= float(rule_value)
-            elif operator == 'gt':
+            elif operator == "gt":
                 return float(ac_value) > float(rule_value)
-            elif operator in ('ge', 'gte'):
+            elif operator in ("ge", "gte"):
                 return float(ac_value) >= float(rule_value)
-            elif operator == 'contains':
+            elif operator == "contains":
                 return rule_value.upper() in str(ac_value).upper()
-            elif operator == 'startswith':
+            elif operator == "startswith":
                 return str(ac_value).upper().startswith(rule_value.upper())
-            elif operator == 'endswith':
+            elif operator == "endswith":
                 return str(ac_value).upper().endswith(rule_value.upper())
-            elif operator == 'regex':
+            elif operator == "regex":
                 # Validate regex pattern length to prevent ReDoS
                 if len(rule_value) > MAX_REGEX_PATTERN_LENGTH:
                     logger.warning(f"Regex pattern too long ({len(rule_value)} chars), skipping")
@@ -264,18 +255,15 @@ class AlertService:
         """
         Evaluate complex AND/OR conditions.
         """
-        logic = conditions.get('logic', 'AND').upper()
-        groups = conditions.get('groups', [])
+        logic = conditions.get("logic", "AND").upper()
+        groups = conditions.get("groups", [])
 
         if not groups:
             return True
 
-        results = [
-            self._evaluate_condition_group(aircraft, group)
-            for group in groups
-        ]
+        results = [self._evaluate_condition_group(aircraft, group) for group in groups]
 
-        if logic == 'AND':
+        if logic == "AND":
             return all(results)
         else:  # OR
             return any(results)
@@ -284,8 +272,8 @@ class AlertService:
         """
         Evaluate a condition group.
         """
-        logic = group.get('logic', 'AND').upper()
-        conditions = group.get('conditions', [])
+        logic = group.get("logic", "AND").upper()
+        conditions = group.get("conditions", [])
 
         if not conditions:
             return True
@@ -293,26 +281,23 @@ class AlertService:
         results = []
         for cond in conditions:
             result = self._evaluate_simple_condition(
-                aircraft,
-                cond.get('type'),
-                cond.get('operator', 'eq'),
-                cond.get('value')
+                aircraft, cond.get("type"), cond.get("operator", "eq"), cond.get("value")
             )
             results.append(result)
 
-        if logic == 'AND':
+        if logic == "AND":
             return all(results)
         else:  # OR
             return any(results)
 
-    def _trigger_alert(self, rule: CompiledRule, aircraft: dict) -> Optional[dict]:
+    def _trigger_alert(self, rule: CompiledRule, aircraft: dict) -> dict | None:
         """
         Trigger an alert and record it.
 
         Uses distributed cooldowns for multi-worker consistency.
         """
         start_time = time.perf_counter()
-        icao = aircraft.get('hex', '').upper()
+        icao = aircraft.get("hex", "").upper()
 
         # Validate ICAO to prevent empty string cooldown keys
         if not icao:
@@ -324,16 +309,14 @@ class AlertService:
             return None
 
         # Check cooldown using distributed manager
-        can_trigger, last_trigger = cooldown_manager.check_and_set(
-            rule.id, icao, rule.cooldown_seconds
-        )
+        can_trigger, last_trigger = cooldown_manager.check_and_set(rule.id, icao, rule.cooldown_seconds)
 
         if not can_trigger:
             alert_metrics.record_cooldown_block(rule.id, rule.name)
             return None
 
         # Create alert message
-        callsign = aircraft.get('flight') or icao
+        callsign = aircraft.get("flight") or icao
         message = f"Alert '{rule.name}' triggered for {callsign}"
 
         # Store in history and update rule atomically
@@ -342,7 +325,7 @@ class AlertService:
                 rule_id=rule.id,
                 rule_name=rule.name,
                 icao_hex=icao,
-                callsign=aircraft.get('flight'),
+                callsign=aircraft.get("flight"),
                 message=message,
                 priority=rule.priority,
                 aircraft_data=aircraft,
@@ -352,14 +335,14 @@ class AlertService:
             AlertRule.objects.filter(id=rule.id).update(last_triggered=timezone.now())
 
         alert_data = {
-            'rule_id': rule.id,
-            'rule_name': rule.name,
-            'icao': icao,
-            'callsign': aircraft.get('flight'),
-            'message': message,
-            'priority': rule.priority,
-            'aircraft': aircraft,
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            "rule_id": rule.id,
+            "rule_name": rule.name,
+            "icao": icao,
+            "callsign": aircraft.get("flight"),
+            "message": message,
+            "priority": rule.priority,
+            "aircraft": aircraft,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
         }
 
         # Record metrics
@@ -368,17 +351,17 @@ class AlertService:
 
         # Broadcast alert via WebSocket
         try:
-            sync_emit('alert:triggered', alert_data, room='topic_alerts')
+            sync_emit("alert:triggered", alert_data, room="topic_alerts")
 
             # Also broadcast to owner-specific channel if rule has owner
             if rule.owner_id:
-                sync_emit('alert:triggered', alert_data, room=f'user_{rule.owner_id}')
+                sync_emit("alert:triggered", alert_data, room=f"user_{rule.owner_id}")
         except Exception as e:
             logger.warning(f"Failed to broadcast alert: {e}")
 
         # Send notification - fetch rule from DB to get notification channels
         try:
-            db_rule = AlertRule.objects.prefetch_related('notification_channels').get(id=rule.id)
+            db_rule = AlertRule.objects.prefetch_related("notification_channels").get(id=rule.id)
             self._send_notification(alert_data, db_rule)
         except AlertRule.DoesNotExist:
             # Fallback to global config only
@@ -402,7 +385,7 @@ class AlertService:
         # to AlertRule model
         return False
 
-    def _send_notification(self, alert_data: dict, rule: Optional[AlertRule] = None):
+    def _send_notification(self, alert_data: dict, rule: AlertRule | None = None):
         """
         Send notification via Apprise to rule-specific channels and/or global config.
 
@@ -415,9 +398,9 @@ class AlertService:
 
             # Determine notification type based on priority
             notify_type = apprise.NotifyType.INFO
-            if alert_data['priority'] == 'warning':
+            if alert_data["priority"] == "warning":
                 notify_type = apprise.NotifyType.WARNING
-            elif alert_data['priority'] == 'critical':
+            elif alert_data["priority"] == "critical":
                 notify_type = apprise.NotifyType.FAILURE
 
             # Use list of tuples (url, channel_id) to keep them aligned
@@ -425,7 +408,7 @@ class AlertService:
             seen_urls = set()
 
             # 1. Get rule-specific notification channels
-            if rule and hasattr(rule, 'notification_channels'):
+            if rule and hasattr(rule, "notification_channels"):
                 for channel in rule.notification_channels.filter(enabled=True):
                     if channel.apprise_url and channel.apprise_url not in seen_urls:
                         url_channel_pairs.append((channel.apprise_url, channel.id))
@@ -433,13 +416,13 @@ class AlertService:
 
             # 2. Get global config if enabled for this rule (or if no rule provided)
             use_global = True
-            if rule and hasattr(rule, 'use_global_notifications'):
+            if rule and hasattr(rule, "use_global_notifications"):
                 use_global = rule.use_global_notifications
 
             if use_global:
                 config = NotificationConfig.get_config()
                 if config.enabled and config.apprise_urls:
-                    for url in config.apprise_urls.split(';'):
+                    for url in config.apprise_urls.split(";"):
                         url = url.strip()
                         if url and url not in seen_urls:
                             # Global URLs have no associated channel_id
@@ -458,22 +441,20 @@ class AlertService:
 
             # Send notification
             apobj.notify(
-                title=f"SkysPy Alert: {alert_data['rule_name']}",
-                body=alert_data['message'],
-                notify_type=notify_type
+                title=f"SkysPy Alert: {alert_data['rule_name']}", body=alert_data["message"], notify_type=notify_type
             )
 
             # Log notification for each channel
             for url, channel_id in url_channel_pairs:
                 NotificationLog.objects.create(
-                    notification_type='alert',
-                    icao_hex=alert_data['icao'],
-                    callsign=alert_data.get('callsign'),
-                    message=alert_data['message'],
+                    notification_type="alert",
+                    icao_hex=alert_data["icao"],
+                    callsign=alert_data.get("callsign"),
+                    message=alert_data["message"],
                     details=alert_data,
                     channel_id=channel_id,
                     channel_url=url,
-                    status='sent',
+                    status="sent",
                 )
 
         except ImportError:
@@ -507,11 +488,7 @@ class AlertService:
 
     # Public methods for rule testing and management
 
-    def test_rule_against_aircraft(
-        self,
-        rule_data: dict,
-        aircraft_list: list
-    ) -> dict:
+    def test_rule_against_aircraft(self, rule_data: dict, aircraft_list: list) -> dict:
         """
         Test a rule configuration against aircraft data without saving.
 
@@ -531,26 +508,26 @@ class AlertService:
                 matches.append(ac)
 
         return {
-            'would_match': len(matches),
-            'matched_aircraft': matches,
-            'rule_valid': True,
-            'aircraft_tested': len(aircraft_list),
+            "would_match": len(matches),
+            "matched_aircraft": matches,
+            "rule_valid": True,
+            "aircraft_tested": len(aircraft_list),
         }
 
     def _create_temp_rule(self, rule_data: dict) -> CompiledRule:
         """Create a temporary CompiledRule from rule data dict."""
         return CompiledRule(
             id=0,  # Temporary
-            name=rule_data.get('name', 'Test Rule'),
-            rule_type=rule_data.get('type') or rule_data.get('rule_type'),
-            operator=rule_data.get('operator', 'eq'),
-            value=rule_data.get('value'),
-            conditions=rule_data.get('conditions'),
-            priority=rule_data.get('priority', 'info'),
-            cooldown_seconds=rule_data.get('cooldown_minutes', 5) * 60,
-            api_url=rule_data.get('api_url'),
+            name=rule_data.get("name", "Test Rule"),
+            rule_type=rule_data.get("type") or rule_data.get("rule_type"),
+            operator=rule_data.get("operator", "eq"),
+            value=rule_data.get("value"),
+            conditions=rule_data.get("conditions"),
+            priority=rule_data.get("priority", "info"),
+            cooldown_seconds=rule_data.get("cooldown_minutes", 5) * 60,
+            api_url=rule_data.get("api_url"),
             owner_id=None,
-            visibility='private',
+            visibility="private",
             is_system=False,
             starts_at=None,
             expires_at=None,
@@ -559,9 +536,9 @@ class AlertService:
     def get_status(self) -> dict:
         """Get alert service status including cache and cooldown info."""
         return {
-            'cache': rule_cache.get_status(),
-            'cooldowns': cooldown_manager.get_status(),
-            'metrics': alert_metrics.get_summary(),
+            "cache": rule_cache.get_status(),
+            "cooldowns": cooldown_manager.get_status(),
+            "metrics": alert_metrics.get_summary(),
         }
 
     def clear_cooldowns_for_rule(self, rule_id: int) -> int:

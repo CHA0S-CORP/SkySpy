@@ -10,11 +10,11 @@ Provides resource pooling to reduce allocation overhead:
 import ctypes
 import logging
 import threading
-import time
 from collections import deque
-from contextlib import contextmanager
+from collections.abc import Callable, Generator
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
-from typing import Any, Callable, Generator, Generic, Optional, TypeVar
+from typing import TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class PoolStats:
         }
 
 
-class ObjectPool(Generic[T]):
+class ObjectPool[T]:
     """
     Generic thread-safe object pool.
 
@@ -85,8 +85,8 @@ class ObjectPool(Generic[T]):
     def __init__(
         self,
         factory: Callable[[], T],
-        reset: Optional[Callable[[T], None]] = None,
-        destroy: Optional[Callable[[T], None]] = None,
+        reset: Callable[[T], None] | None = None,
+        destroy: Callable[[T], None] | None = None,
         max_size: int = 10,
         min_size: int = 0,
         name: str = "ObjectPool",
@@ -177,10 +177,8 @@ class ObjectPool(Generic[T]):
                 )
                 # Destroy object if reset fails
                 if self._destroy:
-                    try:
+                    with suppress(Exception):
                         self._destroy(obj)
-                    except Exception:
-                        pass
                 with self._lock:
                     self._stats.total_destroyed += 1
                 return
@@ -237,10 +235,8 @@ class ObjectPool(Generic[T]):
             while self._pool:
                 obj = self._pool.popleft()
                 if self._destroy:
-                    try:
+                    with suppress(Exception):
                         self._destroy(obj)
-                    except Exception:
-                        pass
                 self._stats.total_destroyed += 1
 
             self._stats.current_pool_size = 0
@@ -263,7 +259,7 @@ class ObjectPool(Generic[T]):
         return self.size
 
 
-class ThreadLocalPool(Generic[T]):
+class ThreadLocalPool[T]:
     """
     Thread-local object pool.
 
@@ -279,7 +275,7 @@ class ThreadLocalPool(Generic[T]):
     def __init__(
         self,
         factory: Callable[[], T],
-        reset: Optional[Callable[[T], None]] = None,
+        reset: Callable[[T], None] | None = None,
         name: str = "ThreadLocalPool",
     ):
         """
@@ -461,9 +457,7 @@ class BufferPool:
         """Get pool statistics."""
         with self._lock:
             stats = self._stats.to_dict()
-            stats["pool_sizes"] = {
-                str(size): len(pool) for size, pool in self._pools.items()
-            }
+            stats["pool_sizes"] = {str(size): len(pool) for size, pool in self._pools.items()}
             return stats
 
     def clear(self) -> None:
@@ -475,8 +469,8 @@ class BufferPool:
 
 
 # Global pool instances
-_vstring_pool: Optional[ObjectPool] = None
-_buffer_pool: Optional[BufferPool] = None
+_vstring_pool: ObjectPool | None = None
+_buffer_pool: BufferPool | None = None
 
 
 def get_buffer_pool() -> BufferPool:

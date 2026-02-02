@@ -6,10 +6,8 @@ catching invalid inputs early and providing meaningful error messages.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 from .exceptions import LibacarsValidationError
-
 
 # Validation constants
 MAX_MESSAGE_LENGTH = 10_000
@@ -22,11 +20,11 @@ class ValidationResult:
     """Result of message validation."""
 
     is_valid: bool
-    error_message: Optional[str] = None
-    field: Optional[str] = None
+    error_message: str | None = None
+    field: str | None = None
 
     @property
-    def as_tuple(self) -> tuple[bool, Optional[str]]:
+    def as_tuple(self) -> tuple[bool, str | None]:
         """Return (is_valid, error_message) tuple for backwards compatibility."""
         return (self.is_valid, self.error_message)
 

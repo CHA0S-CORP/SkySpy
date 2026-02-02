@@ -3,6 +3,7 @@ NOTAM (Notice to Air Missions) models.
 
 Stores cached NOTAM and TFR data from FAA Aviation Weather API.
 """
+
 from django.db import models
 
 
@@ -10,29 +11,25 @@ class CachedNotam(models.Model):
     """Cached NOTAM data from FAA Aviation Weather Center."""
 
     NOTAM_TYPES = [
-        ('D', 'NOTAM D'),
-        ('FDC', 'FDC NOTAM'),
-        ('TFR', 'Temporary Flight Restriction'),
-        ('GPS', 'GPS NOTAM'),
-        ('MIL', 'Military NOTAM'),
-        ('POINTER', 'Pointer NOTAM'),
+        ("D", "NOTAM D"),
+        ("FDC", "FDC NOTAM"),
+        ("TFR", "Temporary Flight Restriction"),
+        ("GPS", "GPS NOTAM"),
+        ("MIL", "Military NOTAM"),
+        ("POINTER", "Pointer NOTAM"),
     ]
 
     CLASSIFICATION_CHOICES = [
-        ('FDC', 'Flight Data Center'),
-        ('INTL', 'International'),
-        ('DOM', 'Domestic'),
-        ('MIL', 'Military'),
+        ("FDC", "Flight Data Center"),
+        ("INTL", "International"),
+        ("DOM", "Domestic"),
+        ("MIL", "Military"),
     ]
 
     # NOTAM identification
     notam_id = models.CharField(max_length=50, unique=True, db_index=True)
     notam_type = models.CharField(max_length=10, choices=NOTAM_TYPES, db_index=True)
-    classification = models.CharField(
-        max_length=20,
-        choices=CLASSIFICATION_CHOICES,
-        blank=True, null=True
-    )
+    classification = models.CharField(max_length=20, choices=CLASSIFICATION_CHOICES, blank=True, null=True)
 
     # Location
     location = models.CharField(max_length=10, db_index=True)  # ICAO identifier
@@ -69,15 +66,15 @@ class CachedNotam(models.Model):
     archive_reason = models.CharField(max_length=50, blank=True, null=True)
 
     class Meta:
-        db_table = 'cached_notams'
+        db_table = "cached_notams"
         indexes = [
-            models.Index(fields=['location', 'effective_start'], name='idx_notam_loc_start'),
-            models.Index(fields=['notam_type', 'effective_start'], name='idx_notam_type_start'),
-            models.Index(fields=['latitude', 'longitude'], name='idx_notam_location'),
-            models.Index(fields=['effective_end', 'effective_start'], name='idx_notam_validity'),
-            models.Index(fields=['is_archived', 'archived_at'], name='idx_notam_archive'),
+            models.Index(fields=["location", "effective_start"], name="idx_notam_loc_start"),
+            models.Index(fields=["notam_type", "effective_start"], name="idx_notam_type_start"),
+            models.Index(fields=["latitude", "longitude"], name="idx_notam_location"),
+            models.Index(fields=["effective_end", "effective_start"], name="idx_notam_validity"),
+            models.Index(fields=["is_archived", "archived_at"], name="idx_notam_archive"),
         ]
-        ordering = ['-effective_start']
+        ordering = ["-effective_start"]
 
     def __str__(self):
         return f"{self.notam_type} {self.notam_id} - {self.location}"
@@ -86,17 +83,16 @@ class CachedNotam(models.Model):
     def is_active(self):
         """Check if NOTAM is currently active."""
         from django.utils import timezone
+
         now = timezone.now()
         if self.effective_start > now:
             return False
-        if self.effective_end and self.effective_end < now:
-            return False
-        return True
+        return not (self.effective_end and self.effective_end < now)
 
     @property
     def is_tfr(self):
         """Check if this is a TFR NOTAM."""
-        return self.notam_type == 'TFR' or (self.geometry is not None)
+        return self.notam_type == "TFR" or (self.geometry is not None)
 
 
 class CachedAirline(models.Model):
@@ -114,10 +110,10 @@ class CachedAirline(models.Model):
     fetched_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'cached_airlines'
+        db_table = "cached_airlines"
         indexes = [
-            models.Index(fields=['iata_code'], name='idx_airline_iata'),
-            models.Index(fields=['callsign'], name='idx_airline_callsign'),
+            models.Index(fields=["iata_code"], name="idx_airline_iata"),
+            models.Index(fields=["callsign"], name="idx_airline_callsign"),
         ]
 
     def __str__(self):
@@ -137,10 +133,10 @@ class CachedAircraftType(models.Model):
     fetched_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'cached_aircraft_types'
+        db_table = "cached_aircraft_types"
         indexes = [
-            models.Index(fields=['iata_code'], name='idx_actype_iata'),
-            models.Index(fields=['manufacturer'], name='idx_actype_mfr'),
+            models.Index(fields=["iata_code"], name="idx_actype_iata"),
+            models.Index(fields=["manufacturer"], name="idx_actype_mfr"),
         ]
 
     def __str__(self):

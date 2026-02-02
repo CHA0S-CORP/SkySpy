@@ -7,9 +7,10 @@ OpenSky Network: https://opensky-network.org/
 Free tier: 4,000 credits/day (8,000 for contributors)
 Resolution: 5-second updates
 """
+
 import logging
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List, Tuple
+from datetime import datetime
+from typing import Any
 
 import httpx
 from django.conf import settings
@@ -28,23 +29,19 @@ FLIGHTS_CACHE_TTL = 60  # 1 minute
 MAX_REQUESTS_PER_MINUTE = 10
 
 
-def _get_credentials() -> Tuple[Optional[str], Optional[str]]:
+def _get_credentials() -> tuple[str | None, str | None]:
     """Get OpenSky credentials from settings."""
-    username = getattr(settings, 'OPENSKY_USERNAME', None)
-    password = getattr(settings, 'OPENSKY_PASSWORD', None)
+    username = getattr(settings, "OPENSKY_USERNAME", None)
+    password = getattr(settings, "OPENSKY_PASSWORD", None)
     return username, password
 
 
 def _is_enabled() -> bool:
     """Check if OpenSky Live API is enabled."""
-    return getattr(settings, 'OPENSKY_LIVE_ENABLED', False)
+    return getattr(settings, "OPENSKY_LIVE_ENABLED", False)
 
 
-def _make_request(
-    endpoint: str,
-    params: Optional[Dict] = None,
-    timeout: int = 30
-) -> Optional[Dict[str, Any]]:
+def _make_request(endpoint: str, params: dict | None = None, timeout: int = 30) -> dict[str, Any] | None:
     """
     Make a request to the OpenSky Network API.
 
@@ -72,10 +69,7 @@ def _make_request(
     try:
         with httpx.Client(timeout=timeout) as client:
             response = client.get(
-                f"{OPENSKY_API_BASE}/{endpoint}",
-                params=params,
-                auth=auth,
-                headers={"Accept": "application/json"}
+                f"{OPENSKY_API_BASE}/{endpoint}", params=params, auth=auth, headers={"Accept": "application/json"}
             )
             response.raise_for_status()
 
@@ -98,8 +92,8 @@ def _make_request(
 
 
 def get_all_states(
-    bbox: Optional[Tuple[float, float, float, float]] = None,
-) -> List[Dict[str, Any]]:
+    bbox: tuple[float, float, float, float] | None = None,
+) -> list[dict[str, Any]]:
     """
     Get all aircraft state vectors.
 
@@ -114,22 +108,22 @@ def get_all_states(
 
     params = {}
     if bbox:
-        params['lamin'] = bbox[0]
-        params['lamax'] = bbox[1]
-        params['lomin'] = bbox[2]
-        params['lomax'] = bbox[3]
+        params["lamin"] = bbox[0]
+        params["lamax"] = bbox[1]
+        params["lomin"] = bbox[2]
+        params["lomax"] = bbox[3]
 
     cache_key = f"opensky_states_{bbox}" if bbox else "opensky_states_all"
     cached = cache.get(cache_key)
     if cached:
         return cached
 
-    result = _make_request('states/all', params)
+    result = _make_request("states/all", params)
 
     if not result:
         return []
 
-    states = result.get('states', [])
+    states = result.get("states", [])
     if not states:
         return []
 
@@ -144,7 +138,7 @@ def get_all_states(
     return aircraft
 
 
-def _parse_state_vector(state: List) -> Optional[Dict[str, Any]]:
+def _parse_state_vector(state: list) -> dict[str, Any] | None:
     """
     Parse an OpenSky state vector into a dictionary.
 
@@ -202,29 +196,29 @@ def _parse_state_vector(state: List) -> Optional[Dict[str, Any]]:
         geo_alt_ft = round(geo_alt_m * 3.281, 0) if geo_alt_m else None
 
         position_sources = {
-            0: 'ADS-B',
-            1: 'ASTERIX',
-            2: 'MLAT',
-            3: 'FLARM',
+            0: "ADS-B",
+            1: "ASTERIX",
+            2: "MLAT",
+            3: "FLARM",
         }
 
         return {
-            'icao_hex': icao_hex.upper(),
-            'callsign': state[1].strip() if state[1] else None,
-            'origin_country': state[2],
-            'latitude': lat,
-            'longitude': lon,
-            'altitude_baro_ft': baro_alt_ft,
-            'altitude_geo_ft': geo_alt_ft,
-            'on_ground': state[8],
-            'velocity_kt': velocity_kt,
-            'track': state[10],
-            'vertical_rate_fpm': vert_rate_fpm,
-            'squawk': state[14],
-            'position_source': position_sources.get(state[16], 'Unknown'),
-            'last_contact': state[4],
-            'time_position': state[3],
-            'source': 'opensky',
+            "icao_hex": icao_hex.upper(),
+            "callsign": state[1].strip() if state[1] else None,
+            "origin_country": state[2],
+            "latitude": lat,
+            "longitude": lon,
+            "altitude_baro_ft": baro_alt_ft,
+            "altitude_geo_ft": geo_alt_ft,
+            "on_ground": state[8],
+            "velocity_kt": velocity_kt,
+            "track": state[10],
+            "vertical_rate_fpm": vert_rate_fpm,
+            "squawk": state[14],
+            "position_source": position_sources.get(state[16], "Unknown"),
+            "last_contact": state[4],
+            "time_position": state[3],
+            "source": "opensky",
         }
 
     except (IndexError, TypeError, ValueError) as e:
@@ -232,7 +226,7 @@ def _parse_state_vector(state: List) -> Optional[Dict[str, Any]]:
         return None
 
 
-def get_aircraft_by_icao(icao_hex: str) -> Optional[Dict[str, Any]]:
+def get_aircraft_by_icao(icao_hex: str) -> dict[str, Any] | None:
     """
     Get current state for a specific aircraft.
 
@@ -252,12 +246,12 @@ def get_aircraft_by_icao(icao_hex: str) -> Optional[Dict[str, Any]]:
     if cached:
         return cached
 
-    result = _make_request('states/all', {'icao24': icao_hex})
+    result = _make_request("states/all", {"icao24": icao_hex})
 
     if not result:
         return None
 
-    states = result.get('states', [])
+    states = result.get("states", [])
     if not states:
         return None
 
@@ -268,10 +262,7 @@ def get_aircraft_by_icao(icao_hex: str) -> Optional[Dict[str, Any]]:
     return parsed
 
 
-def get_aircraft_track(
-    icao_hex: str,
-    time: Optional[int] = None
-) -> List[Dict[str, Any]]:
+def get_aircraft_track(icao_hex: str, time: int | None = None) -> list[dict[str, Any]]:
     """
     Get flight track for an aircraft.
 
@@ -286,37 +277,35 @@ def get_aircraft_track(
         return []
 
     icao_hex = icao_hex.lower()
-    params = {'icao24': icao_hex}
+    params = {"icao24": icao_hex}
     if time:
-        params['time'] = time
+        params["time"] = time
 
-    result = _make_request('tracks/all', params)
+    result = _make_request("tracks/all", params)
 
     if not result:
         return []
 
-    path = result.get('path', [])
+    path = result.get("path", [])
     track_points = []
 
     for point in path:
         if len(point) >= 6:
-            track_points.append({
-                'time': point[0],
-                'latitude': point[1],
-                'longitude': point[2],
-                'altitude_baro_ft': round(point[3] * 3.281, 0) if point[3] else None,
-                'track': point[4],
-                'on_ground': point[5],
-            })
+            track_points.append(
+                {
+                    "time": point[0],
+                    "latitude": point[1],
+                    "longitude": point[2],
+                    "altitude_baro_ft": round(point[3] * 3.281, 0) if point[3] else None,
+                    "track": point[4],
+                    "on_ground": point[5],
+                }
+            )
 
     return track_points
 
 
-def get_departures(
-    airport_icao: str,
-    begin: Optional[int] = None,
-    end: Optional[int] = None
-) -> List[Dict[str, Any]]:
+def get_departures(airport_icao: str, begin: int | None = None, end: int | None = None) -> list[dict[str, Any]]:
     """
     Get departures from an airport.
 
@@ -340,36 +329,37 @@ def get_departures(
     if cached:
         return cached
 
-    result = _make_request(f'flights/departure', {
-        'airport': airport_icao,
-        'begin': begin,
-        'end': end,
-    })
+    result = _make_request(
+        "flights/departure",
+        {
+            "airport": airport_icao,
+            "begin": begin,
+            "end": end,
+        },
+    )
 
     if not result:
         return []
 
     flights = []
     for flight in result:
-        flights.append({
-            'icao_hex': flight.get('icao24', '').upper(),
-            'callsign': flight.get('callsign', '').strip() if flight.get('callsign') else None,
-            'departure_airport': flight.get('estDepartureAirport'),
-            'arrival_airport': flight.get('estArrivalAirport'),
-            'first_seen': flight.get('firstSeen'),
-            'last_seen': flight.get('lastSeen'),
-            'source': 'opensky',
-        })
+        flights.append(
+            {
+                "icao_hex": flight.get("icao24", "").upper(),
+                "callsign": flight.get("callsign", "").strip() if flight.get("callsign") else None,
+                "departure_airport": flight.get("estDepartureAirport"),
+                "arrival_airport": flight.get("estArrivalAirport"),
+                "first_seen": flight.get("firstSeen"),
+                "last_seen": flight.get("lastSeen"),
+                "source": "opensky",
+            }
+        )
 
     cache.set(cache_key, flights, FLIGHTS_CACHE_TTL)
     return flights
 
 
-def get_arrivals(
-    airport_icao: str,
-    begin: Optional[int] = None,
-    end: Optional[int] = None
-) -> List[Dict[str, Any]]:
+def get_arrivals(airport_icao: str, begin: int | None = None, end: int | None = None) -> list[dict[str, Any]]:
     """
     Get arrivals at an airport.
 
@@ -393,32 +383,37 @@ def get_arrivals(
     if cached:
         return cached
 
-    result = _make_request(f'flights/arrival', {
-        'airport': airport_icao,
-        'begin': begin,
-        'end': end,
-    })
+    result = _make_request(
+        "flights/arrival",
+        {
+            "airport": airport_icao,
+            "begin": begin,
+            "end": end,
+        },
+    )
 
     if not result:
         return []
 
     flights = []
     for flight in result:
-        flights.append({
-            'icao_hex': flight.get('icao24', '').upper(),
-            'callsign': flight.get('callsign', '').strip() if flight.get('callsign') else None,
-            'departure_airport': flight.get('estDepartureAirport'),
-            'arrival_airport': flight.get('estArrivalAirport'),
-            'first_seen': flight.get('firstSeen'),
-            'last_seen': flight.get('lastSeen'),
-            'source': 'opensky',
-        })
+        flights.append(
+            {
+                "icao_hex": flight.get("icao24", "").upper(),
+                "callsign": flight.get("callsign", "").strip() if flight.get("callsign") else None,
+                "departure_airport": flight.get("estDepartureAirport"),
+                "arrival_airport": flight.get("estArrivalAirport"),
+                "first_seen": flight.get("firstSeen"),
+                "last_seen": flight.get("lastSeen"),
+                "source": "opensky",
+            }
+        )
 
     cache.set(cache_key, flights, FLIGHTS_CACHE_TTL)
     return flights
 
 
-def track_aircraft_globally(icao_hex: str) -> Optional[Dict[str, Any]]:
+def track_aircraft_globally(icao_hex: str) -> dict[str, Any] | None:
     """
     Track an aircraft that may have left local receiver range.
 
@@ -434,7 +429,7 @@ def track_aircraft_globally(icao_hex: str) -> Optional[Dict[str, Any]]:
     return get_aircraft_by_icao(icao_hex)
 
 
-def get_api_status() -> Dict[str, Any]:
+def get_api_status() -> dict[str, Any]:
     """
     Get OpenSky API status and configuration.
 
@@ -444,11 +439,11 @@ def get_api_status() -> Dict[str, Any]:
     username, password = _get_credentials()
 
     return {
-        'enabled': _is_enabled(),
-        'authenticated': bool(username and password),
-        'cache_ttl_states': STATES_CACHE_TTL,
-        'cache_ttl_flights': FLIGHTS_CACHE_TTL,
-        'max_requests_per_minute': MAX_REQUESTS_PER_MINUTE,
-        'daily_limit_basic': 4000,
-        'daily_limit_contributor': 8000,
+        "enabled": _is_enabled(),
+        "authenticated": bool(username and password),
+        "cache_ttl_states": STATES_CACHE_TTL,
+        "cache_ttl_flights": FLIGHTS_CACHE_TTL,
+        "max_requests_per_minute": MAX_REQUESTS_PER_MINUTE,
+        "daily_limit_basic": 4000,
+        "daily_limit_contributor": 8000,
     }

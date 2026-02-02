@@ -4,33 +4,31 @@ Message batcher for Socket.IO.
 Batches messages for efficient sending, reducing the number of
 individual emissions while maintaining responsiveness.
 """
+
 import asyncio
 import json
 import logging
 from collections import deque
+from collections.abc import Callable
 from datetime import datetime
-from typing import Callable, Optional, Any
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 # Default batch configuration
 DEFAULT_BATCH_CONFIG = {
-    'window_ms': 200,                              # Batch window in milliseconds
-    'max_size': 50,                                # Maximum messages per batch
-    'max_bytes': 1024 * 1024,                      # Maximum batch size (1MB)
-    'immediate_types': ['alert', 'safety', 'emergency'],  # Types sent immediately
+    "window_ms": 200,  # Batch window in milliseconds
+    "max_size": 50,  # Maximum messages per batch
+    "max_bytes": 1024 * 1024,  # Maximum batch size (1MB)
+    "immediate_types": ["alert", "safety", "emergency"],  # Types sent immediately
 }
 
 
 class MessageBatcher:
     """Batches messages for efficient sending."""
 
-    def __init__(
-        self,
-        send_callback: Callable[[dict], Any],
-        config: Optional[dict] = None
-    ):
+    def __init__(self, send_callback: Callable[[dict], Any], config: dict | None = None):
         """
         Initialize the message batcher.
 
@@ -45,7 +43,7 @@ class MessageBatcher:
         self._batch: deque = deque()
         self._batch_size_bytes: int = 0  # Track total byte size of batch
         self._send_callback = send_callback
-        self._batch_task: Optional[asyncio.Task] = None
+        self._batch_task: asyncio.Task | None = None
         self._config = config if config is not None else DEFAULT_BATCH_CONFIG.copy()
         self._lock = asyncio.Lock()
 
@@ -60,10 +58,10 @@ class MessageBatcher:
         Args:
             message: The message dict to add. Should have a 'type' key.
         """
-        msg_type = message.get('type', '')
+        msg_type = message.get("type", "")
 
         # Check if this message type should be sent immediately
-        for immediate_type in self._config['immediate_types']:
+        for immediate_type in self._config["immediate_types"]:
             if immediate_type in msg_type:
                 await self._send_callback(message)
                 return
@@ -86,8 +84,8 @@ class MessageBatcher:
                 self._batch_task = asyncio.create_task(self._flush_after_delay())
 
             # Check if batch is full (by count OR by bytes)
-            max_bytes = self._config.get('max_bytes', 1024 * 1024)
-            if len(self._batch) >= self._config['max_size'] or self._batch_size_bytes >= max_bytes:
+            max_bytes = self._config.get("max_bytes", 1024 * 1024)
+            if len(self._batch) >= self._config["max_size"] or self._batch_size_bytes >= max_bytes:
                 if self._batch_task and not self._batch_task.done():
                     self._batch_task.cancel()
                 should_flush = True
@@ -104,7 +102,7 @@ class MessageBatcher:
     async def _flush_after_delay(self):
         """Wait for batch window then flush."""
         try:
-            await asyncio.sleep(self._config['window_ms'] / 1000.0)
+            await asyncio.sleep(self._config["window_ms"] / 1000.0)
             await self._flush()
         except asyncio.CancelledError:
             # Task was cancelled (likely due to immediate flush), this is expected
@@ -129,12 +127,14 @@ class MessageBatcher:
             await self._send_callback(messages[0])
         else:
             # Multiple messages, send as batch
-            await self._send_callback({
-                'type': 'batch',
-                'messages': messages,
-                'count': len(messages),
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
-            })
+            await self._send_callback(
+                {
+                    "type": "batch",
+                    "messages": messages,
+                    "count": len(messages),
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                }
+            )
 
     async def flush_now(self):
         """Force flush any pending messages."""

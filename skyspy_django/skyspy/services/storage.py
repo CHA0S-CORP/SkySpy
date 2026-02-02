@@ -6,12 +6,12 @@ Provides a unified interface for:
 - Local filesystem storage
 - File validation and sanitization
 """
+
 import logging
 import os
 import re
 import threading
 from pathlib import Path
-from typing import Optional
 
 from django.conf import settings
 
@@ -51,24 +51,24 @@ def _get_s3_client():
             from botocore.config import Config
 
             config = Config(
-                signature_version='s3v4',
-                retries={'max_attempts': 3, 'mode': 'standard'},
+                signature_version="s3v4",
+                retries={"max_attempts": 3, "mode": "standard"},
                 connect_timeout=10,
                 read_timeout=30,
             )
 
             client_kwargs = {
-                'service_name': 's3',
-                'region_name': settings.S3_REGION,
-                'config': config,
+                "service_name": "s3",
+                "region_name": settings.S3_REGION,
+                "config": config,
             }
 
             if settings.S3_ACCESS_KEY and settings.S3_SECRET_KEY:
-                client_kwargs['aws_access_key_id'] = settings.S3_ACCESS_KEY
-                client_kwargs['aws_secret_access_key'] = settings.S3_SECRET_KEY
+                client_kwargs["aws_access_key_id"] = settings.S3_ACCESS_KEY
+                client_kwargs["aws_secret_access_key"] = settings.S3_SECRET_KEY
 
             if settings.S3_ENDPOINT_URL:
-                client_kwargs['endpoint_url'] = settings.S3_ENDPOINT_URL
+                client_kwargs["endpoint_url"] = settings.S3_ENDPOINT_URL
 
             _s3_client = boto3.client(**client_kwargs)
             logger.info(f"S3 client initialized: bucket={settings.S3_BUCKET}")
@@ -118,11 +118,11 @@ def sanitize_filename(filename: str) -> str:
         raise ValueError("Filename cannot be empty after sanitization")
 
     # Validate filename contains only allowed characters
-    if not re.match(r'^[\w\-\.]+$', sanitized):
+    if not re.match(r"^[\w\-\.]+$", sanitized):
         raise ValueError(f"Filename contains invalid characters: {sanitized}")
 
     # Reject filenames that are just dots
-    if sanitized in ('.', '..'):
+    if sanitized in (".", ".."):
         raise ValueError("Invalid filename")
 
     return sanitized
@@ -134,7 +134,7 @@ def get_s3_key(filename: str, prefix: str) -> str:
     prefix = prefix.strip("/")
     key = f"{prefix}/{safe_filename}"
 
-    if '..' in key:
+    if ".." in key:
         raise ValueError("S3 key contains path traversal sequence")
 
     return key
@@ -148,7 +148,7 @@ def get_s3_url(filename: str, prefix: str) -> str:
         base = settings.S3_PUBLIC_URL.rstrip("/")
         prefix_with_slash = prefix.strip("/") + "/"
         if key.startswith(prefix_with_slash):
-            key = key[len(prefix_with_slash):]
+            key = key[len(prefix_with_slash) :]
         return f"{base}/{key}"
 
     if settings.S3_ENDPOINT_URL:
@@ -158,7 +158,7 @@ def get_s3_url(filename: str, prefix: str) -> str:
     return f"https://{settings.S3_BUCKET}.s3.{settings.S3_REGION}.amazonaws.com/{key}"
 
 
-def generate_signed_url(filename: str, prefix: str, expires_in: int = 3600) -> Optional[str]:
+def generate_signed_url(filename: str, prefix: str, expires_in: int = 3600) -> str | None:
     """
     Generate a signed URL for S3 file access.
 
@@ -178,10 +178,10 @@ def generate_signed_url(filename: str, prefix: str, expires_in: int = 3600) -> O
 
     try:
         url = client.generate_presigned_url(
-            'get_object',
+            "get_object",
             Params={
-                'Bucket': settings.S3_BUCKET,
-                'Key': key,
+                "Bucket": settings.S3_BUCKET,
+                "Key": key,
             },
             ExpiresIn=expires_in,
         )
@@ -196,8 +196,8 @@ def upload_to_s3(
     filename: str,
     prefix: str,
     content_type: str = "application/octet-stream",
-    cache_control: str = "max-age=86400"
-) -> Optional[str]:
+    cache_control: str = "max-age=86400",
+) -> str | None:
     """
     Upload file to S3.
 
@@ -236,7 +236,7 @@ def upload_to_s3(
         return None
 
 
-def download_from_s3(filename: str, prefix: str) -> Optional[bytes]:
+def download_from_s3(filename: str, prefix: str) -> bytes | None:
     """
     Download file from S3.
 
@@ -255,7 +255,7 @@ def download_from_s3(filename: str, prefix: str) -> Optional[bytes]:
 
     try:
         response = client.get_object(Bucket=settings.S3_BUCKET, Key=key)
-        return response['Body'].read()
+        return response["Body"].read()
     except Exception as e:
         logger.error(f"S3 download failed for {filename}: {e}")
         return None
@@ -296,8 +296,8 @@ def check_s3_exists(filename: str, prefix: str, use_cache: bool = True) -> bool:
         return True
 
     except ClientError as e:
-        error_code = e.response.get('Error', {}).get('Code', '')
-        if error_code in ('404', 'NoSuchKey'):
+        error_code = e.response.get("Error", {}).get("Code", "")
+        if error_code in ("404", "NoSuchKey"):
             _s3_exists_cache[cache_key] = (False, time.time())
             return False
         logger.warning(f"S3 head_object error for {filename}: {error_code}")
@@ -308,7 +308,7 @@ def check_s3_exists(filename: str, prefix: str, use_cache: bool = True) -> bool:
         return False
 
 
-def save_file_locally(data: bytes, filename: str, directory: str) -> Optional[Path]:
+def save_file_locally(data: bytes, filename: str, directory: str) -> Path | None:
     """
     Save file to local storage.
 
@@ -336,7 +336,7 @@ def save_file_locally(data: bytes, filename: str, directory: str) -> Optional[Pa
         return None
 
 
-def read_local_file(filename: str, directory: str) -> Optional[bytes]:
+def read_local_file(filename: str, directory: str) -> bytes | None:
     """
     Read file from local storage.
 

@@ -1,6 +1,7 @@
 """
 ACARS/VDL2 message model for aircraft data link communications.
 """
+
 from django.db import models
 
 
@@ -8,14 +9,14 @@ class AcarsMessage(models.Model):
     """ACARS and VDL2 messages received from aircraft."""
 
     SOURCE_CHOICES = [
-        ('acars', 'ACARS'),
-        ('vdlm2', 'VDL Mode 2'),
+        ("acars", "ACARS"),
+        ("vdlm2", "VDL Mode 2"),
     ]
 
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
 
     # Message source
-    source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default='acars')
+    source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default="acars")
     channel = models.CharField(max_length=10, blank=True, null=True)
     frequency = models.FloatField(blank=True, null=True)
 
@@ -43,12 +44,12 @@ class AcarsMessage(models.Model):
     station_id = models.CharField(max_length=50, blank=True, null=True)
 
     class Meta:
-        db_table = 'acars_messages'
+        db_table = "acars_messages"
         indexes = [
-            models.Index(fields=['icao_hex', 'timestamp'], name='idx_acars_icao_time'),
-            models.Index(fields=['label', 'timestamp'], name='idx_acars_label'),
+            models.Index(fields=["icao_hex", "timestamp"], name="idx_acars_icao_time"),
+            models.Index(fields=["label", "timestamp"], name="idx_acars_label"),
         ]
-        ordering = ['-timestamp']
+        ordering = ["-timestamp"]
 
     def __str__(self):
         return f"{self.source.upper()} {self.label or 'N/A'} - {self.icao_hex} @ {self.timestamp}"

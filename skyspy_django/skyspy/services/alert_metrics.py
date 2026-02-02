@@ -4,13 +4,13 @@ Alert performance metrics collection and reporting.
 Tracks evaluation duration, trigger rates, cache hit ratios,
 and exposes metrics via API and optionally Prometheus.
 """
+
 import logging
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from threading import Lock
-from typing import Dict, List, Optional
 
 from django.conf import settings
 
@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class EvaluationMetrics:
     """Metrics for a single evaluation cycle."""
+
     start_time: datetime
     duration_ms: float
     aircraft_count: int
@@ -31,11 +32,12 @@ class EvaluationMetrics:
 @dataclass
 class RuleMetrics:
     """Metrics for a specific rule."""
+
     rule_id: int
     rule_name: str
     evaluation_count: int = 0
     trigger_count: int = 0
-    last_triggered: Optional[datetime] = None
+    last_triggered: datetime | None = None
     total_evaluation_ms: float = 0.0
     cooldown_blocks: int = 0  # Times alert was blocked by cooldown
 
@@ -56,11 +58,11 @@ class AlertMetricsCollector:
         self._lock = Lock()
 
         # Recent evaluation metrics (circular buffer)
-        self._evaluations: List[EvaluationMetrics] = []
+        self._evaluations: list[EvaluationMetrics] = []
         self._max_evaluations = 1800  # 1 hour at 2-second intervals
 
         # Per-rule metrics
-        self._rule_metrics: Dict[int, RuleMetrics] = {}
+        self._rule_metrics: dict[int, RuleMetrics] = {}
 
         # Aggregate counters
         self._total_evaluations = 0
@@ -70,7 +72,7 @@ class AlertMetricsCollector:
         self._cache_misses = 0
 
         # Prometheus metrics (optional)
-        self._prometheus_enabled = getattr(settings, 'PROMETHEUS_ENABLED', False)
+        self._prometheus_enabled = getattr(settings, "PROMETHEUS_ENABLED", False)
         self._prom_metrics = None
         if self._prometheus_enabled:
             self._setup_prometheus()
@@ -78,47 +80,28 @@ class AlertMetricsCollector:
     def _setup_prometheus(self):
         """Initialize Prometheus metrics."""
         try:
-            from prometheus_client import Counter, Histogram, Gauge
+            from prometheus_client import Counter, Gauge, Histogram
 
             self._prom_metrics = {
-                'evaluations': Counter(
-                    'skyspy_alert_evaluations_total',
-                    'Total number of alert evaluation cycles'
+                "evaluations": Counter("skyspy_alert_evaluations_total", "Total number of alert evaluation cycles"),
+                "triggers": Counter(
+                    "skyspy_alert_triggers_total", "Total number of alerts triggered", ["rule_id", "priority"]
                 ),
-                'triggers': Counter(
-                    'skyspy_alert_triggers_total',
-                    'Total number of alerts triggered',
-                    ['rule_id', 'priority']
+                "cooldown_blocks": Counter("skyspy_alert_cooldown_blocks_total", "Alerts blocked by cooldown"),
+                "evaluation_duration": Histogram(
+                    "skyspy_alert_evaluation_duration_seconds",
+                    "Alert evaluation cycle duration",
+                    buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 1.0],
                 ),
-                'cooldown_blocks': Counter(
-                    'skyspy_alert_cooldown_blocks_total',
-                    'Alerts blocked by cooldown'
-                ),
-                'evaluation_duration': Histogram(
-                    'skyspy_alert_evaluation_duration_seconds',
-                    'Alert evaluation cycle duration',
-                    buckets=[.001, .005, .01, .025, .05, .075, .1, .25, .5, 1.0]
-                ),
-                'rules_active': Gauge(
-                    'skyspy_alert_rules_active',
-                    'Number of active alert rules'
-                ),
-                'cache_hit_ratio': Gauge(
-                    'skyspy_alert_cache_hit_ratio',
-                    'Alert rule cache hit ratio'
-                ),
+                "rules_active": Gauge("skyspy_alert_rules_active", "Number of active alert rules"),
+                "cache_hit_ratio": Gauge("skyspy_alert_cache_hit_ratio", "Alert rule cache hit ratio"),
             }
         except ImportError:
             logger.debug("prometheus_client not available, Prometheus metrics disabled")
             self._prometheus_enabled = False
 
     def record_evaluation(
-        self,
-        duration_ms: float,
-        aircraft_count: int,
-        rules_evaluated: int,
-        alerts_triggered: int,
-        cache_hit: bool
+        self, duration_ms: float, aircraft_count: int, rules_evaluated: int, alerts_triggered: int, cache_hit: bool
     ):
         """Record metrics for a complete evaluation cycle."""
         now = datetime.utcnow()
@@ -147,23 +130,17 @@ class AlertMetricsCollector:
 
         # Update Prometheus
         if self._prom_metrics:
-            self._prom_metrics['evaluations'].inc()
-            self._prom_metrics['evaluation_duration'].observe(duration_ms / 1000.0)
-            self._prom_metrics['rules_active'].set(rules_evaluated)
+            self._prom_metrics["evaluations"].inc()
+            self._prom_metrics["evaluation_duration"].observe(duration_ms / 1000.0)
+            self._prom_metrics["rules_active"].set(rules_evaluated)
 
             # Update cache hit ratio
             total_cache = self._cache_hits + self._cache_misses
             if total_cache > 0:
                 ratio = self._cache_hits / total_cache
-                self._prom_metrics['cache_hit_ratio'].set(ratio)
+                self._prom_metrics["cache_hit_ratio"].set(ratio)
 
-    def record_trigger(
-        self,
-        rule_id: int,
-        rule_name: str,
-        priority: str,
-        evaluation_ms: float
-    ):
+    def record_trigger(self, rule_id: int, rule_name: str, priority: str, evaluation_ms: float):
         """Record a successful alert trigger."""
         now = datetime.utcnow()
 
@@ -182,10 +159,7 @@ class AlertMetricsCollector:
 
         # Update Prometheus
         if self._prom_metrics:
-            self._prom_metrics['triggers'].labels(
-                rule_id=str(rule_id),
-                priority=priority
-            ).inc()
+            self._prom_metrics["triggers"].labels(rule_id=str(rule_id), priority=priority).inc()
 
     def record_cooldown_block(self, rule_id: int, rule_name: str):
         """Record when an alert was blocked by cooldown."""
@@ -201,14 +175,9 @@ class AlertMetricsCollector:
             self._rule_metrics[rule_id].cooldown_blocks += 1
 
         if self._prom_metrics:
-            self._prom_metrics['cooldown_blocks'].inc()
+            self._prom_metrics["cooldown_blocks"].inc()
 
-    def record_rule_evaluation(
-        self,
-        rule_id: int,
-        rule_name: str,
-        evaluation_ms: float
-    ):
+    def record_rule_evaluation(self, rule_id: int, rule_name: str, evaluation_ms: float):
         """Record a rule evaluation (whether it triggered or not)."""
         with self._lock:
             if rule_id not in self._rule_metrics:
@@ -247,43 +216,39 @@ class AlertMetricsCollector:
             overall_cache_ratio = self._cache_hits / total_cache if total_cache > 0 else 0
 
             return {
-                'window_minutes': self._window_minutes,
-                'evaluations_in_window': len(recent),
-                'average_duration_ms': round(avg_duration, 2),
-                'average_aircraft': round(avg_aircraft, 1),
-                'average_rules': round(avg_rules, 1),
-                'triggers_in_window': total_triggers,
-                'cache_hit_ratio_window': round(cache_hit_ratio, 3),
-                'total_evaluations': self._total_evaluations,
-                'total_triggers': self._total_triggers,
-                'total_cooldown_blocks': self._total_cooldown_blocks,
-                'overall_cache_hit_ratio': round(overall_cache_ratio, 3),
-                'rules_tracked': len(self._rule_metrics),
+                "window_minutes": self._window_minutes,
+                "evaluations_in_window": len(recent),
+                "average_duration_ms": round(avg_duration, 2),
+                "average_aircraft": round(avg_aircraft, 1),
+                "average_rules": round(avg_rules, 1),
+                "triggers_in_window": total_triggers,
+                "cache_hit_ratio_window": round(cache_hit_ratio, 3),
+                "total_evaluations": self._total_evaluations,
+                "total_triggers": self._total_triggers,
+                "total_cooldown_blocks": self._total_cooldown_blocks,
+                "overall_cache_hit_ratio": round(overall_cache_ratio, 3),
+                "rules_tracked": len(self._rule_metrics),
             }
 
-    def get_rule_metrics(self, limit: int = 20) -> List[dict]:
+    def get_rule_metrics(self, limit: int = 20) -> list[dict]:
         """Get metrics for top rules by trigger count."""
         with self._lock:
-            sorted_rules = sorted(
-                self._rule_metrics.values(),
-                key=lambda r: r.trigger_count,
-                reverse=True
-            )[:limit]
+            sorted_rules = sorted(self._rule_metrics.values(), key=lambda r: r.trigger_count, reverse=True)[:limit]
 
             return [
                 {
-                    'rule_id': rm.rule_id,
-                    'rule_name': rm.rule_name,
-                    'evaluation_count': rm.evaluation_count,
-                    'trigger_count': rm.trigger_count,
-                    'cooldown_blocks': rm.cooldown_blocks,
-                    'trigger_rate': round(
-                        rm.trigger_count / rm.evaluation_count * 100, 2
-                    ) if rm.evaluation_count > 0 else 0,
-                    'avg_evaluation_ms': round(
-                        rm.total_evaluation_ms / rm.evaluation_count, 3
-                    ) if rm.evaluation_count > 0 else 0,
-                    'last_triggered': rm.last_triggered.isoformat() if rm.last_triggered else None,
+                    "rule_id": rm.rule_id,
+                    "rule_name": rm.rule_name,
+                    "evaluation_count": rm.evaluation_count,
+                    "trigger_count": rm.trigger_count,
+                    "cooldown_blocks": rm.cooldown_blocks,
+                    "trigger_rate": round(rm.trigger_count / rm.evaluation_count * 100, 2)
+                    if rm.evaluation_count > 0
+                    else 0,
+                    "avg_evaluation_ms": round(rm.total_evaluation_ms / rm.evaluation_count, 3)
+                    if rm.evaluation_count > 0
+                    else 0,
+                    "last_triggered": rm.last_triggered.isoformat() if rm.last_triggered else None,
                 }
                 for rm in sorted_rules
             ]
@@ -292,7 +257,7 @@ class AlertMetricsCollector:
         """Get histogram of evaluation times."""
         with self._lock:
             if not self._evaluations:
-                return {'buckets': [], 'min': 0, 'max': 0, 'median': 0}
+                return {"buckets": [], "min": 0, "max": 0, "median": 0}
 
             durations = [e.duration_ms for e in self._evaluations]
             min_d = min(durations)
@@ -310,18 +275,18 @@ class AlertMetricsCollector:
                 histogram[bucket] += 1
 
             return {
-                'buckets': [
+                "buckets": [
                     {
-                        'range_start': round(min_d + i * bucket_size, 2),
-                        'range_end': round(min_d + (i + 1) * bucket_size, 2),
-                        'count': histogram[i],
+                        "range_start": round(min_d + i * bucket_size, 2),
+                        "range_end": round(min_d + (i + 1) * bucket_size, 2),
+                        "count": histogram[i],
                     }
                     for i in range(buckets)
                 ],
-                'min_ms': round(min_d, 2),
-                'max_ms': round(max_d, 2),
-                'median_ms': round(median, 2),
-                'sample_count': len(durations),
+                "min_ms": round(min_d, 2),
+                "max_ms": round(max_d, 2),
+                "median_ms": round(median, 2),
+                "sample_count": len(durations),
             }
 
     def reset(self):

@@ -8,8 +8,10 @@ Tests cover:
 - Rate limiter and batcher utilities
 - Broadcast utilities
 """
-import pytest
+
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from django.contrib.auth.models import AnonymousUser
 
 
@@ -23,7 +25,7 @@ class TestRateLimiter:
         limiter = RateLimiter()
         assert limiter is not None
         # Default rate for aircraft:update is 10 Hz
-        assert limiter.can_send('aircraft:update') is True
+        assert limiter.can_send("aircraft:update") is True
 
     def test_rate_limiter_respects_limits(self):
         """Test that rate limiter blocks rapid sends."""
@@ -32,29 +34,29 @@ class TestRateLimiter:
         limiter = RateLimiter()
 
         # First send should always succeed
-        assert limiter.can_send('stats:update') is True
+        assert limiter.can_send("stats:update") is True
 
         # Second immediate send should be blocked (stats is 0.5 Hz = 2s interval)
-        assert limiter.can_send('stats:update') is False
+        assert limiter.can_send("stats:update") is False
 
     def test_rate_limiter_custom_rates(self):
         """Test rate limiter with custom rates."""
         from skyspy.socketio.utils.rate_limiter import RateLimiter
 
-        custom_rates = {'test:topic': 1.0}  # 1 Hz
+        custom_rates = {"test:topic": 1.0}  # 1 Hz
         limiter = RateLimiter(rate_limits=custom_rates)
 
-        assert limiter.can_send('test:topic') is True
-        assert limiter.can_send('test:topic') is False
+        assert limiter.can_send("test:topic") is True
+        assert limiter.can_send("test:topic") is False
 
     def test_rate_limiter_get_wait_time(self):
         """Test get_wait_time returns correct delay."""
         from skyspy.socketio.utils.rate_limiter import RateLimiter
 
         limiter = RateLimiter()
-        limiter.can_send('stats:update')  # Mark as sent
+        limiter.can_send("stats:update")  # Mark as sent
 
-        wait_time = limiter.get_wait_time('stats:update')
+        wait_time = limiter.get_wait_time("stats:update")
         # stats:update is 0.5 Hz, so wait should be close to 2 seconds
         assert wait_time > 0
         assert wait_time <= 2.0
@@ -80,12 +82,20 @@ class TestMessageBatcher:
 
         callback = AsyncMock()
         # Use config dict with long window to prevent auto-flush
-        batcher = MessageBatcher(callback, config={'window_ms': 10000, 'max_size': 50, 'max_bytes': 1024 * 1024, 'immediate_types': ['alert', 'safety', 'emergency']})
+        batcher = MessageBatcher(
+            callback,
+            config={
+                "window_ms": 10000,
+                "max_size": 50,
+                "max_bytes": 1024 * 1024,
+                "immediate_types": ["alert", "safety", "emergency"],
+            },
+        )
 
-        await batcher.add({'type': 'test', 'data': 'value1'})
+        await batcher.add({"type": "test", "data": "value1"})
         assert batcher.pending_count == 1
 
-        await batcher.add({'type': 'test', 'data': 'value2'})
+        await batcher.add({"type": "test", "data": "value2"})
         assert batcher.pending_count == 2
 
     @pytest.mark.asyncio
@@ -97,7 +107,7 @@ class TestMessageBatcher:
         batcher = MessageBatcher(callback)
 
         # Alert messages should be sent immediately
-        await batcher.add({'type': 'alert', 'data': 'urgent'})
+        await batcher.add({"type": "alert", "data": "urgent"})
 
         # Callback should have been called immediately
         callback.assert_called()
@@ -109,10 +119,18 @@ class TestMessageBatcher:
 
         callback = AsyncMock()
         # Use config dict with long window to prevent auto-flush
-        batcher = MessageBatcher(callback, config={'window_ms': 10000, 'max_size': 50, 'max_bytes': 1024 * 1024, 'immediate_types': ['alert', 'safety', 'emergency']})
+        batcher = MessageBatcher(
+            callback,
+            config={
+                "window_ms": 10000,
+                "max_size": 50,
+                "max_bytes": 1024 * 1024,
+                "immediate_types": ["alert", "safety", "emergency"],
+            },
+        )
 
-        await batcher.add({'type': 'test', 'data': 'value1'})
-        await batcher.add({'type': 'test', 'data': 'value2'})
+        await batcher.add({"type": "test", "data": "value1"})
+        await batcher.add({"type": "test", "data": "value2"})
 
         assert batcher.pending_count == 2
 
@@ -131,8 +149,8 @@ class TestAuthMiddleware:
         """Test authentication in public mode without token."""
         from skyspy.socketio.middleware.auth import authenticate_socket
 
-        with patch('skyspy.socketio.middleware.auth.settings') as mock_settings:
-            mock_settings.AUTH_MODE = 'public'
+        with patch("skyspy.socketio.middleware.auth.settings") as mock_settings:
+            mock_settings.AUTH_MODE = "public"
 
             user, error = await authenticate_socket({})
 
@@ -145,13 +163,13 @@ class TestAuthMiddleware:
         """Test authentication in private mode without token."""
         from skyspy.socketio.middleware.auth import authenticate_socket
 
-        with patch('skyspy.socketio.middleware.auth.settings') as mock_settings:
-            mock_settings.AUTH_MODE = 'private'
+        with patch("skyspy.socketio.middleware.auth.settings") as mock_settings:
+            mock_settings.AUTH_MODE = "private"
 
             user, error = await authenticate_socket({})
 
             assert error is not None
-            assert 'required' in error.lower()
+            assert "required" in error.lower()
 
     @pytest.mark.asyncio
     @pytest.mark.django_db
@@ -159,10 +177,10 @@ class TestAuthMiddleware:
         """Test authentication with invalid JWT token."""
         from skyspy.socketio.middleware.auth import authenticate_socket
 
-        with patch('skyspy.socketio.middleware.auth.settings') as mock_settings:
-            mock_settings.AUTH_MODE = 'private'
+        with patch("skyspy.socketio.middleware.auth.settings") as mock_settings:
+            mock_settings.AUTH_MODE = "private"
 
-            user, error = await authenticate_socket({'token': 'invalid_jwt_token'})
+            user, error = await authenticate_socket({"token": "invalid_jwt_token"})
 
             assert error is not None
 
@@ -176,12 +194,12 @@ class TestPermissionsMiddleware:
         """Test topic permission in public mode."""
         from skyspy.socketio.middleware.permissions import check_topic_permission
 
-        with patch('skyspy.socketio.middleware.permissions.settings') as mock_settings:
-            mock_settings.AUTH_MODE = 'public'
+        with patch("skyspy.socketio.middleware.permissions.settings") as mock_settings:
+            mock_settings.AUTH_MODE = "public"
 
             # In public mode, basic topics should be accessible
             user = AnonymousUser()
-            allowed = await check_topic_permission(user, 'aircraft')
+            allowed = await check_topic_permission(user, "aircraft")
 
             assert allowed is True
 
@@ -191,14 +209,14 @@ class TestPermissionsMiddleware:
         """Test getting list of allowed topics for user."""
         from skyspy.socketio.middleware.permissions import get_allowed_topics
 
-        with patch('skyspy.socketio.middleware.permissions.settings') as mock_settings:
-            mock_settings.AUTH_MODE = 'public'
+        with patch("skyspy.socketio.middleware.permissions.settings") as mock_settings:
+            mock_settings.AUTH_MODE = "public"
 
             user = AnonymousUser()
             topics = await get_allowed_topics(user)
 
             assert isinstance(topics, list)
-            assert 'aircraft' in topics
+            assert "aircraft" in topics
 
 
 class TestBroadcastUtility:
@@ -208,11 +226,11 @@ class TestBroadcastUtility:
         """Test that sync_emit formats messages for Socket.IO."""
         from skyspy.socketio.utils.broadcast import sync_emit
 
-        with patch('skyspy.socketio.utils.broadcast._get_redis_client') as mock_redis:
+        with patch("skyspy.socketio.utils.broadcast._get_redis_client") as mock_redis:
             mock_client = MagicMock()
             mock_redis.return_value = mock_client
 
-            result = sync_emit('test:event', {'data': 'value'}, room='test_room')
+            result = sync_emit("test:event", {"data": "value"}, room="test_room")
 
             # Should have called publish on Redis
             mock_client.publish.assert_called_once()
@@ -222,14 +240,14 @@ class TestBroadcastUtility:
         """Test broadcast_to_room helper."""
         from skyspy.socketio.utils.broadcast import broadcast_to_room
 
-        with patch('skyspy.socketio.utils.broadcast.sync_emit') as mock_emit:
+        with patch("skyspy.socketio.utils.broadcast.sync_emit") as mock_emit:
             mock_emit.return_value = True
 
-            result = broadcast_to_room('test_room', 'test:event', {'data': 'value'})
+            result = broadcast_to_room("test_room", "test:event", {"data": "value"})
 
             # broadcast_to_room calls sync_emit with keyword arguments
             mock_emit.assert_called_once_with(
-                event='test:event', data={'data': 'value'}, room='test_room', namespace='/', skip_sid=None
+                event="test:event", data={"data": "value"}, room="test_room", namespace="/", skip_sid=None
             )
             assert result is True
 
@@ -247,8 +265,8 @@ class TestMainNamespace:
         """Test MainNamespace initialization."""
         from skyspy.socketio.namespaces.main import MainNamespace
 
-        namespace = MainNamespace('/')
-        assert namespace.namespace == '/'
+        namespace = MainNamespace("/")
+        assert namespace.namespace == "/"
 
 
 class TestAudioNamespace:
@@ -265,7 +283,7 @@ class TestAudioNamespace:
         from skyspy.socketio.namespaces.audio import AudioNamespace
 
         namespace = AudioNamespace()
-        assert namespace.namespace == '/audio'
+        assert namespace.namespace == "/audio"
 
 
 class TestCannonballNamespace:
@@ -282,7 +300,7 @@ class TestCannonballNamespace:
         from skyspy.socketio.namespaces.cannonball import CannonballNamespace
 
         namespace = CannonballNamespace()
-        assert namespace.namespace == '/cannonball'
+        assert namespace.namespace == "/cannonball"
 
 
 class TestSocketIOServer:

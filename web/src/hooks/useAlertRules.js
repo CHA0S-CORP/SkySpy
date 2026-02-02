@@ -307,9 +307,10 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
           return (a.name || '').localeCompare(b.name || '');
         case 'name-desc':
           return (b.name || '').localeCompare(a.name || '');
-        case 'priority':
+        case 'priority': {
           const priorityOrder = { critical: 0, emergency: 1, warning: 2, info: 3 };
           return (priorityOrder[a.priority] ?? 3) - (priorityOrder[b.priority] ?? 3);
+        }
         case 'created':
           return new Date(b.created_at || 0) - new Date(a.created_at || 0);
         default:

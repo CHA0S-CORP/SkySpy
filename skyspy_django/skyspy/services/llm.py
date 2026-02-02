@@ -10,12 +10,12 @@ Provides optional LLM-based post-processing for:
 Supports OpenAI-compatible APIs (OpenAI, Anthropic via proxy, local Ollama).
 Gracefully degrades to regex-only extraction on any failure.
 """
+
 import hashlib
 import json
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Optional
 
 import httpx
 from django.conf import settings
@@ -62,16 +62,14 @@ class LLMClient:
         """Check if LLM service is configured and available."""
         if not settings.LLM_ENABLED:
             return False
-        if not self.api_key and 'localhost' not in self.api_url and '127.0.0.1' not in self.api_url:
-            return False
-        return True
+        return not (not self.api_key and "localhost" not in self.api_url and "127.0.0.1" not in self.api_url)
 
     def _get_cache_key(self, messages: list[dict], **kwargs) -> str:
         """Generate a cache key from request parameters."""
         content = json.dumps({"messages": messages, **kwargs}, sort_keys=True)
         return hashlib.sha256(content.encode()).hexdigest()
 
-    def _check_cache(self, cache_key: str) -> Optional[dict]:
+    def _check_cache(self, cache_key: str) -> dict | None:
         """Check cache for a valid response."""
         if cache_key in _cache:
             timestamp, response = _cache[cache_key]
@@ -94,12 +92,7 @@ class LLMClient:
             for k in expired:
                 del _cache[k]
 
-    def complete(
-        self,
-        messages: list[dict],
-        use_cache: bool = True,
-        **kwargs
-    ) -> Optional[dict]:
+    def complete(self, messages: list[dict], use_cache: bool = True, **kwargs) -> dict | None:
         """
         Send a chat completion request.
 
@@ -181,7 +174,7 @@ class LLMClient:
                 last_error = "timeout"
                 logger.warning(f"LLM request timeout (attempt {attempt + 1}/{self.max_retries})")
                 _stats["retries"] += 1
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
 
             except httpx.HTTPStatusError as e:
                 last_error = str(e)
@@ -189,7 +182,7 @@ class LLMClient:
                 _stats["failures"] += 1
                 if e.response.status_code >= 500:
                     _stats["retries"] += 1
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
                     continue
                 return None
 
@@ -367,10 +360,7 @@ def resolve_ambiguous_callsigns(
         return ambiguous
 
     # Only process ambiguous entries (low confidence or fuzzy matched)
-    to_resolve = [
-        cs for cs in ambiguous
-        if cs.get("confidence", 1.0) < 0.8 or cs.get("fuzzy_matched", False)
-    ]
+    to_resolve = [cs for cs in ambiguous if cs.get("confidence", 1.0) < 0.8 or cs.get("fuzzy_matched", False)]
 
     if not to_resolve:
         return ambiguous

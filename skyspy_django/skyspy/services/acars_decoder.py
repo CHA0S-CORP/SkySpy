@@ -8,15 +8,17 @@ when pre-decoded data isn't available from upstream sources.
 Based on logic from:
 https://github.com/sdr-enthusiasts/docker-acarshub/blob/main/rootfs/webapp/acarshub_helpers.py
 """
-import re
+
 import logging
+import re
 from functools import lru_cache
-from typing import Optional
 
 from skyspy.services.libacars_binding import (
-    decode_acars_apps,
-    is_available as libacars_is_available,
     MsgDir,
+    decode_acars_apps,
+)
+from skyspy.services.libacars_binding import (
+    is_available as libacars_is_available,
 )
 
 logger = logging.getLogger(__name__)
@@ -112,7 +114,7 @@ def find_airline_by_iata(iata_code: str) -> tuple[str, str]:
     return (iata_code, "Unknown Airline")
 
 
-def lookup_label(label: str) -> Optional[dict]:
+def lookup_label(label: str) -> dict | None:
     """Look up message label description."""
     return MESSAGE_LABELS.get(label)
 
@@ -140,7 +142,7 @@ def parse_callsign(callsign: str) -> dict:
             "airline_iata": None,
             "airline_name": None,
             "flight_number": None,
-            "format": "unknown"
+            "format": "unknown",
         }
 
     callsign = callsign.strip().upper()
@@ -159,7 +161,7 @@ def parse_callsign(callsign: str) -> dict:
             "airline_iata": iata_code if iata_code != icao_code else None,
             "airline_name": airline_name if airline_name != "Unknown Airline" else None,
             "flight_number": flight_num if flight_num else None,
-            "format": "icao"
+            "format": "icao",
         }
 
     # Check if first 2 characters form a valid IATA code (must contain at least one letter)
@@ -177,7 +179,7 @@ def parse_callsign(callsign: str) -> dict:
             "airline_iata": iata_code,
             "airline_name": airline_name if airline_name != "Unknown Airline" else None,
             "flight_number": flight_num if flight_num else None,
-            "format": "iata"
+            "format": "iata",
         }
 
     return {
@@ -187,34 +189,22 @@ def parse_callsign(callsign: str) -> dict:
         "airline_iata": None,
         "airline_name": None,
         "flight_number": None,
-        "format": "unknown"
+        "format": "unknown",
     }
 
 
 def decode_label(label: str) -> dict:
     """Decode an ACARS message label to get its description."""
     if not label:
-        return {
-            "label": None,
-            "name": None,
-            "description": None
-        }
+        return {"label": None, "name": None, "description": None}
 
     label = label.strip()
     info = lookup_label(label)
 
     if info:
-        return {
-            "label": label,
-            "name": info.get("name"),
-            "description": info.get("description")
-        }
+        return {"label": label, "name": info.get("name"), "description": info.get("description")}
 
-    return {
-        "label": label,
-        "name": None,
-        "description": None
-    }
+    return {"label": label, "name": None, "description": None}
 
 
 def validate_coordinates(lat: float, lon: float) -> bool:
@@ -222,28 +212,28 @@ def validate_coordinates(lat: float, lon: float) -> bool:
     return -90 <= lat <= 90 and -180 <= lon <= 180
 
 
-def parse_coordinates(text: str) -> Optional[dict]:
+def parse_coordinates(text: str) -> dict | None:
     """
     Parse coordinates from various ACARS message formats.
     """
     if not text:
         return None
 
-    text_clean = text.replace(' ', '').replace('\n', '').replace('\r', '')
+    text_clean = text.replace(" ", "").replace("\n", "").replace("\r", "")
 
     # Format 1: N12345W123456 (DDMMm for lat, DDDMMm for lon - tenths of minutes)
-    match = re.search(r'([NS])(\d{2})(\d{3})([EW])(\d{3})(\d{3})', text_clean)
+    match = re.search(r"([NS])(\d{2})(\d{3})([EW])(\d{3})(\d{3})", text_clean)
     if match:
         lat_deg = int(match.group(2))
         lat_min = int(match.group(3)) / 10
         lat = lat_deg + lat_min / 60
-        if match.group(1) == 'S':
+        if match.group(1) == "S":
             lat = -lat
 
         lon_deg = int(match.group(5))
         lon_min = int(match.group(6)) / 10
         lon = lon_deg + lon_min / 60
-        if match.group(4) == 'W':
+        if match.group(4) == "W":
             lon = -lon
 
         if validate_coordinates(lat, lon):
@@ -251,14 +241,14 @@ def parse_coordinates(text: str) -> Optional[dict]:
         return None
 
     # Format 2: N 49.128,W122.374 (decimal degrees)
-    match = re.search(r'([NS])\s*(\d+\.?\d*)\s*,\s*([EW])\s*(\d+\.?\d*)', text_clean)
+    match = re.search(r"([NS])\s*(\d+\.?\d*)\s*,\s*([EW])\s*(\d+\.?\d*)", text_clean)
     if match:
         try:
             lat = float(match.group(2))
-            if match.group(1) == 'S':
+            if match.group(1) == "S":
                 lat = -lat
             lon = float(match.group(4))
-            if match.group(3) == 'W':
+            if match.group(3) == "W":
                 lon = -lon
 
             if validate_coordinates(lat, lon):
@@ -276,32 +266,32 @@ def decode_h1_message(text: str) -> dict | None:
         return None
 
     decoded = {}
-    text_clean = text.replace('\n', '').replace('\r', '')
+    text_clean = text.replace("\n", "").replace("\r", "")
 
     # FPN - Flight Plan
-    if 'FPN/' in text_clean or re.match(r'^[A-Z0-9#]*FPN/', text_clean):
+    if "FPN/" in text_clean or re.match(r"^[A-Z0-9#]*FPN/", text_clean):
         decoded["message_type"] = "Flight Plan"
         decoded["description"] = "FPN flight plan/route data"
 
-        da_match = re.search(r'DA:([A-Z]{4})', text_clean)
-        aa_match = re.search(r'AA:([A-Z]{4})', text_clean)
+        da_match = re.search(r"DA:([A-Z]{4})", text_clean)
+        aa_match = re.search(r"AA:([A-Z]{4})", text_clean)
         if da_match:
             decoded["origin"] = da_match.group(1)
         if aa_match:
             decoded["destination"] = aa_match.group(1)
 
-        route_match = re.search(r'F:([A-Z0-9./]+)', text_clean)
+        route_match = re.search(r"F:([A-Z0-9./]+)", text_clean)
         if route_match:
             route_str = route_match.group(1)
-            waypoints = re.findall(r'([A-Z]{3,5})', route_str)
+            waypoints = re.findall(r"([A-Z]{3,5})", route_str)
             if waypoints:
-                decoded["route"] = ' -> '.join(waypoints[:10])
+                decoded["route"] = " -> ".join(waypoints[:10])
                 decoded["waypoints"] = waypoints[:10]
 
         return decoded
 
     # POS - Position Report
-    if '/POS/' in text_clean or re.match(r'^[A-Z0-9#]*POS/', text_clean):
+    if "/POS/" in text_clean or re.match(r"^[A-Z0-9#]*POS/", text_clean):
         decoded["message_type"] = "Position Report"
         decoded["description"] = "H1 position report"
 
@@ -310,7 +300,7 @@ def decode_h1_message(text: str) -> dict | None:
         if coords:
             decoded["position"] = coords
 
-        alt_match = re.search(r'/A(\d{5})', text_clean)
+        alt_match = re.search(r"/A(\d{5})", text_clean)
         if alt_match:
             decoded["altitude_ft"] = int(alt_match.group(1))
             decoded["flight_level"] = f"FL{int(alt_match.group(1)) // 100}"
@@ -318,11 +308,11 @@ def decode_h1_message(text: str) -> dict | None:
         return decoded
 
     # PRG - Progress Report
-    if 'PRG/' in text_clean:
+    if "PRG/" in text_clean:
         decoded["message_type"] = "Progress Report"
         decoded["description"] = "Flight progress update"
 
-        prg_match = re.search(r'PRG/([A-Z0-9]+)/DT([A-Z]{4})', text_clean)
+        prg_match = re.search(r"PRG/([A-Z0-9]+)/DT([A-Z]{4})", text_clean)
         if prg_match:
             decoded["progress_id"] = prg_match.group(1)
             decoded["destination"] = prg_match.group(2)
@@ -364,11 +354,24 @@ def decode_message_text(text: str, label: str = None, libacars_data: dict = None
         # Try to decode with libacars for complex message formats
         # Labels that commonly have decodable content
         decodable_labels = {
-            "H1", "H2",  # FANS-1/A (ADS-C, CPDLC)
-            "SA", "S1", "S2",  # System address messages
-            "AA", "AB", "AC",  # ARINC 622 messages
-            "BA", "B1", "B2", "B3", "B4", "B5", "B6",  # Various airline formats
-            "_d", "2Z", "5Z",  # MIAM compressed messages
+            "H1",
+            "H2",  # FANS-1/A (ADS-C, CPDLC)
+            "SA",
+            "S1",
+            "S2",  # System address messages
+            "AA",
+            "AB",
+            "AC",  # ARINC 622 messages
+            "BA",
+            "B1",
+            "B2",
+            "B3",
+            "B4",
+            "B5",
+            "B6",  # Various airline formats
+            "_d",
+            "2Z",
+            "5Z",  # MIAM compressed messages
         }
         if label in decodable_labels:
             try:
@@ -381,11 +384,11 @@ def decode_message_text(text: str, label: str = None, libacars_data: dict = None
                 logger.debug("libacars_decode_failed", extra={"label": label, "error": str(e)})
 
     # Ground Station Squitter
-    gs_pattern = r'^(\d{2})X([SA])([A-Z]{3})([A-Z]{4})(\d)(\d{4})([NS])(\d{5})([EW])V(\d{6})/?(.*)$'
-    gs_match = re.match(gs_pattern, text_stripped.replace(' ', ''))
+    gs_pattern = r"^(\d{2})X([SA])([A-Z]{3})([A-Z]{4})(\d)(\d{4})([NS])(\d{5})([EW])V(\d{6})/?(.*)$"
+    gs_match = re.match(gs_pattern, text_stripped.replace(" ", ""))
     if gs_match:
-        version = gs_match.group(1)
-        network_type = 'SITA' if gs_match.group(2) == 'S' else 'ARINC'
+        gs_match.group(1)
+        network_type = "SITA" if gs_match.group(2) == "S" else "ARINC"
         iata_code = gs_match.group(3)
         icao_code = gs_match.group(4)
 
@@ -411,13 +414,13 @@ def decode_message_text(text: str, label: str = None, libacars_data: dict = None
         decoded["event_type"] = oooi_labels[label]
         decoded["description"] = f"Flight phase: {oooi_labels[label]}"
 
-        oooi_pos = re.search(r'([NS])\s*(\d+\.?\d*)\s*,\s*([EW])\s*(\d+\.?\d*)\s*,\s*(\d+)', text_stripped)
+        oooi_pos = re.search(r"([NS])\s*(\d+\.?\d*)\s*,\s*([EW])\s*(\d+\.?\d*)\s*,\s*(\d+)", text_stripped)
         if oooi_pos:
             lat = float(oooi_pos.group(2))
-            if oooi_pos.group(1) == 'S':
+            if oooi_pos.group(1) == "S":
                 lat = -lat
             lon = float(oooi_pos.group(4))
-            if oooi_pos.group(3) == 'W':
+            if oooi_pos.group(3) == "W":
                 lon = -lon
             altitude = int(oooi_pos.group(5))
             decoded["position"] = {"lat": lat, "lon": lon}
@@ -445,34 +448,135 @@ def decode_message_text(text: str, label: str = None, libacars_data: dict = None
     # U: Russia, V: South/Southeast Asia, W: Indonesia/Malaysia,
     # Y: Australia, Z: China/Mongolia
     # Note: 'A' and 'X' are NOT valid ICAO first-letter prefixes
-    valid_icao_prefixes = set('BCDEFGHKLMNOPRSTUVWYZ')
+    valid_icao_prefixes = set("BCDEFGHKLMNOPRSTUVWYZ")
 
-    airport_pattern = r'\b([A-Z]{4})\b'
+    airport_pattern = r"\b([A-Z]{4})\b"
     airports = re.findall(airport_pattern, text_stripped)
     if airports:
         # Common 4-letter words to exclude (not airport codes)
         excluded_words = {
-            'ACMS', 'ATIS', 'AUTO', 'BANK', 'CITY', 'CODE', 'DATA', 'DATE',
-            'DOOR', 'DOWN', 'EAST', 'ECHO', 'EDIT', 'FAIL', 'FILE', 'FIRE',
-            'FLED', 'FLEX', 'FLOW', 'FUEL', 'FULL', 'GATE', 'GEAR', 'GOOD',
-            'HALF', 'HAVE', 'HEAD', 'HEAT', 'HIGH', 'HOLD', 'HOME', 'INFO',
-            'ITEM', 'LAND', 'LATE', 'LEFT', 'LINE', 'LINK', 'LIST', 'LOAD',
-            'LONG', 'LOST', 'MAIN', 'MAKE', 'MARK', 'MENU', 'MODE', 'MORE',
-            'MOVE', 'MUST', 'NAME', 'NEXT', 'NONE', 'NORM', 'NOTE', 'ONLY',
-            'OPEN', 'OVER', 'PAGE', 'PART', 'PASS', 'PATH', 'PLAN', 'PLAY',
-            'PORT', 'PULL', 'PUSH', 'RATE', 'READ', 'REPT', 'ROLE', 'ROOM',
-            'SAFE', 'SAME', 'SAVE', 'SEAL', 'SEAT', 'SELF', 'SEND', 'SHOW',
-            'SHUT', 'SIDE', 'SIGN', 'SIZE', 'SLOW', 'SOME', 'STOP', 'TAKE',
-            'TAXI', 'TEST', 'TEXT', 'THAT', 'THEM', 'THEN', 'THIS', 'TIME',
-            'TURN', 'TYPE', 'UNIT', 'UPON', 'USED', 'USER', 'VIEW', 'VOID',
-            'WAIT', 'WARM', 'WARN', 'WEST', 'WHEN', 'WITH', 'WORK', 'ZONE',
-            'FROM', 'METAR', 'PROG', 'VERY', 'ACARS', 'FANS', 'CPDLC',
+            "ACMS",
+            "ATIS",
+            "AUTO",
+            "BANK",
+            "CITY",
+            "CODE",
+            "DATA",
+            "DATE",
+            "DOOR",
+            "DOWN",
+            "EAST",
+            "ECHO",
+            "EDIT",
+            "FAIL",
+            "FILE",
+            "FIRE",
+            "FLED",
+            "FLEX",
+            "FLOW",
+            "FUEL",
+            "FULL",
+            "GATE",
+            "GEAR",
+            "GOOD",
+            "HALF",
+            "HAVE",
+            "HEAD",
+            "HEAT",
+            "HIGH",
+            "HOLD",
+            "HOME",
+            "INFO",
+            "ITEM",
+            "LAND",
+            "LATE",
+            "LEFT",
+            "LINE",
+            "LINK",
+            "LIST",
+            "LOAD",
+            "LONG",
+            "LOST",
+            "MAIN",
+            "MAKE",
+            "MARK",
+            "MENU",
+            "MODE",
+            "MORE",
+            "MOVE",
+            "MUST",
+            "NAME",
+            "NEXT",
+            "NONE",
+            "NORM",
+            "NOTE",
+            "ONLY",
+            "OPEN",
+            "OVER",
+            "PAGE",
+            "PART",
+            "PASS",
+            "PATH",
+            "PLAN",
+            "PLAY",
+            "PORT",
+            "PULL",
+            "PUSH",
+            "RATE",
+            "READ",
+            "REPT",
+            "ROLE",
+            "ROOM",
+            "SAFE",
+            "SAME",
+            "SAVE",
+            "SEAL",
+            "SEAT",
+            "SELF",
+            "SEND",
+            "SHOW",
+            "SHUT",
+            "SIDE",
+            "SIGN",
+            "SIZE",
+            "SLOW",
+            "SOME",
+            "STOP",
+            "TAKE",
+            "TAXI",
+            "TEST",
+            "TEXT",
+            "THAT",
+            "THEM",
+            "THEN",
+            "THIS",
+            "TIME",
+            "TURN",
+            "TYPE",
+            "UNIT",
+            "UPON",
+            "USED",
+            "USER",
+            "VIEW",
+            "VOID",
+            "WAIT",
+            "WARM",
+            "WARN",
+            "WEST",
+            "WHEN",
+            "WITH",
+            "WORK",
+            "ZONE",
+            "FROM",
+            "METAR",
+            "PROG",
+            "VERY",
+            "ACARS",
+            "FANS",
+            "CPDLC",
         }
         # Filter: must start with valid ICAO prefix AND not be an excluded word
-        valid_airports = [
-            a for a in airports
-            if a[0] in valid_icao_prefixes and a not in excluded_words
-        ]
+        valid_airports = [a for a in airports if a[0] in valid_icao_prefixes and a not in excluded_words]
         if valid_airports:
             decoded["airports_mentioned"] = list(set(valid_airports))[:5]
 

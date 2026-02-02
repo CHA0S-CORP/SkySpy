@@ -6,6 +6,7 @@ Provides Celery tasks for:
 - Syncing databases to PostgreSQL
 - Periodic database updates
 """
+
 import logging
 from datetime import datetime
 
@@ -17,23 +18,25 @@ from skyspy.socketio.utils import sync_emit
 logger = logging.getLogger(__name__)
 
 
-def broadcast_airframe_error(icao: str, error_message: str, sources_tried: list = None, error_type: str = 'lookup_failed'):
+def broadcast_airframe_error(
+    icao: str, error_message: str, sources_tried: list = None, error_type: str = "lookup_failed"
+):
     """Broadcast an airframe lookup error to WebSocket clients via Socket.IO."""
     try:
         sync_emit(
-            'airframe:error',
+            "airframe:error",
             {
-                'icao_hex': icao.upper() if icao else '',
-                'icao': icao,  # Keep for backwards compatibility
-                'error_type': error_type,
-                'error_message': error_message,
-                'error': error_message,  # Keep for backwards compatibility
-                'source': 'external_db',
-                'sources_tried': sources_tried or [],
-                'details': {'sources_tried': sources_tried or []},
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
+                "icao_hex": icao.upper() if icao else "",
+                "icao": icao,  # Keep for backwards compatibility
+                "error_type": error_type,
+                "error_message": error_message,
+                "error": error_message,  # Keep for backwards compatibility
+                "source": "external_db",
+                "sources_tried": sources_tried or [],
+                "details": {"sources_tried": sources_tried or []},
+                "timestamp": datetime.utcnow().isoformat() + "Z",
             },
-            room='topic_aircraft'
+            room="topic_aircraft",
         )
     except Exception as e:
         logger.warning(f"Failed to broadcast airframe error: {e}")
@@ -102,7 +105,7 @@ def load_opensky_database():
 
     Runs on startup or when OpenSky data is needed.
     """
-    if not getattr(settings, 'OPENSKY_DB_ENABLED', True):
+    if not getattr(settings, "OPENSKY_DB_ENABLED", True):
         logger.info("OpenSky database disabled in settings")
         return False
 
@@ -130,21 +133,20 @@ def fetch_aircraft_info_batch(self, icao_list: list):
     This reduces Celery task overhead compared to individual tasks.
     Used by process_new_aircraft_lookups for better efficiency.
     """
-    from skyspy.services import external_db
     from skyspy.models import AircraftInfo
+    from skyspy.services import external_db
 
     if not icao_list:
-        return {'processed': 0}
+        return {"processed": 0}
 
     # Limit batch size
     icao_list = icao_list[:50]
 
     # Check which ICAOs we already have valid info for
     existing = set(
-        AircraftInfo.objects.filter(
-            icao_hex__in=[i.upper() for i in icao_list],
-            fetch_failed=False
-        ).values_list('icao_hex', flat=True)
+        AircraftInfo.objects.filter(icao_hex__in=[i.upper() for i in icao_list], fetch_failed=False).values_list(
+            "icao_hex", flat=True
+        )
     )
 
     to_lookup = [icao for icao in icao_list if icao.upper() not in existing]
@@ -160,26 +162,26 @@ def fetch_aircraft_info_batch(self, icao_list: list):
                 AircraftInfo.objects.update_or_create(
                     icao_hex=icao,
                     defaults={
-                        'registration': data.get('registration'),
-                        'type_code': data.get('type_code'),
-                        'manufacturer': data.get('manufacturer'),
-                        'model': data.get('model'),
-                        'operator': data.get('operator'),
-                        'operator_icao': data.get('operator_icao'),
-                        'owner': data.get('owner'),
-                        'year_built': data.get('year_built'),
-                        'serial_number': data.get('serial_number'),
-                        'country': data.get('country'),
-                        'category': data.get('category'),
-                        'is_military': data.get('is_military', False),
-                        'is_interesting': data.get('is_interesting', False),
-                        'is_pia': data.get('is_pia', False),
-                        'is_ladd': data.get('is_ladd', False),
-                        'city': data.get('city'),
-                        'state': data.get('state'),
-                        'source': ','.join(data.get('sources', [])),
-                        'fetch_failed': False,
-                    }
+                        "registration": data.get("registration"),
+                        "type_code": data.get("type_code"),
+                        "manufacturer": data.get("manufacturer"),
+                        "model": data.get("model"),
+                        "operator": data.get("operator"),
+                        "operator_icao": data.get("operator_icao"),
+                        "owner": data.get("owner"),
+                        "year_built": data.get("year_built"),
+                        "serial_number": data.get("serial_number"),
+                        "country": data.get("country"),
+                        "category": data.get("category"),
+                        "is_military": data.get("is_military", False),
+                        "is_interesting": data.get("is_interesting", False),
+                        "is_pia": data.get("is_pia", False),
+                        "is_ladd": data.get("is_ladd", False),
+                        "city": data.get("city"),
+                        "state": data.get("state"),
+                        "source": ",".join(data.get("sources", [])),
+                        "fetch_failed": False,
+                    },
                 )
                 processed += 1
                 _trigger_photo_fetch_if_enabled(icao)
@@ -188,16 +190,16 @@ def fetch_aircraft_info_batch(self, icao_list: list):
                 AircraftInfo.objects.update_or_create(
                     icao_hex=icao,
                     defaults={
-                        'fetch_failed': True,
-                        'source': 'failed',
-                    }
+                        "fetch_failed": True,
+                        "source": "failed",
+                    },
                 )
 
         except Exception as e:
             logger.debug(f"Batch lookup failed for {icao}: {e}")
 
     logger.debug(f"Batch processed {processed} aircraft info lookups")
-    return {'processed': processed, 'total': len(to_lookup)}
+    return {"processed": processed, "total": len(to_lookup)}
 
 
 @shared_task
@@ -215,17 +217,15 @@ def fetch_aircraft_info(icao_hex: str):
     icao = icao_hex.upper().strip()
     logger.debug(f"Fetching aircraft info for {icao}")
 
-    info_found = False
 
     try:
-        from skyspy.services import external_db
         from skyspy.models import AircraftInfo
+        from skyspy.services import external_db
 
         # Check if already cached in database
         try:
             existing = AircraftInfo.objects.get(icao_hex=icao)
             if not existing.fetch_failed:
-                info_found = True
                 # Still try to fetch photos if not cached
                 if not existing.photo_url:
                     _trigger_photo_fetch_if_enabled(icao)
@@ -240,34 +240,34 @@ def fetch_aircraft_info(icao_hex: str):
             AircraftInfo.objects.update_or_create(
                 icao_hex=icao,
                 defaults={
-                    'registration': data.get('registration'),
-                    'type_code': data.get('type_code'),
-                    'manufacturer': data.get('manufacturer'),
-                    'model': data.get('model'),
-                    'operator': data.get('operator'),
-                    'operator_icao': data.get('operator_icao'),
-                    'owner': data.get('owner'),
-                    'year_built': data.get('year_built'),
-                    'serial_number': data.get('serial_number'),
-                    'country': data.get('country'),
-                    'category': data.get('category'),
-                    'is_military': data.get('is_military', False),
-                    'is_interesting': data.get('is_interesting', False),
-                    'is_pia': data.get('is_pia', False),
-                    'is_ladd': data.get('is_ladd', False),
-                    'city': data.get('city'),
-                    'state': data.get('state'),
-                    'source': ','.join(data.get('sources', [])),
-                    'fetch_failed': False,
-                }
+                    "registration": data.get("registration"),
+                    "type_code": data.get("type_code"),
+                    "manufacturer": data.get("manufacturer"),
+                    "model": data.get("model"),
+                    "operator": data.get("operator"),
+                    "operator_icao": data.get("operator_icao"),
+                    "owner": data.get("owner"),
+                    "year_built": data.get("year_built"),
+                    "serial_number": data.get("serial_number"),
+                    "country": data.get("country"),
+                    "category": data.get("category"),
+                    "is_military": data.get("is_military", False),
+                    "is_interesting": data.get("is_interesting", False),
+                    "is_pia": data.get("is_pia", False),
+                    "is_ladd": data.get("is_ladd", False),
+                    "city": data.get("city"),
+                    "state": data.get("state"),
+                    "source": ",".join(data.get("sources", [])),
+                    "fetch_failed": False,
+                },
             )
             logger.debug(f"Got info for {icao} from in-memory databases: {data.get('sources', [])}")
-            info_found = True
             _trigger_photo_fetch_if_enabled(icao)
             return
 
         # Try HexDB API
         import httpx
+
         try:
             url = f"https://hexdb.io/api/v1/aircraft/{icao}"
             response = httpx.get(url, timeout=10.0)
@@ -278,17 +278,16 @@ def fetch_aircraft_info(icao_hex: str):
                 AircraftInfo.objects.update_or_create(
                     icao_hex=icao,
                     defaults={
-                        'registration': hexdb_data.get('Registration'),
-                        'type_code': hexdb_data.get('ICAOTypeCode'),
-                        'manufacturer': hexdb_data.get('Manufacturer'),
-                        'model': hexdb_data.get('Type'),
-                        'operator': hexdb_data.get('RegisteredOwners'),
-                        'source': 'hexdb',
-                        'fetch_failed': False,
-                    }
+                        "registration": hexdb_data.get("Registration"),
+                        "type_code": hexdb_data.get("ICAOTypeCode"),
+                        "manufacturer": hexdb_data.get("Manufacturer"),
+                        "model": hexdb_data.get("Type"),
+                        "operator": hexdb_data.get("RegisteredOwners"),
+                        "source": "hexdb",
+                        "fetch_failed": False,
+                    },
                 )
                 logger.debug(f"Got info for {icao} from HexDB")
-                info_found = True
                 _trigger_photo_fetch_if_enabled(icao)
                 return
 
@@ -302,14 +301,13 @@ def fetch_aircraft_info(icao_hex: str):
                 AircraftInfo.objects.update_or_create(
                     icao_hex=icao,
                     defaults={
-                        'registration': lol_data.get('r'),
-                        'type_code': lol_data.get('t'),
-                        'source': 'adsb.lol',
-                        'fetch_failed': False,
-                    }
+                        "registration": lol_data.get("r"),
+                        "type_code": lol_data.get("t"),
+                        "source": "adsb.lol",
+                        "fetch_failed": False,
+                    },
                 )
                 logger.debug(f"Got info for {icao} from adsb.lol")
-                info_found = True
                 _trigger_photo_fetch_if_enabled(icao)
                 return
         except Exception as e:
@@ -319,30 +317,28 @@ def fetch_aircraft_info(icao_hex: str):
         AircraftInfo.objects.update_or_create(
             icao_hex=icao,
             defaults={
-                'fetch_failed': True,
-                'source': 'failed',
-            }
+                "fetch_failed": True,
+                "source": "failed",
+            },
         )
 
         # Broadcast the lookup failure
         broadcast_airframe_error(
-            icao,
-            'All aircraft info sources failed',
-            sources_tried=['in-memory', 'hexdb', 'adsb.lol']
+            icao, "All aircraft info sources failed", sources_tried=["in-memory", "hexdb", "adsb.lol"]
         )
         logger.debug(f"All sources failed for {icao}")
 
     except Exception as e:
         logger.error(f"Error fetching aircraft info for {icao}: {e}")
-        broadcast_airframe_error(icao, str(e), sources_tried=['error'])
+        broadcast_airframe_error(icao, str(e), sources_tried=["error"])
 
 
 def _trigger_photo_fetch_if_enabled(icao: str):
     """Trigger photo fetch if PHOTO_AUTO_DOWNLOAD is enabled."""
-    if not getattr(settings, 'PHOTO_AUTO_DOWNLOAD', False):
+    if not getattr(settings, "PHOTO_AUTO_DOWNLOAD", False):
         return
 
-    if not getattr(settings, 'PHOTO_CACHE_ENABLED', False):
+    if not getattr(settings, "PHOTO_CACHE_ENABLED", False):
         return
 
     try:
@@ -372,8 +368,9 @@ def fetch_route_info(callsign: str):
 
 
 @shared_task
-def fetch_aircraft_photos(icao_hex: str, photo_url: str = None, thumbnail_url: str = None,
-                          photo_page_link: str = None, force: bool = False):
+def fetch_aircraft_photos(
+    icao_hex: str, photo_url: str = None, thumbnail_url: str = None, photo_page_link: str = None, force: bool = False
+):
     """
     Background task to fetch and cache aircraft photos.
 
@@ -384,10 +381,8 @@ def fetch_aircraft_photos(icao_hex: str, photo_url: str = None, thumbnail_url: s
     logger.debug(f"Fetching photos for {icao}")
 
     try:
-        from skyspy.services.photo_cache import (
-            download_photo, update_photo_paths, get_photo_url
-        )
         from skyspy.models import AircraftInfo
+        from skyspy.services.photo_cache import download_photo, get_photo_url, update_photo_paths
 
         # Check if we already have photos cached
         if not force:
@@ -409,6 +404,7 @@ def fetch_aircraft_photos(icao_hex: str, photo_url: str = None, thumbnail_url: s
         # Try planespotters first (higher quality source)
         if not photo_url:
             import httpx
+
             try:
                 ps_url = f"https://api.planespotters.net/pub/photos/hex/{icao}"
                 response = httpx.get(ps_url, timeout=10.0)
@@ -432,8 +428,8 @@ def fetch_aircraft_photos(icao_hex: str, photo_url: str = None, thumbnail_url: s
                                 photo_url=photo_url,
                                 photo_thumbnail_url=thumbnail_url,
                                 photo_page_link=photo_page_link,
-                                photo_source='planespotters.net',
-                                photo_photographer=photo.get("photographer")
+                                photo_source="planespotters.net",
+                                photo_photographer=photo.get("photographer"),
                             )
             except Exception as e:
                 logger.debug(f"Planespotters photo check failed for {icao}: {e}")
@@ -441,6 +437,7 @@ def fetch_aircraft_photos(icao_hex: str, photo_url: str = None, thumbnail_url: s
         # Fallback to hexdb.io if planespotters didn't work
         if not photo_url:
             import httpx
+
             try:
                 hex_photo_url = f"https://hexdb.io/hex-image?hex={icao.lower()}"
                 hex_thumb_url = f"https://hexdb.io/hex-image-thumb?hex={icao.lower()}"
@@ -453,9 +450,7 @@ def fetch_aircraft_photos(icao_hex: str, photo_url: str = None, thumbnail_url: s
                         thumbnail_url = hex_thumb_url
 
                         AircraftInfo.objects.filter(icao_hex=icao).update(
-                            photo_url=photo_url,
-                            photo_thumbnail_url=thumbnail_url,
-                            photo_source='hexdb.io'
+                            photo_url=photo_url, photo_thumbnail_url=thumbnail_url, photo_source="hexdb.io"
                         )
             except Exception as e:
                 logger.debug(f"HexDB photo check failed for {icao}: {e}")
@@ -463,8 +458,7 @@ def fetch_aircraft_photos(icao_hex: str, photo_url: str = None, thumbnail_url: s
         # Download photos if we have URLs
         if photo_url:
             photo_path = download_photo(
-                photo_url, icao, is_thumbnail=False,
-                photo_page_link=photo_page_link, force=force
+                photo_url, icao, is_thumbnail=False, photo_page_link=photo_page_link, force=force
             )
             thumb_path = None
             if thumbnail_url:
@@ -492,9 +486,10 @@ def upgrade_aircraft_photo(icao_hex: str):
     logger.debug(f"Attempting photo upgrade for {icao}")
 
     try:
-        from skyspy.services.photo_cache import download_photo, update_photo_paths
-        from skyspy.models import AircraftInfo
         import httpx
+
+        from skyspy.models import AircraftInfo
+        from skyspy.services.photo_cache import download_photo, update_photo_paths
 
         # Get current photo info
         try:
@@ -540,7 +535,7 @@ def upgrade_aircraft_photo(icao_hex: str):
                             photo_page_link = photo.get("link")
                             if photo_page_link:
                                 info.photo_page_link = photo_page_link
-                                info.save(update_fields=['photo_page_link'])
+                                info.save(update_fields=["photo_page_link"])
                                 logger.info(f"Got page link for {icao}: {photo_page_link}")
                 except Exception as e:
                     logger.debug(f"Planespotters API failed for {icao}: {e}")
@@ -552,16 +547,20 @@ def upgrade_aircraft_photo(icao_hex: str):
             info.photo_thumbnail_url = new_thumb_url
             info.photo_local_path = None
             info.photo_thumbnail_local_path = None
-            info.photo_source = 'hexdb.io'
-            info.save(update_fields=[
-                'photo_url', 'photo_thumbnail_url',
-                'photo_local_path', 'photo_thumbnail_local_path', 'photo_source'
-            ])
+            info.photo_source = "hexdb.io"
+            info.save(
+                update_fields=[
+                    "photo_url",
+                    "photo_thumbnail_url",
+                    "photo_local_path",
+                    "photo_thumbnail_local_path",
+                    "photo_source",
+                ]
+            )
 
             # Download new photos
             photo_path = download_photo(
-                new_photo_url, icao, is_thumbnail=False,
-                photo_page_link=photo_page_link, force=True
+                new_photo_url, icao, is_thumbnail=False, photo_page_link=photo_page_link, force=True
             )
             thumb_path = None
             if new_thumb_url:
@@ -574,11 +573,10 @@ def upgrade_aircraft_photo(icao_hex: str):
         elif photo_page_link and old_photo_url:
             # Clear old cached path and re-download with scraping
             info.photo_local_path = None
-            info.save(update_fields=['photo_local_path'])
+            info.save(update_fields=["photo_local_path"])
 
             photo_path = download_photo(
-                old_photo_url, icao, is_thumbnail=False,
-                photo_page_link=photo_page_link, force=True
+                old_photo_url, icao, is_thumbnail=False, photo_page_link=photo_page_link, force=True
             )
             thumb_path = None
             if old_thumb_url:
@@ -620,7 +618,9 @@ def refresh_stale_aircraft_info(max_age_days: int = 7, batch_size: int = 100):
     Runs daily to keep aircraft info cache fresh.
     """
     from datetime import timedelta
+
     from django.utils import timezone
+
     from skyspy.models import AircraftInfo
 
     logger.info(f"Refreshing stale aircraft info (older than {max_age_days} days)")
@@ -630,16 +630,14 @@ def refresh_stale_aircraft_info(max_age_days: int = 7, batch_size: int = 100):
         retry_cutoff = timezone.now() - timedelta(hours=24)
 
         # Get stale records (successful lookups older than max_age_days)
-        stale_records = AircraftInfo.objects.filter(
-            updated_at__lt=cutoff,
-            fetch_failed=False
-        ).values_list('icao_hex', flat=True)[:batch_size]
+        stale_records = AircraftInfo.objects.filter(updated_at__lt=cutoff, fetch_failed=False).values_list(
+            "icao_hex", flat=True
+        )[:batch_size]
 
         # Get failed records ready for retry (failed more than 24 hours ago)
-        retry_records = AircraftInfo.objects.filter(
-            updated_at__lt=retry_cutoff,
-            fetch_failed=True
-        ).values_list('icao_hex', flat=True)[:batch_size]
+        retry_records = AircraftInfo.objects.filter(updated_at__lt=retry_cutoff, fetch_failed=True).values_list(
+            "icao_hex", flat=True
+        )[:batch_size]
 
         refreshed = 0
         retried = 0
@@ -663,11 +661,11 @@ def refresh_stale_aircraft_info(max_age_days: int = 7, batch_size: int = 100):
                 logger.warning(f"Failed to queue retry for {icao}: {e}")
 
         logger.info(f"Queued {refreshed} stale + {retried} retry aircraft info lookups")
-        return {'refreshed': refreshed, 'retried': retried}
+        return {"refreshed": refreshed, "retried": retried}
 
     except Exception as e:
         logger.error(f"Error refreshing stale aircraft info: {e}")
-        return {'error': str(e)}
+        return {"error": str(e)}
 
 
 @shared_task
@@ -683,21 +681,22 @@ def batch_upgrade_aircraft_photos(batch_size: int = 50):
     Runs daily to improve photo quality over time.
     """
     import time
-    from datetime import timedelta
-    from django.utils import timezone
+
     from django.db.models import Q
+
     from skyspy.models import AircraftInfo
 
     logger.info("Starting batch photo upgrade")
 
     try:
         # Get aircraft with photos from planespotters that might have hexdb alternatives
-        candidates = AircraftInfo.objects.filter(
-            Q(photo_source='planespotters.net') |
-            Q(photo_url__isnull=False, photo_local_path__isnull=True)
-        ).exclude(
-            photo_url__isnull=True
-        ).values_list('icao_hex', flat=True)[:batch_size]
+        candidates = (
+            AircraftInfo.objects.filter(
+                Q(photo_source="planespotters.net") | Q(photo_url__isnull=False, photo_local_path__isnull=True)
+            )
+            .exclude(photo_url__isnull=True)
+            .values_list("icao_hex", flat=True)[:batch_size]
+        )
 
         upgraded = 0
         for icao in candidates:
@@ -709,11 +708,11 @@ def batch_upgrade_aircraft_photos(batch_size: int = 50):
                 logger.warning(f"Failed to queue photo upgrade for {icao}: {e}")
 
         logger.info(f"Queued {upgraded} aircraft for photo upgrade")
-        return {'queued': upgraded}
+        return {"queued": upgraded}
 
     except Exception as e:
         logger.error(f"Error in batch photo upgrade: {e}")
-        return {'error': str(e)}
+        return {"error": str(e)}
 
 
 @shared_task
@@ -730,8 +729,9 @@ def cleanup_orphan_aircraft_info(days_without_sighting: int = 30):
     Runs weekly.
     """
     from datetime import timedelta
+
     from django.utils import timezone
-    from django.db.models import Q
+
     from skyspy.models import AircraftInfo, AircraftSighting
 
     logger.info(f"Cleaning up orphan aircraft info (not seen in {days_without_sighting} days)")
@@ -741,25 +741,18 @@ def cleanup_orphan_aircraft_info(days_without_sighting: int = 30):
 
         # Get ICAO codes of aircraft seen recently
         recent_icaos = set(
-            AircraftSighting.objects.filter(
-                timestamp__gte=cutoff
-            ).values_list('icao_hex', flat=True).distinct()
+            AircraftSighting.objects.filter(timestamp__gte=cutoff).values_list("icao_hex", flat=True).distinct()
         )
 
         # Delete failed lookups for aircraft not seen recently
-        deleted_failed, _ = AircraftInfo.objects.filter(
-            fetch_failed=True
-        ).exclude(
-            icao_hex__in=recent_icaos
-        ).delete()
+        deleted_failed, _ = AircraftInfo.objects.filter(fetch_failed=True).exclude(icao_hex__in=recent_icaos).delete()
 
         # Delete old records without photos for aircraft not seen recently
-        deleted_no_photo, _ = AircraftInfo.objects.filter(
-            photo_url__isnull=True,
-            updated_at__lt=cutoff
-        ).exclude(
-            icao_hex__in=recent_icaos
-        ).delete()
+        deleted_no_photo, _ = (
+            AircraftInfo.objects.filter(photo_url__isnull=True, updated_at__lt=cutoff)
+            .exclude(icao_hex__in=recent_icaos)
+            .delete()
+        )
 
         total_deleted = deleted_failed + deleted_no_photo
         logger.info(
@@ -767,15 +760,11 @@ def cleanup_orphan_aircraft_info(days_without_sighting: int = 30):
             f"({deleted_failed} failed, {deleted_no_photo} without photos)"
         )
 
-        return {
-            'deleted_failed': deleted_failed,
-            'deleted_no_photo': deleted_no_photo,
-            'total_deleted': total_deleted
-        }
+        return {"deleted_failed": deleted_failed, "deleted_no_photo": deleted_no_photo, "total_deleted": total_deleted}
 
     except Exception as e:
         logger.error(f"Error cleaning up orphan aircraft info: {e}")
-        return {'error': str(e)}
+        return {"error": str(e)}
 
 
 @shared_task
@@ -790,20 +779,21 @@ def update_cached_photo_set():
     Should be run periodically (e.g., every 5 minutes).
     """
     from pathlib import Path
+
     from django.core.cache import cache
 
-    if not getattr(settings, 'PHOTO_CACHE_ENABLED', False):
-        return {'cached': 0, 'enabled': False}
+    if not getattr(settings, "PHOTO_CACHE_ENABLED", False):
+        return {"cached": 0, "enabled": False}
 
-    if getattr(settings, 'S3_ENABLED', False):
+    if getattr(settings, "S3_ENABLED", False):
         # For S3, we rely on the photo_cache service's existing logic
         # This task is mainly for local filesystem caching
-        return {'cached': 0, 's3_mode': True}
+        return {"cached": 0, "s3_mode": True}
 
-    cache_dir = Path(getattr(settings, 'PHOTO_CACHE_DIR', '/tmp/photo_cache'))
+    cache_dir = Path(getattr(settings, "PHOTO_CACHE_DIR", "/tmp/photo_cache"))
     if not cache_dir.exists():
-        cache.set('cached_photo_icaos', [], timeout=600)
-        return {'cached': 0, 'dir_missing': True}
+        cache.set("cached_photo_icaos", [], timeout=600)
+        return {"cached": 0, "dir_missing": True}
 
     icaos = set()
     thumbs = set()
@@ -814,22 +804,22 @@ def update_cached_photo_set():
             # Skip thumbnails for the main photo list
             if "_thumb" in name.lower():
                 # Track thumbs separately
-                thumbs.add(name.replace('_THUMB', ''))
+                thumbs.add(name.replace("_THUMB", ""))
             else:
                 # Verify file is not empty
                 if photo.stat().st_size > 0:
                     icaos.add(name)
 
         # Store both main photos and thumbnails as sets for O(1) lookup
-        cache.set('cached_photo_icaos', icaos, timeout=600)
-        cache.set('cached_photo_thumb_icaos', thumbs, timeout=600)
+        cache.set("cached_photo_icaos", icaos, timeout=600)
+        cache.set("cached_photo_thumb_icaos", thumbs, timeout=600)
 
         logger.info(f"Updated cached photo set: {len(icaos)} photos, {len(thumbs)} thumbnails")
-        return {'cached': len(icaos), 'thumbnails': len(thumbs)}
+        return {"cached": len(icaos), "thumbnails": len(thumbs)}
 
     except Exception as e:
         logger.error(f"Error updating cached photo set: {e}")
-        return {'error': str(e)}
+        return {"error": str(e)}
 
 
 @shared_task
@@ -839,40 +829,45 @@ def get_aircraft_info_stats():
 
     Returns counts by source, photo status, etc.
     """
-    from django.db.models import Count, Q
+    from django.db.models import Count
+
     from skyspy.models import AircraftInfo
 
     try:
         total = AircraftInfo.objects.count()
-        with_photos = AircraftInfo.objects.filter(photo_url__isnull=False).exclude(photo_url='').count()
+        with_photos = AircraftInfo.objects.filter(photo_url__isnull=False).exclude(photo_url="").count()
         with_local_photos = AircraftInfo.objects.filter(photo_local_path__isnull=False).count()
         failed = AircraftInfo.objects.filter(fetch_failed=True).count()
         military = AircraftInfo.objects.filter(is_military=True).count()
 
         # By source
         by_source = dict(
-            AircraftInfo.objects.exclude(source__isnull=True).exclude(source='')
-            .values('source').annotate(count=Count('id'))
-            .values_list('source', 'count')
+            AircraftInfo.objects.exclude(source__isnull=True)
+            .exclude(source="")
+            .values("source")
+            .annotate(count=Count("id"))
+            .values_list("source", "count")
         )
 
         # By photo source
         by_photo_source = dict(
-            AircraftInfo.objects.exclude(photo_source__isnull=True).exclude(photo_source='')
-            .values('photo_source').annotate(count=Count('id'))
-            .values_list('photo_source', 'count')
+            AircraftInfo.objects.exclude(photo_source__isnull=True)
+            .exclude(photo_source="")
+            .values("photo_source")
+            .annotate(count=Count("id"))
+            .values_list("photo_source", "count")
         )
 
         return {
-            'total': total,
-            'with_photos': with_photos,
-            'with_local_photos': with_local_photos,
-            'failed_lookups': failed,
-            'military': military,
-            'by_source': by_source,
-            'by_photo_source': by_photo_source,
+            "total": total,
+            "with_photos": with_photos,
+            "with_local_photos": with_local_photos,
+            "failed_lookups": failed,
+            "military": military,
+            "by_source": by_source,
+            "by_photo_source": by_photo_source,
         }
 
     except Exception as e:
         logger.error(f"Error getting aircraft info stats: {e}")
-        return {'error': str(e)}
+        return {"error": str(e)}

@@ -12,6 +12,26 @@ import {
  * - Average flight duration by type
  */
 export function FlightPatternsSection({ data, loading, onSelectAircraft }) {
+  const {
+    top_routes = [],
+    busiest_hours = [],
+    aircraft_types = [],
+    duration_by_type = []
+  } = data || {};
+
+  // Prepare hours data (0-23) - must be called before any conditional returns
+  const hoursData = useMemo(() => {
+    const hourMap = {};
+    busiest_hours.forEach(h => {
+      hourMap[h.hour] = h.count;
+    });
+    return Array.from({ length: 24 }, (_, i) => ({
+      hour: i,
+      count: hourMap[i] || 0,
+      label: `${i.toString().padStart(2, '0')}:00`
+    }));
+  }, [busiest_hours]);
+
   // Show loading skeleton when data is loading
   if (loading) {
     return (
@@ -30,13 +50,6 @@ export function FlightPatternsSection({ data, loading, onSelectAircraft }) {
 
   if (!data) return null;
 
-  const {
-    top_routes = [],
-    busiest_hours = [],
-    aircraft_types = [],
-    duration_by_type = []
-  } = data;
-
   // Find max values for normalization
   const maxRouteCount = Math.max(...top_routes.map(r => r.count || 0), 1);
   const maxHourCount = Math.max(...busiest_hours.map(h => h.count || 0), 1);
@@ -52,19 +65,6 @@ export function FlightPatternsSection({ data, loading, onSelectAircraft }) {
     if (intensity > 0.2) return 'rgba(0, 200, 255, 0.25)';
     return 'rgba(0, 200, 255, 0.1)';
   };
-
-  // Prepare hours data (0-23)
-  const hoursData = useMemo(() => {
-    const hourMap = {};
-    busiest_hours.forEach(h => {
-      hourMap[h.hour] = h.count;
-    });
-    return Array.from({ length: 24 }, (_, i) => ({
-      hour: i,
-      count: hourMap[i] || 0,
-      label: `${i.toString().padStart(2, '0')}:00`
-    }));
-  }, [busiest_hours]);
 
   return (
     <div className="stats-section flight-patterns-section">

@@ -3,28 +3,25 @@ Sentry integration utilities.
 
 Provides helper functions for explicit exception capture and context management.
 """
+
 import logging
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, Optional
 
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
 # Check if Sentry is configured
-SENTRY_ENABLED = bool(getattr(settings, 'SENTRY_DSN', None))
+SENTRY_ENABLED = bool(getattr(settings, "SENTRY_DSN", None))
 
 if SENTRY_ENABLED:
     import sentry_sdk
-    from sentry_sdk import set_context, set_tag, set_user, capture_exception, capture_message
 
 
 def capture_error(
-    exception: Exception,
-    extra: Optional[dict] = None,
-    tags: Optional[dict] = None,
-    level: str = 'error'
-) -> Optional[str]:
+    exception: Exception, extra: dict | None = None, tags: dict | None = None, level: str = "error"
+) -> str | None:
     """
     Capture an exception to Sentry with optional context.
 
@@ -60,11 +57,11 @@ def capture_error(
 
 def capture_aircraft_error(
     exception: Exception,
-    icao_hex: Optional[str] = None,
-    callsign: Optional[str] = None,
-    operation: Optional[str] = None,
-    extra: Optional[dict] = None
-) -> Optional[str]:
+    icao_hex: str | None = None,
+    callsign: str | None = None,
+    operation: str | None = None,
+    extra: dict | None = None,
+) -> str | None:
     """
     Capture an aircraft-related exception with context.
 
@@ -78,15 +75,15 @@ def capture_aircraft_error(
     Returns:
         Sentry event ID if captured
     """
-    tags = {'type': 'aircraft_error'}
+    tags = {"type": "aircraft_error"}
     if operation:
-        tags['operation'] = operation
+        tags["operation"] = operation
 
     context = extra or {}
     if icao_hex:
-        context['icao_hex'] = icao_hex
+        context["icao_hex"] = icao_hex
     if callsign:
-        context['callsign'] = callsign
+        context["callsign"] = callsign
 
     return capture_error(exception, extra=context, tags=tags)
 
@@ -94,10 +91,10 @@ def capture_aircraft_error(
 def capture_task_error(
     exception: Exception,
     task_name: str,
-    task_args: Optional[tuple] = None,
-    task_kwargs: Optional[dict] = None,
-    extra: Optional[dict] = None
-) -> Optional[str]:
+    task_args: tuple | None = None,
+    task_kwargs: dict | None = None,
+    extra: dict | None = None,
+) -> str | None:
     """
     Capture a Celery task exception with context.
 
@@ -111,26 +108,20 @@ def capture_task_error(
     Returns:
         Sentry event ID if captured
     """
-    tags = {
-        'type': 'task_error',
-        'task_name': task_name
-    }
+    tags = {"type": "task_error", "task_name": task_name}
 
     context = extra or {}
     if task_args:
-        context['task_args'] = str(task_args)[:500]
+        context["task_args"] = str(task_args)[:500]
     if task_kwargs:
-        context['task_kwargs'] = str(task_kwargs)[:500]
+        context["task_kwargs"] = str(task_kwargs)[:500]
 
     return capture_error(exception, extra=context, tags=tags)
 
 
 def capture_api_error(
-    exception: Exception,
-    endpoint: Optional[str] = None,
-    method: Optional[str] = None,
-    extra: Optional[dict] = None
-) -> Optional[str]:
+    exception: Exception, endpoint: str | None = None, method: str | None = None, extra: dict | None = None
+) -> str | None:
     """
     Capture an API-related exception with context.
 
@@ -143,49 +134,43 @@ def capture_api_error(
     Returns:
         Sentry event ID if captured
     """
-    tags = {'type': 'api_error'}
+    tags = {"type": "api_error"}
     if endpoint:
-        tags['endpoint'] = endpoint
+        tags["endpoint"] = endpoint
     if method:
-        tags['method'] = method
+        tags["method"] = method
 
     return capture_error(exception, extra=extra, tags=tags)
 
 
 def set_aircraft_context(
-    icao_hex: str,
-    callsign: Optional[str] = None,
-    registration: Optional[str] = None,
-    aircraft_type: Optional[str] = None
+    icao_hex: str, callsign: str | None = None, registration: str | None = None, aircraft_type: str | None = None
 ):
     """Set aircraft context for Sentry events."""
     if not SENTRY_ENABLED:
         return
 
-    context = {'icao_hex': icao_hex}
+    context = {"icao_hex": icao_hex}
     if callsign:
-        context['callsign'] = callsign
+        context["callsign"] = callsign
     if registration:
-        context['registration'] = registration
+        context["registration"] = registration
     if aircraft_type:
-        context['aircraft_type'] = aircraft_type
+        context["aircraft_type"] = aircraft_type
 
-    sentry_sdk.set_context('aircraft', context)
+    sentry_sdk.set_context("aircraft", context)
 
 
-def set_operation_context(
-    operation: str,
-    details: Optional[dict] = None
-):
+def set_operation_context(operation: str, details: dict | None = None):
     """Set operation context for Sentry events."""
     if not SENTRY_ENABLED:
         return
 
-    context = {'operation': operation}
+    context = {"operation": operation}
     if details:
         context.update(details)
 
-    sentry_sdk.set_context('operation', context)
+    sentry_sdk.set_context("operation", context)
 
 
 def sentry_task_wrapper(task_name: str):
@@ -198,6 +183,7 @@ def sentry_task_wrapper(task_name: str):
         def poll_aircraft():
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -206,16 +192,13 @@ def sentry_task_wrapper(task_name: str):
             except Exception as e:
                 capture_task_error(e, task_name, args, kwargs)
                 raise
+
         return wrapper
+
     return decorator
 
 
-def log_and_capture(
-    message: str,
-    exception: Optional[Exception] = None,
-    level: str = 'error',
-    extra: Optional[dict] = None
-):
+def log_and_capture(message: str, exception: Exception | None = None, level: str = "error", extra: dict | None = None):
     """
     Log a message and optionally capture to Sentry.
 
@@ -232,7 +215,7 @@ def log_and_capture(
         capture_error(exception, extra=extra)
     else:
         log_func(message)
-        if SENTRY_ENABLED and level in ('error', 'critical'):
+        if SENTRY_ENABLED and level in ("error", "critical"):
             with sentry_sdk.push_scope() as scope:
                 if extra:
                     for key, value in extra.items():

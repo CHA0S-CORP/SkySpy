@@ -72,10 +72,11 @@ export function TabNavigation({
 
   const getTabBadge = (tabId) => {
     switch (tabId) {
-      case 'communications':
+      case 'communications': {
         // Combined count of radio + ACARS
         const commCount = radioCount + acarsCount;
         return commCount > 0 ? commCount : null;
+      }
       case 'safety':
         return safetyCount > 0 ? safetyCount : null;
       default:

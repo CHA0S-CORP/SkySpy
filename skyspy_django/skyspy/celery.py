@@ -18,43 +18,47 @@ This module configures Celery for background task processing including:
 
 Uses gevent for green-threaded concurrent task execution.
 """
+
 import os
 import sys
 
 # Only apply gevent monkey patching when running as celery worker with gevent pool
 # Check via environment variable or command line args
 _use_gevent = (
-    os.environ.get('CELERY_POOL', '').lower() == 'gevent' or
-    '--pool=gevent' in sys.argv or
-    '-P gevent' in ' '.join(sys.argv)
+    os.environ.get("CELERY_POOL", "").lower() == "gevent"
+    or "--pool=gevent" in sys.argv
+    or "-P gevent" in " ".join(sys.argv)
 )
 
 if _use_gevent:
     # Gevent monkey patching must happen before any other imports
     # This patches standard library modules for cooperative multitasking
     from gevent import monkey
+
     # Patch all except ssl and subprocess to avoid issues with Django ORM
     monkey.patch_all(ssl=False)
 
     # Tell Django we're in a sync context even with gevent
-    os.environ['DJANGO_ALLOW_ASYNC_UNSAFE'] = 'true'
+    os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
 
 from celery import Celery
 from celery.schedules import crontab
 
 # Set the default Django settings module for the 'celery' program.
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'skyspy.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "skyspy.settings")
 
-app = Celery('skyspy')
+app = Celery("skyspy")
+
 
 # Check if running with RPi settings
 def _is_rpi_mode():
     """Check if using RPi-optimized settings."""
-    return 'settings_rpi' in os.environ.get('DJANGO_SETTINGS_MODULE', '')
+    return "settings_rpi" in os.environ.get("DJANGO_SETTINGS_MODULE", "")
+
 
 # Using a string here means the worker doesn't have to serialize
 # the configuration object to child processes.
-app.config_from_object('django.conf:settings', namespace='CELERY')
+app.config_from_object("django.conf:settings", namespace="CELERY")
 
 # Load task modules from all registered Django apps.
 app.autodiscover_tasks()
@@ -63,7 +67,7 @@ app.autodiscover_tasks()
 @app.task(bind=True, ignore_result=True)
 def debug_task(self):
     """Debug task for testing Celery configuration."""
-    print(f'Request: {self.request!r}')
+    print(f"Request: {self.request!r}")
 
 
 # =============================================================================
@@ -71,291 +75,245 @@ def debug_task(self):
 # =============================================================================
 app.conf.beat_schedule = {
     # Aircraft polling - every 1 second (skipped when streaming is active)
-    'poll-aircraft-every-2s': {
-        'task': 'skyspy.tasks.aircraft.poll_aircraft',
-        'schedule': 1.0,
-        'options': {'expires': 1.0},  # Don't queue if missed
+    "poll-aircraft-every-2s": {
+        "task": "skyspy.tasks.aircraft.poll_aircraft",
+        "schedule": 1.0,
+        "options": {"expires": 1.0},  # Don't queue if missed
     },
-
     # Aircraft streaming - check/start every 30 seconds
     # (actual stream runs continuously, this just ensures it's running)
-    'start-aircraft-stream-every-30s': {
-        'task': 'skyspy.tasks.aircraft_stream.start_aircraft_stream',
-        'schedule': 30.0,
-        'options': {'expires': 30.0},
+    "start-aircraft-stream-every-30s": {
+        "task": "skyspy.tasks.aircraft_stream.start_aircraft_stream",
+        "schedule": 30.0,
+        "options": {"expires": 30.0},
     },
-
     # Aircraft stream cold path - flush buffered data to database every 5 seconds
     # (non-blocking, doesn't affect client latency)
-    'flush-stream-to-database-every-5s': {
-        'task': 'skyspy.tasks.aircraft_stream.flush_stream_to_database',
-        'schedule': 5.0,
-        'options': {'expires': 5.0},
+    "flush-stream-to-database-every-5s": {
+        "task": "skyspy.tasks.aircraft_stream.flush_stream_to_database",
+        "schedule": 5.0,
+        "options": {"expires": 5.0},
     },
-
     # Aircraft stream cold path - process new aircraft info lookups every 10 seconds
-    'process-new-aircraft-lookups-every-10s': {
-        'task': 'skyspy.tasks.aircraft_stream.process_new_aircraft_lookups',
-        'schedule': 10.0,
-        'options': {'expires': 10.0},
+    "process-new-aircraft-lookups-every-10s": {
+        "task": "skyspy.tasks.aircraft_stream.process_new_aircraft_lookups",
+        "schedule": 10.0,
+        "options": {"expires": 10.0},
     },
-
     # Session cleanup - every 5 minutes
-    'cleanup-sessions-every-5m': {
-        'task': 'skyspy.tasks.aircraft.cleanup_sessions',
-        'schedule': 300.0,  # 5 minutes
+    "cleanup-sessions-every-5m": {
+        "task": "skyspy.tasks.aircraft.cleanup_sessions",
+        "schedule": 300.0,  # 5 minutes
     },
-
     # Airspace advisory refresh - every 5 minutes
-    'refresh-airspace-advisories-every-5m': {
-        'task': 'skyspy.tasks.airspace.refresh_airspace_advisories',
-        'schedule': 300.0,  # 5 minutes
+    "refresh-airspace-advisories-every-5m": {
+        "task": "skyspy.tasks.airspace.refresh_airspace_advisories",
+        "schedule": 300.0,  # 5 minutes
     },
-
     # Airspace boundary refresh - daily at 3 AM UTC
-    'refresh-airspace-boundaries-daily': {
-        'task': 'skyspy.tasks.airspace.refresh_airspace_boundaries',
-        'schedule': crontab(hour=3, minute=0),
+    "refresh-airspace-boundaries-daily": {
+        "task": "skyspy.tasks.airspace.refresh_airspace_boundaries",
+        "schedule": crontab(hour=3, minute=0),
     },
-
     # Antenna analytics update - every 5 minutes
-    'update-antenna-analytics-every-5m': {
-        'task': 'skyspy.tasks.analytics.update_antenna_analytics',
-        'schedule': 300.0,  # 5 minutes
+    "update-antenna-analytics-every-5m": {
+        "task": "skyspy.tasks.analytics.update_antenna_analytics",
+        "schedule": 300.0,  # 5 minutes
     },
-
     # External database sync - daily at 4 AM UTC
-    'sync-external-databases-daily': {
-        'task': 'skyspy.tasks.external_db.sync_external_databases',
-        'schedule': crontab(hour=4, minute=0),
+    "sync-external-databases-daily": {
+        "task": "skyspy.tasks.external_db.sync_external_databases",
+        "schedule": crontab(hour=4, minute=0),
     },
-
     # Check for stale external databases - every 6 hours
-    'update-stale-databases-every-6h': {
-        'task': 'skyspy.tasks.external_db.update_stale_databases',
-        'schedule': 21600.0,  # 6 hours
+    "update-stale-databases-every-6h": {
+        "task": "skyspy.tasks.external_db.update_stale_databases",
+        "schedule": 21600.0,  # 6 hours
     },
-
     # Geographic data refresh - daily at 3:30 AM UTC
-    'refresh-geodata-daily': {
-        'task': 'skyspy.tasks.geodata.refresh_all_geodata',
-        'schedule': crontab(hour=3, minute=30),
+    "refresh-geodata-daily": {
+        "task": "skyspy.tasks.geodata.refresh_all_geodata",
+        "schedule": crontab(hour=3, minute=30),
     },
-
     # Check and refresh geodata if stale - every hour
-    'check-geodata-freshness-hourly': {
-        'task': 'skyspy.tasks.geodata.check_and_refresh_geodata',
-        'schedule': 3600.0,  # 1 hour
+    "check-geodata-freshness-hourly": {
+        "task": "skyspy.tasks.geodata.check_and_refresh_geodata",
+        "schedule": 3600.0,  # 1 hour
     },
-
     # PIREP cleanup - every hour
-    'cleanup-pireps-hourly': {
-        'task': 'skyspy.tasks.geodata.cleanup_old_pireps',
-        'schedule': 3600.0,  # 1 hour
+    "cleanup-pireps-hourly": {
+        "task": "skyspy.tasks.geodata.cleanup_old_pireps",
+        "schedule": 3600.0,  # 1 hour
     },
-
     # PIREP refresh - every 10 minutes
-    'refresh-pireps-every-10m': {
-        'task': 'skyspy.tasks.geodata.refresh_pireps',
-        'schedule': 600.0,  # 10 minutes
+    "refresh-pireps-every-10m": {
+        "task": "skyspy.tasks.geodata.refresh_pireps",
+        "schedule": 600.0,  # 10 minutes
     },
-
     # METAR refresh - every 10 minutes
-    'refresh-metars-every-10m': {
-        'task': 'skyspy.tasks.geodata.refresh_metars',
-        'schedule': 600.0,  # 10 minutes
+    "refresh-metars-every-10m": {
+        "task": "skyspy.tasks.geodata.refresh_metars",
+        "schedule": 600.0,  # 10 minutes
     },
-
     # TAF refresh - every 30 minutes
-    'refresh-tafs-every-30m': {
-        'task': 'skyspy.tasks.geodata.refresh_tafs',
-        'schedule': 1800.0,  # 30 minutes
+    "refresh-tafs-every-30m": {
+        "task": "skyspy.tasks.geodata.refresh_tafs",
+        "schedule": 1800.0,  # 30 minutes
     },
-
     # Stats cache update - every 60 seconds
-    'update-stats-cache-every-60s': {
-        'task': 'skyspy.tasks.aircraft.update_stats_cache',
-        'schedule': 60.0,
+    "update-stats-cache-every-60s": {
+        "task": "skyspy.tasks.aircraft.update_stats_cache",
+        "schedule": 60.0,
     },
-
     # Safety stats update - every 30 seconds
-    'update-safety-stats-every-30s': {
-        'task': 'skyspy.tasks.aircraft.update_safety_stats',
-        'schedule': 30.0,
+    "update-safety-stats-every-30s": {
+        "task": "skyspy.tasks.aircraft.update_safety_stats",
+        "schedule": 30.0,
     },
-
     # ACARS stats update - every 60 seconds
-    'update-acars-stats-every-60s': {
-        'task': 'skyspy.tasks.analytics.refresh_acars_stats',
-        'schedule': 60.0,
+    "update-acars-stats-every-60s": {
+        "task": "skyspy.tasks.analytics.refresh_acars_stats",
+        "schedule": 60.0,
     },
-
     # Time comparison stats update - every 5 minutes
-    'update-time-comparison-stats-every-5m': {
-        'task': 'skyspy.tasks.analytics.refresh_time_comparison_stats',
-        'schedule': 300.0,  # 5 minutes
+    "update-time-comparison-stats-every-5m": {
+        "task": "skyspy.tasks.analytics.refresh_time_comparison_stats",
+        "schedule": 300.0,  # 5 minutes
     },
-
     # Flight pattern and geographic stats update - every 2 minutes
-    'update-flight-pattern-geographic-stats-every-2m': {
-        'task': 'skyspy.tasks.analytics.refresh_flight_pattern_geographic_stats',
-        'schedule': 120.0,  # 2 minutes
+    "update-flight-pattern-geographic-stats-every-2m": {
+        "task": "skyspy.tasks.analytics.refresh_flight_pattern_geographic_stats",
+        "schedule": 120.0,  # 2 minutes
     },
-
     # Tracking quality stats update - every 2 minutes
-    'update-tracking-quality-stats-every-2m': {
-        'task': 'skyspy.tasks.analytics.refresh_tracking_quality_stats',
-        'schedule': 120.0,  # 2 minutes
+    "update-tracking-quality-stats-every-2m": {
+        "task": "skyspy.tasks.analytics.refresh_tracking_quality_stats",
+        "schedule": 120.0,  # 2 minutes
     },
-
     # Engagement stats update - every 2 minutes
-    'update-engagement-stats-every-2m': {
-        'task': 'skyspy.tasks.analytics.refresh_engagement_stats',
-        'schedule': 120.0,  # 2 minutes
+    "update-engagement-stats-every-2m": {
+        "task": "skyspy.tasks.analytics.refresh_engagement_stats",
+        "schedule": 120.0,  # 2 minutes
     },
-
     # Update favorite tracking - every 5 minutes
-    'update-favorite-tracking-every-5m': {
-        'task': 'skyspy.tasks.analytics.update_favorite_tracking',
-        'schedule': 300.0,  # 5 minutes
+    "update-favorite-tracking-every-5m": {
+        "task": "skyspy.tasks.analytics.update_favorite_tracking",
+        "schedule": 300.0,  # 5 minutes
     },
-
     # Transcription queue processing - every 10 seconds
-    'process-transcription-queue-every-10s': {
-        'task': 'skyspy.tasks.transcription.process_transcription_queue',
-        'schedule': 10.0,
-        'options': {'expires': 10.0},
+    "process-transcription-queue-every-10s": {
+        "task": "skyspy.tasks.transcription.process_transcription_queue",
+        "schedule": 10.0,
+        "options": {"expires": 10.0},
     },
-
     # Hourly antenna analytics aggregation - every hour
-    'aggregate-hourly-antenna-analytics': {
-        'task': 'skyspy.tasks.analytics.aggregate_hourly_antenna_analytics',
-        'schedule': crontab(minute=5),  # 5 minutes past each hour
+    "aggregate-hourly-antenna-analytics": {
+        "task": "skyspy.tasks.analytics.aggregate_hourly_antenna_analytics",
+        "schedule": crontab(minute=5),  # 5 minutes past each hour
     },
-
     # Antenna analytics cleanup - daily at 4:30 AM UTC
-    'cleanup-antenna-analytics-daily': {
-        'task': 'skyspy.tasks.analytics.cleanup_antenna_analytics_snapshots',
-        'schedule': crontab(hour=4, minute=30),
+    "cleanup-antenna-analytics-daily": {
+        "task": "skyspy.tasks.analytics.cleanup_antenna_analytics_snapshots",
+        "schedule": crontab(hour=4, minute=30),
     },
-
     # Aircraft info refresh - daily at 5 AM UTC
-    'refresh-stale-aircraft-info-daily': {
-        'task': 'skyspy.tasks.external_db.refresh_stale_aircraft_info',
-        'schedule': crontab(hour=5, minute=0),
+    "refresh-stale-aircraft-info-daily": {
+        "task": "skyspy.tasks.external_db.refresh_stale_aircraft_info",
+        "schedule": crontab(hour=5, minute=0),
     },
-
     # Aircraft photo upgrades - daily at 5:30 AM UTC
-    'upgrade-aircraft-photos-daily': {
-        'task': 'skyspy.tasks.external_db.batch_upgrade_aircraft_photos',
-        'schedule': crontab(hour=5, minute=30),
+    "upgrade-aircraft-photos-daily": {
+        "task": "skyspy.tasks.external_db.batch_upgrade_aircraft_photos",
+        "schedule": crontab(hour=5, minute=30),
     },
-
     # Orphan aircraft info cleanup - weekly on Sundays at 6 AM UTC
-    'cleanup-orphan-aircraft-info-weekly': {
-        'task': 'skyspy.tasks.external_db.cleanup_orphan_aircraft_info',
-        'schedule': crontab(hour=6, minute=0, day_of_week='sunday'),
+    "cleanup-orphan-aircraft-info-weekly": {
+        "task": "skyspy.tasks.external_db.cleanup_orphan_aircraft_info",
+        "schedule": crontab(hour=6, minute=0, day_of_week="sunday"),
     },
-
     # Notification queue processing - every 30 seconds
-    'process-notification-queue-every-30s': {
-        'task': 'skyspy.tasks.notifications.process_notification_queue',
-        'schedule': 30.0,
+    "process-notification-queue-every-30s": {
+        "task": "skyspy.tasks.notifications.process_notification_queue",
+        "schedule": 30.0,
     },
-
     # Notification log cleanup - daily at 3:15 AM UTC
-    'cleanup-notification-logs-daily': {
-        'task': 'skyspy.tasks.notifications.cleanup_old_notification_logs',
-        'schedule': crontab(hour=3, minute=15),
+    "cleanup-notification-logs-daily": {
+        "task": "skyspy.tasks.notifications.cleanup_old_notification_logs",
+        "schedule": crontab(hour=3, minute=15),
     },
-
     # SWIM FNS NOTAM consumer - every 5 minutes
     # Connects to FAA SWIM to receive real-time NOTAM updates
-    'swim-notams-every-5m': {
-        'task': 'skyspy.tasks.notams.consume_swim_notams',
-        'schedule': 300.0,  # 5 minutes
-        'kwargs': {'max_messages': 500, 'timeout_seconds': 240},
+    "swim-notams-every-5m": {
+        "task": "skyspy.tasks.notams.consume_swim_notams",
+        "schedule": 300.0,  # 5 minutes
+        "kwargs": {"max_messages": 500, "timeout_seconds": 240},
     },
-
     # Legacy NOTAMs refresh - every 30 minutes (fallback if SWIM disabled)
-    'refresh-notams-every-30m': {
-        'task': 'skyspy.tasks.notams.refresh_notams',
-        'schedule': 1800.0,  # 30 minutes
+    "refresh-notams-every-30m": {
+        "task": "skyspy.tasks.notams.refresh_notams",
+        "schedule": 1800.0,  # 30 minutes
     },
-
     # OpenAIP airspace refresh - daily at 5:15 AM UTC
-    'refresh-openaip-daily': {
-        'task': 'skyspy.tasks.openaip.refresh_openaip_data',
-        'schedule': crontab(hour=5, minute=15),
+    "refresh-openaip-daily": {
+        "task": "skyspy.tasks.openaip.refresh_openaip_data",
+        "schedule": crontab(hour=5, minute=15),
     },
-
     # NOTAM cleanup - daily at 4:15 AM UTC
-    'cleanup-expired-notams-daily': {
-        'task': 'skyspy.tasks.notams.cleanup_expired_notams',
-        'schedule': crontab(hour=4, minute=15),
+    "cleanup-expired-notams-daily": {
+        "task": "skyspy.tasks.notams.cleanup_expired_notams",
+        "schedule": crontab(hour=4, minute=15),
     },
-
     # Daily stats calculation - daily at 1 AM UTC
-    'calculate-daily-stats': {
-        'task': 'skyspy.tasks.analytics.calculate_daily_stats',
-        'schedule': crontab(hour=1, minute=0),
+    "calculate-daily-stats": {
+        "task": "skyspy.tasks.analytics.calculate_daily_stats",
+        "schedule": crontab(hour=1, minute=0),
     },
-
     # Memory cache cleanup - every 5 minutes
-    'cleanup-memory-cache-every-5m': {
-        'task': 'skyspy.tasks.analytics.cleanup_memory_cache',
-        'schedule': 300.0,  # 5 minutes
+    "cleanup-memory-cache-every-5m": {
+        "task": "skyspy.tasks.analytics.cleanup_memory_cache",
+        "schedule": 300.0,  # 5 minutes
     },
-
     # Notification cooldown cleanup - every 30 minutes
-    'cleanup-notification-cooldowns-every-30m': {
-        'task': 'skyspy.tasks.notifications.cleanup_notification_cooldowns',
-        'schedule': crontab(minute='*/30'),
+    "cleanup-notification-cooldowns-every-30m": {
+        "task": "skyspy.tasks.notifications.cleanup_notification_cooldowns",
+        "schedule": crontab(minute="*/30"),
     },
-
     # ==========================================================================
     # Cannonball Mode Tasks
     # ==========================================================================
-
     # Cannonball pattern analysis - every 5 seconds
-    'analyze-aircraft-patterns-every-5s': {
-        'task': 'skyspy.tasks.cannonball.analyze_aircraft_patterns',
-        'schedule': 5.0,
-        'options': {'expires': 5.0},
+    "analyze-aircraft-patterns-every-5s": {
+        "task": "skyspy.tasks.cannonball.analyze_aircraft_patterns",
+        "schedule": 5.0,
+        "options": {"expires": 5.0},
     },
-
     # Cannonball session cleanup - every 5 minutes
-    'cleanup-cannonball-sessions-every-5m': {
-        'task': 'skyspy.tasks.cannonball.cleanup_cannonball_sessions',
-        'schedule': 300.0,
+    "cleanup-cannonball-sessions-every-5m": {
+        "task": "skyspy.tasks.cannonball.cleanup_cannonball_sessions",
+        "schedule": 300.0,
     },
-
     # Cannonball pattern cleanup - daily at 3:45 AM UTC
-    'cleanup-cannonball-patterns-daily': {
-        'task': 'skyspy.tasks.cannonball.cleanup_old_patterns',
-        'schedule': crontab(hour=3, minute=45),
+    "cleanup-cannonball-patterns-daily": {
+        "task": "skyspy.tasks.cannonball.cleanup_old_patterns",
+        "schedule": crontab(hour=3, minute=45),
     },
-
     # Cannonball stats aggregation - hourly
-    'aggregate-cannonball-stats-hourly': {
-        'task': 'skyspy.tasks.cannonball.aggregate_cannonball_stats',
-        'schedule': crontab(minute=10),  # 10 minutes past each hour
+    "aggregate-cannonball-stats-hourly": {
+        "task": "skyspy.tasks.cannonball.aggregate_cannonball_stats",
+        "schedule": crontab(minute=10),  # 10 minutes past each hour
     },
-
     # ==========================================================================
     # Data Retention Cleanup Tasks
     # ==========================================================================
-
     # Daily cleanup of all old data - runs at 3 AM
-    'cleanup-all-old-data-daily': {
-        'task': 'skyspy.tasks.cleanup.run_all_cleanup_tasks',
-        'schedule': crontab(hour=3, minute=0),
+    "cleanup-all-old-data-daily": {
+        "task": "skyspy.tasks.cleanup.run_all_cleanup_tasks",
+        "schedule": crontab(hour=3, minute=0),
     },
-
     # Weekly vacuum analyze - runs at 4 AM on Sundays
-    'vacuum-analyze-weekly': {
-        'task': 'skyspy.tasks.cleanup.vacuum_analyze_tables',
-        'schedule': crontab(hour=4, minute=0, day_of_week=0),
+    "vacuum-analyze-weekly": {
+        "task": "skyspy.tasks.cleanup.vacuum_analyze_tables",
+        "schedule": crontab(hour=4, minute=0, day_of_week=0),
     },
 }
 
@@ -368,84 +326,76 @@ if _is_rpi_mode():
     from django.conf import settings as django_settings
 
     # Get RPi task intervals if defined
-    rpi_intervals = getattr(django_settings, 'RPI_TASK_INTERVALS', {})
+    rpi_intervals = getattr(django_settings, "RPI_TASK_INTERVALS", {})
 
     # Override polling interval
-    polling_interval = getattr(django_settings, 'POLLING_INTERVAL', 2)
-    app.conf.beat_schedule['poll-aircraft-every-2s']['schedule'] = float(polling_interval)
-    app.conf.beat_schedule['poll-aircraft-every-2s']['options']['expires'] = float(polling_interval)
+    polling_interval = getattr(django_settings, "POLLING_INTERVAL", 2)
+    app.conf.beat_schedule["poll-aircraft-every-2s"]["schedule"] = float(polling_interval)
+    app.conf.beat_schedule["poll-aircraft-every-2s"]["options"]["expires"] = float(polling_interval)
 
     # Override stats task frequencies (staggered to avoid concurrent execution)
-    app.conf.beat_schedule['update-stats-cache-every-60s']['schedule'] = rpi_intervals.get('stats_cache', 90.0)
-    app.conf.beat_schedule['update-safety-stats-every-30s']['schedule'] = rpi_intervals.get('safety_stats', 60.0)
-    app.conf.beat_schedule['update-acars-stats-every-60s']['schedule'] = rpi_intervals.get('acars_stats', 120.0)
+    app.conf.beat_schedule["update-stats-cache-every-60s"]["schedule"] = rpi_intervals.get("stats_cache", 90.0)
+    app.conf.beat_schedule["update-safety-stats-every-30s"]["schedule"] = rpi_intervals.get("safety_stats", 60.0)
+    app.conf.beat_schedule["update-acars-stats-every-60s"]["schedule"] = rpi_intervals.get("acars_stats", 120.0)
 
     # Override expensive analytics tasks with staggered schedules
-    app.conf.beat_schedule['update-flight-pattern-geographic-stats-every-2m']['schedule'] = crontab(minute='*/10', second=0)
-    app.conf.beat_schedule['update-tracking-quality-stats-every-2m']['schedule'] = crontab(minute='*/10', second=20)
-    app.conf.beat_schedule['update-engagement-stats-every-2m']['schedule'] = crontab(minute='*/10', second=40)
-    app.conf.beat_schedule['update-time-comparison-stats-every-5m']['schedule'] = crontab(minute='*/15')
-    app.conf.beat_schedule['update-antenna-analytics-every-5m']['schedule'] = crontab(minute='*/10', second=30)
+    app.conf.beat_schedule["update-flight-pattern-geographic-stats-every-2m"]["schedule"] = crontab(
+        minute="*/10", second=0
+    )
+    app.conf.beat_schedule["update-tracking-quality-stats-every-2m"]["schedule"] = crontab(minute="*/10", second=20)
+    app.conf.beat_schedule["update-engagement-stats-every-2m"]["schedule"] = crontab(minute="*/10", second=40)
+    app.conf.beat_schedule["update-time-comparison-stats-every-5m"]["schedule"] = crontab(minute="*/15")
+    app.conf.beat_schedule["update-antenna-analytics-every-5m"]["schedule"] = crontab(minute="*/10", second=30)
 
 
 # Task routing
 app.conf.task_routes = {
     # High-priority aircraft polling (time-sensitive)
-    'skyspy.tasks.aircraft.poll_aircraft': {'queue': 'polling'},
-    'skyspy.tasks.aircraft.update_stats_cache': {'queue': 'polling'},
-    'skyspy.tasks.aircraft.update_safety_stats': {'queue': 'polling'},
-
+    "skyspy.tasks.aircraft.poll_aircraft": {"queue": "polling"},
+    "skyspy.tasks.aircraft.update_stats_cache": {"queue": "polling"},
+    "skyspy.tasks.aircraft.update_safety_stats": {"queue": "polling"},
     # Aircraft streaming (long-running, uses polling queue for priority)
-    'skyspy.tasks.aircraft_stream.stream_aircraft': {'queue': 'polling'},
-    'skyspy.tasks.aircraft_stream.start_aircraft_stream': {'queue': 'polling'},
-
+    "skyspy.tasks.aircraft_stream.stream_aircraft": {"queue": "polling"},
+    "skyspy.tasks.aircraft_stream.start_aircraft_stream": {"queue": "polling"},
     # Aircraft stream cold path (database writes - separate queue to not block hot path)
-    'skyspy.tasks.aircraft_stream.flush_stream_to_database': {'queue': 'database'},
-    'skyspy.tasks.aircraft_stream.process_new_aircraft_lookups': {'queue': 'database'},
-
+    "skyspy.tasks.aircraft_stream.flush_stream_to_database": {"queue": "database"},
+    "skyspy.tasks.aircraft_stream.process_new_aircraft_lookups": {"queue": "database"},
     # Antenna analytics (runs frequently, should be quick)
-    'skyspy.tasks.analytics.update_antenna_analytics': {'queue': 'polling'},
-    'skyspy.tasks.analytics.refresh_acars_stats': {'queue': 'polling'},
-
+    "skyspy.tasks.analytics.update_antenna_analytics": {"queue": "polling"},
+    "skyspy.tasks.analytics.refresh_acars_stats": {"queue": "polling"},
     # Low-priority expensive analytics tasks (RPi optimization)
-    'skyspy.tasks.analytics.refresh_time_comparison_stats': {'queue': 'low_priority'},
-    'skyspy.tasks.analytics.refresh_tracking_quality_stats': {'queue': 'low_priority'},
-    'skyspy.tasks.analytics.refresh_engagement_stats': {'queue': 'low_priority'},
-    'skyspy.tasks.analytics.refresh_flight_pattern_geographic_stats': {'queue': 'low_priority'},
-    'skyspy.tasks.analytics.calculate_daily_stats': {'queue': 'low_priority'},
-    'skyspy.tasks.analytics.aggregate_hourly_antenna_analytics': {'queue': 'low_priority'},
-    'skyspy.tasks.analytics.cleanup_antenna_analytics_snapshots': {'queue': 'low_priority'},
-
+    "skyspy.tasks.analytics.refresh_time_comparison_stats": {"queue": "low_priority"},
+    "skyspy.tasks.analytics.refresh_tracking_quality_stats": {"queue": "low_priority"},
+    "skyspy.tasks.analytics.refresh_engagement_stats": {"queue": "low_priority"},
+    "skyspy.tasks.analytics.refresh_flight_pattern_geographic_stats": {"queue": "low_priority"},
+    "skyspy.tasks.analytics.calculate_daily_stats": {"queue": "low_priority"},
+    "skyspy.tasks.analytics.aggregate_hourly_antenna_analytics": {"queue": "low_priority"},
+    "skyspy.tasks.analytics.cleanup_antenna_analytics_snapshots": {"queue": "low_priority"},
     # Background database operations
-    'skyspy.tasks.external_db.*': {'queue': 'database'},
-    'skyspy.tasks.geodata.*': {'queue': 'database'},
-    'skyspy.tasks.notams.*': {'queue': 'database'},
-    'skyspy.tasks.openaip.*': {'queue': 'database'},
-    'skyspy.tasks.aircraft.cleanup_sessions': {'queue': 'database'},
-    'skyspy.tasks.analytics.update_favorite_tracking': {'queue': 'database'},
-    'skyspy.tasks.analytics.cleanup_memory_cache': {'queue': 'default'},
-
+    "skyspy.tasks.external_db.*": {"queue": "database"},
+    "skyspy.tasks.geodata.*": {"queue": "database"},
+    "skyspy.tasks.notams.*": {"queue": "database"},
+    "skyspy.tasks.openaip.*": {"queue": "database"},
+    "skyspy.tasks.aircraft.cleanup_sessions": {"queue": "database"},
+    "skyspy.tasks.analytics.update_favorite_tracking": {"queue": "database"},
+    "skyspy.tasks.analytics.cleanup_memory_cache": {"queue": "default"},
     # Cleanup tasks (low-priority, can run slowly)
-    'skyspy.tasks.cleanup.*': {'queue': 'low_priority'},
-
+    "skyspy.tasks.cleanup.*": {"queue": "low_priority"},
     # Long-running transcription tasks
-    'skyspy.tasks.transcription.*': {'queue': 'transcription'},
-
+    "skyspy.tasks.transcription.*": {"queue": "transcription"},
     # Notification tasks
-    'skyspy.tasks.notifications.send_notification_task': {'queue': 'notifications'},
-    'skyspy.tasks.notifications.process_notification_queue': {'queue': 'notifications'},
-    'skyspy.tasks.notifications.cleanup_notification_cooldowns': {'queue': 'notifications'},
-    'skyspy.tasks.notifications.*': {'queue': 'notifications'},
-
+    "skyspy.tasks.notifications.send_notification_task": {"queue": "notifications"},
+    "skyspy.tasks.notifications.process_notification_queue": {"queue": "notifications"},
+    "skyspy.tasks.notifications.cleanup_notification_cooldowns": {"queue": "notifications"},
+    "skyspy.tasks.notifications.*": {"queue": "notifications"},
     # Cannonball tasks (pattern analysis is time-sensitive)
-    'skyspy.tasks.cannonball.analyze_aircraft_patterns': {'queue': 'polling'},
-    'skyspy.tasks.cannonball.cleanup_cannonball_sessions': {'queue': 'database'},
-    'skyspy.tasks.cannonball.cleanup_old_patterns': {'queue': 'low_priority'},
-    'skyspy.tasks.cannonball.aggregate_cannonball_stats': {'queue': 'low_priority'},
-    'skyspy.tasks.cannonball.*': {'queue': 'default'},
-
+    "skyspy.tasks.cannonball.analyze_aircraft_patterns": {"queue": "polling"},
+    "skyspy.tasks.cannonball.cleanup_cannonball_sessions": {"queue": "database"},
+    "skyspy.tasks.cannonball.cleanup_old_patterns": {"queue": "low_priority"},
+    "skyspy.tasks.cannonball.aggregate_cannonball_stats": {"queue": "low_priority"},
+    "skyspy.tasks.cannonball.*": {"queue": "default"},
     # Default queue for everything else
-    'skyspy.tasks.*': {'queue': 'default'},
+    "skyspy.tasks.*": {"queue": "default"},
 }
 
 
@@ -453,4 +403,6 @@ app.conf.task_routes = {
 app.conf.worker_prefetch_multiplier = 1  # Disable prefetching for time-sensitive tasks
 app.conf.task_acks_late = True  # Acknowledge after completion
 app.conf.task_reject_on_worker_lost = True  # Re-queue if worker dies
-app.conf.worker_cancel_long_running_tasks_on_connection_loss = True  # Cancel tasks on connection loss (Celery 6.0 default)
+app.conf.worker_cancel_long_running_tasks_on_connection_loss = (
+    True  # Cancel tasks on connection loss (Celery 6.0 default)
+)

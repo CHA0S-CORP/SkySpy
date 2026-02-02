@@ -3,20 +3,17 @@ Weather data caching service.
 
 Provides Redis caching for METAR data and database storage for PIREPs.
 """
+
 import hashlib
-import json
 import logging
-import time
 from datetime import datetime, timedelta
-from math import radians, sin, cos, sqrt, atan2
-from typing import Optional, List
+from math import atan2, cos, radians, sin, sqrt
 
 import httpx
-from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Max, Count
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from django.db.models import Max
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from skyspy.models import CachedPirep
 
@@ -52,6 +49,7 @@ def haversine_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 # METAR Redis Cache (using Django cache framework)
 # =============================================================================
 
+
 def _make_metar_key(station: str, hours: int = 2) -> str:
     """Create a cache key for METAR data."""
     return f"metar:{station.upper()}:{hours}"
@@ -63,7 +61,7 @@ def _make_metar_bbox_key(bbox: str, hours: int = 2) -> str:
     return f"metar:bbox:{bbox_hash}:{hours}"
 
 
-def get_cached_metar(station: str, hours: int = 2) -> Optional[list]:
+def get_cached_metar(station: str, hours: int = 2) -> list | None:
     """Get cached METAR data for a station from Redis."""
     global _metar_stats
 
@@ -87,7 +85,7 @@ def cache_metar(station: str, data: list, hours: int = 2, ttl: int = 300) -> boo
     return True
 
 
-def get_cached_metars_bbox(bbox: str, hours: int = 2) -> Optional[list]:
+def get_cached_metars_bbox(bbox: str, hours: int = 2) -> list | None:
     """Get cached METAR data for a bounding box from Redis."""
     global _metar_stats
 
@@ -95,7 +93,7 @@ def get_cached_metars_bbox(bbox: str, hours: int = 2) -> Optional[list]:
     data = cache.get(key)
 
     if data:
-        logger.debug(f"Cache hit for METAR bbox query")
+        logger.debug("Cache hit for METAR bbox query")
         _metar_stats["cache_hits"] += 1
         return data
     else:
@@ -115,6 +113,7 @@ def cache_metars_bbox(bbox: str, data: list, hours: int = 2, ttl: int = 300) -> 
 # PIREP Database Storage
 # =============================================================================
 
+
 def _generate_pirep_id(pirep: dict) -> str:
     """Generate a unique ID for a PIREP based on its content."""
     parts = [
@@ -127,7 +126,7 @@ def _generate_pirep_id(pirep: dict) -> str:
     return hashlib.md5(content.encode()).hexdigest()
 
 
-def _parse_pirep_time(pirep: dict) -> Optional[datetime]:
+def _parse_pirep_time(pirep: dict) -> datetime | None:
     """Parse observation time from PIREP data."""
     obs_time = pirep.get("obsTime")
     if obs_time:
@@ -143,7 +142,7 @@ def _parse_pirep_time(pirep: dict) -> Optional[datetime]:
 
 
 @transaction.atomic
-def store_pirep(pirep: dict) -> Optional[int]:
+def store_pirep(pirep: dict) -> int | None:
     """Store a single PIREP in the database."""
     global _pirep_stats
 
@@ -212,12 +211,8 @@ def store_pireps(pireps: list) -> int:
 
 
 def get_cached_pireps(
-    lat: Optional[float] = None,
-    lon: Optional[float] = None,
-    radius_nm: float = 100,
-    hours: int = 6,
-    limit: int = 100
-) -> List[dict]:
+    lat: float | None = None, lon: float | None = None, radius_nm: float = 100, hours: int = 6, limit: int = 100
+) -> list[dict]:
     """Get PIREPs from the database cache."""
     global _pirep_stats
 
@@ -235,7 +230,7 @@ def get_cached_pireps(
             longitude__range=(lon - deg_offset, lon + deg_offset),
         )
 
-    pireps = list(queryset.order_by('-observation_time')[:limit * 2])
+    pireps = list(queryset.order_by("-observation_time")[: limit * 2])
 
     results = []
     for pirep in pireps:
@@ -293,22 +288,19 @@ def cleanup_old_pireps(retention_hours: int = 24) -> int:
 def get_historical_pireps(
     start_time: datetime,
     end_time: datetime,
-    lat: Optional[float] = None,
-    lon: Optional[float] = None,
+    lat: float | None = None,
+    lon: float | None = None,
     radius_nm: float = 100,
     turbulence_only: bool = False,
     icing_only: bool = False,
-    limit: int = 500
-) -> List[dict]:
+    limit: int = 500,
+) -> list[dict]:
     """Get historical PIREPs from the database within a time range."""
     global _pirep_stats
 
     _pirep_stats["queries"] += 1
 
-    queryset = CachedPirep.objects.filter(
-        observation_time__gte=start_time,
-        observation_time__lte=end_time
-    )
+    queryset = CachedPirep.objects.filter(observation_time__gte=start_time, observation_time__lte=end_time)
 
     # Add bounding box filter if location specified
     if lat is not None and lon is not None:
@@ -324,7 +316,7 @@ def get_historical_pireps(
     if icing_only:
         queryset = queryset.exclude(icing_type__isnull=True)
 
-    pireps = list(queryset.order_by('-observation_time')[:limit * 2])
+    pireps = list(queryset.order_by("-observation_time")[: limit * 2])
 
     results = []
     for pirep in pireps:
@@ -378,16 +370,14 @@ def get_pirep_stats() -> dict:
     recent = CachedPirep.objects.filter(observation_time__gte=cutoff_6h).count()
 
     # Latest PIREP time
-    latest = CachedPirep.objects.aggregate(Max('fetched_at'))['fetched_at__max']
+    latest = CachedPirep.objects.aggregate(Max("fetched_at"))["fetched_at__max"]
 
     # Count by type
-    turb_count = CachedPirep.objects.filter(
-        observation_time__gte=cutoff_6h
-    ).exclude(turbulence_type__isnull=True).count()
+    turb_count = (
+        CachedPirep.objects.filter(observation_time__gte=cutoff_6h).exclude(turbulence_type__isnull=True).count()
+    )
 
-    ice_count = CachedPirep.objects.filter(
-        observation_time__gte=cutoff_6h
-    ).exclude(icing_type__isnull=True).count()
+    ice_count = CachedPirep.objects.filter(observation_time__gte=cutoff_6h).exclude(icing_type__isnull=True).count()
 
     return {
         "total_pireps": total,
@@ -400,7 +390,7 @@ def get_pirep_stats() -> dict:
             "duplicates": _pirep_stats["duplicates"],
             "queries": _pirep_stats["queries"],
             "last_store": _pirep_stats["last_store"],
-        }
+        },
     }
 
 
@@ -439,7 +429,7 @@ def _http_get_awc(url: str, params: dict, timeout: float = 15.0) -> httpx.Respon
             headers={
                 "User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)",
                 "Accept": "application/json",
-            }
+            },
         )
         response.raise_for_status()
         return response
@@ -468,11 +458,14 @@ def fetch_and_store_pireps(bbox: str = "24,-130,50,-60", hours: int = 6) -> int:
     """
     logger.info(f"Fetching PIREPs from AWC (bbox={bbox}, hours={hours})")
 
-    data = _fetch_awc_data("pirep", {
-        "bbox": bbox,
-        "format": "json",
-        "hours": hours,
-    })
+    data = _fetch_awc_data(
+        "pirep",
+        {
+            "bbox": bbox,
+            "format": "json",
+            "hours": hours,
+        },
+    )
 
     if isinstance(data, dict) and "error" in data:
         logger.warning(f"Failed to fetch PIREPs: {data.get('error')}")
@@ -487,11 +480,7 @@ def fetch_and_store_pireps(bbox: str = "24,-130,50,-60", hours: int = 6) -> int:
     return stored
 
 
-def fetch_and_cache_metars(
-    bbox: str = "24,-130,50,-60",
-    hours: int = 2,
-    ttl: int = 300
-) -> List[dict]:
+def fetch_and_cache_metars(bbox: str = "24,-130,50,-60", hours: int = 2, ttl: int = 300) -> list[dict]:
     """
     Fetch METARs from Aviation Weather Center and cache them.
 
@@ -513,11 +502,14 @@ def fetch_and_cache_metars(
     logger.info(f"Fetching METARs from AWC (bbox={bbox}, hours={hours})")
     record_metar_api_request(success=True)
 
-    data = _fetch_awc_data("metar", {
-        "bbox": bbox,
-        "format": "json",
-        "hours": hours,
-    })
+    data = _fetch_awc_data(
+        "metar",
+        {
+            "bbox": bbox,
+            "format": "json",
+            "hours": hours,
+        },
+    )
 
     if isinstance(data, dict) and "error" in data:
         logger.warning(f"Failed to fetch METARs: {data.get('error')}")
@@ -535,7 +527,7 @@ def fetch_and_cache_metars(
     return data
 
 
-def fetch_metar_by_station(station: str, hours: int = 2, ttl: int = 300) -> List[dict]:
+def fetch_metar_by_station(station: str, hours: int = 2, ttl: int = 300) -> list[dict]:
     """
     Fetch METARs for a specific station.
 
@@ -555,11 +547,14 @@ def fetch_metar_by_station(station: str, hours: int = 2, ttl: int = 300) -> List
     logger.debug(f"Fetching METARs for station {station}")
     record_metar_api_request(success=True)
 
-    data = _fetch_awc_data("metar", {
-        "ids": station.upper(),
-        "format": "json",
-        "hours": hours,
-    })
+    data = _fetch_awc_data(
+        "metar",
+        {
+            "ids": station.upper(),
+            "format": "json",
+            "hours": hours,
+        },
+    )
 
     if isinstance(data, dict) and "error" in data:
         logger.warning(f"Failed to fetch METARs for {station}: {data.get('error')}")
@@ -574,10 +569,7 @@ def fetch_metar_by_station(station: str, hours: int = 2, ttl: int = 300) -> List
     return data
 
 
-def fetch_and_cache_tafs(
-    bbox: str = "24,-130,50,-60",
-    ttl: int = 1800
-) -> List[dict]:
+def fetch_and_cache_tafs(bbox: str = "24,-130,50,-60", ttl: int = 1800) -> list[dict]:
     """
     Fetch TAFs from Aviation Weather Center and cache them.
 
@@ -597,10 +589,13 @@ def fetch_and_cache_tafs(
 
     logger.info(f"Fetching TAFs from AWC (bbox={bbox})")
 
-    data = _fetch_awc_data("taf", {
-        "bbox": bbox,
-        "format": "json",
-    })
+    data = _fetch_awc_data(
+        "taf",
+        {
+            "bbox": bbox,
+            "format": "json",
+        },
+    )
 
     if isinstance(data, dict) and "error" in data:
         logger.warning(f"Failed to fetch TAFs: {data.get('error')}")
@@ -629,13 +624,14 @@ def record_metar_api_request(success: bool = True):
 # Generic Aviation Data Cache (airports, navaids, etc.)
 # =============================================================================
 
+
 def _make_aviation_cache_key(data_type: str, bbox: str) -> str:
     """Create a cache key for aviation data by type and bounding box."""
     bbox_hash = hashlib.md5(bbox.encode()).hexdigest()[:12]
     return f"aviation:{data_type}:{bbox_hash}"
 
 
-def get_cached_aviation_data(data_type: str, bbox: str) -> Optional[list]:
+def get_cached_aviation_data(data_type: str, bbox: str) -> list | None:
     """
     Get cached aviation data (airports, navaids, etc.) from Redis.
 

@@ -9,32 +9,32 @@ This service provides pattern-based detection for:
 
 Designed to integrate with the frontend Cannonball Mode for driver awareness.
 """
+
 import logging
 import math
-from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple, Set
-from django.conf import settings
+from datetime import datetime
+from typing import Any
+
 from django.core.cache import cache
 from django.utils import timezone
 
 from .law_enforcement_db import (
-    identify_law_enforcement,
-    get_threat_level,
-    haversine_distance,
     calculate_bearing,
     get_direction_name,
+    get_threat_level,
     get_trend,
+    haversine_distance,
+    identify_law_enforcement,
 )
 
 logger = logging.getLogger(__name__)
 
 # Cache keys
-CACHE_POSITION_HISTORY = 'cannonball:positions:{}'
-CACHE_PATTERN_DETECTIONS = 'cannonball:patterns:{}'
-CACHE_ACTIVE_THREATS = 'cannonball:threats'
-CACHE_HIGHWAY_WATCHERS = 'cannonball:highway_watchers'
+CACHE_POSITION_HISTORY = "cannonball:positions:{}"
+CACHE_PATTERN_DETECTIONS = "cannonball:patterns:{}"
+CACHE_ACTIVE_THREATS = "cannonball:threats"
+CACHE_HIGHWAY_WATCHERS = "cannonball:highway_watchers"
 
 # Configuration
 POSITION_HISTORY_LENGTH = 30  # Number of positions to track per aircraft
@@ -49,74 +49,77 @@ CLOSING_SPEED_ALERT_THRESHOLD = 100  # knots
 @dataclass
 class AircraftPosition:
     """Single position report for pattern analysis."""
+
     lat: float
     lon: float
-    altitude: Optional[int]
-    speed: Optional[float]
-    track: Optional[float]
+    altitude: int | None
+    speed: float | None
+    track: float | None
     timestamp: datetime
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
-            'lat': self.lat,
-            'lon': self.lon,
-            'altitude': self.altitude,
-            'speed': self.speed,
-            'track': self.track,
-            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            "lat": self.lat,
+            "lon": self.lon,
+            "altitude": self.altitude,
+            "speed": self.speed,
+            "track": self.track,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'AircraftPosition':
+    def from_dict(cls, data: dict[str, Any]) -> "AircraftPosition":
         return cls(
-            lat=data['lat'],
-            lon=data['lon'],
-            altitude=data.get('altitude'),
-            speed=data.get('speed'),
-            track=data.get('track'),
-            timestamp=datetime.fromisoformat(data['timestamp']) if data.get('timestamp') else timezone.now(),
+            lat=data["lat"],
+            lon=data["lon"],
+            altitude=data.get("altitude"),
+            speed=data.get("speed"),
+            track=data.get("track"),
+            timestamp=datetime.fromisoformat(data["timestamp"]) if data.get("timestamp") else timezone.now(),
         )
 
 
 @dataclass
 class PatternDetection:
     """Detected flight pattern."""
+
     pattern_type: str  # 'circling', 'loitering', 'grid_search', 'speed_trap', 'highway_patrol'
     confidence: float  # 0-1
-    center_lat: Optional[float] = None
-    center_lon: Optional[float] = None
-    radius_nm: Optional[float] = None
-    duration_minutes: Optional[int] = None
-    description: str = ''
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    center_lat: float | None = None
+    center_lon: float | None = None
+    radius_nm: float | None = None
+    duration_minutes: int | None = None
+    description: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
-            'pattern_type': self.pattern_type,
-            'confidence': self.confidence,
-            'center_lat': self.center_lat,
-            'center_lon': self.center_lon,
-            'radius_nm': self.radius_nm,
-            'duration_minutes': self.duration_minutes,
-            'description': self.description,
-            'metadata': self.metadata,
+            "pattern_type": self.pattern_type,
+            "confidence": self.confidence,
+            "center_lat": self.center_lat,
+            "center_lon": self.center_lon,
+            "radius_nm": self.radius_nm,
+            "duration_minutes": self.duration_minutes,
+            "description": self.description,
+            "metadata": self.metadata,
         }
 
 
 @dataclass
 class CannonballThreat:
     """Enhanced threat information for Cannonball Mode."""
+
     hex: str
-    callsign: Optional[str]
+    callsign: str | None
     category: str
     description: str
     distance_nm: float
     bearing: float
     direction: str
-    altitude: Optional[int]
-    ground_speed: Optional[float]
-    track: Optional[float]
-    vertical_rate: Optional[int]
+    altitude: int | None
+    ground_speed: float | None
+    track: float | None
+    vertical_rate: int | None
     trend: str
     threat_level: str
     is_law_enforcement: bool
@@ -124,118 +127,110 @@ class CannonballThreat:
     is_surveillance_type: bool
     confidence: str
     urgency_score: int
-    closing_speed: Optional[float] = None
-    eta_seconds: Optional[int] = None
-    patterns: List[PatternDetection] = field(default_factory=list)
+    closing_speed: float | None = None
+    eta_seconds: int | None = None
+    patterns: list[PatternDetection] = field(default_factory=list)
     lat: float = 0.0
     lon: float = 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
-            'hex': self.hex,
-            'callsign': self.callsign,
-            'category': self.category,
-            'description': self.description,
-            'distance_nm': self.distance_nm,
-            'bearing': self.bearing,
-            'direction': self.direction,
-            'altitude': self.altitude,
-            'ground_speed': self.ground_speed,
-            'track': self.track,
-            'vertical_rate': self.vertical_rate,
-            'trend': self.trend,
-            'threat_level': self.threat_level,
-            'is_law_enforcement': self.is_law_enforcement,
-            'is_helicopter': self.is_helicopter,
-            'is_surveillance_type': self.is_surveillance_type,
-            'confidence': self.confidence,
-            'urgency_score': self.urgency_score,
-            'closing_speed': self.closing_speed,
-            'eta_seconds': self.eta_seconds,
-            'patterns': [p.to_dict() for p in self.patterns],
-            'lat': self.lat,
-            'lon': self.lon,
+            "hex": self.hex,
+            "callsign": self.callsign,
+            "category": self.category,
+            "description": self.description,
+            "distance_nm": self.distance_nm,
+            "bearing": self.bearing,
+            "direction": self.direction,
+            "altitude": self.altitude,
+            "ground_speed": self.ground_speed,
+            "track": self.track,
+            "vertical_rate": self.vertical_rate,
+            "trend": self.trend,
+            "threat_level": self.threat_level,
+            "is_law_enforcement": self.is_law_enforcement,
+            "is_helicopter": self.is_helicopter,
+            "is_surveillance_type": self.is_surveillance_type,
+            "confidence": self.confidence,
+            "urgency_score": self.urgency_score,
+            "closing_speed": self.closing_speed,
+            "eta_seconds": self.eta_seconds,
+            "patterns": [p.to_dict() for p in self.patterns],
+            "lat": self.lat,
+            "lon": self.lon,
         }
 
 
 # Additional callsign patterns for traffic enforcement
-TRAFFIC_ENFORCEMENT_PATTERNS: List[Tuple[str, str, str]] = [
+TRAFFIC_ENFORCEMENT_PATTERNS: list[tuple[str, str, str]] = [
     # Traffic helicopters
-    (r'^TRAFF\d*', 'Traffic Enforcement', 'Traffic Helicopter'),
-    (r'^SPEED\d*', 'Traffic Enforcement', 'Speed Enforcement'),
-    (r'^MOTOR\d*', 'Traffic Enforcement', 'Motor Patrol'),
-    (r'^AIRWATCH\d*', 'Traffic Enforcement', 'Air Watch Traffic'),
-    (r'^EYE\d*', 'Traffic Enforcement', 'Eye in the Sky'),
-
+    (r"^TRAFF\d*", "Traffic Enforcement", "Traffic Helicopter"),
+    (r"^SPEED\d*", "Traffic Enforcement", "Speed Enforcement"),
+    (r"^MOTOR\d*", "Traffic Enforcement", "Motor Patrol"),
+    (r"^AIRWATCH\d*", "Traffic Enforcement", "Air Watch Traffic"),
+    (r"^EYE\d*", "Traffic Enforcement", "Eye in the Sky"),
     # Highway patrol specific
-    (r'^HIGHWAY\d*', 'Highway Patrol', 'Highway Patrol'),
-    (r'^HWAY\d*', 'Highway Patrol', 'Highway Patrol'),
-    (r'^FREEWAY\d*', 'Highway Patrol', 'Freeway Patrol'),
-    (r'^I\d{1,3}PAT', 'Highway Patrol', 'Interstate Patrol'),
-
+    (r"^HIGHWAY\d*", "Highway Patrol", "Highway Patrol"),
+    (r"^HWAY\d*", "Highway Patrol", "Highway Patrol"),
+    (r"^FREEWAY\d*", "Highway Patrol", "Freeway Patrol"),
+    (r"^I\d{1,3}PAT", "Highway Patrol", "Interstate Patrol"),
     # More state patrol callsigns
-    (r'^ASP\d*', 'State Police', 'Arizona State Patrol'),
-    (r'^CSP\d*', 'State Police', 'Colorado State Patrol'),
-    (r'^GSP\d*', 'State Police', 'Georgia State Patrol'),
-    (r'^KHP\d*', 'State Police', 'Kansas Highway Patrol'),
-    (r'^LSP\d*', 'State Police', 'Louisiana State Police'),
-    (r'^NHP\d*', 'State Police', 'Nevada Highway Patrol'),
-    (r'^NCSHP\d*', 'State Police', 'North Carolina State Highway Patrol'),
-    (r'^UHP\d*', 'State Police', 'Utah Highway Patrol'),
-    (r'^VHP\d*', 'State Police', 'Virginia Highway Patrol'),
-
+    (r"^ASP\d*", "State Police", "Arizona State Patrol"),
+    (r"^CSP\d*", "State Police", "Colorado State Patrol"),
+    (r"^GSP\d*", "State Police", "Georgia State Patrol"),
+    (r"^KHP\d*", "State Police", "Kansas Highway Patrol"),
+    (r"^LSP\d*", "State Police", "Louisiana State Police"),
+    (r"^NHP\d*", "State Police", "Nevada Highway Patrol"),
+    (r"^NCSHP\d*", "State Police", "North Carolina State Highway Patrol"),
+    (r"^UHP\d*", "State Police", "Utah Highway Patrol"),
+    (r"^VHP\d*", "State Police", "Virginia Highway Patrol"),
     # County sheriffs air units
-    (r'^LASO\d*', 'Sheriff Aviation', 'Los Angeles County Sheriff'),
-    (r'^OCSD\d*', 'Sheriff Aviation', 'Orange County Sheriff'),
-    (r'^SDSO\d*', 'Sheriff Aviation', 'San Diego County Sheriff'),
-    (r'^HCSO\d*', 'Sheriff Aviation', 'Harris County Sheriff'),
-    (r'^PBSO\d*', 'Sheriff Aviation', 'Palm Beach Sheriff'),
-    (r'^BSO\d*', 'Sheriff Aviation', 'Broward Sheriff'),
-    (r'^CCSO\d*', 'Sheriff Aviation', 'County Sheriff Office'),
-    (r'^WCSO\d*', 'Sheriff Aviation', 'County Sheriff Office'),
-
+    (r"^LASO\d*", "Sheriff Aviation", "Los Angeles County Sheriff"),
+    (r"^OCSD\d*", "Sheriff Aviation", "Orange County Sheriff"),
+    (r"^SDSO\d*", "Sheriff Aviation", "San Diego County Sheriff"),
+    (r"^HCSO\d*", "Sheriff Aviation", "Harris County Sheriff"),
+    (r"^PBSO\d*", "Sheriff Aviation", "Palm Beach Sheriff"),
+    (r"^BSO\d*", "Sheriff Aviation", "Broward Sheriff"),
+    (r"^CCSO\d*", "Sheriff Aviation", "County Sheriff Office"),
+    (r"^WCSO\d*", "Sheriff Aviation", "County Sheriff Office"),
     # Additional federal patterns
-    (r'^CONUS\d*', 'Federal Law Enforcement', 'CONUS Operations'),
-    (r'^FEDEX\d*', 'Federal Law Enforcement', 'Federal Excercise'),  # Be careful - might match FedEx
-    (r'^JSTARS\d*', 'Federal Law Enforcement', 'Joint STARS'),
-
+    (r"^CONUS\d*", "Federal Law Enforcement", "CONUS Operations"),
+    (r"^FEDEX\d*", "Federal Law Enforcement", "Federal Excercise"),  # Be careful - might match FedEx
+    (r"^JSTARS\d*", "Federal Law Enforcement", "Joint STARS"),
     # Fire/emergency (often work with LE)
-    (r'^TANKER\d*', 'Fire/Emergency', 'Air Tanker'),
-    (r'^FIRE\d*', 'Fire/Emergency', 'Fire Response'),
-    (r'^CALFIRE\d*', 'Fire/Emergency', 'CAL FIRE'),
+    (r"^TANKER\d*", "Fire/Emergency", "Air Tanker"),
+    (r"^FIRE\d*", "Fire/Emergency", "Fire Response"),
+    (r"^CALFIRE\d*", "Fire/Emergency", "CAL FIRE"),
 ]
 
 # Additional operator ICAO codes
-ADDITIONAL_LE_OPERATORS: Dict[str, Tuple[str, str]] = {
+ADDITIONAL_LE_OPERATORS: dict[str, tuple[str, str]] = {
     # More federal agencies
-    'TSA': ('Federal Law Enforcement', 'Transportation Security Administration'),
-    'NSA': ('Federal Law Enforcement', 'National Security Agency'),
-    'CIA': ('Federal Law Enforcement', 'Central Intelligence Agency'),
-    'USCG': ('Federal Law Enforcement', 'US Coast Guard'),
-    'USSS': ('Federal Law Enforcement', 'US Secret Service'),
-
+    "TSA": ("Federal Law Enforcement", "Transportation Security Administration"),
+    "NSA": ("Federal Law Enforcement", "National Security Agency"),
+    "CIA": ("Federal Law Enforcement", "Central Intelligence Agency"),
+    "USCG": ("Federal Law Enforcement", "US Coast Guard"),
+    "USSS": ("Federal Law Enforcement", "US Secret Service"),
     # Military (often used for LE support)
-    'NG': ('National Guard', 'National Guard'),
-    'ANG': ('National Guard', 'Air National Guard'),
-    'USAF': ('Military', 'US Air Force'),
-    'USA': ('Military', 'US Army'),
-    'USN': ('Military', 'US Navy'),
-
+    "NG": ("National Guard", "National Guard"),
+    "ANG": ("National Guard", "Air National Guard"),
+    "USAF": ("Military", "US Air Force"),
+    "USA": ("Military", "US Army"),
+    "USN": ("Military", "US Navy"),
     # State police aviation
-    'TXSP': ('State Police', 'Texas State Police'),
-    'CASP': ('State Police', 'California State Police'),
-    'FLHP': ('State Police', 'Florida Highway Patrol'),
-    'GAHP': ('State Police', 'Georgia Highway Patrol'),
-
+    "TXSP": ("State Police", "Texas State Police"),
+    "CASP": ("State Police", "California State Police"),
+    "FLHP": ("State Police", "Florida Highway Patrol"),
+    "GAHP": ("State Police", "Georgia Highway Patrol"),
     # County/city LE
-    'PBCSO': ('Sheriff Aviation', 'Palm Beach County Sheriff'),
-    'SDPD': ('Police Aviation', 'San Diego Police Dept'),
-    'PPD': ('Police Aviation', 'Phoenix Police Dept'),
-    'DPD': ('Police Aviation', 'Dallas Police Dept'),
-    'APD': ('Police Aviation', 'Austin Police Dept'),
-    'SPD': ('Police Aviation', 'Seattle Police Dept'),
-    'OPD': ('Police Aviation', 'Oakland Police Dept'),
-    'SFO': ('Police Aviation', 'San Francisco Police Dept'),
+    "PBCSO": ("Sheriff Aviation", "Palm Beach County Sheriff"),
+    "SDPD": ("Police Aviation", "San Diego Police Dept"),
+    "PPD": ("Police Aviation", "Phoenix Police Dept"),
+    "DPD": ("Police Aviation", "Dallas Police Dept"),
+    "APD": ("Police Aviation", "Austin Police Dept"),
+    "SPD": ("Police Aviation", "Seattle Police Dept"),
+    "OPD": ("Police Aviation", "Oakland Police Dept"),
+    "SFO": ("Police Aviation", "San Francisco Police Dept"),
 }
 
 
@@ -251,19 +246,19 @@ class CannonballService:
     """
 
     def __init__(self):
-        self._position_history: Dict[str, List[AircraftPosition]] = {}
-        self._pattern_cache: Dict[str, List[PatternDetection]] = {}
-        self._previous_distances: Dict[str, float] = {}
+        self._position_history: dict[str, list[AircraftPosition]] = {}
+        self._pattern_cache: dict[str, list[PatternDetection]] = {}
+        self._previous_distances: dict[str, float] = {}
 
     def analyze_aircraft(
         self,
-        aircraft_list: List[Dict[str, Any]],
+        aircraft_list: list[dict[str, Any]],
         user_lat: float,
         user_lon: float,
-        user_heading: Optional[float] = None,
+        user_heading: float | None = None,
         radius_nm: float = 25.0,
         altitude_ceiling: int = 20000,
-    ) -> List[CannonballThreat]:
+    ) -> list[CannonballThreat]:
         """
         Analyze aircraft for Cannonball Mode threats.
 
@@ -278,15 +273,15 @@ class CannonballService:
         Returns:
             List of CannonballThreat objects sorted by urgency
         """
-        threats: List[CannonballThreat] = []
+        threats: list[CannonballThreat] = []
 
         for ac in aircraft_list:
-            if not ac.get('lat') or not ac.get('lon'):
+            if not ac.get("lat") or not ac.get("lon"):
                 continue
 
             # Calculate distance
-            ac_lat = ac['lat']
-            ac_lon = ac['lon']
+            ac_lat = ac["lat"]
+            ac_lon = ac["lon"]
             distance_nm = haversine_distance(user_lat, user_lon, ac_lat, ac_lon)
 
             # Apply radius filter
@@ -294,12 +289,12 @@ class CannonballService:
                 continue
 
             # Apply altitude filter
-            altitude = ac.get('alt_baro') or ac.get('alt_geom') or ac.get('altitude') or 0
+            altitude = ac.get("alt_baro") or ac.get("alt_geom") or ac.get("altitude") or 0
             if altitude > altitude_ceiling:
                 continue
 
             # Get hex identifier
-            hex_code = ac.get('hex', '')
+            hex_code = ac.get("hex", "")
             if not hex_code:
                 continue
 
@@ -307,7 +302,7 @@ class CannonballService:
             le_info = self._enhanced_identify_le(ac)
 
             # Skip if not interesting
-            if not le_info['is_interest']:
+            if not le_info["is_interest"]:
                 continue
 
             # Calculate bearing
@@ -320,7 +315,7 @@ class CannonballService:
 
             # Calculate ETA if approaching
             eta_seconds = None
-            if closing_speed and closing_speed > 0 and trend == 'approaching':
+            if closing_speed and closing_speed > 0 and trend == "approaching":
                 eta_hours = distance_nm / closing_speed
                 eta_seconds = int(eta_hours * 3600)
                 if eta_seconds > 1800:  # Cap at 30 minutes
@@ -349,22 +344,22 @@ class CannonballService:
             # Create threat object
             threat = CannonballThreat(
                 hex=hex_code,
-                callsign=(ac.get('flight') or ac.get('callsign') or '').strip() or None,
-                category=le_info.get('category') or 'Unknown',
-                description=le_info.get('description') or '',
+                callsign=(ac.get("flight") or ac.get("callsign") or "").strip() or None,
+                category=le_info.get("category") or "Unknown",
+                description=le_info.get("description") or "",
                 distance_nm=round(distance_nm, 2),
                 bearing=round(bearing, 1),
                 direction=get_direction_name(bearing),
                 altitude=altitude,
-                ground_speed=ac.get('gs'),
-                track=ac.get('track'),
-                vertical_rate=ac.get('baro_rate') or ac.get('geom_rate'),
+                ground_speed=ac.get("gs"),
+                track=ac.get("track"),
+                vertical_rate=ac.get("baro_rate") or ac.get("geom_rate"),
                 trend=trend,
                 threat_level=threat_level,
-                is_law_enforcement=le_info['is_law_enforcement'],
-                is_helicopter=le_info['is_helicopter'],
-                is_surveillance_type=le_info['is_surveillance_type'],
-                confidence=le_info['confidence'],
+                is_law_enforcement=le_info["is_law_enforcement"],
+                is_helicopter=le_info["is_helicopter"],
+                is_surveillance_type=le_info["is_surveillance_type"],
+                confidence=le_info["confidence"],
                 urgency_score=urgency_score,
                 closing_speed=closing_speed,
                 eta_seconds=eta_seconds,
@@ -379,12 +374,12 @@ class CannonballService:
             self._previous_distances[hex_code] = distance_nm
 
         # Sort by urgency score (descending), then threat level, then distance
-        threat_order = {'critical': 0, 'warning': 1, 'info': 2}
+        threat_order = {"critical": 0, "warning": 1, "info": 2}
         threats.sort(key=lambda t: (-t.urgency_score, threat_order.get(t.threat_level, 3), t.distance_nm))
 
         return threats
 
-    def _enhanced_identify_le(self, aircraft: Dict[str, Any]) -> Dict[str, Any]:
+    def _enhanced_identify_le(self, aircraft: dict[str, Any]) -> dict[str, Any]:
         """
         Enhanced law enforcement identification with additional patterns.
         """
@@ -392,52 +387,54 @@ class CannonballService:
 
         # Start with base identification
         result = identify_law_enforcement(
-            hex_code=aircraft.get('hex'),
-            callsign=aircraft.get('flight') or aircraft.get('callsign'),
-            operator=aircraft.get('ownOp') or aircraft.get('operator'),
-            registration=aircraft.get('r') or aircraft.get('registration'),
-            category=aircraft.get('category'),
-            type_code=aircraft.get('t') or aircraft.get('type'),
+            hex_code=aircraft.get("hex"),
+            callsign=aircraft.get("flight") or aircraft.get("callsign"),
+            operator=aircraft.get("ownOp") or aircraft.get("operator"),
+            registration=aircraft.get("r") or aircraft.get("registration"),
+            category=aircraft.get("category"),
+            type_code=aircraft.get("t") or aircraft.get("type"),
         )
 
         # Check additional traffic enforcement patterns
-        callsign = (aircraft.get('flight') or aircraft.get('callsign') or '').strip().upper()
+        callsign = (aircraft.get("flight") or aircraft.get("callsign") or "").strip().upper()
         if callsign:
             for pattern, category, description in TRAFFIC_ENFORCEMENT_PATTERNS:
                 if re.match(pattern, callsign, re.IGNORECASE):
-                    result['is_law_enforcement'] = category not in ['Fire/Emergency']
-                    result['is_interest'] = True
-                    if result['confidence'] == 'none':
-                        result['confidence'] = 'high'
-                    if not result['category']:
-                        result['category'] = category
-                        result['description'] = description
-                    result['identifiers'].append('traffic_pattern')
+                    result["is_law_enforcement"] = category not in ["Fire/Emergency"]
+                    result["is_interest"] = True
+                    if result["confidence"] == "none":
+                        result["confidence"] = "high"
+                    if not result["category"]:
+                        result["category"] = category
+                        result["description"] = description
+                    result["identifiers"].append("traffic_pattern")
                     break
 
         # Check additional operator codes
-        operator = (aircraft.get('ownOp') or aircraft.get('operator') or '').strip().upper()
+        operator = (aircraft.get("ownOp") or aircraft.get("operator") or "").strip().upper()
         if operator and operator in ADDITIONAL_LE_OPERATORS:
             category, description = ADDITIONAL_LE_OPERATORS[operator]
-            result['is_law_enforcement'] = 'Law Enforcement' in category or 'Police' in category or 'Sheriff' in category
-            result['is_interest'] = True
-            if result['confidence'] in ['none', 'low']:
-                result['confidence'] = 'high'
-            if not result['category']:
-                result['category'] = category
-                result['description'] = description
-            result['identifiers'].append('additional_operator')
+            result["is_law_enforcement"] = (
+                "Law Enforcement" in category or "Police" in category or "Sheriff" in category
+            )
+            result["is_interest"] = True
+            if result["confidence"] in ["none", "low"]:
+                result["confidence"] = "high"
+            if not result["category"]:
+                result["category"] = category
+                result["description"] = description
+            result["identifiers"].append("additional_operator")
 
         return result
 
-    def _store_position(self, hex_code: str, aircraft: Dict[str, Any]) -> None:
+    def _store_position(self, hex_code: str, aircraft: dict[str, Any]) -> None:
         """Store position for pattern analysis."""
         position = AircraftPosition(
-            lat=aircraft['lat'],
-            lon=aircraft['lon'],
-            altitude=aircraft.get('alt_baro') or aircraft.get('alt_geom'),
-            speed=aircraft.get('gs'),
-            track=aircraft.get('track'),
+            lat=aircraft["lat"],
+            lon=aircraft["lon"],
+            altitude=aircraft.get("alt_baro") or aircraft.get("alt_geom"),
+            speed=aircraft.get("gs"),
+            track=aircraft.get("track"),
             timestamp=timezone.now(),
         )
 
@@ -452,13 +449,9 @@ class CannonballService:
 
         # Also store in cache for persistence across requests
         cache_key = CACHE_POSITION_HISTORY.format(hex_code)
-        cache.set(
-            cache_key,
-            [p.to_dict() for p in self._position_history[hex_code]],
-            POSITION_HISTORY_TTL
-        )
+        cache.set(cache_key, [p.to_dict() for p in self._position_history[hex_code]], POSITION_HISTORY_TTL)
 
-    def _load_position_history(self, hex_code: str) -> List[AircraftPosition]:
+    def _load_position_history(self, hex_code: str) -> list[AircraftPosition]:
         """Load position history from cache."""
         if hex_code in self._position_history:
             return self._position_history[hex_code]
@@ -472,9 +465,9 @@ class CannonballService:
 
         return []
 
-    def _detect_patterns(self, hex_code: str) -> List[PatternDetection]:
+    def _detect_patterns(self, hex_code: str) -> list[PatternDetection]:
         """Detect flight patterns from position history."""
-        patterns: List[PatternDetection] = []
+        patterns: list[PatternDetection] = []
 
         positions = self._load_position_history(hex_code)
         if len(positions) < CIRCLING_MIN_POSITIONS:
@@ -497,7 +490,7 @@ class CannonballService:
 
         return patterns
 
-    def _detect_circling(self, positions: List[AircraftPosition]) -> Optional[PatternDetection]:
+    def _detect_circling(self, positions: list[AircraftPosition]) -> PatternDetection | None:
         """
         Detect circling/orbiting behavior.
 
@@ -516,10 +509,7 @@ class CannonballService:
         center_lon = sum(lons) / len(lons)
 
         # Calculate distances from centroid
-        distances = [
-            haversine_distance(center_lat, center_lon, p.lat, p.lon)
-            for p in positions
-        ]
+        distances = [haversine_distance(center_lat, center_lon, p.lat, p.lon) for p in positions]
 
         # Calculate average and standard deviation
         avg_distance = sum(distances) / len(distances)
@@ -539,7 +529,7 @@ class CannonballService:
         # Calculate cumulative heading change
         total_heading_change = 0
         for i in range(1, len(positions)):
-            bearing1 = calculate_bearing(center_lat, center_lon, positions[i-1].lat, positions[i-1].lon)
+            bearing1 = calculate_bearing(center_lat, center_lon, positions[i - 1].lat, positions[i - 1].lon)
             bearing2 = calculate_bearing(center_lat, center_lon, positions[i].lat, positions[i].lon)
             change = bearing2 - bearing1
             if change > 180:
@@ -561,7 +551,7 @@ class CannonballService:
         avg_altitude = sum(p.altitude or 0 for p in positions) / len(positions)
         is_speed_trap = avg_altitude < 3000 and avg_distance < 1.0
 
-        pattern_type = 'speed_trap' if is_speed_trap else 'circling'
+        pattern_type = "speed_trap" if is_speed_trap else "circling"
         description = f"Aircraft circling at {avg_distance:.1f}nm radius"
         if circles_completed > 1:
             description += f", {circles_completed:.1f} orbits completed"
@@ -574,13 +564,13 @@ class CannonballService:
             radius_nm=avg_distance,
             description=description,
             metadata={
-                'circles_completed': round(circles_completed, 2),
-                'coefficient_variation': round(coeff_var, 3),
-                'avg_altitude': int(avg_altitude),
-            }
+                "circles_completed": round(circles_completed, 2),
+                "coefficient_variation": round(coeff_var, 3),
+                "avg_altitude": int(avg_altitude),
+            },
         )
 
-    def _detect_loitering(self, positions: List[AircraftPosition]) -> Optional[PatternDetection]:
+    def _detect_loitering(self, positions: list[AircraftPosition]) -> PatternDetection | None:
         """Detect loitering (staying in area for extended time)."""
         if len(positions) < 3:
             return None
@@ -615,7 +605,7 @@ class CannonballService:
         confidence = min(1.0, (duration / LOITERING_TIME_THRESHOLD) * (1 - max_range / 5.0) * 0.5)
 
         return PatternDetection(
-            pattern_type='loitering',
+            pattern_type="loitering",
             confidence=confidence,
             center_lat=center_lat,
             center_lon=center_lon,
@@ -623,11 +613,11 @@ class CannonballService:
             duration_minutes=int(duration),
             description=f"Aircraft loitering for {int(duration)} minutes",
             metadata={
-                'area_nm': round(max_range, 2),
-            }
+                "area_nm": round(max_range, 2),
+            },
         )
 
-    def _detect_grid_pattern(self, positions: List[AircraftPosition]) -> Optional[PatternDetection]:
+    def _detect_grid_pattern(self, positions: list[AircraftPosition]) -> PatternDetection | None:
         """
         Detect grid search pattern (typical of surveillance searches).
 
@@ -644,8 +634,8 @@ class CannonballService:
         track_changes = []
 
         for i in range(2, len(positions)):
-            if positions[i].track is not None and positions[i-2].track is not None:
-                change = abs(positions[i].track - positions[i-2].track)
+            if positions[i].track is not None and positions[i - 2].track is not None:
+                change = abs(positions[i].track - positions[i - 2].track)
                 if change > 180:
                     change = 360 - change
                 track_changes.append(change)
@@ -673,24 +663,24 @@ class CannonballService:
         center_lon = sum(lons) / len(lons)
 
         return PatternDetection(
-            pattern_type='grid_search',
+            pattern_type="grid_search",
             confidence=confidence,
             center_lat=center_lat,
             center_lon=center_lon,
             description=f"Grid search pattern with {turn_count} track reversals",
             metadata={
-                'turn_count': turn_count,
-                'track_changes': len(track_changes),
-            }
+                "turn_count": turn_count,
+                "track_changes": len(track_changes),
+            },
         )
 
     def _calculate_closing_speed(
         self,
         hex_code: str,
         current_distance: float,
-        previous_distance: Optional[float],
+        previous_distance: float | None,
         time_delta_seconds: float = 3.0,
-    ) -> Optional[float]:
+    ) -> float | None:
         """Calculate closing speed in knots."""
         if previous_distance is None:
             return None
@@ -705,11 +695,11 @@ class CannonballService:
         self,
         distance_nm: float,
         threat_level: str,
-        le_info: Dict[str, Any],
+        le_info: dict[str, Any],
         trend: str,
-        closing_speed: Optional[float],
-        eta_seconds: Optional[int],
-        patterns: List[PatternDetection],
+        closing_speed: float | None,
+        eta_seconds: int | None,
+        patterns: list[PatternDetection],
     ) -> int:
         """
         Calculate urgency score (0-100).
@@ -729,11 +719,11 @@ class CannonballService:
             score += 10
 
         # Law enforcement factor
-        if le_info['is_law_enforcement']:
+        if le_info["is_law_enforcement"]:
             score += 25
 
         # Approaching factor
-        if trend == 'approaching':
+        if trend == "approaching":
             score += 15
 
         # ETA factor
@@ -751,19 +741,19 @@ class CannonballService:
 
         # Pattern factors
         for pattern in patterns:
-            if pattern.pattern_type == 'circling':
+            if pattern.pattern_type == "circling":
                 score += int(15 * pattern.confidence)
-            elif pattern.pattern_type == 'speed_trap':
+            elif pattern.pattern_type == "speed_trap":
                 score += int(20 * pattern.confidence)
-            elif pattern.pattern_type == 'loitering':
+            elif pattern.pattern_type == "loitering":
                 score += int(10 * pattern.confidence)
-            elif pattern.pattern_type == 'grid_search':
+            elif pattern.pattern_type == "grid_search":
                 score += int(15 * pattern.confidence)
 
         # Threat level factor
-        if threat_level == 'critical':
+        if threat_level == "critical":
             score += 10
-        elif threat_level == 'warning':
+        elif threat_level == "warning":
             score += 5
 
         return min(100, score)
@@ -773,7 +763,7 @@ class CannonballService:
         lat: float,
         lon: float,
         radius_nm: float = 25.0,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get cached active threats for a location.
 
@@ -795,7 +785,7 @@ class CannonballService:
 
 
 # Module-level service instance
-_cannonball_service: Optional[CannonballService] = None
+_cannonball_service: CannonballService | None = None
 
 
 def get_cannonball_service() -> CannonballService:
@@ -807,13 +797,13 @@ def get_cannonball_service() -> CannonballService:
 
 
 def analyze_threats(
-    aircraft_list: List[Dict[str, Any]],
+    aircraft_list: list[dict[str, Any]],
     user_lat: float,
     user_lon: float,
-    user_heading: Optional[float] = None,
+    user_heading: float | None = None,
     radius_nm: float = 25.0,
     altitude_ceiling: int = 20000,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Convenience function to analyze threats.
 

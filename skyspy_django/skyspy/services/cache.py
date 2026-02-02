@@ -7,12 +7,14 @@ Provides:
 - Rate limiting for upstream API calls
 - MD5-based cache key generation
 """
+
 import hashlib
 import logging
 import threading
 import time
 from collections import OrderedDict
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from django.conf import settings
 from django.core.cache import cache
@@ -23,6 +25,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # Bounded Cache (RPi Optimization)
 # =============================================================================
+
 
 class BoundedCache:
     """
@@ -37,7 +40,7 @@ class BoundedCache:
         value = cache.get('key')
     """
 
-    def __init__(self, maxsize: int = 1000, name: str = 'bounded'):
+    def __init__(self, maxsize: int = 1000, name: str = "bounded"):
         """
         Initialize bounded cache.
 
@@ -81,7 +84,7 @@ class BoundedCache:
             ttl: Time to live in seconds (default from settings)
         """
         if ttl is None:
-            ttl = getattr(settings, 'CACHE_TTL', 300)
+            ttl = getattr(settings, "CACHE_TTL", 300)
 
         expires_at = time.time() + ttl
 
@@ -112,10 +115,7 @@ class BoundedCache:
         """Remove all expired entries."""
         now = time.time()
         with self._lock:
-            expired_keys = [
-                key for key, (_, expires_at) in self._cache.items()
-                if now >= expires_at
-            ]
+            expired_keys = [key for key, (_, expires_at) in self._cache.items() if now >= expires_at]
             for key in expired_keys:
                 del self._cache[key]
         return len(expired_keys)
@@ -138,19 +138,19 @@ class BoundedCache:
             total_requests = self._hits + self._misses
             hit_rate = (self._hits / total_requests * 100) if total_requests > 0 else 0
             return {
-                'name': self._name,
-                'size': len(self._cache),
-                'maxsize': self._maxsize,
-                'hits': self._hits,
-                'misses': self._misses,
-                'hit_rate_pct': round(hit_rate, 1),
+                "name": self._name,
+                "size": len(self._cache),
+                "maxsize": self._maxsize,
+                "hits": self._hits,
+                "misses": self._misses,
+                "hit_rate_pct": round(hit_rate, 1),
             }
 
 
 # Global bounded caches for common use cases
-aircraft_info_cache = BoundedCache(maxsize=5000, name='aircraft_info')
-route_cache = BoundedCache(maxsize=1000, name='routes')
-photo_cache = BoundedCache(maxsize=2000, name='photos')
+aircraft_info_cache = BoundedCache(maxsize=5000, name="aircraft_info")
+route_cache = BoundedCache(maxsize=1000, name="routes")
+photo_cache = BoundedCache(maxsize=2000, name="photos")
 
 # In-memory cache for fast access (thread-safe)
 _memory_cache: dict[str, tuple[Any, float]] = {}
@@ -219,10 +219,7 @@ def cleanup_expired_memory_cache():
     """Remove expired entries from in-memory cache."""
     now = time.time()
     with _memory_cache_lock:
-        expired_keys = [
-            key for key, (_, expires_at) in _memory_cache.items()
-            if now >= expires_at
-        ]
+        expired_keys = [key for key, (_, expires_at) in _memory_cache.items() if now >= expires_at]
         for key in expired_keys:
             del _memory_cache[key]
 
@@ -326,6 +323,7 @@ def cached_with_ttl(ttl: int = None, use_memory: bool = True):
             return result
 
         return wrapper
+
     return decorator
 
 
@@ -343,6 +341,7 @@ def rate_limited(key_prefix: str, min_interval: int = None):
             # API call
             return photo
     """
+
     def decorator(func: Callable):
         def wrapper(*args, **kwargs):
             # Generate unique key for this call
@@ -356,14 +355,11 @@ def rate_limited(key_prefix: str, min_interval: int = None):
             return func(*args, **kwargs)
 
         return wrapper
+
     return decorator
 
 
-def cached_upstream_api(
-    cache_ttl: int = None,
-    rate_limit_interval: int = None,
-    key_prefix: str = "upstream"
-):
+def cached_upstream_api(cache_ttl: int = None, rate_limit_interval: int = None, key_prefix: str = "upstream"):
     """
     Combined decorator for caching and rate limiting upstream API calls.
 
@@ -378,6 +374,7 @@ def cached_upstream_api(
             # API call
             return data
     """
+
     def decorator(func: Callable):
         def wrapper(*args, **kwargs):
             cache_key = f"{key_prefix}:{func.__name__}:{generate_cache_key(*args, **kwargs)}"
@@ -403,10 +400,12 @@ def cached_upstream_api(
             return result
 
         return wrapper
+
     return decorator
 
 
 # Django cache helpers with default TTLs
+
 
 def cache_set(key: str, value: Any, timeout: int = None):
     """Set value in Django cache with default timeout."""
@@ -471,6 +470,7 @@ def cleanup_all_caches():
     # Clean notification cooldowns
     try:
         from skyspy.services.notifications import cleanup_cooldowns
+
         cleanup_cooldowns()
     except ImportError:
         # notifications module not available
@@ -503,11 +503,11 @@ def get_cache_stats() -> dict:
         rate_limit_size = len(_rate_limit_timestamps)
 
     return {
-        'memory_cache_entries': memory_cache_size,
-        'rate_limit_entries': rate_limit_size,
-        'bounded_caches': {
-            'aircraft_info': aircraft_info_cache.get_stats(),
-            'routes': route_cache.get_stats(),
-            'photos': photo_cache.get_stats(),
-        }
+        "memory_cache_entries": memory_cache_size,
+        "rate_limit_entries": rate_limit_size,
+        "bounded_caches": {
+            "aircraft_info": aircraft_info_cache.get_stats(),
+            "routes": route_cache.get_stats(),
+            "photos": photo_cache.get_stats(),
+        },
     }

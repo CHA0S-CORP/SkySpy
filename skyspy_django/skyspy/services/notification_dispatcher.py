@@ -4,16 +4,17 @@ Central notification dispatch coordinator.
 Orchestrates the notification flow from alert/safety events through
 templating, routing, and channel-specific delivery.
 """
+
+import contextlib
 import logging
-from datetime import datetime
-from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
+from typing import Any
 
 from django.contrib.auth.models import User
 
-from skyspy.services.template_engine import template_engine
-from skyspy.services.notification_router import notification_router, RoutedNotification
+from skyspy.services.notification_router import RoutedNotification, notification_router
 from skyspy.services.rich_formatters import rich_formatter
+from skyspy.services.template_engine import template_engine
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class NotificationPayload:
     """Prepared notification ready for delivery."""
+
     channel_id: int
     channel_type: str
     apprise_url: str
@@ -28,9 +30,9 @@ class NotificationPayload:
     body: str
     priority: str
     event_type: str
-    rich_payload: Optional[Dict[str, Any]] = None
-    context: Optional[Dict[str, Any]] = None
-    user_id: Optional[int] = None
+    rich_payload: dict[str, Any] | None = None
+    context: dict[str, Any] | None = None
+    user_id: int | None = None
 
 
 class NotificationDispatcher:
@@ -47,11 +49,11 @@ class NotificationDispatcher:
 
     def dispatch_alert(
         self,
-        alert_data: Dict[str, Any],
-        user: Optional[User] = None,
-        rule_webhook_url: Optional[str] = None,
-        use_celery: bool = True
-    ) -> List[NotificationPayload]:
+        alert_data: dict[str, Any],
+        user: User | None = None,
+        rule_webhook_url: str | None = None,
+        use_celery: bool = True,
+    ) -> list[NotificationPayload]:
         """
         Dispatch notifications for an alert event.
 
@@ -64,8 +66,8 @@ class NotificationDispatcher:
         Returns:
             List of prepared NotificationPayload objects
         """
-        priority = alert_data.get('priority', 'info')
-        event_type = 'alert'
+        priority = alert_data.get("priority", "info")
+        event_type = "alert"
 
         # Build template context
         context = template_engine.build_context_from_alert(alert_data)
@@ -100,11 +102,7 @@ class NotificationDispatcher:
 
         return payloads
 
-    def dispatch_safety_event(
-        self,
-        event_data: Dict[str, Any],
-        use_celery: bool = True
-    ) -> List[NotificationPayload]:
+    def dispatch_safety_event(self, event_data: dict[str, Any], use_celery: bool = True) -> list[NotificationPayload]:
         """
         Dispatch notifications for a safety event.
 
@@ -115,8 +113,8 @@ class NotificationDispatcher:
         Returns:
             List of prepared NotificationPayload objects
         """
-        event_type = event_data.get('event_type', 'safety')
-        severity = event_data.get('severity', 'warning')
+        event_type = event_data.get("event_type", "safety")
+        severity = event_data.get("severity", "warning")
 
         # Build template context
         context = template_engine.build_context_from_safety_event(event_data)
@@ -152,7 +150,7 @@ class NotificationDispatcher:
     def _prepare_payload(
         self,
         channel: RoutedNotification,
-        context: Dict[str, Any],
+        context: dict[str, Any],
         event_type: str,
         priority: str,
     ) -> NotificationPayload:
@@ -171,7 +169,7 @@ class NotificationDispatcher:
         else:
             # Default templates
             title = f"SkysPy Alert: {context.get('rule_name', 'Notification')}"
-            body = context.get('message', 'A notification was triggered.')
+            body = context.get("message", "A notification was triggered.")
 
         # Prepare rich payload if channel supports it
         rich_payload = None
@@ -184,15 +182,11 @@ class NotificationDispatcher:
 
             # Also check for template-specific rich formatting
             if template:
-                if channel.channel_type == 'discord' and template.discord_embed:
+                if channel.channel_type == "discord" and template.discord_embed:
                     # Use template's discord embed, rendering any variables
-                    rich_payload = self._render_json_template(
-                        template.discord_embed, context
-                    )
-                elif channel.channel_type == 'slack' and template.slack_blocks:
-                    rich_payload = self._render_json_template(
-                        template.slack_blocks, context
-                    )
+                    rich_payload = self._render_json_template(template.discord_embed, context)
+                elif channel.channel_type == "slack" and template.slack_blocks:
+                    rich_payload = self._render_json_template(template.slack_blocks, context)
 
         return NotificationPayload(
             channel_id=channel.channel_id,
@@ -207,34 +201,25 @@ class NotificationDispatcher:
             user_id=channel.user_id,
         )
 
-    def _render_json_template(
-        self,
-        template_json: Dict,
-        context: Dict[str, Any]
-    ) -> Dict:
+    def _render_json_template(self, template_json: dict, context: dict[str, Any]) -> dict:
         """
         Recursively render template variables in a JSON structure.
         """
         if isinstance(template_json, dict):
-            return {
-                k: self._render_json_template(v, context)
-                for k, v in template_json.items()
-            }
+            return {k: self._render_json_template(v, context) for k, v in template_json.items()}
         elif isinstance(template_json, list):
-            return [
-                self._render_json_template(item, context)
-                for item in template_json
-            ]
+            return [self._render_json_template(item, context) for item in template_json]
         elif isinstance(template_json, str):
             return template_engine.render(template_json, context)
         else:
             return template_json
 
-    def _queue_payloads(self, payloads: List[NotificationPayload]):
+    def _queue_payloads(self, payloads: list[NotificationPayload]):
         """Queue payloads for async delivery via Celery."""
         for payload in payloads:
             try:
                 from skyspy.tasks.notifications import send_notification_task
+
                 send_notification_task.delay(
                     channel_url=payload.apprise_url,
                     title=payload.title,
@@ -251,7 +236,7 @@ class NotificationDispatcher:
                 # Fall back to sync delivery
                 self._send_payload_sync(payload)
 
-    def _send_payloads_sync(self, payloads: List[NotificationPayload]):
+    def _send_payloads_sync(self, payloads: list[NotificationPayload]):
         """Send payloads synchronously."""
         for payload in payloads:
             self._send_payload_sync(payload)
@@ -266,9 +251,9 @@ class NotificationDispatcher:
 
             # Map priority to apprise notification type
             notify_type = apprise.NotifyType.INFO
-            if payload.priority == 'warning':
+            if payload.priority == "warning":
                 notify_type = apprise.NotifyType.WARNING
-            elif payload.priority == 'critical':
+            elif payload.priority == "critical":
                 notify_type = apprise.NotifyType.FAILURE
 
             # Send notification
@@ -279,35 +264,28 @@ class NotificationDispatcher:
             )
 
             # Log success
-            self._log_notification(payload, status='sent')
+            self._log_notification(payload, status="sent")
 
         except ImportError:
             logger.debug("Apprise not installed, skipping notification")
         except Exception as e:
             logger.error(f"Failed to send notification: {e}")
-            self._log_notification(payload, status='failed', error=str(e))
+            self._log_notification(payload, status="failed", error=str(e))
 
-    def _log_notification(
-        self,
-        payload: NotificationPayload,
-        status: str = 'sent',
-        error: str = None
-    ):
+    def _log_notification(self, payload: NotificationPayload, status: str = "sent", error: str = None):
         """Log notification to database."""
         try:
-            from skyspy.models.notifications import NotificationLog, NotificationChannel
+            from skyspy.models.notifications import NotificationChannel, NotificationLog
 
             channel = None
             if payload.channel_id:
-                try:
+                with contextlib.suppress(NotificationChannel.DoesNotExist):
                     channel = NotificationChannel.objects.get(id=payload.channel_id)
-                except NotificationChannel.DoesNotExist:
-                    pass
 
             NotificationLog.objects.create(
                 notification_type=payload.event_type,
-                icao_hex=payload.context.get('icao') if payload.context else None,
-                callsign=payload.context.get('callsign') if payload.context else None,
+                icao_hex=payload.context.get("icao") if payload.context else None,
+                callsign=payload.context.get("callsign") if payload.context else None,
                 message=payload.body[:500] if payload.body else None,
                 details=payload.context,
                 channel=channel,
@@ -324,11 +302,11 @@ notification_dispatcher = NotificationDispatcher()
 
 
 # Convenience functions for backwards compatibility
-def dispatch_alert_notification(alert_data: Dict[str, Any], **kwargs):
+def dispatch_alert_notification(alert_data: dict[str, Any], **kwargs):
     """Dispatch alert notification (convenience function)."""
     return notification_dispatcher.dispatch_alert(alert_data, **kwargs)
 
 
-def dispatch_safety_notification(event_data: Dict[str, Any], **kwargs):
+def dispatch_safety_notification(event_data: dict[str, Any], **kwargs):
     """Dispatch safety notification (convenience function)."""
     return notification_dispatcher.dispatch_safety_event(event_data, **kwargs)

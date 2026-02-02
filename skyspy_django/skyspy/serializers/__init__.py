@@ -1,35 +1,31 @@
 """
 Django REST Framework serializers for SkysPy API.
 """
-from skyspy.serializers.aircraft import (
-    AircraftSerializer,
-    AircraftListSerializer,
-    TopAircraftSerializer,
-    AircraftStatsSerializer,
-    AircraftInfoSerializer,
-    AircraftPhotoSerializer,
-    BulkAircraftInfoSerializer,
-)
-from skyspy.serializers.alerts import (
-    AlertRuleSerializer,
-    AlertRuleCreateSerializer,
-    AlertRuleUpdateSerializer,
-    AlertHistorySerializer,
-)
-from skyspy.serializers.safety import (
-    SafetyEventSerializer,
-    SafetyStatsSerializer,
-    AircraftSafetyStatsSerializer,
-)
+
 from skyspy.serializers.acars import (
     AcarsMessageSerializer,
     AcarsStatsSerializer,
     AcarsStatusSerializer,
 )
+from skyspy.serializers.aircraft import (
+    AircraftInfoSerializer,
+    AircraftListSerializer,
+    AircraftPhotoSerializer,
+    AircraftSerializer,
+    AircraftStatsSerializer,
+    BulkAircraftInfoSerializer,
+    TopAircraftSerializer,
+)
+from skyspy.serializers.alerts import (
+    AlertHistorySerializer,
+    AlertRuleCreateSerializer,
+    AlertRuleSerializer,
+    AlertRuleUpdateSerializer,
+)
 from skyspy.serializers.audio import (
+    AudioStatsSerializer,
     AudioTransmissionSerializer,
     AudioUploadSerializer,
-    AudioStatsSerializer,
 )
 from skyspy.serializers.aviation import (
     AirspaceAdvisorySerializer,
@@ -39,97 +35,102 @@ from skyspy.serializers.aviation import (
     CachedPirepSerializer,
 )
 from skyspy.serializers.common import (
-    SuccessResponseSerializer,
     DeleteResponseSerializer,
     ErrorResponseSerializer,
-    GeoJSONFeatureSerializer,
     GeoJSONFeatureCollectionSerializer,
+    GeoJSONFeatureSerializer,
+    SuccessResponseSerializer,
 )
 from skyspy.serializers.history import (
-    SightingSerializer,
-    SessionSerializer,
     HistoryStatsSerializer,
-    TrendsSerializer,
+    SessionSerializer,
+    SightingSerializer,
     TopPerformersSerializer,
+    TrendsSerializer,
+)
+from skyspy.serializers.notams import (
+    CachedAircraftTypeSerializer,
+    CachedAirlineSerializer,
+    CachedNotamSerializer,
+    NotamListResponseSerializer,
+    NotamResponseSerializer,
+    NotamStatsSerializer,
+    TfrListResponseSerializer,
+    TfrResponseSerializer,
 )
 from skyspy.serializers.notifications import (
     NotificationConfigSerializer,
     NotificationLogSerializer,
 )
+from skyspy.serializers.safety import (
+    AircraftSafetyStatsSerializer,
+    SafetyEventSerializer,
+    SafetyStatsSerializer,
+)
 from skyspy.serializers.system import (
+    ApiInfoSerializer,
     HealthResponseSerializer,
     StatusResponseSerializer,
-    ApiInfoSerializer,
-)
-from skyspy.serializers.notams import (
-    CachedNotamSerializer,
-    NotamResponseSerializer,
-    NotamListResponseSerializer,
-    TfrResponseSerializer,
-    TfrListResponseSerializer,
-    NotamStatsSerializer,
-    CachedAirlineSerializer,
-    CachedAircraftTypeSerializer,
 )
 
 __all__ = [
     # Aircraft
-    'AircraftSerializer',
-    'AircraftListSerializer',
-    'TopAircraftSerializer',
-    'AircraftStatsSerializer',
-    'AircraftInfoSerializer',
-    'AircraftPhotoSerializer',
-    'BulkAircraftInfoSerializer',
+    "AircraftSerializer",
+    "AircraftListSerializer",
+    "TopAircraftSerializer",
+    "AircraftStatsSerializer",
+    "AircraftInfoSerializer",
+    "AircraftPhotoSerializer",
+    "BulkAircraftInfoSerializer",
     # Alerts
-    'AlertRuleSerializer',
-    'AlertRuleCreateSerializer',
-    'AlertRuleUpdateSerializer',
-    'AlertHistorySerializer',
+    "AlertRuleSerializer",
+    "AlertRuleCreateSerializer",
+    "AlertRuleUpdateSerializer",
+    "AlertHistorySerializer",
     # Safety
-    'SafetyEventSerializer',
-    'SafetyStatsSerializer',
-    'AircraftSafetyStatsSerializer',
+    "SafetyEventSerializer",
+    "SafetyStatsSerializer",
+    "AircraftSafetyStatsSerializer",
     # ACARS
-    'AcarsMessageSerializer',
-    'AcarsStatsSerializer',
-    'AcarsStatusSerializer',
+    "AcarsMessageSerializer",
+    "AcarsStatsSerializer",
+    "AcarsStatusSerializer",
     # Audio
-    'AudioTransmissionSerializer',
-    'AudioUploadSerializer',
-    'AudioStatsSerializer',
+    "AudioTransmissionSerializer",
+    "AudioUploadSerializer",
+    "AudioStatsSerializer",
     # Aviation
-    'AirspaceAdvisorySerializer',
-    'AirspaceBoundarySerializer',
-    'CachedAirportSerializer',
-    'CachedNavaidSerializer',
-    'CachedPirepSerializer',
+    "AirspaceAdvisorySerializer",
+    "AirspaceBoundarySerializer",
+    "CachedAirportSerializer",
+    "CachedNavaidSerializer",
+    "CachedPirepSerializer",
     # Common
-    'SuccessResponseSerializer',
-    'DeleteResponseSerializer',
-    'ErrorResponseSerializer',
-    'GeoJSONFeatureSerializer',
-    'GeoJSONFeatureCollectionSerializer',
+    "SuccessResponseSerializer",
+    "DeleteResponseSerializer",
+    "ErrorResponseSerializer",
+    "GeoJSONFeatureSerializer",
+    "GeoJSONFeatureCollectionSerializer",
     # History
-    'SightingSerializer',
-    'SessionSerializer',
-    'HistoryStatsSerializer',
-    'TrendsSerializer',
-    'TopPerformersSerializer',
+    "SightingSerializer",
+    "SessionSerializer",
+    "HistoryStatsSerializer",
+    "TrendsSerializer",
+    "TopPerformersSerializer",
     # Notifications
-    'NotificationConfigSerializer',
-    'NotificationLogSerializer',
+    "NotificationConfigSerializer",
+    "NotificationLogSerializer",
     # System
-    'HealthResponseSerializer',
-    'StatusResponseSerializer',
-    'ApiInfoSerializer',
+    "HealthResponseSerializer",
+    "StatusResponseSerializer",
+    "ApiInfoSerializer",
     # NOTAMs
-    'CachedNotamSerializer',
-    'NotamResponseSerializer',
-    'NotamListResponseSerializer',
-    'TfrResponseSerializer',
-    'TfrListResponseSerializer',
-    'NotamStatsSerializer',
-    'CachedAirlineSerializer',
-    'CachedAircraftTypeSerializer',
+    "CachedNotamSerializer",
+    "NotamResponseSerializer",
+    "NotamListResponseSerializer",
+    "TfrResponseSerializer",
+    "TfrListResponseSerializer",
+    "NotamStatsSerializer",
+    "CachedAirlineSerializer",
+    "CachedAircraftTypeSerializer",
 ]

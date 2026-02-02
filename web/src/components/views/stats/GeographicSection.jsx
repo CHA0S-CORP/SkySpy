@@ -11,40 +11,12 @@ import {
  * - Connected airports
  */
 export function GeographicSection({ data, loading, onSelectAircraft }) {
-  // Show loading skeleton when data is loading
-  if (loading) {
-    return (
-      <div className="stats-section geographic-section">
-        <div className="section-header">
-          <Globe size={18} />
-          <span>Geographic Coverage</span>
-        </div>
-        <div className="section-loading">
-          <Loader2 size={24} className="spin" />
-          <span>Loading geographic data...</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (!data) return null;
-
   const {
     countries = [],
     airlines = [],
     airports = [],
     regions = []
-  } = data;
-
-  // Calculate totals for percentage
-  const totalCountryFlights = useMemo(() =>
-    countries.reduce((sum, c) => sum + (c.count || 0), 0) || 1,
-    [countries]
-  );
-
-  const maxAirlineCount = Math.max(...airlines.map(a => a.count || 0), 1);
-  const maxAirportCount = Math.max(...airports.map(a => a.count || 0), 1);
-  const maxRegionCount = Math.max(...regions.map(r => r.count || 0), 1);
+  } = data || {};
 
   // Colors for countries pie
   const countryColors = [
@@ -53,7 +25,13 @@ export function GeographicSection({ data, loading, onSelectAircraft }) {
     '#a8dadc', '#6b7280'
   ];
 
-  // Build pie chart segments
+  // Calculate totals for percentage - must be called before any conditional returns
+  const totalCountryFlights = useMemo(() =>
+    countries.reduce((sum, c) => sum + (c.count || 0), 0) || 1,
+    [countries]
+  );
+
+  // Build pie chart segments - must be called before any conditional returns
   const pieSegments = useMemo(() => {
     const segments = [];
     let startAngle = 0;
@@ -73,6 +51,28 @@ export function GeographicSection({ data, loading, onSelectAircraft }) {
 
     return segments;
   }, [countries, totalCountryFlights]);
+
+  // Show loading skeleton when data is loading
+  if (loading) {
+    return (
+      <div className="stats-section geographic-section">
+        <div className="section-header">
+          <Globe size={18} />
+          <span>Geographic Coverage</span>
+        </div>
+        <div className="section-loading">
+          <Loader2 size={24} className="spin" />
+          <span>Loading geographic data...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const maxAirlineCount = Math.max(...airlines.map(a => a.count || 0), 1);
+  const maxAirportCount = Math.max(...airports.map(a => a.count || 0), 1);
+  const maxRegionCount = Math.max(...regions.map(r => r.count || 0), 1);
 
   // SVG arc path helper
   const describeArc = (cx, cy, radius, startAngle, endAngle) => {

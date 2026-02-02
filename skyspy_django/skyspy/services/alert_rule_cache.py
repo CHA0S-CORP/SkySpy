@@ -4,17 +4,18 @@ Alert rule caching with pre-compiled optimization hints.
 Provides a two-level cache (local memory + Redis) for alert rules
 with automatic invalidation via Django signals.
 """
+
+import hashlib
 import json
 import logging
 import re
-import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional, Dict, Any
 from threading import Lock
+from typing import Any
 
 from django.conf import settings
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.utils import timezone
 
@@ -32,46 +33,45 @@ class CompiledRule:
     Contains pre-computed metadata that helps filter aircraft
     before full condition evaluation.
     """
+
     # Core rule data
     id: int
     name: str
-    rule_type: Optional[str]
+    rule_type: str | None
     operator: str
-    value: Optional[str]
-    conditions: Optional[Dict]
+    value: str | None
+    conditions: dict | None
     priority: str
     cooldown_seconds: int
-    api_url: Optional[str]
-    owner_id: Optional[int]
+    api_url: str | None
+    owner_id: int | None
     visibility: str
     is_system: bool
 
     # Scheduling
-    starts_at: Optional[datetime]
-    expires_at: Optional[datetime]
+    starts_at: datetime | None
+    expires_at: datetime | None
 
     # Pre-computed optimization hints
     requires_military: bool = False
     requires_position: bool = False
     requires_altitude: bool = False
     requires_speed: bool = False
-    target_icao: Optional[str] = None  # For exact ICAO match rules
-    target_callsign_prefix: Optional[str] = None  # For callsign prefix rules
-    target_squawk: Optional[str] = None  # For exact squawk match
+    target_icao: str | None = None  # For exact ICAO match rules
+    target_callsign_prefix: str | None = None  # For callsign prefix rules
+    target_squawk: str | None = None  # For exact squawk match
 
     # Compiled regex patterns (if rule uses regex)
-    compiled_regex: Optional[Any] = field(default=None, repr=False)
+    compiled_regex: Any | None = field(default=None, repr=False)
 
-    def is_scheduled_active(self, now: Optional[datetime] = None) -> bool:
+    def is_scheduled_active(self, now: datetime | None = None) -> bool:
         """Check if rule is active based on schedule."""
         if now is None:
             now = timezone.now()
 
         if self.starts_at and self.starts_at > now:
             return False
-        if self.expires_at and self.expires_at < now:
-            return False
-        return True
+        return not (self.expires_at and self.expires_at < now)
 
     def can_match(self, aircraft: dict) -> bool:
         """
@@ -82,56 +82,55 @@ class CompiledRule:
         """
         # Military filter - check both 'military' key and 'dbFlags' bit 0
         if self.requires_military:
-            is_military = aircraft.get('military')
+            is_military = aircraft.get("military")
             if not is_military:
                 # Fall back to dbFlags (bit 0 = military)
-                db_flags = aircraft.get('dbFlags', 0)
+                db_flags = aircraft.get("dbFlags", 0)
                 is_military = bool(db_flags & 1) if isinstance(db_flags, int) else False
             if not is_military:
                 return False
 
         # Position filter (for distance rules)
-        if self.requires_position and not aircraft.get('distance_nm'):
+        if self.requires_position and not aircraft.get("distance_nm"):
             return False
 
         # Altitude filter - check both 'alt' and 'alt_baro'
-        if self.requires_altitude:
-            if aircraft.get('alt') is None and aircraft.get('alt_baro') is None:
-                return False
+        if self.requires_altitude and aircraft.get("alt") is None and aircraft.get("alt_baro") is None:
+            return False
 
         # Speed filter
-        if self.requires_speed and aircraft.get('gs') is None:
+        if self.requires_speed and aircraft.get("gs") is None:
             return False
 
         # Exact ICAO match (fastest path)
         if self.target_icao:
-            icao = aircraft.get('hex', '').upper()
+            icao = aircraft.get("hex", "").upper()
             if icao != self.target_icao:
                 return False
 
         # Exact squawk match
         if self.target_squawk:
-            squawk = aircraft.get('squawk', '')
+            squawk = aircraft.get("squawk", "")
             if squawk != self.target_squawk:
                 return False
 
         # Callsign prefix match
         if self.target_callsign_prefix:
-            callsign = (aircraft.get('flight') or '').upper()
+            callsign = (aircraft.get("flight") or "").upper()
             if not callsign.startswith(self.target_callsign_prefix):
                 return False
 
         return True
 
     @classmethod
-    def from_db_rule(cls, rule) -> 'CompiledRule':
+    def from_db_rule(cls, rule) -> "CompiledRule":
         """Create a CompiledRule from a database AlertRule instance."""
         # Determine optimization hints using mutable dict
         flags = {
-            'military': False,
-            'position': False,
-            'altitude': False,
-            'speed': False,
+            "military": False,
+            "position": False,
+            "altitude": False,
+            "speed": False,
         }
         target_icao = None
         target_callsign_prefix = None
@@ -140,24 +139,23 @@ class CompiledRule:
 
         # Analyze simple rule type
         if rule.rule_type:
-            if rule.rule_type == 'military':
-                flags['military'] = True
-            elif rule.rule_type == 'distance':
-                flags['position'] = True
-            elif rule.rule_type == 'altitude':
-                flags['altitude'] = True
-            elif rule.rule_type in ('speed', 'vertical_rate'):
-                flags['speed'] = True
-            elif rule.rule_type == 'icao' and rule.operator == 'eq':
-                target_icao = (rule.value or '').upper()
-            elif rule.rule_type == 'squawk' and rule.operator == 'eq':
+            if rule.rule_type == "military":
+                flags["military"] = True
+            elif rule.rule_type == "distance":
+                flags["position"] = True
+            elif rule.rule_type == "altitude":
+                flags["altitude"] = True
+            elif rule.rule_type in ("speed", "vertical_rate"):
+                flags["speed"] = True
+            elif rule.rule_type == "icao" and rule.operator == "eq":
+                target_icao = (rule.value or "").upper()
+            elif rule.rule_type == "squawk" and rule.operator == "eq":
                 target_squawk = rule.value
-            elif rule.rule_type == 'callsign':
-                if rule.operator == 'startswith':
-                    target_callsign_prefix = (rule.value or '').upper()
+            elif rule.rule_type == "callsign" and rule.operator == "startswith":
+                target_callsign_prefix = (rule.value or "").upper()
 
         # Compile regex if needed
-        if rule.operator == 'regex' and rule.value:
+        if rule.operator == "regex" and rule.value:
             try:
                 compiled_regex = re.compile(rule.value, re.IGNORECASE)
             except re.error as e:
@@ -168,8 +166,8 @@ class CompiledRule:
             cls._analyze_conditions(rule.conditions, flags)
 
         # Get visibility with fallback for old rules
-        visibility = getattr(rule, 'visibility', 'private')
-        is_system = getattr(rule, 'is_system', False)
+        visibility = getattr(rule, "visibility", "private")
+        is_system = getattr(rule, "is_system", False)
 
         return cls(
             id=rule.id,
@@ -186,10 +184,10 @@ class CompiledRule:
             is_system=is_system,
             starts_at=rule.starts_at,
             expires_at=rule.expires_at,
-            requires_military=flags['military'],
-            requires_position=flags['position'],
-            requires_altitude=flags['altitude'],
-            requires_speed=flags['speed'],
+            requires_military=flags["military"],
+            requires_position=flags["position"],
+            requires_altitude=flags["altitude"],
+            requires_speed=flags["speed"],
             target_icao=target_icao,
             target_callsign_prefix=target_callsign_prefix,
             target_squawk=target_squawk,
@@ -197,22 +195,22 @@ class CompiledRule:
         )
 
     @staticmethod
-    def _analyze_conditions(conditions: dict, flags: Dict[str, bool]) -> None:
+    def _analyze_conditions(conditions: dict, flags: dict[str, bool]) -> None:
         """Analyze complex conditions for optimization hints."""
         # This is a simplified analysis - full implementation would
         # recursively check all nested conditions
-        groups = conditions.get('groups', [])
+        groups = conditions.get("groups", [])
         for group in groups:
-            for cond in group.get('conditions', []):
-                cond_type = cond.get('type')
-                if cond_type == 'military':
-                    flags['military'] = True
-                elif cond_type == 'distance':
-                    flags['position'] = True
-                elif cond_type == 'altitude':
-                    flags['altitude'] = True
-                elif cond_type in ('speed', 'vertical_rate'):
-                    flags['speed'] = True
+            for cond in group.get("conditions", []):
+                cond_type = cond.get("type")
+                if cond_type == "military":
+                    flags["military"] = True
+                elif cond_type == "distance":
+                    flags["position"] = True
+                elif cond_type == "altitude":
+                    flags["altitude"] = True
+                elif cond_type in ("speed", "vertical_rate"):
+                    flags["speed"] = True
 
 
 class AlertRuleCache:
@@ -231,7 +229,7 @@ class AlertRuleCache:
     DEFAULT_TTL = 300  # 5 minutes
 
     def __init__(self):
-        self._local_rules: List[CompiledRule] = []
+        self._local_rules: list[CompiledRule] = []
         self._local_version: str = ""
         self._lock = Lock()
         self._redis = None
@@ -243,7 +241,8 @@ class AlertRuleCache:
         if self._redis is None:
             try:
                 import redis
-                redis_url = getattr(settings, 'REDIS_URL', 'redis://redis:6379/0')
+
+                redis_url = getattr(settings, "REDIS_URL", "redis://redis:6379/0")
                 self._redis = redis.from_url(redis_url, decode_responses=True)
                 self._redis.ping()
             except Exception as e:
@@ -265,11 +264,13 @@ class AlertRuleCache:
     def _generate_version(self) -> str:
         """Generate a new cache version string with strong uniqueness."""
         import uuid
+
         return hashlib.md5(
-            f"{datetime.utcnow().isoformat()}:{uuid.uuid4().hex}".encode()
+            f"{datetime.utcnow().isoformat()}:{uuid.uuid4().hex}".encode(),
+            usedforsecurity=False,  # nosec B324 - MD5 used for cache versioning, not security
         ).hexdigest()[:16]
 
-    def get_active_rules(self, user_id: Optional[int] = None) -> List[CompiledRule]:
+    def get_active_rules(self, user_id: int | None = None) -> list[CompiledRule]:
         """
         Get all active (enabled) rules from cache.
 
@@ -291,12 +292,7 @@ class AlertRuleCache:
 
         # Filter by visibility if user_id provided
         if user_id is not None:
-            rules = [
-                r for r in rules
-                if r.visibility == 'public' or
-                   r.visibility == 'shared' or
-                   r.owner_id == user_id
-            ]
+            rules = [r for r in rules if r.visibility == "public" or r.visibility == "shared" or r.owner_id == user_id]
 
         return rules
 
@@ -311,9 +307,7 @@ class AlertRuleCache:
                 if cached_data:
                     try:
                         rules_data = json.loads(cached_data)
-                        self._local_rules = [
-                            self._deserialize_rule(r) for r in rules_data
-                        ]
+                        self._local_rules = [self._deserialize_rule(r) for r in rules_data]
                         self._local_version = self._get_current_version()
                         logger.debug(f"Loaded {len(self._local_rules)} rules from Redis cache")
                         return
@@ -321,18 +315,14 @@ class AlertRuleCache:
                         logger.warning(f"Invalid Redis cache data: {e}")
 
             # Fetch from database
-            db_rules = AlertRule.objects.filter(enabled=True).select_related('owner')
+            db_rules = AlertRule.objects.filter(enabled=True).select_related("owner")
             self._local_rules = [CompiledRule.from_db_rule(r) for r in db_rules]
 
             # Store in Redis
             if self.redis:
                 try:
                     rules_data = [self._serialize_rule(r) for r in self._local_rules]
-                    self.redis.setex(
-                        self.REDIS_KEY,
-                        self.DEFAULT_TTL,
-                        json.dumps(rules_data)
-                    )
+                    self.redis.setex(self.REDIS_KEY, self.DEFAULT_TTL, json.dumps(rules_data))
                     new_version = self._generate_version()
                     self.redis.set(self.VERSION_KEY, new_version)
                     self._local_version = new_version
@@ -352,27 +342,27 @@ class AlertRuleCache:
     def _serialize_rule(self, rule: CompiledRule) -> dict:
         """Serialize a CompiledRule for Redis storage."""
         return {
-            'id': rule.id,
-            'name': rule.name,
-            'rule_type': rule.rule_type,
-            'operator': rule.operator,
-            'value': rule.value,
-            'conditions': rule.conditions,
-            'priority': rule.priority,
-            'cooldown_seconds': rule.cooldown_seconds,
-            'api_url': rule.api_url,
-            'owner_id': rule.owner_id,
-            'visibility': rule.visibility,
-            'is_system': rule.is_system,
-            'starts_at': rule.starts_at.isoformat() if rule.starts_at else None,
-            'expires_at': rule.expires_at.isoformat() if rule.expires_at else None,
-            'requires_military': rule.requires_military,
-            'requires_position': rule.requires_position,
-            'requires_altitude': rule.requires_altitude,
-            'requires_speed': rule.requires_speed,
-            'target_icao': rule.target_icao,
-            'target_callsign_prefix': rule.target_callsign_prefix,
-            'target_squawk': rule.target_squawk,
+            "id": rule.id,
+            "name": rule.name,
+            "rule_type": rule.rule_type,
+            "operator": rule.operator,
+            "value": rule.value,
+            "conditions": rule.conditions,
+            "priority": rule.priority,
+            "cooldown_seconds": rule.cooldown_seconds,
+            "api_url": rule.api_url,
+            "owner_id": rule.owner_id,
+            "visibility": rule.visibility,
+            "is_system": rule.is_system,
+            "starts_at": rule.starts_at.isoformat() if rule.starts_at else None,
+            "expires_at": rule.expires_at.isoformat() if rule.expires_at else None,
+            "requires_military": rule.requires_military,
+            "requires_position": rule.requires_position,
+            "requires_altitude": rule.requires_altitude,
+            "requires_speed": rule.requires_speed,
+            "target_icao": rule.target_icao,
+            "target_callsign_prefix": rule.target_callsign_prefix,
+            "target_squawk": rule.target_squawk,
         }
 
     def _deserialize_rule(self, data: dict) -> CompiledRule:
@@ -380,20 +370,20 @@ class AlertRuleCache:
         starts_at = None
         expires_at = None
 
-        if data.get('starts_at'):
-            starts_at = datetime.fromisoformat(data['starts_at'])
+        if data.get("starts_at"):
+            starts_at = datetime.fromisoformat(data["starts_at"])
             if timezone.is_naive(starts_at):
                 starts_at = timezone.make_aware(starts_at)
 
-        if data.get('expires_at'):
-            expires_at = datetime.fromisoformat(data['expires_at'])
+        if data.get("expires_at"):
+            expires_at = datetime.fromisoformat(data["expires_at"])
             if timezone.is_naive(expires_at):
                 expires_at = timezone.make_aware(expires_at)
 
         # Recompile regex if needed, with length validation to prevent ReDoS
         compiled_regex = None
-        if data.get('operator') == 'regex' and data.get('value'):
-            pattern_value = data['value']
+        if data.get("operator") == "regex" and data.get("value"):
+            pattern_value = data["value"]
             if len(pattern_value) > MAX_REGEX_PATTERN_LENGTH:
                 logger.warning(
                     f"Regex pattern too long in rule {data.get('id')}: "
@@ -406,27 +396,27 @@ class AlertRuleCache:
                     logger.warning(f"Invalid regex pattern in rule {data.get('id')}: {pattern_value} - {e}")
 
         return CompiledRule(
-            id=data['id'],
-            name=data['name'],
-            rule_type=data.get('rule_type'),
-            operator=data['operator'],
-            value=data.get('value'),
-            conditions=data.get('conditions'),
-            priority=data['priority'],
-            cooldown_seconds=data['cooldown_seconds'],
-            api_url=data.get('api_url'),
-            owner_id=data.get('owner_id'),
-            visibility=data.get('visibility', 'private'),
-            is_system=data.get('is_system', False),
+            id=data["id"],
+            name=data["name"],
+            rule_type=data.get("rule_type"),
+            operator=data["operator"],
+            value=data.get("value"),
+            conditions=data.get("conditions"),
+            priority=data["priority"],
+            cooldown_seconds=data["cooldown_seconds"],
+            api_url=data.get("api_url"),
+            owner_id=data.get("owner_id"),
+            visibility=data.get("visibility", "private"),
+            is_system=data.get("is_system", False),
             starts_at=starts_at,
             expires_at=expires_at,
-            requires_military=data.get('requires_military', False),
-            requires_position=data.get('requires_position', False),
-            requires_altitude=data.get('requires_altitude', False),
-            requires_speed=data.get('requires_speed', False),
-            target_icao=data.get('target_icao'),
-            target_callsign_prefix=data.get('target_callsign_prefix'),
-            target_squawk=data.get('target_squawk'),
+            requires_military=data.get("requires_military", False),
+            requires_position=data.get("requires_position", False),
+            requires_altitude=data.get("requires_altitude", False),
+            requires_speed=data.get("requires_speed", False),
+            target_icao=data.get("target_icao"),
+            target_callsign_prefix=data.get("target_callsign_prefix"),
+            target_squawk=data.get("target_squawk"),
             compiled_regex=compiled_regex,
         )
 
@@ -450,7 +440,7 @@ class AlertRuleCache:
 
         logger.debug("Alert rule cache invalidated")
 
-    def get_rule_by_id(self, rule_id: int) -> Optional[CompiledRule]:
+    def get_rule_by_id(self, rule_id: int) -> CompiledRule | None:
         """Get a specific rule by ID from cache."""
         rules = self.get_active_rules()
         for rule in rules:
@@ -461,9 +451,9 @@ class AlertRuleCache:
     def get_status(self) -> dict:
         """Get cache status information."""
         return {
-            'cached_rules': len(self._local_rules),
-            'cache_version': self._local_version,
-            'redis_available': bool(self.redis),
+            "cached_rules": len(self._local_rules),
+            "cache_version": self._local_version,
+            "redis_available": bool(self.redis),
         }
 
 

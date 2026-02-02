@@ -13,6 +13,7 @@ import (
 type CallbackServer struct {
 	port       int
 	server     *http.Server
+	serverMu   sync.RWMutex
 	listener   net.Listener
 	resultCh   chan CallbackResult
 	shutdownCh chan struct{}
@@ -69,16 +70,20 @@ func (s *CallbackServer) Start() error {
 	mux.HandleFunc("/callback", s.handleCallback)
 	mux.HandleFunc("/", s.handleRoot)
 
-	s.server = &http.Server{
+	server := &http.Server{
 		Handler:      mux,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	}
 
+	s.serverMu.Lock()
+	s.server = server
+	s.serverMu.Unlock()
+
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		if err := s.server.Serve(s.listener); err != http.ErrServerClosed {
+		if err := server.Serve(s.listener); err != http.ErrServerClosed {
 			// Log error but don't fail - server might be intentionally closed
 		}
 	}()
@@ -107,10 +112,13 @@ func (s *CallbackServer) WaitForCallback(ctx context.Context, timeout time.Durat
 // Stop stops the callback server
 func (s *CallbackServer) Stop() error {
 	close(s.shutdownCh)
-	if s.server != nil {
+	s.serverMu.RLock()
+	server := s.server
+	s.serverMu.RUnlock()
+	if server != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := s.server.Shutdown(ctx); err != nil {
+		if err := server.Shutdown(ctx); err != nil {
 			return err
 		}
 	}

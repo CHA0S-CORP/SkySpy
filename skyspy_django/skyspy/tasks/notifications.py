@@ -7,10 +7,12 @@ Provides asynchronous notification delivery with:
 - Notification log tracking
 - Rate limiting per channel
 """
+
+import contextlib
 import logging
 import time
 from datetime import timedelta
-from typing import Dict, Any, Optional
+from typing import Any
 
 from celery import shared_task
 from django.utils import timezone
@@ -31,12 +33,12 @@ def send_notification_task(
     channel_url: str,
     title: str,
     body: str,
-    priority: str = 'info',
-    event_type: str = 'alert',
-    channel_type: str = 'webhook',
+    priority: str = "info",
+    event_type: str = "alert",
+    channel_type: str = "webhook",
     channel_id: int = None,
-    rich_payload: Dict[str, Any] = None,
-    context: Dict[str, Any] = None,
+    rich_payload: dict[str, Any] = None,
+    context: dict[str, Any] = None,
     notification_log_id: int = None,
 ):
     """
@@ -54,36 +56,32 @@ def send_notification_task(
         context: Optional context data for logging
         notification_log_id: Optional existing log ID to update
     """
-    from skyspy.models.notifications import NotificationLog, NotificationChannel
+    from skyspy.models.notifications import NotificationChannel, NotificationLog
 
     start_time = time.perf_counter()
 
     # Get or create log entry
     log_entry = None
     if notification_log_id:
-        try:
+        with contextlib.suppress(NotificationLog.DoesNotExist):
             log_entry = NotificationLog.objects.get(id=notification_log_id)
-        except NotificationLog.DoesNotExist:
-            pass
 
     if not log_entry:
         # Create new log entry
         channel = None
         if channel_id:
-            try:
+            with contextlib.suppress(NotificationChannel.DoesNotExist):
                 channel = NotificationChannel.objects.get(id=channel_id)
-            except NotificationChannel.DoesNotExist:
-                pass
 
         log_entry = NotificationLog.objects.create(
             notification_type=event_type,
-            icao_hex=context.get('icao') if context else None,
-            callsign=context.get('callsign') if context else None,
+            icao_hex=context.get("icao") if context else None,
+            callsign=context.get("callsign") if context else None,
             message=body[:500] if body else None,
             details=context,
             channel=channel,
             channel_url=channel_url,
-            status='pending',
+            status="pending",
             max_retries=self.max_retries,
         )
 
@@ -95,9 +93,9 @@ def send_notification_task(
 
         # Map priority to apprise notification type
         notify_type = apprise.NotifyType.INFO
-        if priority == 'warning':
+        if priority == "warning":
             notify_type = apprise.NotifyType.WARNING
-        elif priority == 'critical':
+        elif priority == "critical":
             notify_type = apprise.NotifyType.FAILURE
 
         # Send notification
@@ -122,32 +120,30 @@ def send_notification_task(
                 )
 
             logger.info(f"Notification sent successfully to {channel_type}")
-            return {'status': 'sent', 'duration_ms': duration_ms}
+            return {"status": "sent", "duration_ms": duration_ms}
         else:
             raise Exception("Apprise returned False - delivery may have failed")
 
     except ImportError:
         logger.error("Apprise not installed")
         log_entry.mark_failed("Apprise library not installed")
-        return {'status': 'failed', 'error': 'Apprise not installed'}
+        return {"status": "failed", "error": "Apprise not installed"}
 
     except Exception as e:
         error_msg = str(e)
-        logger.warning(
-            f"Notification failed (attempt {self.request.retries + 1}/{self.max_retries + 1}): {error_msg}"
-        )
+        logger.warning(f"Notification failed (attempt {self.request.retries + 1}/{self.max_retries + 1}): {error_msg}")
 
         # Update log entry
         log_entry.retry_count = self.request.retries + 1
         log_entry.last_error = error_msg
 
         if self.request.retries < self.max_retries:
-            log_entry.status = 'retrying'
+            log_entry.status = "retrying"
             # Calculate next retry time (exponential backoff with jitter)
-            countdown = self.default_retry_delay * (2 ** self.request.retries)
+            countdown = self.default_retry_delay * (2**self.request.retries)
             log_entry.next_retry_at = timezone.now() + timedelta(seconds=countdown)
         else:
-            log_entry.status = 'failed'
+            log_entry.status = "failed"
             log_entry.next_retry_at = None
 
             # Update channel failure timestamp
@@ -174,20 +170,20 @@ def process_notification_queue():
 
     # Find notifications ready for retry
     pending = NotificationLog.objects.filter(
-        status='retrying',
+        status="retrying",
         next_retry_at__lte=now,
-    ).select_related('channel')[:50]  # Process up to 50 at a time
+    ).select_related("channel")[:50]  # Process up to 50 at a time
 
     for log_entry in pending:
         try:
             # Re-queue for delivery
             send_notification_task.delay(
                 channel_url=log_entry.channel_url,
-                title=f"SkysPy Notification",  # Original title not stored
+                title="SkysPy Notification",  # Original title not stored
                 body=log_entry.message or "",
-                priority='warning',
+                priority="warning",
                 event_type=log_entry.notification_type,
-                channel_type=log_entry.channel.channel_type if log_entry.channel else 'webhook',
+                channel_type=log_entry.channel.channel_type if log_entry.channel else "webhook",
                 channel_id=log_entry.channel_id,
                 context=log_entry.details,
                 notification_log_id=log_entry.id,
@@ -195,7 +191,7 @@ def process_notification_queue():
         except Exception as e:
             logger.error(f"Failed to re-queue notification {log_entry.id}: {e}")
 
-    return {'processed': len(pending)}
+    return {"processed": len(pending)}
 
 
 @shared_task
@@ -208,16 +204,14 @@ def cleanup_old_notification_logs(days: int = 30):
     from skyspy.models.notifications import NotificationLog
 
     cutoff = timezone.now() - timedelta(days=days)
-    deleted, _ = NotificationLog.objects.filter(
-        timestamp__lt=cutoff
-    ).delete()
+    deleted, _ = NotificationLog.objects.filter(timestamp__lt=cutoff).delete()
 
     logger.info(f"Cleaned up {deleted} old notification logs")
-    return {'deleted': deleted}
+    return {"deleted": deleted}
 
 
 @shared_task
-def test_notification_channel(channel_id: int) -> Dict[str, Any]:
+def test_notification_channel(channel_id: int) -> dict[str, Any]:
     """
     Send a test notification to verify a channel configuration.
 
@@ -232,7 +226,7 @@ def test_notification_channel(channel_id: int) -> Dict[str, Any]:
     try:
         channel = NotificationChannel.objects.get(id=channel_id)
     except NotificationChannel.DoesNotExist:
-        return {'success': False, 'error': 'Channel not found'}
+        return {"success": False, "error": "Channel not found"}
 
     try:
         import apprise
@@ -250,28 +244,25 @@ def test_notification_channel(channel_id: int) -> Dict[str, Any]:
             channel.verified = True
             channel.last_success = timezone.now()
             channel.last_error = None
-            channel.save(update_fields=['verified', 'last_success', 'last_error'])
-            return {'success': True, 'message': 'Test notification sent successfully'}
+            channel.save(update_fields=["verified", "last_success", "last_error"])
+            return {"success": True, "message": "Test notification sent successfully"}
         else:
             channel.last_failure = timezone.now()
             channel.last_error = "Apprise returned False"
-            channel.save(update_fields=['last_failure', 'last_error'])
-            return {'success': False, 'error': 'Notification delivery failed'}
+            channel.save(update_fields=["last_failure", "last_error"])
+            return {"success": False, "error": "Notification delivery failed"}
 
     except ImportError:
-        return {'success': False, 'error': 'Apprise library not installed'}
+        return {"success": False, "error": "Apprise library not installed"}
     except Exception as e:
         channel.last_failure = timezone.now()
         channel.last_error = str(e)
-        channel.save(update_fields=['last_failure', 'last_error'])
-        return {'success': False, 'error': str(e)}
+        channel.save(update_fields=["last_failure", "last_error"])
+        return {"success": False, "error": str(e)}
 
 
 @shared_task
-def send_bulk_notifications(
-    notifications: list,
-    delay_between_ms: int = 100
-):
+def send_bulk_notifications(notifications: list, delay_between_ms: int = 100):
     """
     Send multiple notifications with rate limiting.
 
@@ -283,15 +274,15 @@ def send_bulk_notifications(
     for i, notif in enumerate(notifications):
         try:
             result = send_notification_task.delay(**notif)
-            results.append({'index': i, 'task_id': result.id})
+            results.append({"index": i, "task_id": result.id})
         except Exception as e:
-            results.append({'index': i, 'error': str(e)})
+            results.append({"index": i, "error": str(e)})
 
         # Rate limiting delay
         if delay_between_ms > 0 and i < len(notifications) - 1:
             time.sleep(delay_between_ms / 1000)
 
-    return {'queued': len([r for r in results if 'task_id' in r]), 'results': results}
+    return {"queued": len([r for r in results if "task_id" in r]), "results": results}
 
 
 @shared_task
@@ -306,12 +297,13 @@ def cleanup_notification_cooldowns():
     """
     try:
         from skyspy.services.notifications import cleanup_cooldowns
+
         cleanup_cooldowns()
         logger.debug("Notification cooldowns cleaned up")
-        return {'status': 'success'}
+        return {"status": "success"}
     except ImportError:
         logger.debug("Notifications service not available")
-        return {'status': 'skipped', 'reason': 'module not available'}
+        return {"status": "skipped", "reason": "module not available"}
     except Exception as e:
         logger.warning(f"Failed to cleanup notification cooldowns: {e}")
-        return {'status': 'error', 'error': str(e)}
+        return {"status": "error", "error": str(e)}

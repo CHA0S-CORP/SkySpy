@@ -7,16 +7,15 @@ Supports:
 - Cooldown tracking to prevent spam
 - Database configuration and logging
 """
+
 import ipaddress
 import logging
 import threading
 import time
-from typing import Optional
 from urllib.parse import urlparse
 
 import apprise
 from django.conf import settings
-from django.core.cache import cache
 
 from skyspy.models import NotificationConfig, NotificationLog
 
@@ -28,14 +27,14 @@ _notification_cooldown_lock = threading.Lock()
 
 # Private/internal IP ranges that should be blocked for SSRF prevention
 _BLOCKED_IP_RANGES = [
-    ipaddress.ip_network('127.0.0.0/8'),      # Loopback
-    ipaddress.ip_network('10.0.0.0/8'),       # Private Class A
-    ipaddress.ip_network('172.16.0.0/12'),    # Private Class B
-    ipaddress.ip_network('192.168.0.0/16'),   # Private Class C
-    ipaddress.ip_network('169.254.0.0/16'),   # Link-local
-    ipaddress.ip_network('::1/128'),          # IPv6 loopback
-    ipaddress.ip_network('fc00::/7'),         # IPv6 private
-    ipaddress.ip_network('fe80::/10'),        # IPv6 link-local
+    ipaddress.ip_network("127.0.0.0/8"),  # Loopback
+    ipaddress.ip_network("10.0.0.0/8"),  # Private Class A
+    ipaddress.ip_network("172.16.0.0/12"),  # Private Class B
+    ipaddress.ip_network("192.168.0.0/16"),  # Private Class C
+    ipaddress.ip_network("169.254.0.0/16"),  # Link-local
+    ipaddress.ip_network("::1/128"),  # IPv6 loopback
+    ipaddress.ip_network("fc00::/7"),  # IPv6 private
+    ipaddress.ip_network("fe80::/10"),  # IPv6 link-local
 ]
 
 
@@ -57,7 +56,7 @@ def _is_safe_url(url: str) -> bool:
         parsed = urlparse(url)
 
         # Only allow http and https schemes
-        if parsed.scheme not in ('http', 'https'):
+        if parsed.scheme not in ("http", "https"):
             logger.warning(f"Blocked URL with invalid scheme: {parsed.scheme}")
             return False
 
@@ -96,9 +95,9 @@ class NotificationManager:
 
     def _setup_notifications(self):
         """Set up notification URLs from settings."""
-        apprise_urls = getattr(settings, 'APPRISE_URLS', '')
+        apprise_urls = getattr(settings, "APPRISE_URLS", "")
         if apprise_urls:
-            for url in apprise_urls.split(','):
+            for url in apprise_urls.split(","):
                 url = url.strip()
                 if url:
                     self.apprise.add(url)
@@ -109,7 +108,7 @@ class NotificationManager:
             config = NotificationConfig.get_config()
             if config and config.apprise_urls:
                 self.apprise.clear()
-                for url in config.apprise_urls.split(','):
+                for url in config.apprise_urls.split(","):
                     url = url.strip()
                     if url:
                         self.apprise.add(url)
@@ -119,7 +118,7 @@ class NotificationManager:
     def reload_urls(self, urls: str):
         """Reload notification URLs."""
         self.apprise.clear()
-        for url in urls.split(','):
+        for url in urls.split(","):
             url = url.strip()
             if url:
                 self.apprise.add(url)
@@ -127,7 +126,7 @@ class NotificationManager:
     def can_notify(self, key: str, cooldown: int = None) -> bool:
         """Check if notification can be sent (respects cooldown)."""
         if cooldown is None:
-            cooldown = getattr(settings, 'NOTIFICATION_COOLDOWN', 300)
+            cooldown = getattr(settings, "NOTIFICATION_COOLDOWN", 300)
 
         now = time.time()
         with _notification_cooldown_lock:
@@ -138,12 +137,12 @@ class NotificationManager:
         self,
         title: str,
         body: str,
-        notify_type: str = 'info',
-        key: Optional[str] = None,
-        icao: Optional[str] = None,
-        callsign: Optional[str] = None,
-        details: Optional[dict] = None,
-        api_url: Optional[str] = None
+        notify_type: str = "info",
+        key: str | None = None,
+        icao: str | None = None,
+        callsign: str | None = None,
+        details: dict | None = None,
+        api_url: str | None = None,
     ) -> bool:
         """
         Send notification with optional per-rule API URL override.
@@ -166,12 +165,10 @@ class NotificationManager:
             config = NotificationConfig.get_config()
             if config and not config.enabled:
                 return False
-            cooldown = config.cooldown_seconds if config else getattr(
-                settings, 'NOTIFICATION_COOLDOWN', 300
-            )
+            cooldown = config.cooldown_seconds if config else getattr(settings, "NOTIFICATION_COOLDOWN", 300)
         except Exception as e:
             logger.warning(f"Failed to check notification config: {e}")
-            cooldown = getattr(settings, 'NOTIFICATION_COOLDOWN', 300)
+            cooldown = getattr(settings, "NOTIFICATION_COOLDOWN", 300)
 
         # Use per-rule API URL if provided
         notifier = self.apprise
@@ -193,9 +190,9 @@ class NotificationManager:
 
         try:
             apprise_type = apprise.NotifyType.INFO
-            if notify_type == 'warning':
+            if notify_type == "warning":
                 apprise_type = apprise.NotifyType.WARNING
-            elif notify_type in ('emergency', 'critical'):
+            elif notify_type in ("emergency", "critical"):
                 apprise_type = apprise.NotifyType.FAILURE
 
             result = notifier.notify(title=title, body=body, notify_type=apprise_type)
@@ -211,7 +208,7 @@ class NotificationManager:
                         icao_hex=icao,
                         callsign=callsign,
                         message=f"{title}: {body}",
-                        details=details or {}
+                        details=details or {},
                     )
                 except Exception as e:
                     logger.warning(f"Failed to log notification: {e}")
@@ -236,9 +233,7 @@ class NotificationManager:
         try:
             config = NotificationConfig.get_config()
             enabled = config.enabled if config else True
-            cooldown = config.cooldown_seconds if config else getattr(
-                settings, 'NOTIFICATION_COOLDOWN', 300
-            )
+            cooldown = config.cooldown_seconds if config else getattr(settings, "NOTIFICATION_COOLDOWN", 300)
         except Exception:
             enabled = True
             cooldown = 300
@@ -246,10 +241,10 @@ class NotificationManager:
         with _notification_cooldown_lock:
             active_cooldowns = len(_notification_cooldown)
         return {
-            'enabled': enabled,
-            'server_count': self.server_count,
-            'cooldown_seconds': cooldown,
-            'active_cooldowns': active_cooldowns,
+            "enabled": enabled,
+            "server_count": self.server_count,
+            "cooldown_seconds": cooldown,
+            "active_cooldowns": active_cooldowns,
         }
 
 
@@ -257,12 +252,7 @@ class NotificationManager:
 notifier = NotificationManager()
 
 
-def send_notification(
-    title: str,
-    body: str,
-    notify_type: str = 'info',
-    **kwargs
-) -> bool:
+def send_notification(title: str, body: str, notify_type: str = "info", **kwargs) -> bool:
     """Convenience function to send notification."""
     return notifier.send(title, body, notify_type, **kwargs)
 
@@ -270,11 +260,11 @@ def send_notification(
 def send_alert_notification(
     rule_name: str,
     icao: str,
-    callsign: Optional[str],
+    callsign: str | None,
     message: str,
-    priority: str = 'info',
-    api_url: Optional[str] = None,
-    details: Optional[dict] = None
+    priority: str = "info",
+    api_url: str | None = None,
+    details: dict | None = None,
 ) -> bool:
     """Send notification for triggered alert rule."""
     title = f"Alert: {rule_name}"
@@ -291,17 +281,17 @@ def send_alert_notification(
         icao=icao,
         callsign=callsign,
         api_url=api_url,
-        details=details
+        details=details,
     )
 
 
 def send_safety_notification(
     event_type: str,
     icao: str,
-    callsign: Optional[str],
+    callsign: str | None,
     message: str,
-    severity: str = 'warning',
-    details: Optional[dict] = None
+    severity: str = "warning",
+    details: dict | None = None,
 ) -> bool:
     """Send notification for safety event."""
     title = f"Safety Event: {event_type}"
@@ -317,7 +307,7 @@ def send_safety_notification(
         key=f"safety:{event_type}:{icao}",
         icao=icao,
         callsign=callsign,
-        details=details
+        details=details,
     )
 
 

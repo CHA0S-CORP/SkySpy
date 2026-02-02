@@ -9,17 +9,15 @@ Tests thread safety of:
 """
 
 import asyncio
-import concurrent.futures
 import threading
 import time
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from skyspy_common.libacars.cache import DecodeCache, LabelFormatCache
-from skyspy_common.libacars.circuit_breaker import CircuitBreaker, CircuitState, ErrorCategory
-from skyspy_common.libacars.pool import ObjectPool, ThreadLocalPool, BufferPool
+from skyspy_common.libacars.circuit_breaker import CircuitBreaker, ErrorCategory
 from skyspy_common.libacars.metrics import MetricsCollector
+from skyspy_common.libacars.pool import BufferPool, ObjectPool, ThreadLocalPool
 
 
 class TestDecodeCacheConcurrency:
@@ -79,7 +77,7 @@ class TestDecodeCacheConcurrency:
                     text = f"Text_{thread_id}_{i}"
                     cache.set(label, text, 1, {"data": i})
                     # Immediately try to read it back
-                    result = cache.get(label, text, 1)
+                    cache.get(label, text, 1)
                     # May be None due to eviction, but should not error
             except Exception as e:
                 errors.append(e)
@@ -238,6 +236,7 @@ class TestCircuitBreakerConcurrency:
                     if breaker.can_execute():
                         # Randomly succeed or fail
                         import random
+
                         if random.random() > 0.3:
                             breaker.record_success()
                         else:
@@ -413,7 +412,7 @@ class TestBufferPoolConcurrency:
                     buffer = pool.get_buffer(size)
                     assert buffer is not None
                     # Write some data
-                    data = f"Thread{thread_id}_{i}".encode()[:size-1]
+                    data = f"Thread{thread_id}_{i}".encode()[: size - 1]
                     buffer.value = data
                     time.sleep(0.0001)
                     pool.release_buffer(buffer)
@@ -616,7 +615,7 @@ class TestAsyncConcurrency:
 
         async def worker(worker_id):
             try:
-                for i in range(100):
+                for _i in range(100):
                     metrics.increment(f"async_counter_{worker_id % 3}")
                     await asyncio.sleep(0)
             except Exception as e:

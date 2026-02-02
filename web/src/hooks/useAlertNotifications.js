@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useToastContext, TOAST_TYPES } from './useToast';
+import { useToastContextSafe, TOAST_TYPES } from './useToast';
 
 // Helper to safely parse JSON from fetch response
 const safeJson = async (res) => {
@@ -68,13 +68,8 @@ export function useAlertNotifications(options = {}) {
     soundEnabled = true,
   } = options;
 
-  // Try to use toast context if not provided as prop
-  let toastContext = null;
-  try {
-    toastContext = useToastContext();
-  } catch (e) {
-    // Not wrapped in ToastProvider, toastContext will be null
-  }
+  // Use toast context if not provided as prop (safe version returns null if not in provider)
+  const toastContext = useToastContextSafe();
   const toast = toastProp || toastContext;
   const [unacknowledgedCount, setUnacknowledgedCount] = useState(0);
   const [recentAlerts, setRecentAlerts] = useState([]);

@@ -8,13 +8,12 @@ Monitors aircraft for:
 - Vertical speed reversals (potential TCAS RA response)
 - Proximity conflicts between aircraft pairs
 """
+
 import logging
 import math
 import threading
 import time
 import uuid
-from datetime import datetime, timedelta
-from typing import Optional, Dict, List, Set
 
 from django.conf import settings
 from django.utils import timezone
@@ -91,19 +90,19 @@ def calculate_distance_nm(lat1: float, lon1: float, lat2: float, lon2: float) ->
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-def is_valid_position(lat: Optional[float], lon: Optional[float]) -> bool:
+def is_valid_position(lat: float | None, lon: float | None) -> bool:
     """Check if position coordinates are valid."""
     if lat is None or lon is None:
         return False
     return -90 <= lat <= 90 and -180 <= lon <= 180
 
 
-def safe_int_altitude(alt) -> Optional[int]:
+def safe_int_altitude(alt) -> int | None:
     """Safely convert altitude to int, handling 'ground' and other special values."""
     if alt is None:
         return None
     if isinstance(alt, str):
-        if alt.lower() == 'ground':
+        if alt.lower() == "ground":
             return 0
         try:
             return int(alt)
@@ -132,20 +131,20 @@ class SafetyMonitor:
 
     def __init__(self):
         # Thresholds from settings
-        self.vs_change_threshold = getattr(settings, 'SAFETY_VS_CHANGE_THRESHOLD', 3000)
-        self.vs_extreme_threshold = getattr(settings, 'SAFETY_VS_EXTREME_THRESHOLD', 6000)
-        self.proximity_nm = getattr(settings, 'SAFETY_PROXIMITY_NM', 1.0)
-        self.altitude_diff_ft = getattr(settings, 'SAFETY_ALTITUDE_DIFF_FT', 1000)
-        self.closure_rate_kt = getattr(settings, 'SAFETY_CLOSURE_RATE_KT', 100)
-        self.tcas_vs_threshold = getattr(settings, 'SAFETY_TCAS_VS_THRESHOLD', 1500)
+        self.vs_change_threshold = getattr(settings, "SAFETY_VS_CHANGE_THRESHOLD", 3000)
+        self.vs_extreme_threshold = getattr(settings, "SAFETY_VS_EXTREME_THRESHOLD", 6000)
+        self.proximity_nm = getattr(settings, "SAFETY_PROXIMITY_NM", 1.0)
+        self.altitude_diff_ft = getattr(settings, "SAFETY_ALTITUDE_DIFF_FT", 1000)
+        self.closure_rate_kt = getattr(settings, "SAFETY_CLOSURE_RATE_KT", 100)
+        self.tcas_vs_threshold = getattr(settings, "SAFETY_TCAS_VS_THRESHOLD", 1500)
 
         # State tracking
-        self._aircraft_state: Dict[str, dict] = {}
-        self._event_cooldown: Dict[str, float] = {}
-        self._active_events: Dict[str, dict] = {}  # event_id -> event data
-        self._acknowledged_events: Set[str] = set()  # Set of acknowledged event IDs
+        self._aircraft_state: dict[str, dict] = {}
+        self._event_cooldown: dict[str, float] = {}
+        self._active_events: dict[str, dict] = {}  # event_id -> event data
+        self._acknowledged_events: set[str] = set()  # Set of acknowledged event IDs
         self._events_lock = threading.Lock()  # Lock for _active_events and _acknowledged_events
-        self._enabled = getattr(settings, 'SAFETY_MONITORING_ENABLED', True)
+        self._enabled = getattr(settings, "SAFETY_MONITORING_ENABLED", True)
         self._last_cleanup = 0.0
 
     @property
@@ -181,7 +180,7 @@ class SafetyMonitor:
             "rssi": ac.get("rssi"),
         }
 
-    def _get_cooldown_key(self, event_type: str, icao: str, icao_2: Optional[str] = None) -> str:
+    def _get_cooldown_key(self, event_type: str, icao: str, icao_2: str | None = None) -> str:
         """Generate a cooldown key for an event."""
         if icao_2:
             # Ensure both values are not None before sorting
@@ -191,7 +190,7 @@ class SafetyMonitor:
             return f"{event_type}:{pair[0]}:{pair[1]}"
         return f"{event_type}:{icao}"
 
-    def _can_trigger_event(self, event_type: str, icao: str, icao_2: Optional[str] = None) -> bool:
+    def _can_trigger_event(self, event_type: str, icao: str, icao_2: str | None = None) -> bool:
         """Check if we can trigger an event (respects cooldown)."""
         if icao is None:
             return False
@@ -200,7 +199,7 @@ class SafetyMonitor:
         last_trigger = self._event_cooldown.get(key, 0)
         return (now - last_trigger) > self.EVENT_COOLDOWN
 
-    def _mark_event_triggered(self, event_type: str, icao: str, icao_2: Optional[str] = None):
+    def _mark_event_triggered(self, event_type: str, icao: str, icao_2: str | None = None):
         """Mark an event as triggered."""
         key = self._get_cooldown_key(event_type, icao, icao_2)
         self._event_cooldown[key] = time.time()
@@ -218,10 +217,7 @@ class SafetyMonitor:
         event_cutoff = now - self.EVENT_EXPIRY
 
         # Clean up old aircraft state
-        to_remove = [
-            icao for icao, state in self._aircraft_state.items()
-            if state.get("last_update", 0) < cutoff
-        ]
+        to_remove = [icao for icao, state in self._aircraft_state.items() if state.get("last_update", 0) < cutoff]
         for icao in to_remove:
             del self._aircraft_state[icao]
 
@@ -233,8 +229,7 @@ class SafetyMonitor:
         # Clean up expired events (with lock for thread safety)
         with self._events_lock:
             expired_events = [
-                (eid, event) for eid, event in self._active_events.items()
-                if event.get("last_seen", 0) < event_cutoff
+                (eid, event) for eid, event in self._active_events.items() if event.get("last_seen", 0) < event_cutoff
             ]
             for eid, event in expired_events:
                 del self._active_events[eid]
@@ -244,7 +239,7 @@ class SafetyMonitor:
         for eid, event in expired_events:
             self.broadcast_event_resolved(event)
 
-    def _generate_event_id(self, event_type: str, icao: str, icao_2: Optional[str] = None) -> str:
+    def _generate_event_id(self, event_type: str, icao: str, icao_2: str | None = None) -> str:
         """Generate a stable event ID for deduplication."""
         if icao_2:
             pair = tuple(sorted([icao, icao_2]))
@@ -256,7 +251,7 @@ class SafetyMonitor:
         event_id = self._generate_event_id(
             event["event_type"],
             event.get("icao") or event.get("icao_hex"),
-            event.get("icao_2") or event.get("icao_hex_2")
+            event.get("icao_2") or event.get("icao_hex_2"),
         )
         now = time.time()
 
@@ -278,7 +273,7 @@ class SafetyMonitor:
                 self._active_events[event_id] = event
                 return event.copy()  # Return copy to avoid race conditions
 
-    def find_event_by_db_id(self, db_id: int) -> Optional[str]:
+    def find_event_by_db_id(self, db_id: int) -> str | None:
         """Find an active event's string ID by its database ID. Thread-safe."""
         with self._events_lock:
             for event_id, event in self._active_events.items():
@@ -346,7 +341,7 @@ class SafetyMonitor:
 
         return False
 
-    def get_active_events(self, include_acknowledged: bool = True) -> List[dict]:
+    def get_active_events(self, include_acknowledged: bool = True) -> list[dict]:
         """Get all active safety events. Thread-safe."""
         with self._events_lock:
             events = [e.copy() for e in self._active_events.values()]
@@ -392,7 +387,7 @@ class SafetyMonitor:
 
     def _is_near_major_airport(self, lat: float, lon: float, radius_nm: float = 5.0) -> bool:
         """Check if a position is within radius of a major airport."""
-        for icao, apt_lat, apt_lon in MAJOR_AIRPORTS:
+        for _icao, apt_lat, apt_lon in MAJOR_AIRPORTS:
             dist = calculate_distance_nm(lat, lon, apt_lat, apt_lon)
             if dist <= radius_nm:
                 return True
@@ -431,7 +426,7 @@ class SafetyMonitor:
 
         return near_airport_1 and near_airport_2
 
-    def _calculate_closure_rate(self, pos1: dict, pos2: dict) -> Optional[float]:
+    def _calculate_closure_rate(self, pos1: dict, pos2: dict) -> float | None:
         """Calculate closure rate between two aircraft in knots."""
         if pos1["gs"] is None or pos2["gs"] is None:
             return None
@@ -441,7 +436,7 @@ class SafetyMonitor:
         lat_diff = (pos2["lat"] - pos1["lat"]) * 60
         lon_diff = (pos2["lon"] - pos1["lon"]) * 60 * math.cos(math.radians(pos1["lat"]))
 
-        dist = math.sqrt(lat_diff ** 2 + lon_diff ** 2)
+        dist = math.sqrt(lat_diff**2 + lon_diff**2)
         if dist < 0.001:
             return None
 
@@ -461,17 +456,19 @@ class SafetyMonitor:
         return round(closure, 1)
 
     def _update_state(
-        self, icao: str, vr: Optional[int], alt: Optional[int],
-        lat: Optional[float], lon: Optional[float],
-        gs: Optional[float], track: Optional[float], now: float
+        self,
+        icao: str,
+        vr: int | None,
+        alt: int | None,
+        lat: float | None,
+        lon: float | None,
+        gs: float | None,
+        track: float | None,
+        now: float,
     ):
         """Update aircraft state history."""
         if icao not in self._aircraft_state:
-            self._aircraft_state[icao] = {
-                "vs_history": [],
-                "alt_history": [],
-                "last_update": now
-            }
+            self._aircraft_state[icao] = {"vs_history": [], "alt_history": [], "last_update": now}
 
         state = self._aircraft_state[icao]
         state["last_update"] = now
@@ -491,7 +488,7 @@ class SafetyMonitor:
         state["gs"] = gs
         state["track"] = track
 
-    def update_aircraft(self, aircraft_list: List[dict]) -> List[dict]:
+    def update_aircraft(self, aircraft_list: list[dict]) -> list[dict]:
         """Process aircraft list and detect safety events."""
         if not self.enabled:
             return []
@@ -519,9 +516,14 @@ class SafetyMonitor:
             # Only include in proximity check if airborne (>500ft) with valid position
             if is_valid_position(lat, lon) and alt is not None and alt >= 500:
                 current_positions[icao] = {
-                    "lat": lat, "lon": lon, "alt": alt,
-                    "vr": vr, "gs": gs, "track": track,
-                    "callsign": callsign, "raw": ac
+                    "lat": lat,
+                    "lon": lon,
+                    "alt": alt,
+                    "vr": vr,
+                    "gs": gs,
+                    "track": track,
+                    "callsign": callsign,
+                    "raw": ac,
                 }
 
             # Check for emergency squawks
@@ -547,9 +549,7 @@ class SafetyMonitor:
 
         return stored_events
 
-    def _check_emergency_squawk(
-        self, icao: str, callsign: str, squawk: str, ac: dict
-    ) -> List[dict]:
+    def _check_emergency_squawk(self, icao: str, callsign: str, squawk: str, ac: dict) -> list[dict]:
         """Check for emergency squawk codes."""
         events = []
 
@@ -560,36 +560,36 @@ class SafetyMonitor:
         display_name = callsign or icao
 
         # Emergency squawks don't use cooldown - they persist while active
-        events.append({
-            "event_type": f"squawk_{squawk_info['type']}",
-            "severity": squawk_info["severity"],
-            "icao": icao,
-            "icao_hex": icao,
-            "callsign": display_name,
-            "flight": display_name,
-            "squawk": squawk,
-            "message": f"{squawk_info['label']}: {display_name} squawking {squawk}",
-            "details": {
+        events.append(
+            {
+                "event_type": f"squawk_{squawk_info['type']}",
+                "severity": squawk_info["severity"],
+                "icao": icao,
+                "icao_hex": icao,
+                "callsign": display_name,
+                "flight": display_name,
                 "squawk": squawk,
-                "squawk_type": squawk_info["type"],
-                "squawk_label": squawk_info["label"],
-                "altitude": ac.get("alt_baro") or ac.get("alt_geom") or ac.get("alt"),
-                "lat": ac.get("lat"),
-                "lon": ac.get("lon"),
-                "gs": ac.get("gs"),
-                "track": ac.get("track"),
-                "vr": ac.get("baro_rate") or ac.get("geom_rate") or ac.get("vr")
-            },
-            "aircraft_snapshot": self._build_aircraft_snapshot(ac),
-        })
+                "message": f"{squawk_info['label']}: {display_name} squawking {squawk}",
+                "details": {
+                    "squawk": squawk,
+                    "squawk_type": squawk_info["type"],
+                    "squawk_label": squawk_info["label"],
+                    "altitude": ac.get("alt_baro") or ac.get("alt_geom") or ac.get("alt"),
+                    "lat": ac.get("lat"),
+                    "lon": ac.get("lon"),
+                    "gs": ac.get("gs"),
+                    "track": ac.get("track"),
+                    "vr": ac.get("baro_rate") or ac.get("geom_rate") or ac.get("vr"),
+                },
+                "aircraft_snapshot": self._build_aircraft_snapshot(ac),
+            }
+        )
 
         return events
 
     def _check_vertical_speed_events(
-        self, icao: str, callsign: str,
-        current_vs: Optional[int], alt: Optional[int],
-        ac: dict, now: float
-    ) -> List[dict]:
+        self, icao: str, callsign: str, current_vs: int | None, alt: int | None, ac: dict, now: float
+    ) -> list[dict]:
         """Check for VS-related safety events."""
         events = []
 
@@ -600,18 +600,18 @@ class SafetyMonitor:
         display_name = callsign or icao
 
         # Extreme vertical speed (threshold is 6000 fpm)
-        if abs_vs >= self.vs_extreme_threshold:
-            if self._can_trigger_event("extreme_vs", icao):
-                direction = "climbing" if current_vs > 0 else "descending"
+        if abs_vs >= self.vs_extreme_threshold and self._can_trigger_event("extreme_vs", icao):
+            direction = "climbing" if current_vs > 0 else "descending"
 
-                if abs_vs >= 8000:
-                    severity = "critical"
-                elif abs_vs >= 7000:
-                    severity = "warning"
-                else:
-                    severity = "low"
+            if abs_vs >= 8000:
+                severity = "critical"
+            elif abs_vs >= 7000:
+                severity = "warning"
+            else:
+                severity = "low"
 
-                events.append({
+            events.append(
+                {
                     "event_type": "extreme_vs",
                     "severity": severity,
                     "icao": icao,
@@ -626,11 +626,12 @@ class SafetyMonitor:
                         "lat": ac.get("lat"),
                         "lon": ac.get("lon"),
                         "gs": ac.get("gs"),
-                        "squawk": ac.get("squawk")
+                        "squawk": ac.get("squawk"),
                     },
                     "aircraft_snapshot": self._build_aircraft_snapshot(ac),
-                })
-                self._mark_event_triggered("extreme_vs", icao)
+                }
+            )
+            self._mark_event_triggered("extreme_vs", icao)
 
         # VS reversal detection (potential TCAS RA)
         state = self._aircraft_state.get(icao)
@@ -660,48 +661,15 @@ class SafetyMonitor:
 
                     # TCAS RA: High magnitude reversal
                     is_tcas_ra = not is_takeoff and (
-                        abs(prev_vs) >= self.tcas_vs_threshold and
-                        abs(current_vs) >= self.tcas_vs_threshold
+                        abs(prev_vs) >= self.tcas_vs_threshold and abs(current_vs) >= self.tcas_vs_threshold
                     )
 
                     if is_tcas_ra and self._can_trigger_event("tcas_ra", icao):
-                        msg = (f"TCAS RA suspected: {display_name} "
-                               f"VS reversed from {prev_vs:+d} to {current_vs:+d} fpm")
-                        events.append({
-                            "event_type": "tcas_ra",
-                            "severity": "critical",
-                            "icao": icao,
-                            "icao_hex": icao,
-                            "callsign": display_name,
-                            "flight": display_name,
-                            "message": msg,
-                            "details": {
-                                "previous_vs": prev_vs,
-                                "current_vs": current_vs,
-                                "vs_change": current_vs - prev_vs,
-                                "altitude": alt,
-                                "lat": ac.get("lat"),
-                                "lon": ac.get("lon"),
-                                "gs": ac.get("gs"),
-                                "squawk": ac.get("squawk"),
-                                "threshold": self.tcas_vs_threshold
-                            },
-                            "aircraft_snapshot": self._build_aircraft_snapshot(ac),
-                        })
-                        self._mark_event_triggered("tcas_ra", icao)
-
-                    elif not is_takeoff and abs_change >= self.vs_change_threshold:
-                        # Regular VS reversal
-                        if abs_change >= 4000:
-                            severity = "warning"
-                        else:
-                            severity = "low"
-
-                        if self._can_trigger_event("vs_reversal", icao):
-                            msg = f"VS reversal: {display_name} {prev_vs:+d} → {current_vs:+d} fpm"
-                            events.append({
-                                "event_type": "vs_reversal",
-                                "severity": severity,
+                        msg = f"TCAS RA suspected: {display_name} VS reversed from {prev_vs:+d} to {current_vs:+d} fpm"
+                        events.append(
+                            {
+                                "event_type": "tcas_ra",
+                                "severity": "critical",
                                 "icao": icao,
                                 "icao_hex": icao,
                                 "callsign": display_name,
@@ -716,15 +684,47 @@ class SafetyMonitor:
                                     "lon": ac.get("lon"),
                                     "gs": ac.get("gs"),
                                     "squawk": ac.get("squawk"),
-                                    "threshold": self.vs_change_threshold
+                                    "threshold": self.tcas_vs_threshold,
                                 },
                                 "aircraft_snapshot": self._build_aircraft_snapshot(ac),
-                            })
+                            }
+                        )
+                        self._mark_event_triggered("tcas_ra", icao)
+
+                    elif not is_takeoff and abs_change >= self.vs_change_threshold:
+                        # Regular VS reversal
+                        severity = "warning" if abs_change >= 4000 else "low"
+
+                        if self._can_trigger_event("vs_reversal", icao):
+                            msg = f"VS reversal: {display_name} {prev_vs:+d} → {current_vs:+d} fpm"
+                            events.append(
+                                {
+                                    "event_type": "vs_reversal",
+                                    "severity": severity,
+                                    "icao": icao,
+                                    "icao_hex": icao,
+                                    "callsign": display_name,
+                                    "flight": display_name,
+                                    "message": msg,
+                                    "details": {
+                                        "previous_vs": prev_vs,
+                                        "current_vs": current_vs,
+                                        "vs_change": current_vs - prev_vs,
+                                        "altitude": alt,
+                                        "lat": ac.get("lat"),
+                                        "lon": ac.get("lon"),
+                                        "gs": ac.get("gs"),
+                                        "squawk": ac.get("squawk"),
+                                        "threshold": self.vs_change_threshold,
+                                    },
+                                    "aircraft_snapshot": self._build_aircraft_snapshot(ac),
+                                }
+                            )
                             self._mark_event_triggered("vs_reversal", icao)
 
         return events
 
-    def _check_proximity_conflicts(self, positions: Dict[str, dict]) -> List[dict]:
+    def _check_proximity_conflicts(self, positions: dict[str, dict]) -> list[dict]:
         """Check for proximity conflicts between aircraft pairs."""
         events = []
         icao_list = list(positions.keys())
@@ -734,7 +734,7 @@ class SafetyMonitor:
 
         for i, icao1 in enumerate(icao_list):
             pos1 = positions[icao1]
-            for icao2 in icao_list[i + 1:]:
+            for icao2 in icao_list[i + 1 :]:
                 pos2 = positions[icao2]
 
                 # Fast bounding box check
@@ -745,10 +745,7 @@ class SafetyMonitor:
                 if lon_diff > deg_threshold:
                     continue
 
-                dist_nm = calculate_distance_nm(
-                    pos1["lat"], pos1["lon"],
-                    pos2["lat"], pos2["lon"]
-                )
+                dist_nm = calculate_distance_nm(pos1["lat"], pos1["lon"], pos2["lat"], pos2["lon"])
 
                 if dist_nm > self.proximity_nm:
                     continue
@@ -795,48 +792,50 @@ class SafetyMonitor:
                     if closure_rate is not None and closure_rate > 0:
                         msg += f", closure rate {closure_rate:.0f}kt"
 
-                    events.append({
-                        "event_type": "proximity_conflict",
-                        "severity": severity,
-                        "icao": icao1,
-                        "icao_hex": icao1,
-                        "icao_2": icao2,
-                        "icao_hex_2": icao2,
-                        "callsign": display1,
-                        "callsign_2": display2,
-                        "flight": display1,
-                        "flight_2": display2,
-                        "message": msg,
-                        "details": {
-                            "distance_nm": round(dist_nm, 3),
-                            "altitude_diff_ft": alt_diff,
-                            "closure_rate_kt": closure_rate,
-                            "horizontal_nm": round(dist_nm, 3),
-                            "vertical_ft": alt_diff,
-                            "aircraft_1": {
-                                "icao": icao1,
-                                "callsign": display1,
-                                "lat": pos1["lat"],
-                                "lon": pos1["lon"],
-                                "alt": pos1["alt"],
-                                "gs": pos1["gs"],
-                                "track": pos1["track"],
-                                "vr": pos1["vr"]
+                    events.append(
+                        {
+                            "event_type": "proximity_conflict",
+                            "severity": severity,
+                            "icao": icao1,
+                            "icao_hex": icao1,
+                            "icao_2": icao2,
+                            "icao_hex_2": icao2,
+                            "callsign": display1,
+                            "callsign_2": display2,
+                            "flight": display1,
+                            "flight_2": display2,
+                            "message": msg,
+                            "details": {
+                                "distance_nm": round(dist_nm, 3),
+                                "altitude_diff_ft": alt_diff,
+                                "closure_rate_kt": closure_rate,
+                                "horizontal_nm": round(dist_nm, 3),
+                                "vertical_ft": alt_diff,
+                                "aircraft_1": {
+                                    "icao": icao1,
+                                    "callsign": display1,
+                                    "lat": pos1["lat"],
+                                    "lon": pos1["lon"],
+                                    "alt": pos1["alt"],
+                                    "gs": pos1["gs"],
+                                    "track": pos1["track"],
+                                    "vr": pos1["vr"],
+                                },
+                                "aircraft_2": {
+                                    "icao": icao2,
+                                    "callsign": display2,
+                                    "lat": pos2["lat"],
+                                    "lon": pos2["lon"],
+                                    "alt": pos2["alt"],
+                                    "gs": pos2["gs"],
+                                    "track": pos2["track"],
+                                    "vr": pos2["vr"],
+                                },
                             },
-                            "aircraft_2": {
-                                "icao": icao2,
-                                "callsign": display2,
-                                "lat": pos2["lat"],
-                                "lon": pos2["lon"],
-                                "alt": pos2["alt"],
-                                "gs": pos2["gs"],
-                                "track": pos2["track"],
-                                "vr": pos2["vr"]
-                            }
-                        },
-                        "aircraft_snapshot": self._build_aircraft_snapshot(pos1["raw"]),
-                        "aircraft_snapshot_2": self._build_aircraft_snapshot(pos2["raw"]),
-                    })
+                            "aircraft_snapshot": self._build_aircraft_snapshot(pos1["raw"]),
+                            "aircraft_snapshot_2": self._build_aircraft_snapshot(pos2["raw"]),
+                        }
+                    )
                     self._mark_event_triggered("proximity_conflict", icao1, icao2)
 
         return events
@@ -847,18 +846,18 @@ class SafetyMonitor:
 
         # Map internal event types to Socket.IO event names expected by frontend
         event_name_map = {
-            'safety_event': 'safety:event',
-            'safety_event_updated': 'safety:event_updated',
-            'safety_event_resolved': 'safety:event_resolved',
+            "safety_event": "safety:event",
+            "safety_event_updated": "safety:event_updated",
+            "safety_event_resolved": "safety:event_resolved",
         }
-        socket_event = event_name_map.get(event_type, 'safety:event')
+        socket_event = event_name_map.get(event_type, "safety:event")
 
         try:
-            sync_emit(socket_event, {
-                **event,
-                'event_action': event_type,
-                'timestamp': timezone.now().isoformat().replace('+00:00', 'Z')
-            }, room='topic_safety')
+            sync_emit(
+                socket_event,
+                {**event, "event_action": event_type, "timestamp": timezone.now().isoformat().replace("+00:00", "Z")},
+                room="topic_safety",
+            )
         except Exception as e:
             logger.warning(f"Failed to broadcast {event_type}: {e}")
 
@@ -867,36 +866,36 @@ class SafetyMonitor:
         # Store in database
         try:
             db_event = SafetyEvent.objects.create(
-                event_type=event['event_type'],
-                severity=event['severity'],
-                icao_hex=event.get('icao') or event.get('icao_hex'),
-                icao_hex_2=event.get('icao_2') or event.get('icao_hex_2'),
-                callsign=event.get('callsign'),
-                callsign_2=event.get('callsign_2'),
-                message=event.get('message'),
-                details=event.get('details'),
-                aircraft_snapshot=event.get('aircraft_snapshot'),
-                aircraft_snapshot_2=event.get('aircraft_snapshot_2'),
+                event_type=event["event_type"],
+                severity=event["severity"],
+                icao_hex=event.get("icao") or event.get("icao_hex"),
+                icao_hex_2=event.get("icao_2") or event.get("icao_hex_2"),
+                callsign=event.get("callsign"),
+                callsign_2=event.get("callsign_2"),
+                message=event.get("message"),
+                details=event.get("details"),
+                aircraft_snapshot=event.get("aircraft_snapshot"),
+                aircraft_snapshot_2=event.get("aircraft_snapshot_2"),
             )
             # Store DB ID back in active event (with lock)
-            event_id = event.get('id')
+            event_id = event.get("id")
             if event_id:
                 with self._events_lock:
                     if event_id in self._active_events:
-                        self._active_events[event_id]['db_id'] = db_event.id
+                        self._active_events[event_id]["db_id"] = db_event.id
         except Exception as e:
             logger.error(f"Failed to store safety event: {e}")
 
         # Broadcast new event to WebSocket clients
-        self._broadcast_event('safety_event', event)
+        self._broadcast_event("safety_event", event)
 
     def broadcast_event_updated(self, event: dict):
         """Broadcast an event update (e.g., acknowledgment change)."""
-        self._broadcast_event('safety_event_updated', event)
+        self._broadcast_event("safety_event_updated", event)
 
     def broadcast_event_resolved(self, event: dict):
         """Broadcast an event resolution/clearing."""
-        self._broadcast_event('safety_event_resolved', event)
+        self._broadcast_event("safety_event_resolved", event)
 
     def get_stats(self) -> dict:
         """Get safety monitor statistics. Thread-safe."""
@@ -920,7 +919,7 @@ class SafetyMonitor:
             "acknowledged_events": acked_count,
             "unacknowledged_events": unacked_count,
             "events_by_severity": severity_counts,
-            "thresholds": self.get_thresholds()
+            "thresholds": self.get_thresholds(),
         }
 
     def get_thresholds(self) -> dict:
@@ -945,191 +944,201 @@ class SafetyMonitor:
             "active_events": active_events_count,
         }
 
-    def generate_test_events(self) -> List[dict]:
+    def generate_test_events(self) -> list[dict]:
         """Generate test events for all safety event types."""
         now = time.time()
         test_events = []
 
-        feeder_lat = getattr(settings, 'FEEDER_LAT', 47.9377)
-        feeder_lon = getattr(settings, 'FEEDER_LON', -121.9687)
+        feeder_lat = getattr(settings, "FEEDER_LAT", 47.9377)
+        feeder_lon = getattr(settings, "FEEDER_LON", -121.9687)
 
         # Test emergency squawk (7700)
-        test_events.append({
-            "event_type": "squawk_emergency",
-            "severity": "critical",
-            "icao": "TEST01",
-            "icao_hex": "TEST01",
-            "callsign": "TEST001",
-            "flight": "TEST001",
-            "message": "EMERGENCY: TEST001 squawking 7700",
-            "details": {
-                "squawk": "7700",
-                "squawk_type": "emergency",
-                "altitude": 5000,
-                "lat": feeder_lat,
-                "lon": feeder_lon,
-            },
-            "aircraft_snapshot": {
-                "hex": "TEST01",
+        test_events.append(
+            {
+                "event_type": "squawk_emergency",
+                "severity": "critical",
+                "icao": "TEST01",
+                "icao_hex": "TEST01",
+                "callsign": "TEST001",
                 "flight": "TEST001",
-                "lat": feeder_lat,
-                "lon": feeder_lon,
-                "alt_baro": 5000,
-                "gs": 250,
-                "track": 90,
-                "baro_rate": 0,
-                "squawk": "7700",
-            },
-        })
-
-        # Test TCAS RA
-        test_events.append({
-            "event_type": "tcas_ra",
-            "severity": "critical",
-            "icao": "TEST02",
-            "icao_hex": "TEST02",
-            "callsign": "TEST002",
-            "flight": "TEST002",
-            "message": "TCAS RA suspected: TEST002 VS reversed from -2500 to +2500 fpm",
-            "details": {
-                "previous_vs": -2500,
-                "current_vs": 2500,
-                "vs_change": 5000,
-                "altitude": 8000,
-                "lat": feeder_lat + 0.01,
-                "lon": feeder_lon + 0.01,
-            },
-            "aircraft_snapshot": {
-                "hex": "TEST02",
-                "flight": "TEST002",
-                "lat": feeder_lat + 0.01,
-                "lon": feeder_lon + 0.01,
-                "alt_baro": 8000,
-                "gs": 300,
-                "track": 180,
-                "baro_rate": 2500,
-                "squawk": "1200",
-            },
-        })
-
-        # Test VS reversal (warning level)
-        test_events.append({
-            "event_type": "vs_reversal",
-            "severity": "warning",
-            "icao": "TEST03",
-            "icao_hex": "TEST03",
-            "callsign": "TEST003",
-            "flight": "TEST003",
-            "message": "VS reversal: TEST003 -3000 → +1500 fpm",
-            "details": {
-                "previous_vs": -3000,
-                "current_vs": 1500,
-                "vs_change": 4500,
-                "altitude": 12000,
-                "lat": feeder_lat - 0.01,
-                "lon": feeder_lon - 0.01,
-            },
-            "aircraft_snapshot": {
-                "hex": "TEST03",
-                "flight": "TEST003",
-                "lat": feeder_lat - 0.01,
-                "lon": feeder_lon - 0.01,
-                "alt_baro": 12000,
-                "gs": 350,
-                "track": 270,
-                "baro_rate": 1500,
-                "squawk": "4521",
-            },
-        })
-
-        # Test extreme VS
-        test_events.append({
-            "event_type": "extreme_vs",
-            "severity": "low",
-            "icao": "TEST04",
-            "icao_hex": "TEST04",
-            "callsign": "TEST004",
-            "flight": "TEST004",
-            "message": "Extreme vertical speed: TEST004 descending at 6500 fpm",
-            "details": {
-                "vertical_rate": -6500,
-                "altitude": 3000,
-                "threshold": self.vs_extreme_threshold,
-                "lat": feeder_lat + 0.02,
-                "lon": feeder_lon - 0.02,
-            },
-            "aircraft_snapshot": {
-                "hex": "TEST04",
-                "flight": "TEST004",
-                "lat": feeder_lat + 0.02,
-                "lon": feeder_lon - 0.02,
-                "alt_baro": 3000,
-                "gs": 180,
-                "track": 45,
-                "baro_rate": -6500,
-                "squawk": "1200",
-            },
-        })
-
-        # Test proximity conflict
-        test_events.append({
-            "event_type": "proximity_conflict",
-            "severity": "warning",
-            "icao": "TEST05",
-            "icao_hex": "TEST05",
-            "icao_2": "TEST06",
-            "icao_hex_2": "TEST06",
-            "callsign": "TEST005",
-            "callsign_2": "TEST006",
-            "flight": "TEST005",
-            "flight_2": "TEST006",
-            "message": "Proximity conflict: TEST005 and TEST006 within 0.80nm, 400ft altitude separation",
-            "details": {
-                "distance_nm": 0.8,
-                "altitude_diff_ft": 400,
-                "closure_rate_kt": 150,
-                "aircraft_1": {
-                    "icao": "TEST05",
-                    "callsign": "TEST005",
+                "message": "EMERGENCY: TEST001 squawking 7700",
+                "details": {
+                    "squawk": "7700",
+                    "squawk_type": "emergency",
+                    "altitude": 5000,
                     "lat": feeder_lat,
                     "lon": feeder_lon,
-                    "alt": 10000,
+                },
+                "aircraft_snapshot": {
+                    "hex": "TEST01",
+                    "flight": "TEST001",
+                    "lat": feeder_lat,
+                    "lon": feeder_lon,
+                    "alt_baro": 5000,
+                    "gs": 250,
+                    "track": 90,
+                    "baro_rate": 0,
+                    "squawk": "7700",
+                },
+            }
+        )
+
+        # Test TCAS RA
+        test_events.append(
+            {
+                "event_type": "tcas_ra",
+                "severity": "critical",
+                "icao": "TEST02",
+                "icao_hex": "TEST02",
+                "callsign": "TEST002",
+                "flight": "TEST002",
+                "message": "TCAS RA suspected: TEST002 VS reversed from -2500 to +2500 fpm",
+                "details": {
+                    "previous_vs": -2500,
+                    "current_vs": 2500,
+                    "vs_change": 5000,
+                    "altitude": 8000,
+                    "lat": feeder_lat + 0.01,
+                    "lon": feeder_lon + 0.01,
+                },
+                "aircraft_snapshot": {
+                    "hex": "TEST02",
+                    "flight": "TEST002",
+                    "lat": feeder_lat + 0.01,
+                    "lon": feeder_lon + 0.01,
+                    "alt_baro": 8000,
+                    "gs": 300,
+                    "track": 180,
+                    "baro_rate": 2500,
+                    "squawk": "1200",
+                },
+            }
+        )
+
+        # Test VS reversal (warning level)
+        test_events.append(
+            {
+                "event_type": "vs_reversal",
+                "severity": "warning",
+                "icao": "TEST03",
+                "icao_hex": "TEST03",
+                "callsign": "TEST003",
+                "flight": "TEST003",
+                "message": "VS reversal: TEST003 -3000 → +1500 fpm",
+                "details": {
+                    "previous_vs": -3000,
+                    "current_vs": 1500,
+                    "vs_change": 4500,
+                    "altitude": 12000,
+                    "lat": feeder_lat - 0.01,
+                    "lon": feeder_lon - 0.01,
+                },
+                "aircraft_snapshot": {
+                    "hex": "TEST03",
+                    "flight": "TEST003",
+                    "lat": feeder_lat - 0.01,
+                    "lon": feeder_lon - 0.01,
+                    "alt_baro": 12000,
+                    "gs": 350,
+                    "track": 270,
+                    "baro_rate": 1500,
+                    "squawk": "4521",
+                },
+            }
+        )
+
+        # Test extreme VS
+        test_events.append(
+            {
+                "event_type": "extreme_vs",
+                "severity": "low",
+                "icao": "TEST04",
+                "icao_hex": "TEST04",
+                "callsign": "TEST004",
+                "flight": "TEST004",
+                "message": "Extreme vertical speed: TEST004 descending at 6500 fpm",
+                "details": {
+                    "vertical_rate": -6500,
+                    "altitude": 3000,
+                    "threshold": self.vs_extreme_threshold,
+                    "lat": feeder_lat + 0.02,
+                    "lon": feeder_lon - 0.02,
+                },
+                "aircraft_snapshot": {
+                    "hex": "TEST04",
+                    "flight": "TEST004",
+                    "lat": feeder_lat + 0.02,
+                    "lon": feeder_lon - 0.02,
+                    "alt_baro": 3000,
+                    "gs": 180,
+                    "track": 45,
+                    "baro_rate": -6500,
+                    "squawk": "1200",
+                },
+            }
+        )
+
+        # Test proximity conflict
+        test_events.append(
+            {
+                "event_type": "proximity_conflict",
+                "severity": "warning",
+                "icao": "TEST05",
+                "icao_hex": "TEST05",
+                "icao_2": "TEST06",
+                "icao_hex_2": "TEST06",
+                "callsign": "TEST005",
+                "callsign_2": "TEST006",
+                "flight": "TEST005",
+                "flight_2": "TEST006",
+                "message": "Proximity conflict: TEST005 and TEST006 within 0.80nm, 400ft altitude separation",
+                "details": {
+                    "distance_nm": 0.8,
+                    "altitude_diff_ft": 400,
+                    "closure_rate_kt": 150,
+                    "aircraft_1": {
+                        "icao": "TEST05",
+                        "callsign": "TEST005",
+                        "lat": feeder_lat,
+                        "lon": feeder_lon,
+                        "alt": 10000,
+                        "gs": 280,
+                        "track": 90,
+                    },
+                    "aircraft_2": {
+                        "icao": "TEST06",
+                        "callsign": "TEST006",
+                        "lat": feeder_lat + 0.005,
+                        "lon": feeder_lon + 0.005,
+                        "alt": 10400,
+                        "gs": 290,
+                        "track": 270,
+                    },
+                },
+                "aircraft_snapshot": {
+                    "hex": "TEST05",
+                    "flight": "TEST005",
+                    "lat": feeder_lat,
+                    "lon": feeder_lon,
+                    "alt_baro": 10000,
                     "gs": 280,
                     "track": 90,
+                    "baro_rate": 0,
+                    "squawk": "3456",
                 },
-                "aircraft_2": {
-                    "icao": "TEST06",
-                    "callsign": "TEST006",
+                "aircraft_snapshot_2": {
+                    "hex": "TEST06",
+                    "flight": "TEST006",
                     "lat": feeder_lat + 0.005,
                     "lon": feeder_lon + 0.005,
-                    "alt": 10400,
+                    "alt_baro": 10400,
                     "gs": 290,
                     "track": 270,
+                    "baro_rate": 0,
+                    "squawk": "7654",
                 },
-            },
-            "aircraft_snapshot": {
-                "hex": "TEST05",
-                "flight": "TEST005",
-                "lat": feeder_lat,
-                "lon": feeder_lon,
-                "alt_baro": 10000,
-                "gs": 280,
-                "track": 90,
-                "baro_rate": 0,
-                "squawk": "3456",
-            },
-            "aircraft_snapshot_2": {
-                "hex": "TEST06",
-                "flight": "TEST006",
-                "lat": feeder_lat + 0.005,
-                "lon": feeder_lon + 0.005,
-                "alt_baro": 10400,
-                "gs": 290,
-                "track": 270,
-                "baro_rate": 0,
-                "squawk": "7654",
-            },
-        })
+            }
+        )
 
         # Add all test events to active events (with lock for thread safety)
         with self._events_lock:

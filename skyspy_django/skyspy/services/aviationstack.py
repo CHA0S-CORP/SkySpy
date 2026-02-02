@@ -6,9 +6,10 @@ Aviationstack: https://aviationstack.com/
 
 Free tier: 100 requests/month
 """
+
 import logging
-from datetime import datetime, date
-from typing import Optional, Dict, Any, List
+from datetime import date
+from typing import Any
 
 import httpx
 from django.conf import settings
@@ -24,21 +25,17 @@ FLIGHTS_CACHE_TTL = 3600  # 1 hour
 SCHEDULES_CACHE_TTL = 7200  # 2 hours
 
 
-def _get_api_key() -> Optional[str]:
+def _get_api_key() -> str | None:
     """Get Aviationstack API key from settings."""
-    return getattr(settings, 'AVIATIONSTACK_API_KEY', None)
+    return getattr(settings, "AVIATIONSTACK_API_KEY", None)
 
 
 def _is_enabled() -> bool:
     """Check if Aviationstack is enabled."""
-    return getattr(settings, 'AVIATIONSTACK_ENABLED', False) and _get_api_key()
+    return getattr(settings, "AVIATIONSTACK_ENABLED", False) and _get_api_key()
 
 
-def _make_request(
-    endpoint: str,
-    params: Optional[Dict] = None,
-    timeout: int = 30
-) -> Optional[Dict[str, Any]]:
+def _make_request(endpoint: str, params: dict | None = None, timeout: int = 30) -> dict[str, Any] | None:
     """
     Make a request to the Aviationstack API.
 
@@ -57,7 +54,7 @@ def _make_request(
 
     # Add API key to params
     params = params or {}
-    params['access_key'] = api_key
+    params["access_key"] = api_key
 
     try:
         with httpx.Client(timeout=timeout) as client:
@@ -70,8 +67,8 @@ def _make_request(
             data = response.json()
 
             # Check for API errors
-            if 'error' in data:
-                error = data['error']
+            if "error" in data:
+                error = data["error"]
                 logger.error(f"Aviationstack API error: {error.get('message', error)}")
                 return None
 
@@ -86,9 +83,9 @@ def _make_request(
 
 
 def get_flight_by_callsign(
-    flight_iata: Optional[str] = None,
-    flight_icao: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
+    flight_iata: str | None = None,
+    flight_icao: str | None = None,
+) -> dict[str, Any] | None:
     """
     Get flight information by callsign.
 
@@ -110,18 +107,18 @@ def get_flight_by_callsign(
 
     params = {}
     if flight_iata:
-        params['flight_iata'] = flight_iata
+        params["flight_iata"] = flight_iata
     elif flight_icao:
-        params['flight_icao'] = flight_icao
+        params["flight_icao"] = flight_icao
     else:
         return None
 
-    result = _make_request('flights', params)
+    result = _make_request("flights", params)
 
     if not result:
         return None
 
-    flights = result.get('data', [])
+    flights = result.get("data", [])
     if not flights:
         return None
 
@@ -136,8 +133,8 @@ def get_flight_by_callsign(
 def get_flights_for_route(
     departure_iata: str,
     arrival_iata: str,
-    flight_date: Optional[date] = None,
-) -> List[Dict[str, Any]]:
+    flight_date: date | None = None,
+) -> list[dict[str, Any]]:
     """
     Get flights for a specific route.
 
@@ -160,19 +157,19 @@ def get_flights_for_route(
         return cached
 
     params = {
-        'dep_iata': departure_iata,
-        'arr_iata': arrival_iata,
+        "dep_iata": departure_iata,
+        "arr_iata": arrival_iata,
     }
     if flight_date:
-        params['flight_date'] = date_str
+        params["flight_date"] = date_str
 
-    result = _make_request('flights', params)
+    result = _make_request("flights", params)
 
     if not result:
         return []
 
     flights = []
-    for flight_data in result.get('data', []):
+    for flight_data in result.get("data", []):
         parsed = _parse_flight(flight_data)
         if parsed:
             flights.append(parsed)
@@ -183,9 +180,9 @@ def get_flights_for_route(
 
 def get_departures(
     airport_iata: str,
-    flight_date: Optional[date] = None,
+    flight_date: date | None = None,
     limit: int = 50,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Get departures from an airport.
 
@@ -208,19 +205,19 @@ def get_departures(
         return cached[:limit]
 
     params = {
-        'dep_iata': airport_iata,
-        'limit': limit,
+        "dep_iata": airport_iata,
+        "limit": limit,
     }
     if flight_date:
-        params['flight_date'] = date_str
+        params["flight_date"] = date_str
 
-    result = _make_request('flights', params)
+    result = _make_request("flights", params)
 
     if not result:
         return []
 
     flights = []
-    for flight_data in result.get('data', []):
+    for flight_data in result.get("data", []):
         parsed = _parse_flight(flight_data)
         if parsed:
             flights.append(parsed)
@@ -231,9 +228,9 @@ def get_departures(
 
 def get_arrivals(
     airport_iata: str,
-    flight_date: Optional[date] = None,
+    flight_date: date | None = None,
     limit: int = 50,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Get arrivals at an airport.
 
@@ -256,19 +253,19 @@ def get_arrivals(
         return cached[:limit]
 
     params = {
-        'arr_iata': airport_iata,
-        'limit': limit,
+        "arr_iata": airport_iata,
+        "limit": limit,
     }
     if flight_date:
-        params['flight_date'] = date_str
+        params["flight_date"] = date_str
 
-    result = _make_request('flights', params)
+    result = _make_request("flights", params)
 
     if not result:
         return []
 
     flights = []
-    for flight_data in result.get('data', []):
+    for flight_data in result.get("data", []):
         parsed = _parse_flight(flight_data)
         if parsed:
             flights.append(parsed)
@@ -278,9 +275,9 @@ def get_arrivals(
 
 
 def get_airline_info(
-    airline_iata: Optional[str] = None,
-    airline_icao: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
+    airline_iata: str | None = None,
+    airline_icao: str | None = None,
+) -> dict[str, Any] | None:
     """
     Get airline information.
 
@@ -302,41 +299,41 @@ def get_airline_info(
 
     params = {}
     if airline_iata:
-        params['airline_iata'] = airline_iata
+        params["airline_iata"] = airline_iata
     elif airline_icao:
-        params['airline_icao'] = airline_icao
+        params["airline_icao"] = airline_icao
     else:
         return None
 
-    result = _make_request('airlines', params)
+    result = _make_request("airlines", params)
 
     if not result:
         return None
 
-    airlines = result.get('data', [])
+    airlines = result.get("data", [])
     if not airlines:
         return None
 
     airline = airlines[0]
     parsed = {
-        'name': airline.get('airline_name'),
-        'iata_code': airline.get('iata_code'),
-        'icao_code': airline.get('icao_code'),
-        'callsign': airline.get('callsign'),
-        'country': airline.get('country_name'),
-        'country_iso': airline.get('country_iso2'),
-        'is_active': airline.get('status') == 'active',
-        'fleet_size': airline.get('fleet_size'),
-        'fleet_average_age': airline.get('fleet_average_age'),
-        'hub_code': airline.get('hub_code'),
-        'source': 'aviationstack',
+        "name": airline.get("airline_name"),
+        "iata_code": airline.get("iata_code"),
+        "icao_code": airline.get("icao_code"),
+        "callsign": airline.get("callsign"),
+        "country": airline.get("country_name"),
+        "country_iso": airline.get("country_iso2"),
+        "is_active": airline.get("status") == "active",
+        "fleet_size": airline.get("fleet_size"),
+        "fleet_average_age": airline.get("fleet_average_age"),
+        "hub_code": airline.get("hub_code"),
+        "source": "aviationstack",
     }
 
     cache.set(cache_key, parsed, 86400)  # 24 hour cache for airline data
     return parsed
 
 
-def _parse_flight(flight_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _parse_flight(flight_data: dict[str, Any]) -> dict[str, Any] | None:
     """
     Parse an Aviationstack flight record.
 
@@ -347,51 +344,45 @@ def _parse_flight(flight_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         Parsed flight dictionary or None if invalid
     """
     try:
-        flight = flight_data.get('flight', {})
-        departure = flight_data.get('departure', {})
-        arrival = flight_data.get('arrival', {})
-        airline = flight_data.get('airline', {})
-        aircraft = flight_data.get('aircraft', {})
+        flight = flight_data.get("flight", {})
+        departure = flight_data.get("departure", {})
+        arrival = flight_data.get("arrival", {})
+        airline = flight_data.get("airline", {})
+        aircraft = flight_data.get("aircraft", {})
 
         return {
-            'flight_number': flight.get('number'),
-            'flight_iata': flight.get('iata'),
-            'flight_icao': flight.get('icao'),
-
-            'airline_name': airline.get('name'),
-            'airline_iata': airline.get('iata'),
-            'airline_icao': airline.get('icao'),
-
-            'departure_airport': departure.get('airport'),
-            'departure_iata': departure.get('iata'),
-            'departure_icao': departure.get('icao'),
-            'departure_scheduled': departure.get('scheduled'),
-            'departure_estimated': departure.get('estimated'),
-            'departure_actual': departure.get('actual'),
-            'departure_delay': departure.get('delay'),
-            'departure_terminal': departure.get('terminal'),
-            'departure_gate': departure.get('gate'),
-
-            'arrival_airport': arrival.get('airport'),
-            'arrival_iata': arrival.get('iata'),
-            'arrival_icao': arrival.get('icao'),
-            'arrival_scheduled': arrival.get('scheduled'),
-            'arrival_estimated': arrival.get('estimated'),
-            'arrival_actual': arrival.get('actual'),
-            'arrival_delay': arrival.get('delay'),
-            'arrival_terminal': arrival.get('terminal'),
-            'arrival_gate': arrival.get('gate'),
-            'arrival_baggage': arrival.get('baggage'),
-
-            'aircraft_registration': aircraft.get('registration'),
-            'aircraft_iata': aircraft.get('iata'),
-            'aircraft_icao': aircraft.get('icao'),
-            'aircraft_icao24': aircraft.get('icao24'),
-
-            'flight_status': flight_data.get('flight_status'),
-            'flight_date': flight_data.get('flight_date'),
-
-            'source': 'aviationstack',
+            "flight_number": flight.get("number"),
+            "flight_iata": flight.get("iata"),
+            "flight_icao": flight.get("icao"),
+            "airline_name": airline.get("name"),
+            "airline_iata": airline.get("iata"),
+            "airline_icao": airline.get("icao"),
+            "departure_airport": departure.get("airport"),
+            "departure_iata": departure.get("iata"),
+            "departure_icao": departure.get("icao"),
+            "departure_scheduled": departure.get("scheduled"),
+            "departure_estimated": departure.get("estimated"),
+            "departure_actual": departure.get("actual"),
+            "departure_delay": departure.get("delay"),
+            "departure_terminal": departure.get("terminal"),
+            "departure_gate": departure.get("gate"),
+            "arrival_airport": arrival.get("airport"),
+            "arrival_iata": arrival.get("iata"),
+            "arrival_icao": arrival.get("icao"),
+            "arrival_scheduled": arrival.get("scheduled"),
+            "arrival_estimated": arrival.get("estimated"),
+            "arrival_actual": arrival.get("actual"),
+            "arrival_delay": arrival.get("delay"),
+            "arrival_terminal": arrival.get("terminal"),
+            "arrival_gate": arrival.get("gate"),
+            "arrival_baggage": arrival.get("baggage"),
+            "aircraft_registration": aircraft.get("registration"),
+            "aircraft_iata": aircraft.get("iata"),
+            "aircraft_icao": aircraft.get("icao"),
+            "aircraft_icao24": aircraft.get("icao24"),
+            "flight_status": flight_data.get("flight_status"),
+            "flight_date": flight_data.get("flight_date"),
+            "source": "aviationstack",
         }
 
     except Exception as e:
@@ -401,8 +392,8 @@ def _parse_flight(flight_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 def correlate_with_live_aircraft(
     callsign: str,
-    aircraft_type: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
+    aircraft_type: str | None = None,
+) -> dict[str, Any] | None:
     """
     Correlate observed aircraft with scheduled flight data.
 
@@ -433,7 +424,7 @@ def correlate_with_live_aircraft(
     return None
 
 
-def get_api_status() -> Dict[str, Any]:
+def get_api_status() -> dict[str, Any]:
     """
     Get Aviationstack API status and configuration.
 
@@ -441,10 +432,10 @@ def get_api_status() -> Dict[str, Any]:
         API status dictionary
     """
     return {
-        'enabled': _is_enabled(),
-        'api_key_configured': bool(_get_api_key()),
-        'cache_ttl_flights': FLIGHTS_CACHE_TTL,
-        'cache_ttl_schedules': SCHEDULES_CACHE_TTL,
-        'monthly_limit': 100,  # Free tier
-        'note': 'Aggressive caching enabled due to low request limit',
+        "enabled": _is_enabled(),
+        "api_key_configured": bool(_get_api_key()),
+        "cache_ttl_flights": FLIGHTS_CACHE_TTL,
+        "cache_ttl_schedules": SCHEDULES_CACHE_TTL,
+        "monthly_limit": 100,  # Free tier
+        "note": "Aggressive caching enabled due to low request limit",
     }

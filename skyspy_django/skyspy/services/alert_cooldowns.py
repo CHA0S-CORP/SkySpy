@@ -4,12 +4,12 @@ Distributed cooldown management for alerts using Redis.
 Provides atomic cooldown checking across multiple Celery workers
 to prevent duplicate alert triggers.
 """
+
 import logging
 import threading
 import time
 from collections import OrderedDict
 from datetime import datetime, timedelta
-from typing import Tuple, Optional
 
 from django.conf import settings
 
@@ -53,7 +53,7 @@ class LRUCooldownCache:
         self._max_size = max_size
         self._last_cleanup = 0.0
 
-    def get(self, key: tuple) -> Optional[datetime]:
+    def get(self, key: tuple) -> datetime | None:
         """Get a cooldown entry, returning None if not found."""
         with self._lock:
             if key in self._cache:
@@ -88,7 +88,7 @@ class LRUCooldownCache:
     def remove_by_predicate(self, predicate) -> int:
         """Remove all keys matching predicate. Returns count removed."""
         with self._lock:
-            keys_to_remove = [k for k in self._cache.keys() if predicate(k)]
+            keys_to_remove = [k for k in self._cache if predicate(k)]
             for key in keys_to_remove:
                 del self._cache[key]
             return len(keys_to_remove)
@@ -114,10 +114,7 @@ class LRUCooldownCache:
         cutoff = datetime.utcnow() - timedelta(minutes=30)  # Keep for 30 min max
 
         # Remove expired entries (iterate over copy of keys)
-        keys_to_remove = [
-            k for k, v in self._cache.items()
-            if v < cutoff
-        ]
+        keys_to_remove = [k for k, v in self._cache.items() if v < cutoff]
         for key in keys_to_remove:
             del self._cache[key]
 
@@ -143,7 +140,8 @@ class DistributedCooldownManager:
         if self._redis is None:
             try:
                 import redis
-                redis_url = getattr(settings, 'REDIS_URL', 'redis://redis:6379/0')
+
+                redis_url = getattr(settings, "REDIS_URL", "redis://redis:6379/0")
                 self._redis = redis.from_url(redis_url, decode_responses=True)
                 # Test connection
                 self._redis.ping()
@@ -162,12 +160,7 @@ class DistributedCooldownManager:
             self._lua_script = self.redis.register_script(COOLDOWN_CHECK_SET_LUA)
         return self._lua_script
 
-    def check_and_set(
-        self,
-        rule_id: int,
-        icao_hex: str,
-        cooldown_seconds: int
-    ) -> Tuple[bool, Optional[datetime]]:
+    def check_and_set(self, rule_id: int, icao_hex: str, cooldown_seconds: int) -> tuple[bool, datetime | None]:
         """
         Atomically check if cooldown has passed and set if so.
 
@@ -192,10 +185,7 @@ class DistributedCooldownManager:
                 # Use Lua script for atomic check-and-set operation
                 # This eliminates the TOCTOU race condition
                 script = self._get_lua_script()
-                result = script(
-                    keys=[key],
-                    args=[str(now_ts), cooldown_seconds]
-                )
+                result = script(keys=[key], args=[str(now_ts), cooldown_seconds])
 
                 can_trigger = bool(result[0])
                 last_ts = result[1]
@@ -216,12 +206,7 @@ class DistributedCooldownManager:
         else:
             return self._check_fallback(rule_id, icao_hex, cooldown_seconds)
 
-    def _check_fallback(
-        self,
-        rule_id: int,
-        icao_hex: str,
-        cooldown_seconds: int
-    ) -> Tuple[bool, Optional[datetime]]:
+    def _check_fallback(self, rule_id: int, icao_hex: str, cooldown_seconds: int) -> tuple[bool, datetime | None]:
         """In-memory fallback when Redis is unavailable. Uses thread-safe LRU cache."""
         key = (rule_id, icao_hex.upper())
         now = datetime.utcnow()
@@ -236,11 +221,7 @@ class DistributedCooldownManager:
         self._fallback_cooldowns.set(key, now)
         return True, last_trigger
 
-    def get_remaining_cooldown(
-        self,
-        rule_id: int,
-        icao_hex: str
-    ) -> Optional[int]:
+    def get_remaining_cooldown(self, rule_id: int, icao_hex: str) -> int | None:
         """
         Get remaining cooldown time in seconds.
 
@@ -378,10 +359,10 @@ class DistributedCooldownManager:
         redis_available = bool(self.redis)
 
         return {
-            'redis_available': redis_available,
-            'active_cooldowns': self.get_active_cooldowns_count(),
-            'fallback_cooldowns': len(self._fallback_cooldowns),
-            'using_fallback': not redis_available,
+            "redis_available": redis_available,
+            "active_cooldowns": self.get_active_cooldowns_count(),
+            "fallback_cooldowns": len(self._fallback_cooldowns),
+            "using_fallback": not redis_available,
         }
 
 

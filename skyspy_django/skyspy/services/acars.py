@@ -21,18 +21,16 @@ Message formats handled:
   - vdlm2dec: flat JSON similar to acarsdec
   - dumpvdl2: nested JSON with vdl2/avlc/acars structure
 """
+
 import asyncio
+import contextlib
 import hashlib
 import json
 import logging
-import time
 import threading
-from collections import defaultdict, OrderedDict
-from datetime import datetime, timedelta, timezone as dt_timezone
-from typing import Optional
-
-from django.conf import settings
-from django.utils import timezone as dj_timezone
+import time
+from collections import OrderedDict, defaultdict
+from datetime import UTC, datetime, timedelta
 
 from skyspy.services.acars_decoder import enrich_acars_message
 from skyspy.socketio.utils import sync_emit
@@ -40,7 +38,7 @@ from skyspy.socketio.utils import sync_emit
 logger = logging.getLogger(__name__)
 
 
-def _normalize_frequency(freq) -> Optional[float]:
+def _normalize_frequency(freq) -> float | None:
     """Normalize frequency to MHz.
 
     Handles frequencies that may be in Hz (e.g., 136975000) or MHz (e.g., 136.975).
@@ -113,8 +111,8 @@ class AcarsService:
 
     def __init__(self):
         self._running = False
-        self._acars_task: Optional[asyncio.Task] = None
-        self._vdlm2_task: Optional[asyncio.Task] = None
+        self._acars_task: asyncio.Task | None = None
+        self._vdlm2_task: asyncio.Task | None = None
 
         # Statistics
         self._stats_lock = threading.Lock()
@@ -171,15 +169,11 @@ class AcarsService:
 
         # Start UDP listeners
         if acars_port:
-            self._acars_task = asyncio.create_task(
-                self._udp_listener(acars_port, "acars")
-            )
+            self._acars_task = asyncio.create_task(self._udp_listener(acars_port, "acars"))
             logger.info(f"ACARS UDP listener started on 0.0.0.0:{acars_port}")
 
         if vdlm2_port:
-            self._vdlm2_task = asyncio.create_task(
-                self._udp_listener(vdlm2_port, "vdlm2")
-            )
+            self._vdlm2_task = asyncio.create_task(self._udp_listener(vdlm2_port, "vdlm2"))
             logger.info(f"VDL2 UDP listener started on 0.0.0.0:{vdlm2_port}")
 
         logger.info("ACARS service started successfully")
@@ -191,18 +185,14 @@ class AcarsService:
 
         if self._acars_task:
             self._acars_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._acars_task
-            except asyncio.CancelledError:
-                pass
             logger.debug("ACARS listener stopped")
 
         if self._vdlm2_task:
             self._vdlm2_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._vdlm2_task
-            except asyncio.CancelledError:
-                pass
             logger.debug("VDL2 listener stopped")
 
         # Log final stats
@@ -234,9 +224,7 @@ class AcarsService:
                 elif self.packet_count % 100 == 0:
                     logger.debug(f"Received {self.packet_count} {self.source} packets so far")
 
-                task = asyncio.create_task(
-                    self.service._process_message(data, self.source)
-                )
+                task = asyncio.create_task(self.service._process_message(data, self.source))
                 # Add error callback to prevent silent exception loss
                 task.add_done_callback(self._handle_task_exception)
 
@@ -256,7 +244,7 @@ class AcarsService:
         try:
             transport, protocol = await loop.create_datagram_endpoint(
                 lambda: UDPProtocol(service, source),
-                local_addr=('0.0.0.0', port)
+                local_addr=("0.0.0.0", port),  # nosec B104 - intentional bind to all interfaces for UDP listener
             )
             logger.debug(f"UDP endpoint created for {source} on port {port}")
         except Exception as e:
@@ -274,7 +262,7 @@ class AcarsService:
         """Process a received message."""
         try:
             # Parse JSON message
-            raw_text = data.decode('utf-8')
+            raw_text = data.decode("utf-8")
             msg = json.loads(raw_text)
 
             logger.debug(f"Received {source} message with keys: {list(msg.keys())}")
@@ -289,7 +277,7 @@ class AcarsService:
                     return
 
                 # Track frequency statistics
-                freq = normalized.get('frequency')
+                freq = normalized.get("frequency")
                 if freq:
                     freq_mhz = f"{freq:.3f}"
                     with self._stats_lock:
@@ -301,7 +289,7 @@ class AcarsService:
                 # Update statistics
                 with self._stats_lock:
                     self._stats[source]["total"] += 1
-                    self._hourly_counts[source].append(datetime.now(dt_timezone.utc))
+                    self._hourly_counts[source].append(datetime.now(UTC))
                     total = self._stats[source]["total"]
 
                 # Add to recent buffer
@@ -317,8 +305,8 @@ class AcarsService:
                 await self._broadcast_message(enriched)
 
                 # Log message details
-                flight = normalized.get('callsign') or normalized.get('registration') or 'unknown'
-                label = normalized.get('label') or 'unknown'
+                flight = normalized.get("callsign") or normalized.get("registration") or "unknown"
+                label = normalized.get("label") or "unknown"
                 freq_str = f"{freq:.3f}MHz" if freq else "unknown freq"
                 logger.debug(f"[{source.upper()}] #{total} {flight} label={label} @ {freq_str}")
 
@@ -335,7 +323,7 @@ class AcarsService:
         except json.JSONDecodeError as e:
             with self._stats_lock:
                 self._stats[source]["errors"] += 1
-            preview = data[:100].decode('utf-8', errors='replace')
+            preview = data[:100].decode("utf-8", errors="replace")
             logger.warning(f"Invalid JSON from {source}: {e} | Data preview: {preview!r}")
         except UnicodeDecodeError as e:
             with self._stats_lock:
@@ -346,7 +334,7 @@ class AcarsService:
                 self._stats[source]["errors"] += 1
             logger.error(f"Error processing {source} message: {e}", exc_info=True)
 
-    def _normalize_message(self, msg: dict, source: str) -> Optional[dict]:
+    def _normalize_message(self, msg: dict, source: str) -> dict | None:
         """Normalize message to common format.
 
         Handles message formats from acars_router which forwards messages from:
@@ -371,7 +359,7 @@ class AcarsService:
                     ack_val = str(ack_val) if ack_val else None
 
                 return {
-                    "timestamp": msg.get("timestamp", datetime.now(dt_timezone.utc).timestamp()),
+                    "timestamp": msg.get("timestamp", datetime.now(UTC).timestamp()),
                     "source": "acars",
                     "channel": str(msg.get("channel", "")),
                     "frequency": _normalize_frequency(msg.get("freq")),
@@ -419,7 +407,7 @@ class AcarsService:
                         ack_val = str(ack_val) if ack_val else None
 
                     return {
-                        "timestamp": msg.get("timestamp", vdl2.get("t", {}).get("sec", datetime.now(dt_timezone.utc).timestamp())),
+                        "timestamp": msg.get("timestamp", vdl2.get("t", {}).get("sec", datetime.now(UTC).timestamp())),
                         "source": "vdlm2",
                         "channel": str(vdl2.get("channel", vdl2.get("idx", ""))),
                         "frequency": _normalize_frequency(vdl2.get("freq")),
@@ -441,10 +429,7 @@ class AcarsService:
                     # vdlm2dec flat format
                     icao = msg.get("icao") or msg.get("hex") or msg.get("icao_hex")
                     if icao:
-                        if isinstance(icao, int):
-                            icao = format(icao, '06X')
-                        else:
-                            icao = str(icao).upper()
+                        icao = format(icao, "06X") if isinstance(icao, int) else str(icao).upper()
 
                     station_id = msg.get("station_id")
                     if not station_id:
@@ -457,7 +442,7 @@ class AcarsService:
                         ack_val = str(ack_val) if ack_val else None
 
                     return {
-                        "timestamp": msg.get("timestamp", datetime.now(dt_timezone.utc).timestamp()),
+                        "timestamp": msg.get("timestamp", datetime.now(UTC).timestamp()),
                         "source": "vdlm2",
                         "channel": str(msg.get("channel", "")),
                         "frequency": _normalize_frequency(msg.get("freq")),
@@ -485,18 +470,19 @@ class AcarsService:
 
     async def _store_message(self, msg: dict):
         """Store an ACARS message in the database."""
-        from skyspy.models import AcarsMessage
         from asgiref.sync import sync_to_async
+
+        from skyspy.models import AcarsMessage
 
         try:
             # Parse timestamp
             ts = msg.get("timestamp")
             if isinstance(ts, (int, float)):
-                ts = datetime.fromtimestamp(ts, tz=dt_timezone.utc)
+                ts = datetime.fromtimestamp(ts, tz=UTC)
             elif isinstance(ts, str):
                 ts = datetime.fromisoformat(ts.replace("Z", "+00:00"))
             else:
-                ts = datetime.now(dt_timezone.utc)
+                ts = datetime.now(UTC)
 
             @sync_to_async
             def create_record():
@@ -533,23 +519,23 @@ class AcarsService:
         """Broadcast ACARS message to WebSocket clients via Socket.IO."""
         try:
             # Add timestamp if not present
-            if 'timestamp' not in msg or not isinstance(msg['timestamp'], str):
-                ts = msg.get('timestamp')
+            if "timestamp" not in msg or not isinstance(msg["timestamp"], str):
+                ts = msg.get("timestamp")
                 if isinstance(ts, (int, float)):
-                    msg['timestamp'] = datetime.fromtimestamp(ts, tz=dt_timezone.utc).isoformat().replace('+00:00', 'Z')
+                    msg["timestamp"] = datetime.fromtimestamp(ts, tz=UTC).isoformat().replace("+00:00", "Z")
                 else:
-                    msg['timestamp'] = datetime.now(dt_timezone.utc).isoformat().replace('+00:00', 'Z')
+                    msg["timestamp"] = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
             # Broadcast to all ACARS subscribers on /acars namespace
-            sync_emit('acars:message', msg, room='acars_all', namespace='/acars')
+            sync_emit("acars:message", msg, room="acars_all", namespace="/acars")
 
             # Also broadcast to main namespace for frontend compatibility
-            sync_emit('acars:message', msg, room='topic_acars', namespace='/')
+            sync_emit("acars:message", msg, room="topic_acars", namespace="/")
 
             # Also send to aircraft-specific room if we have ICAO
-            icao = msg.get('icao_hex')
+            icao = msg.get("icao_hex")
             if icao:
-                sync_emit('acars:message', msg, room=f'acars_{icao.lower()}', namespace='/acars')
+                sync_emit("acars:message", msg, room=f"acars_{icao.lower()}", namespace="/acars")
 
         except Exception as e:
             logger.warning(f"Failed to broadcast ACARS message: {e}")
@@ -561,23 +547,17 @@ class AcarsService:
 
     def get_stats(self) -> dict:
         """Get ACARS service statistics."""
-        now = datetime.now(dt_timezone.utc)
+        now = datetime.now(UTC)
         hour_ago = now - timedelta(hours=1)
 
         with self._stats_lock:
             # Clean up old hourly counts
             for source in ["acars", "vdlm2"]:
-                self._hourly_counts[source] = [
-                    t for t in self._hourly_counts[source] if t > hour_ago
-                ]
+                self._hourly_counts[source] = [t for t in self._hourly_counts[source] if t > hour_ago]
                 self._stats[source]["last_hour"] = len(self._hourly_counts[source])
 
             # Get top frequencies by message count
-            top_frequencies = sorted(
-                self._frequency_counts.items(),
-                key=lambda x: x[1],
-                reverse=True
-            )[:10]
+            top_frequencies = sorted(self._frequency_counts.items(), key=lambda x: x[1], reverse=True)[:10]
 
             return {
                 "acars": dict(self._stats["acars"]),
@@ -585,9 +565,7 @@ class AcarsService:
                 "running": self._running,
                 "recent_buffer_size": len(self._recent_messages),
                 "dedup_cache_size": self._dedup_cache.size(),
-                "top_frequencies": [
-                    {"frequency_mhz": f, "count": c} for f, c in top_frequencies
-                ],
+                "top_frequencies": [{"frequency_mhz": f, "count": c} for f, c in top_frequencies],
             }
 
 

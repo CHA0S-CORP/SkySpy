@@ -1,10 +1,15 @@
 """
 Serializers for Cannonball Mode API endpoints.
 """
+
 from rest_framework import serializers
+
 from skyspy.models import (
-    CannonballPattern, CannonballSession, CannonballAlert,
-    CannonballKnownAircraft, CannonballStats,
+    CannonballAlert,
+    CannonballKnownAircraft,
+    CannonballPattern,
+    CannonballSession,
+    CannonballStats,
 )
 
 
@@ -16,12 +21,24 @@ class CannonballPatternSerializer(serializers.ModelSerializer):
     class Meta:
         model = CannonballPattern
         fields = [
-            'id', 'icao_hex', 'callsign', 'pattern_type', 'confidence',
-            'confidence_score', 'center_lat', 'center_lon', 'radius_nm',
-            'pattern_data', 'started_at', 'ended_at', 'duration_seconds',
-            'detected_at', 'session', 'is_active',
+            "id",
+            "icao_hex",
+            "callsign",
+            "pattern_type",
+            "confidence",
+            "confidence_score",
+            "center_lat",
+            "center_lon",
+            "radius_nm",
+            "pattern_data",
+            "started_at",
+            "ended_at",
+            "duration_seconds",
+            "detected_at",
+            "session",
+            "is_active",
         ]
-        read_only_fields = ['id', 'detected_at', 'is_active']
+        read_only_fields = ["id", "detected_at", "is_active"]
 
 
 class CannonballPatternSummarySerializer(serializers.ModelSerializer):
@@ -30,8 +47,12 @@ class CannonballPatternSummarySerializer(serializers.ModelSerializer):
     class Meta:
         model = CannonballPattern
         fields = [
-            'id', 'pattern_type', 'confidence', 'confidence_score',
-            'detected_at', 'duration_seconds',
+            "id",
+            "pattern_type",
+            "confidence",
+            "confidence_score",
+            "detected_at",
+            "duration_seconds",
         ]
 
 
@@ -39,26 +60,50 @@ class CannonballSessionSerializer(serializers.ModelSerializer):
     """Serializer for LE aircraft tracking sessions."""
 
     patterns = CannonballPatternSummarySerializer(many=True, read_only=True)
-    threat_level_display = serializers.CharField(
-        source='get_threat_level_display', read_only=True
-    )
+    threat_level_display = serializers.CharField(source="get_threat_level_display", read_only=True)
 
     class Meta:
         model = CannonballSession
         fields = [
-            'id', 'icao_hex', 'callsign', 'registration',
-            'identification_method', 'identification_reason',
-            'operator_name', 'operator_icao', 'aircraft_type',
-            'is_active', 'threat_level', 'threat_level_display', 'urgency_score',
-            'last_lat', 'last_lon', 'last_altitude', 'last_ground_speed', 'last_track',
-            'distance_nm', 'bearing', 'closing_speed_kts',
-            'first_seen', 'last_seen', 'session_duration_seconds',
-            'pattern_count', 'alert_count', 'position_count',
-            'patterns', 'metadata',
+            "id",
+            "icao_hex",
+            "callsign",
+            "registration",
+            "identification_method",
+            "identification_reason",
+            "operator_name",
+            "operator_icao",
+            "aircraft_type",
+            "is_active",
+            "threat_level",
+            "threat_level_display",
+            "urgency_score",
+            "last_lat",
+            "last_lon",
+            "last_altitude",
+            "last_ground_speed",
+            "last_track",
+            "distance_nm",
+            "bearing",
+            "closing_speed_kts",
+            "first_seen",
+            "last_seen",
+            "session_duration_seconds",
+            "pattern_count",
+            "alert_count",
+            "position_count",
+            "patterns",
+            "metadata",
         ]
         read_only_fields = [
-            'id', 'first_seen', 'last_seen', 'session_duration_seconds',
-            'pattern_count', 'alert_count', 'position_count', 'patterns',
+            "id",
+            "first_seen",
+            "last_seen",
+            "session_duration_seconds",
+            "pattern_count",
+            "alert_count",
+            "position_count",
+            "patterns",
         ]
 
 
@@ -68,46 +113,78 @@ class CannonballSessionListSerializer(serializers.ModelSerializer):
     class Meta:
         model = CannonballSession
         fields = [
-            'id', 'icao_hex', 'callsign', 'is_active',
-            'threat_level', 'urgency_score',
-            'distance_nm', 'bearing', 'closing_speed_kts',
-            'last_seen', 'pattern_count', 'alert_count',
+            "id",
+            "icao_hex",
+            "callsign",
+            "is_active",
+            "threat_level",
+            "urgency_score",
+            "distance_nm",
+            "bearing",
+            "closing_speed_kts",
+            "last_seen",
+            "pattern_count",
+            "alert_count",
         ]
 
 
 class CannonballAlertSerializer(serializers.ModelSerializer):
     """Serializer for Cannonball alerts."""
 
-    session_icao = serializers.CharField(source='session.icao_hex', read_only=True)
-    session_callsign = serializers.CharField(source='session.callsign', read_only=True)
+    session_icao = serializers.CharField(source="session.icao_hex", read_only=True)
+    session_callsign = serializers.CharField(source="session.callsign", read_only=True)
 
     class Meta:
         model = CannonballAlert
         fields = [
-            'id', 'session', 'session_icao', 'session_callsign',
-            'alert_type', 'priority', 'title', 'message',
-            'aircraft_lat', 'aircraft_lon', 'aircraft_altitude',
-            'user_lat', 'user_lon', 'distance_nm', 'bearing',
-            'pattern', 'notified', 'announced',
-            'acknowledged', 'acknowledged_at',
-            'created_at',
+            "id",
+            "session",
+            "session_icao",
+            "session_callsign",
+            "alert_type",
+            "priority",
+            "title",
+            "message",
+            "aircraft_lat",
+            "aircraft_lon",
+            "aircraft_altitude",
+            "user_lat",
+            "user_lon",
+            "distance_nm",
+            "bearing",
+            "pattern",
+            "notified",
+            "announced",
+            "acknowledged",
+            "acknowledged_at",
+            "created_at",
         ]
         read_only_fields = [
-            'id', 'session_icao', 'session_callsign',
-            'notified', 'announced', 'created_at',
+            "id",
+            "session_icao",
+            "session_callsign",
+            "notified",
+            "announced",
+            "created_at",
         ]
 
 
 class CannonballAlertListSerializer(serializers.ModelSerializer):
     """Lightweight alert serializer for list views."""
 
-    session_icao = serializers.CharField(source='session.icao_hex', read_only=True)
+    session_icao = serializers.CharField(source="session.icao_hex", read_only=True)
 
     class Meta:
         model = CannonballAlert
         fields = [
-            'id', 'session_icao', 'alert_type', 'priority',
-            'title', 'distance_nm', 'acknowledged', 'created_at',
+            "id",
+            "session_icao",
+            "alert_type",
+            "priority",
+            "title",
+            "distance_nm",
+            "acknowledged",
+            "created_at",
         ]
 
 
@@ -117,15 +194,32 @@ class CannonballKnownAircraftSerializer(serializers.ModelSerializer):
     class Meta:
         model = CannonballKnownAircraft
         fields = [
-            'id', 'icao_hex', 'registration', 'aircraft_type', 'aircraft_model',
-            'agency_name', 'agency_type', 'agency_state', 'agency_city',
-            'source', 'source_url', 'verified', 'verified_at',
-            'times_detected', 'last_detected', 'notes',
-            'created_at', 'updated_at',
+            "id",
+            "icao_hex",
+            "registration",
+            "aircraft_type",
+            "aircraft_model",
+            "agency_name",
+            "agency_type",
+            "agency_state",
+            "agency_city",
+            "source",
+            "source_url",
+            "verified",
+            "verified_at",
+            "times_detected",
+            "last_detected",
+            "notes",
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = [
-            'id', 'verified_at', 'times_detected', 'last_detected',
-            'created_at', 'updated_at',
+            "id",
+            "verified_at",
+            "times_detected",
+            "last_detected",
+            "created_at",
+            "updated_at",
         ]
 
 
@@ -135,9 +229,17 @@ class CannonballKnownAircraftCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = CannonballKnownAircraft
         fields = [
-            'icao_hex', 'registration', 'aircraft_type', 'aircraft_model',
-            'agency_name', 'agency_type', 'agency_state', 'agency_city',
-            'source', 'source_url', 'notes',
+            "icao_hex",
+            "registration",
+            "aircraft_type",
+            "aircraft_model",
+            "agency_name",
+            "agency_type",
+            "agency_state",
+            "agency_city",
+            "source",
+            "source_url",
+            "notes",
         ]
 
 
@@ -147,14 +249,24 @@ class CannonballStatsSerializer(serializers.ModelSerializer):
     class Meta:
         model = CannonballStats
         fields = [
-            'id', 'period_type', 'period_start', 'period_end',
-            'total_detections', 'unique_aircraft',
-            'critical_alerts', 'warning_alerts', 'info_alerts',
-            'circling_patterns', 'loitering_patterns',
-            'grid_search_patterns', 'speed_trap_patterns',
-            'top_aircraft', 'top_agencies', 'created_at',
+            "id",
+            "period_type",
+            "period_start",
+            "period_end",
+            "total_detections",
+            "unique_aircraft",
+            "critical_alerts",
+            "warning_alerts",
+            "info_alerts",
+            "circling_patterns",
+            "loitering_patterns",
+            "grid_search_patterns",
+            "speed_trap_patterns",
+            "top_aircraft",
+            "top_agencies",
+            "created_at",
         ]
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = ["id", "created_at"]
 
 
 class CannonballThreatSerializer(serializers.Serializer):
@@ -198,8 +310,6 @@ class CannonballSettingsSerializer(serializers.Serializer):
     voice_enabled = serializers.BooleanField(default=True)
     show_all_aircraft = serializers.BooleanField(default=False)
     patterns_enabled = serializers.ListField(
-        child=serializers.ChoiceField(choices=[
-            'circling', 'loitering', 'grid_search', 'speed_trap'
-        ]),
-        default=['circling', 'loitering', 'grid_search', 'speed_trap']
+        child=serializers.ChoiceField(choices=["circling", "loitering", "grid_search", "speed_trap"]),
+        default=["circling", "loitering", "grid_search", "speed_trap"],
     )

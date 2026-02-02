@@ -8,28 +8,28 @@ Handles:
 - Callsign extraction from transcripts
 - URL generation for audio playback
 """
+
 import io
 import logging
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import httpx
 from django.conf import settings
 from django.utils import timezone
 
 from skyspy.models import AudioTransmission
+from skyspy.services.llm import enhance_callsign_extraction
 from skyspy.services.storage import (
-    upload_to_s3,
     download_from_s3,
-    save_file_locally,
-    read_local_file,
     generate_signed_url,
     get_s3_key,
+    read_local_file,
     sanitize_filename,
+    save_file_locally,
+    upload_to_s3,
 )
-from skyspy.services.llm import enhance_callsign_extraction
 
 logger = logging.getLogger(__name__)
 
@@ -114,89 +114,210 @@ AIRLINE_CALLSIGNS = {
 # Phonetic alphabet for number parsing (extended with common mishearings)
 PHONETIC_NUMBERS = {
     # Standard
-    "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4",
-    "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9",
+    "zero": "0",
+    "one": "1",
+    "two": "2",
+    "three": "3",
+    "four": "4",
+    "five": "5",
+    "six": "6",
+    "seven": "7",
+    "eight": "8",
+    "nine": "9",
     # ATC variants
-    "niner": "9", "fife": "5", "tree": "3", "fower": "4",
+    "niner": "9",
+    "fife": "5",
+    "tree": "3",
+    "fower": "4",
     # Common homophones
-    "won": "1", "wan": "1", "wun": "1",
-    "to": "2", "too": "2", "tu": "2", "tew": "2",
-    "for": "4", "fore": "4", "foor": "4",
-    "ate": "8", "ait": "8",
+    "won": "1",
+    "wan": "1",
+    "wun": "1",
+    "to": "2",
+    "too": "2",
+    "tu": "2",
+    "tew": "2",
+    "for": "4",
+    "fore": "4",
+    "foor": "4",
+    "ate": "8",
+    "ait": "8",
     "free": "3",
     # Zero variants
-    "oh": "0", "o": "0", "nil": "0", "hero": "0", "ziro": "0",
+    "oh": "0",
+    "o": "0",
+    "nil": "0",
+    "hero": "0",
+    "ziro": "0",
     # Mishearings
-    "won't": "1", "want": "1",
-    "too-er": "2", "tower": "2",
-    "sicks": "6", "sex": "6",
-    "nein": "9", "line": "9",
+    "won't": "1",
+    "want": "1",
+    "too-er": "2",
+    "tower": "2",
+    "sicks": "6",
+    "sex": "6",
+    "nein": "9",
+    "line": "9",
     # Compound numbers
-    "ten": "10", "eleven": "11", "twelve": "12", "thirteen": "13",
-    "fourteen": "14", "fifteen": "15", "sixteen": "16", "seventeen": "17",
-    "eighteen": "18", "nineteen": "19", "twenty": "20", "thirty": "30",
-    "forty": "40", "fifty": "50", "sixty": "60", "seventy": "70",
-    "eighty": "80", "ninety": "90", "hundred": "00",
+    "ten": "10",
+    "eleven": "11",
+    "twelve": "12",
+    "thirteen": "13",
+    "fourteen": "14",
+    "fifteen": "15",
+    "sixteen": "16",
+    "seventeen": "17",
+    "eighteen": "18",
+    "nineteen": "19",
+    "twenty": "20",
+    "thirty": "30",
+    "forty": "40",
+    "fifty": "50",
+    "sixty": "60",
+    "seventy": "70",
+    "eighty": "80",
+    "ninety": "90",
+    "hundred": "00",
 }
 
 # Phonetic alphabet letters (extended with common mishearings)
 PHONETIC_LETTERS = {
     # Standard ICAO
-    "alpha": "A", "alfa": "A", "bravo": "B", "charlie": "C", "delta": "D",
-    "echo": "E", "foxtrot": "F", "golf": "G", "hotel": "H", "india": "I",
-    "juliet": "J", "juliett": "J", "kilo": "K", "lima": "L", "mike": "M",
-    "november": "N", "oscar": "O", "papa": "P", "quebec": "Q", "romeo": "R",
-    "sierra": "S", "tango": "T", "uniform": "U", "victor": "V", "whiskey": "W",
-    "xray": "X", "x-ray": "X", "yankee": "Y", "zulu": "Z",
+    "alpha": "A",
+    "alfa": "A",
+    "bravo": "B",
+    "charlie": "C",
+    "delta": "D",
+    "echo": "E",
+    "foxtrot": "F",
+    "golf": "G",
+    "hotel": "H",
+    "india": "I",
+    "juliet": "J",
+    "juliett": "J",
+    "kilo": "K",
+    "lima": "L",
+    "mike": "M",
+    "november": "N",
+    "oscar": "O",
+    "papa": "P",
+    "quebec": "Q",
+    "romeo": "R",
+    "sierra": "S",
+    "tango": "T",
+    "uniform": "U",
+    "victor": "V",
+    "whiskey": "W",
+    "xray": "X",
+    "x-ray": "X",
+    "yankee": "Y",
+    "zulu": "Z",
     # Common mishearings
-    "brah": "B", "bruh": "B",
-    "char": "C", "charley": "C", "charly": "C",
-    "del": "D", "delt": "D",
-    "ech": "E", "ecko": "E",
-    "fox": "F", "foxrot": "F",
-    "gol": "G", "gulf": "G",
-    "hoe": "H", "ho": "H",
-    "indie": "I", "indy": "I",
-    "jules": "J", "julie": "J",
-    "key": "K", "kee": "K",
-    "lee": "L", "lema": "L",
-    "mic": "M", "my": "M",
-    "nova": "N", "nov": "N",
-    "pop": "P", "poppa": "P",
-    "keh": "Q", "kebec": "Q",
-    "see": "S", "sera": "S",
+    "brah": "B",
+    "bruh": "B",
+    "char": "C",
+    "charley": "C",
+    "charly": "C",
+    "del": "D",
+    "delt": "D",
+    "ech": "E",
+    "ecko": "E",
+    "fox": "F",
+    "foxrot": "F",
+    "gol": "G",
+    "gulf": "G",
+    "hoe": "H",
+    "ho": "H",
+    "indie": "I",
+    "indy": "I",
+    "jules": "J",
+    "julie": "J",
+    "key": "K",
+    "kee": "K",
+    "lee": "L",
+    "lema": "L",
+    "mic": "M",
+    "my": "M",
+    "nova": "N",
+    "nov": "N",
+    "pop": "P",
+    "poppa": "P",
+    "keh": "Q",
+    "kebec": "Q",
+    "see": "S",
+    "sera": "S",
     "tang": "T",
-    "uni": "U", "you": "U",
-    "vic": "V", "viktor": "V",
-    "whis": "W", "wisky": "W",
-    "ex": "X", "ray": "X",
-    "yank": "Y", "yang": "Y",
-    "zoo": "Z", "zul": "Z",
+    "uni": "U",
+    "you": "U",
+    "vic": "V",
+    "viktor": "V",
+    "whis": "W",
+    "wisky": "W",
+    "ex": "X",
+    "ray": "X",
+    "yank": "Y",
+    "yang": "Y",
+    "zoo": "Z",
+    "zul": "Z",
 }
 
 # General aviation aircraft types for pattern matching
 GA_AIRCRAFT_TYPES = {
-    "CESSNA": "C", "PIPER": "P", "BEECH": "BE", "BEECHCRAFT": "BE",
-    "CIRRUS": "SR", "MOONEY": "M", "BONANZA": "BE",
-    "SKYLANE": "C182", "SKYHAWK": "C172", "CITATION": "C",
-    "KING AIR": "BE", "BARON": "BE", "LANCE": "P",
-    "CHEROKEE": "P", "ARCHER": "P", "WARRIOR": "P",
-    "DIAMOND": "DA", "SOCATA": "TB", "TECNAM": "P",
+    "CESSNA": "C",
+    "PIPER": "P",
+    "BEECH": "BE",
+    "BEECHCRAFT": "BE",
+    "CIRRUS": "SR",
+    "MOONEY": "M",
+    "BONANZA": "BE",
+    "SKYLANE": "C182",
+    "SKYHAWK": "C172",
+    "CITATION": "C",
+    "KING AIR": "BE",
+    "BARON": "BE",
+    "LANCE": "P",
+    "CHEROKEE": "P",
+    "ARCHER": "P",
+    "WARRIOR": "P",
+    "DIAMOND": "DA",
+    "SOCATA": "TB",
+    "TECNAM": "P",
 }
 
 # Airline name variants and common misspellings
 AIRLINE_VARIANTS = {
-    "UNITED": "UAL", "AMERICAN": "AAL", "DELTA": "DAL",
-    "SOUTHWEST": "SWA", "JETBLUE": "JBU", "JET BLUE": "JBU",
-    "ALASKA": "ASA", "FRONTIER": "FFT", "SPIRIT": "NKS",
-    "SKYWEST": "SKW", "FEDEX": "FDX", "FED EX": "FDX",
-    "UPS": "UPS", "ATLAS": "GTI", "GIANT": "GTI",
-    "SPEEDBIRD": "BAW", "BRITISH": "BAW", "AIR FRANCE": "AFR",
-    "LUFTHANSA": "DLH", "KLM": "KLM", "AIR CANADA": "ACA",
-    "QANTAS": "QFA", "EMIRATES": "UAE", "SINGAPORE": "SIA",
-    "CATHAY": "CPA", "VIRGIN": "VIR", "RYANAIR": "RYR",
-    "EASYJET": "EZY", "TURKISH": "THY", "QATAR": "QTR",
-    "JAPAN": "JAL", "KOREAN": "KAL",
+    "UNITED": "UAL",
+    "AMERICAN": "AAL",
+    "DELTA": "DAL",
+    "SOUTHWEST": "SWA",
+    "JETBLUE": "JBU",
+    "JET BLUE": "JBU",
+    "ALASKA": "ASA",
+    "FRONTIER": "FFT",
+    "SPIRIT": "NKS",
+    "SKYWEST": "SKW",
+    "FEDEX": "FDX",
+    "FED EX": "FDX",
+    "UPS": "UPS",
+    "ATLAS": "GTI",
+    "GIANT": "GTI",
+    "SPEEDBIRD": "BAW",
+    "BRITISH": "BAW",
+    "AIR FRANCE": "AFR",
+    "LUFTHANSA": "DLH",
+    "KLM": "KLM",
+    "AIR CANADA": "ACA",
+    "QANTAS": "QFA",
+    "EMIRATES": "UAE",
+    "SINGAPORE": "SIA",
+    "CATHAY": "CPA",
+    "VIRGIN": "VIR",
+    "RYANAIR": "RYR",
+    "EASYJET": "EZY",
+    "TURKISH": "THY",
+    "QATAR": "QTR",
+    "JAPAN": "JAL",
+    "KOREAN": "KAL",
 }
 
 
@@ -207,7 +328,7 @@ def _convert_phonetic_to_digits(text: str) -> str:
 
     i = 0
     while i < len(words):
-        clean_word = re.sub(r'[^\w\-]', '', words[i]).replace('-', '')
+        clean_word = re.sub(r"[^\w\-]", "", words[i]).replace("-", "")
 
         if clean_word in PHONETIC_NUMBERS:
             val = PHONETIC_NUMBERS[clean_word]
@@ -227,12 +348,12 @@ def _convert_phonetic_to_digits(text: str) -> str:
                 break
             i += 1
 
-    return ''.join(result)
+    return "".join(result)
 
 
-def _normalize_flight_number(text: str) -> Optional[str]:
+def _normalize_flight_number(text: str) -> str | None:
     """Extract and normalize a flight number from text."""
-    digit_match = re.search(r'\d{1,4}', text)
+    digit_match = re.search(r"\d{1,4}", text)
     if digit_match:
         return digit_match.group()
 
@@ -240,25 +361,25 @@ def _normalize_flight_number(text: str) -> Optional[str]:
     if converted and len(converted) <= 4:
         return converted
 
-    spaced_digits = re.findall(r'\b(\d)\b', text)
+    spaced_digits = re.findall(r"\b(\d)\b", text)
     if spaced_digits and len(spaced_digits) <= 4:
-        return ''.join(spaced_digits)
+        return "".join(spaced_digits)
 
     return None
 
 
 def _preprocess_transcript(text: str) -> str:
     """Preprocess transcript to normalize common ATC speech patterns."""
-    text = ' '.join(text.split())
+    text = " ".join(text.split())
 
     replacements = [
-        (r'\bROGER\s+THAT\b', 'ROGER'),
-        (r'\bCOPY\s+THAT\b', 'ROGER'),
-        (r'\bWILCO\b', ''),
-        (r'\bUH+\b', ''),
-        (r'\bUM+\b', ''),
-        (r'\bFLIGHT\s+', ''),
-        (r'\bHEAVY\s+HEAVY\b', 'HEAVY'),
+        (r"\bROGER\s+THAT\b", "ROGER"),
+        (r"\bCOPY\s+THAT\b", "ROGER"),
+        (r"\bWILCO\b", ""),
+        (r"\bUH+\b", ""),
+        (r"\bUM+\b", ""),
+        (r"\bFLIGHT\s+", ""),
+        (r"\bHEAVY\s+HEAVY\b", "HEAVY"),
     ]
 
     for pattern, replacement in replacements:
@@ -288,7 +409,7 @@ def _levenshtein_distance(s1: str, s2: str) -> int:
     return previous_row[-1]
 
 
-def _fuzzy_match_airline(word: str) -> Optional[tuple]:
+def _fuzzy_match_airline(word: str) -> tuple | None:
     """Fuzzy match an airline name, returning (matched_name, icao_code) or None."""
     word_upper = word.upper().strip()
 
@@ -347,9 +468,9 @@ def extract_callsigns_from_transcript(
     text = _preprocess_transcript(transcript).upper()
 
     # Pattern 1: Airline name + flight number
-    airline_names = '|'.join(re.escape(name) for name in AIRLINE_VARIANTS.keys())
-    phonetic_num_words = '|'.join(PHONETIC_NUMBERS.keys())
-    airline_pattern = rf'\b({airline_names})\s+((?:\d+|(?:{phonetic_num_words})\s*)+)\s*(HEAVY|SUPER)?'
+    airline_names = "|".join(re.escape(name) for name in AIRLINE_VARIANTS)
+    phonetic_num_words = "|".join(PHONETIC_NUMBERS.keys())
+    airline_pattern = rf"\b({airline_names})\s+((?:\d+|(?:{phonetic_num_words})\s*)+)\s*(HEAVY|SUPER)?"
 
     for match in re.finditer(airline_pattern, text, re.IGNORECASE):
         airline_raw = match.group(1).upper()
@@ -367,32 +488,36 @@ def extract_callsigns_from_transcript(
         callsign = f"{icao}{flight_num}"
         if callsign not in seen:
             seen.add(callsign)
-            callsigns.append({
-                "callsign": callsign,
-                "raw": match.group(0).strip(),
-                "type": "airline",
-                "airline_icao": icao,
-                "airline_name": AIRLINE_CALLSIGNS.get(icao),
-                "flight_number": flight_num,
-                "suffix": suffix.lower() if suffix else None,
-                "confidence": 0.9 if number_part.strip().isdigit() else 0.7,
-            })
+            callsigns.append(
+                {
+                    "callsign": callsign,
+                    "raw": match.group(0).strip(),
+                    "type": "airline",
+                    "airline_icao": icao,
+                    "airline_name": AIRLINE_CALLSIGNS.get(icao),
+                    "flight_number": flight_num,
+                    "suffix": suffix.lower() if suffix else None,
+                    "confidence": 0.9 if number_part.strip().isdigit() else 0.7,
+                }
+            )
 
     # Pattern 2: N-numbers (general aviation)
-    n_direct_pattern = r'\bN(\d{1,5})([A-Z]{0,2})\b'
+    n_direct_pattern = r"\bN(\d{1,5})([A-Z]{0,2})\b"
     for match in re.finditer(n_direct_pattern, text):
         n_num = f"N{match.group(1)}{match.group(2)}"
         if len(n_num) >= 4 and n_num not in seen:
             seen.add(n_num)
-            callsigns.append({
-                "callsign": n_num,
-                "raw": match.group(0).strip(),
-                "type": "general_aviation",
-                "confidence": 0.95,
-            })
+            callsigns.append(
+                {
+                    "callsign": n_num,
+                    "raw": match.group(0).strip(),
+                    "type": "general_aviation",
+                    "confidence": 0.95,
+                }
+            )
 
     # Pattern 3: November + phonetic/numbers
-    november_pattern = r'\bNOVEMBER\s+(.+?)(?=\s+(?:CLEARED|CONTACT|RUNWAY|TAXI|HOLD)|[,.]|$)'
+    november_pattern = r"\bNOVEMBER\s+(.+?)(?=\s+(?:CLEARED|CONTACT|RUNWAY|TAXI|HOLD)|[,.]|$)"
     for match in re.finditer(november_pattern, text, re.IGNORECASE):
         tail_part = match.group(1).strip()
         digits = []
@@ -401,7 +526,7 @@ def extract_callsigns_from_transcript(
 
         for word in tail_part.split():
             word_lower = word.lower()
-            word_clean = re.sub(r'[^\w]', '', word_lower)
+            word_clean = re.sub(r"[^\w]", "", word_lower)
 
             if word_clean.isdigit():
                 if not parsing_letters:
@@ -419,27 +544,37 @@ def extract_callsigns_from_transcript(
                 break
 
         if digits:
-            n_num = "N" + ''.join(digits)[:5] + ''.join(letters)[:2]
+            n_num = "N" + "".join(digits)[:5] + "".join(letters)[:2]
             if len(n_num) >= 4 and n_num not in seen:
                 seen.add(n_num)
-                callsigns.append({
-                    "callsign": n_num,
-                    "raw": match.group(0).strip(),
-                    "type": "general_aviation",
-                    "confidence": 0.75,
-                })
+                callsigns.append(
+                    {
+                        "callsign": n_num,
+                        "raw": match.group(0).strip(),
+                        "type": "general_aviation",
+                        "confidence": 0.75,
+                    }
+                )
 
     # Pattern 4: Military callsigns
     military_prefixes = [
-        ("AIR FORCE", "AIRFORCE"), ("NAVY", "NAVY"), ("ARMY", "ARMY"),
-        ("MARINE", "MARINE"), ("REACH", "REACH"), ("EVAC", "EVAC"),
-        ("KING", "KING"), ("PEDRO", "PEDRO"), ("JOLLY", "JOLLY"),
-        ("COAST GUARD", "COASTGUARD"), ("RESCUE", "RESCUE"),
-        ("NASA", "NASA"), ("SAM", "SAM"),
+        ("AIR FORCE", "AIRFORCE"),
+        ("NAVY", "NAVY"),
+        ("ARMY", "ARMY"),
+        ("MARINE", "MARINE"),
+        ("REACH", "REACH"),
+        ("EVAC", "EVAC"),
+        ("KING", "KING"),
+        ("PEDRO", "PEDRO"),
+        ("JOLLY", "JOLLY"),
+        ("COAST GUARD", "COASTGUARD"),
+        ("RESCUE", "RESCUE"),
+        ("NASA", "NASA"),
+        ("SAM", "SAM"),
     ]
 
     for name, prefix in military_prefixes:
-        pattern = rf'\b{name}\s*((?:\d+|(?:{phonetic_num_words})\s*)+)'
+        pattern = rf"\b{name}\s*((?:\d+|(?:{phonetic_num_words})\s*)+)"
         for match in re.finditer(pattern, text, re.IGNORECASE):
             num_part = match.group(1)
             flight_num = _normalize_flight_number(num_part) or num_part
@@ -447,15 +582,17 @@ def extract_callsigns_from_transcript(
 
             if callsign not in seen:
                 seen.add(callsign)
-                callsigns.append({
-                    "callsign": callsign,
-                    "raw": match.group(0).strip(),
-                    "type": "military",
-                    "confidence": 0.85,
-                })
+                callsigns.append(
+                    {
+                        "callsign": callsign,
+                        "raw": match.group(0).strip(),
+                        "type": "military",
+                        "confidence": 0.85,
+                    }
+                )
 
     # Pattern 5: Direct ICAO code + numbers
-    icao_pattern = r'\b([A-Z]{3})(\d{1,4})\b'
+    icao_pattern = r"\b([A-Z]{3})(\d{1,4})\b"
     for match in re.finditer(icao_pattern, text):
         icao = match.group(1)
         flight_num = match.group(2)
@@ -463,20 +600,22 @@ def extract_callsigns_from_transcript(
 
         if icao in AIRLINE_CALLSIGNS and callsign not in seen:
             seen.add(callsign)
-            callsigns.append({
-                "callsign": callsign,
-                "raw": match.group(0).strip(),
-                "type": "airline",
-                "airline_icao": icao,
-                "airline_name": AIRLINE_CALLSIGNS.get(icao),
-                "flight_number": flight_num,
-                "confidence": 0.95,
-            })
+            callsigns.append(
+                {
+                    "callsign": callsign,
+                    "raw": match.group(0).strip(),
+                    "type": "airline",
+                    "airline_icao": icao,
+                    "airline_name": AIRLINE_CALLSIGNS.get(icao),
+                    "flight_number": flight_num,
+                    "confidence": 0.95,
+                }
+            )
 
     # Pattern 6: GA aircraft type + partial tail number
     # Handles "Cessna 3AB", "Piper 45X", etc.
-    ga_types = '|'.join(re.escape(t) for t in GA_AIRCRAFT_TYPES.keys())
-    ga_pattern = rf'\b({ga_types})\s+(\d{{1,3}})\s*([A-Z]{{1,2}})?'
+    ga_types = "|".join(re.escape(t) for t in GA_AIRCRAFT_TYPES)
+    ga_pattern = rf"\b({ga_types})\s+(\d{{1,3}})\s*([A-Z]{{1,2}})?"
     for match in re.finditer(ga_pattern, text, re.IGNORECASE):
         ac_type = match.group(1).upper()
         digits = match.group(2)
@@ -486,14 +625,16 @@ def extract_callsigns_from_transcript(
         partial_tail = f"{digits}{letters.upper()}"
         if len(partial_tail) >= 2 and partial_tail not in seen:
             seen.add(partial_tail)
-            callsigns.append({
-                "callsign": partial_tail,
-                "raw": match.group(0).strip(),
-                "type": "general_aviation",
-                "aircraft_type": ac_type,
-                "partial_tail": True,
-                "confidence": 0.5,  # Lower confidence for partial
-            })
+            callsigns.append(
+                {
+                    "callsign": partial_tail,
+                    "raw": match.group(0).strip(),
+                    "type": "general_aviation",
+                    "aircraft_type": ac_type,
+                    "partial_tail": True,
+                    "confidence": 0.5,  # Lower confidence for partial
+                }
+            )
 
     # Pattern 7: Fuzzy airline matching (multi-word lookahead)
     # Handles misspelled airlines like "UNTED" or "DALTE"
@@ -526,17 +667,19 @@ def extract_callsigns_from_transcript(
                 callsign = f"{icao}{flight_num}"
                 if callsign not in seen:
                     seen.add(callsign)
-                    raw_text = ' '.join(words[i:raw_end+1])
-                    callsigns.append({
-                        "callsign": callsign,
-                        "raw": raw_text,
-                        "type": "airline",
-                        "airline_icao": icao,
-                        "airline_name": AIRLINE_CALLSIGNS.get(icao, airline_name),
-                        "flight_number": flight_num,
-                        "fuzzy_matched": True,
-                        "confidence": 0.6,  # Lower for fuzzy match
-                    })
+                    raw_text = " ".join(words[i : raw_end + 1])
+                    callsigns.append(
+                        {
+                            "callsign": callsign,
+                            "raw": raw_text,
+                            "type": "airline",
+                            "airline_icao": icao,
+                            "airline_name": AIRLINE_CALLSIGNS.get(icao, airline_name),
+                            "flight_number": flight_num,
+                            "fuzzy_matched": True,
+                            "confidence": 0.6,  # Lower for fuzzy match
+                        }
+                    )
 
     # Sort by confidence
     callsigns.sort(key=lambda x: x.get("confidence", 0.5), reverse=True)
@@ -559,8 +702,8 @@ def extract_callsigns_from_transcript(
 
 def identify_airframes_from_transcript(
     transcript: str,
-    segments: Optional[list] = None,
-    duration_seconds: Optional[float] = None,
+    segments: list | None = None,
+    duration_seconds: float | None = None,
     use_llm: bool = True,
 ) -> list[dict]:
     """
@@ -633,7 +776,7 @@ def identify_airframes_from_transcript(
     return identified
 
 
-def get_audio_duration(audio_data: bytes) -> Optional[float]:
+def get_audio_duration(audio_data: bytes) -> float | None:
     """
     Calculate audio duration from raw audio bytes.
 
@@ -642,6 +785,7 @@ def get_audio_duration(audio_data: bytes) -> Optional[float]:
     try:
         try:
             import mutagen
+
             with io.BytesIO(audio_data) as audio_file:
                 audio = mutagen.File(audio_file)
                 if audio and audio.info:
@@ -651,7 +795,7 @@ def get_audio_duration(audio_data: bytes) -> Optional[float]:
             logger.debug("mutagen not installed, using WAV parsing fallback")
 
         # Fallback: WAV parsing
-        if audio_data[:4] == b'RIFF' and audio_data[8:12] == b'WAVE':
+        if audio_data[:4] == b"RIFF" and audio_data[8:12] == b"WAVE":
             return _parse_wav_duration(audio_data)
 
         return None
@@ -661,7 +805,7 @@ def get_audio_duration(audio_data: bytes) -> Optional[float]:
         return None
 
 
-def _parse_wav_duration(audio_data: bytes) -> Optional[float]:
+def _parse_wav_duration(audio_data: bytes) -> float | None:
     """Parse WAV duration from header."""
     try:
         if len(audio_data) < 40:
@@ -669,24 +813,24 @@ def _parse_wav_duration(audio_data: bytes) -> Optional[float]:
 
         pos = 12
         while pos < len(audio_data) - 8:
-            chunk_id = audio_data[pos:pos+4]
-            chunk_size = int.from_bytes(audio_data[pos+4:pos+8], 'little')
+            chunk_id = audio_data[pos : pos + 4]
+            chunk_size = int.from_bytes(audio_data[pos + 4 : pos + 8], "little")
 
-            if chunk_id == b'fmt ':
-                num_channels = int.from_bytes(audio_data[pos+8:pos+10], 'little')
-                sample_rate = int.from_bytes(audio_data[pos+10:pos+14], 'little')
-                bytes_per_sample = int.from_bytes(audio_data[pos+22:pos+24], 'little') // 8
+            if chunk_id == b"fmt ":
+                num_channels = int.from_bytes(audio_data[pos + 8 : pos + 10], "little")
+                sample_rate = int.from_bytes(audio_data[pos + 10 : pos + 14], "little")
+                bytes_per_sample = int.from_bytes(audio_data[pos + 22 : pos + 24], "little") // 8
 
                 if num_channels == 0 or sample_rate == 0 or bytes_per_sample == 0:
                     return None
 
                 pos2 = pos + 8 + chunk_size
                 while pos2 < len(audio_data) - 8:
-                    if audio_data[pos2:pos2+4] == b'data':
-                        data_size = int.from_bytes(audio_data[pos2+4:pos2+8], 'little')
+                    if audio_data[pos2 : pos2 + 4] == b"data":
+                        data_size = int.from_bytes(audio_data[pos2 + 4 : pos2 + 8], "little")
                         total_samples = data_size // (num_channels * bytes_per_sample)
                         return total_samples / sample_rate
-                    pos2 += 8 + int.from_bytes(audio_data[pos2+4:pos2+8], 'little')
+                    pos2 += 8 + int.from_bytes(audio_data[pos2 + 4 : pos2 + 8], "little")
                 return None
 
             pos += 8 + chunk_size
@@ -695,10 +839,7 @@ def _parse_wav_duration(audio_data: bytes) -> Optional[float]:
         return None
 
 
-def check_audio_quality(
-    audio_data: bytes,
-    duration: Optional[float] = None
-) -> tuple[bool, str]:
+def check_audio_quality(audio_data: bytes, duration: float | None = None) -> tuple[bool, str]:
     """
     Check if audio meets quality thresholds for transcription.
 
@@ -737,7 +878,7 @@ def detect_static_audio(audio_data: bytes) -> tuple[bool, str]:
         Tuple of (is_static, reason)
     """
     # Only analyze WAV files for now
-    if not (audio_data[:4] == b'RIFF' and audio_data[8:12] == b'WAVE'):
+    if not (audio_data[:4] == b"RIFF" and audio_data[8:12] == b"WAVE"):
         # For non-WAV, try pydub if available
         try:
             return _detect_static_pydub(audio_data)
@@ -767,14 +908,14 @@ def _calculate_wav_rms(audio_data: bytes) -> tuple[bool, str]:
         data_size = 0
 
         while pos < len(audio_data) - 8:
-            chunk_id = audio_data[pos:pos+4]
-            chunk_size = int.from_bytes(audio_data[pos+4:pos+8], 'little')
+            chunk_id = audio_data[pos : pos + 4]
+            chunk_size = int.from_bytes(audio_data[pos + 4 : pos + 8], "little")
 
-            if chunk_id == b'fmt ':
-                num_channels = int.from_bytes(audio_data[pos+10:pos+12], 'little')
-                sample_rate = int.from_bytes(audio_data[pos+12:pos+16], 'little')
-                bits_per_sample = int.from_bytes(audio_data[pos+22:pos+24], 'little')
-            elif chunk_id == b'data':
+            if chunk_id == b"fmt ":
+                num_channels = int.from_bytes(audio_data[pos + 10 : pos + 12], "little")
+                sample_rate = int.from_bytes(audio_data[pos + 12 : pos + 16], "little")
+                bits_per_sample = int.from_bytes(audio_data[pos + 22 : pos + 24], "little")
+            elif chunk_id == b"data":
                 data_start = pos + 8
                 data_size = chunk_size
                 break
@@ -806,11 +947,7 @@ def _calculate_wav_rms(audio_data: bytes) -> tuple[bool, str]:
                 break
 
             if bytes_per_sample == 2:
-                sample = int.from_bytes(
-                    audio_data[frame_start:frame_start+2],
-                    'little',
-                    signed=True
-                )
+                sample = int.from_bytes(audio_data[frame_start : frame_start + 2], "little", signed=True)
             else:
                 sample = audio_data[frame_start] - 128
                 sample *= 256
@@ -826,7 +963,7 @@ def _calculate_wav_rms(audio_data: bytes) -> tuple[bool, str]:
             return True, f"Audio too quiet (RMS={rms:.0f} < {AUDIO_MIN_RMS_THRESHOLD})"
 
         if silence_ratio > AUDIO_SILENCE_RATIO_MAX:
-            return True, f"Audio mostly silence ({silence_ratio*100:.0f}% > {AUDIO_SILENCE_RATIO_MAX*100:.0f}%)"
+            return True, f"Audio mostly silence ({silence_ratio * 100:.0f}% > {AUDIO_SILENCE_RATIO_MAX * 100:.0f}%)"
 
         return False, "ok"
 
@@ -859,7 +996,7 @@ def _detect_static_pydub(audio_data: bytes) -> tuple[bool, str]:
         silence_ratio = total_silence_ms / len(audio) if len(audio) > 0 else 1.0
 
         if silence_ratio > AUDIO_SILENCE_RATIO_MAX:
-            return True, f"Audio mostly silence ({silence_ratio*100:.0f}%)"
+            return True, f"Audio mostly silence ({silence_ratio * 100:.0f}%)"
 
         return False, "ok"
 
@@ -870,7 +1007,7 @@ def _detect_static_pydub(audio_data: bytes) -> tuple[bool, str]:
         return False, "ok"
 
 
-def get_audio_url(transmission: AudioTransmission, signed: bool = True) -> Optional[str]:
+def get_audio_url(transmission: AudioTransmission, signed: bool = True) -> str | None:
     """
     Get accessible URL for an audio file (S3 signed URL or local API URL).
 
@@ -883,13 +1020,10 @@ def get_audio_url(transmission: AudioTransmission, signed: bool = True) -> Optio
     """
     if transmission.s3_key and settings.S3_ENABLED:
         if signed:
-            return generate_signed_url(
-                transmission.filename,
-                settings.RADIO_S3_PREFIX,
-                expires_in=3600
-            )
+            return generate_signed_url(transmission.filename, settings.RADIO_S3_PREFIX, expires_in=3600)
         else:
             from skyspy.services.storage import get_s3_url
+
             return get_s3_url(transmission.filename, settings.RADIO_S3_PREFIX)
     else:
         return f"/api/v1/audio/file/{transmission.filename}"
@@ -898,10 +1032,10 @@ def get_audio_url(transmission: AudioTransmission, signed: bool = True) -> Optio
 def create_transmission(
     audio_data: bytes,
     filename: str,
-    frequency_mhz: Optional[float] = None,
-    channel_name: Optional[str] = None,
-    duration_seconds: Optional[float] = None,
-    metadata: Optional[dict] = None,
+    frequency_mhz: float | None = None,
+    channel_name: str | None = None,
+    duration_seconds: float | None = None,
+    metadata: dict | None = None,
     queue_transcription: bool = True,
 ) -> AudioTransmission:
     """
@@ -959,12 +1093,7 @@ def create_transmission(
             "flac": "audio/flac",
         }.get(audio_format, "audio/mpeg")
 
-        s3_url = upload_to_s3(
-            audio_data,
-            safe_filename,
-            settings.RADIO_S3_PREFIX,
-            content_type=content_type
-        )
+        s3_url = upload_to_s3(audio_data, safe_filename, settings.RADIO_S3_PREFIX, content_type=content_type)
         if s3_url:
             s3_key = get_s3_key(safe_filename, settings.RADIO_S3_PREFIX)
             _stats["uploads"] += 1
@@ -1010,11 +1139,7 @@ def process_transcription(transmission: AudioTransmission) -> bool:
     Returns:
         True if transcription succeeded
     """
-    has_transcription = (
-        settings.WHISPER_ENABLED
-        or settings.TRANSCRIPTION_ENABLED
-        or settings.ATC_WHISPER_ENABLED
-    )
+    has_transcription = settings.WHISPER_ENABLED or settings.TRANSCRIPTION_ENABLED or settings.ATC_WHISPER_ENABLED
     if not has_transcription:
         logger.error("No transcription service configured")
         return False
@@ -1026,15 +1151,9 @@ def process_transcription(transmission: AudioTransmission) -> bool:
     try:
         # Fetch audio data
         if transmission.s3_key and settings.S3_ENABLED:
-            audio_data = download_from_s3(
-                transmission.filename,
-                settings.RADIO_S3_PREFIX
-            )
+            audio_data = download_from_s3(transmission.filename, settings.RADIO_S3_PREFIX)
         else:
-            audio_data = read_local_file(
-                transmission.filename,
-                settings.RADIO_AUDIO_DIR
-            )
+            audio_data = read_local_file(transmission.filename, settings.RADIO_AUDIO_DIR)
 
         if not audio_data:
             raise ValueError("Failed to fetch audio data")
@@ -1094,8 +1213,10 @@ def _transcribe_with_whisper(audio_data: bytes, filename: str) -> dict:
 
     ext = Path(filename).suffix.lower().lstrip(".")
     content_type = {
-        "mp3": "audio/mpeg", "wav": "audio/wav",
-        "ogg": "audio/ogg", "flac": "audio/flac",
+        "mp3": "audio/mpeg",
+        "wav": "audio/wav",
+        "ogg": "audio/ogg",
+        "flac": "audio/flac",
     }.get(ext, "audio/mpeg")
 
     files = {"audio_file": (filename, audio_data, content_type)}
@@ -1116,8 +1237,10 @@ def _transcribe_with_external_service(audio_data: bytes, filename: str) -> dict:
     """Transcribe audio using external service (OpenAI-compatible)."""
     ext = Path(filename).suffix.lower().lstrip(".")
     content_type = {
-        "mp3": "audio/mpeg", "wav": "audio/wav",
-        "ogg": "audio/ogg", "flac": "audio/flac",
+        "mp3": "audio/mpeg",
+        "wav": "audio/wav",
+        "ogg": "audio/ogg",
+        "flac": "audio/flac",
     }.get(ext, "audio/mpeg")
 
     base_url = settings.TRANSCRIPTION_SERVICE_URL.rstrip("/")
@@ -1149,17 +1272,17 @@ def _transcribe_with_external_service(audio_data: bytes, filename: str) -> dict:
 def _transcribe_with_atc_whisper(audio_data: bytes, filename: str) -> dict:
     """Transcribe audio using atc-whisper library."""
     try:
-        from atc_whisper import ATCTranscriber, TranscriptionConfig, PreprocessConfig, VADConfig
+        from atc_whisper import ATCTranscriber, PreprocessConfig, TranscriptionConfig, VADConfig
     except ImportError as e:
         logger.error(f"atc-whisper not installed: {e}")
         raise ValueError("atc-whisper library not available") from e
 
-    import tempfile
     import os
+    import tempfile
 
     base_url = settings.TRANSCRIPTION_SERVICE_URL.rstrip("/")
     if base_url.endswith("/v1/audio/transcriptions"):
-        base_url = base_url[:-len("/audio/transcriptions")]
+        base_url = base_url[: -len("/audio/transcriptions")]
 
     config = TranscriptionConfig(
         base_url=base_url,
@@ -1184,15 +1307,13 @@ def _transcribe_with_atc_whisper(audio_data: bytes, filename: str) -> dict:
 
         async def run_transcription():
             async with ATCTranscriber(config, preprocess_config, vad_config) as transcriber:
-                return await transcriber.transcribe_file(
-                    tmp_path,
-                    segment_by_vad=settings.ATC_WHISPER_SEGMENT_BY_VAD
-                )
+                return await transcriber.transcribe_file(tmp_path, segment_by_vad=settings.ATC_WHISPER_SEGMENT_BY_VAD)
 
         # Handle case where we might already be in an async context
         # (e.g., called from async Celery task or async view)
         try:
             asyncio.get_running_loop()
+
             # Already in async context - run in a new thread with its own event loop
             def _run_in_new_loop():
                 return asyncio.run(run_transcription())
@@ -1204,10 +1325,10 @@ def _transcribe_with_atc_whisper(audio_data: bytes, filename: str) -> dict:
             result = asyncio.run(run_transcription())
 
         return {
-            "text": result.text if hasattr(result, 'text') else result.full_text,
-            "segments": getattr(result, 'segments', []),
+            "text": result.text if hasattr(result, "text") else result.full_text,
+            "segments": getattr(result, "segments", []),
             "language": "en",
-            "duration": getattr(result, 'duration_seconds', None),
+            "duration": getattr(result, "duration_seconds", None),
         }
 
     finally:
@@ -1219,9 +1340,9 @@ def _transcribe_with_atc_whisper(audio_data: bytes, filename: str) -> dict:
 
 
 def get_matched_radio_calls(
-    callsign: Optional[str] = None,
-    operator_icao: Optional[str] = None,
-    registration: Optional[str] = None,
+    callsign: str | None = None,
+    operator_icao: str | None = None,
+    registration: str | None = None,
     hours: int = 24,
     limit: int = 10,
 ) -> list[dict]:
@@ -1246,10 +1367,8 @@ def get_matched_radio_calls(
     cutoff = timezone.now() - timedelta(hours=hours)
 
     transmissions = AudioTransmission.objects.filter(
-        transcription_status="completed",
-        identified_airframes__isnull=False,
-        created_at__gte=cutoff
-    ).order_by('-created_at')
+        transcription_status="completed", identified_airframes__isnull=False, created_at__gte=cutoff
+    ).order_by("-created_at")
 
     matched_calls = []
 
@@ -1264,9 +1383,12 @@ def get_matched_radio_calls(
 
             matched = False
 
-            if callsign and af_callsign.upper() == callsign.upper():
-                matched = True
-            elif operator_icao and af_airline_icao.upper() == operator_icao.upper():
+            if (
+                callsign
+                and af_callsign.upper() == callsign.upper()
+                or operator_icao
+                and af_airline_icao.upper() == operator_icao.upper()
+            ):
                 matched = True
             elif registration and af_type == "general_aviation":
                 if af_callsign.upper() == registration.upper():
@@ -1274,18 +1396,20 @@ def get_matched_radio_calls(
 
             if matched:
                 audio_url = get_audio_url(tx, signed=True)
-                matched_calls.append({
-                    "id": tx.id,
-                    "created_at": tx.created_at.isoformat() + "Z" if tx.created_at else None,
-                    "transcript": tx.transcript,
-                    "frequency_mhz": tx.frequency_mhz,
-                    "channel_name": tx.channel_name,
-                    "duration_seconds": tx.duration_seconds,
-                    "confidence": airframe.get("confidence", 0.5),
-                    "raw_text": airframe.get("raw_text", ""),
-                    "audio_url": audio_url,
-                    "matched_callsign": af_callsign,
-                })
+                matched_calls.append(
+                    {
+                        "id": tx.id,
+                        "created_at": tx.created_at.isoformat() + "Z" if tx.created_at else None,
+                        "transcript": tx.transcript,
+                        "frequency_mhz": tx.frequency_mhz,
+                        "channel_name": tx.channel_name,
+                        "duration_seconds": tx.duration_seconds,
+                        "confidence": airframe.get("confidence", 0.5),
+                        "raw_text": airframe.get("raw_text", ""),
+                        "audio_url": audio_url,
+                        "matched_callsign": af_callsign,
+                    }
+                )
                 break
 
         if len(matched_calls) >= limit:
@@ -1298,20 +1422,17 @@ def get_audio_stats() -> dict:
     """Get audio transmission statistics."""
     from django.db.models import Count, Sum
 
-    by_status = dict(
-        AudioTransmission.objects.values_list('transcription_status')
-        .annotate(count=Count('id'))
-    )
+    by_status = dict(AudioTransmission.objects.values_list("transcription_status").annotate(count=Count("id")))
 
     totals = AudioTransmission.objects.aggregate(
-        total_duration=Sum('duration_seconds'),
-        total_size=Sum('file_size_bytes'),
+        total_duration=Sum("duration_seconds"),
+        total_size=Sum("file_size_bytes"),
     )
 
     by_channel = dict(
         AudioTransmission.objects.exclude(channel_name__isnull=True)
-        .values_list('channel_name')
-        .annotate(count=Count('id'))
+        .values_list("channel_name")
+        .annotate(count=Count("id"))
     )
 
     total_count = AudioTransmission.objects.count()
@@ -1321,8 +1442,8 @@ def get_audio_stats() -> dict:
         "total_transcribed": by_status.get("completed", 0),
         "pending_transcription": by_status.get("pending", 0) + by_status.get("queued", 0),
         "failed_transcription": by_status.get("failed", 0),
-        "total_duration_hours": round((totals['total_duration'] or 0) / 3600, 2),
-        "total_size_mb": round((totals['total_size'] or 0) / (1024 * 1024), 2),
+        "total_duration_hours": round((totals["total_duration"] or 0) / 3600, 2),
+        "total_size_mb": round((totals["total_size"] or 0) / (1024 * 1024), 2),
         "by_channel": by_channel,
         "by_status": by_status,
         "service_stats": _stats.copy(),
@@ -1331,11 +1452,7 @@ def get_audio_stats() -> dict:
 
 def get_service_stats() -> dict:
     """Get service-level statistics."""
-    transcription_enabled = (
-        settings.TRANSCRIPTION_ENABLED
-        or settings.WHISPER_ENABLED
-        or settings.ATC_WHISPER_ENABLED
-    )
+    transcription_enabled = settings.TRANSCRIPTION_ENABLED or settings.WHISPER_ENABLED or settings.ATC_WHISPER_ENABLED
     return {
         "radio_enabled": settings.RADIO_ENABLED,
         "radio_audio_dir": settings.RADIO_AUDIO_DIR,
@@ -1349,11 +1466,7 @@ def get_service_stats() -> dict:
     }
 
 
-def _broadcast_transcription_event(
-    transmission: AudioTransmission,
-    status: str,
-    error: Optional[str] = None
-):
+def _broadcast_transcription_event(transmission: AudioTransmission, status: str, error: str | None = None):
     """
     Broadcast transcription status update via WebSocket.
 
@@ -1373,20 +1486,22 @@ def _broadcast_transcription_event(
         }
 
         if status == "completed":
-            event_data.update({
-                "transcript": transmission.transcript,
-                "confidence": transmission.transcript_confidence,
-                "language": transmission.transcript_language,
-                "duration_seconds": transmission.duration_seconds,
-                "frequency_mhz": transmission.frequency_mhz,
-                "channel_name": transmission.channel_name,
-                "identified_airframes": transmission.identified_airframes,
-                "audio_url": get_audio_url(transmission),
-            })
+            event_data.update(
+                {
+                    "transcript": transmission.transcript,
+                    "confidence": transmission.transcript_confidence,
+                    "language": transmission.transcript_language,
+                    "duration_seconds": transmission.duration_seconds,
+                    "frequency_mhz": transmission.frequency_mhz,
+                    "channel_name": transmission.channel_name,
+                    "identified_airframes": transmission.identified_airframes,
+                    "audio_url": get_audio_url(transmission),
+                }
+            )
         elif status == "failed" and error:
             event_data["error"] = error
 
-        sync_emit('audio:transmission', event_data, room='audio_transmissions', namespace='/audio')
+        sync_emit("audio:transmission", event_data, room="audio_transmissions", namespace="/audio")
 
         logger.debug(f"Broadcast transcription event: {status} for {transmission.id}")
 
@@ -1414,7 +1529,7 @@ def broadcast_new_transmission(transmission: AudioTransmission):
             "transcription_status": transmission.transcription_status,
         }
 
-        sync_emit('audio:transmission', event_data, room='audio_transmissions', namespace='/audio')
+        sync_emit("audio:transmission", event_data, room="audio_transmissions", namespace="/audio")
 
     except Exception as e:
         logger.warning(f"Failed to broadcast new transmission: {e}")

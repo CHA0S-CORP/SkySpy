@@ -9,15 +9,13 @@ Provides cached antenna performance metrics:
 Works with the Celery task for periodic updates and provides
 real-time cache access for API/WebSocket consumers.
 """
+
 import logging
-import math
 import statistics
 from datetime import datetime, timedelta
-from typing import Optional
 
-from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Avg, Count, Max, Min, F
+from django.db.models import Avg, Count, F, Max, Min
 from django.db.models.functions import Floor
 from django.utils import timezone
 
@@ -26,10 +24,10 @@ from skyspy.models import AircraftSighting
 logger = logging.getLogger(__name__)
 
 # Cache keys
-CACHE_KEY_POLAR = 'antenna_polar'
-CACHE_KEY_RSSI = 'antenna_rssi'
-CACHE_KEY_SUMMARY = 'antenna_summary'
-CACHE_KEY_LAST_UPDATED = 'antenna_last_updated'
+CACHE_KEY_POLAR = "antenna_polar"
+CACHE_KEY_RSSI = "antenna_rssi"
+CACHE_KEY_SUMMARY = "antenna_summary"
+CACHE_KEY_LAST_UPDATED = "antenna_last_updated"
 
 # Cache timeout (10 minutes)
 CACHE_TIMEOUT = 600
@@ -43,34 +41,30 @@ def calculate_polar_data(hours: int = 24) -> dict:
     """
     cutoff = timezone.now() - timedelta(hours=hours)
 
-    sightings = AircraftSighting.objects.filter(
-        timestamp__gte=cutoff,
-        track__isnull=False,
-        distance_nm__isnull=False
-    )
+    sightings = AircraftSighting.objects.filter(timestamp__gte=cutoff, track__isnull=False, distance_nm__isnull=False)
 
     if not sightings.exists():
         return {
-            'bearing_data': [
+            "bearing_data": [
                 {
-                    'bearing_start': sector,
-                    'bearing_end': (sector + 10) % 360,
-                    'count': 0,
-                    'avg_rssi': None,
-                    'min_rssi': None,
-                    'max_rssi': None,
-                    'avg_distance_nm': None,
-                    'max_distance_nm': None,
-                    'unique_aircraft': 0,
+                    "bearing_start": sector,
+                    "bearing_end": (sector + 10) % 360,
+                    "count": 0,
+                    "avg_rssi": None,
+                    "min_rssi": None,
+                    "max_rssi": None,
+                    "avg_distance_nm": None,
+                    "max_distance_nm": None,
+                    "unique_aircraft": 0,
                 }
                 for sector in range(0, 360, 10)
             ],
-            'summary': {
-                'total_sightings': 0,
-                'sectors_with_data': 0,
-                'coverage_pct': 0,
+            "summary": {
+                "total_sightings": 0,
+                "sectors_with_data": 0,
+                "coverage_pct": 0,
             },
-            'time_range_hours': hours,
+            "time_range_hours": hours,
         }
 
     # Query with bearing sectors
@@ -79,46 +73,45 @@ def calculate_polar_data(hours: int = 24) -> dict:
     sectors_with_data = 0
 
     for sector in range(0, 360, 10):
-        sector_sightings = sightings.filter(
-            track__gte=sector,
-            track__lt=sector + 10
-        )
+        sector_sightings = sightings.filter(track__gte=sector, track__lt=sector + 10)
 
         stats = sector_sightings.aggregate(
-            count=Count('id'),
-            avg_rssi=Avg('rssi'),
-            min_rssi=Min('rssi'),
-            max_rssi=Max('rssi'),
-            avg_distance=Avg('distance_nm'),
-            max_distance=Max('distance_nm'),
-            unique_aircraft=Count('icao_hex', distinct=True),
+            count=Count("id"),
+            avg_rssi=Avg("rssi"),
+            min_rssi=Min("rssi"),
+            max_rssi=Max("rssi"),
+            avg_distance=Avg("distance_nm"),
+            max_distance=Max("distance_nm"),
+            unique_aircraft=Count("icao_hex", distinct=True),
         )
 
-        count = stats['count'] or 0
+        count = stats["count"] or 0
         total_count += count
         if count > 0:
             sectors_with_data += 1
 
-        bearing_data.append({
-            'bearing_start': sector,
-            'bearing_end': (sector + 10) % 360,
-            'count': count,
-            'avg_rssi': round(stats['avg_rssi'], 1) if stats['avg_rssi'] else None,
-            'min_rssi': round(stats['min_rssi'], 1) if stats['min_rssi'] else None,
-            'max_rssi': round(stats['max_rssi'], 1) if stats['max_rssi'] else None,
-            'avg_distance_nm': round(stats['avg_distance'], 1) if stats['avg_distance'] else None,
-            'max_distance_nm': round(stats['max_distance'], 1) if stats['max_distance'] else None,
-            'unique_aircraft': stats['unique_aircraft'] or 0,
-        })
+        bearing_data.append(
+            {
+                "bearing_start": sector,
+                "bearing_end": (sector + 10) % 360,
+                "count": count,
+                "avg_rssi": round(stats["avg_rssi"], 1) if stats["avg_rssi"] else None,
+                "min_rssi": round(stats["min_rssi"], 1) if stats["min_rssi"] else None,
+                "max_rssi": round(stats["max_rssi"], 1) if stats["max_rssi"] else None,
+                "avg_distance_nm": round(stats["avg_distance"], 1) if stats["avg_distance"] else None,
+                "max_distance_nm": round(stats["max_distance"], 1) if stats["max_distance"] else None,
+                "unique_aircraft": stats["unique_aircraft"] or 0,
+            }
+        )
 
     return {
-        'bearing_data': bearing_data,
-        'summary': {
-            'total_sightings': total_count,
-            'sectors_with_data': sectors_with_data,
-            'coverage_pct': round((sectors_with_data / 36) * 100, 1),
+        "bearing_data": bearing_data,
+        "summary": {
+            "total_sightings": total_count,
+            "sectors_with_data": sectors_with_data,
+            "coverage_pct": round((sectors_with_data / 36) * 100, 1),
         },
-        'time_range_hours': hours,
+        "time_range_hours": hours,
     }
 
 
@@ -131,41 +124,40 @@ def calculate_rssi_data(hours: int = 24, sample_size: int = 500) -> dict:
     cutoff = timezone.now() - timedelta(hours=hours)
 
     base_queryset = AircraftSighting.objects.filter(
-        timestamp__gte=cutoff,
-        rssi__isnull=False,
-        distance_nm__isnull=False,
-        distance_nm__gt=0
+        timestamp__gte=cutoff, rssi__isnull=False, distance_nm__isnull=False, distance_nm__gt=0
     )
 
     if not base_queryset.exists():
         return {
-            'scatter_data': [],
-            'band_statistics': [],
-            'overall_statistics': {},
-            'trend_line': None,
-            'time_range_hours': hours,
-            'sample_size': 0,
+            "scatter_data": [],
+            "band_statistics": [],
+            "overall_statistics": {},
+            "trend_line": None,
+            "time_range_hours": hours,
+            "sample_size": 0,
         }
 
     # Get sampled scatter data points - use deterministic ordering to avoid full table scan
-    scatter_queryset = base_queryset.order_by('-timestamp')[:sample_size]
+    scatter_queryset = base_queryset.order_by("-timestamp")[:sample_size]
     scatter_data = []
-    for row in scatter_queryset.values('distance_nm', 'rssi', 'altitude_baro', 'icao_hex'):
-        scatter_data.append({
-            'distance_nm': round(row['distance_nm'], 1),
-            'rssi': round(row['rssi'], 1),
-            'altitude': row['altitude_baro'],
-            'icao': row['icao_hex'],
-        })
+    for row in scatter_queryset.values("distance_nm", "rssi", "altitude_baro", "icao_hex"):
+        scatter_data.append(
+            {
+                "distance_nm": round(row["distance_nm"], 1),
+                "rssi": round(row["rssi"], 1),
+                "altitude": row["altitude_baro"],
+                "icao": row["icao_hex"],
+            }
+        )
 
     # Get aggregated statistics by distance bands
     band_definitions = [
-        ('0-25nm', 0, 25),
-        ('25-50nm', 25, 50),
-        ('50-75nm', 50, 75),
-        ('75-100nm', 75, 100),
-        ('100-150nm', 100, 150),
-        ('150+nm', 150, 10000),
+        ("0-25nm", 0, 25),
+        ("25-50nm", 25, 50),
+        ("50-75nm", 50, 75),
+        ("75-100nm", 75, 100),
+        ("100-150nm", 100, 150),
+        ("150+nm", 150, 10000),
     ]
 
     band_statistics = []
@@ -173,75 +165,74 @@ def calculate_rssi_data(hours: int = 24, sample_size: int = 500) -> dict:
     all_rssi = []
 
     for band_name, min_dist, max_dist in band_definitions:
-        band_queryset = base_queryset.filter(
-            distance_nm__gte=min_dist,
-            distance_nm__lt=max_dist
-        )
+        band_queryset = base_queryset.filter(distance_nm__gte=min_dist, distance_nm__lt=max_dist)
 
         stats = band_queryset.aggregate(
-            count=Count('id'),
-            avg_rssi=Avg('rssi'),
-            min_rssi=Min('rssi'),
-            max_rssi=Max('rssi'),
-            avg_distance=Avg('distance_nm'),
+            count=Count("id"),
+            avg_rssi=Avg("rssi"),
+            min_rssi=Min("rssi"),
+            max_rssi=Max("rssi"),
+            avg_distance=Avg("distance_nm"),
         )
 
-        count = stats['count'] or 0
+        count = stats["count"] or 0
         total_count += count
 
-        if stats['avg_rssi']:
-            all_rssi.extend([stats['avg_rssi']] * min(count, 100))
+        if stats["avg_rssi"]:
+            all_rssi.extend([stats["avg_rssi"]] * min(count, 100))
 
-        band_statistics.append({
-            'band': band_name,
-            'count': count,
-            'avg_rssi': round(stats['avg_rssi'], 1) if stats['avg_rssi'] else None,
-            'min_rssi': round(stats['min_rssi'], 1) if stats['min_rssi'] else None,
-            'max_rssi': round(stats['max_rssi'], 1) if stats['max_rssi'] else None,
-            'avg_distance_nm': round(stats['avg_distance'], 1) if stats['avg_distance'] else None,
-        })
+        band_statistics.append(
+            {
+                "band": band_name,
+                "count": count,
+                "avg_rssi": round(stats["avg_rssi"], 1) if stats["avg_rssi"] else None,
+                "min_rssi": round(stats["min_rssi"], 1) if stats["min_rssi"] else None,
+                "max_rssi": round(stats["max_rssi"], 1) if stats["max_rssi"] else None,
+                "avg_distance_nm": round(stats["avg_distance"], 1) if stats["avg_distance"] else None,
+            }
+        )
 
     # Calculate overall statistics
     overall_stats = {}
     if all_rssi:
         overall_stats = {
-            'count': total_count,
-            'avg_rssi': round(statistics.mean(all_rssi), 1),
-            'median_rssi': round(statistics.median(all_rssi), 1),
+            "count": total_count,
+            "avg_rssi": round(statistics.mean(all_rssi), 1),
+            "median_rssi": round(statistics.median(all_rssi), 1),
         }
 
     # Calculate linear regression trend line
     trend_line = None
     if len(scatter_data) > 10:
-        distances = [d['distance_nm'] for d in scatter_data]
-        rssis = [d['rssi'] for d in scatter_data]
+        distances = [d["distance_nm"] for d in scatter_data]
+        rssis = [d["rssi"] for d in scatter_data]
         n = len(distances)
         sum_x = sum(distances)
         sum_y = sum(rssis)
-        sum_xy = sum(d * r for d, r in zip(distances, rssis))
-        sum_x2 = sum(d ** 2 for d in distances)
+        sum_xy = sum(d * r for d, r in zip(distances, rssis, strict=False))
+        sum_x2 = sum(d**2 for d in distances)
 
-        denom = n * sum_x2 - sum_x ** 2
+        denom = n * sum_x2 - sum_x**2
         if denom != 0:
             slope = (n * sum_xy - sum_x * sum_y) / denom
             intercept = (sum_y - slope * sum_x) / n
             trend_line = {
-                'slope': round(slope, 4),
-                'intercept': round(intercept, 2),
-                'interpretation': (
+                "slope": round(slope, 4),
+                "intercept": round(intercept, 2),
+                "interpretation": (
                     f"RSSI decreases by {abs(round(slope * 10, 2))} dB per 10nm"
                     if slope < 0
                     else f"RSSI increases by {round(slope * 10, 2)} dB per 10nm"
-                )
+                ),
             }
 
     return {
-        'scatter_data': scatter_data,
-        'band_statistics': band_statistics,
-        'overall_statistics': overall_stats,
-        'trend_line': trend_line,
-        'time_range_hours': hours,
-        'sample_size': len(scatter_data),
+        "scatter_data": scatter_data,
+        "band_statistics": band_statistics,
+        "overall_statistics": overall_stats,
+        "trend_line": trend_line,
+        "time_range_hours": hours,
+        "sample_size": len(scatter_data),
     }
 
 
@@ -249,90 +240,89 @@ def calculate_summary(hours: int = 24) -> dict:
     """Calculate antenna performance summary."""
     cutoff = timezone.now() - timedelta(hours=hours)
 
-    base_queryset = AircraftSighting.objects.filter(
-        timestamp__gte=cutoff,
-        distance_nm__isnull=False
-    )
+    base_queryset = AircraftSighting.objects.filter(timestamp__gte=cutoff, distance_nm__isnull=False)
 
     if not base_queryset.exists():
         return {
-            'range': {
-                'total_sightings': 0,
-                'unique_aircraft': 0,
-                'avg_nm': None,
-                'max_nm': None,
-                'min_nm': None,
+            "range": {
+                "total_sightings": 0,
+                "unique_aircraft": 0,
+                "avg_nm": None,
+                "max_nm": None,
+                "min_nm": None,
             },
-            'signal': {
-                'avg_rssi': None,
-                'best_rssi': None,
-                'worst_rssi': None,
+            "signal": {
+                "avg_rssi": None,
+                "best_rssi": None,
+                "worst_rssi": None,
             },
-            'coverage': {
-                'sectors_active': 0,
-                'total_sectors': 36,
-                'coverage_pct': 0,
+            "coverage": {
+                "sectors_active": 0,
+                "total_sectors": 36,
+                "coverage_pct": 0,
             },
-            'time_range_hours': hours,
+            "time_range_hours": hours,
         }
 
     # Get range statistics
     range_stats = base_queryset.aggregate(
-        total_sightings=Count('id'),
-        unique_aircraft=Count('icao_hex', distinct=True),
-        avg_distance=Avg('distance_nm'),
-        max_distance=Max('distance_nm'),
-        min_distance=Min('distance_nm'),
+        total_sightings=Count("id"),
+        unique_aircraft=Count("icao_hex", distinct=True),
+        avg_distance=Avg("distance_nm"),
+        max_distance=Max("distance_nm"),
+        min_distance=Min("distance_nm"),
     )
 
     # Get RSSI statistics
     rssi_stats = base_queryset.filter(rssi__isnull=False).aggregate(
-        avg_rssi=Avg('rssi'),
-        min_rssi=Min('rssi'),
-        max_rssi=Max('rssi'),
+        avg_rssi=Avg("rssi"),
+        min_rssi=Min("rssi"),
+        max_rssi=Max("rssi"),
     )
 
     # Get coverage by bearing (count distinct 10-degree sectors)
-    sectors_with_data = base_queryset.filter(
-        track__isnull=False
-    ).annotate(
-        sector=Floor(F('track') / 10)
-    ).values('sector').distinct().count()
+    sectors_with_data = (
+        base_queryset.filter(track__isnull=False)
+        .annotate(sector=Floor(F("track") / 10))
+        .values("sector")
+        .distinct()
+        .count()
+    )
 
     # Calculate percentiles
     percentiles = {}
-    distances = list(base_queryset.values_list('distance_nm', flat=True)[:10000])
+    distances = list(base_queryset.values_list("distance_nm", flat=True)[:10000])
     if distances:
         sorted_dist = sorted(d for d in distances if d is not None)
         n = len(sorted_dist)
         if n > 0:
             percentiles = {
-                'p50': round(sorted_dist[n // 2], 1),
-                'p75': round(sorted_dist[int(n * 0.75)], 1),
-                'p90': round(sorted_dist[int(n * 0.90)], 1),
-                'p95': round(sorted_dist[min(int(n * 0.95), n - 1)], 1),
+                "p50": round(sorted_dist[n // 2], 1),
+                "p75": round(sorted_dist[int(n * 0.75)], 1),
+                "p90": round(sorted_dist[int(n * 0.90)], 1),
+                "p95": round(sorted_dist[min(int(n * 0.95), n - 1)], 1),
             }
 
     return {
-        'range': {
-            'total_sightings': range_stats['total_sightings'] or 0,
-            'unique_aircraft': range_stats['unique_aircraft'] or 0,
-            'avg_nm': round(range_stats['avg_distance'], 1) if range_stats['avg_distance'] else None,
-            'max_nm': round(range_stats['max_distance'], 1) if range_stats['max_distance'] else None,
-            'min_nm': round(range_stats['min_distance'], 1) if range_stats['min_distance'] else None,
+        "range": {
+            "total_sightings": range_stats["total_sightings"] or 0,
+            "unique_aircraft": range_stats["unique_aircraft"] or 0,
+            "avg_nm": round(range_stats["avg_distance"], 1) if range_stats["avg_distance"] else None,
+            "max_nm": round(range_stats["max_distance"], 1) if range_stats["max_distance"] else None,
+            "min_nm": round(range_stats["min_distance"], 1) if range_stats["min_distance"] else None,
             **percentiles,
         },
-        'signal': {
-            'avg_rssi': round(rssi_stats['avg_rssi'], 1) if rssi_stats['avg_rssi'] else None,
-            'best_rssi': round(rssi_stats['max_rssi'], 1) if rssi_stats['max_rssi'] else None,
-            'worst_rssi': round(rssi_stats['min_rssi'], 1) if rssi_stats['min_rssi'] else None,
+        "signal": {
+            "avg_rssi": round(rssi_stats["avg_rssi"], 1) if rssi_stats["avg_rssi"] else None,
+            "best_rssi": round(rssi_stats["max_rssi"], 1) if rssi_stats["max_rssi"] else None,
+            "worst_rssi": round(rssi_stats["min_rssi"], 1) if rssi_stats["min_rssi"] else None,
         },
-        'coverage': {
-            'sectors_active': sectors_with_data,
-            'total_sectors': 36,
-            'coverage_pct': round((sectors_with_data / 36) * 100, 1),
+        "coverage": {
+            "sectors_active": sectors_with_data,
+            "total_sectors": 36,
+            "coverage_pct": round((sectors_with_data / 36) * 100, 1),
         },
-        'time_range_hours': hours,
+        "time_range_hours": hours,
     }
 
 
@@ -349,7 +339,7 @@ def refresh_cache(hours: int = 24) -> dict:
         polar = calculate_polar_data(hours)
         rssi = calculate_rssi_data(hours)
         summary = calculate_summary(hours)
-        last_updated = datetime.utcnow().isoformat() + 'Z'
+        last_updated = datetime.utcnow().isoformat() + "Z"
 
         # Update cache
         cache.set(CACHE_KEY_POLAR, polar, timeout=CACHE_TIMEOUT)
@@ -361,10 +351,10 @@ def refresh_cache(hours: int = 24) -> dict:
         logger.debug(f"Antenna analytics cache refreshed in {duration:.2f}s")
 
         return {
-            'polar': polar,
-            'rssi': rssi,
-            'summary': summary,
-            'last_updated': last_updated,
+            "polar": polar,
+            "rssi": rssi,
+            "summary": summary,
+            "last_updated": last_updated,
         }
 
     except Exception as e:
@@ -380,10 +370,7 @@ def broadcast_antenna_update(data: dict = None):
         if data is None:
             data = get_cached_data()
 
-        sync_emit('stats:update', {
-            'stat_type': 'antenna_analytics',
-            'stats': data
-        }, room='topic_stats')
+        sync_emit("stats:update", {"stat_type": "antenna_analytics", "stats": data}, room="topic_stats")
         logger.debug("Antenna analytics broadcast sent")
     except Exception as e:
         logger.error(f"Error broadcasting antenna analytics: {e}")
@@ -392,24 +379,24 @@ def broadcast_antenna_update(data: dict = None):
 def get_cached_data() -> dict:
     """Get all cached antenna analytics data."""
     return {
-        'polar': cache.get(CACHE_KEY_POLAR),
-        'rssi': cache.get(CACHE_KEY_RSSI),
-        'summary': cache.get(CACHE_KEY_SUMMARY),
-        'last_updated': cache.get(CACHE_KEY_LAST_UPDATED),
+        "polar": cache.get(CACHE_KEY_POLAR),
+        "rssi": cache.get(CACHE_KEY_RSSI),
+        "summary": cache.get(CACHE_KEY_SUMMARY),
+        "last_updated": cache.get(CACHE_KEY_LAST_UPDATED),
     }
 
 
-def get_cached_polar() -> Optional[dict]:
+def get_cached_polar() -> dict | None:
     """Get cached polar data."""
     return cache.get(CACHE_KEY_POLAR)
 
 
-def get_cached_rssi() -> Optional[dict]:
+def get_cached_rssi() -> dict | None:
     """Get cached RSSI data."""
     return cache.get(CACHE_KEY_RSSI)
 
 
-def get_cached_summary() -> Optional[dict]:
+def get_cached_summary() -> dict | None:
     """Get cached summary."""
     return cache.get(CACHE_KEY_SUMMARY)
 
@@ -417,7 +404,7 @@ def get_cached_summary() -> Optional[dict]:
 def get_or_calculate_polar(hours: int = 24) -> dict:
     """Get cached polar data or calculate if not available."""
     cached = get_cached_polar()
-    if cached and cached.get('time_range_hours') == hours:
+    if cached and cached.get("time_range_hours") == hours:
         return cached
     return calculate_polar_data(hours)
 
@@ -425,7 +412,7 @@ def get_or_calculate_polar(hours: int = 24) -> dict:
 def get_or_calculate_rssi(hours: int = 24, sample_size: int = 500) -> dict:
     """Get cached RSSI data or calculate if not available."""
     cached = get_cached_rssi()
-    if cached and cached.get('time_range_hours') == hours:
+    if cached and cached.get("time_range_hours") == hours:
         return cached
     return calculate_rssi_data(hours, sample_size)
 
@@ -433,6 +420,6 @@ def get_or_calculate_rssi(hours: int = 24, sample_size: int = 500) -> dict:
 def get_or_calculate_summary(hours: int = 24) -> dict:
     """Get cached summary or calculate if not available."""
     cached = get_cached_summary()
-    if cached and cached.get('time_range_hours') == hours:
+    if cached and cached.get("time_range_hours") == hours:
         return cached
     return calculate_summary(hours)

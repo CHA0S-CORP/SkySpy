@@ -3,7 +3,9 @@ Permission classes for SkySpy.
 
 Provides feature-based and granular permission checking for REST API views.
 """
+
 import logging
+
 from django.conf import settings
 from rest_framework import permissions
 
@@ -19,9 +21,9 @@ class IsAuthenticatedOrPublic(permissions.BasePermission):
 
     def has_permission(self, request, view):
         # Check auth mode
-        auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
+        auth_mode = getattr(settings, "AUTH_MODE", "hybrid")
 
-        if auth_mode == 'public':
+        if auth_mode == "public":
             return True
 
         return request.user and request.user.is_authenticated
@@ -38,70 +40,70 @@ class FeatureBasedPermission(permissions.BasePermission):
     # Map view class names to feature names
     FEATURE_MAP = {
         # Aircraft
-        'AircraftViewSet': 'aircraft',
-        'AircraftSightingViewSet': 'aircraft',
-        'AircraftSessionViewSet': 'aircraft',
-        'AircraftInfoViewSet': 'aircraft',
-        'AirframeViewSet': 'aircraft',
-        'AviationViewSet': 'aircraft',
+        "AircraftViewSet": "aircraft",
+        "AircraftSightingViewSet": "aircraft",
+        "AircraftSessionViewSet": "aircraft",
+        "AircraftInfoViewSet": "aircraft",
+        "AirframeViewSet": "aircraft",
+        "AviationViewSet": "aircraft",
         # Alerts
-        'AlertRuleViewSet': 'alerts',
-        'AlertHistoryViewSet': 'alerts',
-        'AlertSubscriptionViewSet': 'alerts',
+        "AlertRuleViewSet": "alerts",
+        "AlertHistoryViewSet": "alerts",
+        "AlertSubscriptionViewSet": "alerts",
         # Notifications (related to alerts)
-        'NotificationChannelViewSet': 'alerts',
-        'NotificationViewSet': 'alerts',
+        "NotificationChannelViewSet": "alerts",
+        "NotificationViewSet": "alerts",
         # Safety
-        'SafetyEventViewSet': 'safety',
+        "SafetyEventViewSet": "safety",
         # Audio
-        'AudioViewSet': 'audio',
-        'AudioTransmissionViewSet': 'audio',
+        "AudioViewSet": "audio",
+        "AudioTransmissionViewSet": "audio",
         # ACARS
-        'AcarsViewSet': 'acars',
-        'AcarsMessageViewSet': 'acars',
+        "AcarsViewSet": "acars",
+        "AcarsMessageViewSet": "acars",
         # History
-        'HistoryViewSet': 'history',
-        'SightingViewSet': 'history',
-        'SessionViewSet': 'history',
-        'ArchiveViewSet': 'history',
+        "HistoryViewSet": "history",
+        "SightingViewSet": "history",
+        "SessionViewSet": "history",
+        "ArchiveViewSet": "history",
         # System and Stats
-        'SystemViewSet': 'system',
-        'HealthViewSet': 'system',
-        'MetricsViewSet': 'system',
-        'TrackingQualityViewSet': 'system',
-        'EngagementViewSet': 'system',
-        'FavoritesViewSet': 'system',
-        'FlightPatternsViewSet': 'system',
-        'FlightPatternStatsViewSet': 'system',
-        'GeographicStatsViewSet': 'system',
-        'CombinedStatsViewSet': 'system',
-        'AntennaAnalyticsViewSet': 'system',
-        'RouteLookupView': 'system',
-        'GeodataStatsView': 'system',
-        'WeatherCacheStatsView': 'system',
+        "SystemViewSet": "system",
+        "HealthViewSet": "system",
+        "MetricsViewSet": "system",
+        "TrackingQualityViewSet": "system",
+        "EngagementViewSet": "system",
+        "FavoritesViewSet": "system",
+        "FlightPatternsViewSet": "system",
+        "FlightPatternStatsViewSet": "system",
+        "GeographicStatsViewSet": "system",
+        "CombinedStatsViewSet": "system",
+        "AntennaAnalyticsViewSet": "system",
+        "RouteLookupView": "system",
+        "GeodataStatsView": "system",
+        "WeatherCacheStatsView": "system",
         # Map and navigation
-        'MapViewSet': 'aircraft',
-        'NotamViewSet': 'aircraft',
-        'MobileViewSet': 'aircraft',
+        "MapViewSet": "aircraft",
+        "NotamViewSet": "aircraft",
+        "MobileViewSet": "aircraft",
         # User management
-        'UserViewSet': 'users',
-        'SkyspyUserViewSet': 'users',
-        'UserRoleViewSet': 'users',
-        'APIKeyViewSet': 'users',
-        'FeatureAccessViewSet': 'users',
-        'OIDCClaimMappingViewSet': 'users',
+        "UserViewSet": "users",
+        "SkyspyUserViewSet": "users",
+        "UserRoleViewSet": "users",
+        "APIKeyViewSet": "users",
+        "FeatureAccessViewSet": "users",
+        "OIDCClaimMappingViewSet": "users",
         # Role management
-        'RoleViewSet': 'roles',
+        "RoleViewSet": "roles",
     }
 
     # Permission required for each action type
     ACTION_PERMISSIONS = {
-        'list': 'view',
-        'retrieve': 'view',
-        'create': 'create',
-        'update': 'edit',
-        'partial_update': 'edit',
-        'destroy': 'delete',
+        "list": "view",
+        "retrieve": "view",
+        "create": "create",
+        "update": "edit",
+        "partial_update": "edit",
+        "destroy": "delete",
     }
 
     def has_permission(self, request, view):
@@ -109,16 +111,16 @@ class FeatureBasedPermission(permissions.BasePermission):
         from skyspy.models.auth import FeatureAccess
 
         # Validate API key scopes if present
-        api_key_scopes = getattr(request, 'api_key_scopes', None)
+        api_key_scopes = getattr(request, "api_key_scopes", None)
         if api_key_scopes is not None:
             required_scope = self._get_required_scope(view)
             if required_scope and required_scope not in api_key_scopes:
                 return False
 
-        auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
+        auth_mode = getattr(settings, "AUTH_MODE", "hybrid")
 
         # Public mode bypasses all permission checks - allows anonymous access
-        if auth_mode == 'public':
+        if auth_mode == "public":
             return True
 
         # Get feature name for this view
@@ -146,7 +148,7 @@ class FeatureBasedPermission(permissions.BasePermission):
             return self._check_access_level(request, access_level, feature, is_write)
 
         # No explicit config - fall back to AUTH_MODE
-        if auth_mode == 'private':
+        if auth_mode == "private":
             # Private mode requires auth for all access
             return request.user and request.user.is_authenticated
 
@@ -161,10 +163,10 @@ class FeatureBasedPermission(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
         """Check object-level permissions (e.g., ownership)."""
-        auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
+        auth_mode = getattr(settings, "AUTH_MODE", "hybrid")
 
         # Public mode bypasses all permission checks
-        if auth_mode == 'public':
+        if auth_mode == "public":
             return True
 
         # For write operations, check ownership
@@ -185,13 +187,13 @@ class FeatureBasedPermission(permissions.BasePermission):
 
     def _check_access_level(self, request, access_level, feature, is_write):
         """Check if request meets the access level requirement."""
-        if access_level == 'public':
+        if access_level == "public":
             return True
 
-        if access_level == 'authenticated':
+        if access_level == "authenticated":
             return request.user and request.user.is_authenticated
 
-        if access_level == 'permission':
+        if access_level == "permission":
             # Check specific permission
             permission = self._get_required_permission(request, feature, is_write)
             return self._has_permission(request.user, permission)
@@ -203,14 +205,14 @@ class FeatureBasedPermission(permissions.BasePermission):
         if is_write:
             # Map HTTP method to permission
             method_map = {
-                'POST': 'create',
-                'PUT': 'edit',
-                'PATCH': 'edit',
-                'DELETE': 'delete',
+                "POST": "create",
+                "PUT": "edit",
+                "PATCH": "edit",
+                "DELETE": "delete",
             }
-            action = method_map.get(request.method, 'edit')
+            action = method_map.get(request.method, "edit")
         else:
-            action = 'view'
+            action = "view"
 
         return f"{feature}.{action}"
 
@@ -248,15 +250,15 @@ class FeatureBasedPermission(permissions.BasePermission):
 
         # For unknown viewsets (not in FEATURE_MAP), check alerts.manage_all as fallback
         # This covers notification channels and other related viewsets
-        if not feature and self._has_permission(user, 'alerts.manage_all'):
+        if not feature and self._has_permission(user, "alerts.manage_all"):
             return True
 
         # Check ownership (if object has owner field)
-        if hasattr(obj, 'owner') and obj.owner:
+        if hasattr(obj, "owner") and obj.owner:
             return obj.owner == user
 
         # Check shared status (if object has is_shared field)
-        if hasattr(obj, 'is_shared'):
+        if hasattr(obj, "is_shared"):
             # Can view shared objects but not edit
             if request.method in permissions.SAFE_METHODS:
                 return True
@@ -267,11 +269,11 @@ class FeatureBasedPermission(permissions.BasePermission):
             return False
 
         # Get the view action and check for corresponding permission
-        action = getattr(view, 'action', None)
+        action = getattr(view, "action", None)
         if action:
             # Map related actions to base permissions
             action_mapping = {
-                'unacknowledge': 'acknowledge',  # unacknowledge requires acknowledge permission
+                "unacknowledge": "acknowledge",  # unacknowledge requires acknowledge permission
             }
             permission_action = action_mapping.get(action, action)
 
@@ -300,34 +302,37 @@ class HasPermission(permissions.BasePermission):
     # Permissions that should always be enforced regardless of AUTH_MODE
     # (admin/user management permissions)
     ALWAYS_ENFORCE_PERMISSIONS = {
-        'users.view', 'users.create', 'users.edit', 'users.delete',
-        'roles.view', 'roles.create', 'roles.edit', 'roles.delete',
+        "users.view",
+        "users.create",
+        "users.edit",
+        "users.delete",
+        "roles.view",
+        "roles.create",
+        "roles.edit",
+        "roles.delete",
     }
 
     def has_permission(self, request, view):
         """Check if user has required permissions."""
         # Get required permissions from view or class
-        required = getattr(view, 'required_permissions', None) or self.required_permissions
+        required = getattr(view, "required_permissions", None) or self.required_permissions
 
         # Validate API key scopes if present
-        api_key_scopes = getattr(request, 'api_key_scopes', None)
+        api_key_scopes = getattr(request, "api_key_scopes", None)
         if api_key_scopes is not None and required:
             # Check if any required permission's feature is in API key scopes
             for perm in required:
                 # Extract feature from permission (e.g., 'alerts.create' -> 'alerts')
-                feature = perm.split('.')[0] if '.' in perm else perm
+                feature = perm.split(".")[0] if "." in perm else perm
                 if feature not in api_key_scopes:
                     return False
 
         # Check if any required permissions are admin-related (always enforce)
-        always_enforce = any(
-            perm in self.ALWAYS_ENFORCE_PERMISSIONS
-            for perm in required
-        ) if required else False
+        always_enforce = any(perm in self.ALWAYS_ENFORCE_PERMISSIONS for perm in required) if required else False
 
         # Check auth mode - only bypass for non-admin permissions
-        auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
-        if auth_mode == 'public' and not always_enforce:
+        auth_mode = getattr(settings, "AUTH_MODE", "hybrid")
+        if auth_mode == "public" and not always_enforce:
             return True
 
         user = request.user
@@ -352,11 +357,7 @@ class HasPermission(permissions.BasePermission):
     @classmethod
     def with_perms(cls, *permissions):
         """Create a permission class with specific required permissions."""
-        return type(
-            'HasPermission',
-            (cls,),
-            {'required_permissions': list(permissions)}
-        )
+        return type("HasPermission", (cls,), {"required_permissions": list(permissions)})
 
 
 class HasAnyPermission(permissions.BasePermission):
@@ -377,17 +378,17 @@ class HasAnyPermission(permissions.BasePermission):
     def has_permission(self, request, view):
         """Check if user has any of the required permissions."""
         # Get required permissions from view or class
-        required = getattr(view, 'required_permissions', None) or self.required_permissions
+        required = getattr(view, "required_permissions", None) or self.required_permissions
 
         # Validate API key scopes if present
         # For HasAnyPermission, check if at least one required permission's feature is in scopes
-        api_key_scopes = getattr(request, 'api_key_scopes', None)
+        api_key_scopes = getattr(request, "api_key_scopes", None)
         if api_key_scopes is not None and required:
             # Check if any required permission's feature is in API key scopes
             has_valid_scope = False
             for perm in required:
                 # Extract feature from permission (e.g., 'alerts.create' -> 'alerts')
-                feature = perm.split('.')[0] if '.' in perm else perm
+                feature = perm.split(".")[0] if "." in perm else perm
                 if feature in api_key_scopes:
                     has_valid_scope = True
                     break
@@ -395,14 +396,11 @@ class HasAnyPermission(permissions.BasePermission):
                 return False
 
         # Check if any required permissions are admin-related (always enforce)
-        always_enforce = any(
-            perm in self.ALWAYS_ENFORCE_PERMISSIONS
-            for perm in required
-        ) if required else False
+        always_enforce = any(perm in self.ALWAYS_ENFORCE_PERMISSIONS for perm in required) if required else False
 
         # Check auth mode - only bypass for non-admin permissions
-        auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
-        if auth_mode == 'public' and not always_enforce:
+        auth_mode = getattr(settings, "AUTH_MODE", "hybrid")
+        if auth_mode == "public" and not always_enforce:
             return True
 
         user = request.user
@@ -441,7 +439,7 @@ class IsAdminUser(permissions.BasePermission):
         try:
             profile = user.skyspy_profile
             # Check for admin-level permissions
-            admin_perms = ['system.manage', 'users.view', 'roles.view']
+            admin_perms = ["system.manage", "users.view", "roles.view"]
             return profile.has_any_permission(admin_perms)
         except AttributeError:
             return False
@@ -466,7 +464,7 @@ class IsSuperAdmin(permissions.BasePermission):
         try:
             profile = user.skyspy_profile
             # Check for full user/role management permissions
-            return profile.has_all_permissions(['users.create', 'users.delete', 'roles.create', 'roles.delete'])
+            return profile.has_all_permissions(["users.create", "users.delete", "roles.create", "roles.delete"])
         except AttributeError:
             return False
         except Exception as e:
@@ -483,8 +481,8 @@ class IsOwnerOrAdmin(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
         # Check auth mode - public mode allows all access
-        auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
-        if auth_mode == 'public':
+        auth_mode = getattr(settings, "AUTH_MODE", "hybrid")
+        if auth_mode == "public":
             return True
 
         user = request.user
@@ -495,7 +493,7 @@ class IsOwnerOrAdmin(permissions.BasePermission):
             return True
 
         # Check ownership
-        if hasattr(obj, 'owner') and obj.owner == user:
+        if hasattr(obj, "owner") and obj.owner == user:
             return True
 
         # Check for admin permission
@@ -531,7 +529,7 @@ class HasSystemManagePermission(permissions.BasePermission):
 
         try:
             profile = user.skyspy_profile
-            return profile.has_permission('system.manage')
+            return profile.has_permission("system.manage")
         except AttributeError:
             return False
         except Exception as e:
@@ -551,8 +549,8 @@ class CanAccessAlert(permissions.BasePermission):
     """
 
     def has_permission(self, request, view):
-        auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
-        if auth_mode == 'public':
+        auth_mode = getattr(settings, "AUTH_MODE", "hybrid")
+        if auth_mode == "public":
             return True
 
         user = request.user
@@ -561,22 +559,22 @@ class CanAccessAlert(permissions.BasePermission):
 
         # Read access - need alerts.view
         if request.method in permissions.SAFE_METHODS:
-            return self._has_perm(user, 'alerts.view')
+            return self._has_perm(user, "alerts.view")
 
         # Write access - need create/edit/delete
         method_perm_map = {
-            'POST': 'alerts.create',
-            'PUT': 'alerts.edit',
-            'PATCH': 'alerts.edit',
-            'DELETE': 'alerts.delete',
+            "POST": "alerts.create",
+            "PUT": "alerts.edit",
+            "PATCH": "alerts.edit",
+            "DELETE": "alerts.delete",
         }
         required_perm = method_perm_map.get(request.method)
         return self._has_perm(user, required_perm) if required_perm else False
 
     def has_object_permission(self, request, view, obj):
         # Check auth mode - public mode allows all access
-        auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
-        if auth_mode == 'public':
+        auth_mode = getattr(settings, "AUTH_MODE", "hybrid")
+        if auth_mode == "public":
             return True
 
         user = request.user
@@ -591,15 +589,11 @@ class CanAccessAlert(permissions.BasePermission):
             return True
 
         # Can view shared rules
-        if request.method in permissions.SAFE_METHODS:
-            if obj.is_shared and self._has_perm(user, 'alerts.view'):
-                return True
-
-        # Can edit any rule with manage_all
-        if self._has_perm(user, 'alerts.manage_all'):
+        if request.method in permissions.SAFE_METHODS and obj.is_shared and self._has_perm(user, "alerts.view"):
             return True
 
-        return False
+        # Can edit any rule with manage_all
+        return bool(self._has_perm(user, "alerts.manage_all"))
 
     def _has_perm(self, user, permission):
         if user.is_superuser:

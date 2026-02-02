@@ -170,13 +170,13 @@ export const decodePirep = (pirep) => {
     const ovMatch = rawStr.match(/\/OV\s+([A-Z0-9]+)/);
     if (ovMatch) parsed.location = ovMatch[1];
     
-    const skMatch = rawStr.match(/\/SK\s+([^\/]+)/);
+    const skMatch = rawStr.match(/\/SK\s+([^/]+)/);
     if (skMatch) parsed.sky = skMatch[1].trim();
-    
-    const tbMatch = rawStr.match(/\/TB\s+([^\/]+)/);
+
+    const tbMatch = rawStr.match(/\/TB\s+([^/]+)/);
     if (tbMatch) parsed.turbulence = tbMatch[1].trim();
-    
-    const icMatch = rawStr.match(/\/IC\s+([^\/]+)/);
+
+    const icMatch = rawStr.match(/\/IC\s+([^/]+)/);
     if (icMatch) parsed.icing = icMatch[1].trim();
     
     const taMatch = rawStr.match(/\/TA\s*(M?\d+)/);
@@ -185,20 +185,20 @@ export const decodePirep = (pirep) => {
       parsed.temp = temp.startsWith('M') ? -parseInt(temp.substring(1), 10) : parseInt(temp, 10);
     }
     
-    const wvMatch = rawStr.match(/\/WV\s*(\d{3})[\s\/]?(\d{2,3})/);
+    const wvMatch = rawStr.match(/\/WV\s*(\d{3})[\s/]?(\d{2,3})/);
     if (wvMatch) {
       parsed.wdir = parseInt(wvMatch[1], 10);
       parsed.wspd = parseInt(wvMatch[2], 10);
     }
-    
+
     const rmMatch = rawStr.match(/\/RM\s+(.+?)(?:\/|$)/);
     if (rmMatch) parsed.remarks = rmMatch[1].trim();
-    
-    const wsMatch = rawStr.match(/\/WS\s+([^\/]+)/);
+
+    const wsMatch = rawStr.match(/\/WS\s+([^/]+)/);
     if (wsMatch) {
       parsed.windshear = wsMatch[1].trim();
     } else if (rawStr.includes('LLWS') || rawStr.includes('WSHFT')) {
-      const llwsMatch = rawStr.match(/LLWS[^\/]*/i);
+      const llwsMatch = rawStr.match(/LLWS[^/]*/i);
       if (llwsMatch) parsed.windshear = llwsMatch[0].trim();
     }
     

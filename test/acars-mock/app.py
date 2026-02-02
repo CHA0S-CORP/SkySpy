@@ -26,15 +26,12 @@ TCP Relay Ports:
 import asyncio
 import json
 import logging
-import os
 import random
 import socket
 import time
-import uuid
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import httpx
 import uvicorn
@@ -44,37 +41,35 @@ from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("acarshub-mock")
 
 
 class Settings(BaseSettings):
     """Application settings from environment variables"""
+
     # Mock generation settings
     mock_enabled: bool = True
     mock_interval_min: float = 1.0  # Minimum seconds between mock messages
     mock_interval_max: float = 5.0  # Maximum seconds between mock messages
-    
+
     # UDP listener ports
     acars_udp_port: int = 5550
     vdlm2_udp_port: int = 5555
     hfdl_udp_port: int = 5556
     imsl_udp_port: int = 5557
     irdm_udp_port: int = 5558
-    
+
     # TCP relay ports
     acars_tcp_port: int = 15550
     vdlm2_tcp_port: int = 15555
     hfdl_tcp_port: int = 15556
     imsl_tcp_port: int = 15557
     irdm_tcp_port: int = 15558
-    
+
     # Relay destination (your service)
     relay_host: str = "api"
-    relay_port: Optional[int] = None
+    relay_port: int | None = None
     relay_protocol: str = "udp"  # udp or tcp
 
     # Web interface
@@ -117,10 +112,36 @@ AIRLINES = [
 ]
 
 AIRPORTS = [
-    "KSEA", "KPAE", "KBFI", "KORD", "KJFK", "KLAX", "KSFO", "KDEN",
-    "KATL", "KDFW", "KMIA", "KBOS", "KPHX", "KLAS", "KMSP", "KDTW",
-    "EGLL", "LFPG", "EDDF", "EHAM", "RJTT", "VHHH", "WSSS", "YSSY",
-    "CYYZ", "CYVR", "OMDB", "ZBAA", "RKSI", "VTBS"
+    "KSEA",
+    "KPAE",
+    "KBFI",
+    "KORD",
+    "KJFK",
+    "KLAX",
+    "KSFO",
+    "KDEN",
+    "KATL",
+    "KDFW",
+    "KMIA",
+    "KBOS",
+    "KPHX",
+    "KLAS",
+    "KMSP",
+    "KDTW",
+    "EGLL",
+    "LFPG",
+    "EDDF",
+    "EHAM",
+    "RJTT",
+    "VHHH",
+    "WSSS",
+    "YSSY",
+    "CYYZ",
+    "CYVR",
+    "OMDB",
+    "ZBAA",
+    "RKSI",
+    "VTBS",
 ]
 
 ACARS_LABELS = [
@@ -241,9 +262,18 @@ REALISTIC_TEMPLATES = {
 
 # Delay reasons for realistic messages
 DELAY_REASONS = [
-    "ATC FLOW CONTROL", "WEATHER", "MAINTENANCE", "CREW AVAILABILITY",
-    "LATE ARRIVING AIRCRAFT", "GATE HOLD", "FUELING", "CATERING",
-    "SECURITY", "PASSENGER BOARDING", "CONNECTING PASSENGERS", "CARGO LOADING"
+    "ATC FLOW CONTROL",
+    "WEATHER",
+    "MAINTENANCE",
+    "CREW AVAILABILITY",
+    "LATE ARRIVING AIRCRAFT",
+    "GATE HOLD",
+    "FUELING",
+    "CATERING",
+    "SECURITY",
+    "PASSENGER BOARDING",
+    "CONNECTING PASSENGERS",
+    "CARGO LOADING",
 ]
 
 # Flight phases for ACMS reports
@@ -251,8 +281,18 @@ FLIGHT_PHASES = ["TAXI OUT", "TAKEOFF", "CLIMB", "CRUISE", "DESCENT", "APPROACH"
 
 # Systems for maintenance messages
 AIRCRAFT_SYSTEMS = [
-    "HYDRAULICS", "ELECTRICAL", "PRESSURIZATION", "APU", "ENG 1", "ENG 2",
-    "FUEL", "ANTI-ICE", "AUTOPILOT", "FMS", "TCAS", "WEATHER RADAR"
+    "HYDRAULICS",
+    "ELECTRICAL",
+    "PRESSURIZATION",
+    "APU",
+    "ENG 1",
+    "ENG 2",
+    "FUEL",
+    "ANTI-ICE",
+    "AUTOPILOT",
+    "FMS",
+    "TCAS",
+    "WEATHER RADAR",
 ]
 
 # SIDs and airways for routing
@@ -262,31 +302,36 @@ WAYPOINTS = ["MARNR", "JAWBN", "ZADON", "GLASR", "HETHR", "NORMY", "COUGA", "TUM
 
 # Crew messages
 CREW_MESSAGES = [
-    "ROGER", "WILCO", "CONFIRM GATE INFO", "REQUEST FUEL UPDATE",
-    "MEDICAL EMERGENCY ON BOARD", "TURBULENCE REPORT FL{fl}",
-    "RIDE REPORT: {ride} AT FL{fl}", "PIREP: {pirep}"
+    "ROGER",
+    "WILCO",
+    "CONFIRM GATE INFO",
+    "REQUEST FUEL UPDATE",
+    "MEDICAL EMERGENCY ON BOARD",
+    "TURBULENCE REPORT FL{fl}",
+    "RIDE REPORT: {ride} AT FL{fl}",
+    "PIREP: {pirep}",
 ]
 
 # Weather advisories
 WX_ADVISORIES = [
-    "SIGMET {id}: TS AREA {loc}", "CONVECTIVE ACTIVITY {dir} OF ROUTE",
-    "MOD TURB FL{fl_lo}-{fl_hi}", "ICING REPORTED FL{fl_lo}-{fl_hi}",
-    "VOLCANIC ASH ADVISORY {area}"
+    "SIGMET {id}: TS AREA {loc}",
+    "CONVECTIVE ACTIVITY {dir} OF ROUTE",
+    "MOD TURB FL{fl_lo}-{fl_hi}",
+    "ICING REPORTED FL{fl_lo}-{fl_hi}",
+    "VOLCANIC ASH ADVISORY {area}",
 ]
 
 # Ride conditions
 RIDE_CONDITIONS = ["SMOOTH", "LIGHT CHOP", "LIGHT TURB", "MOD CHOP", "MOD TURB", "SEV TURB"]
 
 # Pilot reports
-PIREPS = [
-    "MOD ICE FL{fl}", "NEG ICE FL{fl}", "WIND {dir}/{spd} FL{fl}",
-    "TOPS FL{fl}", "BASES FL{fl}"
-]
+PIREPS = ["MOD ICE FL{fl}", "NEG ICE FL{fl}", "WIND {dir}/{spd} FL{fl}", "TOPS FL{fl}", "BASES FL{fl}"]
 
 
 @dataclass
 class ACARSMessage:
     """Represents an ACARS message in the format expected by ACARSHUB"""
+
     timestamp: float = field(default_factory=time.time)
     station_id: str = ""
     channel: int = 0
@@ -303,7 +348,7 @@ class ACARSMessage:
     text: str = ""
     end: bool = True
     msg_type: str = "acars"  # acars, vdlm2, hfdl, imsl, irdm
-    
+
     def to_acarsdec_json(self) -> dict:
         """Convert to acarsdec JSON format"""
         return {
@@ -323,33 +368,20 @@ class ACARSMessage:
             "text": self.text,
             "end": self.end,
         }
-    
+
     def to_dumpvdl2_json(self) -> dict:
         """Convert to dumpvdl2 JSON format"""
         return {
             "vdl2": {
-                "app": {
-                    "name": "dumpvdl2",
-                    "ver": "2.5.0"
-                },
-                "t": {
-                    "sec": int(self.timestamp),
-                    "usec": int((self.timestamp % 1) * 1000000)
-                },
+                "app": {"name": "dumpvdl2", "ver": "2.5.0"},
+                "t": {"sec": int(self.timestamp), "usec": int((self.timestamp % 1) * 1000000)},
                 "freq": int(self.frequency * 1000000),
                 "sig_level": self.level,
                 "noise_level": self.level - 20,
                 "station": self.station_id,
                 "avlc": {
-                    "src": {
-                        "addr": self.tail.replace("-", ""),
-                        "type": "Aircraft",
-                        "status": "Airborne"
-                    },
-                    "dst": {
-                        "addr": "GROUND",
-                        "type": "Ground station"
-                    },
+                    "src": {"addr": self.tail.replace("-", ""), "type": "Aircraft", "status": "Airborne"},
+                    "dst": {"addr": "GROUND", "type": "Ground station"},
                     "cr": "Command",
                     "acars": {
                         "err": self.error == 0,
@@ -363,43 +395,44 @@ class ACARSMessage:
                         "flight": self.flight,
                         "msg_num": self.msgno,
                         "msg_num_seq": "A",
-                        "msg_text": self.text
-                    }
-                }
+                        "msg_text": self.text,
+                    },
+                },
             }
         }
 
 
 class MessageStore:
     """Store for received and generated messages"""
+
     def __init__(self, max_messages: int = 1000):
         self.messages: list[dict] = []
         self.max_messages = max_messages
         self.total_received = 0
         self.total_generated = 0
         self.websocket_clients: set[WebSocket] = set()
-    
+
     async def add_message(self, msg: dict, source: str = "received"):
         """Add a message to the store and broadcast to clients"""
         msg["_source"] = source
-        msg["_received_at"] = datetime.now(timezone.utc).isoformat()
-        
+        msg["_received_at"] = datetime.now(UTC).isoformat()
+
         self.messages.append(msg)
         if len(self.messages) > self.max_messages:
             self.messages.pop(0)
-        
+
         if source == "received":
             self.total_received += 1
         else:
             self.total_generated += 1
-        
+
         # Broadcast to WebSocket clients
         for ws in list(self.websocket_clients):
             try:
                 await ws.send_json(msg)
             except Exception:
                 self.websocket_clients.discard(ws)
-    
+
     def get_stats(self) -> dict:
         return {
             "total_received": self.total_received,
@@ -417,19 +450,16 @@ class MockGenerator:
 
     def __init__(self):
         self.running = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._callsigns: list[dict] = []  # Cache of aircraft from API
-        self._callsign_refresh_task: Optional[asyncio.Task] = None
+        self._callsign_refresh_task: asyncio.Task | None = None
 
     async def _refresh_callsigns(self):
         """Periodically fetch callsigns from the API"""
         async with httpx.AsyncClient() as client:
             while self.running:
                 try:
-                    response = await client.get(
-                        f"{settings.api_url}/api/v1/aircraft",
-                        timeout=5.0
-                    )
+                    response = await client.get(f"{settings.api_url}/api/v1/aircraft", timeout=5.0)
                     if response.status_code == 200:
                         data = response.json()
                         aircraft = data.get("aircraft", [])
@@ -585,7 +615,7 @@ class MockGenerator:
                 ctx["msg"] = msg_template.format(
                     fl=fl,
                     ride=random.choice(RIDE_CONDITIONS),
-                    pirep=random.choice(PIREPS).format(fl=fl, dir=random.randint(0, 359), spd=random.randint(20, 100))
+                    pirep=random.choice(PIREPS).format(fl=fl, dir=random.randint(0, 359), spd=random.randint(20, 100)),
                 )
                 advisory_template = random.choice(WX_ADVISORIES)
                 ctx["advisory"] = advisory_template.format(
@@ -594,7 +624,7 @@ class MockGenerator:
                     dir=random.choice(["N", "NE", "E", "SE", "S", "SW", "W", "NW"]),
                     fl_lo=random.randint(200, 300),
                     fl_hi=random.randint(350, 450),
-                    area=random.choice(["NORTH PACIFIC", "ALASKA", "HAWAII"])
+                    area=random.choice(["NORTH PACIFIC", "ALASKA", "HAWAII"]),
                 )
                 return template.format(**ctx)
 
@@ -603,7 +633,9 @@ class MockGenerator:
                 route_parts = random.sample(WAYPOINTS, 3) + random.sample(AIRWAYS, 2)
                 random.shuffle(route_parts)
                 ctx["route"] = " ".join(route_parts[:4])
-                ctx["squawk"] = f"{random.randint(0, 7)}{random.randint(0, 7)}{random.randint(0, 7)}{random.randint(0, 7)}"
+                ctx["squawk"] = (
+                    f"{random.randint(0, 7)}{random.randint(0, 7)}{random.randint(0, 7)}{random.randint(0, 7)}"
+                )
                 ctx["rwy"] = random.choice(["16L", "16R", "34L", "34R", "28L", "28R", "10L", "10R"])
                 ctx["freq"] = f"1{random.randint(18, 36)}.{random.randint(0, 99):02d}"
                 return template.format(**ctx)
@@ -622,7 +654,9 @@ class MockGenerator:
                 ctx["entry"] = random.choice(WAYPOINTS)
                 route_pts = random.sample(WAYPOINTS, 4)
                 ctx["route"] = "/".join(route_pts)
-                ctx["selcal"] = f"{random.choice('ABCDEFGHJKLMPQRS')}{random.choice('ABCDEFGHJKLMPQRS')}-{random.choice('ABCDEFGHJKLMPQRS')}{random.choice('ABCDEFGHJKLMPQRS')}"
+                ctx["selcal"] = (
+                    f"{random.choice('ABCDEFGHJKLMPQRS')}{random.choice('ABCDEFGHJKLMPQRS')}-{random.choice('ABCDEFGHJKLMPQRS')}{random.choice('ABCDEFGHJKLMPQRS')}"
+                )
                 return template.format(**ctx)
 
             elif label == "B9":  # Arrival/departure info
@@ -631,7 +665,9 @@ class MockGenerator:
                 return template.format(**ctx)
 
             elif label == "SQ":
-                ctx["squawk"] = f"{random.randint(0, 7)}{random.randint(0, 7)}{random.randint(0, 7)}{random.randint(0, 7)}"
+                ctx["squawk"] = (
+                    f"{random.randint(0, 7)}{random.randint(0, 7)}{random.randint(0, 7)}{random.randint(0, 7)}"
+                )
                 return template.format(**ctx)
 
             elif label == "21":
@@ -644,11 +680,11 @@ class MockGenerator:
         except (KeyError, ValueError) as e:
             logger.debug(f"Template format error for label {label}: {e}")
             return f"MSG {time_str}"
-    
+
     def generate_message(self) -> ACARSMessage:
         """Generate a random mock ACARS message using real callsigns when available"""
         label, label_desc = random.choice(ACARS_LABELS)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Use real callsign from API if available
         if self._callsigns:
@@ -665,18 +701,17 @@ class MockGenerator:
             flight = f"{airline_code}{random.randint(1, 9999)}"
             tail = self.generate_registration(reg_prefix)
             text = self._generate_text(label, now)
-        
+
         # Select message type and frequency
-        msg_type = random.choices(
-            ["acars", "vdlm2"],
-            weights=[0.6, 0.4]
-        )[0]
-        
+        msg_type = random.choices(["acars", "vdlm2"], weights=[0.6, 0.4])[0]
+
         if msg_type == "acars":
             frequency = random.choice([131.550, 131.525, 131.725, 131.825, 130.025, 130.425])
         else:
-            frequency = random.choice([136.650, 136.700, 136.725, 136.775, 136.800, 136.825, 136.875, 136.900, 136.925, 136.975])
-        
+            frequency = random.choice(
+                [136.650, 136.700, 136.725, 136.775, 136.800, 136.825, 136.875, 136.900, 136.925, 136.975]
+            )
+
         return ACARSMessage(
             timestamp=time.time(),
             station_id=settings.station_id,
@@ -695,7 +730,7 @@ class MockGenerator:
             end=True,
             msg_type=msg_type,
         )
-    
+
     def _generate_text(self, label: str, now: datetime) -> str:
         """Generate realistic message text based on label (fallback when no aircraft data)"""
         # Create a mock aircraft context with random data
@@ -708,57 +743,47 @@ class MockGenerator:
             "flight": "",
         }
         return self._generate_text_from_aircraft(label, now, mock_ac)
-    
+
     async def start(self):
         """Start generating mock messages"""
         self.running = True
         self._task = asyncio.create_task(self._generate_loop())
         self._callsign_refresh_task = asyncio.create_task(self._refresh_callsigns())
         logger.info("Mock message generator started")
-    
+
     async def stop(self):
         """Stop generating mock messages"""
         self.running = False
         if self._task:
             self._task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
         if self._callsign_refresh_task:
             self._callsign_refresh_task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await self._callsign_refresh_task
-            except asyncio.CancelledError:
-                pass
         logger.info("Mock message generator stopped")
-    
+
     async def _generate_loop(self):
         """Main loop for generating mock messages"""
         while self.running:
             try:
-                interval = random.uniform(
-                    settings.mock_interval_min,
-                    settings.mock_interval_max
-                )
+                interval = random.uniform(settings.mock_interval_min, settings.mock_interval_max)
                 await asyncio.sleep(interval)
-                
+
                 msg = self.generate_message()
-                
+
                 # Convert to appropriate JSON format
-                if msg.msg_type == "acars":
-                    json_msg = msg.to_acarsdec_json()
-                else:
-                    json_msg = msg.to_dumpvdl2_json()
-                
+                json_msg = msg.to_acarsdec_json() if msg.msg_type == "acars" else msg.to_dumpvdl2_json()
+
                 # Add to message store
                 await message_store.add_message(json_msg, source="generated")
-                
+
                 # Relay to downstream service
                 await relay_message(json_msg, msg.msg_type)
-                
+
                 logger.debug(f"Generated {msg.msg_type} message: {msg.flight} {msg.label}")
-                
+
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -770,18 +795,18 @@ mock_generator = MockGenerator()
 
 class UDPProtocol(asyncio.DatagramProtocol):
     """UDP protocol handler for receiving ACARS messages"""
-    
+
     def __init__(self, msg_type: str):
         self.msg_type = msg_type
         self.transport = None
-    
+
     def connection_made(self, transport):
         self.transport = transport
-    
+
     def datagram_received(self, data: bytes, addr: tuple):
         try:
             # Try to decode as JSON
-            msg_str = data.decode('utf-8').strip()
+            msg_str = data.decode("utf-8").strip()
             if msg_str:
                 msg = json.loads(msg_str)
                 asyncio.create_task(self._handle_message(msg, addr))
@@ -789,7 +814,7 @@ class UDPProtocol(asyncio.DatagramProtocol):
             logger.warning(f"Invalid JSON from {addr}: {e}")
         except Exception as e:
             logger.error(f"Error processing UDP message: {e}")
-    
+
     async def _handle_message(self, msg: dict, addr: tuple):
         """Handle received message"""
         logger.info(f"Received {self.msg_type} message from {addr}")
@@ -799,7 +824,7 @@ class UDPProtocol(asyncio.DatagramProtocol):
 
 class TCPRelayProtocol(asyncio.Protocol):
     """TCP protocol for relaying messages to connected clients"""
-    
+
     clients: dict[str, set] = {
         "acars": set(),
         "vdlm2": set(),
@@ -807,44 +832,44 @@ class TCPRelayProtocol(asyncio.Protocol):
         "imsl": set(),
         "irdm": set(),
     }
-    
+
     def __init__(self, msg_type: str):
         self.msg_type = msg_type
         self.transport = None
-    
+
     def connection_made(self, transport):
         self.transport = transport
         TCPRelayProtocol.clients[self.msg_type].add(self)
-        peer = transport.get_extra_info('peername')
+        peer = transport.get_extra_info("peername")
         logger.info(f"TCP client connected for {self.msg_type}: {peer}")
-    
+
     def connection_lost(self, exc):
         TCPRelayProtocol.clients[self.msg_type].discard(self)
         logger.info(f"TCP client disconnected from {self.msg_type}")
-    
+
     @classmethod
     async def broadcast(cls, msg_type: str, data: bytes):
         """Broadcast message to all connected clients of a type"""
         for client in list(cls.clients.get(msg_type, [])):
             try:
-                client.transport.write(data + b'\n')
+                client.transport.write(data + b"\n")
             except Exception as e:
                 logger.error(f"Error broadcasting to TCP client: {e}")
 
 
 # Global relay socket
-relay_socket: Optional[socket.socket] = None
+relay_socket: socket.socket | None = None
 
 
 async def relay_message(msg: dict, msg_type: str):
     """Relay message to configured destination and TCP clients"""
     global relay_socket
-    
-    msg_bytes = (json.dumps(msg) + '\n').encode('utf-8')
-    
+
+    msg_bytes = (json.dumps(msg) + "\n").encode("utf-8")
+
     # Relay via TCP to connected clients
     await TCPRelayProtocol.broadcast(msg_type, msg_bytes.strip())
-    
+
     # Relay to configured destination
     if settings.relay_host and settings.relay_port:
         try:
@@ -864,7 +889,7 @@ async def relay_message(msg: dict, msg_type: str):
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     loop = asyncio.get_event_loop()
-    
+
     # Start UDP listeners
     udp_ports = [
         (settings.acars_udp_port, "acars"),
@@ -873,19 +898,18 @@ async def lifespan(app: FastAPI):
         (settings.imsl_udp_port, "imsl"),
         (settings.irdm_udp_port, "irdm"),
     ]
-    
+
     udp_transports = []
     for port, msg_type in udp_ports:
         try:
             transport, protocol = await loop.create_datagram_endpoint(
-                lambda mt=msg_type: UDPProtocol(mt),
-                local_addr=('0.0.0.0', port)
+                lambda mt=msg_type: UDPProtocol(mt), local_addr=("0.0.0.0", port)
             )
             udp_transports.append(transport)
             logger.info(f"UDP listener started on port {port} for {msg_type}")
         except Exception as e:
             logger.error(f"Failed to start UDP listener on port {port}: {e}")
-    
+
     # Start TCP relay servers
     tcp_ports = [
         (settings.acars_tcp_port, "acars"),
@@ -894,31 +918,28 @@ async def lifespan(app: FastAPI):
         (settings.imsl_tcp_port, "imsl"),
         (settings.irdm_tcp_port, "irdm"),
     ]
-    
+
     tcp_servers = []
     for port, msg_type in tcp_ports:
         try:
-            server = await loop.create_server(
-                lambda mt=msg_type: TCPRelayProtocol(mt),
-                '0.0.0.0', port
-            )
+            server = await loop.create_server(lambda mt=msg_type: TCPRelayProtocol(mt), "0.0.0.0", port)
             tcp_servers.append(server)
             logger.info(f"TCP relay server started on port {port} for {msg_type}")
         except Exception as e:
             logger.error(f"Failed to start TCP server on port {port}: {e}")
-    
+
     # Start mock generator if enabled
     if settings.mock_enabled:
         await mock_generator.start()
-    
+
     yield
-    
+
     # Cleanup
     await mock_generator.stop()
-    
+
     for transport in udp_transports:
         transport.close()
-    
+
     for server in tcp_servers:
         server.close()
         await server.wait_closed()
@@ -928,7 +949,7 @@ app = FastAPI(
     title="ACARSHUB Mock Service",
     description="Mock service for testing ACARSHUB integrations",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 
@@ -959,51 +980,51 @@ async def index():
 </head>
 <body>
     <h1>🛩️ ACARSHUB Mock Service</h1>
-    
+
     <div class="controls">
         <button onclick="toggleMock()">Toggle Mock Generation</button>
         <button onclick="clearMessages()">Clear Messages</button>
         <span id="wsStatus" class="status disconnected">Disconnected</span>
     </div>
-    
+
     <div class="stats" id="stats">Loading stats...</div>
-    
+
     <h2>Live Messages</h2>
     <div class="messages" id="messages"></div>
-    
+
     <script>
         let ws;
         let mockEnabled = true;
-        
+
         function connect() {
             ws = new WebSocket(`ws://${location.host}/ws`);
-            
+
             ws.onopen = () => {
                 document.getElementById('wsStatus').className = 'status connected';
                 document.getElementById('wsStatus').textContent = 'Connected';
             };
-            
+
             ws.onclose = () => {
                 document.getElementById('wsStatus').className = 'status disconnected';
                 document.getElementById('wsStatus').textContent = 'Disconnected';
                 setTimeout(connect, 2000);
             };
-            
+
             ws.onmessage = (event) => {
                 const msg = JSON.parse(event.data);
                 addMessage(msg);
             };
         }
-        
+
         function addMessage(msg) {
             const container = document.getElementById('messages');
             const div = document.createElement('div');
-            
+
             let msgType = 'acars';
             if (msg.vdl2) msgType = 'vdlm2';
-            
+
             div.className = `message ${msgType} ${msg._source}`;
-            
+
             let text = '';
             if (msg.vdl2) {
                 const acars = msg.vdl2?.avlc?.acars || {};
@@ -1011,26 +1032,26 @@ async def index():
             } else {
                 text = `[ACARS] ${msg.tail || 'N/A'} | ${msg.flight || 'N/A'} | ${msg.label || ''} | ${msg.text || ''}`;
             }
-            
+
             div.textContent = `${new Date().toLocaleTimeString()} - ${text}`;
             container.insertBefore(div, container.firstChild);
-            
+
             // Limit displayed messages
             while (container.children.length > 100) {
                 container.removeChild(container.lastChild);
             }
         }
-        
+
         function clearMessages() {
             document.getElementById('messages').innerHTML = '';
         }
-        
+
         async function toggleMock() {
             mockEnabled = !mockEnabled;
             await fetch('/api/mock/' + (mockEnabled ? 'start' : 'stop'), { method: 'POST' });
             updateStats();
         }
-        
+
         async function updateStats() {
             const resp = await fetch('/api/stats');
             const stats = await resp.json();
@@ -1042,7 +1063,7 @@ async def index():
                 WebSocket Clients: ${stats.websocket_clients}
             `;
         }
-        
+
         connect();
         setInterval(updateStats, 2000);
         updateStats();
@@ -1057,7 +1078,7 @@ async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for live message streaming"""
     await websocket.accept()
     message_store.websocket_clients.add(websocket)
-    
+
     try:
         while True:
             await websocket.receive_text()
@@ -1093,6 +1114,7 @@ async def stop_mock():
 
 class InjectMessage(BaseModel):
     """Model for injecting custom messages"""
+
     tail: str = "N12345"
     flight: str = "AAL123"
     label: str = "SA"
@@ -1112,22 +1134,14 @@ async def inject_message(msg: InjectMessage):
         text=msg.text,
         msg_type=msg.msg_type,
     )
-    
-    if msg.msg_type == "acars":
-        json_msg = acars_msg.to_acarsdec_json()
-    else:
-        json_msg = acars_msg.to_dumpvdl2_json()
-    
+
+    json_msg = acars_msg.to_acarsdec_json() if msg.msg_type == "acars" else acars_msg.to_dumpvdl2_json()
+
     await message_store.add_message(json_msg, source="injected")
     await relay_message(json_msg, msg.msg_type)
-    
+
     return {"status": "injected", "message": json_msg}
 
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "app:app",
-        host="0.0.0.0",
-        port=settings.web_port,
-        log_level="info"
-    )
+    uvicorn.run("app:app", host="0.0.0.0", port=settings.web_port, log_level="info")
