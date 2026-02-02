@@ -37,6 +37,7 @@ dev:
 	@echo ""
 	@echo "   Dashboard:     http://localhost:3000"
 	@echo "   Django API:    http://localhost:8000"
+	@echo "   Django Admin:  http://localhost:8000/admin/ (admin/admin)"
 	@echo "   PostgreSQL:    localhost:5432 (via pgbouncer)"
 	@echo "   Redis:         localhost:6379"
 	@echo "   Ultrafeeder:   http://localhost:18080"

@@ -197,6 +197,8 @@ services:
       sh -c "
         echo 'Running database migrations...' &&
         python manage.py migrate --noinput &&
+        echo 'Creating superuser if not exists...' &&
+        python manage.py createsuperuser --noinput || true &&
         echo 'Syncing Celery tasks to database...' &&
         python manage.py sync_celery_tasks &&
         echo 'Starting Daphne ASGI server...' &&

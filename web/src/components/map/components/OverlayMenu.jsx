@@ -10,6 +10,9 @@ export function OverlayMenu({
   setShowOverlayMenu,
   overlays,
   updateOverlays,
+  // Airspace labels
+  showAirspaceLabels,
+  setShowAirspaceLabels,
   // Pro mode display settings
   proTheme,
   setProTheme,
@@ -86,6 +89,21 @@ export function OverlayMenu({
         />
         <span className="toggle-label">Airspace</span>
       </label>
+
+      {overlays.airspace && (
+        <label className="overlay-toggle" style={{ paddingLeft: '20px' }}>
+          <input
+            type="checkbox"
+            checked={showAirspaceLabels}
+            onChange={() => {
+              const newVal = !showAirspaceLabels;
+              setShowAirspaceLabels(newVal);
+              localStorage.setItem('adsb-show-airspace-labels', String(newVal));
+            }}
+          />
+          <span className="toggle-label">Show Labels</span>
+        </label>
+      )}
 
       <label className="overlay-toggle">
         <input

@@ -242,6 +242,11 @@ function MapView({
   const [selectedPirep, setSelectedPirep] = useState(null);
   const [selectedNavaid, setSelectedNavaid] = useState(null);
   const [selectedAirport, setSelectedAirport] = useState(null);
+  const [selectedAirspace, setSelectedAirspace] = useState(null);
+  const [showAirspaceLabels, setShowAirspaceLabels] = useState(() => {
+    const saved = localStorage.getItem('adsb-show-airspace-labels');
+    return saved === null ? true : saved === 'true';
+  });
   const [radarRange, setRadarRange] = useState(50); // nm
   const [showOverlayMenu, setShowOverlayMenu] = useState(false);
   const [safetyEvents, setSafetyEvents] = useState([]); // Safety events from API/WebSocket
@@ -4599,8 +4604,8 @@ function MapView({
             ctx.stroke();
             ctx.setLineDash([]);
 
-            // Draw label at center
-            if (as.name) {
+            // Draw label at center (if labels enabled)
+            if (as.name && showAirspaceLabels) {
               const asCenter = as.center || {
                 lat: as.center_lat || as.lat,
                 lon: as.center_lon || as.lon,
@@ -7527,6 +7532,69 @@ function MapView({
                 });
               }
 
+              // Check Airspaces if enabled - use point-in-polygon test
+              if (overlays.airspace && airspaceData.length > 0) {
+                airspaceData.forEach((as) => {
+                  // Get polygon coordinates
+                  let polygonCoords = null;
+                  if (as.polygon) {
+                    if (Array.isArray(as.polygon) && as.polygon.length >= 3) {
+                      polygonCoords = as.polygon;
+                    } else if (as.polygon.type === 'Polygon' && as.polygon.coordinates?.[0]) {
+                      polygonCoords = as.polygon.coordinates[0];
+                    } else if (as.polygon.type === 'MultiPolygon' && as.polygon.coordinates?.[0]?.[0]) {
+                      polygonCoords = as.polygon.coordinates[0][0];
+                    }
+                  }
+
+                  if (!polygonCoords || polygonCoords.length < 3) return;
+
+                  // Convert click position to lat/lon
+                  const clickLat =
+                    feederLat + ((centerY - clickY + proPanOffset.y) / pixelsPerNm) * (1 / 60);
+                  const clickLon =
+                    feederLon +
+                    ((clickX - centerX - proPanOffset.x) / pixelsPerNm) *
+                      (1 / 60) *
+                      (1 / Math.cos((feederLat * Math.PI) / 180));
+
+                  // Point-in-polygon test (ray casting algorithm)
+                  let inside = false;
+                  for (let i = 0, j = polygonCoords.length - 1; i < polygonCoords.length; j = i++) {
+                    const xi = Array.isArray(polygonCoords[i]) ? polygonCoords[i][0] : polygonCoords[i].lon;
+                    const yi = Array.isArray(polygonCoords[i]) ? polygonCoords[i][1] : polygonCoords[i].lat;
+                    const xj = Array.isArray(polygonCoords[j]) ? polygonCoords[j][0] : polygonCoords[j].lon;
+                    const yj = Array.isArray(polygonCoords[j]) ? polygonCoords[j][1] : polygonCoords[j].lat;
+
+                    if (yi > clickLat !== yj > clickLat &&
+                        clickLon < ((xj - xi) * (clickLat - yi)) / (yj - yi) + xi) {
+                      inside = !inside;
+                    }
+                  }
+
+                  if (inside) {
+                    // Use center distance as priority (closer centers = higher priority)
+                    const centerLat = as.center_lat || as.lat;
+                    const centerLon = as.center_lon || as.lon;
+                    if (centerLat && centerLon) {
+                      const centerPos = getScreenPos(centerLat, centerLon);
+                      const clickDist = Math.sqrt((clickX - centerPos.x) ** 2 + (clickY - centerPos.y) ** 2);
+                      // Only select if closer than current closest (or if no closer point-based item)
+                      if (clickDist < closestDist || closestDist > 30) {
+                        closestDist = Math.min(clickDist, 25); // Cap distance for polygon items
+                        closest = as;
+                        closestType = 'airspace';
+                      }
+                    } else {
+                      // No center, just select if inside
+                      closest = as;
+                      closestType = 'airspace';
+                      closestDist = 20;
+                    }
+                  }
+                });
+              }
+
               // Handle click based on type
               if (closest) {
                 // Only clear aircraft selection if not pinned, or if selecting a new aircraft
@@ -7537,6 +7605,7 @@ function MapView({
                 setSelectedPirep(null);
                 setSelectedNavaid(null);
                 setSelectedAirport(null);
+                setSelectedAirspace(null);
 
                 if (closestType === 'aircraft') {
                   selectAircraft(closest);
@@ -7548,6 +7617,8 @@ function MapView({
                   setSelectedNavaid(closest);
                 } else if (closestType === 'airport') {
                   setSelectedAirport(closest);
+                } else if (closestType === 'airspace') {
+                  setSelectedAirspace(closest);
                 }
               } else {
                 // Clicked on empty area - clear all selections (unless panel is pinned)
@@ -7558,6 +7629,7 @@ function MapView({
                 setSelectedPirep(null);
                 setSelectedNavaid(null);
                 setSelectedAirport(null);
+                setSelectedAirspace(null);
               }
             }}
             onDoubleClick={(e) => {
@@ -7861,6 +7933,20 @@ function MapView({
             />
             <span className="toggle-label">Airspace</span>
           </label>
+          {overlays.airspace && (
+            <label className="overlay-toggle" style={{ paddingLeft: '20px' }}>
+              <input
+                type="checkbox"
+                checked={showAirspaceLabels}
+                onChange={() => {
+                  const newVal = !showAirspaceLabels;
+                  setShowAirspaceLabels(newVal);
+                  localStorage.setItem('adsb-show-airspace-labels', String(newVal));
+                }}
+              />
+              <span className="toggle-label">Show Labels</span>
+            </label>
+          )}
           <label className="overlay-toggle">
             <input
               type="checkbox"
