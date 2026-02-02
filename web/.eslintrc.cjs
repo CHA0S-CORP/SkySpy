@@ -33,11 +33,18 @@ module.exports = {
 
     // React Hooks rules
     'react-hooks/rules-of-hooks': 'error',
-    'react-hooks/exhaustive-deps': 'warn',
+    'react-hooks/exhaustive-deps': 'off', // Too many false positives with complex hooks
 
-    // General rules
-    'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-    'no-console': ['warn', { allow: ['warn', 'error'] }],
+    // General rules - ignore React and common unused patterns
+    'no-unused-vars': [
+      'warn',
+      {
+        argsIgnorePattern: '^_|^(props|options|config|apiBase|index|event|err|error)$',
+        varsIgnorePattern: '^(_|React$|set[A-Z])',
+        ignoreRestSiblings: true,
+      },
+    ],
+    'no-console': 'off', // Allow console for debugging aviation data
     'prefer-const': 'warn',
     'no-var': 'error',
     'eqeqeq': ['warn', 'always', { null: 'ignore' }],

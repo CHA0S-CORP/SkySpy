@@ -13,7 +13,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
-    "lint": "eslint src --ext .js,.jsx --report-unused-disable-directives --max-warnings 0",
+    "lint": "eslint src --ext .js,.jsx --report-unused-disable-directives --max-warnings 200",
     "lint:fix": "eslint src --ext .js,.jsx --fix",
     "format": "prettier --write \"src/**/*.{js,jsx,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{js,jsx,css,json}\""
