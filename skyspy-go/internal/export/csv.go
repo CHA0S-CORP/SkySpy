@@ -1,4 +1,6 @@
 // Package export provides export functionality for SkySpy CLI
+//
+//nolint:revive // Export* function names are intentional for API clarity
 package export
 
 import (
@@ -27,8 +29,8 @@ func ExportAircraft(aircraft map[string]*radar.Target, directory string) (string
 
 	file, err := os.Create(filename)
 	if err != nil {
-		if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
-			return "", fmt.Errorf("failed to create directory: %w", err)
+		if mkdirErr := os.MkdirAll(filepath.Dir(filename), 0o755); mkdirErr != nil {
+			return "", fmt.Errorf("failed to create directory: %w", mkdirErr)
 		}
 		file, err = os.Create(filename)
 		if err != nil {
@@ -95,8 +97,8 @@ func ExportAircraft(aircraft map[string]*radar.Target, directory string) (string
 func ExportAircraftToFile(aircraft map[string]*radar.Target, filename string) error {
 	file, err := os.Create(filename)
 	if err != nil {
-		if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
-			return fmt.Errorf("failed to create directory: %w", err)
+		if mkdirErr := os.MkdirAll(filepath.Dir(filename), 0o755); mkdirErr != nil {
+			return fmt.Errorf("failed to create directory: %w", mkdirErr)
 		}
 		file, err = os.Create(filename)
 		if err != nil {
@@ -165,8 +167,8 @@ func ExportACARSMessages(messages []ACARSMessage, directory string) (string, err
 
 	file, err := os.Create(filename)
 	if err != nil {
-		if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
-			return "", fmt.Errorf("failed to create directory: %w", err)
+		if mkdirErr := os.MkdirAll(filepath.Dir(filename), 0o755); mkdirErr != nil {
+			return "", fmt.Errorf("failed to create directory: %w", mkdirErr)
 		}
 		file, err = os.Create(filename)
 		if err != nil {
@@ -216,8 +218,8 @@ func ExportACARSMessages(messages []ACARSMessage, directory string) (string, err
 func ExportACARSMessagesToFile(messages []ACARSMessage, filename string) error {
 	file, err := os.Create(filename)
 	if err != nil {
-		if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
-			return fmt.Errorf("failed to create directory: %w", err)
+		if mkdirErr := os.MkdirAll(filepath.Dir(filename), 0o755); mkdirErr != nil {
+			return fmt.Errorf("failed to create directory: %w", mkdirErr)
 		}
 		file, err = os.Create(filename)
 		if err != nil {

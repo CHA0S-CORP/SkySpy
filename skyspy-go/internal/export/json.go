@@ -1,4 +1,6 @@
 // Package export provides export functionality for SkySpy CLI
+//
+//nolint:revive // Export* function names are intentional for API clarity
 package export
 
 import (
@@ -188,6 +190,7 @@ func ExportAircraftJSONToFile(aircraft map[string]*radar.Target, filename string
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
+	//nolint:gosec // G306: Export files are non-sensitive and can be world-readable
 	if err := os.WriteFile(filename, jsonData, 0o644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
@@ -230,6 +233,7 @@ func ExportACARSJSON(messages []ACARSMessage, directory string) (string, error) 
 		return "", fmt.Errorf("failed to create directory: %w", err)
 	}
 
+	//nolint:gosec // G306: Export files are non-sensitive and can be world-readable
 	if err := os.WriteFile(filename, jsonData, 0o644); err != nil {
 		return "", fmt.Errorf("failed to write file: %w", err)
 	}

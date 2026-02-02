@@ -3121,7 +3121,9 @@ function MapView({
                 const boundaries = rawBoundaries.map((b) => ({
                   ...b,
                   isBoundary: true,
-                  type: b.class ? `CLASS_${b.class}` : b.type,
+                  // Map airspace_class to class for frontend compatibility
+                  class: b.airspace_class || b.class,
+                  type: b.airspace_class ? `CLASS_${b.airspace_class}` : b.type,
                 }));
                 return { type: 'boundaries', data: boundaries };
               })
@@ -4540,28 +4542,47 @@ function MapView({
       if (overlays.airspace) {
         // Helper to get airspace color based on type/class
         const getAirspaceColor = (as) => {
-          const asClass = as.class || as.type?.replace('CLASS_', '');
+          const asClass = as.class || as.airspace_class || as.type?.replace('CLASS_', '');
           if (asClass === 'B' || as.type === 'CLASS_B') return 'rgba(80, 120, 200, 0.35)';
           if (asClass === 'C' || as.type === 'CLASS_C') return 'rgba(180, 80, 180, 0.35)';
           if (asClass === 'D' || as.type === 'CLASS_D') return 'rgba(80, 180, 180, 0.35)';
-          if (as.type === 'RESTRICTED' || as.type === 'R') return 'rgba(200, 80, 80, 0.4)';
-          if (as.type === 'MOA') return 'rgba(200, 150, 80, 0.3)';
-          if (as.type === 'TFR') return 'rgba(255, 80, 80, 0.5)';
+          if (asClass === 'E' || as.type === 'CLASS_E') return 'rgba(100, 150, 100, 0.25)';
+          if (asClass === 'RESTRICTED' || as.type === 'RESTRICTED') return 'rgba(200, 80, 80, 0.4)';
+          if (asClass === 'PROHIBITED' || as.type === 'PROHIBITED') return 'rgba(255, 50, 50, 0.5)';
+          if (asClass === 'WARNING' || as.type === 'WARNING') return 'rgba(255, 180, 50, 0.35)';
+          if (asClass === 'MOA' || as.type === 'MOA') return 'rgba(200, 150, 80, 0.3)';
+          if (asClass === 'ALERT' || as.type === 'ALERT') return 'rgba(255, 150, 80, 0.35)';
+          if (asClass === 'TFR' || as.type === 'TFR') return 'rgba(255, 80, 80, 0.5)';
           return 'rgba(100, 100, 200, 0.3)';
         };
 
         airspaceData.forEach((as) => {
           const asColor = getAirspaceColor(as);
 
+          // Extract polygon coordinates - handle GeoJSON and simple array formats
+          let polygonCoords = null;
+          if (as.polygon) {
+            if (Array.isArray(as.polygon) && as.polygon.length >= 3) {
+              // Simple array format: [[lon, lat], ...]
+              polygonCoords = as.polygon;
+            } else if (as.polygon.type === 'Polygon' && as.polygon.coordinates?.[0]) {
+              // GeoJSON Polygon: {type: "Polygon", coordinates: [[[lon, lat], ...]]}
+              polygonCoords = as.polygon.coordinates[0];
+            } else if (as.polygon.type === 'MultiPolygon' && as.polygon.coordinates?.[0]?.[0]) {
+              // GeoJSON MultiPolygon - use first polygon
+              polygonCoords = as.polygon.coordinates[0][0];
+            }
+          }
+
           // Draw polygon boundaries (from API)
-          if (as.polygon && Array.isArray(as.polygon) && as.polygon.length >= 3) {
+          if (polygonCoords && polygonCoords.length >= 3) {
             ctx.strokeStyle = asColor;
             ctx.fillStyle = asColor.replace(/[\d.]+\)$/, '0.1)'); // Lighter fill
             ctx.lineWidth = isPro ? 2 : 1.5;
             ctx.setLineDash([8, 4]);
 
             ctx.beginPath();
-            as.polygon.forEach((coord, idx) => {
+            polygonCoords.forEach((coord, idx) => {
               // Polygon coords are [lon, lat] format
               const lon = Array.isArray(coord) ? coord[0] : coord.lon;
               const lat = Array.isArray(coord) ? coord[1] : coord.lat;

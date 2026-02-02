@@ -418,16 +418,17 @@ func (m *Manager) GetTokenInfo() map[string]interface{} {
 	info["oidc_enabled"] = m.config.OIDCEnabled
 	info["oidc_provider"] = m.config.OIDCProviderName
 
-	if m.apiKey != "" {
+	switch {
+	case m.apiKey != "":
 		info["auth_type"] = authTypeAPIKey
 		info["api_key_prefix"] = m.apiKey[:minInt(10, len(m.apiKey))] + "..."
-	} else if m.tokens != nil {
+	case m.tokens != nil:
 		info["auth_type"] = authTypeOIDC
 		info["username"] = m.tokens.Username
 		info["expires_at"] = m.tokens.ExpiresAt.Format(time.RFC3339)
 		info["expired"] = m.tokens.IsExpired()
 		info["has_refresh_token"] = m.tokens.RefreshToken != ""
-	} else {
+	default:
 		info["auth_type"] = authTypeNone
 	}
 
