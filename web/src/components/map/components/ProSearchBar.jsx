@@ -12,6 +12,7 @@ import {
   Crosshair,
   Maximize2,
   Minimize2,
+  AlertTriangle,
 } from 'lucide-react';
 
 /**
@@ -26,6 +27,9 @@ export function ProSearchBar({
   setSoundMuted,
   showAcarsPanel,
   setShowAcarsPanel,
+  showAdvisoryPanel,
+  setShowAdvisoryPanel,
+  advisoryCount,
   showFilterMenu,
   setShowFilterMenu,
   showOverlayMenu,
@@ -89,6 +93,17 @@ export function ProSearchBar({
           title="ACARS Messages"
         >
           <MessageCircle size={18} />
+        </button>
+        <button
+          className={`pro-header-btn ${showAdvisoryPanel ? 'active' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowAdvisoryPanel?.(!showAdvisoryPanel);
+          }}
+          title="Airspace Advisories"
+        >
+          <AlertTriangle size={18} />
+          {advisoryCount > 0 && <span className="advisory-badge">{advisoryCount}</span>}
         </button>
         <button
           className={`pro-header-btn ${showFilterMenu ? 'active' : ''}`}

@@ -1708,3 +1708,450 @@
   pointer-events: none;
   z-index: 100;
 }
+
+/* ============================================================================
+   PIREP UI/UX Enhancements
+   ============================================================================ */
+
+/* PIREP Hazard Banner */
+.pirep-hazard-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  margin: 0 -16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pirep-hazard-banner.routine {
+  background: rgba(100, 200, 100, 0.1);
+  border-bottom: 1px solid rgba(100, 200, 100, 0.3);
+  color: #88cc88;
+}
+
+.pirep-hazard-banner.light {
+  background: rgba(200, 200, 100, 0.1);
+  border-bottom: 1px solid rgba(200, 200, 100, 0.3);
+  color: #cccc88;
+}
+
+.pirep-hazard-banner.moderate {
+  background: rgba(255, 170, 50, 0.15);
+  border-bottom: 1px solid rgba(255, 170, 50, 0.4);
+  color: #ffaa44;
+}
+
+.pirep-hazard-banner.severe {
+  background: rgba(255, 80, 50, 0.2);
+  border-bottom: 1px solid rgba(255, 80, 50, 0.5);
+  color: #ff6644;
+  animation: hazard-pulse 2s ease-in-out infinite;
+}
+
+@keyframes hazard-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+.pirep-hazard-banner .urgent-icon {
+  color: #ff5544;
+  animation: urgent-blink 1s ease-in-out infinite;
+}
+
+@keyframes urgent-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.pirep-hazard-banner .hazard-items {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pirep-hazard-banner .hazard-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pirep-hazard-banner .hazard-item.turbulence {
+  color: #ffaa44;
+}
+
+.pirep-hazard-banner .hazard-item.icing {
+  color: #66ccff;
+}
+
+.pirep-hazard-banner .hazard-item.windshear {
+  color: #ff88cc;
+}
+
+/* Time Freshness Indicator */
+.time-freshness-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.time-freshness-indicator svg {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.time-freshness-indicator .time-value {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.freshness-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.freshness-badge.fresh {
+  background: rgba(0, 200, 100, 0.2);
+  color: #00cc66;
+  border: 1px solid rgba(0, 200, 100, 0.4);
+}
+
+.freshness-badge.recent {
+  background: rgba(200, 200, 50, 0.2);
+  color: #cccc44;
+  border: 1px solid rgba(200, 200, 50, 0.4);
+}
+
+.freshness-badge.aging {
+  background: rgba(255, 150, 50, 0.2);
+  color: #ff9944;
+  border: 1px solid rgba(255, 150, 50, 0.4);
+}
+
+.freshness-badge.stale {
+  background: rgba(150, 150, 150, 0.2);
+  color: #999999;
+  border: 1px solid rgba(150, 150, 150, 0.4);
+}
+
+.freshness-badge.unknown {
+  background: rgba(100, 100, 100, 0.2);
+  color: #888888;
+  border: 1px solid rgba(100, 100, 100, 0.4);
+}
+
+/* PIREP Summary Section */
+.pirep-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 8px;
+}
+
+.pirep-summary .summary-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.pirep-summary .summary-item svg {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.pirep-summary .alt-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  background: rgba(100, 180, 255, 0.2);
+  border: 1px solid rgba(100, 180, 255, 0.4);
+  border-radius: 4px;
+  color: #88ccff;
+}
+
+/* Severity Gauges */
+.severity-gauges {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.severity-gauge {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.severity-gauge .gauge-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.severity-gauge .gauge-segments {
+  display: flex;
+  gap: 2px;
+  height: 20px;
+}
+
+.severity-gauge .gauge-segment {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(80, 80, 80, 0.3);
+  border-radius: 3px;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.severity-gauge .gauge-segment .segment-label {
+  font-size: 8px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+}
+
+.severity-gauge .gauge-segment.active .segment-label {
+  color: rgba(0, 0, 0, 0.8);
+}
+
+/* Turbulence gauge colors (6 segments) */
+.severity-gauge.turbulence .gauge-segment.segment-0.active { background: #88cc44; }
+.severity-gauge.turbulence .gauge-segment.segment-1.active { background: #aacc44; }
+.severity-gauge.turbulence .gauge-segment.segment-2.active { background: #cccc44; }
+.severity-gauge.turbulence .gauge-segment.segment-3.active { background: #ffaa44; }
+.severity-gauge.turbulence .gauge-segment.segment-4.active { background: #ff6644; }
+.severity-gauge.turbulence .gauge-segment.segment-5.active { background: #ff4444; }
+
+/* Icing gauge colors (4 segments) */
+.severity-gauge.icing .gauge-segment.segment-0.active { background: #88ccff; }
+.severity-gauge.icing .gauge-segment.segment-1.active { background: #66aaff; }
+.severity-gauge.icing .gauge-segment.segment-2.active { background: #4488ff; }
+.severity-gauge.icing .gauge-segment.segment-3.active { background: #ff4488; }
+
+.severity-gauge .gauge-segment.current {
+  box-shadow: 0 0 6px currentColor;
+  transform: scaleY(1.1);
+}
+
+/* Altitude Range Visualization */
+.altitude-range-viz {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 8px 0;
+}
+
+.altitude-range-viz .altitude-scale {
+  position: relative;
+  width: 60px;
+  height: 120px;
+  background: rgba(50, 50, 50, 0.3);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.altitude-range-viz .scale-marker {
+  position: absolute;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transform: translateY(-50%);
+}
+
+.altitude-range-viz .scale-marker .marker-label {
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.altitude-range-viz .scale-marker .marker-line {
+  width: 8px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.altitude-range-viz .scale-marker.fl180 .marker-line {
+  width: 100%;
+  background: rgba(100, 180, 255, 0.4);
+}
+
+.altitude-range-viz .hazard-band {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  border-radius: 2px;
+  opacity: 0.6;
+}
+
+.altitude-range-viz .hazard-band.turbulence {
+  background: linear-gradient(180deg, rgba(255, 150, 50, 0.6), rgba(255, 150, 50, 0.3));
+  border-left: 2px solid #ffaa44;
+}
+
+.altitude-range-viz .hazard-band.icing {
+  background: linear-gradient(180deg, rgba(100, 180, 255, 0.6), rgba(100, 180, 255, 0.3));
+  border-left: 2px solid #66ccff;
+}
+
+.altitude-range-viz .aircraft-marker {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%) translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 2;
+}
+
+.altitude-range-viz .aircraft-marker svg {
+  color: #00ff88;
+  filter: drop-shadow(0 0 4px #00ff88);
+}
+
+.altitude-range-viz .aircraft-marker .altitude-label {
+  font-size: 9px;
+  font-family: 'JetBrains Mono', monospace;
+  color: #00ff88;
+  text-shadow: 0 0 4px rgba(0, 255, 136, 0.5);
+}
+
+.altitude-range-viz .altitude-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+}
+
+.altitude-range-viz .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.altitude-range-viz .legend-item .legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.altitude-range-viz .legend-item.turbulence .legend-color {
+  background: #ffaa44;
+}
+
+.altitude-range-viz .legend-item.icing .legend-color {
+  background: #66ccff;
+}
+
+/* Collapsible Sections */
+.collapsible-section {
+  margin: 8px 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.collapsible-section .section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.collapsible-section .section-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.collapsible-section .section-toggle svg:last-child {
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.collapsible-section .section-content {
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 0 0 8px 8px;
+}
+
+.collapsible-section.open .section-toggle {
+  border-radius: 8px 8px 0 0;
+}
+
+/* Hazard Details in Collapsible Sections */
+.hazard-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hazard-details strong {
+  font-size: 14px;
+}
+
+/* PIREP Quick Actions */
+.pirep-quick-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.pirep-quick-actions .quick-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pirep-quick-actions .quick-action:hover {
+  background: rgba(100, 180, 255, 0.2);
+  border-color: rgba(100, 180, 255, 0.4);
+  color: #88ccff;
+}
+
+/* ISA Deviation styling */
+.isa-dev {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Remarks row */
+.remarks-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}

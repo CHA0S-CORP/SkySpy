@@ -316,6 +316,34 @@ def store_aircraft_sightings(aircraft_data: list):
 
 
 @shared_task
+def update_aircraft_sessions_from_cache():
+    """
+    Periodic task to update aircraft sessions from cached aircraft data.
+
+    Reads current aircraft from cache and updates/creates session records.
+    """
+    aircraft_data = cache.get("current_aircraft", [])
+    if aircraft_data:
+        update_aircraft_sessions(aircraft_data)
+
+
+def _safe_altitude(value):
+    """Convert altitude value to number, handling 'ground' string."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        if value.lower() == "ground":
+            return 0
+        try:
+            return int(float(value))
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+@shared_task
 def update_aircraft_sessions(aircraft_data: list):
     """
     Update or create aircraft tracking sessions.
@@ -335,7 +363,7 @@ def update_aircraft_sessions(aircraft_data: list):
             # Find or create session
             session = AircraftSession.objects.filter(icao_hex=icao, last_seen__gte=session_cutoff).first()
 
-            alt = ac.get("alt_baro") or ac.get("alt_geom")
+            alt = _safe_altitude(ac.get("alt_baro") or ac.get("alt_geom"))
             distance = ac.get("distance_nm")
             vr = ac.get("baro_rate") or ac.get("geom_rate")
             rssi = ac.get("rssi")

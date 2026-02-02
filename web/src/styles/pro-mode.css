@@ -3804,6 +3804,401 @@
 }
 
 /* ============================================================================
+   Airspace Advisory Panel
+   ============================================================================ */
+
+.advisory-panel {
+  position: absolute;
+  top: 70px;
+  left: 16px;
+  width: 340px;
+  max-height: calc(100vh - 160px);
+  background: rgba(15, 25, 35, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(80, 140, 200, 0.4);
+  border-radius: 8px;
+  z-index: 950;
+  font-family: 'JetBrains Mono', monospace;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.advisory-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(20, 40, 60, 0.8);
+  border-bottom: 1px solid rgba(80, 140, 200, 0.3);
+  cursor: grab;
+  user-select: none;
+}
+
+.advisory-panel-header:active {
+  cursor: grabbing;
+}
+
+.advisory-panel-drag-handle {
+  color: rgba(100, 160, 200, 0.5);
+  display: flex;
+  align-items: center;
+}
+
+.advisory-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  color: rgba(100, 180, 255, 0.9);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.advisory-panel-title svg {
+  color: rgba(255, 180, 50, 0.9);
+}
+
+.advisory-count-badge {
+  background: rgba(255, 150, 50, 0.3);
+  color: rgba(255, 180, 100, 1);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid rgba(255, 150, 50, 0.5);
+}
+
+.advisory-panel-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.advisory-panel-btn {
+  background: transparent;
+  border: none;
+  padding: 6px;
+  border-radius: 4px;
+  color: rgba(100, 160, 200, 0.7);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.advisory-panel-btn:hover {
+  background: rgba(80, 140, 200, 0.2);
+  color: rgba(150, 210, 255, 1);
+}
+
+.advisory-panel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.advisory-panel-btn.close:hover {
+  background: rgba(255, 100, 100, 0.2);
+  color: rgba(255, 150, 150, 1);
+}
+
+.advisory-panel-btn .spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Advisory filter bar */
+.advisory-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(15, 30, 45, 0.6);
+  border-bottom: 1px solid rgba(80, 140, 200, 0.2);
+}
+
+.advisory-filter-select {
+  flex: 1;
+  background: rgba(20, 40, 60, 0.8);
+  border: 1px solid rgba(80, 140, 200, 0.3);
+  border-radius: 4px;
+  padding: 6px 10px;
+  color: rgba(150, 210, 255, 0.9);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.advisory-filter-select:focus {
+  outline: none;
+  border-color: rgba(100, 180, 255, 0.6);
+}
+
+.advisory-filter-select option {
+  background: rgba(20, 35, 50, 1);
+  color: rgba(200, 220, 240, 1);
+}
+
+.advisory-filter-count {
+  font-size: 10px;
+  color: rgba(100, 160, 200, 0.6);
+  white-space: nowrap;
+}
+
+/* Advisory list */
+.advisory-list {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(80, 140, 200, 0.3) transparent;
+}
+
+.advisory-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.advisory-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.advisory-list::-webkit-scrollbar-thumb {
+  background: rgba(80, 140, 200, 0.3);
+  border-radius: 3px;
+}
+
+.advisory-empty,
+.advisory-error {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(100, 160, 200, 0.5);
+}
+
+.advisory-error {
+  color: rgba(255, 150, 150, 0.8);
+}
+
+/* Advisory item */
+.advisory-item {
+  border-bottom: 1px solid rgba(80, 140, 200, 0.15);
+  border-left: 3px solid var(--hazard-color, rgba(100, 160, 200, 0.5));
+  transition: all 0.2s;
+}
+
+.advisory-item:hover {
+  background: rgba(80, 140, 200, 0.1);
+}
+
+.advisory-item.acknowledged {
+  opacity: 0.5;
+  border-left-color: rgba(100, 160, 200, 0.3);
+}
+
+.advisory-item.highlighted {
+  background: rgba(100, 180, 255, 0.15);
+  border-left-width: 4px;
+}
+
+.advisory-item.expiring-soon:not(.acknowledged) {
+  animation: expiring-pulse 2s ease-in-out infinite;
+}
+
+@keyframes expiring-pulse {
+  0%, 100% {
+    background: transparent;
+  }
+  50% {
+    background: rgba(255, 150, 50, 0.1);
+  }
+}
+
+/* Advisory header (collapsed view) */
+.advisory-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+}
+
+.advisory-header:hover {
+  background: rgba(80, 140, 200, 0.05);
+}
+
+.advisory-hazard-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.advisory-hazard-badge svg {
+  flex-shrink: 0;
+}
+
+.advisory-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.advisory-type {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(150, 210, 255, 0.9);
+}
+
+.advisory-id {
+  font-size: 9px;
+  color: rgba(100, 160, 200, 0.5);
+  font-family: monospace;
+}
+
+.advisory-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.advisory-altitude {
+  font-size: 10px;
+  color: rgba(100, 200, 180, 0.8);
+  font-family: monospace;
+}
+
+.advisory-expand-icon {
+  color: rgba(100, 160, 200, 0.5);
+  transition: transform 0.2s;
+}
+
+/* Advisory content (expanded view) */
+.advisory-content {
+  padding: 0 12px 12px 12px;
+  border-top: 1px solid rgba(80, 140, 200, 0.1);
+  margin-top: 4px;
+}
+
+.advisory-validity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 10px;
+}
+
+.validity-label {
+  color: rgba(100, 160, 200, 0.6);
+}
+
+.validity-time {
+  color: rgba(150, 210, 255, 0.9);
+  font-family: monospace;
+}
+
+.expiring-badge {
+  background: rgba(255, 150, 50, 0.3);
+  color: rgba(255, 180, 100, 1);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.advisory-region {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 10px;
+  color: rgba(100, 160, 200, 0.7);
+}
+
+.advisory-region svg {
+  flex-shrink: 0;
+  color: rgba(100, 160, 200, 0.5);
+}
+
+.advisory-raw-text {
+  padding: 8px;
+  margin: 8px 0;
+  background: rgba(10, 20, 30, 0.6);
+  border-radius: 4px;
+  font-size: 10px;
+  color: rgba(180, 200, 220, 0.8);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  font-family: monospace;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+/* Advisory action buttons */
+.advisory-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.advisory-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(40, 80, 120, 0.4);
+  border: 1px solid rgba(80, 140, 200, 0.3);
+  border-radius: 4px;
+  color: rgba(150, 210, 255, 0.9);
+  font-size: 10px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.advisory-action-btn:hover {
+  background: rgba(60, 100, 150, 0.5);
+  border-color: rgba(100, 180, 255, 0.5);
+}
+
+.advisory-action-btn.show-on-map:hover {
+  background: rgba(50, 150, 100, 0.4);
+  border-color: rgba(100, 200, 150, 0.5);
+  color: rgba(150, 255, 200, 1);
+}
+
+.advisory-action-btn.acknowledge.active {
+  background: rgba(100, 180, 100, 0.3);
+  border-color: rgba(100, 200, 100, 0.5);
+  color: rgba(150, 255, 150, 0.9);
+}
+
+/* ============================================================================
    Accessibility - Reduced Motion
    ============================================================================ */
 

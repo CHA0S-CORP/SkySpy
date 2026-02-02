@@ -90,6 +90,8 @@ class AircraftSessionAdmin(admin.ModelAdmin):
 
     inlines = [SessionTrackingQualityInline]
 
+    readonly_fields = ["first_seen", "last_seen"]
+
     fieldsets = (
         ("Identification", {"fields": ("icao_hex", "callsign", "category", "aircraft_type", "is_military")}),
         ("Timing", {"fields": ("first_seen", "last_seen", "total_positions")}),

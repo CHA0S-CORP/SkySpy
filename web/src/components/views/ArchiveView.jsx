@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Archive,
   FileWarning,
@@ -8,6 +8,8 @@ import {
   AlertTriangle,
   Loader2,
   X,
+  Wind,
+  Thermometer,
 } from 'lucide-react';
 import {
   ArchivedNotamCard,
@@ -15,6 +17,8 @@ import {
   ArchiveStats,
   NOTAM_TYPES,
   DATE_RANGES,
+  HAZARD_FILTERS,
+  ALTITUDE_RANGES,
 } from '../archive';
 
 // Main ArchiveView component
@@ -24,6 +28,8 @@ export function ArchiveView({ apiBase, hashParams = {}, setHashParams }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [icaoFilter, setIcaoFilter] = useState('');
+  const [hazardFilter, setHazardFilter] = useState('all');
+  const [altitudeFilter, setAltitudeFilter] = useState('all');
   const [expandedId, setExpandedId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -145,11 +151,36 @@ export function ArchiveView({ apiBase, hashParams = {}, setHashParams }) {
   // Reset offset when filters change
   useEffect(() => {
     setOffset(0);
-  }, [searchQuery, typeFilter, icaoFilter, dateRange]);
+  }, [searchQuery, typeFilter, icaoFilter, dateRange, hazardFilter, altitudeFilter]);
+
+  // Apply client-side hazard and altitude filters to PIREPs
+  const filteredPireps = useMemo(() => {
+    if (activeTab !== 'pireps') return pireps;
+
+    let filtered = pireps;
+
+    // Apply hazard filter
+    if (hazardFilter !== 'all' && HAZARD_FILTERS[hazardFilter]) {
+      const filterFn = HAZARD_FILTERS[hazardFilter].filterFn;
+      filtered = filtered.filter(filterFn);
+    }
+
+    // Apply altitude filter
+    if (altitudeFilter !== 'all' && ALTITUDE_RANGES[altitudeFilter]) {
+      const range = ALTITUDE_RANGES[altitudeFilter];
+      filtered = filtered.filter((p) => {
+        const alt = p.altitude_ft || (p.flight_level ? p.flight_level * 100 : null);
+        if (alt === null) return true; // Include if no altitude data
+        return alt >= range.min && alt < range.max;
+      });
+    }
+
+    return filtered;
+  }, [pireps, activeTab, hazardFilter, altitudeFilter]);
 
   // Get current data and count based on tab
-  const currentData = activeTab === 'notams' ? notams : pireps;
-  const totalCount = activeTab === 'notams' ? notamsTotalCount : pirepsTotalCount;
+  const currentData = activeTab === 'notams' ? notams : filteredPireps;
+  const totalCount = activeTab === 'notams' ? notamsTotalCount : filteredPireps.length;
   const hasMore = offset + limit < totalCount;
   const hasPrev = offset > 0;
 
@@ -228,6 +259,42 @@ export function ArchiveView({ apiBase, hashParams = {}, setHashParams }) {
               </>
             )}
           </select>
+
+          {/* Hazard filter - PIREPs only */}
+          {activeTab === 'pireps' && (
+            <div className="hazard-filter-wrapper">
+              <Wind size={14} />
+              <select
+                value={hazardFilter}
+                onChange={(e) => setHazardFilter(e.target.value)}
+                className="hazard-filter"
+              >
+                {Object.entries(HAZARD_FILTERS).map(([key, { label }]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Altitude filter - PIREPs only */}
+          {activeTab === 'pireps' && (
+            <div className="altitude-filter-wrapper">
+              <Thermometer size={14} />
+              <select
+                value={altitudeFilter}
+                onChange={(e) => setAltitudeFilter(e.target.value)}
+                className="altitude-filter"
+              >
+                {Object.entries(ALTITUDE_RANGES).map(([key, { label }]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <select
             value={dateRange}

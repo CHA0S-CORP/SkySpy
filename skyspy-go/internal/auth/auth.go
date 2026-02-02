@@ -12,6 +12,14 @@ import (
 	"time"
 )
 
+// Auth mode and type constants
+const (
+	authModePublic = "public"
+	authTypeOIDC   = "oidc"
+	authTypeAPIKey = "api_key"
+	authTypeNone   = "none"
+)
+
 // Manager handles authentication for the CLI
 type Manager struct {
 	baseURL    string
@@ -33,7 +41,7 @@ func NewManager(host string, port int) (*Manager, error) {
 	if err != nil {
 		// If we can't fetch config, assume public mode
 		config = &AuthConfig{
-			AuthMode:    "public",
+			AuthMode:    authModePublic,
 			AuthEnabled: false,
 		}
 	}
@@ -69,7 +77,7 @@ func (m *Manager) SetAPIKey(key string) {
 
 // RequiresAuth returns true if authentication is required
 func (m *Manager) RequiresAuth() bool {
-	return m.config.AuthEnabled && m.config.AuthMode != "public"
+	return m.config.AuthEnabled && m.config.AuthMode != authModePublic
 }
 
 // IsAuthenticated returns true if we have valid credentials
@@ -134,7 +142,7 @@ func (m *Manager) loginOIDC(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to start callback server: %w", err)
 	}
-	defer callbackServer.Stop()
+	defer func() { _ = callbackServer.Stop() }()
 
 	if err := callbackServer.Start(); err != nil {
 		return fmt.Errorf("failed to start callback server: %w", err)
@@ -283,7 +291,7 @@ func (m *Manager) parseTokensFromRedirect(redirectURL string) (*TokenSet, error)
 	refreshToken := values.Get("refresh_token")
 	expiresIn := 3600 // Default 1 hour
 	if exp := values.Get("expires_in"); exp != "" {
-		fmt.Sscanf(exp, "%d", &expiresIn)
+		_, _ = fmt.Sscanf(exp, "%d", &expiresIn)
 	}
 
 	tokens := &TokenSet{
@@ -410,16 +418,16 @@ func (m *Manager) GetTokenInfo() map[string]interface{} {
 	info["oidc_provider"] = m.config.OIDCProviderName
 
 	if m.apiKey != "" {
-		info["auth_type"] = "api_key"
+		info["auth_type"] = authTypeAPIKey
 		info["api_key_prefix"] = m.apiKey[:min(10, len(m.apiKey))] + "..."
 	} else if m.tokens != nil {
-		info["auth_type"] = "oidc"
+		info["auth_type"] = authTypeOIDC
 		info["username"] = m.tokens.Username
 		info["expires_at"] = m.tokens.ExpiresAt.Format(time.RFC3339)
 		info["expired"] = m.tokens.IsExpired()
 		info["has_refresh_token"] = m.tokens.RefreshToken != ""
 	} else {
-		info["auth_type"] = "none"
+		info["auth_type"] = authTypeNone
 	}
 
 	return info

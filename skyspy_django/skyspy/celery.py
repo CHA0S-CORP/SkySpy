@@ -100,6 +100,12 @@ app.conf.beat_schedule = {
         "schedule": 10.0,
         "options": {"expires": 10.0},
     },
+    # Update aircraft sessions - every 5 seconds
+    "update-aircraft-sessions-every-5s": {
+        "task": "skyspy.tasks.aircraft.update_aircraft_sessions_from_cache",
+        "schedule": 5.0,
+        "options": {"expires": 5.0},
+    },
     # Session cleanup - every 5 minutes
     "cleanup-sessions-every-5m": {
         "task": "skyspy.tasks.aircraft.cleanup_sessions",
@@ -377,6 +383,7 @@ app.conf.task_routes = {
     "skyspy.tasks.notams.*": {"queue": "database"},
     "skyspy.tasks.openaip.*": {"queue": "database"},
     "skyspy.tasks.aircraft.cleanup_sessions": {"queue": "database"},
+    "skyspy.tasks.aircraft.update_aircraft_sessions_from_cache": {"queue": "database"},
     "skyspy.tasks.analytics.update_favorite_tracking": {"queue": "database"},
     "skyspy.tasks.analytics.cleanup_memory_cache": {"queue": "default"},
     # Cleanup tasks (low-priority, can run slowly)

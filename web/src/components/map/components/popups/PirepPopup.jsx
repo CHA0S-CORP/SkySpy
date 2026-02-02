@@ -1,14 +1,90 @@
-import React from 'react';
-import { X, AlertTriangle, Wind, Snowflake, Thermometer, Navigation } from 'lucide-react';
-import { decodePirep, windDirToCardinal } from '../../../../utils';
+import React, { useState } from 'react';
+import {
+  X,
+  AlertTriangle,
+  Wind,
+  Snowflake,
+  Thermometer,
+  Navigation,
+  MapPin,
+  Plane,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Target,
+  Cloud,
+} from 'lucide-react';
+import { decodePirep, windDirToCardinal, getPirepMaxSeverity } from '../../../../utils';
+import {
+  PirepHazardBanner,
+  TimeFreshnessIndicator,
+  SeverityGauge,
+  AltitudeRangeViz,
+} from '../../../pirep';
 
 /**
- * PIREP (Pilot Report) popup component
+ * Collapsible section component
  */
-export function PirepPopup({ pirep, config, popupPosition, isDragging, onClose, onMouseDown }) {
+function CollapsibleSection({ title, icon: Icon, children, defaultOpen = true, className = '' }) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <div className={`collapsible-section ${className} ${isOpen ? 'open' : 'closed'}`}>
+      <button className="section-toggle" onClick={() => setIsOpen(!isOpen)}>
+        {Icon && <Icon size={14} />}
+        <span>{title}</span>
+        {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+      </button>
+      {isOpen && <div className="section-content">{children}</div>}
+    </div>
+  );
+}
+
+/**
+ * Quick action buttons for PIREP popup
+ */
+function PirepQuickActions({ pirep, onCenterMap }) {
+  const handleCopy = () => {
+    const rawText = pirep.raw_text || pirep.rawOb || '';
+    if (rawText) {
+      navigator.clipboard.writeText(rawText);
+    }
+  };
+
+  return (
+    <div className="pirep-quick-actions">
+      {onCenterMap && (
+        <button className="quick-action" onClick={onCenterMap} title="Center map on this PIREP">
+          <Target size={14} />
+        </button>
+      )}
+      <button className="quick-action" onClick={handleCopy} title="Copy raw PIREP">
+        <Copy size={14} />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * PIREP (Pilot Report) popup component - redesigned
+ */
+export function PirepPopup({
+  pirep,
+  config,
+  popupPosition,
+  isDragging,
+  onClose,
+  onMouseDown,
+  onCenterMap,
+}) {
   if (!pirep) return null;
 
   const decoded = decodePirep(pirep);
+  const severity = getPirepMaxSeverity(pirep);
+  const hasTurbulence = decoded?.turbulence && decoded.turbulence.level > 0;
+  const hasIcing = decoded?.icing && decoded.icing.level > 0;
+  const hasWindshear = decoded?.windshear && decoded.windshear.level > 0;
+  const hasHazards = hasTurbulence || hasIcing || hasWindshear;
 
   return (
     <div
@@ -19,67 +95,75 @@ export function PirepPopup({ pirep, config, popupPosition, isDragging, onClose, 
       <button className="popup-close" onClick={onClose}>
         <X size={16} />
       </button>
+
+      {/* Header */}
       <div className="popup-header">
         <AlertTriangle size={20} />
         <span className="popup-callsign">PIREP</span>
         <span className={`pirep-type-badge ${decoded?.type === 'UUA' ? 'urgent' : ''}`}>
           {decoded?.type || 'UA'}
         </span>
+        <PirepQuickActions pirep={pirep} onCenterMap={onCenterMap} />
       </div>
 
-      {/* Urgent warning banner */}
-      {decoded?.type === 'UUA' && (
-        <div className="urgent-banner">
-          Warning: URGENT PILOT REPORT - Significant weather hazard
-        </div>
-      )}
+      {/* Hazard Banner - always visible at top */}
+      <PirepHazardBanner decoded={decoded} severity={severity} />
 
       <div className="popup-details">
-        {/* Location */}
-        {decoded?.location && (
-          <div className="detail-row">
-            <span>Location</span>
-            <span>{decoded.location}</span>
-          </div>
-        )}
-
-        {/* Aircraft */}
-        {decoded?.aircraft && (
-          <div className="detail-row">
-            <span>Aircraft</span>
-            <span>{decoded.aircraft}</span>
-          </div>
-        )}
-
-        {/* Altitude/Flight Level */}
-        {decoded?.altitude && (
-          <div className="detail-row decoded-section">
-            <span>Altitude</span>
-            <div className="decoded-value">
-              <strong>{decoded.altitude.text}</strong>
+        {/* At-a-glance summary */}
+        <div className="pirep-summary">
+          {decoded?.location && (
+            <div className="summary-item">
+              <MapPin size={12} />
+              <span>{decoded.location}</span>
             </div>
-          </div>
-        )}
-
-        {/* Sky Condition */}
-        {decoded?.sky && (
-          <div className="detail-row decoded-section">
-            <span>Sky</span>
-            <div className="decoded-value">
-              <strong>{decoded.sky.description}</strong>
+          )}
+          {decoded?.altitude && (
+            <div className="summary-item">
+              <span className="alt-badge">{decoded.altitude.text}</span>
             </div>
+          )}
+          {decoded?.aircraft && (
+            <div className="summary-item">
+              <Plane size={12} />
+              <span>{decoded.aircraft}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Time Freshness Indicator */}
+        <TimeFreshnessIndicator pirep={pirep} decoded={decoded} />
+
+        {/* Severity Gauges */}
+        {hasHazards && (
+          <div className="severity-gauges">
+            {hasTurbulence && (
+              <SeverityGauge
+                type="turbulence"
+                level={decoded.turbulence.level}
+                label="Turbulence"
+              />
+            )}
+            {hasIcing && (
+              <SeverityGauge type="icing" level={decoded.icing.level} label="Icing" />
+            )}
           </div>
         )}
 
-        {/* Turbulence with full decoding */}
-        {decoded?.turbulence && (
-          <div
-            className={`detail-row decoded-section turb-section level-${decoded.turbulence.level}`}
+        {/* Altitude Range Visualization */}
+        {(pirep.turbulence_base_ft || pirep.icing_base_ft || decoded?.altitude) && (
+          <AltitudeRangeViz decoded={decoded} pirep={pirep} />
+        )}
+
+        {/* Turbulence Section - collapsible, default open if present */}
+        {hasTurbulence && (
+          <CollapsibleSection
+            title="Turbulence"
+            icon={Wind}
+            defaultOpen={true}
+            className={`turb-section level-${decoded.turbulence.level}`}
           >
-            <span className="section-icon">
-              <Wind size={14} /> Turbulence
-            </span>
-            <div className="decoded-value">
+            <div className="hazard-details">
               <strong className="turb-intensity">{decoded.turbulence.intensity}</strong>
               {decoded.turbulence.type && (
                 <span className="turb-type">{decoded.turbulence.type}</span>
@@ -91,16 +175,18 @@ export function PirepPopup({ pirep, config, popupPosition, isDragging, onClose, 
                 <span className="hazard-warning">{decoded.turbulence.warning}</span>
               )}
             </div>
-          </div>
+          </CollapsibleSection>
         )}
 
-        {/* Icing with full decoding */}
-        {decoded?.icing && (
-          <div className={`detail-row decoded-section icing-section level-${decoded.icing.level}`}>
-            <span className="section-icon">
-              <Snowflake size={14} /> Icing
-            </span>
-            <div className="decoded-value">
+        {/* Icing Section - collapsible, default open if present */}
+        {hasIcing && (
+          <CollapsibleSection
+            title="Icing"
+            icon={Snowflake}
+            defaultOpen={true}
+            className={`icing-section level-${decoded.icing.level}`}
+          >
+            <div className="hazard-details">
               <strong className="icing-intensity">{decoded.icing.intensity}</strong>
               {decoded.icing.type && <span className="icing-type">{decoded.icing.type}</span>}
               {decoded.icing.detail && <span className="decoded-desc">{decoded.icing.detail}</span>}
@@ -108,16 +194,18 @@ export function PirepPopup({ pirep, config, popupPosition, isDragging, onClose, 
                 <span className="hazard-warning">{decoded.icing.warning}</span>
               )}
             </div>
-          </div>
+          </CollapsibleSection>
         )}
 
-        {/* Wind Shear / LLWS with full decoding */}
-        {decoded?.windshear && (
-          <div className={`detail-row decoded-section ws-section level-${decoded.windshear.level}`}>
-            <span className="section-icon">
-              <Wind size={14} /> Wind Shear
-            </span>
-            <div className="decoded-value">
+        {/* Wind Shear Section - collapsible, default open if present */}
+        {hasWindshear && (
+          <CollapsibleSection
+            title="Wind Shear"
+            icon={Wind}
+            defaultOpen={true}
+            className={`ws-section level-${decoded.windshear.level}`}
+          >
+            <div className="hazard-details">
               <strong className="ws-intensity">{decoded.windshear.intensity}</strong>
               {decoded.windshear.gainLoss && (
                 <span className="ws-type">{decoded.windshear.gainLoss}</span>
@@ -132,72 +220,71 @@ export function PirepPopup({ pirep, config, popupPosition, isDragging, onClose, 
                 <span className="hazard-warning">{decoded.windshear.warning}</span>
               )}
             </div>
-          </div>
+          </CollapsibleSection>
         )}
 
-        {/* Weather */}
-        {decoded?.weather && (
-          <div className="detail-row">
-            <span>Weather</span>
-            <span>{decoded.weather.description}</span>
-          </div>
+        {/* Weather/Sky Section - collapsible, default closed */}
+        {(decoded?.weather || decoded?.sky) && (
+          <CollapsibleSection title="Weather & Sky" icon={Cloud} defaultOpen={false}>
+            {decoded?.sky && (
+              <div className="detail-row">
+                <span>Sky</span>
+                <span>{decoded.sky.description}</span>
+              </div>
+            )}
+            {decoded?.weather && (
+              <div className="detail-row">
+                <span>Weather</span>
+                <span>{decoded.weather.description}</span>
+              </div>
+            )}
+          </CollapsibleSection>
         )}
 
-        {/* Temperature at altitude */}
-        {decoded?.temperature && (
-          <div className="detail-row decoded-section">
-            <span className="section-icon">
-              <Thermometer size={14} /> Temp
-            </span>
-            <div className="decoded-value">
-              <strong>
-                {decoded.temperature.celsius}°C / {decoded.temperature.fahrenheit}°F
-              </strong>
-              {decoded.temperature.isaDeviation !== null && (
-                <span className="decoded-desc">
-                  ISA deviation: {decoded.temperature.isaDeviation > 0 ? '+' : ''}
-                  {decoded.temperature.isaDeviation}°C
+        {/* Temperature & Wind Section - collapsible, default closed */}
+        {(decoded?.temperature || decoded?.wind) && (
+          <CollapsibleSection title="Atmosphere" icon={Thermometer} defaultOpen={false}>
+            {decoded?.temperature && (
+              <div className="detail-row">
+                <span>Temperature</span>
+                <span>
+                  {decoded.temperature.celsius}°C / {decoded.temperature.fahrenheit}°F
+                  {decoded.temperature.isaDeviation !== null && (
+                    <span className="isa-dev">
+                      {' '}
+                      (ISA {decoded.temperature.isaDeviation > 0 ? '+' : ''}
+                      {decoded.temperature.isaDeviation}°)
+                    </span>
+                  )}
                 </span>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Wind at altitude */}
-        {decoded?.wind && (
-          <div className="detail-row">
-            <span className="section-icon">
-              <Navigation size={14} /> Wind
-            </span>
-            <span>
-              {windDirToCardinal(decoded.wind.direction)} ({decoded.wind.direction}°) at{' '}
-              {decoded.wind.speed}kt
-            </span>
-          </div>
+              </div>
+            )}
+            {decoded?.wind && (
+              <div className="detail-row">
+                <span>Wind</span>
+                <span>
+                  <Navigation size={12} style={{ display: 'inline', marginRight: 4 }} />
+                  {windDirToCardinal(decoded.wind.direction)} ({decoded.wind.direction}°) at{' '}
+                  {decoded.wind.speed}kt
+                </span>
+              </div>
+            )}
+          </CollapsibleSection>
         )}
 
         {/* Remarks */}
         {decoded?.remarks && (
-          <div className="detail-row">
+          <div className="detail-row remarks-row">
             <span>Remarks</span>
             <span>{decoded.remarks}</span>
           </div>
         )}
 
-        {/* Raw PIREP */}
+        {/* Raw PIREP - collapsible, default closed */}
         {(pirep.raw_text || pirep.rawOb) && (
-          <div className="detail-row raw-section">
-            <span>Raw PIREP</span>
-            <span className="mono raw-text">{pirep.raw_text || pirep.rawOb}</span>
-          </div>
-        )}
-
-        {/* Reported time - only show if valid */}
-        {decoded?.time && (
-          <div className="detail-row">
-            <span>Reported</span>
-            <span>{decoded.time}</span>
-          </div>
+          <CollapsibleSection title="Raw PIREP" defaultOpen={false} className="raw-section">
+            <pre className="raw-text">{pirep.raw_text || pirep.rawOb}</pre>
+          </CollapsibleSection>
         )}
       </div>
     </div>

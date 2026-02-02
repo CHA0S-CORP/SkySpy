@@ -120,6 +120,8 @@ const safeJson = async (res) => {
 import { AircraftDetailPage } from '../aircraft/AircraftDetailPage';
 import { useAircraftInfo } from '../../hooks/useAircraftInfo';
 import { useToastContextSafe } from '../../hooks/useToast';
+import { useAirspaceAdvisories, HAZARD_CONFIG } from '../../hooks/useAirspaceAdvisories';
+import { AirspaceAdvisoryPanel } from './components/AirspaceAdvisoryPanel';
 
 // Phase 5.1: Pro Radar Theme Color Presets
 const PRO_THEME_COLORS = {
@@ -280,6 +282,9 @@ function MapView({
   const [isFullscreen, setIsFullscreen] = useState(false); // Fullscreen mode
   const [panelPinned, setPanelPinned] = useState(false); // Pin pro details panel
   const [showAcarsPanel, setShowAcarsPanel] = useState(false); // ACARS messages panel
+  const [showAdvisoryPanel, setShowAdvisoryPanel] = useState(false); // Airspace advisories panel
+  const [selectedAdvisoryId, setSelectedAdvisoryId] = useState(null); // Highlighted advisory on map
+  const [advisoryHazardFilter, setAdvisoryHazardFilter] = useState(null); // Advisory hazard filter
   const [acarsMessages, setAcarsMessages] = useState([]); // Live ACARS messages
   const [acarsStatus, setAcarsStatus] = useState(null); // ACARS service status
   const [acarsFilters, setAcarsFilters] = useState(() => {
@@ -318,6 +323,22 @@ function MapView({
     apiBaseUrl: config.apiBaseUrl,
     getAirframeError,
     clearAirframeError,
+  });
+
+  // Airspace advisories hook for pro mode
+  const {
+    advisories: airspaceAdvisories,
+    loading: advisoriesLoading,
+    error: advisoriesError,
+    acknowledged: acknowledgedAdvisories,
+    acknowledgeAdvisory,
+    unacknowledgeAdvisory,
+    unacknowledgedCount: advisoryUnacknowledgedCount,
+    refresh: refreshAdvisories,
+    isAcknowledged: isAdvisoryAcknowledged,
+  } = useAirspaceAdvisories(wsRequest, wsConnected, {
+    hazardFilter: advisoryHazardFilter,
+    refreshInterval: 60000,
   });
 
   // Toast context for notifications (gracefully handles if not in provider)
@@ -4610,6 +4631,81 @@ function MapView({
             }
           }
         });
+      }
+
+      // Draw Airspace Advisories (SIGMETs, AIRMETs, G-AIRMETs) when overlay enabled
+      if (overlays.advisories && airspaceAdvisories?.length > 0 && isPro) {
+        ctx.save();
+        ctx.setLineDash([6, 4]);
+
+        airspaceAdvisories.forEach((adv) => {
+          if (!adv.polygon || adv.polygon.length < 3) return;
+
+          // Get color from hazard type
+          const hazardConfig = HAZARD_CONFIG[adv.hazard] || { color: '#888888' };
+          const isSelected = selectedAdvisoryId === adv.id;
+          const isAck = acknowledgedAdvisories?.has(adv.id);
+
+          // Skip acknowledged advisories in rendering (or dim them)
+          const baseAlpha = isAck ? 0.15 : 0.4;
+          const strokeAlpha = isAck ? 0.3 : 0.7;
+
+          ctx.strokeStyle = isSelected
+            ? hazardConfig.color
+            : `${hazardConfig.color}${Math.round(strokeAlpha * 255)
+                .toString(16)
+                .padStart(2, '0')}`;
+          ctx.fillStyle = `${hazardConfig.color}${Math.round(baseAlpha * 255 * 0.3)
+            .toString(16)
+            .padStart(2, '0')}`;
+          ctx.lineWidth = isSelected ? 3 : 1.5;
+
+          ctx.beginPath();
+          adv.polygon.forEach((coord, idx) => {
+            // Polygon coords are [lon, lat] format
+            const lon = Array.isArray(coord) ? coord[0] : coord.lon;
+            const lat = Array.isArray(coord) ? coord[1] : coord.lat;
+            const screenPos = latLonToScreen(lat, lon);
+
+            if (idx === 0) {
+              ctx.moveTo(screenPos.x, screenPos.y);
+            } else {
+              ctx.lineTo(screenPos.x, screenPos.y);
+            }
+          });
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // Draw hazard label at center if selected
+          if (isSelected) {
+            const lats = adv.polygon.map((p) => (Array.isArray(p) ? p[1] : p.lat));
+            const lons = adv.polygon.map((p) => (Array.isArray(p) ? p[0] : p.lon));
+            const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+            const centerLon = (Math.min(...lons) + Math.max(...lons)) / 2;
+            const labelPos = latLonToScreen(centerLat, centerLon);
+
+            ctx.setLineDash([]);
+            ctx.fillStyle = hazardConfig.color;
+            ctx.font = 'bold 12px "JetBrains Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(adv.hazard || adv.advisory_type || 'ADVISORY', labelPos.x, labelPos.y);
+
+            if (adv.lower_alt_ft !== undefined && adv.upper_alt_ft !== undefined) {
+              ctx.font = '10px "JetBrains Mono", monospace';
+              const lower = adv.lower_alt_ft === 0 ? 'SFC' : `FL${Math.round(adv.lower_alt_ft / 100)}`;
+              const upper =
+                adv.upper_alt_ft >= 18000
+                  ? `FL${Math.round(adv.upper_alt_ft / 100)}`
+                  : `${adv.upper_alt_ft}ft`;
+              ctx.fillText(`${lower}-${upper}`, labelPos.x, labelPos.y + 14);
+            }
+            ctx.setLineDash([6, 4]);
+          }
+        });
+
+        ctx.setLineDash([]);
+        ctx.restore();
       }
 
       // Draw PIREPs if enabled (Pro mode primarily)
@@ -9412,6 +9508,19 @@ function MapView({
               <MessageCircle size={18} />
             </button>
             <button
+              className={`pro-header-btn ${showAdvisoryPanel ? 'active' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowAdvisoryPanel(!showAdvisoryPanel);
+              }}
+              title="Airspace Advisories"
+            >
+              <AlertTriangle size={18} />
+              {advisoryUnacknowledgedCount > 0 && (
+                <span className="advisory-badge">{advisoryUnacknowledgedCount}</span>
+              )}
+            </button>
+            <button
               className={`pro-header-btn ${showFilterMenu ? 'active' : ''}`}
               onClick={(e) => {
                 e.stopPropagation();
@@ -10243,6 +10352,41 @@ function MapView({
             })()}
           </div>
         </div>
+      )}
+
+      {/* Airspace Advisory Panel */}
+      {config.mapMode === 'pro' && (
+        <AirspaceAdvisoryPanel
+          show={showAdvisoryPanel}
+          onClose={() => setShowAdvisoryPanel(false)}
+          advisories={airspaceAdvisories}
+          loading={advisoriesLoading}
+          error={advisoriesError}
+          acknowledged={acknowledgedAdvisories}
+          onAcknowledge={acknowledgeAdvisory}
+          onUnacknowledge={unacknowledgeAdvisory}
+          onShowOnMap={(adv) => {
+            setSelectedAdvisoryId(adv.id);
+            // Center map on advisory polygon centroid if available
+            if (adv.polygon && adv.polygon.length > 0) {
+              const lats = adv.polygon.map((p) => p[1]);
+              const lons = adv.polygon.map((p) => p[0]);
+              const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+              const centerLon = (Math.min(...lons) + Math.max(...lons)) / 2;
+              // Pan pro mode to show the advisory
+              if (setProPanOffset) {
+                const dx = (centerLon - feederLon) * 60; // rough nm conversion
+                const dy = (feederLat - centerLat) * 60;
+                setProPanOffset({ x: dx * 2, y: dy * 2 });
+              }
+            }
+          }}
+          onRefresh={refreshAdvisories}
+          hazardFilter={advisoryHazardFilter}
+          setHazardFilter={setAdvisoryHazardFilter}
+          selectedAdvisoryId={selectedAdvisoryId}
+          unacknowledgedCount={advisoryUnacknowledgedCount}
+        />
       )}
 
       {/* Aircraft Detail Modal */}

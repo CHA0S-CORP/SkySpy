@@ -111,10 +111,9 @@ func TestSoundManager_InitializeSounds_DirectoryCreationError(t *testing.T) {
 	sm.initializeSounds()
 
 	// Sound paths should be empty since directory creation failed
-	if len(sm.soundPaths) != 3 {
-		// Note: initializeSounds still creates entries even if write fails
-		// The paths will be empty strings
-	}
+	// Note: initializeSounds still creates entries even if write fails
+	// The paths will be empty strings
+	_ = len(sm.soundPaths)
 }
 
 func TestSoundManager_GenerateSound_ExistingFile(t *testing.T) {

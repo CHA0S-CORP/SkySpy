@@ -182,6 +182,8 @@ func (p *AlertPlayer) playTerminalBell() {
 }
 
 // playSystemBeep attempts to play a system beep using platform tools
+//
+//nolint:unparam,gosec // G204: params are validated integers; frequency kept for API flexibility
 func (p *AlertPlayer) playSystemBeep(frequency, durationMs int) bool {
 	var cmd *exec.Cmd
 

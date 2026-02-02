@@ -7539,13 +7539,48 @@
 }
 
 .archive-toolbar .type-filter,
-.archive-toolbar .date-filter {
+.archive-toolbar .date-filter,
+.archive-toolbar .hazard-filter,
+.archive-toolbar .altitude-filter {
   padding: 8px 12px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text-primary);
   font-size: 13px;
+}
+
+/* Hazard and altitude filter wrappers */
+.archive-toolbar .hazard-filter-wrapper,
+.archive-toolbar .altitude-filter-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.archive-toolbar .hazard-filter-wrapper svg,
+.archive-toolbar .altitude-filter-wrapper svg {
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.archive-toolbar .hazard-filter-wrapper select,
+.archive-toolbar .altitude-filter-wrapper select {
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.archive-toolbar .hazard-filter-wrapper:hover,
+.archive-toolbar .altitude-filter-wrapper:hover {
+  border-color: var(--accent-purple);
 }
 
 /* Archive Content Area */
@@ -7597,14 +7632,36 @@
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 16px;
   cursor: pointer;
   transition: all 0.2s ease;
+  display: flex;
+  overflow: hidden;
 }
 
 .archive-card:hover {
   border-color: var(--accent-purple);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Severity indicator bar on left side of PIREP cards */
+.archive-card .severity-indicator {
+  width: 4px;
+  min-height: 100%;
+  flex-shrink: 0;
+  transition: background-color 0.2s;
+}
+
+/* Card content wrapper */
+.archive-card .archive-card-content {
+  flex: 1;
+  padding: 16px;
+  min-width: 0;
+}
+
+/* NOTAM cards don't have severity indicator, use border-left */
+.archive-card.notam-card {
+  display: block;
+  padding: 16px;
 }
 
 .archive-card.notam-card.tfr {
@@ -7623,13 +7680,26 @@
   border-left: 3px solid #10b981;
 }
 
-.archive-card.pirep-card {
-  border-left: 3px solid #60a5fa;
-}
+/* PIREP card severity-based styling */
+.archive-card.pirep-card.severity-0 .severity-indicator { background: #4ade80; }
+.archive-card.pirep-card.severity-1 .severity-indicator { background: #a3e635; }
+.archive-card.pirep-card.severity-2 .severity-indicator { background: #facc15; }
+.archive-card.pirep-card.severity-3 .severity-indicator { background: #fb923c; }
+.archive-card.pirep-card.severity-4 .severity-indicator { background: #f87171; }
+.archive-card.pirep-card.severity-5 .severity-indicator { background: #ef4444; }
+.archive-card.pirep-card.severity-6 .severity-indicator { background: #dc2626; }
 
 .archive-card.pirep-card.urgent {
-  border-left: 3px solid #ef4444;
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.05), var(--bg-card));
+}
+
+.archive-card.pirep-card.urgent .severity-indicator {
+  animation: severity-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes severity-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 .archive-card.expanded {
@@ -7744,10 +7814,29 @@
   border-left: 3px solid #60a5fa;
 }
 
+.condition-badge.windshear {
+  border-left: 3px solid #ff88cc;
+  background: rgba(255, 136, 204, 0.1);
+}
+
 .condition-badge.altitude {
   background: rgba(0, 200, 255, 0.1);
   border-color: rgba(0, 200, 255, 0.2);
   color: var(--accent-cyan);
+}
+
+/* Severity-based condition badge styling */
+.condition-badge[data-level="0"] { background: rgba(74, 222, 128, 0.1); border-color: rgba(74, 222, 128, 0.3); }
+.condition-badge[data-level="1"] { background: rgba(163, 230, 53, 0.1); border-color: rgba(163, 230, 53, 0.3); }
+.condition-badge[data-level="2"] { background: rgba(250, 204, 21, 0.1); border-color: rgba(250, 204, 21, 0.3); }
+.condition-badge[data-level="3"] { background: rgba(251, 146, 60, 0.15); border-color: rgba(251, 146, 60, 0.4); }
+.condition-badge[data-level="4"] { background: rgba(248, 113, 113, 0.15); border-color: rgba(248, 113, 113, 0.4); }
+.condition-badge[data-level="5"],
+.condition-badge[data-level="6"] {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #f87171;
+  font-weight: 600;
 }
 
 /* Archive Card Meta */
