@@ -209,7 +209,7 @@ func TestGetRuleByID(t *testing.T) {
 	// Test finding existing rule
 	found := rs.GetRuleByID("rule1")
 	if found == nil {
-		t.Error("GetRuleByID should find existing rule")
+		t.Fatal("GetRuleByID should find existing rule")
 	}
 	if found.Name != "Rule 1" {
 		t.Error("GetRuleByID returned wrong rule")

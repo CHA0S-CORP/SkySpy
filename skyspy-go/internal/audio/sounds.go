@@ -77,6 +77,7 @@ func (m *SoundManager) generateSound(alertType AlertType, filename string) strin
 	}
 
 	// Write the WAV file
+	//nolint:gosec // G306: Sound files are non-sensitive and can be world-readable
 	if err := os.WriteFile(soundPath, wavData, 0o644); err != nil {
 		return ""
 	}

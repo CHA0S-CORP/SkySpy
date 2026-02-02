@@ -848,7 +848,8 @@ func (m *Model) renderSearchPanel() string {
 	sb.WriteString(borderDim.Render("  " + strings.Repeat("─", 34)))
 	sb.WriteString("\n")
 
-	if len(m.searchResults) > 0 {
+	switch {
+	case len(m.searchResults) > 0:
 		// Show up to 8 results
 		displayCount := 8
 		if len(m.searchResults) < displayCount {
@@ -924,14 +925,14 @@ func (m *Model) renderSearchPanel() string {
 			sb.WriteString("  " + textDim.Render(strings.Repeat(" ", 30)))
 			sb.WriteString("\n")
 		}
-	} else if m.searchQuery != "" {
+	case m.searchQuery != "":
 		sb.WriteString("  " + textDim.Render("No matches found"))
 		sb.WriteString("\n")
 		for i := 0; i < 7; i++ {
 			sb.WriteString("  " + textDim.Render(strings.Repeat(" ", 30)))
 			sb.WriteString("\n")
 		}
-	} else {
+	default:
 		sb.WriteString("  " + textDim.Render("Type to search..."))
 		sb.WriteString("\n")
 		for i := 0; i < 7; i++ {
@@ -1135,16 +1136,15 @@ func (m *Model) renderVUMeter(level float64, width int) string {
 	var sb strings.Builder
 
 	for i := 0; i < width; i++ {
-		if i < filled {
-			if float64(i) < float64(width)*0.6 {
-				sb.WriteString(successStyle.Render("█"))
-			} else if float64(i) < float64(width)*0.8 {
-				sb.WriteString(warningStyle.Render("█"))
-			} else {
-				sb.WriteString(errorStyle.Render("█"))
-			}
-		} else {
+		switch {
+		case i >= filled:
 			sb.WriteString(textDim.Render("░"))
+		case float64(i) < float64(width)*0.6:
+			sb.WriteString(successStyle.Render("█"))
+		case float64(i) < float64(width)*0.8:
+			sb.WriteString(warningStyle.Render("█"))
+		default:
+			sb.WriteString(errorStyle.Render("█"))
 		}
 	}
 	return sb.String()
