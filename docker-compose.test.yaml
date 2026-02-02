@@ -261,6 +261,34 @@ services:
       --queues=polling,default,database,transcription,notifications,low_priority
       --pool=gevent
 
+  # ACARS UDP Listener for dev profile
+  acars-listener:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: skyspy_acars_listener_dev
+    profiles: ["dev"]
+    env_file:
+      - .env.test
+    environment:
+      - DJANGO_SETTINGS_MODULE=skyspy.settings
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-dev-secret-key-change-in-production}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-adsb}:${POSTGRES_PASSWORD:-adsb}@pgbouncer:5432/${POSTGRES_DB:-adsb}
+      - REDIS_URL=redis://redis:6379/0
+      - ACARS_ENABLED=${ACARS_ENABLED:-True}
+      - ACARS_PORT=${ACARS_PORT:-5550}
+      - VDLM2_PORT=${VDLM2_PORT:-5555}
+    volumes:
+      - ./skyspy_django/skyspy:/app/skyspy:ro
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - test-network
+    command: python manage.py run_acars --acars-port 5550 --vdlm2-port 5555 -v 2
+
   # Celery Beat for dev profile
   celery-beat:
     build:
@@ -463,8 +491,11 @@ services:
       # Station identification
       - STATION_ID=${STATION_ID:-test-station}
 
-      # Relay configuration - only set if you want to relay to another service
-      # RELAY_HOST, RELAY_PORT, RELAY_PROTOCOL are optional
+      # Relay configuration - send messages to acars-listener
+      - RELAY_HOST=acars-listener
+      - RELAY_PORT=5550
+      - RELAY_PORT_VDLM2=5555
+      - RELAY_PROTOCOL=udp
 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/stats"]

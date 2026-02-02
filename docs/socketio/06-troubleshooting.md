@@ -1,13 +1,8 @@
 ---
-title: Troubleshooting & Debugging
-slug: socketio-troubleshooting
-category:
-  uri: uri-that-does-not-map-to-api-reference
-position: 6
-content:
-  excerpt: 'Common issues, debugging tips, rate limits, and security best practices'
-privacy:
-  view: public
+title: "Troubleshooting & Debugging"
+slug: "socketio-troubleshooting"
+excerpt: "Common issues, debugging tips, rate limits, and security best practices"
+hidden: false
 ---
 
 # Troubleshooting & Debugging
@@ -42,9 +37,13 @@ Solutions to common issues, debugging techniques, and best practices for product
 }
 [/block]
 
-> 🚧 Authentication Modes
->
-> SkySpy supports three auth modes: `public` (no auth), `hybrid` (optional auth), and `private` (auth required). Check your server's `WS_AUTH_MODE` setting.
+[block:callout]
+{
+  "type": "warning",
+  "title": "Authentication Modes",
+  "body": "SkySpy supports three auth modes: `public` (no auth), `hybrid` (optional auth), and `private` (auth required). Check your server's `WS_AUTH_MODE` setting."
+}
+[/block]
 
 ### Subscription Issues
 
@@ -254,9 +253,13 @@ Understanding and working with rate limits.
 }
 [/block]
 
-> ✅ Critical Events
->
-> Safety events, alerts, and emergency events bypass batching and rate limits to ensure immediate delivery.
+[block:callout]
+{
+  "type": "success",
+  "title": "Critical Events",
+  "body": "Safety events, alerts, and emergency events bypass batching and rate limits to ensure immediate delivery."
+}
+[/block]
 
 ### Client-Side Throttling
 
@@ -278,9 +281,13 @@ If your UI can't keep up with updates, implement client-side throttling:
 
 ### Best Practices
 
-> 🚧 Production Security Checklist
->
-> Follow these guidelines for secure production deployments:
+[block:callout]
+{
+  "type": "warning",
+  "title": "Production Security Checklist",
+  "body": "Follow these guidelines for secure production deployments:"
+}
+[/block]
 
 [block:parameters]
 {
@@ -453,11 +460,10 @@ Common error messages and their meanings:
 
 ## Need More Help?
 
-> 📘 Additional Resources
->
-> - [Socket.IO Overview](/docs/socketio-overview) - Introduction and architecture
-> - [Main Namespace](/docs/socketio-main-namespace) - Complete API reference
-> - [Client Implementation](/docs/socketio-client-implementation) - Code examples
-> - [REST API Documentation](/docs/rest-api) - HTTP API reference
->
-> Still stuck? Check the [GitHub Issues](https://github.com/your-repo/skyspy/issues) or join the community Discord.
+[block:callout]
+{
+  "type": "info",
+  "title": "Additional Resources",
+  "body": "- [Socket.IO Overview](/docs/socketio-overview) - Introduction and architecture\n- [Main Namespace](/docs/socketio-main-namespace) - Complete API reference\n- [Client Implementation](/docs/socketio-client-implementation) - Code examples\n- [REST API Documentation](/docs/rest-api) - HTTP API reference\n\nStill stuck? Check the GitHub Issues or join the community Discord."
+}
+[/block]

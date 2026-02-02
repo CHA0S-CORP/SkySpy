@@ -1,13 +1,8 @@
 ---
-title: Client Implementation
-slug: socketio-client-implementation
-category:
-  uri: uri-that-does-not-map-to-api-reference
-position: 5
-content:
-  excerpt: Complete JavaScript and Python client examples with best practices
-privacy:
-  view: public
+title: "Client Implementation"
+slug: "socketio-client-implementation"
+excerpt: "Complete JavaScript and Python client examples with best practices"
+hidden: false
 ---
 
 # Client Implementation
@@ -113,9 +108,13 @@ Full-featured Python client with async/await support and type hints.
 
 ## Best Practices
 
-> ✅ Production Guidelines
->
-> Follow these best practices for robust client implementations:
+[block:callout]
+{
+  "type": "success",
+  "title": "Production Guidelines",
+  "body": "Follow these best practices for robust client implementations:"
+}
+[/block]
 
 ### Connection Management
 
@@ -242,8 +241,10 @@ Full-featured Python client with async/await support and type hints.
 
 ## Next Steps
 
-> 📘 Additional Resources
->
-> - [Troubleshooting](/docs/socketio-troubleshooting) - Debugging tips and common issues
-> - [Main Namespace](/docs/socketio-main-namespace) - Complete API reference
-> - [Specialized Namespaces](/docs/socketio-specialized-namespaces) - Audio and Cannonball features
+[block:callout]
+{
+  "type": "info",
+  "title": "Additional Resources",
+  "body": "- [Troubleshooting](/docs/socketio-troubleshooting) - Debugging tips and common issues\n- [Main Namespace](/docs/socketio-main-namespace) - Complete API reference\n- [Specialized Namespaces](/docs/socketio-specialized-namespaces) - Audio and Cannonball features"
+}
+[/block]

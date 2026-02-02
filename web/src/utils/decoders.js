@@ -504,3 +504,171 @@ export const decodePirep = (pirep) => {
 
   return decoded;
 };
+
+// ============================================================================
+// PIREP Utility Functions
+// ============================================================================
+
+/**
+ * Get the maximum severity level from a PIREP
+ * Returns an object with level (0-6), type ('turbulence', 'icing', 'windshear', 'both'),
+ * and description
+ */
+export const getPirepMaxSeverity = (pirep) => {
+  if (!pirep) return { level: 0, type: 'routine', description: 'Routine' };
+
+  const decoded = typeof pirep.decoded === 'object' ? pirep.decoded : decodePirep(pirep);
+  if (!decoded) return { level: 0, type: 'routine', description: 'Routine' };
+
+  // Check for UUA (Urgent)
+  const isUrgent = decoded.type === 'UUA' || (pirep.raw_text || pirep.rawOb || '').includes(' UUA ');
+
+  const turbLevel = decoded.turbulence?.level || 0;
+  const iceLevel = decoded.icing?.level || 0;
+  const wsLevel = decoded.windshear?.level || 0;
+
+  // Determine max level and type
+  let maxLevel = Math.max(turbLevel, iceLevel, wsLevel);
+  let type = 'routine';
+  let description = 'Routine';
+
+  if (isUrgent) {
+    maxLevel = Math.max(maxLevel, 5); // UUA is at least severe
+  }
+
+  if (turbLevel > 0 && iceLevel > 0) {
+    type = 'both';
+  } else if (turbLevel >= iceLevel && turbLevel >= wsLevel && turbLevel > 0) {
+    type = 'turbulence';
+  } else if (iceLevel >= turbLevel && iceLevel >= wsLevel && iceLevel > 0) {
+    type = 'icing';
+  } else if (wsLevel > 0) {
+    type = 'windshear';
+  }
+
+  // Generate description based on level
+  const levelDescriptions = {
+    0: 'Routine',
+    1: 'Light',
+    2: 'Light-Moderate',
+    3: 'Moderate',
+    4: 'Moderate-Severe',
+    5: 'Severe',
+    6: 'Extreme',
+  };
+  description = levelDescriptions[maxLevel] || 'Routine';
+
+  return {
+    level: maxLevel,
+    type: isUrgent ? 'urgent' : type,
+    description,
+    turbLevel,
+    iceLevel,
+    wsLevel,
+    isUrgent,
+  };
+};
+
+/**
+ * Get a short hazard summary text for a PIREP
+ * Returns string like "SEVERE TURBULENCE | MODERATE ICING"
+ */
+export const getHazardSummary = (decoded) => {
+  if (!decoded) return null;
+
+  const hazards = [];
+
+  if (decoded.turbulence && decoded.turbulence.level > 0) {
+    hazards.push(`${decoded.turbulence.intensity.toUpperCase()} TURBULENCE`);
+  }
+
+  if (decoded.icing && decoded.icing.level > 0) {
+    hazards.push(`${decoded.icing.intensity.toUpperCase()} ICING`);
+  }
+
+  if (decoded.windshear && decoded.windshear.level > 0) {
+    hazards.push(`${decoded.windshear.intensity.toUpperCase()} WIND SHEAR`);
+  }
+
+  if (hazards.length === 0) {
+    if (decoded.type === 'UUA') {
+      return 'URGENT PILOT REPORT';
+    }
+    return 'ROUTINE REPORT';
+  }
+
+  return hazards.join(' | ');
+};
+
+/**
+ * Get the age of a PIREP in minutes
+ * @param {Object} pirep - PIREP object with observation_time or obsTime
+ * @returns {number} Age in minutes, or -1 if unable to determine
+ */
+export const getPirepAgeMinutes = (pirep) => {
+  if (!pirep) return -1;
+
+  const obsTime = pirep.observation_time || pirep.obsTime;
+  if (!obsTime) return -1;
+
+  try {
+    const obsDate = new Date(obsTime);
+    const now = new Date();
+    const diffMs = now - obsDate;
+    return Math.floor(diffMs / 60000); // Convert ms to minutes
+  } catch {
+    return -1;
+  }
+};
+
+/**
+ * Get a freshness CSS class based on age in minutes
+ * @param {number} minutes - Age in minutes
+ * @returns {string} CSS class name
+ */
+export const getAgeFreshnessClass = (minutes) => {
+  if (minutes < 0) return 'unknown';
+  if (minutes <= 30) return 'fresh'; // Green
+  if (minutes <= 60) return 'recent'; // Yellow
+  if (minutes <= 120) return 'aging'; // Orange
+  return 'stale'; // Gray
+};
+
+/**
+ * Get opacity value based on PIREP age
+ * @param {number} minutes - Age in minutes
+ * @returns {number} Opacity value 0-1
+ */
+export const getAgeOpacity = (minutes) => {
+  if (minutes < 0) return 1.0;
+  if (minutes <= 30) return 1.0;
+  if (minutes <= 60) return 0.85;
+  if (minutes <= 120) return 0.7;
+  if (minutes <= 240) return 0.55;
+  return 0.4;
+};
+
+/**
+ * Format altitude for display (e.g., "FL350" or "12k")
+ * @param {Object} pirep - PIREP object
+ * @returns {string|null} Formatted altitude string
+ */
+export const formatPirepAltitude = (pirep) => {
+  if (!pirep) return null;
+
+  const flightLevel = pirep.flight_level ?? pirep.fltLvl;
+  const altitudeFt = pirep.altitude_ft;
+
+  if (flightLevel != null && flightLevel >= 180) {
+    return `FL${flightLevel}`;
+  } else if (flightLevel != null) {
+    return `${Math.round((flightLevel * 100) / 1000)}k`;
+  } else if (altitudeFt != null) {
+    if (altitudeFt >= 18000) {
+      return `FL${Math.round(altitudeFt / 100)}`;
+    }
+    return `${Math.round(altitudeFt / 1000)}k`;
+  }
+
+  return null;
+};

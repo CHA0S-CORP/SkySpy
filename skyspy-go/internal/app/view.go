@@ -10,8 +10,14 @@ import (
 	"github.com/skyspy/skyspy-go/internal/theme"
 )
 
-// Placeholder for missing values
-const emptyPlaceholder = "----"
+// View constants
+const (
+	emptyPlaceholder = "----"
+	dashPlaceholder  = "---"
+	bulletFilled     = "●"
+	bulletEmpty      = "○"
+	playIndicator    = "▶ "
+)
 
 // View renders the application
 func (m *Model) View() string {
@@ -292,7 +298,7 @@ func (m *Model) renderStatsPanel() string {
 	if m.IsConnected() {
 		ind := "◉"
 		if !m.blink {
-			ind = "○"
+			ind = bulletEmpty
 		}
 		sb.WriteString(borderStyle.Render("│") + successStyle.Render("  "+ind+" ") + successStyle.Bold(true).Render("RECEIVING") + strings.Repeat(" ", 16) + borderStyle.Render("│"))
 	} else {
@@ -389,7 +395,7 @@ func (m *Model) renderTargetList() string {
 			cs = cs[:6]
 		}
 
-		alt := "---"
+		alt := dashPlaceholder
 		if target.HasAlt {
 			if target.Altitude >= 1000 {
 				alt = fmt.Sprintf("%d", target.Altitude/100)
@@ -454,11 +460,11 @@ func (m *Model) renderFreqPanel() string {
 	}
 
 	for _, f := range freqs {
-		ind := "○"
+		ind := bulletEmpty
 		indStyle := textDim
 		// Simulate random activity
 		if m.blink && m.frame%7 < 3 {
-			ind = "●"
+			ind = bulletFilled
 			indStyle = f.style
 		}
 		sb.WriteString(borderStyle.Render("│") + "  " + indStyle.Render(ind) + " " + f.style.Render(f.freq) + " " + textDim.Render(fmt.Sprintf("[%-5s]", f.label)) + strings.Repeat(" ", 8) + borderStyle.Render("│"))
@@ -555,7 +561,7 @@ func (m *Model) renderStatusBar() string {
 	if m.IsConnected() {
 		ind := "◉"
 		if !m.blink {
-			ind = "○"
+			ind = bulletEmpty
 		}
 		sb.WriteString(successStyle.Render(ind + " ON "))
 	} else {
@@ -664,11 +670,11 @@ func (m *Model) renderSettingsPanel() string {
 
 		prefix := "  "
 		if isCursor {
-			prefix = "▶ "
+			prefix = playIndicator
 		}
-		marker := "○"
+		marker := bulletEmpty
 		if isCurrent {
-			marker = "●"
+			marker = bulletFilled
 		}
 
 		var style, markerStyle lipgloss.Style
@@ -739,11 +745,11 @@ func (m *Model) renderOverlayPanel() string {
 
 			prefix := "  "
 			if isCursor {
-				prefix = "▶ "
+				prefix = playIndicator
 			}
-			marker := "○"
+			marker := bulletEmpty
 			if ov.Enabled {
-				marker = "●"
+				marker = bulletFilled
 			}
 
 			var style, markerStyle lipgloss.Style
@@ -785,6 +791,7 @@ func (m *Model) renderOverlayPanel() string {
 	return sb.String()
 }
 
+//nolint:gocyclo // Complex rendering with many conditional branches is acceptable
 func (m *Model) renderSearchPanel() string {
 	borderStyle := lipgloss.NewStyle().Foreground(m.theme.Border)
 	titleStyle := lipgloss.NewStyle().Foreground(m.theme.PrimaryBright).Bold(true)
@@ -863,7 +870,7 @@ func (m *Model) renderSearchPanel() string {
 			isCursor := i == m.searchCursor
 			prefix := "  "
 			if isCursor {
-				prefix = "▶ "
+				prefix = playIndicator
 			}
 
 			// Format callsign/hex with highlighting
@@ -896,7 +903,7 @@ func (m *Model) renderSearchPanel() string {
 			}
 
 			// Add altitude/distance info
-			alt := "---"
+			alt := dashPlaceholder
 			if target.HasAlt {
 				if target.Altitude >= 1000 {
 					alt = fmt.Sprintf("%d", target.Altitude/100)
@@ -1025,14 +1032,14 @@ func (m *Model) formatAlt(t *radar.Target) string {
 
 func (m *Model) formatSpeed(t *radar.Target) string {
 	if !t.HasSpeed {
-		return "---"
+		return dashPlaceholder
 	}
 	return fmt.Sprintf("%d kt", int(t.Speed))
 }
 
 func (m *Model) formatVS(t *radar.Target) string {
 	if !t.HasVS {
-		return "---"
+		return dashPlaceholder
 	}
 	if t.Vertical > 0 {
 		return fmt.Sprintf("+%d", int(t.Vertical))
@@ -1042,21 +1049,21 @@ func (m *Model) formatVS(t *radar.Target) string {
 
 func (m *Model) formatTrack(t *radar.Target) string {
 	if !t.HasTrack {
-		return "---"
+		return dashPlaceholder
 	}
 	return fmt.Sprintf("%03d°", int(t.Track))
 }
 
 func (m *Model) formatDistance(t *radar.Target) string {
 	if t.Distance <= 0 {
-		return "---"
+		return dashPlaceholder
 	}
 	return fmt.Sprintf("%.1fnm", t.Distance)
 }
 
 func (m *Model) formatBearing(t *radar.Target) string {
 	if t.Bearing <= 0 {
-		return "---"
+		return dashPlaceholder
 	}
 	return fmt.Sprintf("%03d°", int(t.Bearing))
 }
@@ -1117,6 +1124,7 @@ func (m *Model) renderSignalBars(t *radar.Target) string {
 	return sb.String()
 }
 
+//nolint:unparam // width parameter kept for API flexibility
 func (m *Model) renderVUMeter(level float64, width int) string {
 	successStyle := lipgloss.NewStyle().Foreground(m.theme.Success)
 	warningStyle := lipgloss.NewStyle().Foreground(m.theme.Warning)
@@ -1271,13 +1279,13 @@ func (m *Model) renderAlertRulesPanel() string {
 
 			prefix := "  "
 			if isCursor {
-				prefix = "▶ "
+				prefix = playIndicator
 			}
 
-			marker := "○"
+			marker := bulletEmpty
 			markerStyle := textDim
 			if rule.Enabled {
-				marker = "●"
+				marker = bulletFilled
 				markerStyle = successStyle
 			}
 

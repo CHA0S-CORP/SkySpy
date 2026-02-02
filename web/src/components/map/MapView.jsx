@@ -94,6 +94,10 @@ import {
   decodeMetar,
   decodePirep,
   getPirepType,
+  getPirepMaxSeverity,
+  getPirepAgeMinutes,
+  getAgeOpacity,
+  formatPirepAltitude,
   windDirToCardinal,
   utcToLocal,
   utcToLocalTime,
@@ -4622,11 +4626,28 @@ function MapView({
           const isSelected =
             selectedPirep && selectedPirep.lat === pirep.lat && selectedPirep.lon === pirep.lon;
 
+          // Get severity info for sizing and effects
+          const severity = getPirepMaxSeverity(pirep);
+          const severityLevel = severity.level;
+
+          // Get age for opacity
+          const ageMinutes = getPirepAgeMinutes(pirep);
+          const ageOpacity = getAgeOpacity(ageMinutes);
+
+          // Severity-based marker sizing (12-20px)
+          const baseSize = 6; // Half of 12px base
+          let markerSize = baseSize;
+          if (severityLevel >= 5) markerSize = 10; // 20px for severe/extreme
+          else if (severityLevel >= 4) markerSize = 9; // 18px for mod-severe
+          else if (severityLevel >= 3) markerSize = 8; // 16px for moderate
+          else if (severityLevel >= 2) markerSize = 7; // 14px for light-moderate
+          // Level 0-1 stays at baseSize (12px)
+
           // Draw selection indicator
           if (isSelected) {
             const selFlash = Math.floor(frameCount / 10) % 2 === 0;
             const selAlpha = selFlash ? 0.9 : 0.4;
-            const selSize = selFlash ? 18 : 16;
+            const selSize = markerSize + (selFlash ? 12 : 10);
 
             ctx.strokeStyle = `rgba(100, 220, 255, ${selAlpha})`;
             ctx.lineWidth = 2;
@@ -4637,7 +4658,7 @@ function MapView({
             ctx.setLineDash([]);
 
             // Corner brackets
-            const bSize = 12;
+            const bSize = markerSize + 6;
             const bLen = 5;
             ctx.strokeStyle = `rgba(100, 220, 255, ${selAlpha})`;
             ctx.lineWidth = 2;
@@ -4669,86 +4690,163 @@ function MapView({
 
           // PIREP color based on type
           const pirepType = getPirepType(pirep);
-          let color, fillColor;
+          let baseColor, glowColor;
           switch (pirepType) {
             case 'urgent':
-              color = 'rgba(255, 50, 50, 0.9)'; // Red for urgent
-              fillColor = 'rgba(255, 50, 50, 0.3)';
+              baseColor = { r: 255, g: 50, b: 50 }; // Red for urgent
+              glowColor = 'rgba(255, 50, 50, 0.6)';
               break;
             case 'turbulence':
-              color = 'rgba(255, 150, 50, 0.85)'; // Orange for turbulence
-              fillColor = 'rgba(255, 150, 50, 0.25)';
+              baseColor = { r: 255, g: 150, b: 50 }; // Orange for turbulence
+              glowColor = 'rgba(255, 150, 50, 0.5)';
               break;
             case 'icing':
-              color = 'rgba(100, 180, 255, 0.85)'; // Blue for icing
-              fillColor = 'rgba(100, 180, 255, 0.25)';
+              baseColor = { r: 100, g: 180, b: 255 }; // Blue for icing
+              glowColor = 'rgba(100, 180, 255, 0.5)';
               break;
             case 'both':
-              color = 'rgba(200, 100, 255, 0.85)'; // Purple for both
-              fillColor = 'rgba(200, 100, 255, 0.25)';
+              baseColor = { r: 200, g: 100, b: 255 }; // Purple for both
+              glowColor = 'rgba(200, 100, 255, 0.5)';
               break;
             case 'windshear':
-              color = 'rgba(255, 100, 200, 0.85)'; // Magenta for wind shear
-              fillColor = 'rgba(255, 100, 200, 0.25)';
+              baseColor = { r: 255, g: 100, b: 200 }; // Magenta for wind shear
+              glowColor = 'rgba(255, 100, 200, 0.5)';
               break;
             default:
-              color = 'rgba(255, 220, 100, 0.7)'; // Yellow for routine
-              fillColor = 'rgba(255, 220, 100, 0.15)';
+              baseColor = { r: 255, g: 220, b: 100 }; // Yellow for routine
+              glowColor = 'rgba(255, 220, 100, 0.3)';
           }
 
-          // Make selected PIREPs brighter
-          if (isSelected) {
-            color = color.replace(/0\.\d+\)/, '1)');
+          // Apply age-based opacity
+          const colorAlpha = isSelected ? 1.0 : Math.min(0.9, ageOpacity);
+          const fillAlpha = isSelected ? 0.4 : Math.min(0.25, ageOpacity * 0.3);
+          const color = `rgba(${baseColor.r}, ${baseColor.g}, ${baseColor.b}, ${colorAlpha})`;
+          const fillColor = `rgba(${baseColor.r}, ${baseColor.g}, ${baseColor.b}, ${fillAlpha})`;
+
+          // Glow effects for severe conditions (level 3+)
+          if (severityLevel >= 3) {
+            ctx.shadowColor = glowColor;
+            ctx.shadowBlur = severityLevel >= 5 ? 12 : severityLevel >= 4 ? 8 : 4;
           }
+
+          // Pulsing effect for UUA/extreme (level 5+)
+          let pulseScale = 1;
+          if (severity.isUrgent || severityLevel >= 5) {
+            const pulsePhase = (frameCount % 60) / 60;
+            pulseScale = 1 + 0.1 * Math.sin(pulsePhase * Math.PI * 2);
+            ctx.shadowBlur = 8 + 8 * Math.sin(pulsePhase * Math.PI * 2);
+          }
+
+          const scaledSize = markerSize * pulseScale;
 
           // Draw diamond symbol
           ctx.strokeStyle = color;
-          ctx.lineWidth = isSelected ? 2.5 : 1.5;
+          ctx.lineWidth = isSelected ? 2.5 : severityLevel >= 3 ? 2 : 1.5;
           ctx.beginPath();
-          ctx.moveTo(0, -7);
-          ctx.lineTo(6, 0);
-          ctx.lineTo(0, 7);
-          ctx.lineTo(-6, 0);
+          ctx.moveTo(0, -scaledSize);
+          ctx.lineTo(scaledSize * 0.85, 0);
+          ctx.lineTo(0, scaledSize);
+          ctx.lineTo(-scaledSize * 0.85, 0);
           ctx.closePath();
           ctx.stroke();
 
           // Fill based on type (always fill slightly, more if selected)
-          ctx.fillStyle = isSelected ? color.replace(/[\d.]+\)$/, '0.4)') : fillColor;
+          ctx.fillStyle = fillColor;
           ctx.fill();
 
-          // Add inner symbol for turb/ice
-          if (pirepType === 'turbulence' || pirepType === 'both') {
-            // Wavy line for turbulence
+          // Reset shadow for inner symbols
+          ctx.shadowBlur = 0;
+          ctx.shadowColor = 'transparent';
+
+          // Improved inner symbols based on type
+          const innerScale = scaledSize / 7; // Scale inner symbols with marker
+          if (pirepType === 'both') {
+            // Split diamond for both - orange/blue halves
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(0, -scaledSize * 0.5);
+            ctx.lineTo(0, scaledSize * 0.5);
+            ctx.lineTo(-scaledSize * 0.4, 0);
+            ctx.closePath();
+            ctx.fillStyle = `rgba(255, 150, 50, ${colorAlpha})`; // Orange half
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(0, -scaledSize * 0.5);
+            ctx.lineTo(0, scaledSize * 0.5);
+            ctx.lineTo(scaledSize * 0.4, 0);
+            ctx.closePath();
+            ctx.fillStyle = `rgba(100, 180, 255, ${colorAlpha})`; // Blue half
+            ctx.fill();
+            ctx.restore();
+          } else if (pirepType === 'turbulence') {
+            // Three horizontal wavy lines for turbulence
             ctx.strokeStyle = color;
             ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(-3, 0);
-            ctx.quadraticCurveTo(-1.5, -2, 0, 0);
-            ctx.quadraticCurveTo(1.5, 2, 3, 0);
-            ctx.stroke();
-          }
-          if (pirepType === 'icing') {
-            // Snowflake-ish symbol for icing
+            const waveY = [-2, 0, 2];
+            waveY.forEach((y) => {
+              const yScaled = y * innerScale;
+              ctx.beginPath();
+              ctx.moveTo(-3 * innerScale, yScaled);
+              ctx.quadraticCurveTo(-1.5 * innerScale, yScaled - 1.2 * innerScale, 0, yScaled);
+              ctx.quadraticCurveTo(1.5 * innerScale, yScaled + 1.2 * innerScale, 3 * innerScale, yScaled);
+              ctx.stroke();
+            });
+          } else if (pirepType === 'icing') {
+            // 6-arm asterisk/snowflake for icing
             ctx.strokeStyle = color;
             ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(0, -3);
-            ctx.lineTo(0, 3);
-            ctx.moveTo(-2.5, -1.5);
-            ctx.lineTo(2.5, 1.5);
-            ctx.moveTo(-2.5, 1.5);
-            ctx.lineTo(2.5, -1.5);
-            ctx.stroke();
-          }
-          if (pirepType === 'windshear') {
-            // Arrow-like symbol for wind shear
+            const armLen = 3 * innerScale;
+            for (let i = 0; i < 6; i++) {
+              const angle = (i * Math.PI) / 3;
+              ctx.beginPath();
+              ctx.moveTo(0, 0);
+              ctx.lineTo(Math.cos(angle) * armLen, Math.sin(angle) * armLen);
+              ctx.stroke();
+              // Add small branches on each arm
+              const branchLen = armLen * 0.4;
+              const branchDist = armLen * 0.6;
+              const bx = Math.cos(angle) * branchDist;
+              const by = Math.sin(angle) * branchDist;
+              ctx.beginPath();
+              ctx.moveTo(bx, by);
+              ctx.lineTo(bx + Math.cos(angle + 0.5) * branchLen, by + Math.sin(angle + 0.5) * branchLen);
+              ctx.moveTo(bx, by);
+              ctx.lineTo(bx + Math.cos(angle - 0.5) * branchLen, by + Math.sin(angle - 0.5) * branchLen);
+              ctx.stroke();
+            }
+          } else if (pirepType === 'windshear') {
+            // Vertical double-headed arrow for wind shear
             ctx.strokeStyle = color;
             ctx.lineWidth = 1.5;
+            const arrowLen = 3.5 * innerScale;
+            const arrowHead = 1.5 * innerScale;
+            // Vertical line
             ctx.beginPath();
-            ctx.moveTo(-3, 1);
-            ctx.lineTo(0, -2);
-            ctx.lineTo(3, 1);
+            ctx.moveTo(0, -arrowLen);
+            ctx.lineTo(0, arrowLen);
             ctx.stroke();
+            // Top arrow head
+            ctx.beginPath();
+            ctx.moveTo(-arrowHead, -arrowLen + arrowHead);
+            ctx.lineTo(0, -arrowLen);
+            ctx.lineTo(arrowHead, -arrowLen + arrowHead);
+            ctx.stroke();
+            // Bottom arrow head
+            ctx.beginPath();
+            ctx.moveTo(-arrowHead, arrowLen - arrowHead);
+            ctx.lineTo(0, arrowLen);
+            ctx.lineTo(arrowHead, arrowLen - arrowHead);
+            ctx.stroke();
+          }
+
+          // Altitude label below marker
+          const altLabel = formatPirepAltitude(pirep);
+          if (altLabel) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.7, ageOpacity * 0.8)})`;
+            ctx.font = '9px "JetBrains Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillText(altLabel, 0, scaledSize + 4);
           }
 
           ctx.restore();

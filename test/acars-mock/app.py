@@ -69,7 +69,8 @@ class Settings(BaseSettings):
 
     # Relay destination (your service)
     relay_host: str = "api"
-    relay_port: int | None = None
+    relay_port: int | None = None  # Port for ACARS messages (also default for other types)
+    relay_port_vdlm2: int | None = None  # Separate port for VDL2 messages (optional)
     relay_protocol: str = "udp"  # udp or tcp
 
     # Web interface
@@ -870,13 +871,20 @@ async def relay_message(msg: dict, msg_type: str):
     # Relay via TCP to connected clients
     await TCPRelayProtocol.broadcast(msg_type, msg_bytes.strip())
 
+    # Determine target port based on message type
+    # VDL2 messages use relay_port_vdlm2 if configured, otherwise fall back to relay_port
+    if msg_type == "vdlm2" and settings.relay_port_vdlm2:
+        target_port = settings.relay_port_vdlm2
+    else:
+        target_port = settings.relay_port
+
     # Relay to configured destination
-    if settings.relay_host and settings.relay_port:
+    if settings.relay_host and target_port:
         try:
             if settings.relay_protocol == "udp":
                 if relay_socket is None:
                     relay_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                relay_socket.sendto(msg_bytes, (settings.relay_host, settings.relay_port))
+                relay_socket.sendto(msg_bytes, (settings.relay_host, target_port))
             else:
                 # TCP relay (would need connection management)
                 pass

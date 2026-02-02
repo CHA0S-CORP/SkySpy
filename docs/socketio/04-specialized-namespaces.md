@@ -67,9 +67,13 @@ Monitor radio transmissions and receive real-time transcriptions from ATC feeds.
 }
 [/block]
 
-> 🚧 Permission Required
->
-> The audio namespace requires the `audio` topic/feature permission. Ensure your user or API key has this permission enabled.
+[block:callout]
+{
+  "type": "warning",
+  "title": "Permission Required",
+  "body": "The audio namespace requires the `audio` topic/feature permission. Ensure your user or API key has this permission enabled."
+}
+[/block]
 
 ### Audio Events
 
@@ -222,22 +226,17 @@ Mobile threat detection for real-time proximity alerts. Designed for mobile apps
 
 ### Cannonball Flow
 
-```mermaid
-sequenceDiagram
-    participant M as Mobile App
-    participant S as Server
-
-    M->>S: connect()
-    S->>M: session_started { session_id }
-
-    loop Location Updates
-        M->>S: position_update { lat, lon, heading? }
-        S->>M: threats { aircraft[], threat_level }
-    end
-
-    M->>S: set_radius { radius_nm }
-    S->>M: radius_updated { radius_nm }
-```
+[block:code]
+{
+  "codes": [
+    {
+      "code": "sequenceDiagram\n    participant M as Mobile App\n    participant S as Server\n\n    M->>S: connect()\n    S->>M: session_started { session_id }\n\n    loop Location Updates\n        M->>S: position_update { lat, lon, heading? }\n        S->>M: threats { aircraft[], threat_level }\n    end\n\n    M->>S: set_radius { radius_nm }\n    S->>M: radius_updated { radius_nm }",
+      "language": "mermaid",
+      "name": "Cannonball Flow"
+    }
+  ]
+}
+[/block]
 
 ### Client → Server Events
 
@@ -425,14 +424,20 @@ Optional dedicated namespace for ACARS-only clients. Use this if you only need d
 }
 [/block]
 
-> 💡 Main Namespace Alternative
->
-> You can also receive ACARS messages on the main namespace by subscribing to the `acars` topic. The dedicated `/acars` namespace is for clients that **only** need ACARS without other features.
+[block:callout]
+{
+  "type": "info",
+  "title": "Main Namespace Alternative",
+  "body": "You can also receive ACARS messages on the main namespace by subscribing to the `acars` topic. The dedicated `/acars` namespace is for clients that **only** need ACARS without other features."
+}
+[/block]
 
 ## Next Steps
 
-> 📘 Build Your Client
->
-> - [Client Implementation](/docs/socketio-client-implementation) - Complete examples for JavaScript and Python
-> - [Troubleshooting](/docs/socketio-troubleshooting) - Common issues and debugging tips
-> - [Main Namespace](/docs/socketio-main-namespace) - Aircraft tracking and safety monitoring
+[block:callout]
+{
+  "type": "info",
+  "title": "Build Your Client",
+  "body": "- [Client Implementation](/docs/socketio-client-implementation) - Complete examples for JavaScript and Python\n- [Troubleshooting](/docs/socketio-troubleshooting) - Common issues and debugging tips\n- [Main Namespace](/docs/socketio-main-namespace) - Aircraft tracking and safety monitoring"
+}
+[/block]

@@ -10,6 +10,13 @@ import (
 	"github.com/skyspy/skyspy-go/internal/config"
 )
 
+// Operating system constants
+const (
+	osDarwin  = "darwin"
+	osLinux   = "linux"
+	osWindows = "windows"
+)
+
 // AlertType represents the type of audio alert
 type AlertType int
 
@@ -134,14 +141,16 @@ func (p *AlertPlayer) playSound(alertType AlertType) {
 }
 
 // playPlatformSound attempts to play a sound file using platform-specific tools
+//
+//nolint:gosec // G204: soundPath is validated before use, not user-controllable
 func (p *AlertPlayer) playPlatformSound(soundPath string) bool {
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
-	case "darwin":
+	case osDarwin:
 		// macOS: use afplay
 		cmd = exec.Command("afplay", soundPath)
-	case "linux":
+	case osLinux:
 		// Linux: try paplay first (PulseAudio), then aplay (ALSA)
 		if _, err := exec.LookPath("paplay"); err == nil {
 			cmd = exec.Command("paplay", soundPath)
@@ -150,7 +159,7 @@ func (p *AlertPlayer) playPlatformSound(soundPath string) bool {
 		} else {
 			return false
 		}
-	case "windows":
+	case osWindows:
 		// Windows: use PowerShell to play sound
 		cmd = exec.Command("powershell", "-c",
 			"(New-Object Media.SoundPlayer '"+soundPath+"').PlaySync()")
@@ -177,10 +186,10 @@ func (p *AlertPlayer) playSystemBeep(frequency, durationMs int) bool {
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
-	case "darwin":
+	case osDarwin:
 		// macOS: use osascript to beep
 		cmd = exec.Command("osascript", "-e", "beep")
-	case "linux":
+	case osLinux:
 		// Linux: use beep command if available, or speaker-test
 		if _, err := exec.LookPath("beep"); err == nil {
 			cmd = exec.Command("beep", "-f", itoa(frequency), "-l", itoa(durationMs))
@@ -191,7 +200,7 @@ func (p *AlertPlayer) playSystemBeep(frequency, durationMs int) bool {
 		} else {
 			return false
 		}
-	case "windows":
+	case osWindows:
 		// Windows: use PowerShell to play a beep
 		cmd = exec.Command("powershell", "-c",
 			"[console]::beep("+itoa(frequency)+","+itoa(durationMs)+")")
