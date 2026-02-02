@@ -573,7 +573,7 @@ curl http://localhost:8000/api/v1/system/status/
 | [🔐 Authentication](./02-authentication.md) | Set up user authentication and OIDC/SSO | 🔑 |
 | [🔔 Alerts & Notifications](./03-alerts.md) | Advanced alert rules and notification setup | 📬 |
 | [📡 API Reference](./04-api-reference.md) | Complete REST API documentation | 🔌 |
-| [⚡ Socket.IO Guide](./05-websockets.md) | Real-time data streaming | 🌐 |
+| [⚡ Socket.IO Guide](./socketio/00-overview.md) | Real-time data streaming | 🌐 |
 | [📻 ACARS Integration](./06-acars.md) | Set up ACARS/VDL2 message decoding | 📡 |
 | [🎙️ Audio & Transcription](./07-audio.md) | Radio capture and AI transcription | 🔊 |
 | [🚀 Deployment](./08-deployment.md) | Production deployment best practices | ☁️ |

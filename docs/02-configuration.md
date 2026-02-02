@@ -1097,5 +1097,5 @@ Token is invalid or expired
 |:---------|:------------|
 | [Installation Guide](./01-installation.md) | Getting started with SkysPy |
 | [API Reference](./03-api-reference.md) | REST API documentation |
-| [Socket.IO Events](./04-websockets.md) | Real-time event reference |
+| [Socket.IO Events](./socketio/00-overview.md) | Real-time event reference |
 | [Deployment Guide](./05-deployment.md) | Production deployment |

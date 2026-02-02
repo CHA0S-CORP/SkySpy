@@ -1,11 +1,14 @@
 ---
-title: "Admin Configuration Management"
-slug: "admin-configuration"
-category: "operations"
-excerpt: "Manage runtime-editable system settings with full audit logging and environment variable override support"
-hidden: false
-createdAt: "2026-02-01T00:00:00.000Z"
-updatedAt: "2026-02-01T00:00:00.000Z"
+title: Admin Configuration Management
+slug: admin-configuration
+category:
+  uri: uri-that-does-not-map-to-operations
+content:
+  excerpt: >-
+    Manage runtime-editable system settings with full audit logging and
+    environment variable override support
+privacy:
+  view: public
 ---
 
 SkySpy's Admin Configuration Management system provides administrators with runtime-editable control over approximately 70 system settings across 12 functional categories. All configuration changes are stored in the database, fully audit-logged, and can be overridden by environment variables when needed.

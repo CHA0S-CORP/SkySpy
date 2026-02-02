@@ -114,7 +114,7 @@ export function useNotams(wsRequest, wsConnected, options = {}) {
         params.type = typeFilter;
       }
 
-      const response = await wsRequest('notams-list', params, 30000);
+      const response = await wsRequest('notam-snapshot', params, 30000);
 
       if (!mountedRef.current) return;
 

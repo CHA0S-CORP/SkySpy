@@ -2249,7 +2249,7 @@ Real-time data is available via **Socket.IO** (path `/socket.io`, default namesp
 - **Topics:** Subscribe after connect with `emit('subscribe', { topics: ['aircraft', 'safety', ...] })`. Use topic `all` for every stream.
 - **Events:** Server emits `aircraft:snapshot`, `aircraft:update`, `safety:event`, `alert:triggered`, `response`, `error`, etc.
 
-For full details, event shapes, request types, and namespaces (`/`, `/audio`, `/cannonball`), see the [Socket.IO API Reference](./06-websocket-api.md).
+For full details, event shapes, request types, and namespaces (`/`, `/audio`, `/cannonball`), see the [Socket.IO API Reference](./socketio/00-overview.md).
 
 ---
 
