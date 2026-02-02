@@ -225,11 +225,18 @@ issues:
         - gocritic
         - nolintlint
         - ineffassign
-    # Exclude govet shadow checks from test files (common pattern in test code)
+        - stylecheck
+        - revive
+    # Exclude govet shadow and unusedwrite checks from test files
     - path: _test\.go
-      text: "shadow:"
+      text: "shadow:|unusedwrite:"
       linters:
         - govet
+    # Exclude staticcheck SA4006 (unused value) from test files
+    - path: _test\.go
+      text: "SA4006:"
+      linters:
+        - staticcheck
 
     # Exclude linters from generated files
     - path: ".*\\.gen\\.go"

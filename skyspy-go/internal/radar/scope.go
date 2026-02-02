@@ -405,14 +405,15 @@ func (s *Scope) DrawTrails(trails map[string][]TrailPoint, receiverLat, receiver
 				if s.cells[y][x].char == ' ' || s.cells[y][x].char == '·' {
 					// Use different characters based on trail age
 					// Older points are more faded (use dots), newer points use small dots
-					char := '·'
-					if i < len(trail)/3 {
+					var char rune
+					switch {
+					case i < len(trail)/3:
 						// Oldest third - faintest
 						char = '·'
-					} else if i < 2*len(trail)/3 {
+					case i < 2*len(trail)/3:
 						// Middle third
 						char = '•'
-					} else {
+					default:
 						// Newest third (but not current position)
 						char = '∘'
 					}

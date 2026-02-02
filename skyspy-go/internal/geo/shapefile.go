@@ -131,8 +131,9 @@ func ParseShapefile(path string) (*GeoOverlay, error) {
 		}
 
 		// Read record header (big endian)
+		// Note: RecordNumber at offset is not used, only ContentLength
+		_ = binary.BigEndian.Uint32(data[offset : offset+4]) // skip record number
 		recHeader := recordHeader{
-			RecordNumber:  int32(binary.BigEndian.Uint32(data[offset : offset+4])),
 			ContentLength: int32(binary.BigEndian.Uint32(data[offset+4 : offset+8])),
 		}
 		offset += 8
