@@ -1,0 +1,542 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.2.3)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
+      draft:
+        description: 'Create as draft release'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  GO_VERSION: '1.22'
+  NODE_VERSION: '22'
+  PYTHON_VERSION: '3.12'
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
+
+jobs:
+  # ===========================================================================
+  # Validation
+  # ===========================================================================
+
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
+      version_tag: ${{ steps.validate.outputs.version_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate version format
+        id: validate
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+
+          # Ensure version starts with 'v'
+          if [[ ! "$VERSION" =~ ^v ]]; then
+            VERSION="v$VERSION"
+          fi
+
+          # Validate semantic versioning
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "Error: Version must follow semantic versioning (e.g., v1.2.3 or v1.2.3-beta.1)"
+            exit 1
+          fi
+
+          # Check if tag already exists
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+            echo "Error: Tag $VERSION already exists"
+            exit 1
+          fi
+
+          echo "version=${VERSION#v}" >> $GITHUB_OUTPUT
+          echo "version_tag=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release version: $VERSION"
+
+  # ===========================================================================
+  # Run Tests
+  # ===========================================================================
+
+  test-python:
+    name: Test Python
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: adsb
+          POSTGRES_PASSWORD: adsb
+          POSTGRES_DB: adsb_test
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 3s --health-retries 5
+        ports: ['5432:5432']
+      redis:
+        image: redis:7-alpine
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 5
+        ports: ['6379:6379']
+    env:
+      DJANGO_SETTINGS_MODULE: skyspy.tests.test_settings
+      DJANGO_SECRET_KEY: test-secret-key-for-ci
+      DATABASE_URL: postgresql://adsb:adsb@localhost:5432/adsb_test
+      REDIS_URL: redis://localhost:6379/0
+      FEEDER_LAT: '48.6969'
+      FEEDER_LON: '-122.6767'
+      SAFETY_MONITORING_ENABLED: 'true'
+      PHOTO_CACHE_ENABLED: 'false'
+      S3_ENABLED: 'false'
+      WHISPER_ENABLED: 'false'
+      TRANSCRIPTION_ENABLED: 'false'
+      OPENSKY_DB_ENABLED: 'false'
+      LLM_ENABLED: 'false'
+      PROMETHEUS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v5
+      - name: Install and test
+        working-directory: skyspy_django
+        run: |
+          uv venv
+          uv pip install -r requirements.txt
+          uv pip install pytest pytest-cov pytest-django pytest-asyncio
+          uv pip install -e ../skyspy_common
+          source .venv/bin/activate
+          python manage.py migrate --noinput
+          pytest -v --tb=short --ignore=skyspy/tests/e2e --ignore=skyspy/tests/integration
+
+  test-go:
+    name: Test Go
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: skyspy-go/go.sum
+      - name: Run tests
+        working-directory: skyspy-go
+        run: go test -v -race ./...
+
+  test-frontend:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run test:unit
+        working-directory: web
+
+  # ===========================================================================
+  # Build Go Binaries (6 platforms)
+  # ===========================================================================
+
+  build-go:
+    name: Build Go (${{ matrix.goos }}-${{ matrix.goarch }})
+    runs-on: ubuntu-latest
+    needs: [validate, test-go]
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          - goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+          - goos: windows
+            goarch: amd64
+            suffix: windows-amd64
+            extension: .exe
+          - goos: windows
+            goarch: arm64
+            suffix: windows-arm64
+            extension: .exe
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: skyspy-go/go.sum
+
+      - name: Build binary
+        working-directory: skyspy-go
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          COMMIT=$(git rev-parse --short HEAD)
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          BINARY_NAME="skyspy-${{ matrix.suffix }}${{ matrix.extension }}"
+
+          go build -trimpath \
+            -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME}" \
+            -o "../dist/${BINARY_NAME}" \
+            ./cmd/skyspy
+
+          echo "Built: dist/${BINARY_NAME}"
+
+      - name: Create checksum
+        run: |
+          cd dist
+          sha256sum "skyspy-${{ matrix.suffix }}${{ matrix.extension }}" > "skyspy-${{ matrix.suffix }}${{ matrix.extension }}.sha256"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: skyspy-${{ matrix.suffix }}
+          path: |
+            dist/skyspy-${{ matrix.suffix }}${{ matrix.extension }}
+            dist/skyspy-${{ matrix.suffix }}${{ matrix.extension }}.sha256
+          retention-days: 1
+
+  # ===========================================================================
+  # Build Docker Images (multi-platform)
+  # ===========================================================================
+
+  build-docker:
+    name: Build Docker (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    needs: [validate, test-python, test-frontend]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: API
+            dockerfile: Dockerfile
+            image-suffix: ""
+            context: .
+          - name: rtl-airband-uploader
+            dockerfile: rtl-airband-uploader/Dockerfile
+            image-suffix: -rtl-airband-uploader
+            context: rtl-airband-uploader
+          - name: 1090 Mock
+            dockerfile: test/mock-1090/Dockerfile
+            image-suffix: -1090-mock
+            context: test/mock-1090
+          - name: ACARS Mock
+            dockerfile: test/acars-mock/Dockerfile
+            image-suffix: -acarshub-mock
+            context: test/acars-mock
+    outputs:
+      api-digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Docker tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image-suffix }}
+          tags: |
+            type=raw,value=${{ needs.validate.outputs.version_tag }}
+            type=raw,value=${{ needs.validate.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.validate.outputs.version_tag }}
+            type=semver,pattern={{major}},value=${{ needs.validate.outputs.version_tag }}
+            type=raw,value=latest,enable=${{ github.event.inputs.prerelease == 'false' }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          sbom: true
+          provenance: true
+          build-args: |
+            VERSION=${{ needs.validate.outputs.version }}
+            COMMIT=${{ github.sha }}
+            BUILD_TIME=${{ github.event.repository.updated_at }}
+
+      - name: Attest Docker image
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image-suffix }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  # ===========================================================================
+  # Attest Go Binaries
+  # ===========================================================================
+
+  attest-binaries:
+    name: Attest Go Binaries
+    runs-on: ubuntu-latest
+    needs: [validate, build-go]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: skyspy-*
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la dist/
+
+      - name: Attest linux-amd64
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/skyspy-linux-amd64
+
+      - name: Attest linux-arm64
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/skyspy-linux-arm64
+
+      - name: Attest darwin-amd64
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/skyspy-darwin-amd64
+
+      - name: Attest darwin-arm64
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/skyspy-darwin-arm64
+
+      - name: Attest windows-amd64
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/skyspy-windows-amd64.exe
+
+      - name: Attest windows-arm64
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/skyspy-windows-arm64.exe
+
+  # ===========================================================================
+  # Create GitHub Release
+  # ===========================================================================
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [validate, build-go, build-docker, attest-binaries]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: skyspy-*
+          merge-multiple: true
+
+      - name: List release artifacts
+        run: ls -la dist/
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          VERSION="${{ needs.validate.outputs.version_tag }}"
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          cat > release-notes.md << 'RELEASE_HEADER'
+          ## SkySpy ${{ needs.validate.outputs.version_tag }}
+
+          Real-time ADS-B aircraft tracking platform with safety monitoring, custom alerts, and push notifications.
+
+          ### What's New
+
+          RELEASE_HEADER
+
+          # Add commit history if there's a previous tag
+          if [ -n "$PREV_TAG" ]; then
+            echo "#### Changes since ${PREV_TAG}" >> release-notes.md
+            echo "" >> release-notes.md
+            git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges >> release-notes.md
+            echo "" >> release-notes.md
+          fi
+
+          cat >> release-notes.md << 'RELEASE_BODY'
+
+          ---
+
+          ### Installation
+
+          #### Docker (Recommended)
+
+          ```bash
+          # Pull the latest images
+          docker pull ghcr.io/${{ github.repository }}:${{ needs.validate.outputs.version_tag }}
+
+          # Or use docker-compose
+          curl -O https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose.yml
+          docker compose up -d
+          ```
+
+          #### Go CLI (skyspy-go)
+
+          Download the appropriate binary for your platform:
+
+          | Platform | Architecture | Download |
+          |----------|--------------|----------|
+          | Linux | x64 (amd64) | `skyspy-linux-amd64` |
+          | Linux | ARM64 | `skyspy-linux-arm64` |
+          | macOS | x64 (Intel) | `skyspy-darwin-amd64` |
+          | macOS | ARM64 (Apple Silicon) | `skyspy-darwin-arm64` |
+          | Windows | x64 (amd64) | `skyspy-windows-amd64.exe` |
+          | Windows | ARM64 | `skyspy-windows-arm64.exe` |
+
+          ```bash
+          # Linux/macOS example
+          chmod +x skyspy-linux-amd64
+          ./skyspy-linux-amd64 --help
+
+          # Windows example (PowerShell)
+          .\skyspy-windows-amd64.exe --help
+          ```
+
+          ---
+
+          ### Verification
+
+          All release artifacts include SHA256 checksums and build attestations for supply chain security.
+
+          #### Verify Go binary checksums
+
+          ```bash
+          # Linux/macOS
+          sha256sum -c skyspy-linux-amd64.sha256
+
+          # Windows (PowerShell)
+          Get-FileHash skyspy-windows-amd64.exe -Algorithm SHA256
+          ```
+
+          #### Verify attestations
+
+          ```bash
+          # Verify Go binary attestation
+          gh attestation verify skyspy-linux-amd64 --repo ${{ github.repository }}
+
+          # Verify Docker image attestation
+          gh attestation verify oci://ghcr.io/${{ github.repository }}:${{ needs.validate.outputs.version_tag }} --repo ${{ github.repository }}
+          ```
+
+          ---
+
+          ### Docker Images
+
+          All images support `linux/amd64` and `linux/arm64` architectures.
+
+          | Image | Description |
+          |-------|-------------|
+          | `ghcr.io/${{ github.repository }}:${{ needs.validate.outputs.version_tag }}` | Main API server |
+          | `ghcr.io/${{ github.repository }}-rtl-airband-uploader:${{ needs.validate.outputs.version_tag }}` | RTL-Airband uploader |
+          | `ghcr.io/${{ github.repository }}-1090-mock:${{ needs.validate.outputs.version_tag }}` | 1090MHz mock server (testing) |
+          | `ghcr.io/${{ github.repository }}-acarshub-mock:${{ needs.validate.outputs.version_tag }}` | ACARS mock server (testing) |
+
+          ---
+
+          ### System Requirements
+
+          - **Backend**: Python 3.12+, PostgreSQL 16+, Redis 7+
+          - **Frontend**: Node.js 22+
+          - **Go CLI**: Go 1.22+ (for building from source)
+          - **Docker**: Docker 24+ with Compose v2
+
+          ---
+
+          ### Documentation
+
+          - [Getting Started](https://skyspy.readme.io/docs/getting-started)
+          - [API Reference](https://skyspy.readme.io/reference)
+          - [Configuration Guide](https://skyspy.readme.io/docs/configuration)
+
+          RELEASE_BODY
+
+          echo "Generated release notes:"
+          cat release-notes.md
+
+      - name: Create git tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ needs.validate.outputs.version_tag }}" -m "Release ${{ needs.validate.outputs.version_tag }}"
+          git push origin "${{ needs.validate.outputs.version_tag }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.validate.outputs.version_tag }}
+          name: SkySpy ${{ needs.validate.outputs.version_tag }}
+          body_path: release-notes.md
+          draft: ${{ github.event.inputs.draft }}
+          prerelease: ${{ github.event.inputs.prerelease }}
+          files: |
+            dist/skyspy-linux-amd64
+            dist/skyspy-linux-amd64.sha256
+            dist/skyspy-linux-arm64
+            dist/skyspy-linux-arm64.sha256
+            dist/skyspy-darwin-amd64
+            dist/skyspy-darwin-amd64.sha256
+            dist/skyspy-darwin-arm64
+            dist/skyspy-darwin-arm64.sha256
+            dist/skyspy-windows-amd64.exe
+            dist/skyspy-windows-amd64.exe.sha256
+            dist/skyspy-windows-arm64.exe
+            dist/skyspy-windows-arm64.exe.sha256
+          fail_on_unmatched_files: true
+          generate_release_notes: false

@@ -7,9 +7,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/spf13/cobra"
 	"github.com/skyspy/skyspy-go/internal/auth"
 	"github.com/skyspy/skyspy-go/internal/config"
+	"github.com/spf13/cobra"
 )
 
 var authCmd = &cobra.Command{
@@ -55,7 +55,9 @@ Examples:
 	RunE: runStatus,
 }
 
-func init() {
+// RegisterAuthCommands sets up the auth command hierarchy.
+// Call this from the main command initialization.
+func RegisterAuthCommands() {
 	// Add subcommands to auth
 	authCmd.AddCommand(statusCmd)
 
@@ -128,7 +130,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-sigCh
-		fmt.Println("\n⚠ Authentication cancelled")
+		fmt.Println("\n⚠ Authentication canceled")
 		cancel()
 	}()
 
@@ -230,7 +232,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	// Current auth status
 	fmt.Println("Authentication Status:")
-	authType := info["auth_type"].(string)
+	authType, _ := info["auth_type"].(string)
 
 	switch authType {
 	case "oidc":
@@ -241,9 +243,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		if expiresAt := info["expires_at"]; expiresAt != nil {
 			fmt.Printf("  Token Expires: %s\n", expiresAt)
 		}
-		if expired := info["expired"]; expired != nil && expired.(bool) {
+		if expired, ok := info["expired"].(bool); ok && expired {
 			fmt.Printf("  ⚠ Token is expired\n")
-			if hasRefresh := info["has_refresh_token"]; hasRefresh != nil && hasRefresh.(bool) {
+			if hasRefresh, ok := info["has_refresh_token"].(bool); ok && hasRefresh {
 				fmt.Printf("  Token will be refreshed on next request\n")
 			}
 		}

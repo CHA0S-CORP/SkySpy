@@ -16,9 +16,9 @@ var authTestPortCounter int32 = 50000
 func getTestPort() int {
 	// Try to find an available port
 	for i := 0; i < 100; i++ {
-		port := int(atomic.AddInt32(&authTestPortCounter, 1))
-		if isTestPortAvailable(port) {
-			return port
+		testPort := int(atomic.AddInt32(&authTestPortCounter, 1))
+		if isTestPortAvailable(testPort) {
+			return testPort
 		}
 	}
 	// Fallback
@@ -668,6 +668,8 @@ func TestAuthFlagsAreInherited(t *testing.T) {
 
 	// These commands should have access to host/port through persistent flags
 	// Note: The actual flag lookup depends on command registration
+	// Log the flag status for verification
+	t.Logf("loginHostFlag: %v, loginPortFlag: %v", loginHostFlag, loginPortFlag)
 }
 
 // TestAuthCommandUse tests the Use field of auth commands

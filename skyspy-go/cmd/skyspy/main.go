@@ -72,6 +72,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&noAudio, "no-audio", false, "Disable audio alerts")
 
 	// Add subcommands
+	RegisterAuthCommands() // Sets up auth command hierarchy
 	rootCmd.AddCommand(loginCmd)
 	rootCmd.AddCommand(logoutCmd)
 	rootCmd.AddCommand(authCmd)

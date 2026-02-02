@@ -66,7 +66,7 @@ def calculate_distance_nm(lat1, lon1, lat2, lon2):
         )
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
         return 3440.065 * c
-    except:
+    except (ValueError, TypeError):
         return 0
 
 
@@ -231,7 +231,7 @@ def transform_adsbx_to_readsb(adsbx_ac):
     else:
         try:
             alt_val = int(alt)
-        except:
+        except (ValueError, TypeError):
             alt_val = 0
 
     return {
