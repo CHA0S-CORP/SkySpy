@@ -198,34 +198,39 @@ func ParseFloat(s string) float64 {
 	var result float64
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		if c >= '0' && c <= '9' {
+		switch {
+		case c >= '0' && c <= '9':
 			result = result*10 + float64(c-'0')
-		} else if c == '.' {
+		case c == '.':
 			// Parse decimal part
 			decimal := 0.1
 			for j := i + 1; j < len(s); j++ {
-				c := s[j]
-				if c >= '0' && c <= '9' {
-					result += float64(c-'0') * decimal
+				ch := s[j]
+				if ch >= '0' && ch <= '9' {
+					result += float64(ch-'0') * decimal
 					decimal *= 0.1
 				} else {
 					break
 				}
 			}
-			break
-		} else if c == '-' && i == 0 {
+			return result * negMultiplier(s)
+		case c == '-' && i == 0:
 			// Negative number handled at end
 			continue
-		} else {
+		default:
 			break
 		}
 	}
 
-	if s != "" && s[0] == '-' {
-		result = -result
-	}
+	return result * negMultiplier(s)
+}
 
-	return result
+// negMultiplier returns -1 if string starts with '-', 1 otherwise
+func negMultiplier(s string) float64 {
+	if s != "" && s[0] == '-' {
+		return -1
+	}
+	return 1
 }
 
 // ParseInt parses a string to int, returns 0 on error
@@ -235,12 +240,16 @@ func ParseInt(s string) int {
 
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		if c >= '0' && c <= '9' {
+		switch {
+		case c >= '0' && c <= '9':
 			result = result*10 + int(c-'0')
-		} else if c == '-' && i == 0 {
+		case c == '-' && i == 0:
 			negative = true
-		} else {
-			break
+		default:
+			if negative {
+				return -result
+			}
+			return result
 		}
 	}
 

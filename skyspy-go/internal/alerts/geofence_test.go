@@ -633,7 +633,8 @@ func TestLoadGeofenceFromGeoJSONWithTildeExpansion(t *testing.T) {
 
 	// Test with tilde path
 	homeTestFile := home + "/.skyspy_test_geojson.json"
-	if err := os.WriteFile(homeTestFile, []byte(`{"type": "Point", "coordinates": [0, 0]}`), 0o644); err != nil {
+	err = os.WriteFile(homeTestFile, []byte(`{"type": "Point", "coordinates": [0, 0]}`), 0o644)
+	if err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 	defer os.Remove(homeTestFile)
