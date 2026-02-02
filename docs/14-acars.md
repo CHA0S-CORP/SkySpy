@@ -102,7 +102,7 @@ flowchart TB
 
     subgraph Storage["💾 Storage & Delivery"]
         DB[(PostgreSQL)]
-        WS[WebSocket<br/>Broadcast]
+        WS[Socket.IO<br/>Broadcast]
         API[REST API]
     end
 
