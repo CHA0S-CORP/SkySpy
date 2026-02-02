@@ -113,9 +113,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: |
+      - name: Run security scans
+        run: |
           uv tool run bandit -r skyspy_django skyspy_common -x "*/tests/*,*/test_*" -ll -ii
-          uv tool run pip-audit --requirement skyspy_django/requirements.txt --ignore-vuln PYSEC-2024-48
+          # Filter out editable installs (-e) which pip-audit can't resolve in CI
+          grep -v '^-e ' skyspy_django/requirements.txt > /tmp/requirements-audit.txt
+          uv tool run pip-audit --requirement /tmp/requirements-audit.txt --ignore-vuln PYSEC-2024-48
 
   security-frontend:
     name: Security Frontend

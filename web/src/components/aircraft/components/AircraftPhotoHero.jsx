@@ -12,10 +12,14 @@ export function AircraftPhotoHero({
   photoStatus,
   onPhotoLoad,
   onPhotoError,
-  onRetry
+  onRetry,
 }) {
   return (
-    <div className="detail-photo" role="img" aria-label={`Photo of aircraft ${info?.registration || hex}`}>
+    <div
+      className="detail-photo"
+      role="img"
+      aria-label={`Photo of aircraft ${info?.registration || hex}`}
+    >
       {/* Loading state with aircraft silhouette watermark */}
       {photoState === 'loading' && (
         <div className="photo-loading">
@@ -40,11 +44,7 @@ export function AircraftPhotoHero({
         <div className="photo-error">
           <Camera size={48} aria-hidden="true" />
           <span>No photo available</span>
-          <button
-            className="photo-retry-btn"
-            onClick={onRetry}
-            aria-label="Retry loading photo"
-          >
+          <button className="photo-retry-btn" onClick={onRetry} aria-label="Retry loading photo">
             <RefreshCw size={14} aria-hidden="true" /> Retry
           </button>
         </div>
@@ -62,19 +62,15 @@ export function AircraftPhotoHero({
             style={{
               opacity: photoState === 'loaded' ? 1 : 0,
               position: photoState !== 'loaded' ? 'absolute' : 'relative',
-              pointerEvents: photoState !== 'loaded' ? 'none' : 'auto'
+              pointerEvents: photoState !== 'loaded' ? 'none' : 'auto',
             }}
           />
           {/* Glass-morphism overlay card at bottom */}
           {photoState === 'loaded' && (
             <div className="photo-overlay-card">
               <div className="photo-overlay-stats">
-                {info?.type_name && (
-                  <span className="photo-stat-type">{info.type_name}</span>
-                )}
-                {info?.operator && (
-                  <span className="photo-stat-operator">{info.operator}</span>
-                )}
+                {info?.type_name && <span className="photo-stat-type">{info.type_name}</span>}
+                {info?.operator && <span className="photo-stat-operator">{info.operator}</span>}
               </div>
             </div>
           )}
@@ -84,7 +80,8 @@ export function AircraftPhotoHero({
       {/* Photo credit - moved to top-left for loaded state */}
       {photoState === 'loaded' && photoInfo?.photographer && (
         <span className="photo-credit">
-          <Camera size={10} aria-hidden="true" /> {photoInfo.photographer} via {photoInfo.source || 'planespotters.net'}
+          <Camera size={10} aria-hidden="true" /> {photoInfo.photographer} via{' '}
+          {photoInfo.source || 'planespotters.net'}
         </span>
       )}
 

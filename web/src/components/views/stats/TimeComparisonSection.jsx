@@ -1,8 +1,16 @@
 import React, { useMemo } from 'react';
 import {
-  Calendar, TrendingUp, TrendingDown, Sun, Moon,
-  ArrowUpRight, ArrowDownRight, Minus, BarChart2,
-  Clock, Loader2
+  Calendar,
+  TrendingUp,
+  TrendingDown,
+  Sun,
+  Moon,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
+  BarChart2,
+  Clock,
+  Loader2,
 } from 'lucide-react';
 
 /**
@@ -17,33 +25,30 @@ export function TimeComparisonSection({ data, loading }) {
     week_over_week = {},
     day_night_ratio = {},
     weekend_weekday = {},
-    trends = {}
+    trends = {},
   } = data || {};
 
   // Normalize trend data for chart
   const normalizeTrendData = (trendData, maxPoints) => {
     if (!trendData || trendData.length === 0) return [];
     const slicedData = trendData.slice(-maxPoints);
-    const max = Math.max(...slicedData.map(d => d.value || 0), 1);
-    return slicedData.map(d => ({
+    const max = Math.max(...slicedData.map((d) => d.value || 0), 1);
+    return slicedData.map((d) => ({
       ...d,
-      normalized: ((d.value || 0) / max) * 100
+      normalized: ((d.value || 0) / max) * 100,
     }));
   };
 
   // Trend memos - must be called before any conditional returns
-  const thirtyDayTrend = useMemo(() =>
-    normalizeTrendData(trends.daily_30, 30),
-    [trends.daily_30]
-  );
+  const thirtyDayTrend = useMemo(() => normalizeTrendData(trends.daily_30, 30), [trends.daily_30]);
 
-  const twelveWeekTrend = useMemo(() =>
-    normalizeTrendData(trends.weekly_12, 12),
+  const twelveWeekTrend = useMemo(
+    () => normalizeTrendData(trends.weekly_12, 12),
     [trends.weekly_12]
   );
 
-  const twelveMonthTrend = useMemo(() =>
-    normalizeTrendData(trends.monthly_12, 12),
+  const twelveMonthTrend = useMemo(
+    () => normalizeTrendData(trends.monthly_12, 12),
     [trends.monthly_12]
   );
 
@@ -84,26 +89,30 @@ export function TimeComparisonSection({ data, loading }) {
       label: 'Total Aircraft',
       current: week_over_week.current_total ?? '--',
       previous: week_over_week.previous_total ?? '--',
-      change: week_over_week.total_change_pct ?? 0
+      change: week_over_week.total_change_pct ?? 0,
     },
     {
       label: 'Unique Types',
       current: week_over_week.current_types ?? '--',
       previous: week_over_week.previous_types ?? '--',
-      change: week_over_week.types_change_pct ?? 0
+      change: week_over_week.types_change_pct ?? 0,
     },
     {
       label: 'Peak Concurrent',
       current: week_over_week.current_peak ?? '--',
       previous: week_over_week.previous_peak ?? '--',
-      change: week_over_week.peak_change_pct ?? 0
+      change: week_over_week.peak_change_pct ?? 0,
     },
     {
       label: 'Avg Duration',
-      current: week_over_week.current_avg_duration ? `${week_over_week.current_avg_duration.toFixed(0)}m` : '--',
-      previous: week_over_week.previous_avg_duration ? `${week_over_week.previous_avg_duration.toFixed(0)}m` : '--',
-      change: week_over_week.duration_change_pct ?? 0
-    }
+      current: week_over_week.current_avg_duration
+        ? `${week_over_week.current_avg_duration.toFixed(0)}m`
+        : '--',
+      previous: week_over_week.previous_avg_duration
+        ? `${week_over_week.previous_avg_duration.toFixed(0)}m`
+        : '--',
+      change: week_over_week.duration_change_pct ?? 0,
+    },
   ];
 
   // Day/Night data
@@ -215,7 +224,7 @@ export function TimeComparisonSection({ data, loading }) {
                   <div
                     className="weekend-bar-fill weekday"
                     style={{
-                      width: `${Math.min((weekdayAvg / Math.max(weekdayAvg, weekendAvg, 1)) * 100, 100)}%`
+                      width: `${Math.min((weekdayAvg / Math.max(weekdayAvg, weekendAvg, 1)) * 100, 100)}%`,
                     }}
                   />
                 </div>
@@ -227,7 +236,7 @@ export function TimeComparisonSection({ data, loading }) {
                   <div
                     className="weekend-bar-fill weekend"
                     style={{
-                      width: `${Math.min((weekendAvg / Math.max(weekdayAvg, weekendAvg, 1)) * 100, 100)}%`
+                      width: `${Math.min((weekendAvg / Math.max(weekdayAvg, weekendAvg, 1)) * 100, 100)}%`,
                     }}
                   />
                 </div>
@@ -305,9 +314,11 @@ export function TimeComparisonSection({ data, loading }) {
               </div>
             )}
 
-            {thirtyDayTrend.length === 0 && twelveWeekTrend.length === 0 && twelveMonthTrend.length === 0 && (
-              <div className="empty-state">No trend data available</div>
-            )}
+            {thirtyDayTrend.length === 0 &&
+              twelveWeekTrend.length === 0 &&
+              twelveMonthTrend.length === 0 && (
+                <div className="empty-state">No trend data available</div>
+              )}
           </div>
         </div>
       </div>

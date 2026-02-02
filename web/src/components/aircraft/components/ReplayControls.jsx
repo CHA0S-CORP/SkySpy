@@ -18,7 +18,7 @@ export function ReplayControls({
   showSpeedControl = true,
   showTrackPointsControl = false,
   showLiveModeControl = false,
-  className = ''
+  className = '',
 }) {
   return (
     <div className={`replay-controls ${className}`}>
@@ -129,7 +129,7 @@ export function ReplayControlsCompact({
   onPositionChange,
   speed,
   onSpeedChange,
-  eventLabel = 'Event'
+  eventLabel = 'Event',
 }) {
   return (
     <div className="safety-replay-controls">

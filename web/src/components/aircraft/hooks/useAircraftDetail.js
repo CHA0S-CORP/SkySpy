@@ -20,7 +20,11 @@ const safeJson = async (res) => {
   if (!res.ok) return null;
   const ct = res.headers.get('content-type');
   if (!ct || !ct.includes('application/json')) return null;
-  try { return await res.json(); } catch { return null; }
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
 };
 
 /**
@@ -36,7 +40,7 @@ export function useAircraftDetail({
   wsRequest,
   wsConnected,
   initialTab,
-  onTabChange
+  onTabChange,
 }) {
   const baseUrl = (apiUrl || '').replace(/\/$/, ''); // Strip trailing slash
 
@@ -56,7 +60,7 @@ export function useAircraftDetail({
 
   // Callback for when tabs are loaded
   const handleTabLoaded = useCallback((tabName) => {
-    setLoadedTabs(prev => ({ ...prev, [tabName]: true }));
+    setLoadedTabs((prev) => ({ ...prev, [tabName]: true }));
   }, []);
 
   // Photo hook - destructure stable callbacks to avoid infinite loops in useEffect deps
@@ -110,10 +114,13 @@ export function useAircraftDetail({
   });
 
   // Tab management
-  const setActiveTab = useCallback((tab) => {
-    setActiveTabState(tab);
-    if (onTabChange) onTabChange(tab);
-  }, [onTabChange]);
+  const setActiveTab = useCallback(
+    (tab) => {
+      setActiveTabState(tab);
+      if (onTabChange) onTabChange(tab);
+    },
+    [onTabChange]
+  );
 
   // Sync with initialTab prop changes
   useEffect(() => {
@@ -154,17 +161,20 @@ export function useAircraftDetail({
   }, [hex, activeTab, aircraft?.flight]);
 
   // Calculate distance from feeder
-  const calculateDistance = useCallback((ac) => {
-    if (!ac?.lat || !ac?.lon) return null;
-    if (ac.distance_nm !== undefined) return ac.distance_nm;
-    if (ac.r_dst !== undefined) return ac.r_dst;
-    const feederLat = feederLocation?.lat;
-    const feederLon = feederLocation?.lon;
-    if (!feederLat || !feederLon) return null;
-    const dLat = (ac.lat - feederLat) * 60;
-    const dLon = (ac.lon - feederLon) * 60 * Math.cos(feederLat * Math.PI / 180);
-    return Math.sqrt(dLat * dLat + dLon * dLon);
-  }, [feederLocation]);
+  const calculateDistance = useCallback(
+    (ac) => {
+      if (!ac?.lat || !ac?.lon) return null;
+      if (ac.distance_nm !== undefined) return ac.distance_nm;
+      if (ac.r_dst !== undefined) return ac.r_dst;
+      const feederLat = feederLocation?.lat;
+      const feederLon = feederLocation?.lon;
+      if (!feederLat || !feederLon) return null;
+      const dLat = (ac.lat - feederLat) * 60;
+      const dLon = (ac.lon - feederLon) * 60 * Math.cos((feederLat * Math.PI) / 180);
+      return Math.sqrt(dLat * dLat + dLon * dLon);
+    },
+    [feederLocation]
+  );
 
   // Load info on mount
   useEffect(() => {
@@ -178,14 +188,14 @@ export function useAircraftDetail({
           let infoData = null;
           // Try airframes endpoint first (includes photo data)
           let infoRes = await fetch(`${baseUrl}/api/v1/airframes/${hex}/`, {
-            signal: abortController.signal
+            signal: abortController.signal,
           });
           infoData = await safeJson(infoRes);
 
           // If airframes not found, try lookup endpoint
           if (!infoData || infoData.error || infoRes.status === 404) {
             infoRes = await fetch(`${baseUrl}/api/v1/lookup/aircraft/${hex}`, {
-              signal: abortController.signal
+              signal: abortController.signal,
             });
             infoData = await safeJson(infoRes);
           }
@@ -194,7 +204,7 @@ export function useAircraftDetail({
           if (!infoData || !infoData.registration) {
             try {
               const openskRes = await fetch(`${baseUrl}/api/v1/lookup/opensky/${hex}`, {
-                signal: abortController.signal
+                signal: abortController.signal,
               });
               const openskyData = await safeJson(openskRes);
               if (openskyData && !openskyData.error) {
@@ -231,11 +241,14 @@ export function useAircraftDetail({
       } catch (err) {
         if (err.name === 'AbortError') return;
         console.error('Aircraft detail fetch error:', err);
-        setError({ message: 'Failed to load aircraft details. Please try again.', originalError: err });
+        setError({
+          message: 'Failed to load aircraft details. Please try again.',
+          originalError: err,
+        });
       }
       if (!abortController.signal.aborted) {
         setLoading(false);
-        setLoadedTabs(prev => ({ ...prev, info: true }));
+        setLoadedTabs((prev) => ({ ...prev, info: true }));
       }
     };
     fetchInfoAndPhoto();

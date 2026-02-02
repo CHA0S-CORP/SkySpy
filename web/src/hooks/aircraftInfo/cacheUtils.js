@@ -41,9 +41,7 @@ export function cleanupCache(cacheObj, cacheTTL, maxSize = MAX_CACHE_SIZE) {
   const entries = Object.entries(cacheObj);
 
   // First pass: remove expired entries
-  let validEntries = entries.filter(([, entry]) =>
-    now - entry.fetchedAt < cacheTTL * 2
-  );
+  let validEntries = entries.filter(([, entry]) => now - entry.fetchedAt < cacheTTL * 2);
 
   // Second pass: LRU eviction if still over max size
   if (validEntries.length > maxSize) {

@@ -60,7 +60,9 @@ export function NavaidPopup({
 
         <div className="detail-row">
           <span>Position</span>
-          <span>{navaid.lat?.toFixed(4)}°, {navaid.lon?.toFixed(4)}°</span>
+          <span>
+            {navaid.lat?.toFixed(4)}°, {navaid.lon?.toFixed(4)}°
+          </span>
         </div>
 
         {navaid.elev && (

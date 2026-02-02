@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react';
 import { ChevronDown, ChevronUp, X, Trash2, Radio, Clock, List } from 'lucide-react';
-import { getGlobalAudioState, subscribeToAudioStateChanges, removeFromQueue, clearQueue, reorderQueue } from '../views/AudioView';
+import {
+  getGlobalAudioState,
+  subscribeToAudioStateChanges,
+  removeFromQueue,
+  clearQueue,
+  reorderQueue,
+} from '../views/AudioView';
 
 export function AudioQueue({ isExpanded, onToggleExpanded }) {
   const [queue, setQueue] = useState([]);
@@ -58,7 +64,7 @@ export function AudioQueue({ isExpanded, onToggleExpanded }) {
     if (!transmission.identified_airframes || transmission.identified_airframes.length === 0) {
       return null;
     }
-    return transmission.identified_airframes.map(af => af.callsign).join(', ');
+    return transmission.identified_airframes.map((af) => af.callsign).join(', ');
   };
 
   return (
@@ -72,9 +78,7 @@ export function AudioQueue({ isExpanded, onToggleExpanded }) {
         <div className="queue-header-left">
           <List size={14} />
           <span className="queue-title">Queue</span>
-          {queue.length > 0 && (
-            <span className="queue-count">{queue.length}</span>
-          )}
+          {queue.length > 0 && <span className="queue-count">{queue.length}</span>}
         </div>
         <div className="queue-header-right">
           {isExpanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
@@ -87,7 +91,9 @@ export function AudioQueue({ isExpanded, onToggleExpanded }) {
             <div className="queue-empty">
               <Radio size={20} />
               <span>Queue is empty</span>
-              <span className="queue-empty-hint">New transmissions will appear here when autoplay is enabled</span>
+              <span className="queue-empty-hint">
+                New transmissions will appear here when autoplay is enabled
+              </span>
             </div>
           ) : (
             <>
@@ -134,10 +140,14 @@ export function AudioQueue({ isExpanded, onToggleExpanded }) {
                           {callsigns ? (
                             <span className="queue-item-callsign">{callsigns}</span>
                           ) : (
-                            <span className="queue-item-channel">{transmission.channel_name || 'Unknown'}</span>
+                            <span className="queue-item-channel">
+                              {transmission.channel_name || 'Unknown'}
+                            </span>
                           )}
                           {callsigns && (
-                            <span className="queue-item-channel-small">{transmission.channel_name}</span>
+                            <span className="queue-item-channel-small">
+                              {transmission.channel_name}
+                            </span>
                           )}
                         </div>
                         <div className="queue-item-meta">
@@ -145,7 +155,9 @@ export function AudioQueue({ isExpanded, onToggleExpanded }) {
                             <Clock size={10} />
                             {formatDuration(transmission.duration_seconds)}
                           </span>
-                          <span className="queue-item-time">{formatTime(transmission.created_at)}</span>
+                          <span className="queue-item-time">
+                            {formatTime(transmission.created_at)}
+                          </span>
                         </div>
                       </div>
                       <button

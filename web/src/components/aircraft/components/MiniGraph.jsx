@@ -16,12 +16,12 @@ export function MiniGraph({
   onDragEnd,
   onResetZoom,
   width = 200,
-  height = 40
+  height = 40,
 }) {
   if (!data || data.length < 2) return null;
 
   const ordered = [...data].reverse();
-  const values = ordered.map(p => p[dataKey]).filter(v => v != null);
+  const values = ordered.map((p) => p[dataKey]).filter((v) => v != null);
   if (values.length < 2) return null;
 
   const min = Math.min(...values);
@@ -37,16 +37,18 @@ export function MiniGraph({
     startPercent = graphScrollOffset;
     endPercent = startPercent + visiblePercent;
 
-    visiblePoints = values.map((v, i) => {
-      const dataPercent = (i / (values.length - 1)) * 100;
-      if (dataPercent < startPercent || dataPercent > endPercent) return null;
-      const normalizedPercent = (dataPercent - startPercent) / visiblePercent;
-      const x = padding + normalizedPercent * (width - padding * 2);
-      const y = height - padding - ((v - min) / range) * (height - padding * 2);
-      return { x, y, value: v, dataPercent };
-    }).filter(Boolean);
+    visiblePoints = values
+      .map((v, i) => {
+        const dataPercent = (i / (values.length - 1)) * 100;
+        if (dataPercent < startPercent || dataPercent > endPercent) return null;
+        const normalizedPercent = (dataPercent - startPercent) / visiblePercent;
+        const x = padding + normalizedPercent * (width - padding * 2);
+        const y = height - padding - ((v - min) / range) * (height - padding * 2);
+        return { x, y, value: v, dataPercent };
+      })
+      .filter(Boolean);
 
-    const visibleVals = visiblePoints.map(p => p.value);
+    const visibleVals = visiblePoints.map((p) => p.value);
     visibleMin = visibleVals.length > 0 ? Math.min(...visibleVals) : min;
     visibleMax = visibleVals.length > 0 ? Math.max(...visibleVals) : max;
   } else {
@@ -62,8 +64,8 @@ export function MiniGraph({
     visibleMax = max;
   }
 
-  const points = visiblePoints.map(p => `${p.x},${p.y}`).join(' ');
-  const format = formatFn || (v => v?.toLocaleString());
+  const points = visiblePoints.map((p) => `${p.x},${p.y}`).join(' ');
+  const format = formatFn || ((v) => v?.toLocaleString());
 
   let indicatorX = null;
   let indicatorY = null;
@@ -113,20 +115,9 @@ export function MiniGraph({
           </span>
         )}
       </div>
-      <svg
-        width={width}
-        height={height}
-        className="mini-graph-svg"
-        aria-hidden="true"
-      >
+      <svg width={width} height={height} className="mini-graph-svg" aria-hidden="true">
         {visiblePoints.length > 1 && (
-          <polyline
-            points={points}
-            fill="none"
-            stroke={color}
-            strokeWidth="1.5"
-            opacity="0.6"
-          />
+          <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" opacity="0.6" />
         )}
         {indicatorX !== null && indicatorY !== null && (
           <>
@@ -151,50 +142,71 @@ export function MiniGraph({
         )}
       </svg>
       <div className="mini-graph-range" aria-hidden="true">
-        <span>{format(visibleMin)} {unit}</span>
-        <span>{format(visibleMax)} {unit}</span>
+        <span>
+          {format(visibleMin)} {unit}
+        </span>
+        <span>
+          {format(visibleMax)} {unit}
+        </span>
       </div>
     </div>
   );
 }
 
 // Hooks for graph interaction
-export function useGraphInteraction(graphZoom, setGraphZoom, graphScrollOffset, setGraphScrollOffset) {
+export function useGraphInteraction(
+  graphZoom,
+  setGraphZoom,
+  graphScrollOffset,
+  setGraphScrollOffset
+) {
   const graphDragRef = useRef({ isDragging: false, startX: 0, startOffset: 0 });
 
-  const handleGraphWheel = useCallback((e) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.25 : 0.25;
-    setGraphZoom(prev => {
-      const newZoom = Math.max(1, Math.min(8, prev + delta));
-      if (newZoom < prev) {
-        const maxOffset = Math.max(0, 100 - (100 / newZoom));
-        setGraphScrollOffset(off => Math.min(off, maxOffset));
-      }
-      return newZoom;
-    });
-  }, [setGraphZoom, setGraphScrollOffset]);
+  const handleGraphWheel = useCallback(
+    (e) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.25 : 0.25;
+      setGraphZoom((prev) => {
+        const newZoom = Math.max(1, Math.min(8, prev + delta));
+        if (newZoom < prev) {
+          const maxOffset = Math.max(0, 100 - 100 / newZoom);
+          setGraphScrollOffset((off) => Math.min(off, maxOffset));
+        }
+        return newZoom;
+      });
+    },
+    [setGraphZoom, setGraphScrollOffset]
+  );
 
-  const handleGraphDragStart = useCallback((e) => {
-    if (graphZoom <= 1) return;
-    graphDragRef.current = {
-      isDragging: true,
-      startX: e.clientX || e.touches?.[0]?.clientX || 0,
-      startOffset: graphScrollOffset
-    };
-  }, [graphZoom, graphScrollOffset]);
+  const handleGraphDragStart = useCallback(
+    (e) => {
+      if (graphZoom <= 1) return;
+      graphDragRef.current = {
+        isDragging: true,
+        startX: e.clientX || e.touches?.[0]?.clientX || 0,
+        startOffset: graphScrollOffset,
+      };
+    },
+    [graphZoom, graphScrollOffset]
+  );
 
-  const handleGraphDragMove = useCallback((e) => {
-    if (!graphDragRef.current.isDragging) return;
-    const currentX = e.clientX || e.touches?.[0]?.clientX || 0;
-    const deltaX = graphDragRef.current.startX - currentX;
-    const graphWidth = 200;
-    const visiblePercent = 100 / graphZoom;
-    const maxOffset = 100 - visiblePercent;
-    const percentDelta = (deltaX / graphWidth) * visiblePercent;
-    const newOffset = Math.max(0, Math.min(maxOffset, graphDragRef.current.startOffset + percentDelta));
-    setGraphScrollOffset(newOffset);
-  }, [graphZoom, setGraphScrollOffset]);
+  const handleGraphDragMove = useCallback(
+    (e) => {
+      if (!graphDragRef.current.isDragging) return;
+      const currentX = e.clientX || e.touches?.[0]?.clientX || 0;
+      const deltaX = graphDragRef.current.startX - currentX;
+      const graphWidth = 200;
+      const visiblePercent = 100 / graphZoom;
+      const maxOffset = 100 - visiblePercent;
+      const percentDelta = (deltaX / graphWidth) * visiblePercent;
+      const newOffset = Math.max(
+        0,
+        Math.min(maxOffset, graphDragRef.current.startOffset + percentDelta)
+      );
+      setGraphScrollOffset(newOffset);
+    },
+    [graphZoom, setGraphScrollOffset]
+  );
 
   const handleGraphDragEnd = useCallback(() => {
     graphDragRef.current.isDragging = false;
@@ -210,6 +222,6 @@ export function useGraphInteraction(graphZoom, setGraphZoom, graphScrollOffset, 
     handleGraphDragStart,
     handleGraphDragMove,
     handleGraphDragEnd,
-    resetGraphZoom
+    resetGraphZoom,
   };
 }

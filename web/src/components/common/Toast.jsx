@@ -53,9 +53,12 @@ export function Toast({ toast, onRemove }) {
   useEffect(() => {
     // Explicit type check to avoid issues with undefined/null/NaN durations
     if (typeof toast.duration === 'number' && toast.duration > 0 && isFinite(toast.duration)) {
-      const exitTimer = setTimeout(() => {
-        setIsExiting(true);
-      }, Math.max(0, toast.duration - 300)); // Start exit animation 300ms before removal, ensure non-negative
+      const exitTimer = setTimeout(
+        () => {
+          setIsExiting(true);
+        },
+        Math.max(0, toast.duration - 300)
+      ); // Start exit animation 300ms before removal, ensure non-negative
 
       return () => clearTimeout(exitTimer);
     }
@@ -71,18 +74,11 @@ export function Toast({ toast, onRemove }) {
       onClick={isClickable ? handleClick : undefined}
       style={isClickable ? { cursor: 'pointer' } : undefined}
     >
-      <div className="toast-icon">
-        {getIcon(toast.type)}
-      </div>
+      <div className="toast-icon">{getIcon(toast.type)}</div>
       <div className="toast-content">
-        <div className="toast-message">
-          {toast.message}
-        </div>
+        <div className="toast-message">{toast.message}</div>
         {toast.actionLabel && toast.onAction && (
-          <button
-            className="toast-action"
-            onClick={handleAction}
-          >
+          <button className="toast-action" onClick={handleAction}>
             {toast.actionLabel}
             <ChevronRight size={14} />
           </button>
@@ -117,12 +113,8 @@ export function ToastContainer({ toasts, removeToast }) {
 
   return (
     <div className="toast-container" aria-live="polite" aria-label="Notifications">
-      {toasts.map(toast => (
-        <Toast
-          key={toast.id}
-          toast={toast}
-          onRemove={removeToast}
-        />
+      {toasts.map((toast) => (
+        <Toast key={toast.id} toast={toast} onRemove={removeToast} />
       ))}
     </div>
   );

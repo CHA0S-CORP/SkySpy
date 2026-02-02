@@ -1,8 +1,17 @@
 import React, { useRef, useEffect, useCallback, memo } from 'react';
 import {
-  Plane, X, ArrowUp, ArrowDown, Navigation,
-  AlertTriangle, ExternalLink, Info, Crosshair,
-  TrendingDown, TrendingUp, Minus
+  Plane,
+  X,
+  ArrowUp,
+  ArrowDown,
+  Navigation,
+  AlertTriangle,
+  ExternalLink,
+  Info,
+  Crosshair,
+  TrendingDown,
+  TrendingUp,
+  Minus,
 } from 'lucide-react';
 import { useDraggable } from '../../hooks/useDraggable';
 import { getTailInfo } from '../../utils/aircraft';
@@ -71,295 +80,316 @@ function getAltitudeColorClass(altitude) {
  * Popup showing selected aircraft details
  * Memoized to prevent re-renders when other map state changes
  */
-export const AircraftPopup = memo(function AircraftPopup({
-  aircraft,
-  aircraftInfo,
-  onClose,
-  onShowDetails,
-  onJumpTo,
-  mapMode = 'crt',
-  getDistanceNm,
-  getBearing,
-  trackHistory
-}) {
-  const { position, isDragging, handleMouseDown } = useDraggable({ x: 100, y: 100 });
-  const prevDistanceRef = useRef(null);
-  const distanceTrendRef = useRef(null); // 'approaching', 'receding', or 'stable'
-  const popupRef = useRef(null);
-  const titleId = `aircraft-popup-title-${aircraft?.hex || 'unknown'}`;
+export const AircraftPopup = memo(
+  function AircraftPopup({
+    aircraft,
+    aircraftInfo,
+    onClose,
+    onShowDetails,
+    onJumpTo,
+    mapMode = 'crt',
+    getDistanceNm,
+    getBearing,
+    trackHistory,
+  }) {
+    const { position, isDragging, handleMouseDown } = useDraggable({ x: 100, y: 100 });
+    const prevDistanceRef = useRef(null);
+    const distanceTrendRef = useRef(null); // 'approaching', 'receding', or 'stable'
+    const popupRef = useRef(null);
+    const titleId = `aircraft-popup-title-${aircraft?.hex || 'unknown'}`;
 
-  // Handle Escape key to close popup
-  const handleKeyDown = useCallback((e) => {
-    if (e.key === 'Escape') {
-      onClose?.();
+    // Handle Escape key to close popup
+    const handleKeyDown = useCallback(
+      (e) => {
+        if (e.key === 'Escape') {
+          onClose?.();
+        }
+      },
+      [onClose]
+    );
+
+    // Add Escape key listener and auto-focus on open
+    useEffect(() => {
+      if (aircraft && popupRef.current) {
+        popupRef.current.focus();
+      }
+
+      document.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown);
+      };
+    }, [aircraft, handleKeyDown]);
+
+    if (!aircraft) return null;
+
+    const tailInfo = getTailInfo(aircraft);
+    const vs = aircraft.vr ?? aircraft.baro_rate ?? aircraft.geom_rate ?? 0;
+    const emergencySquawks = { 7500: 'HIJACK', 7600: 'RADIO', 7700: 'EMERGENCY' };
+    const isEmergency = aircraft.emergency || emergencySquawks[aircraft.squawk];
+
+    const distanceNm = getDistanceNm?.(aircraft.lat, aircraft.lon) ?? aircraft.distance_nm;
+    const bearing = getBearing?.(aircraft.lat, aircraft.lon);
+
+    // Track distance trend
+    if (distanceNm !== undefined && prevDistanceRef.current !== null) {
+      const delta = distanceNm - prevDistanceRef.current;
+      if (Math.abs(delta) > 0.05) {
+        // threshold to avoid noise
+        distanceTrendRef.current = delta < 0 ? 'approaching' : 'receding';
+      } else {
+        distanceTrendRef.current = 'stable';
+      }
     }
-  }, [onClose]);
+    prevDistanceRef.current = distanceNm;
 
-  // Add Escape key listener and auto-focus on open
-  useEffect(() => {
-    if (aircraft && popupRef.current) {
-      popupRef.current.focus();
-    }
+    const distanceTrend = distanceTrendRef.current;
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
+    // Get speed and altitude values
+    const speed = aircraft.gs ?? aircraft.tas;
+    const altitude = aircraft.alt ?? aircraft.baro_alt;
+    const speedClass = getSpeedColorClass(speed, altitude);
+    const altClass = getAltitudeColorClass(altitude);
+
+    // RSSI value (signal strength)
+    const rssi = aircraft.rssi;
+
+    const popupStyle = {
+      left: position.x,
+      top: position.y,
     };
-  }, [aircraft, handleKeyDown]);
 
-  if (!aircraft) return null;
+    return (
+      <div
+        ref={popupRef}
+        className={`aircraft-popup ${mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''} ${isEmergency ? 'emergency' : ''}`}
+        style={popupStyle}
+        onMouseDown={handleMouseDown}
+        onTouchStart={handleMouseDown}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+      >
+        <button className="popup-close no-drag" onClick={onClose} aria-label="Close popup">
+          <X size={16} />
+        </button>
 
-  const tailInfo = getTailInfo(aircraft);
-  const vs = aircraft.vr ?? aircraft.baro_rate ?? aircraft.geom_rate ?? 0;
-  const emergencySquawks = { '7500': 'HIJACK', '7600': 'RADIO', '7700': 'EMERGENCY' };
-  const isEmergency = aircraft.emergency || emergencySquawks[aircraft.squawk];
-
-  const distanceNm = getDistanceNm?.(aircraft.lat, aircraft.lon) ?? aircraft.distance_nm;
-  const bearing = getBearing?.(aircraft.lat, aircraft.lon);
-
-  // Track distance trend
-  if (distanceNm !== undefined && prevDistanceRef.current !== null) {
-    const delta = distanceNm - prevDistanceRef.current;
-    if (Math.abs(delta) > 0.05) { // threshold to avoid noise
-      distanceTrendRef.current = delta < 0 ? 'approaching' : 'receding';
-    } else {
-      distanceTrendRef.current = 'stable';
-    }
-  }
-  prevDistanceRef.current = distanceNm;
-
-  const distanceTrend = distanceTrendRef.current;
-
-  // Get speed and altitude values
-  const speed = aircraft.gs ?? aircraft.tas;
-  const altitude = aircraft.alt ?? aircraft.baro_alt;
-  const speedClass = getSpeedColorClass(speed, altitude);
-  const altClass = getAltitudeColorClass(altitude);
-
-  // RSSI value (signal strength)
-  const rssi = aircraft.rssi;
-
-  const popupStyle = {
-    left: position.x,
-    top: position.y,
-  };
-
-  return (
-    <div
-      ref={popupRef}
-      className={`aircraft-popup ${mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''} ${isEmergency ? 'emergency' : ''}`}
-      style={popupStyle}
-      onMouseDown={handleMouseDown}
-      onTouchStart={handleMouseDown}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      tabIndex={-1}
-    >
-      <button className="popup-close no-drag" onClick={onClose} aria-label="Close popup">
-        <X size={16} />
-      </button>
-
-      <div className="popup-header">
-        <Plane size={20} aria-hidden="true" />
-        <span id={titleId} className="popup-callsign">
-          {aircraft.flight?.trim() || aircraft.hex}
-        </span>
-        {(aircraftInfo?.typeLong || aircraft.type) && (
-          <span className={`model-tag ${aircraft.military ? 'military' : ''}`}>{aircraftInfo?.typeLong || aircraft.type}</span>
-        )}
-        {aircraft.military && <span className="mil-badge">MIL</span>}
-        {isEmergency && (
-          <span className="emergency-badge">
-            <AlertTriangle size={14} />
-            {emergencySquawks[aircraft.squawk] || 'EMER'}
+        <div className="popup-header">
+          <Plane size={20} aria-hidden="true" />
+          <span id={titleId} className="popup-callsign">
+            {aircraft.flight?.trim() || aircraft.hex}
           </span>
-        )}
-      </div>
-      
-      <div className="popup-details">
-        {/* Identification */}
-        <div className="detail-row">
-          <span>ICAO</span>
-          <span className="mono">{aircraft.hex?.toUpperCase()}</span>
-        </div>
-        
-        {tailInfo?.tailNumber && (
-          <div className="detail-row">
-            <span>Tail</span>
-            <span>{tailInfo.tailNumber}</span>
-          </div>
-        )}
-
-        {tailInfo?.country && (
-          <div className="detail-row">
-            <span>Reg</span>
-            <span>{tailInfo.country}</span>
-          </div>
-        )}
-        
-        {aircraft.type && (
-          <div className="detail-row">
-            <span>Type</span>
-            <span>{aircraft.type}</span>
-          </div>
-        )}
-        
-        {aircraftInfo?.typeLong && (
-          <div className="detail-row">
-            <span>Model</span>
-            <span>{aircraftInfo.typeLong}</span>
-          </div>
-        )}
-        
-        {aircraftInfo?.operator && (
-          <div className="detail-row">
-            <span>Operator</span>
-            <span>{aircraftInfo.operator}</span>
-          </div>
-        )}
-        
-        {/* Position */}
-        <div className="detail-section-divider" />
-        
-        <div className="detail-row">
-          <span>Altitude</span>
-          <span className={`altitude-value ${altClass}`}>
-            {altitude?.toLocaleString() || '---'} ft
-            {vs !== 0 && (
-              <span className={`vs-indicator ${vs > 0 ? 'climbing' : 'descending'} ${Math.abs(vs) > 3000 ? 'extreme-vs' : ''}`}>
-                {vs > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
-                {Math.abs(vs).toLocaleString()} fpm
-              </span>
-            )}
-          </span>
+          {(aircraftInfo?.typeLong || aircraft.type) && (
+            <span className={`model-tag ${aircraft.military ? 'military' : ''}`}>
+              {aircraftInfo?.typeLong || aircraft.type}
+            </span>
+          )}
+          {aircraft.military && <span className="mil-badge">MIL</span>}
+          {isEmergency && (
+            <span className="emergency-badge">
+              <AlertTriangle size={14} />
+              {emergencySquawks[aircraft.squawk] || 'EMER'}
+            </span>
+          )}
         </div>
 
-        <div className="detail-row">
-          <span>Speed</span>
-          <span className={`speed-value ${speedClass}`}>
-            {speed?.toFixed(0) || '---'} kts
-          </span>
-        </div>
-        
-        <div className="detail-row">
-          <span>Heading</span>
-          <span>
-            <Navigation size={12} style={{ transform: `rotate(${aircraft.track || aircraft.true_heading || 0}deg)` }} />
-            {' '}{(aircraft.track || aircraft.true_heading || 0).toFixed(0)}°
-          </span>
-        </div>
-        
-        {distanceNm !== undefined && (
+        <div className="popup-details">
+          {/* Identification */}
           <div className="detail-row">
-            <span>Distance</span>
-            <span className={`distance-value ${distanceTrend || ''}`}>
-              {distanceTrend === 'approaching' && <TrendingDown size={12} className="trend-icon approaching" />}
-              {distanceTrend === 'receding' && <TrendingUp size={12} className="trend-icon receding" />}
-              {distanceTrend === 'stable' && <Minus size={12} className="trend-icon stable" />}
-              {distanceNm.toFixed(1)} nm
+            <span>ICAO</span>
+            <span className="mono">{aircraft.hex?.toUpperCase()}</span>
+          </div>
+
+          {tailInfo?.tailNumber && (
+            <div className="detail-row">
+              <span>Tail</span>
+              <span>{tailInfo.tailNumber}</span>
+            </div>
+          )}
+
+          {tailInfo?.country && (
+            <div className="detail-row">
+              <span>Reg</span>
+              <span>{tailInfo.country}</span>
+            </div>
+          )}
+
+          {aircraft.type && (
+            <div className="detail-row">
+              <span>Type</span>
+              <span>{aircraft.type}</span>
+            </div>
+          )}
+
+          {aircraftInfo?.typeLong && (
+            <div className="detail-row">
+              <span>Model</span>
+              <span>{aircraftInfo.typeLong}</span>
+            </div>
+          )}
+
+          {aircraftInfo?.operator && (
+            <div className="detail-row">
+              <span>Operator</span>
+              <span>{aircraftInfo.operator}</span>
+            </div>
+          )}
+
+          {/* Position */}
+          <div className="detail-section-divider" />
+
+          <div className="detail-row">
+            <span>Altitude</span>
+            <span className={`altitude-value ${altClass}`}>
+              {altitude?.toLocaleString() || '---'} ft
+              {vs !== 0 && (
+                <span
+                  className={`vs-indicator ${vs > 0 ? 'climbing' : 'descending'} ${Math.abs(vs) > 3000 ? 'extreme-vs' : ''}`}
+                >
+                  {vs > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+                  {Math.abs(vs).toLocaleString()} fpm
+                </span>
+              )}
             </span>
           </div>
-        )}
-        
-        {bearing !== undefined && (
-          <div className="detail-row">
-            <span>Bearing</span>
-            <span>{Math.round(bearing)}°</span>
-          </div>
-        )}
 
-        {trackHistory?.length > 0 && (
           <div className="detail-row">
-            <span>Track Pts</span>
-            <span>{trackHistory.length}</span>
+            <span>Speed</span>
+            <span className={`speed-value ${speedClass}`}>{speed?.toFixed(0) || '---'} kts</span>
           </div>
-        )}
 
-        {/* Transponder */}
-        {aircraft.squawk && (
-          <>
-            <div className="detail-section-divider" />
+          <div className="detail-row">
+            <span>Heading</span>
+            <span>
+              <Navigation
+                size={12}
+                style={{ transform: `rotate(${aircraft.track || aircraft.true_heading || 0}deg)` }}
+              />{' '}
+              {(aircraft.track || aircraft.true_heading || 0).toFixed(0)}°
+            </span>
+          </div>
+
+          {distanceNm !== undefined && (
             <div className="detail-row">
-              <span>Squawk</span>
-              <span className={`squawk-value ${emergencySquawks[aircraft.squawk] ? 'emergency' : ''}`}>
-                {aircraft.squawk}
-                {emergencySquawks[aircraft.squawk] && ` (${emergencySquawks[aircraft.squawk]})`}
+              <span>Distance</span>
+              <span className={`distance-value ${distanceTrend || ''}`}>
+                {distanceTrend === 'approaching' && (
+                  <TrendingDown size={12} className="trend-icon approaching" />
+                )}
+                {distanceTrend === 'receding' && (
+                  <TrendingUp size={12} className="trend-icon receding" />
+                )}
+                {distanceTrend === 'stable' && <Minus size={12} className="trend-icon stable" />}
+                {distanceNm.toFixed(1)} nm
               </span>
             </div>
-          </>
-        )}
-        
-        {/* Position coordinates */}
-        {aircraft.lat && aircraft.lon && (
-          <div className="detail-row">
-            <span>Position</span>
-            <span className="mono">
-              {aircraft.lat.toFixed(4)}°, {aircraft.lon.toFixed(4)}°
-            </span>
-          </div>
-        )}
+          )}
 
-        {/* Signal strength */}
-        {rssi !== undefined && (
-          <div className="detail-row">
-            <span>Signal</span>
-            <SignalBars rssi={rssi} />
-          </div>
-        )}
+          {bearing !== undefined && (
+            <div className="detail-row">
+              <span>Bearing</span>
+              <span>{Math.round(bearing)}°</span>
+            </div>
+          )}
+
+          {trackHistory?.length > 0 && (
+            <div className="detail-row">
+              <span>Track Pts</span>
+              <span>{trackHistory.length}</span>
+            </div>
+          )}
+
+          {/* Transponder */}
+          {aircraft.squawk && (
+            <>
+              <div className="detail-section-divider" />
+              <div className="detail-row">
+                <span>Squawk</span>
+                <span
+                  className={`squawk-value ${emergencySquawks[aircraft.squawk] ? 'emergency' : ''}`}
+                >
+                  {aircraft.squawk}
+                  {emergencySquawks[aircraft.squawk] && ` (${emergencySquawks[aircraft.squawk]})`}
+                </span>
+              </div>
+            </>
+          )}
+
+          {/* Position coordinates */}
+          {aircraft.lat && aircraft.lon && (
+            <div className="detail-row">
+              <span>Position</span>
+              <span className="mono">
+                {aircraft.lat.toFixed(4)}°, {aircraft.lon.toFixed(4)}°
+              </span>
+            </div>
+          )}
+
+          {/* Signal strength */}
+          {rssi !== undefined && (
+            <div className="detail-row">
+              <span>Signal</span>
+              <SignalBars rssi={rssi} />
+            </div>
+          )}
+        </div>
+
+        <div className="popup-actions">
+          {onJumpTo && (
+            <button className="popup-action-btn no-drag" onClick={() => onJumpTo(aircraft)}>
+              <Crosshair size={14} />
+              Jump
+            </button>
+          )}
+          {onShowDetails && (
+            <button
+              className="popup-action-btn no-drag"
+              onClick={() => onShowDetails(aircraft.hex)}
+            >
+              <Info size={14} />
+              Details
+            </button>
+          )}
+          <a
+            href={`https://flightaware.com/live/flight/${aircraft.flight?.trim() || aircraft.hex}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="popup-action-btn no-drag"
+          >
+            <ExternalLink size={14} />
+            FlightAware
+          </a>
+          <a
+            href={`https://globe.adsbexchange.com/?icao=${aircraft.hex}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="popup-action-btn no-drag"
+          >
+            <ExternalLink size={14} />
+            ADSBx
+          </a>
+        </div>
       </div>
-      
-      <div className="popup-actions">
-        {onJumpTo && (
-          <button className="popup-action-btn no-drag" onClick={() => onJumpTo(aircraft)}>
-            <Crosshair size={14} />
-            Jump
-          </button>
-        )}
-        {onShowDetails && (
-          <button className="popup-action-btn no-drag" onClick={() => onShowDetails(aircraft.hex)}>
-            <Info size={14} />
-            Details
-          </button>
-        )}
-        <a 
-          href={`https://flightaware.com/live/flight/${aircraft.flight?.trim() || aircraft.hex}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="popup-action-btn no-drag"
-        >
-          <ExternalLink size={14} />
-          FlightAware
-        </a>
-        <a 
-          href={`https://globe.adsbexchange.com/?icao=${aircraft.hex}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="popup-action-btn no-drag"
-        >
-          <ExternalLink size={14} />
-          ADSBx
-        </a>
-      </div>
-    </div>
-  );
-}, (prev, next) => {
-  // Custom shallow comparison for performance
-  // Only re-render if key aircraft properties change
-  if (prev.aircraft?.hex !== next.aircraft?.hex) return false;
-  if (prev.aircraft?.lat !== next.aircraft?.lat) return false;
-  if (prev.aircraft?.lon !== next.aircraft?.lon) return false;
-  if (prev.aircraft?.alt !== next.aircraft?.alt) return false;
-  if (prev.aircraft?.gs !== next.aircraft?.gs) return false;
-  if (prev.aircraft?.track !== next.aircraft?.track) return false;
-  if (prev.aircraft?.squawk !== next.aircraft?.squawk) return false;
-  if (prev.aircraft?.flight !== next.aircraft?.flight) return false;
-  if (prev.aircraft?.vr !== next.aircraft?.vr) return false;
-  if (prev.aircraft?.rssi !== next.aircraft?.rssi) return false;
-  if (prev.mapMode !== next.mapMode) return false;
-  if (prev.trackHistory?.length !== next.trackHistory?.length) return false;
-  // Functions are stable (useCallback), so we don't compare them
-  return true;
-});
+    );
+  },
+  (prev, next) => {
+    // Custom shallow comparison for performance
+    // Only re-render if key aircraft properties change
+    if (prev.aircraft?.hex !== next.aircraft?.hex) return false;
+    if (prev.aircraft?.lat !== next.aircraft?.lat) return false;
+    if (prev.aircraft?.lon !== next.aircraft?.lon) return false;
+    if (prev.aircraft?.alt !== next.aircraft?.alt) return false;
+    if (prev.aircraft?.gs !== next.aircraft?.gs) return false;
+    if (prev.aircraft?.track !== next.aircraft?.track) return false;
+    if (prev.aircraft?.squawk !== next.aircraft?.squawk) return false;
+    if (prev.aircraft?.flight !== next.aircraft?.flight) return false;
+    if (prev.aircraft?.vr !== next.aircraft?.vr) return false;
+    if (prev.aircraft?.rssi !== next.aircraft?.rssi) return false;
+    if (prev.mapMode !== next.mapMode) return false;
+    if (prev.trackHistory?.length !== next.trackHistory?.length) return false;
+    // Functions are stable (useCallback), so we don't compare them
+    return true;
+  }
+);
 
 export default AircraftPopup;

@@ -31,30 +31,36 @@ export function useProPan({
   }, [setHashParams]);
 
   // Pro mode pan handlers (middle mouse button)
-  const handleProPanStart = useCallback((e) => {
-    // Middle mouse button (button 1) or auxiliary button
-    if (e.button !== 1 || config.mapMode !== 'pro') return;
-    e.preventDefault();
-    setIsProPanning(true);
-    proPanStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      offsetX: proPanOffset.x,
-      offsetY: proPanOffset.y
-    };
-  }, [config.mapMode, proPanOffset]);
+  const handleProPanStart = useCallback(
+    (e) => {
+      // Middle mouse button (button 1) or auxiliary button
+      if (e.button !== 1 || config.mapMode !== 'pro') return;
+      e.preventDefault();
+      setIsProPanning(true);
+      proPanStartRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+        offsetX: proPanOffset.x,
+        offsetY: proPanOffset.y,
+      };
+    },
+    [config.mapMode, proPanOffset]
+  );
 
-  const handleProPanMove = useCallback((e) => {
-    if (!isProPanning) return;
-    // Stop following when manually panning
-    setFollowingAircraft(null);
-    const dx = e.clientX - proPanStartRef.current.x;
-    const dy = e.clientY - proPanStartRef.current.y;
-    setProPanOffset({
-      x: proPanStartRef.current.offsetX + dx,
-      y: proPanStartRef.current.offsetY + dy
-    });
-  }, [isProPanning]);
+  const handleProPanMove = useCallback(
+    (e) => {
+      if (!isProPanning) return;
+      // Stop following when manually panning
+      setFollowingAircraft(null);
+      const dx = e.clientX - proPanStartRef.current.x;
+      const dy = e.clientY - proPanStartRef.current.y;
+      setProPanOffset({
+        x: proPanStartRef.current.offsetX + dx,
+        y: proPanStartRef.current.offsetY + dy,
+      });
+    },
+    [isProPanning]
+  );
 
   const handleProPanEnd = useCallback(() => {
     setIsProPanning(false);
@@ -64,7 +70,7 @@ export function useProPan({
     if (updateHash && (offset.x !== 0 || offset.y !== 0)) {
       updateHash({
         panX: String(Math.round(offset.x)),
-        panY: String(Math.round(offset.y))
+        panY: String(Math.round(offset.y)),
       });
     } else if (updateHash) {
       updateHash({ panX: undefined, panY: undefined });
@@ -86,7 +92,7 @@ export function useProPan({
   useEffect(() => {
     if (!followingAircraft || config.mapMode !== 'pro' || !canvasRef?.current) return;
 
-    const followedAc = aircraft.find(ac => ac.hex === followingAircraft);
+    const followedAc = aircraft.find((ac) => ac.hex === followingAircraft);
     if (!followedAc || !followedAc.lat || !followedAc.lon) {
       // Aircraft no longer available, stop following
       setFollowingAircraft(null);
@@ -99,7 +105,7 @@ export function useProPan({
     const dLat = followedAc.lat - feederLat;
     const dLon = followedAc.lon - feederLon;
     const nmY = dLat * 60;
-    const nmX = dLon * 60 * Math.cos(feederLat * Math.PI / 180);
+    const nmX = dLon * 60 * Math.cos((feederLat * Math.PI) / 180);
 
     setProPanOffset({ x: -(nmX * pixelsPerNm), y: nmY * pixelsPerNm });
   }, [followingAircraft, aircraft, config.mapMode, radarRange, feederLat, feederLon, canvasRef]);

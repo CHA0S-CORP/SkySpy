@@ -1,5 +1,18 @@
 import React, { useState } from 'react';
-import { TrendingUp, Award, Target, Zap, Activity, BarChart3, Layers, Navigation2, Globe, Calendar, Radio, Trophy } from 'lucide-react';
+import {
+  TrendingUp,
+  Award,
+  Target,
+  Zap,
+  Activity,
+  BarChart3,
+  Layers,
+  Navigation2,
+  Globe,
+  Calendar,
+  Radio,
+  Trophy,
+} from 'lucide-react';
 import { HorizontalBarChart } from './StatsCharts';
 import { ACARS_LABEL_DESCRIPTIONS } from './statsHelpers';
 
@@ -29,7 +42,7 @@ export function TrendsTab({ trendsData }) {
         <div className="trends-chart">
           <div className="trend-bars">
             {trendsData.intervals.map((interval, i) => {
-              const maxCount = Math.max(...trendsData.intervals.map(i => i.unique_aircraft || 0));
+              const maxCount = Math.max(...trendsData.intervals.map((i) => i.unique_aircraft || 0));
               const height = maxCount > 0 ? ((interval.unique_aircraft || 0) / maxCount) * 100 : 0;
               return (
                 <div
@@ -62,8 +75,8 @@ export function TopPerformersTab({ topPerformersData, onSelectAircraft }) {
           { key: 'longest', label: 'Longest' },
           { key: 'furthest', label: 'Furthest' },
           { key: 'highest', label: 'Highest' },
-          { key: 'closest', label: 'Closest' }
-        ].map(tab => (
+          { key: 'closest', label: 'Closest' },
+        ].map((tab) => (
           <button
             key={tab.key}
             className={`top-tab ${topPerformersTab === tab.key ? 'active' : ''}`}
@@ -74,10 +87,19 @@ export function TopPerformersTab({ topPerformersData, onSelectAircraft }) {
         ))}
       </div>
       <div className="top-performers-list">
-        {(topPerformersData[topPerformersTab === 'longest' ? 'longest_tracked' :
-          topPerformersTab === 'furthest' ? 'furthest_distance' :
-          topPerformersTab === 'highest' ? 'highest_altitude' : 'closest_approach'] || [])
-          .slice(0, 6).map((ac, i) => (
+        {(
+          topPerformersData[
+            topPerformersTab === 'longest'
+              ? 'longest_tracked'
+              : topPerformersTab === 'furthest'
+                ? 'furthest_distance'
+                : topPerformersTab === 'highest'
+                  ? 'highest_altitude'
+                  : 'closest_approach'
+          ] || []
+        )
+          .slice(0, 6)
+          .map((ac, i) => (
             <div
               key={ac.icao_hex}
               className={`performer-item ${onSelectAircraft ? 'clickable' : ''} ${ac.is_military ? 'military' : ''}`}
@@ -115,19 +137,27 @@ export function DistanceTab({ distanceAnalytics }) {
       <div className="distance-stats">
         <div className="stat-box">
           <span className="stat-label">Mean</span>
-          <span className="stat-value">{distanceAnalytics.statistics?.mean_nm?.toFixed(1) || '--'} nm</span>
+          <span className="stat-value">
+            {distanceAnalytics.statistics?.mean_nm?.toFixed(1) || '--'} nm
+          </span>
         </div>
         <div className="stat-box">
           <span className="stat-label">Max</span>
-          <span className="stat-value">{distanceAnalytics.statistics?.max_nm?.toFixed(1) || '--'} nm</span>
+          <span className="stat-value">
+            {distanceAnalytics.statistics?.max_nm?.toFixed(1) || '--'} nm
+          </span>
         </div>
         <div className="stat-box">
           <span className="stat-label">Median</span>
-          <span className="stat-value">{distanceAnalytics.statistics?.median_nm?.toFixed(1) || '--'} nm</span>
+          <span className="stat-value">
+            {distanceAnalytics.statistics?.median_nm?.toFixed(1) || '--'} nm
+          </span>
         </div>
         <div className="stat-box">
           <span className="stat-label">90th %</span>
-          <span className="stat-value">{distanceAnalytics.statistics?.percentile_90?.toFixed(1) || '--'} nm</span>
+          <span className="stat-value">
+            {distanceAnalytics.statistics?.percentile_90?.toFixed(1) || '--'} nm
+          </span>
         </div>
       </div>
       {distanceAnalytics.distribution && (
@@ -136,7 +166,7 @@ export function DistanceTab({ distanceAnalytics }) {
           data={Object.entries(distanceAnalytics.distribution).map(([band, count]) => ({
             label: band,
             count,
-            color: '#00c8ff'
+            color: '#00c8ff',
           }))}
           maxItems={8}
           showPercentage={false}
@@ -233,7 +263,7 @@ export function HistoricalAnalyticsSection({
   distanceAnalytics,
   speedAnalytics,
   correlationData,
-  onSelectAircraft
+  onSelectAircraft,
 }) {
   const [activeAnalyticsTab, setActiveAnalyticsTab] = useState('trends');
 
@@ -250,8 +280,8 @@ export function HistoricalAnalyticsSection({
             { key: 'top', label: 'Top Performers', icon: Award },
             { key: 'distance', label: 'Distance', icon: Target },
             { key: 'speed', label: 'Speed', icon: Zap },
-            { key: 'patterns', label: 'Patterns', icon: Activity }
-          ].map(tab => (
+            { key: 'patterns', label: 'Patterns', icon: Activity },
+          ].map((tab) => (
             <button
               key={tab.key}
               className={`analytics-tab ${activeAnalyticsTab === tab.key ? 'active' : ''}`}
@@ -265,9 +295,16 @@ export function HistoricalAnalyticsSection({
       </div>
 
       {activeAnalyticsTab === 'trends' && <TrendsTab trendsData={trendsData} />}
-      {activeAnalyticsTab === 'top' && <TopPerformersTab topPerformersData={topPerformersData} onSelectAircraft={onSelectAircraft} />}
+      {activeAnalyticsTab === 'top' && (
+        <TopPerformersTab
+          topPerformersData={topPerformersData}
+          onSelectAircraft={onSelectAircraft}
+        />
+      )}
       {activeAnalyticsTab === 'distance' && <DistanceTab distanceAnalytics={distanceAnalytics} />}
-      {activeAnalyticsTab === 'speed' && <SpeedTab speedAnalytics={speedAnalytics} onSelectAircraft={onSelectAircraft} />}
+      {activeAnalyticsTab === 'speed' && (
+        <SpeedTab speedAnalytics={speedAnalytics} onSelectAircraft={onSelectAircraft} />
+      )}
       {activeAnalyticsTab === 'patterns' && <PatternsTab correlationData={correlationData} />}
     </div>
   );
@@ -296,7 +333,7 @@ export function ExtendedStatsSection({
   SessionAnalyticsSection,
   TimeComparisonSection,
   AcarsStatsSection,
-  AchievementsSection
+  AchievementsSection,
 }) {
   const [activeExtendedSection, setActiveExtendedSection] = useState('patterns');
 
@@ -314,8 +351,8 @@ export function ExtendedStatsSection({
             { key: 'tracking', label: 'Tracking', icon: Activity },
             { key: 'engagement', label: 'Engagement', icon: Calendar },
             { key: 'acars', label: 'ACARS', icon: Radio },
-            { key: 'favorites', label: 'Favorites', icon: Trophy }
-          ].map(tab => (
+            { key: 'favorites', label: 'Favorites', icon: Trophy },
+          ].map((tab) => (
             <button
               key={tab.key}
               className={`extended-tab ${activeExtendedSection === tab.key ? 'active' : ''}`}
@@ -345,24 +382,15 @@ export function ExtendedStatsSection({
       )}
 
       {activeExtendedSection === 'tracking' && (
-        <SessionAnalyticsSection
-          data={trackingQualityData}
-          loading={trackingQualityLoading}
-        />
+        <SessionAnalyticsSection data={trackingQualityData} loading={trackingQualityLoading} />
       )}
 
       {activeExtendedSection === 'engagement' && (
-        <TimeComparisonSection
-          data={engagementData}
-          loading={engagementLoading}
-        />
+        <TimeComparisonSection data={engagementData} loading={engagementLoading} />
       )}
 
       {activeExtendedSection === 'acars' && (
-        <AcarsStatsSection
-          data={acarsStats}
-          loading={acarsStatsLoading}
-        />
+        <AcarsStatsSection data={acarsStats} loading={acarsStatsLoading} />
       )}
 
       {activeExtendedSection === 'favorites' && (
@@ -391,7 +419,9 @@ export function AcarsSection({ acarsStats, timeRange }) {
       </div>
       <div className="acars-stats-row">
         <div className="acars-stat">
-          <span className="acars-stat-value">{acarsStats.total_messages?.toLocaleString() || '--'}</span>
+          <span className="acars-stat-value">
+            {acarsStats.total_messages?.toLocaleString() || '--'}
+          </span>
           <span className="acars-stat-label">Total</span>
         </div>
         <div className="acars-stat">
@@ -399,17 +429,19 @@ export function AcarsSection({ acarsStats, timeRange }) {
           <span className="acars-stat-label">Last Hour</span>
         </div>
         <div className={`acars-stat ${acarsStats.service_stats?.running ? 'active' : 'inactive'}`}>
-          <span className="acars-stat-value">{acarsStats.service_stats?.running ? 'Active' : 'Stopped'}</span>
+          <span className="acars-stat-value">
+            {acarsStats.service_stats?.running ? 'Active' : 'Stopped'}
+          </span>
           <span className="acars-stat-label">Service</span>
         </div>
       </div>
       {acarsStats.top_labels?.length > 0 && (
         <HorizontalBarChart
           title="Top Message Types"
-          data={acarsStats.top_labels.slice(0, 6).map(item => ({
+          data={acarsStats.top_labels.slice(0, 6).map((item) => ({
             label: `${item.label} - ${ACARS_LABEL_DESCRIPTIONS[item.label] || item.label}`,
             count: item.count,
-            color: '#00c8ff'
+            color: '#00c8ff',
           }))}
           maxItems={6}
           showPercentage={false}

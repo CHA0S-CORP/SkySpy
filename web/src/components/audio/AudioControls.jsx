@@ -28,7 +28,7 @@ function AudioControls({
   loading,
   onRefresh,
   // Socket status
-  socketConnected
+  socketConnected,
 }) {
   const timeRanges = ['1h', '6h', '24h', '48h', '7d'];
 
@@ -52,7 +52,7 @@ function AudioControls({
 
       {/* Time Range Selector */}
       <div className="time-range-selector">
-        {timeRanges.map(range => (
+        {timeRanges.map((range) => (
           <button
             key={range}
             className={`time-btn ${timeRange === range ? 'active' : ''}`}

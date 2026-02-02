@@ -47,7 +47,7 @@ export function EnhancedMiniGraph({
   // Extract and validate values
   const values = useMemo(() => {
     if (!data || data.length < 2) return [];
-    return data.map(p => p[dataKey]).filter(v => v != null);
+    return data.map((p) => p[dataKey]).filter((v) => v != null);
   }, [data, dataKey]);
 
   // Calculate statistics
@@ -118,15 +118,15 @@ export function EnhancedMiniGraph({
 
   // Zoom handlers
   const handleZoomIn = useCallback(() => {
-    setZoom(z => Math.min(8, z + 0.5));
+    setZoom((z) => Math.min(8, z + 0.5));
   }, []);
 
   const handleZoomOut = useCallback(() => {
-    setZoom(z => {
+    setZoom((z) => {
       const newZoom = Math.max(1, z - 0.5);
       // Adjust offset when zooming out
-      const maxOffset = Math.max(0, 100 - (100 / newZoom));
-      setOffset(o => Math.min(o, maxOffset));
+      const maxOffset = Math.max(0, 100 - 100 / newZoom);
+      setOffset((o) => Math.min(o, maxOffset));
       return newZoom;
     });
   }, []);
@@ -140,66 +140,78 @@ export function EnhancedMiniGraph({
   const handleWheel = useCallback((e) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.25 : 0.25;
-    setZoom(z => {
+    setZoom((z) => {
       const newZoom = Math.max(1, Math.min(8, z + delta));
       if (newZoom < z) {
-        const maxOffset = Math.max(0, 100 - (100 / newZoom));
-        setOffset(o => Math.min(o, maxOffset));
+        const maxOffset = Math.max(0, 100 - 100 / newZoom);
+        setOffset((o) => Math.min(o, maxOffset));
       }
       return newZoom;
     });
   }, []);
 
   // Pan handlers
-  const handleDragStart = useCallback((e) => {
-    if (zoom <= 1) return;
-    setIsDragging(true);
-    setDragStart({
-      x: e.clientX || e.touches?.[0]?.clientX || 0,
-      offset,
-    });
-  }, [zoom, offset]);
+  const handleDragStart = useCallback(
+    (e) => {
+      if (zoom <= 1) return;
+      setIsDragging(true);
+      setDragStart({
+        x: e.clientX || e.touches?.[0]?.clientX || 0,
+        offset,
+      });
+    },
+    [zoom, offset]
+  );
 
-  const handleDragMove = useCallback((e) => {
-    if (!isDragging) return;
-    const currentX = e.clientX || e.touches?.[0]?.clientX || 0;
-    const deltaX = dragStart.x - currentX;
-    const visiblePercent = 100 / zoom;
-    const maxOffset = 100 - visiblePercent;
-    const percentDelta = (deltaX / width) * visiblePercent;
-    setOffset(Math.max(0, Math.min(maxOffset, dragStart.offset + percentDelta)));
-  }, [isDragging, dragStart, zoom, width]);
+  const handleDragMove = useCallback(
+    (e) => {
+      if (!isDragging) return;
+      const currentX = e.clientX || e.touches?.[0]?.clientX || 0;
+      const deltaX = dragStart.x - currentX;
+      const visiblePercent = 100 / zoom;
+      const maxOffset = 100 - visiblePercent;
+      const percentDelta = (deltaX / width) * visiblePercent;
+      setOffset(Math.max(0, Math.min(maxOffset, dragStart.offset + percentDelta)));
+    },
+    [isDragging, dragStart, zoom, width]
+  );
 
   const handleDragEnd = useCallback(() => {
     setIsDragging(false);
   }, []);
 
   // Mouse hover for value tooltip
-  const handleMouseMove = useCallback((e) => {
-    if (!containerRef.current || isDragging) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left - padding;
-    const graphWidth = width - padding * 2;
-    const index = Math.round((x / graphWidth) * (visibleValues.length - 1));
-    if (index >= 0 && index < visibleValues.length) {
-      setHoveredIndex(index);
-    }
-  }, [isDragging, padding, width, visibleValues.length]);
+  const handleMouseMove = useCallback(
+    (e) => {
+      if (!containerRef.current || isDragging) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left - padding;
+      const graphWidth = width - padding * 2;
+      const index = Math.round((x / graphWidth) * (visibleValues.length - 1));
+      if (index >= 0 && index < visibleValues.length) {
+        setHoveredIndex(index);
+      }
+    },
+    [isDragging, padding, width, visibleValues.length]
+  );
 
   const handleMouseLeave = useCallback(() => {
     setHoveredIndex(null);
   }, []);
 
   // Click to set position
-  const handleClick = useCallback((e) => {
-    if (!onPositionClick || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left - padding;
-    const graphWidth = width - padding * 2;
-    const relativePos = Math.max(0, Math.min(1, x / graphWidth));
-    const absolutePos = visibleWindow.start + relativePos * (100 / zoom);
-    onPositionClick(Math.max(0, Math.min(100, absolutePos)));
-  }, [onPositionClick, padding, width, visibleWindow, zoom]);
+  const handleClick = useCallback(
+    (e) => {
+      if (!onPositionClick || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left - padding;
+      const graphWidth = width - padding * 2;
+      const relativePos = Math.max(0, Math.min(1, x / graphWidth));
+      const absolutePos = visibleWindow.start + relativePos * (100 / zoom);
+      onPositionClick(Math.max(0, Math.min(100, absolutePos)));
+    },
+    [onPositionClick, padding, width, visibleWindow, zoom]
+  );
 
   if (values.length < 2) return null;
 
@@ -227,9 +239,15 @@ export function EnhancedMiniGraph({
         className={`mini-graph-svg-container ${isZoomed ? 'zoomable' : ''} ${isDragging ? 'dragging' : ''}`}
         onWheel={handleWheel}
         onMouseDown={handleDragStart}
-        onMouseMove={(e) => { handleDragMove(e); handleMouseMove(e); }}
+        onMouseMove={(e) => {
+          handleDragMove(e);
+          handleMouseMove(e);
+        }}
         onMouseUp={handleDragEnd}
-        onMouseLeave={() => { handleDragEnd(); handleMouseLeave(); }}
+        onMouseLeave={() => {
+          handleDragEnd();
+          handleMouseLeave();
+        }}
         onTouchStart={handleDragStart}
         onTouchMove={handleDragMove}
         onTouchEnd={handleDragEnd}
@@ -239,9 +257,30 @@ export function EnhancedMiniGraph({
           {/* Grid lines (optional for large size) */}
           {size === 'large' && (
             <>
-              <line x1={padding} y1={padding} x2={width - padding} y2={padding} stroke="rgba(255,255,255,0.1)" strokeWidth="0.5" />
-              <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="rgba(255,255,255,0.1)" strokeWidth="0.5" />
-              <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="rgba(255,255,255,0.1)" strokeWidth="0.5" />
+              <line
+                x1={padding}
+                y1={padding}
+                x2={width - padding}
+                y2={padding}
+                stroke="rgba(255,255,255,0.1)"
+                strokeWidth="0.5"
+              />
+              <line
+                x1={padding}
+                y1={height / 2}
+                x2={width - padding}
+                y2={height / 2}
+                stroke="rgba(255,255,255,0.1)"
+                strokeWidth="0.5"
+              />
+              <line
+                x1={padding}
+                y1={height - padding}
+                x2={width - padding}
+                y2={height - padding}
+                stroke="rgba(255,255,255,0.1)"
+                strokeWidth="0.5"
+              />
             </>
           )}
 
@@ -291,8 +330,15 @@ export function EnhancedMiniGraph({
           {/* Hover indicator */}
           {hoveredIndex !== null && visibleValues[hoveredIndex] !== undefined && (
             <circle
-              cx={padding + (hoveredIndex / Math.max(1, visibleValues.length - 1)) * (width - padding * 2)}
-              cy={height - padding - ((visibleValues[hoveredIndex] - stats.min) / stats.range) * (height - padding * 2)}
+              cx={
+                padding +
+                (hoveredIndex / Math.max(1, visibleValues.length - 1)) * (width - padding * 2)
+              }
+              cy={
+                height -
+                padding -
+                ((visibleValues[hoveredIndex] - stats.min) / stats.range) * (height - padding * 2)
+              }
               r={3}
               fill="#fff"
               stroke={color}
@@ -303,8 +349,12 @@ export function EnhancedMiniGraph({
       </div>
 
       <div className="mini-graph-range">
-        <span>{format(isZoomed ? Math.min(...visibleValues) : stats.min)} {unit}</span>
-        <span>{format(isZoomed ? Math.max(...visibleValues) : stats.max)} {unit}</span>
+        <span>
+          {format(isZoomed ? Math.min(...visibleValues) : stats.min)} {unit}
+        </span>
+        <span>
+          {format(isZoomed ? Math.max(...visibleValues) : stats.max)} {unit}
+        </span>
       </div>
 
       {showControls && size === 'large' && (

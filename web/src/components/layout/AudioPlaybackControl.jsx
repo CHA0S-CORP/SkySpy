@@ -1,8 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Volume2, VolumeX, X, PlayCircle, Plane, Clock, Radio, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import {
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  X,
+  PlayCircle,
+  Plane,
+  Clock,
+  Radio,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+} from 'lucide-react';
 
 // Import the global audio state from AudioView
-import { getGlobalAudioState, subscribeToAudioStateChanges, clearAutoplayFilter, setAutoplay as setGlobalAutoplay, retryAudioSocket } from '../views/AudioView';
+import {
+  getGlobalAudioState,
+  subscribeToAudioStateChanges,
+  clearAutoplayFilter,
+  setAutoplay as setGlobalAutoplay,
+  retryAudioSocket,
+} from '../views/AudioView';
 
 export function AudioPlaybackControl() {
   const [playingId, setPlayingId] = useState(null);
@@ -53,7 +72,8 @@ export function AudioPlaybackControl() {
       }
       if ('autoplayFilter' in updates) setAutoplayFilter(updates.autoplayFilter);
       if ('socketConnected' in updates) setSocketConnected(updates.socketConnected);
-      if ('socketReconnectFailed' in updates) setSocketReconnectFailed(updates.socketReconnectFailed);
+      if ('socketReconnectFailed' in updates)
+        setSocketReconnectFailed(updates.socketReconnectFailed);
     });
 
     // Initialize with current state
@@ -92,8 +112,8 @@ export function AudioPlaybackControl() {
   // Show the control if autoplay is enabled OR if audio is playing
   if (!autoplay && !playingId) return null;
 
-  const progress = playingId ? (audioProgress[playingId] || 0) : 0;
-  const duration = playingId ? (audioDurations[playingId] || 0) : 0;
+  const progress = playingId ? audioProgress[playingId] || 0 : 0;
+  const duration = playingId ? audioDurations[playingId] || 0 : 0;
   const hasActivePlayback = !!playingId;
 
   const formatDuration = (seconds) => {
@@ -123,7 +143,7 @@ export function AudioPlaybackControl() {
     const audioState = getGlobalAudioState();
     // Apply volume to all cached audio elements for consistent playback
     if (!isMuted) {
-      Object.values(audioState.audioRefs).forEach(audio => {
+      Object.values(audioState.audioRefs).forEach((audio) => {
         if (audio) audio.volume = vol;
       });
     }
@@ -133,7 +153,7 @@ export function AudioPlaybackControl() {
     const audioState = getGlobalAudioState();
     const newMuted = !isMuted;
     // Apply mute state to all cached audio elements for consistent playback
-    Object.values(audioState.audioRefs).forEach(audio => {
+    Object.values(audioState.audioRefs).forEach((audio) => {
       if (audio) audio.volume = newMuted ? 0 : audioVolume;
     });
     setIsMuted(newMuted);
@@ -185,9 +205,7 @@ export function AudioPlaybackControl() {
     <div className={`audio-playback-control ${!hasActivePlayback ? 'idle' : ''}`}>
       <div className="playback-info">
         <span className="playback-label">
-          {autoplayFilter && (
-            <Plane size={12} />
-          )}
+          {autoplayFilter && <Plane size={12} />}
           {hasActivePlayback ? (
             <>
               <Radio size={12} />
@@ -229,10 +247,7 @@ export function AudioPlaybackControl() {
       {hasActivePlayback && (
         <div className="playback-progress">
           <div className="progress-bar">
-            <div
-              className="progress-fill"
-              style={{ width: `${progress}%` }}
-            />
+            <div className="progress-fill" style={{ width: `${progress}%` }} />
           </div>
         </div>
       )}
@@ -272,7 +287,11 @@ export function AudioPlaybackControl() {
         <button
           className={`playback-btn autoplay-btn ${autoplay ? 'active' : ''}`}
           onClick={toggleAutoplay}
-          title={autoplay ? 'Disable autoplay - stop auto-playing new transmissions' : 'Enable autoplay - automatically play new transmissions'}
+          title={
+            autoplay
+              ? 'Disable autoplay - stop auto-playing new transmissions'
+              : 'Enable autoplay - automatically play new transmissions'
+          }
         >
           <PlayCircle size={14} />
         </button>

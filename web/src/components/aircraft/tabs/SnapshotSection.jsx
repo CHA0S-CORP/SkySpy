@@ -67,13 +67,19 @@ export function SnapshotSection({ snapshot, label, currentHex, onSelectAircraft 
         {snapshot.baro_rate && (
           <div className="snapshot-item">
             <span>Baro Rate</span>
-            <span>{snapshot.baro_rate > 0 ? '+' : ''}{snapshot.baro_rate} fpm</span>
+            <span>
+              {snapshot.baro_rate > 0 ? '+' : ''}
+              {snapshot.baro_rate} fpm
+            </span>
           </div>
         )}
         {snapshot.geom_rate && (
           <div className="snapshot-item">
             <span>Geom Rate</span>
-            <span>{snapshot.geom_rate > 0 ? '+' : ''}{snapshot.geom_rate} fpm</span>
+            <span>
+              {snapshot.geom_rate > 0 ? '+' : ''}
+              {snapshot.geom_rate} fpm
+            </span>
           </div>
         )}
         {snapshot.squawk && (

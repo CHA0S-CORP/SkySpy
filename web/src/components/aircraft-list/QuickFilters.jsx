@@ -11,13 +11,19 @@ export function QuickFilters({ filters, stats, onToggleFilter }) {
 
   return (
     <div className="quick-filters">
-      {QUICK_FILTERS.map(qf => {
+      {QUICK_FILTERS.map((qf) => {
         const Icon = qf.icon;
         const isActive = isQuickFilterActive(qf.filter);
-        const count = qf.id === 'emergency' ? stats.emergency :
-                     qf.id === 'military' ? stats.military :
-                     qf.id === 'climbing' ? stats.climbing :
-                     qf.id === 'descending' ? stats.descending : 0;
+        const count =
+          qf.id === 'emergency'
+            ? stats.emergency
+            : qf.id === 'military'
+              ? stats.military
+              : qf.id === 'climbing'
+                ? stats.climbing
+                : qf.id === 'descending'
+                  ? stats.descending
+                  : 0;
         return (
           <button
             key={qf.id}

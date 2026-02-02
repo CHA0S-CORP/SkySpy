@@ -75,7 +75,7 @@ export function parseJwt(token) {
     const jsonPayload = decodeURIComponent(
       atob(base64)
         .split('')
-        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
         .join('')
     );
     return JSON.parse(jsonPayload);
@@ -164,7 +164,7 @@ export function hasAnyPermission(permissions, requiredPermissions) {
   if (!permissions || !Array.isArray(permissions)) {
     return false;
   }
-  return requiredPermissions.some(p => permissions.includes(p));
+  return requiredPermissions.some((p) => permissions.includes(p));
 }
 
 /**
@@ -174,7 +174,7 @@ export function hasAllPermissions(permissions, requiredPermissions) {
   if (!permissions || !Array.isArray(permissions)) {
     return false;
   }
-  return requiredPermissions.every(p => permissions.includes(p));
+  return requiredPermissions.every((p) => permissions.includes(p));
 }
 
 /**

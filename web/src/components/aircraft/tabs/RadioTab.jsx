@@ -21,7 +21,7 @@ export function RadioTab({
   radioAutoplay,
   handleRadioPlay,
   handleRadioSeek,
-  toggleRadioAutoplay
+  toggleRadioAutoplay,
 }) {
   const formatDuration = (seconds) => {
     if (!seconds) return '--:--';
@@ -44,12 +44,7 @@ export function RadioTab({
   }
 
   return (
-    <div
-      className="detail-radio"
-      id="panel-radio"
-      role="tabpanel"
-      aria-labelledby="tab-radio"
-    >
+    <div className="detail-radio" id="panel-radio" role="tabpanel" aria-labelledby="tab-radio">
       {/* Radio Toolbar */}
       <div className="radio-toolbar">
         <div className="radio-filters">
@@ -94,14 +89,19 @@ export function RadioTab({
           <button
             className={`radio-autoplay-btn ${radioAutoplay && getGlobalAudioState().autoplayFilter?.hex === hex ? 'active' : ''}`}
             onClick={toggleRadioAutoplay}
-            title={radioAutoplay ? 'Disable autoplay for this aircraft' : 'Enable autoplay for this aircraft'}
+            title={
+              radioAutoplay
+                ? 'Disable autoplay for this aircraft'
+                : 'Enable autoplay for this aircraft'
+            }
             aria-pressed={radioAutoplay && getGlobalAudioState().autoplayFilter?.hex === hex}
           >
             <PlayCircle size={14} aria-hidden="true" />
             <span>Auto</span>
           </button>
           <span className="radio-count" aria-live="polite">
-            {filteredRadioTransmissions.length} transmission{filteredRadioTransmissions.length !== 1 ? 's' : ''}
+            {filteredRadioTransmissions.length} transmission
+            {filteredRadioTransmissions.length !== 1 ? 's' : ''}
           </span>
         </div>
       </div>
@@ -172,10 +172,7 @@ export function RadioTab({
                       tabIndex={0}
                     >
                       <div className="radio-progress-bar">
-                        <div
-                          className="radio-progress-fill"
-                          style={{ width: `${progress}%` }}
-                        />
+                        <div className="radio-progress-fill" style={{ width: `${progress}%` }} />
                       </div>
                       <div className="radio-duration">
                         <span>{formatDuration((progress / 100) * duration)}</span>
@@ -189,8 +186,8 @@ export function RadioTab({
                         <p className="transcript-preview-text">
                           {transmission.raw_text && (
                             <span className="transcript-highlight">{transmission.raw_text}</span>
-                          )}
-                          {' '}{transmission.transcript}
+                          )}{' '}
+                          {transmission.transcript}
                         </p>
                       </div>
                     ) : (
@@ -205,10 +202,12 @@ export function RadioTab({
                   {transmission.transcript && transmission.transcript.length > 100 && (
                     <button
                       className={`radio-expand-btn ${isExpanded ? 'expanded' : ''}`}
-                      onClick={() => setRadioExpandedTranscript(prev => ({
-                        ...prev,
-                        [id]: !prev[id]
-                      }))}
+                      onClick={() =>
+                        setRadioExpandedTranscript((prev) => ({
+                          ...prev,
+                          [id]: !prev[id],
+                        }))
+                      }
                       aria-label={isExpanded ? 'Collapse transcript' : 'Expand transcript'}
                       aria-expanded={isExpanded}
                     >

@@ -85,8 +85,13 @@
 }
 
 @keyframes pulse-badge {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
 }
 
 .status-btn {
@@ -207,8 +212,13 @@
 }
 
 @keyframes pulse-badge {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
 }
 
 .pattern-badges {
@@ -349,8 +359,13 @@
 }
 
 @keyframes pulse-trend {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
 }
 
 .threat-details {
@@ -386,7 +401,8 @@
 }
 
 @keyframes critical-pulse {
-  0%, 100% {
+  0%,
+  100% {
     text-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
   }
   50% {
@@ -423,7 +439,8 @@
 }
 
 @keyframes clear-pulse {
-  0%, 100% {
+  0%,
+  100% {
     transform: scale(1);
     opacity: 1;
   }
@@ -977,7 +994,7 @@
   font-family: 'SF Mono', 'Menlo', monospace;
 }
 
-.settings-slider input[type="range"] {
+.settings-slider input[type='range'] {
   width: 100%;
   height: 6px;
   appearance: none;
@@ -986,7 +1003,7 @@
   cursor: pointer;
 }
 
-.settings-slider input[type="range"]::-webkit-slider-thumb {
+.settings-slider input[type='range']::-webkit-slider-thumb {
   appearance: none;
   width: 18px;
   height: 18px;
@@ -1054,14 +1071,14 @@
   gap: 8px;
 }
 
-.settings-toggle-row input[type="checkbox"] {
+.settings-toggle-row input[type='checkbox'] {
   width: 18px;
   height: 18px;
   accent-color: #22c55e;
   cursor: pointer;
 }
 
-.settings-toggle-row input[type="checkbox"]:disabled {
+.settings-toggle-row input[type='checkbox']:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -1255,7 +1272,8 @@
 }
 
 @keyframes blip-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.5;
     r: 12;
   }
@@ -1382,8 +1400,12 @@
 }
 
 @keyframes modal-overlay-enter {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .gps-modal {
@@ -1454,7 +1476,9 @@
 }
 
 @keyframes modal-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .gps-modal-title {
@@ -1668,7 +1692,9 @@
   width: 200px;
   height: 200px;
   border-radius: 50%;
-  transition: transform 0.3s ease-out, color 0.3s ease;
+  transition:
+    transform 0.3s ease-out,
+    color 0.3s ease;
 }
 
 .heads-up-arrow svg {
@@ -1692,13 +1718,25 @@
 }
 
 @keyframes heads-up-pulse-critical {
-  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 20px currentColor); }
-  50% { transform: scale(1.08); filter: drop-shadow(0 0 40px currentColor); }
+  0%,
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 20px currentColor);
+  }
+  50% {
+    transform: scale(1.08);
+    filter: drop-shadow(0 0 40px currentColor);
+  }
 }
 
 @keyframes heads-up-pulse-warning {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.04); }
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
 }
 
 .heads-up-distance {
@@ -1744,8 +1782,13 @@
 }
 
 @keyframes all-clear-glow {
-  0%, 100% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.3); }
-  50% { box-shadow: 0 0 40px rgba(34, 197, 94, 0.5); }
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(34, 197, 94, 0.5);
+  }
 }
 
 .heads-up-all-clear-text {
@@ -1780,8 +1823,13 @@
 }
 
 @keyframes threat-glow-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 /* Peripheral edge indicators */
@@ -1832,8 +1880,13 @@
 }
 
 @keyframes edge-pulse {
-  0%, 100% { opacity: var(--intensity, 0.5); }
-  50% { opacity: calc(var(--intensity, 0.5) * 0.6); }
+  0%,
+  100% {
+    opacity: var(--intensity, 0.5);
+  }
+  50% {
+    opacity: calc(var(--intensity, 0.5) * 0.6);
+  }
 }
 
 /* ============================================================================
@@ -2024,9 +2077,17 @@
 }
 
 @keyframes gesture-hint-fade {
-  0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  70% { opacity: 1; }
-  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.95);
+  }
 }
 
 /* ============================================================================
@@ -2065,8 +2126,13 @@
 }
 
 @keyframes prediction-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
 }
 
 .intercept-warning {
@@ -2084,8 +2150,13 @@
 }
 
 @keyframes intercept-flash {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 /* ============================================================================
@@ -2160,13 +2231,23 @@
 }
 
 @keyframes voice-wave {
-  0%, 100% { transform: scaleY(0.5); }
-  50% { transform: scaleY(1); }
+  0%,
+  100% {
+    transform: scaleY(0.5);
+  }
+  50% {
+    transform: scaleY(1);
+  }
 }
 
 @keyframes voice-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
-  50% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+  }
 }
 
 /* ============================================================================
@@ -2245,8 +2326,13 @@
 }
 
 @keyframes badge-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 /* ============================================================================

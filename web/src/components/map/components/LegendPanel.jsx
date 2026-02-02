@@ -21,12 +21,16 @@ export function LegendPanel({
   return (
     <div
       className={`legend-panel ${config.mapMode === 'pro' ? 'pro-style' : ''} ${isLegendDragging ? 'dragging' : ''} ${legendCollapsed ? 'collapsed' : ''}`}
-      style={legendPosition.x !== null ? {
-        left: legendPosition.x,
-        top: legendPosition.y,
-        right: 'auto',
-        bottom: 'auto'
-      } : {}}
+      style={
+        legendPosition.x !== null
+          ? {
+              left: legendPosition.x,
+              top: legendPosition.y,
+              right: 'auto',
+              bottom: 'auto',
+            }
+          : {}
+      }
       onMouseDown={handleLegendMouseDown}
       onTouchStart={(e) => {
         if (e.target.closest('button')) return;
@@ -36,17 +40,22 @@ export function LegendPanel({
           x: touch.clientX,
           y: touch.clientY,
           startX: legendPosition.x ?? rect.left,
-          startY: legendPosition.y ?? rect.top
+          startY: legendPosition.y ?? rect.top,
         };
       }}
     >
       <div className="legend-header">
         <span>Symbol Legend</span>
         <div className="legend-header-buttons">
-          <button onClick={() => setLegendCollapsed(!legendCollapsed)} title={legendCollapsed ? 'Expand' : 'Collapse'}>
+          <button
+            onClick={() => setLegendCollapsed(!legendCollapsed)}
+            title={legendCollapsed ? 'Expand' : 'Collapse'}
+          >
             {legendCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
           </button>
-          <button onClick={() => setShowLegend(false)} title="Close"><X size={14} /></button>
+          <button onClick={() => setShowLegend(false)} title="Close">
+            <X size={14} />
+          </button>
         </div>
       </div>
 

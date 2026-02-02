@@ -5,8 +5,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
  * Handles audio alerts for safety events and browser notifications
  */
 export function useMapAlarms() {
-  const [soundMuted, setSoundMuted] = useState(() =>
-    localStorage.getItem('adsb-sound-muted') === 'true'
+  const [soundMuted, setSoundMuted] = useState(
+    () => localStorage.getItem('adsb-sound-muted') === 'true'
   );
 
   const audioContextRef = useRef(null);
@@ -52,7 +52,7 @@ export function useMapAlarms() {
         icon: '/static/favicon.svg',
         tag,
         requireInteraction: urgent,
-        silent: false
+        silent: false,
       });
 
       if (!urgent) {
@@ -258,38 +258,44 @@ export function useMapAlarms() {
   }, [soundMuted, initAudioContext]);
 
   // Play alarm based on severity
-  const playConflictAlarm = useCallback((severity = 'low') => {
-    switch (severity) {
-      case 'critical':
-        playAlarmStage3();
-        break;
-      case 'warning':
-        playAlarmStage2();
-        break;
-      default:
-        playAlarmStage1();
-    }
-  }, [playAlarmStage1, playAlarmStage2, playAlarmStage3]);
+  const playConflictAlarm = useCallback(
+    (severity = 'low') => {
+      switch (severity) {
+        case 'critical':
+          playAlarmStage3();
+          break;
+        case 'warning':
+          playAlarmStage2();
+          break;
+        default:
+          playAlarmStage1();
+      }
+    },
+    [playAlarmStage1, playAlarmStage2, playAlarmStage3]
+  );
 
   // Get highest severity from events
   const getHighestSeverity = useCallback((events) => {
-    if (events.some(e => e.severity === 'critical')) return 'critical';
-    if (events.some(e => e.severity === 'warning')) return 'warning';
+    if (events.some((e) => e.severity === 'critical')) return 'critical';
+    if (events.some((e) => e.severity === 'warning')) return 'warning';
     return 'low';
   }, []);
 
   // Start looping alarm
-  const startAlarmLoop = useCallback((severity = 'low') => {
-    if (alarmIntervalRef.current || soundMuted) return;
+  const startAlarmLoop = useCallback(
+    (severity = 'low') => {
+      if (alarmIntervalRef.current || soundMuted) return;
 
-    playConflictAlarm(severity);
-
-    const interval = severity === 'critical' ? 1500 : severity === 'warning' ? 2500 : 3000;
-
-    alarmIntervalRef.current = setInterval(() => {
       playConflictAlarm(severity);
-    }, interval);
-  }, [playConflictAlarm, soundMuted]);
+
+      const interval = severity === 'critical' ? 1500 : severity === 'warning' ? 2500 : 3000;
+
+      alarmIntervalRef.current = setInterval(() => {
+        playConflictAlarm(severity);
+      }, interval);
+    },
+    [playConflictAlarm, soundMuted]
+  );
 
   // Stop the alarm loop
   const stopAlarmLoop = useCallback(() => {
@@ -335,7 +341,7 @@ export function useMapAlarms() {
 
   // Clear old notified events
   const clearOldNotifications = useCallback((currentEventKeys) => {
-    notifiedEventsRef.current.forEach(key => {
+    notifiedEventsRef.current.forEach((key) => {
       if (!currentEventKeys.has(key)) {
         setTimeout(() => notifiedEventsRef.current.delete(key), 300000); // 5 min
       }

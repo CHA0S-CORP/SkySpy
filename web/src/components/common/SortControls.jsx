@@ -21,7 +21,7 @@ export function SortControls({
   direction,
   onSort,
   className = '',
-  compact = false
+  compact = false,
 }) {
   const [isMobileDropdownOpen, setIsMobileDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -40,7 +40,7 @@ export function SortControls({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isMobileDropdownOpen]);
 
-  const activeFieldConfig = fields.find(f => f.key === activeField);
+  const activeFieldConfig = fields.find((f) => f.key === activeField);
   const activeLabel = activeFieldConfig?.label || activeField;
 
   const DirectionIcon = direction === 'asc' ? ArrowUp : ArrowDown;

@@ -5,13 +5,7 @@ import { SEVERITY_ICONS, SEVERITY_LABELS } from './alertHistoryConstants';
 /**
  * Single alert history item component
  */
-export function AlertHistoryItem({
-  alert,
-  index,
-  totalCount,
-  isAcknowledged,
-  onAcknowledge,
-}) {
+export function AlertHistoryItem({ alert, index, totalCount, isAcknowledged, onAcknowledge }) {
   const severity = alert.severity || alert.priority || 'info';
   const SeverityIcon = SEVERITY_ICONS[severity] || SEVERITY_ICONS.info;
   const severityLabel = SEVERITY_LABELS[severity] || 'Info';
@@ -33,9 +27,7 @@ export function AlertHistoryItem({
       <div className="alert-history-content">
         <div className="alert-history-header">
           <span className="alert-history-title">{alert.rule_name || 'Alert Triggered'}</span>
-          <span className={`alert-severity-badge ${severity}`}>
-            {severity}
-          </span>
+          <span className={`alert-severity-badge ${severity}`}>{severity}</span>
         </div>
 
         <div className="alert-history-aircraft">
@@ -43,11 +35,7 @@ export function AlertHistoryItem({
           <span>{alertIdentifier}</span>
         </div>
 
-        {alert.message && (
-          <div className="alert-history-message">
-            {alert.message}
-          </div>
-        )}
+        {alert.message && <div className="alert-history-message">{alert.message}</div>}
       </div>
 
       <div className="alert-history-meta">

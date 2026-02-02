@@ -64,22 +64,22 @@ const sliderStyles = `
   }
 `;
 
-export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, wsRequest, wsConnected }) {
+export function SafetyEventPage({
+  eventId,
+  apiBase,
+  onClose,
+  onSelectAircraft,
+  wsRequest,
+  wsConnected,
+}) {
   const [replayState, setReplayState] = useState({ position: 100, isPlaying: false, speed: 1 });
   const animationFrameRef = useRef(null);
   const replayControlsRef = useRef(null);
   const flightGraphsRef = useRef(null);
 
   // Use extracted data hook
-  const {
-    event,
-    loading,
-    error,
-    trackData,
-    acknowledged,
-    acknowledging,
-    acknowledgeEvent
-  } = useSafetyEventData({ eventId, apiBase, wsRequest, wsConnected });
+  const { event, loading, error, trackData, acknowledged, acknowledging, acknowledgeEvent } =
+    useSafetyEventData({ eventId, apiBase, wsRequest, wsConnected });
 
   // Get interpolated position along a track
   const getInterpolatedPosition = useCallback((track, percentage) => {
@@ -93,13 +93,13 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
 
   // Handle replay slider change
   const handleReplayChange = useCallback((newPosition) => {
-    setReplayState(prev => ({ ...prev, position: newPosition }));
+    setReplayState((prev) => ({ ...prev, position: newPosition }));
   }, []);
 
   // Toggle play/pause
   const togglePlay = useCallback(() => {
     const newPlaying = !replayState.isPlaying;
-    setReplayState(prev => ({ ...prev, isPlaying: newPlaying }));
+    setReplayState((prev) => ({ ...prev, isPlaying: newPlaying }));
 
     if (newPlaying) {
       let pos = replayState.position <= 0 ? 0 : replayState.position;
@@ -113,11 +113,11 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
 
         if (pos >= 100) {
           pos = 100;
-          setReplayState(prev => ({ ...prev, position: 100, isPlaying: false }));
+          setReplayState((prev) => ({ ...prev, position: 100, isPlaying: false }));
           return;
         }
 
-        setReplayState(prev => ({ ...prev, position: pos }));
+        setReplayState((prev) => ({ ...prev, position: pos }));
         animationFrameRef.current = requestAnimationFrame(animate);
       };
 
@@ -134,26 +134,26 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
-    setReplayState(prev => ({ ...prev, position: 0, isPlaying: false }));
+    setReplayState((prev) => ({ ...prev, position: 0, isPlaying: false }));
   }, []);
 
   const skipToEnd = useCallback(() => {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
-    setReplayState(prev => ({ ...prev, position: 100, isPlaying: false }));
+    setReplayState((prev) => ({ ...prev, position: 100, isPlaying: false }));
   }, []);
 
   const jumpToEvent = useCallback(() => {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
-    setReplayState(prev => ({ ...prev, position: 50, isPlaying: false }));
+    setReplayState((prev) => ({ ...prev, position: 50, isPlaying: false }));
   }, []);
 
   // Handle speed change
   const handleSpeedChange = useCallback((newSpeed) => {
-    setReplayState(prev => ({ ...prev, speed: newSpeed }));
+    setReplayState((prev) => ({ ...prev, speed: newSpeed }));
   }, []);
 
   // Handle mousewheel on replay controls to scrub through time
@@ -163,7 +163,7 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
       e.stopPropagation();
       const step = e.shiftKey ? 10 : 2;
       const delta = e.deltaY > 0 ? step : -step;
-      setReplayState(prev => {
+      setReplayState((prev) => {
         const newPosition = Math.max(0, Math.min(100, prev.position + delta));
         return { ...prev, position: newPosition, isPlaying: false };
       });
@@ -203,20 +203,27 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
   // Get severity color
   const getSeverityColor = (severity) => {
     switch (severity) {
-      case 'critical': return '#ff4757';
-      case 'warning': return '#ff9f43';
-      case 'info': return '#00d4ff';
-      default: return '#00d4ff';
+      case 'critical':
+        return '#ff4757';
+      case 'warning':
+        return '#ff9f43';
+      case 'info':
+        return '#00d4ff';
+      default:
+        return '#00d4ff';
     }
   };
 
   // Get current telemetry values for display
-  const getCurrentTelemetry = useCallback((icao) => {
-    const track = trackData[icao];
-    if (!track || track.length === 0) return null;
-    const pos = getInterpolatedPosition(track, replayState.position);
-    return pos;
-  }, [trackData, replayState.position, getInterpolatedPosition]);
+  const getCurrentTelemetry = useCallback(
+    (icao) => {
+      const track = trackData[icao];
+      if (!track || track.length === 0) return null;
+      const pos = getInterpolatedPosition(track, replayState.position);
+      return pos;
+    },
+    [trackData, replayState.position, getInterpolatedPosition]
+  );
 
   // Loading state
   if (loading) {
@@ -229,7 +236,9 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
           </div>
           <span className="sep-loading-text">Analyzing safety event data...</span>
           <div className="sep-loading-dots">
-            <span /><span /><span />
+            <span />
+            <span />
+            <span />
           </div>
         </div>
       </div>
@@ -246,7 +255,13 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
           </div>
           <h2>{error || 'Event not found'}</h2>
           <p>Unable to retrieve safety event data</p>
-          <button className="sep-back-btn" onClick={() => { window.location.hash = '#history?data=safety'; onClose?.(); }}>
+          <button
+            className="sep-back-btn"
+            onClick={() => {
+              window.location.hash = '#history?data=safety';
+              onClose?.();
+            }}
+          >
             <ArrowLeft size={18} /> Return to Safety Events
           </button>
         </div>
@@ -317,10 +332,7 @@ export function SafetyEventPage({ eventId, apiBase, onClose, onSelectAircraft, w
               defaultExpanded={false}
               className="sep-telemetry-section"
             >
-              <TelemetrySnapshotsContent
-                event={event}
-                onSelectAircraft={onSelectAircraft}
-              />
+              <TelemetrySnapshotsContent event={event} onSelectAircraft={onSelectAircraft} />
             </CollapsibleSection>
           )}
         </div>

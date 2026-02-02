@@ -109,7 +109,12 @@ export function useSocketIO({
    */
   const connect = useCallback(() => {
     if (!enabledRef.current || !mountedRef.current) {
-      console.log('[useSocketIO] Connect skipped - enabled:', enabledRef.current, 'mounted:', mountedRef.current);
+      console.log(
+        '[useSocketIO] Connect skipped - enabled:',
+        enabledRef.current,
+        'mounted:',
+        mountedRef.current
+      );
       return;
     }
     if (socketRef.current?.connected) {
@@ -245,7 +250,6 @@ export function useSocketIO({
       socket.io.on('reconnect', handleReconnect);
       socket.io.on('reconnect_error', handleReconnectError);
       socket.io.on('reconnect_failed', handleReconnectFailed);
-
     } catch (err) {
       console.error('[useSocketIO] Socket creation error:', err);
       setError(err);
@@ -400,7 +404,7 @@ export function useSocketIO({
 
       // Clean up all user-subscribed event listeners
       subscribersRef.current.forEach((handlers, event) => {
-        handlers.forEach(handler => {
+        handlers.forEach((handler) => {
           socketRef.current?.off(event, handler);
         });
       });
@@ -426,7 +430,6 @@ export function useSocketIO({
         socketRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]); // Only depend on enabled - connect is stable via useCallback
 
   // Check if socket is actually ready (connected AND socket object exists)

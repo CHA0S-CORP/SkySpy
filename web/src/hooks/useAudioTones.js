@@ -137,111 +137,120 @@ export function useAudioTones({ enabled = true, volume: globalVolume = 0.7 }) {
   }, []);
 
   // Play a single tone
-  const playTone = useCallback((config) => {
-    const ctx = getAudioContext();
-    if (!ctx || !enabled) return null;
+  const playTone = useCallback(
+    (config) => {
+      const ctx = getAudioContext();
+      if (!ctx || !enabled) return null;
 
-    // Resume if suspended
-    if (ctx.state === 'suspended') {
-      ctx.resume();
-    }
+      // Resume if suspended
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
 
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
 
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
 
-    oscillator.type = config.type || 'sine';
-    const volume = (config.volume || 0.5) * globalVolume;
+      oscillator.type = config.type || 'sine';
+      const volume = (config.volume || 0.5) * globalVolume;
 
-    // Handle frequency sweep
-    if (config.sweep) {
-      oscillator.frequency.setValueAtTime(config.sweep.from, ctx.currentTime);
-      oscillator.frequency.linearRampToValueAtTime(
-        config.sweep.to,
-        ctx.currentTime + config.duration
-      );
-    } else {
-      oscillator.frequency.setValueAtTime(config.frequency, ctx.currentTime);
-    }
+      // Handle frequency sweep
+      if (config.sweep) {
+        oscillator.frequency.setValueAtTime(config.sweep.from, ctx.currentTime);
+        oscillator.frequency.linearRampToValueAtTime(
+          config.sweep.to,
+          ctx.currentTime + config.duration
+        );
+      } else {
+        oscillator.frequency.setValueAtTime(config.frequency, ctx.currentTime);
+      }
 
-    // Volume envelope
-    if (config.ramp) {
-      gainNode.gain.setValueAtTime(0, ctx.currentTime);
-      gainNode.gain.linearRampToValueAtTime(volume, ctx.currentTime + 0.01);
-      gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + config.duration);
-    } else {
-      gainNode.gain.setValueAtTime(volume, ctx.currentTime);
-      gainNode.gain.setValueAtTime(0, ctx.currentTime + config.duration);
-    }
+      // Volume envelope
+      if (config.ramp) {
+        gainNode.gain.setValueAtTime(0, ctx.currentTime);
+        gainNode.gain.linearRampToValueAtTime(volume, ctx.currentTime + 0.01);
+        gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + config.duration);
+      } else {
+        gainNode.gain.setValueAtTime(volume, ctx.currentTime);
+        gainNode.gain.setValueAtTime(0, ctx.currentTime + config.duration);
+      }
 
-    oscillator.start(ctx.currentTime);
-    oscillator.stop(ctx.currentTime + config.duration + 0.01);
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + config.duration + 0.01);
 
-    activeOscillatorsRef.current.push(oscillator);
-    oscillator.onended = () => {
-      activeOscillatorsRef.current = activeOscillatorsRef.current.filter(o => o !== oscillator);
-    };
+      activeOscillatorsRef.current.push(oscillator);
+      oscillator.onended = () => {
+        activeOscillatorsRef.current = activeOscillatorsRef.current.filter((o) => o !== oscillator);
+      };
 
-    return oscillator;
-  }, [enabled, globalVolume]);
+      return oscillator;
+    },
+    [enabled, globalVolume]
+  );
 
   // Play a sequence of tones
-  const playSequence = useCallback(async (config) => {
-    const ctx = getAudioContext();
-    if (!ctx || !enabled) return;
+  const playSequence = useCallback(
+    async (config) => {
+      const ctx = getAudioContext();
+      if (!ctx || !enabled) return;
 
-    const frequencies = config.frequencies || [config.frequency];
-    const gap = config.gap || 0.1;
-    const repeats = config.repeat || 1;
-    const repeatGap = config.repeatGap || 0.3;
+      const frequencies = config.frequencies || [config.frequency];
+      const gap = config.gap || 0.1;
+      const repeats = config.repeat || 1;
+      const repeatGap = config.repeatGap || 0.3;
 
-    for (let r = 0; r < repeats; r++) {
-      for (let i = 0; i < frequencies.length; i++) {
-        playTone({
-          ...config,
-          frequency: frequencies[i],
-          sweep: undefined, // Sequences don't use sweep
-        });
+      for (let r = 0; r < repeats; r++) {
+        for (let i = 0; i < frequencies.length; i++) {
+          playTone({
+            ...config,
+            frequency: frequencies[i],
+            sweep: undefined, // Sequences don't use sweep
+          });
 
-        if (i < frequencies.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, (config.duration + gap) * 1000));
+          if (i < frequencies.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, (config.duration + gap) * 1000));
+          }
+        }
+
+        if (r < repeats - 1) {
+          await new Promise((resolve) => setTimeout(resolve, repeatGap * 1000));
         }
       }
-
-      if (r < repeats - 1) {
-        await new Promise(resolve => setTimeout(resolve, repeatGap * 1000));
-      }
-    }
-  }, [enabled, playTone]);
+    },
+    [enabled, playTone]
+  );
 
   // Play a specific tone by name with throttling
-  const play = useCallback((toneName) => {
-    if (!enabled) return;
+  const play = useCallback(
+    (toneName) => {
+      if (!enabled) return;
 
-    const now = Date.now();
-    if (now - lastPlayTimeRef.current < minInterval) {
-      return;
-    }
-    lastPlayTimeRef.current = now;
+      const now = Date.now();
+      if (now - lastPlayTimeRef.current < minInterval) {
+        return;
+      }
+      lastPlayTimeRef.current = now;
 
-    const config = TONES[toneName];
-    if (!config) {
-      console.warn(`Unknown tone: ${toneName}`);
-      return;
-    }
+      const config = TONES[toneName];
+      if (!config) {
+        console.warn(`Unknown tone: ${toneName}`);
+        return;
+      }
 
-    if (config.frequencies) {
-      playSequence(config);
-    } else {
-      playTone(config);
-    }
-  }, [enabled, playTone, playSequence]);
+      if (config.frequencies) {
+        playSequence(config);
+      } else {
+        playTone(config);
+      }
+    },
+    [enabled, playTone, playSequence]
+  );
 
   // Stop all active sounds
   const stop = useCallback(() => {
-    activeOscillatorsRef.current.forEach(osc => {
+    activeOscillatorsRef.current.forEach((osc) => {
       try {
         osc.stop();
       } catch {
@@ -264,18 +273,21 @@ export function useAudioTones({ enabled = true, volume: globalVolume = 0.7 }) {
   const playEtaWarning = useCallback(() => play('etaWarning'), [play]);
 
   // Play appropriate tone for threat level
-  const playForThreatLevel = useCallback((level) => {
-    switch (level) {
-      case 'critical':
-        playCritical();
-        break;
-      case 'warning':
-        playWarning();
-        break;
-      default:
-        playInfo();
-    }
-  }, [playCritical, playWarning, playInfo]);
+  const playForThreatLevel = useCallback(
+    (level) => {
+      switch (level) {
+        case 'critical':
+          playCritical();
+          break;
+        case 'warning':
+          playWarning();
+          break;
+        default:
+          playInfo();
+      }
+    },
+    [playCritical, playWarning, playInfo]
+  );
 
   // Cleanup on unmount
   useEffect(() => {

@@ -32,41 +32,44 @@ export function useStats(apiBase = '', options = {}) {
   const mountedRef = useRef(true);
 
   // Helper to fetch data via WebSocket or HTTP
-  const fetchData = useCallback(async (endpoint, socketEvent) => {
-    try {
-      // Try WebSocket first if available
-      if (wsRequest && wsConnected && socketEvent) {
-        try {
-          const result = await wsRequest(socketEvent, { hours });
-          if (result && !result.error) {
-            return result;
+  const fetchData = useCallback(
+    async (endpoint, socketEvent) => {
+      try {
+        // Try WebSocket first if available
+        if (wsRequest && wsConnected && socketEvent) {
+          try {
+            const result = await wsRequest(socketEvent, { hours });
+            if (result && !result.error) {
+              return result;
+            }
+          } catch (wsErr) {
+            console.debug(`WebSocket request failed for ${socketEvent}:`, wsErr.message);
+            // Fall through to HTTP
           }
-        } catch (wsErr) {
-          console.debug(`WebSocket request failed for ${socketEvent}:`, wsErr.message);
-          // Fall through to HTTP
         }
-      }
 
-      // HTTP fallback
-      const baseUrl = (apiBase || '').replace(/\/$/, ''); // Strip trailing slash
-      const res = await fetch(`${baseUrl}${endpoint}?hours=${hours}`);
-      if (!res.ok) {
-        // Return null for 404s (endpoint may not exist yet)
-        if (res.status === 404) return null;
-        throw new Error(`HTTP ${res.status}`);
-      }
+        // HTTP fallback
+        const baseUrl = (apiBase || '').replace(/\/$/, ''); // Strip trailing slash
+        const res = await fetch(`${baseUrl}${endpoint}?hours=${hours}`);
+        if (!res.ok) {
+          // Return null for 404s (endpoint may not exist yet)
+          if (res.status === 404) return null;
+          throw new Error(`HTTP ${res.status}`);
+        }
 
-      // Check content type before parsing
-      const contentType = res.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
+        // Check content type before parsing
+        const contentType = res.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          return null;
+        }
+        return await res.json();
+      } catch (err) {
+        console.debug(`Failed to fetch ${endpoint}:`, err.message);
         return null;
       }
-      return await res.json();
-    } catch (err) {
-      console.debug(`Failed to fetch ${endpoint}:`, err.message);
-      return null;
-    }
-  }, [apiBase, wsRequest, wsConnected, hours]);
+    },
+    [apiBase, wsRequest, wsConnected, hours]
+  );
 
   // Fetch all stats - try combined endpoint first, then individual endpoints as fallback
   const fetchAllStats = useCallback(async () => {
@@ -89,18 +92,12 @@ export function useStats(apiBase = '', options = {}) {
         setGeographicStats(combined.geographic || null);
       } else {
         // Combined endpoint not available, fetch individual endpoints
-        const [
-          tracking,
-          engagementData,
-          favoritesData,
-          patterns,
-          geographic
-        ] = await Promise.all([
+        const [tracking, engagementData, favoritesData, patterns, geographic] = await Promise.all([
           fetchData('/api/v1/stats/tracking-quality', 'stats-tracking-quality'),
           fetchData('/api/v1/stats/engagement', 'stats-engagement'),
           fetchData('/api/v1/stats/favorites', 'stats-favorites'),
           fetchData('/api/v1/stats/flight-patterns', 'stats-flight-patterns'),
-          fetchData('/api/v1/stats/geographic', 'stats-geographic')
+          fetchData('/api/v1/stats/geographic', 'stats-geographic'),
         ]);
 
         // Check mounted before setting state
@@ -149,7 +146,7 @@ export function useStats(apiBase = '', options = {}) {
     // State
     loading,
     error,
-    refetch: fetchAllStats
+    refetch: fetchAllStats,
   };
 }
 

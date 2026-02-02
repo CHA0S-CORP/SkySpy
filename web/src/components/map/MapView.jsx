@@ -2,24 +2,102 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
-  Plane, Radio, MapPin, Activity, Clock, Filter, ChevronUp, ChevronDown,
-  ChevronLeft, ChevronRight, X, Eye, EyeOff, Settings, Trash2, Plus, Shield,
-  Bell, Database, Zap, RefreshCw, TestTube2, AlertTriangle, BarChart3, History,
-  Map as MapIcon, Radar, Moon, Sun, BellRing, BellOff, Layers, ExternalLink,
-  Ship, Radio as RadioIcon, LayoutDashboard, LineChart, MessageSquare, Anchor,
-  Wind, Snowflake, CloudRain, Thermometer, Navigation, Info, HelpCircle, Compass,
-  Volume2, VolumeX, Check, Menu, Search, Signal, Crosshair, BellPlus, TrendingUp, TrendingDown, Minus,
-  ArrowUpRight, ArrowDownRight, ArrowRight, LocateFixed, Maximize2, Minimize2, Pin, PinOff, MessageCircle,
-  Camera, Calendar, Building2, Flag, Hash, Wifi, WifiOff, Loader2
+  Plane,
+  Radio,
+  MapPin,
+  Activity,
+  Clock,
+  Filter,
+  ChevronUp,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Eye,
+  EyeOff,
+  Settings,
+  Trash2,
+  Plus,
+  Shield,
+  Bell,
+  Database,
+  Zap,
+  RefreshCw,
+  TestTube2,
+  AlertTriangle,
+  BarChart3,
+  History,
+  Map as MapIcon,
+  Radar,
+  Moon,
+  Sun,
+  BellRing,
+  BellOff,
+  Layers,
+  ExternalLink,
+  Ship,
+  Radio as RadioIcon,
+  LayoutDashboard,
+  LineChart,
+  MessageSquare,
+  Anchor,
+  Wind,
+  Snowflake,
+  CloudRain,
+  Thermometer,
+  Navigation,
+  Info,
+  HelpCircle,
+  Compass,
+  Volume2,
+  VolumeX,
+  Check,
+  Menu,
+  Search,
+  Signal,
+  Crosshair,
+  BellPlus,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  ArrowUpRight,
+  ArrowDownRight,
+  ArrowRight,
+  LocateFixed,
+  Maximize2,
+  Minimize2,
+  Pin,
+  PinOff,
+  MessageCircle,
+  Camera,
+  Calendar,
+  Building2,
+  Flag,
+  Hash,
+  Wifi,
+  WifiOff,
+  Loader2,
 } from 'lucide-react';
 
 // Import utilities
 import {
-  getConfig, saveConfig, getOverlays, saveOverlays,
-  getLayerOpacities, saveLayerOpacities,
-  getTailInfo, getCountryFromIcao, getTailNumber, getCategoryName,
-  decodeMetar, decodePirep, getPirepType, windDirToCardinal,
-  utcToLocal, utcToLocalTime, callsignsMatch
+  getConfig,
+  saveConfig,
+  getOverlays,
+  saveOverlays,
+  getLayerOpacities,
+  saveLayerOpacities,
+  getTailInfo,
+  getCountryFromIcao,
+  getTailNumber,
+  getCategoryName,
+  decodeMetar,
+  decodePirep,
+  getPirepType,
+  windDirToCardinal,
+  utcToLocal,
+  utcToLocalTime,
+  callsignsMatch,
 } from '../../utils';
 
 // Helper to safely parse JSON from fetch response
@@ -27,7 +105,11 @@ const safeJson = async (res) => {
   if (!res.ok) return null;
   const ct = res.headers.get('content-type');
   if (!ct || !ct.includes('application/json')) return null;
-  try { return await res.json(); } catch { return null; }
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
 };
 
 // Import AircraftDetailPage
@@ -41,17 +123,17 @@ const PRO_THEME_COLORS = {
   cyan: {
     name: 'Classic Cyan',
     background: '#0a0d12',
-    grid: { r: 40, g: 80, b: 120 },           // Grid lines
-    gridLabel: { r: 80, g: 140, b: 180 },     // Grid labels
-    primary: { r: 100, g: 200, b: 255 },      // Main UI elements (center marker, scale bar)
-    aircraft: { r: 0, g: 255, b: 150 },       // Civilian aircraft
+    grid: { r: 40, g: 80, b: 120 }, // Grid lines
+    gridLabel: { r: 80, g: 140, b: 180 }, // Grid labels
+    primary: { r: 100, g: 200, b: 255 }, // Main UI elements (center marker, scale bar)
+    aircraft: { r: 0, g: 255, b: 150 }, // Civilian aircraft
     aircraftText: { r: 150, g: 255, b: 200 }, // Aircraft data block text
-    vector: { r: 100, g: 200, b: 255 },       // Velocity vectors
-    rangeRing: { r: 60, g: 100, b: 140 },     // Range rings
-    rangeLabel: { r: 80, g: 130, b: 170 },    // Range labels
-    compass: { r: 80, g: 140, b: 200 },       // Compass rose
+    vector: { r: 100, g: 200, b: 255 }, // Velocity vectors
+    rangeRing: { r: 60, g: 100, b: 140 }, // Range rings
+    rangeLabel: { r: 80, g: 130, b: 170 }, // Range labels
+    compass: { r: 80, g: 140, b: 200 }, // Compass rose
     compassMajor: { r: 100, g: 180, b: 255 }, // Compass major labels (N/E/S/W)
-    dataBlockBg: { r: 10, g: 13, b: 18 },     // Data block background
+    dataBlockBg: { r: 10, g: 13, b: 18 }, // Data block background
     secondaryText: { r: 100, g: 200, b: 180 }, // Secondary info (speed/altitude)
   },
   // Amber/Gold - traditional ATC amber colors
@@ -125,7 +207,23 @@ const getThemeColors = (themeName) => {
   };
 };
 
-function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: wsSafetyEvents, acarsMessages: wsAcarsMessages, wsRequest, wsConnected, getAirframeError, clearAirframeError, onViewHistoryEvent, hashParams = {}, setHashParams, positionsRef = null, positionSocketConnected = false }) {
+function MapView({
+  aircraft,
+  config,
+  setConfig,
+  feederLocation,
+  safetyEvents: wsSafetyEvents,
+  acarsMessages: wsAcarsMessages,
+  wsRequest,
+  wsConnected,
+  getAirframeError,
+  clearAirframeError,
+  onViewHistoryEvent,
+  hashParams = {},
+  setHashParams,
+  positionsRef = null,
+  positionSocketConnected = false,
+}) {
   const [selectedAircraft, setSelectedAircraft] = useState(null);
   const [selectedMetar, setSelectedMetar] = useState(null);
   const [selectedPirep, setSelectedPirep] = useState(null);
@@ -183,12 +281,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const [acarsFilters, setAcarsFilters] = useState(() => {
     try {
       const saved = localStorage.getItem('adsb-acars-filters');
-      return saved ? JSON.parse(saved) : {
-        hideEmpty: true,
-        sourceFilter: 'all', // 'all', 'acars', 'vdlm2'
-        labelFilter: '',
-        callsignFilter: '',
-      };
+      return saved
+        ? JSON.parse(saved)
+        : {
+            hideEmpty: true,
+            sourceFilter: 'all', // 'all', 'acars', 'vdlm2'
+            labelFilter: '',
+            callsignFilter: '',
+          };
     } catch {
       return {
         hideEmpty: true,
@@ -224,74 +324,83 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const [quickAlertsCreated, setQuickAlertsCreated] = useState({}); // Track created alerts
 
   // Create quick alert rule helper
-  const createQuickAlert = useCallback(async (type, value, displayName) => {
-    if (!wsRequest || !wsConnected) {
-      console.warn('[Quick Alert] Not connected to server');
-      toastContext?.error?.('Not connected to server');
-      return;
-    }
-
-    const key = `${type}:${value}`;
-    if (quickAlertsCreated[key]) {
-      console.info(`[Quick Alert] Alert for ${displayName} already exists`);
-      toastContext?.info?.(`Alert for ${displayName} already exists`);
-      return;
-    }
-
-    setQuickAlertLoading(type);
-    try {
-      const payload = {
-        name: `Alert for ${displayName}`,
-        description: `Quick alert created for ${type === 'callsign' ? 'callsign' : 'registration'} ${value}`,
-        priority: 'info',
-        enabled: true,
-        conditions: {
-          logic: 'AND',
-          groups: [{
-            logic: 'AND',
-            conditions: [{
-              type,
-              operator: 'eq',
-              value,
-            }]
-          }]
-        },
-        cooldown_minutes: 5,
-      };
-
-      const result = await wsRequest('alert-rule-create', payload);
-      if (result?.error) {
-        throw new Error(result.error);
+  const createQuickAlert = useCallback(
+    async (type, value, displayName) => {
+      if (!wsRequest || !wsConnected) {
+        console.warn('[Quick Alert] Not connected to server');
+        toastContext?.error?.('Not connected to server');
+        return;
       }
 
-      setQuickAlertsCreated(prev => ({ ...prev, [key]: true }));
-      console.info(`[Quick Alert] Alert created for ${displayName}`);
-      toastContext?.success?.(`Alert created for ${displayName}`);
-    } catch (err) {
-      console.error('[Quick Alert] Failed to create alert:', err);
-      toastContext?.error?.(err.message || 'Failed to create alert');
-    } finally {
-      setQuickAlertLoading(null);
-    }
-  }, [wsRequest, wsConnected, toastContext, quickAlertsCreated]);
-  
+      const key = `${type}:${value}`;
+      if (quickAlertsCreated[key]) {
+        console.info(`[Quick Alert] Alert for ${displayName} already exists`);
+        toastContext?.info?.(`Alert for ${displayName} already exists`);
+        return;
+      }
+
+      setQuickAlertLoading(type);
+      try {
+        const payload = {
+          name: `Alert for ${displayName}`,
+          description: `Quick alert created for ${type === 'callsign' ? 'callsign' : 'registration'} ${value}`,
+          priority: 'info',
+          enabled: true,
+          conditions: {
+            logic: 'AND',
+            groups: [
+              {
+                logic: 'AND',
+                conditions: [
+                  {
+                    type,
+                    operator: 'eq',
+                    value,
+                  },
+                ],
+              },
+            ],
+          },
+          cooldown_minutes: 5,
+        };
+
+        const result = await wsRequest('alert-rule-create', payload);
+        if (result?.error) {
+          throw new Error(result.error);
+        }
+
+        setQuickAlertsCreated((prev) => ({ ...prev, [key]: true }));
+        console.info(`[Quick Alert] Alert created for ${displayName}`);
+        toastContext?.success?.(`Alert created for ${displayName}`);
+      } catch (err) {
+        console.error('[Quick Alert] Failed to create alert:', err);
+        toastContext?.error?.(err.message || 'Failed to create alert');
+      } finally {
+        setQuickAlertLoading(null);
+      }
+    },
+    [wsRequest, wsConnected, toastContext, quickAlertsCreated]
+  );
+
   // Traffic filters state
   const [trafficFilters, setTrafficFilters] = useState(() => {
     try {
       const saved = localStorage.getItem('adsb-traffic-filters');
-      return saved ? JSON.parse(saved) : {
-        showMilitary: true,
-        showCivil: true,
-        showGround: false, // Hide ground aircraft by default
-        showAirborne: true,
-        minAltitude: 0,
-        maxAltitude: 60000,
-        showWithSquawk: true,
-        showWithoutSquawk: true,
-        safetyEventsOnly: false,
-        showGA: true,
-        showAirliners: true,
-      };
+      return saved
+        ? JSON.parse(saved)
+        : {
+            showMilitary: true,
+            showCivil: true,
+            showGround: false, // Hide ground aircraft by default
+            showAirborne: true,
+            minAltitude: 0,
+            maxAltitude: 60000,
+            showWithSquawk: true,
+            showWithoutSquawk: true,
+            safetyEventsOnly: false,
+            showGA: true,
+            showAirliners: true,
+          };
     } catch {
       return {
         showMilitary: true,
@@ -318,15 +427,18 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const proPhotoRetryRef = useRef(null); // Ref for retry interval
 
   // Helper to resolve photo URLs (handles relative API paths for cross-origin dev setups)
-  const resolvePhotoUrl = useCallback((url) => {
-    if (!url) return null;
-    // If URL starts with /api/, prefix with apiBaseUrl
-    if (url.startsWith('/api/')) {
-      return `${config.apiBaseUrl || ''}${url}`;
-    }
-    return url;
-  }, [config.apiBaseUrl]);
-  
+  const resolvePhotoUrl = useCallback(
+    (url) => {
+      if (!url) return null;
+      // If URL starts with /api/, prefix with apiBaseUrl
+      if (url.startsWith('/api/')) {
+        return `${config.apiBaseUrl || ''}${url}`;
+      }
+      return url;
+    },
+    [config.apiBaseUrl]
+  );
+
   // Aviation overlay states - load from localStorage
   const [overlays, setOverlays] = useState(getOverlays);
 
@@ -337,12 +449,12 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const [popupPosition, setPopupPosition] = useState({ x: 16, y: 16 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0, startX: 0, startY: 0 });
-  
+
   // Legend drag state
   const [legendPosition, setLegendPosition] = useState({ x: null, y: null }); // null means use default CSS position
   const [isLegendDragging, setIsLegendDragging] = useState(false);
   const legendDragStartRef = useRef({ x: 0, y: 0, startX: 0, startY: 0 });
-  
+
   // Aircraft list drag state
   const [aircraftListPosition, setAircraftListPosition] = useState({ x: null, y: null });
   const [isListDragging, setIsListDragging] = useState(false);
@@ -355,17 +467,31 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const [measurementPoints, setMeasurementPoints] = useState([]); // [{lat, lon, x, y}] - max 2 points
 
   // Phase 2: Aircraft Visualization
-  const [showSpeedColors, setShowSpeedColors] = useState(() => localStorage.getItem('adsb-pro-speed-colors') === 'true');
-  const [showPredictionVectors, setShowPredictionVectors] = useState(() => localStorage.getItem('adsb-pro-prediction-vectors') !== 'false'); // default on
-  const [showAltitudeTrails, setShowAltitudeTrails] = useState(() => localStorage.getItem('adsb-pro-altitude-trails') === 'true');
-  const [predictionSeconds, setPredictionSeconds] = useState(() => parseInt(localStorage.getItem('adsb-pro-prediction-seconds') || '60', 10));
+  const [showSpeedColors, setShowSpeedColors] = useState(
+    () => localStorage.getItem('adsb-pro-speed-colors') === 'true'
+  );
+  const [showPredictionVectors, setShowPredictionVectors] = useState(
+    () => localStorage.getItem('adsb-pro-prediction-vectors') !== 'false'
+  ); // default on
+  const [showAltitudeTrails, setShowAltitudeTrails] = useState(
+    () => localStorage.getItem('adsb-pro-altitude-trails') === 'true'
+  );
+  const [predictionSeconds, setPredictionSeconds] = useState(() =>
+    parseInt(localStorage.getItem('adsb-pro-prediction-seconds') || '60', 10)
+  );
 
   // Phase 3: Conflict Visualization
-  const [showConflictVisualization, setShowConflictVisualization] = useState(() => localStorage.getItem('adsb-pro-conflict-viz') !== 'false'); // default on
+  const [showConflictVisualization, setShowConflictVisualization] = useState(
+    () => localStorage.getItem('adsb-pro-conflict-viz') !== 'false'
+  ); // default on
 
   // Phase 4: Grid & Overlays
-  const [gridOpacity, setGridOpacity] = useState(() => parseFloat(localStorage.getItem('adsb-pro-grid-opacity') || '0.3'));
-  const [showCompassRose, setShowCompassRose] = useState(() => localStorage.getItem('adsb-pro-compass-rose') === 'true');
+  const [gridOpacity, setGridOpacity] = useState(() =>
+    parseFloat(localStorage.getItem('adsb-pro-grid-opacity') || '0.3')
+  );
+  const [showCompassRose, setShowCompassRose] = useState(
+    () => localStorage.getItem('adsb-pro-compass-rose') === 'true'
+  );
 
   // Phase 5: Theme & Customization
   const [proTheme, setProTheme] = useState(() => localStorage.getItem('adsb-pro-theme') || 'cyan'); // cyan, amber, green, high-contrast
@@ -408,7 +534,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const hoverTimeoutRef = useRef(null);
 
   // Phase 7: Accessibility
-  const [highContrastMode, setHighContrastMode] = useState(() => localStorage.getItem('adsb-pro-high-contrast') === 'true');
+  const [highContrastMode, setHighContrastMode] = useState(
+    () => localStorage.getItem('adsb-pro-high-contrast') === 'true'
+  );
   const [reducedMotion, setReducedMotion] = useState(() => {
     // Check localStorage first (user preference), then system preference
     const stored = localStorage.getItem('adsb-pro-reduced-motion');
@@ -431,13 +559,13 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   useEffect(() => {
     proPanOffsetRef.current = proPanOffset;
   }, [proPanOffset]);
-  
+
   // Aviation data from REST endpoints
   const [aviationData, setAviationData] = useState({
     navaids: [],
     airports: [],
-    airspaces: [],      // G-AIRMET advisories from /api/v1/aviation/airspaces
-    boundaries: [],     // Static airspace boundaries from /api/v1/aviation/airspace-boundaries
+    airspaces: [], // G-AIRMET advisories from /api/v1/aviation/airspaces
+    boundaries: [], // Static airspace boundaries from /api/v1/aviation/airspace-boundaries
     metars: [],
     pireps: [],
   });
@@ -454,9 +582,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const [aviationOverlayData, setAviationOverlayData] = useState({
     usArtcc: null,
     usRefueling: null,
-    ukMilZones: null,  // Combined: uk_mil_awacs, uk_mil_aar, uk_mil_rc
-    euMilAwacs: null,  // Combined: de_mil_awacs, nl_mil_awacs, pl_mil_awacs
-    trainingAreas: null,  // Combined: ift_nav_routes, ift_training_areas, usafa_training_areas
+    ukMilZones: null, // Combined: uk_mil_awacs, uk_mil_aar, uk_mil_rc
+    euMilAwacs: null, // Combined: de_mil_awacs, nl_mil_awacs, pl_mil_awacs
+    trainingAreas: null, // Combined: ift_nav_routes, ift_training_areas, usafa_training_areas
   });
 
   // Map viewport center for dynamic data loading (updated on pan/zoom)
@@ -484,7 +612,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const animationRef = useRef(null);
   const sweepAngleRef = useRef(0);
   const historyRef = useRef({}); // Store position history for trails
-  const pinchStateRef = useRef({ lastDistance: 0, startRange: 0, lastCenterX: 0, lastCenterY: 0, startPanX: 0, startPanY: 0 }); // For smooth pinch-to-zoom and two-finger pan
+  const pinchStateRef = useRef({
+    lastDistance: 0,
+    startRange: 0,
+    lastCenterX: 0,
+    lastCenterY: 0,
+    startPanX: 0,
+    startPanY: 0,
+  }); // For smooth pinch-to-zoom and two-finger pan
   const conflictsRef = useRef([]); // Track conflicts for banner
   const shortTrackFetchedRef = useRef(new Map()); // Track which aircraft have had history fetched (hex -> timestamp)
   const prevAircraftIcaosRef = useRef(new Set()); // Track previous aircraft ICAOs for auto-lookup on sighting
@@ -528,7 +663,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     let configChanged = false;
 
     // Sync mode from URL
-    if (hashParams.mode && VALID_MODES.includes(hashParams.mode) && hashParams.mode !== config.mapMode) {
+    if (
+      hashParams.mode &&
+      VALID_MODES.includes(hashParams.mode) &&
+      hashParams.mode !== config.mapMode
+    ) {
       newConfig.mapMode = hashParams.mode;
       configChanged = true;
     }
@@ -557,9 +696,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
     // Sync overlays from URL (comma-separated list of enabled overlays)
     if (hashParams.overlays) {
-      const enabledOverlays = hashParams.overlays.split(',').map(s => s.trim());
+      const enabledOverlays = hashParams.overlays.split(',').map((s) => s.trim());
       const newOverlays = { ...overlays };
-      Object.keys(newOverlays).forEach(key => {
+      Object.keys(newOverlays).forEach((key) => {
         newOverlays[key] = enabledOverlays.includes(key);
       });
       setOverlays(newOverlays);
@@ -571,12 +710,20 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       const newFilters = { ...trafficFilters };
 
       if (hashParams.filters) {
-        const enabledFilters = hashParams.filters.split(',').map(s => s.trim());
+        const enabledFilters = hashParams.filters.split(',').map((s) => s.trim());
         // Boolean filter keys
-        const boolKeys = ['showMilitary', 'showCivil', 'showGround', 'showAirborne',
-                          'showWithSquawk', 'showWithoutSquawk', 'safetyEventsOnly',
-                          'showGA', 'showAirliners'];
-        boolKeys.forEach(key => {
+        const boolKeys = [
+          'showMilitary',
+          'showCivil',
+          'showGround',
+          'showAirborne',
+          'showWithSquawk',
+          'showWithoutSquawk',
+          'safetyEventsOnly',
+          'showGA',
+          'showAirliners',
+        ];
+        boolKeys.forEach((key) => {
           newFilters[key] = enabledFilters.includes(key);
         });
       }
@@ -616,14 +763,23 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
     // If no filters in URL, set current filters to URL
     if (!hashParams.filters && setHashParams) {
-      const boolKeys = ['showMilitary', 'showCivil', 'showGround', 'showAirborne',
-                        'showWithSquawk', 'showWithoutSquawk', 'safetyEventsOnly',
-                        'showGA', 'showAirliners'];
-      const enabledFilters = boolKeys.filter(key => trafficFilters[key]).join(',');
+      const boolKeys = [
+        'showMilitary',
+        'showCivil',
+        'showGround',
+        'showAirborne',
+        'showWithSquawk',
+        'showWithoutSquawk',
+        'safetyEventsOnly',
+        'showGA',
+        'showAirliners',
+      ];
+      const enabledFilters = boolKeys.filter((key) => trafficFilters[key]).join(',');
       setHashParams({
         filters: enabledFilters || undefined,
         minAlt: trafficFilters.minAltitude !== 0 ? String(trafficFilters.minAltitude) : undefined,
-        maxAlt: trafficFilters.maxAltitude !== 60000 ? String(trafficFilters.maxAltitude) : undefined,
+        maxAlt:
+          trafficFilters.maxAltitude !== 60000 ? String(trafficFilters.maxAltitude) : undefined,
       });
     }
 
@@ -668,7 +824,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       return;
     }
     if (hashParams.selected && aircraft.length > 0 && !selectedAircraft) {
-      const ac = aircraft.find(a => a.hex?.toLowerCase() === hashParams.selected.toLowerCase());
+      const ac = aircraft.find((a) => a.hex?.toLowerCase() === hashParams.selected.toLowerCase());
       if (ac) {
         // Clear other selections and set popup position
         setSelectedMetar(null);
@@ -682,46 +838,49 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   }, [hashParams.selected, aircraft, selectedAircraft]);
 
   // Send browser notification helper
-  const sendNotification = useCallback((title, body, tag, urgent = false) => {
-    // Always log to console for debugging/testing
-    console.log(`[SkySpy Notification] ${title}: ${body}`);
+  const sendNotification = useCallback(
+    (title, body, tag, urgent = false) => {
+      // Always log to console for debugging/testing
+      console.log(`[SkySpy Notification] ${title}: ${body}`);
 
-    if (typeof Notification === 'undefined') {
-      console.warn('Notifications not supported in this browser');
-      return;
-    }
-
-    if (Notification.permission !== 'granted') {
-      console.warn('Notification permission not granted');
-      return;
-    }
-
-    if (!config.browserNotifications) {
-      console.log('Browser notifications disabled in settings');
-      return;
-    }
-
-    try {
-      const notif = new Notification(title, {
-        body,
-        icon: '/static/favicon.svg',
-        tag,
-        requireInteraction: urgent,
-        silent: false
-      });
-      
-      // Auto-close non-urgent notifications after 10 seconds
-      if (!urgent) {
-        setTimeout(() => notif.close(), 10000);
+      if (typeof Notification === 'undefined') {
+        console.warn('Notifications not supported in this browser');
+        return;
       }
-    } catch (e) {
-      console.warn('Notification failed:', e);
-    }
-  }, [config.browserNotifications]);
-  
+
+      if (Notification.permission !== 'granted') {
+        console.warn('Notification permission not granted');
+        return;
+      }
+
+      if (!config.browserNotifications) {
+        console.log('Browser notifications disabled in settings');
+        return;
+      }
+
+      try {
+        const notif = new Notification(title, {
+          body,
+          icon: '/static/favicon.svg',
+          tag,
+          requireInteraction: urgent,
+          silent: false,
+        });
+
+        // Auto-close non-urgent notifications after 10 seconds
+        if (!urgent) {
+          setTimeout(() => notif.close(), 10000);
+        }
+      } catch (e) {
+        console.warn('Notification failed:', e);
+      }
+    },
+    [config.browserNotifications]
+  );
+
   // Audio context ref - created on first user interaction
   const audioContextRef = useRef(null);
-  
+
   // Initialize audio context on user interaction
   const initAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
@@ -733,17 +892,17 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     }
     return audioContextRef.current;
   }, []);
-  
+
   // Play Stage 1 alarm - double ding (low severity) - yellow
   const playAlarmStage1 = useCallback(() => {
     if (soundMuted || alarmPlayingRef.current) return;
-    
+
     try {
       const audioCtx = initAudioContext();
       if (!audioCtx) return;
-      
+
       const now = audioCtx.currentTime;
-      
+
       const playDing = (startTime) => {
         const osc1 = audioCtx.createOscillator();
         const gain1 = audioCtx.createGain();
@@ -751,36 +910,36 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         gain1.connect(audioCtx.destination);
         osc1.frequency.value = 2200;
         osc1.type = 'sine';
-        
+
         const osc2 = audioCtx.createOscillator();
         const gain2 = audioCtx.createGain();
         osc2.connect(gain2);
         gain2.connect(audioCtx.destination);
         osc2.frequency.value = 3300;
         osc2.type = 'sine';
-        
+
         const osc3 = audioCtx.createOscillator();
         const gain3 = audioCtx.createGain();
         osc3.connect(gain3);
         gain3.connect(audioCtx.destination);
         osc3.frequency.value = 1100;
         osc3.type = 'sine';
-        
+
         const peakTime = startTime + 0.01;
         const endTime = startTime + 0.4;
-        
+
         gain1.gain.setValueAtTime(0, startTime);
         gain1.gain.linearRampToValueAtTime(0.25, peakTime);
         gain1.gain.exponentialRampToValueAtTime(0.001, endTime);
-        
+
         gain2.gain.setValueAtTime(0, startTime);
         gain2.gain.linearRampToValueAtTime(0.1, peakTime);
         gain2.gain.exponentialRampToValueAtTime(0.001, startTime + 0.2);
-        
+
         gain3.gain.setValueAtTime(0, startTime);
         gain3.gain.linearRampToValueAtTime(0.08, peakTime);
         gain3.gain.exponentialRampToValueAtTime(0.001, endTime);
-        
+
         osc1.start(startTime);
         osc1.stop(endTime);
         osc2.start(startTime);
@@ -788,11 +947,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         osc3.start(startTime);
         osc3.stop(endTime);
       };
-      
+
       // Play two dings
       playDing(now);
       playDing(now + 0.5);
-      
+
       alarmPlayingRef.current = true;
       setTimeout(() => {
         alarmPlayingRef.current = false;
@@ -801,17 +960,17 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       console.warn('Could not play alarm sound:', e);
     }
   }, [soundMuted, initAudioContext]);
-  
+
   // Play Stage 2 alarm - rapid triple ding (warning severity) - orange
   const playAlarmStage2 = useCallback(() => {
     if (soundMuted || alarmPlayingRef.current) return;
-    
+
     try {
       const audioCtx = initAudioContext();
       if (!audioCtx) return;
-      
+
       const now = audioCtx.currentTime;
-      
+
       const playDing = (startTime) => {
         const osc1 = audioCtx.createOscillator();
         const gain1 = audioCtx.createGain();
@@ -819,36 +978,36 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         gain1.connect(audioCtx.destination);
         osc1.frequency.value = 2200;
         osc1.type = 'sine';
-        
+
         const osc2 = audioCtx.createOscillator();
         const gain2 = audioCtx.createGain();
         osc2.connect(gain2);
         gain2.connect(audioCtx.destination);
         osc2.frequency.value = 3300;
         osc2.type = 'sine';
-        
+
         const osc3 = audioCtx.createOscillator();
         const gain3 = audioCtx.createGain();
         osc3.connect(gain3);
         gain3.connect(audioCtx.destination);
         osc3.frequency.value = 1100;
         osc3.type = 'sine';
-        
+
         const peakTime = startTime + 0.008;
         const endTime = startTime + 0.25;
-        
+
         gain1.gain.setValueAtTime(0, startTime);
         gain1.gain.linearRampToValueAtTime(0.3, peakTime);
         gain1.gain.exponentialRampToValueAtTime(0.001, endTime);
-        
+
         gain2.gain.setValueAtTime(0, startTime);
         gain2.gain.linearRampToValueAtTime(0.12, peakTime);
         gain2.gain.exponentialRampToValueAtTime(0.001, startTime + 0.12);
-        
+
         gain3.gain.setValueAtTime(0, startTime);
         gain3.gain.linearRampToValueAtTime(0.1, peakTime);
         gain3.gain.exponentialRampToValueAtTime(0.001, endTime);
-        
+
         osc1.start(startTime);
         osc1.stop(endTime);
         osc2.start(startTime);
@@ -856,12 +1015,12 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         osc3.start(startTime);
         osc3.stop(endTime);
       };
-      
+
       // Play three rapid dings
       playDing(now);
       playDing(now + 0.2);
       playDing(now + 0.4);
-      
+
       alarmPlayingRef.current = true;
       setTimeout(() => {
         alarmPlayingRef.current = false;
@@ -870,17 +1029,17 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       console.warn('Could not play alarm sound:', e);
     }
   }, [soundMuted, initAudioContext]);
-  
+
   // Play Stage 3 alarm - high-low siren (critical severity) - pink
   const playAlarmStage3 = useCallback(() => {
     if (soundMuted || alarmPlayingRef.current) return;
-    
+
     try {
       const audioCtx = initAudioContext();
       if (!audioCtx) return;
-      
+
       const now = audioCtx.currentTime;
-      
+
       const playTone = (startTime, freq, duration) => {
         const osc1 = audioCtx.createOscillator();
         const gain1 = audioCtx.createGain();
@@ -888,39 +1047,39 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         gain1.connect(audioCtx.destination);
         osc1.frequency.value = freq;
         osc1.type = 'sine';
-        
+
         const osc2 = audioCtx.createOscillator();
         const gain2 = audioCtx.createGain();
         osc2.connect(gain2);
         gain2.connect(audioCtx.destination);
         osc2.frequency.value = freq * 1.5;
         osc2.type = 'sine';
-        
+
         const peakTime = startTime + 0.02;
         const endTime = startTime + duration;
-        
+
         gain1.gain.setValueAtTime(0, startTime);
         gain1.gain.linearRampToValueAtTime(0.35, peakTime);
         gain1.gain.setValueAtTime(0.35, endTime - 0.05);
         gain1.gain.linearRampToValueAtTime(0, endTime);
-        
+
         gain2.gain.setValueAtTime(0, startTime);
         gain2.gain.linearRampToValueAtTime(0.15, peakTime);
         gain2.gain.setValueAtTime(0.15, endTime - 0.05);
         gain2.gain.linearRampToValueAtTime(0, endTime);
-        
+
         osc1.start(startTime);
         osc1.stop(endTime);
         osc2.start(startTime);
         osc2.stop(endTime);
       };
-      
+
       // High-low-high-low pattern
-      playTone(now, 1800, 0.25);        // High
+      playTone(now, 1800, 0.25); // High
       playTone(now + 0.25, 1200, 0.25); // Low
-      playTone(now + 0.5, 1800, 0.25);  // High
+      playTone(now + 0.5, 1800, 0.25); // High
       playTone(now + 0.75, 1200, 0.25); // Low
-      
+
       alarmPlayingRef.current = true;
       setTimeout(() => {
         alarmPlayingRef.current = false;
@@ -929,42 +1088,48 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       console.warn('Could not play alarm sound:', e);
     }
   }, [soundMuted, initAudioContext]);
-  
+
   // Play alarm based on severity
-  const playConflictAlarm = useCallback((severity = 'low') => {
-    switch (severity) {
-      case 'critical':
-        playAlarmStage3();
-        break;
-      case 'warning':
-        playAlarmStage2();
-        break;
-      default:
-        playAlarmStage1();
-    }
-  }, [playAlarmStage1, playAlarmStage2, playAlarmStage3]);
-  
+  const playConflictAlarm = useCallback(
+    (severity = 'low') => {
+      switch (severity) {
+        case 'critical':
+          playAlarmStage3();
+          break;
+        case 'warning':
+          playAlarmStage2();
+          break;
+        default:
+          playAlarmStage1();
+      }
+    },
+    [playAlarmStage1, playAlarmStage2, playAlarmStage3]
+  );
+
   // Get highest severity from active events
   const getHighestSeverity = useCallback((events) => {
-    if (events.some(e => e.severity === 'critical')) return 'critical';
-    if (events.some(e => e.severity === 'warning')) return 'warning';
+    if (events.some((e) => e.severity === 'critical')) return 'critical';
+    if (events.some((e) => e.severity === 'warning')) return 'warning';
     return 'low';
   }, []);
-  
+
   // Start looping alarm for unacknowledged events
-  const startAlarmLoop = useCallback((severity = 'low') => {
-    if (alarmIntervalRef.current || soundMuted) return;
-    
-    playConflictAlarm(severity);
-    
-    // Determine loop interval based on severity
-    const interval = severity === 'critical' ? 1500 : severity === 'warning' ? 2500 : 3000;
-    
-    alarmIntervalRef.current = setInterval(() => {
+  const startAlarmLoop = useCallback(
+    (severity = 'low') => {
+      if (alarmIntervalRef.current || soundMuted) return;
+
       playConflictAlarm(severity);
-    }, interval);
-  }, [playConflictAlarm, soundMuted]);
-  
+
+      // Determine loop interval based on severity
+      const interval = severity === 'critical' ? 1500 : severity === 'warning' ? 2500 : 3000;
+
+      alarmIntervalRef.current = setInterval(() => {
+        playConflictAlarm(severity);
+      }, interval);
+    },
+    [playConflictAlarm, soundMuted]
+  );
+
   // Stop the alarm loop
   const stopAlarmLoop = useCallback(() => {
     if (alarmIntervalRef.current) {
@@ -972,27 +1137,30 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       alarmIntervalRef.current = null;
     }
   }, []);
-  
+
   // Acknowledge a safety event via API and update local state
-  const acknowledgeEvent = useCallback(async (eventId) => {
-    const baseUrl = config.apiBaseUrl || '';
+  const acknowledgeEvent = useCallback(
+    async (eventId) => {
+      const baseUrl = config.apiBaseUrl || '';
 
-    // Stop audio immediately regardless of API result
-    stopAlarmLoop();
+      // Stop audio immediately regardless of API result
+      stopAlarmLoop();
 
-    // Update local state immediately for UI feedback
-    setAcknowledgedEvents(prev => new Set([...prev, eventId]));
+      // Update local state immediately for UI feedback
+      setAcknowledgedEvents((prev) => new Set([...prev, eventId]));
 
-    // Try to persist to API (fire-and-forget, don't block on failure)
-    try {
-      await fetch(`${baseUrl}/api/v1/safety/active/${encodeURIComponent(eventId)}/acknowledge`, {
-        method: 'POST'
-      });
-    } catch (err) {
-      console.error('Failed to acknowledge event via API:', err);
-      // Audio is already stopped and UI is updated, so this is just a log
-    }
-  }, [config.apiBaseUrl, stopAlarmLoop]);
+      // Try to persist to API (fire-and-forget, don't block on failure)
+      try {
+        await fetch(`${baseUrl}/api/v1/safety/active/${encodeURIComponent(eventId)}/acknowledge`, {
+          method: 'POST',
+        });
+      } catch (err) {
+        console.error('Failed to acknowledge event via API:', err);
+        // Audio is already stopped and UI is updated, so this is just a log
+      }
+    },
+    [config.apiBaseUrl, stopAlarmLoop]
+  );
 
   // Save sound muted preference and stop alarm if muted
   useEffect(() => {
@@ -1045,7 +1213,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   useEffect(() => {
     localStorage.setItem('adsb-show-aircraft-list', showAircraftList.toString());
   }, [showAircraftList]);
-  
+
   // Save aircraft list expanded preference
   useEffect(() => {
     localStorage.setItem('adsb-list-expanded', listExpanded.toString());
@@ -1059,7 +1227,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       }, 350); // Wait for CSS transition
     }
   }, [panelPinned, showAcarsPanel, config.mapMode]);
-  
+
   // Reset photo state and fetch/cache S3 URL when selected aircraft changes
   useEffect(() => {
     // Clear any existing retry loop when aircraft changes
@@ -1096,7 +1264,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             }
           } else {
             // Fallback to HTTP GET from airframes endpoint
-            const res = await fetch(`${config.apiBaseUrl || ''}/api/v1/airframes/${selectedAircraft.hex}/photos`);
+            const res = await fetch(
+              `${config.apiBaseUrl || ''}/api/v1/airframes/${selectedAircraft.hex}/photos`
+            );
             const data = await safeJson(res);
             if (data) {
               if (data?.photo_url) {
@@ -1121,13 +1291,13 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       fetchPhoto();
     }
   }, [selectedAircraft?.hex, config.apiBaseUrl, wsRequest, wsConnected, resolvePhotoUrl]);
-  
+
   // Merge WebSocket safety events with local state
   useEffect(() => {
     if (wsSafetyEvents && wsSafetyEvents.length > 0) {
-      setSafetyEvents(prev => {
-        const existingIds = new Set(prev.map(e => e.id));
-        const newEvents = wsSafetyEvents.filter(e => !existingIds.has(e.id));
+      setSafetyEvents((prev) => {
+        const existingIds = new Set(prev.map((e) => e.id));
+        const newEvents = wsSafetyEvents.filter((e) => !existingIds.has(e.id));
         if (newEvents.length === 0) return prev;
         return [...newEvents, ...prev].slice(0, 50);
       });
@@ -1148,11 +1318,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           const res = await fetch(`${baseUrl}/api/v1/safety/events?limit=20`);
           data = await safeJson(res);
         }
-        const events = Array.isArray(data) ? data : (data?.data || data?.events || []);
+        const events = Array.isArray(data) ? data : data?.data || data?.events || [];
         if (events.length > 0) {
-          setSafetyEvents(prev => {
-            const existingIds = new Set(prev.map(e => e.id));
-            const newEvents = events.filter(e => !existingIds.has(e.id));
+          setSafetyEvents((prev) => {
+            const existingIds = new Set(prev.map((e) => e.id));
+            const newEvents = events.filter((e) => !existingIds.has(e.id));
             if (newEvents.length === 0) return prev;
             return [...newEvents, ...prev].slice(0, 50);
           });
@@ -1170,67 +1340,73 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     const interval = setInterval(fetchSafetyEvents, pollInterval);
     return () => clearInterval(interval);
   }, [wsRequest, wsConnected, config.apiBaseUrl]);
-  
+
   // Convert safety events to conflict format for display with LIVE separation data
   const activeConflicts = useMemo(() => {
     // Get unacknowledged safety events (last 60 seconds)
     const cutoff = Date.now() - 60000;
-    return safetyEvents.filter(event => {
-      if (acknowledgedEvents.has(event.id)) return false;
-      const eventTime = new Date(event.timestamp).getTime();
-      return eventTime > cutoff;
-    }).map(event => {
-      // Try to calculate live separation if both aircraft are available
-      let horizontalNm = event.details?.horizontal_nm?.toFixed(1) || '--';
-      let verticalFt = event.details?.vertical_ft || event.details?.altitude || '--';
-      
-      // For two-aircraft events (like proximity_conflict, tcas_ra), calculate live values
-      if (event.icao && event.icao_2) {
-        const ac1 = aircraft.find(a => a.hex?.toLowerCase() === event.icao?.toLowerCase());
-        const ac2 = aircraft.find(a => a.hex?.toLowerCase() === event.icao_2?.toLowerCase());
-        
-        if (ac1?.lat && ac1?.lon && ac2?.lat && ac2?.lon) {
-          // Calculate horizontal distance between aircraft
-          const dLat = (ac2.lat - ac1.lat) * 60; // nm
-          const dLon = (ac2.lon - ac1.lon) * 60 * Math.cos(ac1.lat * Math.PI / 180); // nm
-          horizontalNm = Math.sqrt(dLat * dLat + dLon * dLon).toFixed(1);
-        }
-        
-        if (ac1?.alt && ac2?.alt) {
-          verticalFt = Math.round(Math.abs(ac2.alt - ac1.alt));
-        }
-      }
-      // For single-aircraft events (extreme_vs, rapid_descent, etc.), show current altitude/vs
-      else if (event.icao) {
-        const ac = aircraft.find(a => a.hex?.toLowerCase() === event.icao?.toLowerCase());
-        if (ac?.alt) {
-          verticalFt = Math.round(ac.alt);
-        }
-        // For V/S events, show current vertical rate
-        if (event.event_type?.includes('vs') || event.event_type?.includes('descent') || event.event_type?.includes('climb')) {
-          const vs = ac?.baro_rate || ac?.geom_rate;
-          if (vs !== undefined) {
-            verticalFt = `${vs > 0 ? '+' : ''}${Math.round(vs)} fpm`;
+    return safetyEvents
+      .filter((event) => {
+        if (acknowledgedEvents.has(event.id)) return false;
+        const eventTime = new Date(event.timestamp).getTime();
+        return eventTime > cutoff;
+      })
+      .map((event) => {
+        // Try to calculate live separation if both aircraft are available
+        let horizontalNm = event.details?.horizontal_nm?.toFixed(1) || '--';
+        let verticalFt = event.details?.vertical_ft || event.details?.altitude || '--';
+
+        // For two-aircraft events (like proximity_conflict, tcas_ra), calculate live values
+        if (event.icao && event.icao_2) {
+          const ac1 = aircraft.find((a) => a.hex?.toLowerCase() === event.icao?.toLowerCase());
+          const ac2 = aircraft.find((a) => a.hex?.toLowerCase() === event.icao_2?.toLowerCase());
+
+          if (ac1?.lat && ac1?.lon && ac2?.lat && ac2?.lon) {
+            // Calculate horizontal distance between aircraft
+            const dLat = (ac2.lat - ac1.lat) * 60; // nm
+            const dLon = (ac2.lon - ac1.lon) * 60 * Math.cos((ac1.lat * Math.PI) / 180); // nm
+            horizontalNm = Math.sqrt(dLat * dLat + dLon * dLon).toFixed(1);
+          }
+
+          if (ac1?.alt && ac2?.alt) {
+            verticalFt = Math.round(Math.abs(ac2.alt - ac1.alt));
           }
         }
-      }
-      
-      return {
-        ...event,
-        ac1: event.callsign || event.icao,
-        ac2: event.callsign_2 || event.icao_2 || null,
-        hex1: event.icao,
-        hex2: event.icao_2,
-        horizontalNm,
-        verticalFt,
-      };
-    });
+        // For single-aircraft events (extreme_vs, rapid_descent, etc.), show current altitude/vs
+        else if (event.icao) {
+          const ac = aircraft.find((a) => a.hex?.toLowerCase() === event.icao?.toLowerCase());
+          if (ac?.alt) {
+            verticalFt = Math.round(ac.alt);
+          }
+          // For V/S events, show current vertical rate
+          if (
+            event.event_type?.includes('vs') ||
+            event.event_type?.includes('descent') ||
+            event.event_type?.includes('climb')
+          ) {
+            const vs = ac?.baro_rate || ac?.geom_rate;
+            if (vs !== undefined) {
+              verticalFt = `${vs > 0 ? '+' : ''}${Math.round(vs)} fpm`;
+            }
+          }
+        }
+
+        return {
+          ...event,
+          ac1: event.callsign || event.icao,
+          ac2: event.callsign_2 || event.icao_2 || null,
+          hex1: event.icao,
+          hex2: event.icao_2,
+          horizontalNm,
+          verticalFt,
+        };
+      });
   }, [safetyEvents, acknowledgedEvents, aircraft]);
-  
+
   // Monitor for new safety events and trigger alarms/notifications
   useEffect(() => {
     // Get unacknowledged events
-    const unacknowledged = activeConflicts.filter(event => !acknowledgedEvents.has(event.id));
+    const unacknowledged = activeConflicts.filter((event) => !acknowledgedEvents.has(event.id));
 
     if (unacknowledged.length > 0) {
       const severity = getHighestSeverity(unacknowledged);
@@ -1245,7 +1421,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         }, 1500);
 
         // Auto-acknowledge low severity events after 5 seconds (only if not already scheduled)
-        unacknowledged.forEach(e => {
+        unacknowledged.forEach((e) => {
           if (e.severity === 'low' && !autoAckScheduledRef.current.has(e.id)) {
             autoAckScheduledRef.current.add(e.id);
             setTimeout(() => {
@@ -1262,14 +1438,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     }
 
     // Send browser notifications for NEW events and auto-focus on critical/warning
-    activeConflicts.forEach(event => {
+    activeConflicts.forEach((event) => {
       const eventKey = `safety-${event.id}`;
 
       if (!notifiedConflictsRef.current.has(eventKey)) {
         notifiedConflictsRef.current.add(eventKey);
 
-        const severityEmoji = event.severity === 'critical' ? '🚨' :
-                             event.severity === 'warning' ? '⚠️' : '🔔';
+        const severityEmoji =
+          event.severity === 'critical' ? '🚨' : event.severity === 'warning' ? '⚠️' : '🔔';
         const title = `${severityEmoji} ${event.event_type.replace(/_/g, ' ').toUpperCase()}`;
 
         sendNotification(
@@ -1285,24 +1461,33 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     return () => {
       stopAlarmLoop();
     };
-  }, [activeConflicts, acknowledgedEvents, acknowledgeEvent, getHighestSeverity, playConflictAlarm, sendNotification, startAlarmLoop, stopAlarmLoop, aircraft]);
-  
-  
+  }, [
+    activeConflicts,
+    acknowledgedEvents,
+    acknowledgeEvent,
+    getHighestSeverity,
+    playConflictAlarm,
+    sendNotification,
+    startAlarmLoop,
+    stopAlarmLoop,
+    aircraft,
+  ]);
+
   // Monitor for emergency squawks and send notifications
   useEffect(() => {
-    const emergencySquawks = { '7500': 'HIJACK', '7600': 'RADIO FAILURE', '7700': 'EMERGENCY' };
-    
-    aircraft.forEach(ac => {
+    const emergencySquawks = { 7500: 'HIJACK', 7600: 'RADIO FAILURE', 7700: 'EMERGENCY' };
+
+    aircraft.forEach((ac) => {
       const isEmergency = ac.emergency || emergencySquawks[ac.squawk];
       if (!isEmergency) return;
-      
+
       const emergencyKey = `${ac.hex}-${ac.squawk}`;
       if (!notifiedEmergenciesRef.current.has(emergencyKey)) {
         notifiedEmergenciesRef.current.add(emergencyKey);
-        
+
         const callsign = ac.flight?.trim() || ac.hex;
         const meaning = emergencySquawks[ac.squawk] || 'EMERGENCY';
-        
+
         sendNotification(
           `🚨 ${meaning}`,
           `${callsign} squawking ${ac.squawk || 'emergency'}\nAlt: ${ac.alt?.toLocaleString() || '?'}ft`,
@@ -1311,12 +1496,12 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         );
       }
     });
-    
+
     // Clean up old emergencies after aircraft no longer in emergency state
     const currentEmergencyHexes = new Set(
-      aircraft.filter(ac => ac.emergency || emergencySquawks[ac.squawk]).map(ac => ac.hex)
+      aircraft.filter((ac) => ac.emergency || emergencySquawks[ac.squawk]).map((ac) => ac.hex)
     );
-    notifiedEmergenciesRef.current.forEach(key => {
+    notifiedEmergenciesRef.current.forEach((key) => {
       const hex = key.split('-')[0];
       if (!currentEmergencyHexes.has(hex)) {
         // Allow re-notification after 10 min
@@ -1427,7 +1612,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         const msgRes = await fetch(`${baseUrl}/api/v1/acars?limit=50`);
         const msgData = await safeJson(msgRes);
         if (msgData) {
-          setAcarsMessages(msgData.messages || msgData.results || (Array.isArray(msgData) ? msgData : []));
+          setAcarsMessages(
+            msgData.messages || msgData.results || (Array.isArray(msgData) ? msgData : [])
+          );
           acarsInitialFetchRef.current = true;
         }
       } catch (err) {
@@ -1472,7 +1659,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         // Skip if already cached
         if (callsignHexCache[cs]) continue;
         // Skip if we have a matching aircraft in range
-        const hasMatch = aircraft.some(ac => callsignsMatch(cs, ac.flight));
+        const hasMatch = aircraft.some((ac) => callsignsMatch(cs, ac.flight));
         if (!hasMatch) {
           callsignsToLookup.add(cs);
         }
@@ -1490,7 +1677,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         try {
           let data;
           if (wsRequest && wsConnected) {
-            const result = await wsRequest('sightings', { callsign: callsign, hours: 24, limit: 1 });
+            const result = await wsRequest('sightings', {
+              callsign: callsign,
+              hours: 24,
+              limit: 1,
+            });
             if (result && (result.sightings || result.results)) {
               data = result;
             } else {
@@ -1498,19 +1689,21 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             }
           } else {
             // Django API uses /api/v1/sightings (was /api/v1/history/sightings)
-            const res = await fetch(`${baseUrl}/api/v1/sightings?callsign=${encodeURIComponent(callsign)}&hours=24&limit=1`);
+            const res = await fetch(
+              `${baseUrl}/api/v1/sightings?callsign=${encodeURIComponent(callsign)}&hours=24&limit=1`
+            );
             data = await safeJson(res);
             if (!data) throw new Error('HTTP request failed');
           }
           const sightings = data?.sightings || data?.results || [];
           if (sightings.length > 0 && sightings[0].icao_hex) {
-            setCallsignHexCache(prev => ({
+            setCallsignHexCache((prev) => ({
               ...prev,
-              [callsign]: sightings[0].icao_hex
+              [callsign]: sightings[0].icao_hex,
             }));
           } else {
             // Mark as not found to avoid re-querying
-            setCallsignHexCache(prev => ({ ...prev, [callsign]: null }));
+            setCallsignHexCache((prev) => ({ ...prev, [callsign]: null }));
           }
         } catch (err) {
           // Silently fail - link just won't work for this callsign
@@ -1519,7 +1712,6 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     };
 
     lookupCallsigns();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAcarsPanel, acarsMessages, aircraft, config.apiBaseUrl, wsRequest, wsConnected]);
 
   // Fetch aircraft info when selecting aircraft (using robust hook)
@@ -1542,7 +1734,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       try {
         const bounds = map.getBounds();
         // Filter to only aircraft within the current map bounds
-        const visibleAircraft = aircraft.filter(ac => {
+        const visibleAircraft = aircraft.filter((ac) => {
           if (!ac.lat || !ac.lon) return false;
           return bounds.contains([ac.lat, ac.lon]);
         });
@@ -1581,11 +1773,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   useEffect(() => {
     if (!aircraft || aircraft.length === 0) return;
 
-    const currentIcaos = new Set(aircraft.map(ac => ac.hex).filter(Boolean));
+    const currentIcaos = new Set(aircraft.map((ac) => ac.hex).filter(Boolean));
     const prevIcaos = prevAircraftIcaosRef.current;
 
     // Find newly sighted aircraft (in current but not in previous)
-    const newAircraft = aircraft.filter(ac => ac.hex && !prevIcaos.has(ac.hex));
+    const newAircraft = aircraft.filter((ac) => ac.hex && !prevIcaos.has(ac.hex));
 
     if (newAircraft.length > 0) {
       // Prefetch info for all newly sighted aircraft
@@ -1598,26 +1790,30 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
   // Popup drag handlers
   const handlePopupMouseDown = (e) => {
-    if (e.target.closest('.popup-close') || e.target.closest('a') || e.target.closest('button')) return;
+    if (e.target.closest('.popup-close') || e.target.closest('a') || e.target.closest('button'))
+      return;
     setIsDragging(true);
     dragStartRef.current = {
       x: e.clientX,
       y: e.clientY,
       startX: popupPosition.x,
-      startY: popupPosition.y
+      startY: popupPosition.y,
     };
     e.preventDefault();
   };
 
-  const handlePopupMouseMove = useCallback((e) => {
-    if (!isDragging) return;
-    const dx = e.clientX - dragStartRef.current.x;
-    const dy = e.clientY - dragStartRef.current.y;
-    setPopupPosition({
-      x: Math.max(0, dragStartRef.current.startX + dx),
-      y: Math.max(0, dragStartRef.current.startY + dy)
-    });
-  }, [isDragging]);
+  const handlePopupMouseMove = useCallback(
+    (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - dragStartRef.current.x;
+      const dy = e.clientY - dragStartRef.current.y;
+      setPopupPosition({
+        x: Math.max(0, dragStartRef.current.startX + dx),
+        y: Math.max(0, dragStartRef.current.startY + dy),
+      });
+    },
+    [isDragging]
+  );
 
   const handlePopupMouseUp = useCallback(() => {
     setIsDragging(false);
@@ -1644,22 +1840,25 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       x: e.clientX,
       y: e.clientY,
       startX: legendPosition.x ?? rect.left,
-      startY: legendPosition.y ?? rect.top
+      startY: legendPosition.y ?? rect.top,
     };
     e.preventDefault();
   };
 
-  const handleLegendMouseMove = useCallback((e) => {
-    if (!isLegendDragging) return;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const dx = clientX - legendDragStartRef.current.x;
-    const dy = clientY - legendDragStartRef.current.y;
-    setLegendPosition({
-      x: Math.max(0, legendDragStartRef.current.startX + dx),
-      y: Math.max(0, legendDragStartRef.current.startY + dy)
-    });
-  }, [isLegendDragging]);
+  const handleLegendMouseMove = useCallback(
+    (e) => {
+      if (!isLegendDragging) return;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const dx = clientX - legendDragStartRef.current.x;
+      const dy = clientY - legendDragStartRef.current.y;
+      setLegendPosition({
+        x: Math.max(0, legendDragStartRef.current.startX + dx),
+        y: Math.max(0, legendDragStartRef.current.startY + dy),
+      });
+    },
+    [isLegendDragging]
+  );
 
   const handleLegendMouseUp = useCallback(() => {
     setIsLegendDragging(false);
@@ -1690,22 +1889,25 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       x: e.clientX,
       y: e.clientY,
       startX: aircraftListPosition.x ?? rect.left,
-      startY: aircraftListPosition.y ?? rect.top
+      startY: aircraftListPosition.y ?? rect.top,
     };
     e.preventDefault();
   };
 
-  const handleListMouseMove = useCallback((e) => {
-    if (!isListDragging) return;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const dx = clientX - listDragStartRef.current.x;
-    const dy = clientY - listDragStartRef.current.y;
-    setAircraftListPosition({
-      x: Math.max(0, listDragStartRef.current.startX + dx),
-      y: Math.max(0, listDragStartRef.current.startY + dy)
-    });
-  }, [isListDragging]);
+  const handleListMouseMove = useCallback(
+    (e) => {
+      if (!isListDragging) return;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const dx = clientX - listDragStartRef.current.x;
+      const dy = clientY - listDragStartRef.current.y;
+      setAircraftListPosition({
+        x: Math.max(0, listDragStartRef.current.startX + dx),
+        y: Math.max(0, listDragStartRef.current.startY + dy),
+      });
+    },
+    [isListDragging]
+  );
 
   const handleListMouseUp = useCallback(() => {
     setIsListDragging(false);
@@ -1728,30 +1930,36 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   }, [isListDragging, handleListMouseMove, handleListMouseUp]);
 
   // Pro mode pan handlers (middle mouse button)
-  const handleProPanStart = useCallback((e) => {
-    // Middle mouse button (button 1) or auxiliary button
-    if (e.button !== 1 || config.mapMode !== 'pro') return;
-    e.preventDefault();
-    setIsProPanning(true);
-    proPanStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      offsetX: proPanOffset.x,
-      offsetY: proPanOffset.y
-    };
-  }, [config.mapMode, proPanOffset]);
+  const handleProPanStart = useCallback(
+    (e) => {
+      // Middle mouse button (button 1) or auxiliary button
+      if (e.button !== 1 || config.mapMode !== 'pro') return;
+      e.preventDefault();
+      setIsProPanning(true);
+      proPanStartRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+        offsetX: proPanOffset.x,
+        offsetY: proPanOffset.y,
+      };
+    },
+    [config.mapMode, proPanOffset]
+  );
 
-  const handleProPanMove = useCallback((e) => {
-    if (!isProPanning) return;
-    // Stop following when manually panning
-    setFollowingAircraft(null);
-    const dx = e.clientX - proPanStartRef.current.x;
-    const dy = e.clientY - proPanStartRef.current.y;
-    setProPanOffset({
-      x: proPanStartRef.current.offsetX + dx,
-      y: proPanStartRef.current.offsetY + dy
-    });
-  }, [isProPanning]);
+  const handleProPanMove = useCallback(
+    (e) => {
+      if (!isProPanning) return;
+      // Stop following when manually panning
+      setFollowingAircraft(null);
+      const dx = e.clientX - proPanStartRef.current.x;
+      const dy = e.clientY - proPanStartRef.current.y;
+      setProPanOffset({
+        x: proPanStartRef.current.offsetX + dx,
+        y: proPanStartRef.current.offsetY + dy,
+      });
+    },
+    [isProPanning]
+  );
 
   const handleProPanEnd = useCallback(() => {
     setIsProPanning(false);
@@ -1761,7 +1969,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     if (updateHash && (offset.x !== 0 || offset.y !== 0)) {
       updateHash({
         panX: String(Math.round(offset.x)),
-        panY: String(Math.round(offset.y))
+        panY: String(Math.round(offset.y)),
       });
     } else if (updateHash) {
       updateHash({ panX: undefined, panY: undefined });
@@ -1783,7 +1991,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   useEffect(() => {
     if (!followingAircraft || config.mapMode !== 'pro' || !canvasRef.current) return;
 
-    const followedAc = aircraft.find(ac => ac.hex === followingAircraft);
+    const followedAc = aircraft.find((ac) => ac.hex === followingAircraft);
     if (!followedAc || !followedAc.lat || !followedAc.lon) {
       // Aircraft no longer available, stop following
       setFollowingAircraft(null);
@@ -1796,7 +2004,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     const dLat = followedAc.lat - feederLat;
     const dLon = followedAc.lon - feederLon;
     const nmY = dLat * 60;
-    const nmX = dLon * 60 * Math.cos(feederLat * Math.PI / 180);
+    const nmX = dLon * 60 * Math.cos((feederLat * Math.PI) / 180);
 
     setProPanOffset({ x: -(nmX * pixelsPerNm), y: nmY * pixelsPerNm });
   }, [followingAircraft, aircraft, config.mapMode, radarRange, feederLat, feederLon]);
@@ -1835,7 +2043,12 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
     const handleKeyDown = (e) => {
       // Don't trigger shortcuts when typing in inputs
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+      if (
+        e.target.tagName === 'INPUT' ||
+        e.target.tagName === 'TEXTAREA' ||
+        e.target.isContentEditable
+      )
+        return;
 
       const key = e.key.toLowerCase();
 
@@ -1845,49 +2058,49 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           setFollowingAircraft(null);
           break;
         case 'v': // Toggle velocity/prediction vectors
-          setShowPredictionVectors(prev => {
+          setShowPredictionVectors((prev) => {
             const newVal = !prev;
             localStorage.setItem('adsb-pro-prediction-vectors', String(newVal));
             return newVal;
           });
           break;
         case 't': // Toggle trails
-          setShowShortTracks(prev => {
+          setShowShortTracks((prev) => {
             const newVal = !prev;
             localStorage.setItem('adsb-show-short-tracks', String(newVal));
             return newVal;
           });
           break;
         case 'g': // Cycle grid opacity (0.3 -> 0.15 -> 0 -> 0.3)
-          setGridOpacity(prev => {
+          setGridOpacity((prev) => {
             const newVal = prev > 0.2 ? 0.15 : prev > 0.1 ? 0 : 0.3;
             localStorage.setItem('adsb-pro-grid-opacity', String(newVal));
             return newVal;
           });
           break;
         case 'c': // Toggle conflict visualization
-          setShowConflictVisualization(prev => {
+          setShowConflictVisualization((prev) => {
             const newVal = !prev;
             localStorage.setItem('adsb-pro-conflict-viz', String(newVal));
             return newVal;
           });
           break;
         case 's': // Toggle speed coloring
-          setShowSpeedColors(prev => {
+          setShowSpeedColors((prev) => {
             const newVal = !prev;
             localStorage.setItem('adsb-pro-speed-colors', String(newVal));
             return newVal;
           });
           break;
         case 'l': // Toggle labels/data blocks
-          setShowDataBlocks(prev => {
+          setShowDataBlocks((prev) => {
             const newVal = !prev;
             localStorage.setItem('adsb-pro-show-datablocks', String(newVal));
             return newVal;
           });
           break;
         case 'p': // Toggle compass rose
-          setShowCompassRose(prev => {
+          setShowCompassRose((prev) => {
             const newVal = !prev;
             localStorage.setItem('adsb-pro-compass-rose', String(newVal));
             return newVal;
@@ -1896,11 +2109,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         case '+':
         case '=': // Zoom in (decrease range)
           e.preventDefault();
-          setRadarRange(prev => Math.max(10, prev - 10));
+          setRadarRange((prev) => Math.max(10, prev - 10));
           break;
         case '-': // Zoom out (increase range)
           e.preventDefault();
-          setRadarRange(prev => Math.min(250, prev + 10));
+          setRadarRange((prev) => Math.min(250, prev + 10));
           break;
         case '1': // Quick range preset 10nm
           setRadarRange(10);
@@ -1925,24 +2138,24 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           setHoverInfo(null);
           break;
         case 'f': // Toggle FPS counter
-          setShowFpsCounter(prev => !prev);
+          setShowFpsCounter((prev) => !prev);
           break;
         case 'h': // Toggle high contrast
-          setHighContrastMode(prev => {
+          setHighContrastMode((prev) => {
             const newVal = !prev;
             localStorage.setItem('adsb-pro-high-contrast', String(newVal));
             return newVal;
           });
           break;
         case 'a': // Toggle altitude-colored trails
-          setShowAltitudeTrails(prev => {
+          setShowAltitudeTrails((prev) => {
             const newVal = !prev;
             localStorage.setItem('adsb-pro-altitude-trails', String(newVal));
             return newVal;
           });
           break;
         case 'm': // Toggle reduced motion
-          setReducedMotion(prev => {
+          setReducedMotion((prev) => {
             const newVal = !prev;
             localStorage.setItem('adsb-pro-reduced-motion', String(newVal));
             return newVal;
@@ -1956,87 +2169,91 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   }, [config.mapMode, panelPinned]);
 
   // Handle mouse move on radar container to show/hide range control and track cursor
-  const handleContainerMouseMove = useCallback((e) => {
-    const container = e.currentTarget;
-    const rect = container.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    const containerHeight = rect.height;
-    const containerWidth = rect.width;
+  const handleContainerMouseMove = useCallback(
+    (e) => {
+      const container = e.currentTarget;
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      const containerHeight = rect.height;
+      const containerWidth = rect.width;
 
-    // Show range control when mouse is in bottom 15% of container
-    const showThreshold = containerHeight * 0.85;
-    setShowRangeControl(mouseY > showThreshold);
+      // Show range control when mouse is in bottom 15% of container
+      const showThreshold = containerHeight * 0.85;
+      setShowRangeControl(mouseY > showThreshold);
 
-    // Store cursor position for draw loop
-    cursorPosRef.current = { x: mouseX, y: mouseY };
+      // Store cursor position for draw loop
+      cursorPosRef.current = { x: mouseX, y: mouseY };
 
-    // Calculate cursor lat/lon/distance/bearing for Pro mode
-    if (config.mapMode === 'pro' && canvasRef.current) {
-      const centerX = containerWidth / 2;
-      const centerY = containerHeight / 2;
-      const maxRadius = Math.min(containerWidth, containerHeight) * 0.45;
-      const pixelsPerNm = maxRadius / radarRange;
+      // Calculate cursor lat/lon/distance/bearing for Pro mode
+      if (config.mapMode === 'pro' && canvasRef.current) {
+        const centerX = containerWidth / 2;
+        const centerY = containerHeight / 2;
+        const maxRadius = Math.min(containerWidth, containerHeight) * 0.45;
+        const pixelsPerNm = maxRadius / radarRange;
 
-      // Convert screen position to nm offset (accounting for pan)
-      const nmX = (mouseX - centerX - proPanOffset.x) / pixelsPerNm;
-      const nmY = -(mouseY - centerY - proPanOffset.y) / pixelsPerNm; // Flip Y
+        // Convert screen position to nm offset (accounting for pan)
+        const nmX = (mouseX - centerX - proPanOffset.x) / pixelsPerNm;
+        const nmY = -(mouseY - centerY - proPanOffset.y) / pixelsPerNm; // Flip Y
 
-      // Convert nm offset to lat/lon
-      const cursorLat = feederLat + (nmY / 60);
-      const cursorLon = feederLon + (nmX / (60 * Math.cos(feederLat * Math.PI / 180)));
+        // Convert nm offset to lat/lon
+        const cursorLat = feederLat + nmY / 60;
+        const cursorLon = feederLon + nmX / (60 * Math.cos((feederLat * Math.PI) / 180));
 
-      // Calculate distance and bearing from feeder
-      const distance = Math.sqrt(nmX * nmX + nmY * nmY);
-      const bearing = (Math.atan2(nmX, nmY) * 180 / Math.PI + 360) % 360;
+        // Calculate distance and bearing from feeder
+        const distance = Math.sqrt(nmX * nmX + nmY * nmY);
+        const bearing = ((Math.atan2(nmX, nmY) * 180) / Math.PI + 360) % 360;
 
-      setCursorInfo({
-        x: mouseX,
-        y: mouseY,
-        lat: cursorLat,
-        lon: cursorLon,
-        distance: distance,
-        bearing: bearing
-      });
-
-      // Check for aircraft hover (with debounce)
-      const now = Date.now();
-      if (now - lastHoverCheckRef.current > 100) { // 100ms debounce
-        lastHoverCheckRef.current = now;
-
-        // Clear any pending hover timeout
-        if (hoverTimeoutRef.current) {
-          clearTimeout(hoverTimeoutRef.current);
-        }
-
-        // Find aircraft under cursor
-        let foundHover = null;
-        const hoverThreshold = 25; // pixels
-
-        aircraft.forEach(ac => {
-          if (!ac.lat || !ac.lon) return;
-          const acNmX = (ac.lon - feederLon) * 60 * Math.cos(feederLat * Math.PI / 180);
-          const acNmY = (ac.lat - feederLat) * 60;
-          const acX = centerX + acNmX * pixelsPerNm + proPanOffset.x;
-          const acY = centerY - acNmY * pixelsPerNm + proPanOffset.y;
-
-          const dist = Math.sqrt((mouseX - acX) ** 2 + (mouseY - acY) ** 2);
-          if (dist < hoverThreshold && (!foundHover || dist < foundHover.dist)) {
-            foundHover = { aircraft: ac, x: acX, y: acY, dist };
-          }
+        setCursorInfo({
+          x: mouseX,
+          y: mouseY,
+          lat: cursorLat,
+          lon: cursorLon,
+          distance: distance,
+          bearing: bearing,
         });
 
-        if (foundHover) {
-          // Set hover info after 500ms delay
-          hoverTimeoutRef.current = setTimeout(() => {
-            setHoverInfo({ aircraft: foundHover.aircraft, x: foundHover.x, y: foundHover.y });
-          }, 500);
-        } else {
-          setHoverInfo(null);
+        // Check for aircraft hover (with debounce)
+        const now = Date.now();
+        if (now - lastHoverCheckRef.current > 100) {
+          // 100ms debounce
+          lastHoverCheckRef.current = now;
+
+          // Clear any pending hover timeout
+          if (hoverTimeoutRef.current) {
+            clearTimeout(hoverTimeoutRef.current);
+          }
+
+          // Find aircraft under cursor
+          let foundHover = null;
+          const hoverThreshold = 25; // pixels
+
+          aircraft.forEach((ac) => {
+            if (!ac.lat || !ac.lon) return;
+            const acNmX = (ac.lon - feederLon) * 60 * Math.cos((feederLat * Math.PI) / 180);
+            const acNmY = (ac.lat - feederLat) * 60;
+            const acX = centerX + acNmX * pixelsPerNm + proPanOffset.x;
+            const acY = centerY - acNmY * pixelsPerNm + proPanOffset.y;
+
+            const dist = Math.sqrt((mouseX - acX) ** 2 + (mouseY - acY) ** 2);
+            if (dist < hoverThreshold && (!foundHover || dist < foundHover.dist)) {
+              foundHover = { aircraft: ac, x: acX, y: acY, dist };
+            }
+          });
+
+          if (foundHover) {
+            // Set hover info after 500ms delay
+            hoverTimeoutRef.current = setTimeout(() => {
+              setHoverInfo({ aircraft: foundHover.aircraft, x: foundHover.x, y: foundHover.y });
+            }, 500);
+          } else {
+            setHoverInfo(null);
+          }
         }
       }
-    }
-  }, [config.mapMode, radarRange, proPanOffset, feederLat, feederLon, aircraft]);
+    },
+    [config.mapMode, radarRange, proPanOffset, feederLat, feederLon, aircraft]
+  );
 
   const handleContainerMouseLeave = useCallback(() => {
     setShowRangeControl(false);
@@ -2053,11 +2270,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     const now = Date.now();
     const maxAge = 5 * 60 * 1000; // 5 minutes of history
 
-    setTrackHistory(prev => {
+    setTrackHistory((prev) => {
       const updated = { ...prev };
 
       // Add new positions for each aircraft
-      aircraft.forEach(ac => {
+      aircraft.forEach((ac) => {
         if (ac.lat && ac.lon && ac.hex) {
           if (!updated[ac.hex]) {
             updated[ac.hex] = [];
@@ -2067,16 +2284,17 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           const dLat = ac.lat - feederLat;
           const dLon = ac.lon - feederLon;
           const latNm = dLat * 60;
-          const lonNm = dLon * 60 * Math.cos(feederLat * Math.PI / 180);
+          const lonNm = dLon * 60 * Math.cos((feederLat * Math.PI) / 180);
           const dist = Math.sqrt(latNm * latNm + lonNm * lonNm);
 
           // Only add if position has changed significantly or enough time has passed
           // Reduced from 3s to 1s for faster updates, and tighter position threshold
           const lastPos = updated[ac.hex][updated[ac.hex].length - 1];
-          const positionChanged = !lastPos ||
-              Math.abs(lastPos.lat - ac.lat) > 0.0005 || // ~50m
-              Math.abs(lastPos.lon - ac.lon) > 0.0005;
-          const timeElapsed = !lastPos || (now - lastPos.time > 1000); // 1 second minimum
+          const positionChanged =
+            !lastPos ||
+            Math.abs(lastPos.lat - ac.lat) > 0.0005 || // ~50m
+            Math.abs(lastPos.lon - ac.lon) > 0.0005;
+          const timeElapsed = !lastPos || now - lastPos.time > 1000; // 1 second minimum
 
           if (positionChanged && timeElapsed) {
             updated[ac.hex].push({
@@ -2087,18 +2305,18 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               vs: ac.vr ?? ac.baro_rate ?? ac.geom_rate ?? 0,
               trk: ac.track || ac.true_heading || ac.mag_heading,
               dist: dist,
-              time: now
+              time: now,
             });
           }
 
           // Remove old positions
-          updated[ac.hex] = updated[ac.hex].filter(p => now - p.time < maxAge);
+          updated[ac.hex] = updated[ac.hex].filter((p) => now - p.time < maxAge);
         }
       });
 
       // Clean up aircraft that are no longer present
-      const activeHexes = new Set(aircraft.map(ac => ac.hex));
-      Object.keys(updated).forEach(hex => {
+      const activeHexes = new Set(aircraft.map((ac) => ac.hex));
+      Object.keys(updated).forEach((hex) => {
         if (!activeHexes.has(hex)) {
           // Keep for a bit after aircraft disappears, then remove
           if (updated[hex].length > 0 && now - updated[hex][updated[hex].length - 1].time > 60000) {
@@ -2113,20 +2331,21 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     // Also update short track history with real-time positions (when enabled)
     // This ensures smooth continuous trails between API refreshes
     if (showShortTracks) {
-      setShortTrackHistory(prev => {
+      setShortTrackHistory((prev) => {
         let hasChanges = false;
         const updated = { ...prev };
 
-        aircraft.forEach(ac => {
+        aircraft.forEach((ac) => {
           if (ac.lat && ac.lon && ac.hex && updated[ac.hex]) {
             const existing = updated[ac.hex];
             const lastPos = existing[existing.length - 1];
 
             // Only add if position changed and time elapsed
-            const positionChanged = !lastPos ||
+            const positionChanged =
+              !lastPos ||
               Math.abs(lastPos.lat - ac.lat) > 0.0003 ||
               Math.abs(lastPos.lon - ac.lon) > 0.0003;
-            const timeElapsed = !lastPos || (now - lastPos.time > 1500); // 1.5 second minimum
+            const timeElapsed = !lastPos || now - lastPos.time > 1500; // 1.5 second minimum
 
             if (positionChanged && timeElapsed) {
               updated[ac.hex] = [...existing, { lat: ac.lat, lon: ac.lon, time: now }].slice(-100);
@@ -2158,7 +2377,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
     const fetchShortTracks = () => {
       const now = Date.now();
-      const visibleAircraft = aircraftForShortTracksRef.current.filter(ac => ac.hex && ac.lat && ac.lon);
+      const visibleAircraft = aircraftForShortTracksRef.current.filter(
+        (ac) => ac.hex && ac.lat && ac.lon
+      );
 
       // Prioritize aircraft: selected first, then near map center, then military
       let prioritized = visibleAircraft;
@@ -2169,7 +2390,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
           // Only consider aircraft within the visible bounds
           prioritized = visibleAircraft
-            .filter(ac => bounds.contains([ac.lat, ac.lon]))
+            .filter((ac) => bounds.contains([ac.lat, ac.lon]))
             .sort((a, b) => {
               // Selected aircraft first
               if (selectedAircraft?.hex === a.hex) return -1;
@@ -2191,10 +2412,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       // - Never fetched before
       // - Last fetch was more than REFRESH_INTERVAL ago (to fill gaps)
       const toFetch = prioritized
-        .filter(ac => {
+        .filter((ac) => {
           const lastFetch = shortTrackFetchedRef.current.get(ac.hex);
           if (!lastFetch) return true; // Never fetched
-          return (now - lastFetch) > REFRESH_INTERVAL; // Needs refresh
+          return now - lastFetch > REFRESH_INTERVAL; // Needs refresh
         })
         .slice(0, 6); // Fetch up to 6 at a time for faster initial loading
 
@@ -2208,7 +2429,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             let data;
             // Use WebSocket when connected
             if (wsRequest && wsConnected) {
-              const result = await wsRequest('sightings', { icao_hex: ac.hex, hours: 1, limit: 100 });
+              const result = await wsRequest('sightings', {
+                icao_hex: ac.hex,
+                hours: 1,
+                limit: 100,
+              });
               if (result && (result.sightings || result.results)) {
                 data = result;
               } else {
@@ -2218,7 +2443,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               }
             } else {
               // Django API uses /api/v1/sightings with query params (was /api/v1/history/sightings/{hex})
-              const res = await fetch(`${baseUrl}/api/v1/sightings?icao_hex=${ac.hex}&hours=1&limit=100`);
+              const res = await fetch(
+                `${baseUrl}/api/v1/sightings?icao_hex=${ac.hex}&hours=1&limit=100`
+              );
               data = await safeJson(res);
               if (!data) {
                 // Failed to parse - mark for quick retry
@@ -2234,15 +2461,15 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
               // Convert API data to our format
               const historicalPositions = sightings
-                .map(s => ({
+                .map((s) => ({
                   lat: s.lat,
                   lon: s.lon,
-                  time: new Date(s.timestamp).getTime()
+                  time: new Date(s.timestamp).getTime(),
                 }))
                 .sort((a, b) => a.time - b.time); // Sort oldest to newest
 
               // Merge with existing positions
-              setShortTrackHistory(prev => {
+              setShortTrackHistory((prev) => {
                 const existing = prev[ac.hex] || [];
 
                 // Combine all positions
@@ -2250,11 +2477,12 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
                 // Also preserve any existing positions not in the new data
                 // (in case real-time captured something the API missed)
-                existing.forEach(p => {
-                  const isDuplicate = allPositions.some(ap =>
-                    Math.abs(ap.time - p.time) < 2000 && // Within 2 seconds
-                    Math.abs(ap.lat - p.lat) < 0.0001 &&
-                    Math.abs(ap.lon - p.lon) < 0.0001
+                existing.forEach((p) => {
+                  const isDuplicate = allPositions.some(
+                    (ap) =>
+                      Math.abs(ap.time - p.time) < 2000 && // Within 2 seconds
+                      Math.abs(ap.lat - p.lat) < 0.0001 &&
+                      Math.abs(ap.lon - p.lon) < 0.0001
                   );
                   if (!isDuplicate) {
                     allPositions.push(p);
@@ -2262,13 +2490,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 });
 
                 // Sort by time and keep last 100 positions for smooth trails
-                const sorted = allPositions
-                  .sort((a, b) => a.time - b.time)
-                  .slice(-100);
+                const sorted = allPositions.sort((a, b) => a.time - b.time).slice(-100);
 
                 return {
                   ...prev,
-                  [ac.hex]: sorted
+                  [ac.hex]: sorted,
                 };
               });
             } else {
@@ -2285,12 +2511,12 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       }
 
       // Cleanup old entries when aircraft disappear
-      const activeHexes = new Set(aircraftForShortTracksRef.current.map(a => a.hex));
-      setShortTrackHistory(prev => {
-        const hexesToRemove = Object.keys(prev).filter(hex => !activeHexes.has(hex));
+      const activeHexes = new Set(aircraftForShortTracksRef.current.map((a) => a.hex));
+      setShortTrackHistory((prev) => {
+        const hexesToRemove = Object.keys(prev).filter((hex) => !activeHexes.has(hex));
         if (hexesToRemove.length === 0) return prev;
         const updated = { ...prev };
-        hexesToRemove.forEach(hex => {
+        hexesToRemove.forEach((hex) => {
           delete updated[hex];
           shortTrackFetchedRef.current.delete(hex);
         });
@@ -2312,34 +2538,36 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     const canvas = trackCanvasRef.current;
     const ctx = canvas.getContext('2d');
     const history = trackHistory[selectedAircraft.hex];
-    
+
     ctx.clearRect(0, 0, 280, 80);
-    
+
     if (history.length < 2) return;
-    
+
     // Find bounds
-    let minLat = Infinity, maxLat = -Infinity;
-    let minLon = Infinity, maxLon = -Infinity;
-    history.forEach(p => {
+    let minLat = Infinity,
+      maxLat = -Infinity;
+    let minLon = Infinity,
+      maxLon = -Infinity;
+    history.forEach((p) => {
       minLat = Math.min(minLat, p.lat);
       maxLat = Math.max(maxLat, p.lat);
       minLon = Math.min(minLon, p.lon);
       maxLon = Math.max(maxLon, p.lon);
     });
-    
+
     const padding = 10;
     const width = 280 - padding * 2;
     const height = 80 - padding * 2;
     const latRange = maxLat - minLat || 0.01;
     const lonRange = maxLon - minLon || 0.01;
-    
+
     // Draw track
     ctx.strokeStyle = 'rgba(0, 212, 255, 0.9)';
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
-    
+
     history.forEach((p, i) => {
       const x = padding + ((p.lon - minLon) / lonRange) * width;
       const y = padding + height - ((p.lat - minLat) / latRange) * height;
@@ -2347,12 +2575,12 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       else ctx.lineTo(x, y);
     });
     ctx.stroke();
-    
+
     // Draw current position marker (airplane shape)
     const last = history[history.length - 1];
     const lastX = padding + ((last.lon - minLon) / lonRange) * width;
     const lastY = padding + height - ((last.lat - minLat) / latRange) * height;
-    
+
     ctx.fillStyle = 'rgba(0, 212, 255, 1)';
     ctx.beginPath();
     ctx.moveTo(lastX, lastY - 6);
@@ -2374,14 +2602,20 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
     if (needsAnimation) {
       const interval = setInterval(() => {
-        setCanvasAnimFrame(f => (f + 1) % 12);
+        setCanvasAnimFrame((f) => (f + 1) % 12);
       }, 150);
       return () => clearInterval(interval);
     }
   }, [selectedAircraft, trackHistory]);
 
   // Helper to draw animated "waiting for data" spinner on canvas
-  const drawWaitingSpinner = (ctx, width, height, color = 'rgba(138, 148, 158, 0.4)', frame = 0) => {
+  const drawWaitingSpinner = (
+    ctx,
+    width,
+    height,
+    color = 'rgba(138, 148, 158, 0.4)',
+    frame = 0
+  ) => {
     const centerX = width / 2;
     const centerY = height / 2;
     const radius = 12;
@@ -2421,8 +2655,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       return;
     }
 
-    const alts = history.map(p => p.alt || 0);
-    const validAlts = alts.filter(a => a > 0);
+    const alts = history.map((p) => p.alt || 0);
+    const validAlts = alts.filter((a) => a > 0);
 
     // If only one point or no valid alts, draw a horizontal line at center
     if (validAlts.length === 0) {
@@ -2437,7 +2671,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
     const getY = (alt) => {
       const normalized = Math.max(0, Math.min(1, (alt - minAlt) / range));
-      return 60 - pad - (normalized * (60 - pad * 2));
+      return 60 - pad - normalized * (60 - pad * 2);
     };
 
     // Draw gradient fill
@@ -2498,8 +2732,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       return;
     }
 
-    const speeds = history.map(p => p.spd || 0);
-    const validSpeeds = speeds.filter(s => s > 0);
+    const speeds = history.map((p) => p.spd || 0);
+    const validSpeeds = speeds.filter((s) => s > 0);
 
     if (validSpeeds.length === 0) {
       drawWaitingSpinner(ctx, 280, 60, 'rgba(74, 222, 128, 0.4)');
@@ -2513,7 +2747,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
     const getY = (spd) => {
       const normalized = Math.max(0, Math.min(1, (spd - minSpd) / range));
-      return 60 - pad - (normalized * (60 - pad * 2));
+      return 60 - pad - normalized * (60 - pad * 2);
     };
 
     // Draw gradient fill
@@ -2586,12 +2820,16 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       return;
     }
 
-    const vsValues = history.map(p => p.vs || 0);
-    const maxAbsVs = Math.max(Math.abs(Math.min(...vsValues)), Math.abs(Math.max(...vsValues)), 500);
+    const vsValues = history.map((p) => p.vs || 0);
+    const maxAbsVs = Math.max(
+      Math.abs(Math.min(...vsValues)),
+      Math.abs(Math.max(...vsValues)),
+      500
+    );
 
     const getY = (vs) => {
       const normalized = Math.max(-1, Math.min(1, vs / maxAbsVs));
-      return centerY - (normalized * halfHeight);
+      return centerY - normalized * halfHeight;
     };
 
     // Draw gradient fill
@@ -2619,8 +2857,13 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     ctx.fill();
 
     // Draw line - use green for climbing, orange for descending
-    const latestVs = history.length > 0 ? (history[history.length - 1].vs || 0) : 0;
-    ctx.strokeStyle = latestVs > 0 ? 'rgba(34, 197, 94, 0.9)' : latestVs < 0 ? 'rgba(249, 115, 22, 0.9)' : 'rgba(138, 148, 158, 0.9)';
+    const latestVs = history.length > 0 ? history[history.length - 1].vs || 0 : 0;
+    ctx.strokeStyle =
+      latestVs > 0
+        ? 'rgba(34, 197, 94, 0.9)'
+        : latestVs < 0
+          ? 'rgba(249, 115, 22, 0.9)'
+          : 'rgba(138, 148, 158, 0.9)';
     ctx.lineWidth = 2;
     ctx.beginPath();
 
@@ -2652,7 +2895,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       return;
     }
 
-    const dists = history.map(p => p.dist || 0).filter(d => d > 0);
+    const dists = history.map((p) => p.dist || 0).filter((d) => d > 0);
 
     if (dists.length === 0) {
       drawWaitingSpinner(ctx, 280, 60, 'rgba(163, 113, 247, 0.4)');
@@ -2667,7 +2910,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     // Helper to clamp Y values within canvas bounds
     const getY = (dist) => {
       const normalized = Math.max(0, Math.min(1, (dist - minDist) / range));
-      return 60 - pad - (normalized * (60 - pad * 2));
+      return 60 - pad - normalized * (60 - pad * 2);
     };
 
     // Draw gradient fill
@@ -2728,10 +2971,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       if (Array.isArray(response)) return response;
       if (response.data && Array.isArray(response.data)) return response.data;
       if (response.features) {
-        return response.features.map(f => ({
+        return response.features.map((f) => ({
           ...f.properties,
           lat: f.geometry?.coordinates?.[1],
-          lon: f.geometry?.coordinates?.[0]
+          lon: f.geometry?.coordinates?.[0],
         }));
       }
       return [];
@@ -2770,18 +3013,26 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             ? wsRequest('navaids', { ...baseParams, radius: Math.round(radarRange * 1.5) })
             : fetchHttp('navaids', { ...baseParams, radius: Math.round(radarRange * 1.5) })
           )
-            .then(data => ({ type: 'navaids', data: extractData(data) }))
-            .catch(err => ({ type: 'navaids', error: err.message }))
+            .then((data) => ({ type: 'navaids', data: extractData(data) }))
+            .catch((err) => ({ type: 'navaids', error: err.message }))
         );
 
         // Airports
         promises.push(
           (wsRequest && wsConnected
-            ? wsRequest('airports', { ...baseParams, radius: Math.round(radarRange * 1.2), limit: 50 })
-            : fetchHttp('airports', { ...baseParams, radius: Math.round(radarRange * 1.2), limit: 50 })
+            ? wsRequest('airports', {
+                ...baseParams,
+                radius: Math.round(radarRange * 1.2),
+                limit: 50,
+              })
+            : fetchHttp('airports', {
+                ...baseParams,
+                radius: Math.round(radarRange * 1.2),
+                limit: 50,
+              })
           )
-            .then(data => ({ type: 'airports', data: extractData(data).map(normalizeAirport) }))
-            .catch(err => ({ type: 'airports', error: err.message }))
+            .then((data) => ({ type: 'airports', data: extractData(data).map(normalizeAirport) }))
+            .catch((err) => ({ type: 'airports', error: err.message }))
         );
 
         // Airspace (if enabled)
@@ -2792,34 +3043,40 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               ? wsRequest('airspaces', baseParams)
               : fetchHttp('airspace/advisories', baseParams)
             )
-              .then(data => {
-                const advisories = (data?.advisories || extractData(data)).map(adv => ({
+              .then((data) => {
+                const advisories = (data?.advisories || extractData(data)).map((adv) => ({
                   ...adv,
                   isAdvisory: true,
                   type: adv.type || 'GAIRMET',
                 }));
                 return { type: 'airspaces', data: advisories };
               })
-              .catch(err => ({ type: 'airspaces', error: err.message }))
+              .catch((err) => ({ type: 'airspaces', error: err.message }))
           );
 
           // Static boundaries
           promises.push(
             (wsRequest && wsConnected
-              ? wsRequest('airspace-boundaries', { ...baseParams, radius: Math.round(radarRange * 1.5) })
-              : fetchHttp('airspace/boundaries', { ...baseParams, radius: Math.round(radarRange * 1.5) })
+              ? wsRequest('airspace-boundaries', {
+                  ...baseParams,
+                  radius: Math.round(radarRange * 1.5),
+                })
+              : fetchHttp('airspace/boundaries', {
+                  ...baseParams,
+                  radius: Math.round(radarRange * 1.5),
+                })
             )
-              .then(data => {
+              .then((data) => {
                 // Response has { boundaries: [...], count, source, ... }
                 const rawBoundaries = data?.boundaries || extractData(data);
-                const boundaries = rawBoundaries.map(b => ({
+                const boundaries = rawBoundaries.map((b) => ({
                   ...b,
                   isBoundary: true,
                   type: b.class ? `CLASS_${b.class}` : b.type,
                 }));
                 return { type: 'boundaries', data: boundaries };
               })
-              .catch(err => ({ type: 'boundaries', error: err.message }))
+              .catch((err) => ({ type: 'boundaries', error: err.message }))
           );
         }
 
@@ -2830,8 +3087,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               ? wsRequest('metars', { ...baseParams, radius: Math.round(radarRange) })
               : fetchHttp('metars', { ...baseParams, radius: Math.round(radarRange) })
             )
-              .then(data => ({ type: 'metars', data: extractData(data) }))
-              .catch(err => ({ type: 'metars', error: err.message }))
+              .then((data) => ({ type: 'metars', data: extractData(data) }))
+              .catch((err) => ({ type: 'metars', error: err.message }))
           );
         }
 
@@ -2839,20 +3096,28 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         if (overlays.pireps) {
           promises.push(
             (wsRequest && wsConnected
-              ? wsRequest('pireps', { ...baseParams, radius: Math.round(radarRange * 1.5), hours: 3 })
-              : fetchHttp('pireps', { ...baseParams, radius: Math.round(radarRange * 1.5), hours: 3 })
+              ? wsRequest('pireps', {
+                  ...baseParams,
+                  radius: Math.round(radarRange * 1.5),
+                  hours: 3,
+                })
+              : fetchHttp('pireps', {
+                  ...baseParams,
+                  radius: Math.round(radarRange * 1.5),
+                  hours: 3,
+                })
             )
-              .then(data => ({ type: 'pireps', data: extractData(data) }))
-              .catch(err => ({ type: 'pireps', error: err.message }))
+              .then((data) => ({ type: 'pireps', data: extractData(data) }))
+              .catch((err) => ({ type: 'pireps', error: err.message }))
           );
         }
 
         const results = await Promise.all(promises);
 
         // Update state with results
-        setAviationData(prev => {
+        setAviationData((prev) => {
           const updated = { ...prev };
-          results.forEach(result => {
+          results.forEach((result) => {
             if (!result.error && result.data) {
               updated[result.type] = result.data;
             }
@@ -2860,7 +3125,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           return updated;
         });
 
-        const errors = results.filter(r => r.error);
+        const errors = results.filter((r) => r.error);
         if (errors.length > 0) {
           console.warn('Some aviation data requests failed:', errors);
         }
@@ -2881,7 +3146,20 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       clearTimeout(debounceTimeout);
       clearInterval(interval);
     };
-  }, [wsRequest, wsConnected, config.apiBaseUrl, viewportCenter.lat, viewportCenter.lon, feederLat, feederLon, radarRange, overlays.metars, overlays.pireps, overlays.airspace, isProPanning]);
+  }, [
+    wsRequest,
+    wsConnected,
+    config.apiBaseUrl,
+    viewportCenter.lat,
+    viewportCenter.lon,
+    feederLat,
+    feederLon,
+    radarRange,
+    overlays.metars,
+    overlays.pireps,
+    overlays.airspace,
+    isProPanning,
+  ]);
 
   // Fetch terrain overlay data (pro mode only) - simplified GeoJSON boundaries
   useEffect(() => {
@@ -2896,35 +3174,35 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       const { minLat, maxLat, minLon, maxLon } = filterBounds;
 
       const processCoords = (coords, type) => {
-        const isNearViewport = coords.some(([lon, lat]) =>
-          lat >= minLat - 2 && lat <= maxLat + 2 &&
-          lon >= minLon - 2 && lon <= maxLon + 2
+        const isNearViewport = coords.some(
+          ([lon, lat]) =>
+            lat >= minLat - 2 && lat <= maxLat + 2 && lon >= minLon - 2 && lon <= maxLon + 2
         );
         if (isNearViewport) {
           features.push({ type, coords });
         }
       };
 
-      geojson.features?.forEach(feature => {
+      geojson.features?.forEach((feature) => {
         const geomType = feature.geometry?.type;
         const coords = feature.geometry?.coordinates;
         if (!coords) return;
 
         if (geomType === 'Polygon') {
-          coords.forEach(ring => processCoords(ring, 'polygon'));
+          coords.forEach((ring) => processCoords(ring, 'polygon'));
         } else if (geomType === 'MultiPolygon') {
-          coords.forEach(poly => poly.forEach(ring => processCoords(ring, 'polygon')));
+          coords.forEach((poly) => poly.forEach((ring) => processCoords(ring, 'polygon')));
         } else if (geomType === 'LineString') {
           processCoords(coords, 'line');
         } else if (geomType === 'MultiLineString') {
-          coords.forEach(line => processCoords(line, 'line'));
+          coords.forEach((line) => processCoords(line, 'line'));
         }
       });
       return features;
     };
 
-    const degPerNm = 1/60;
-    const lonScale = Math.cos(feederLat * Math.PI / 180);
+    const degPerNm = 1 / 60;
+    const lonScale = Math.cos((feederLat * Math.PI) / 180);
     const filterBounds = {
       minLat: feederLat - radarRange * degPerNm * 2,
       maxLat: feederLat + radarRange * degPerNm * 2,
@@ -2933,12 +3211,17 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     };
 
     const dataUrls = {
-      countries: 'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson',
-      states: 'https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json',
-      counties: 'https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json',
+      countries:
+        'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson',
+      states:
+        'https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json',
+      counties:
+        'https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json',
       // Water - 50m resolution lakes and rivers
-      lakes: 'https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/50m/physical/ne_50m_lakes.json',
-      rivers: 'https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/50m/physical/ne_50m_rivers_lake_centerlines.json',
+      lakes:
+        'https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/50m/physical/ne_50m_lakes.json',
+      rivers:
+        'https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/50m/physical/ne_50m_rivers_lake_centerlines.json',
     };
 
     const fetchTerrain = async (type, url) => {
@@ -2989,18 +3272,36 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       }
       if (Object.keys(updates).length > 0) {
         console.log('Updating terrain data:', Object.keys(updates));
-        setTerrainData(prev => ({ ...prev, ...updates }));
+        setTerrainData((prev) => ({ ...prev, ...updates }));
       }
     };
 
     loadTerrainData();
-  }, [config.mapMode, overlays.water, overlays.counties, overlays.states, overlays.countries, feederLat, feederLon, radarRange, terrainData.countries, terrainData.states, terrainData.water, terrainData.counties]);
+  }, [
+    config.mapMode,
+    overlays.water,
+    overlays.counties,
+    overlays.states,
+    overlays.countries,
+    feederLat,
+    feederLon,
+    radarRange,
+    terrainData.countries,
+    terrainData.states,
+    terrainData.water,
+    terrainData.counties,
+  ]);
 
   // Fetch aviation overlay data (pro mode only) - tar1090 GeoJSON from API with browser caching
   useEffect(() => {
     if (config.mapMode !== 'pro') return;
 
-    const needsAny = overlays.usArtcc || overlays.usRefueling || overlays.ukMilZones || overlays.euMilAwacs || overlays.trainingAreas;
+    const needsAny =
+      overlays.usArtcc ||
+      overlays.usRefueling ||
+      overlays.ukMilZones ||
+      overlays.euMilAwacs ||
+      overlays.trainingAreas;
     if (!needsAny) return;
 
     const apiBase = config.apiBaseUrl || '';
@@ -3018,7 +3319,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           }
           if (data.features) {
             // Tag features with their source type for styling
-            data.features.forEach(f => {
+            data.features.forEach((f) => {
               f.properties = f.properties || {};
               f.properties._sourceType = dataType;
             });
@@ -3036,16 +3337,16 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       const result = [];
       const { minLat, maxLat, minLon, maxLon } = filterBounds;
 
-      features.forEach(feature => {
+      features.forEach((feature) => {
         const geomType = feature.geometry?.type;
         const coords = feature.geometry?.coordinates;
         if (!coords) return;
 
         const processCoords = (coordArray, type) => {
           // Check if any point is near viewport
-          const isNearViewport = coordArray.some(([lon, lat]) =>
-            lat >= minLat - 5 && lat <= maxLat + 5 &&
-            lon >= minLon - 5 && lon <= maxLon + 5
+          const isNearViewport = coordArray.some(
+            ([lon, lat]) =>
+              lat >= minLat - 5 && lat <= maxLat + 5 && lon >= minLon - 5 && lon <= maxLon + 5
           );
           if (isNearViewport) {
             result.push({
@@ -3058,13 +3359,13 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         };
 
         if (geomType === 'Polygon') {
-          coords.forEach(ring => processCoords(ring, 'polygon'));
+          coords.forEach((ring) => processCoords(ring, 'polygon'));
         } else if (geomType === 'MultiPolygon') {
-          coords.forEach(poly => poly.forEach(ring => processCoords(ring, 'polygon')));
+          coords.forEach((poly) => poly.forEach((ring) => processCoords(ring, 'polygon')));
         } else if (geomType === 'LineString') {
           processCoords(coords, 'line');
         } else if (geomType === 'MultiLineString') {
-          coords.forEach(line => processCoords(line, 'line'));
+          coords.forEach((line) => processCoords(line, 'line'));
         } else if (geomType === 'Point') {
           result.push({
             type: 'point',
@@ -3077,8 +3378,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       return result;
     };
 
-    const degPerNm = 1/60;
-    const lonScale = Math.cos(feederLat * Math.PI / 180);
+    const degPerNm = 1 / 60;
+    const lonScale = Math.cos((feederLat * Math.PI) / 180);
     const filterBounds = {
       minLat: feederLat - radarRange * degPerNm * 2,
       maxLat: feederLat + radarRange * degPerNm * 2,
@@ -3108,25 +3409,49 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       }
 
       if (overlays.euMilAwacs && !aviationOverlayData.euMilAwacs) {
-        const features = await fetchAviationGeoJSON(['de_mil_awacs', 'nl_mil_awacs', 'pl_mil_awacs']);
+        const features = await fetchAviationGeoJSON([
+          'de_mil_awacs',
+          'nl_mil_awacs',
+          'pl_mil_awacs',
+        ]);
         updates.euMilAwacs = processFeatures(features, filterBounds);
         console.log(`Loaded EU AWACS: ${updates.euMilAwacs.length} features`);
       }
 
       if (overlays.trainingAreas && !aviationOverlayData.trainingAreas) {
-        const features = await fetchAviationGeoJSON(['ift_nav_routes', 'ift_training_areas', 'usafa_training_areas']);
+        const features = await fetchAviationGeoJSON([
+          'ift_nav_routes',
+          'ift_training_areas',
+          'usafa_training_areas',
+        ]);
         updates.trainingAreas = processFeatures(features, filterBounds);
         console.log(`Loaded Training Areas: ${updates.trainingAreas.length} features`);
       }
 
       if (Object.keys(updates).length > 0) {
         console.log('Updating aviation overlay data:', Object.keys(updates));
-        setAviationOverlayData(prev => ({ ...prev, ...updates }));
+        setAviationOverlayData((prev) => ({ ...prev, ...updates }));
       }
     };
 
     loadAviationData();
-  }, [config.mapMode, config.apiBaseUrl, overlays.usArtcc, overlays.usRefueling, overlays.ukMilZones, overlays.euMilAwacs, overlays.trainingAreas, feederLat, feederLon, radarRange, aviationOverlayData.usArtcc, aviationOverlayData.usRefueling, aviationOverlayData.ukMilZones, aviationOverlayData.euMilAwacs, aviationOverlayData.trainingAreas]);
+  }, [
+    config.mapMode,
+    config.apiBaseUrl,
+    overlays.usArtcc,
+    overlays.usRefueling,
+    overlays.ukMilZones,
+    overlays.euMilAwacs,
+    overlays.trainingAreas,
+    feederLat,
+    feederLon,
+    radarRange,
+    aviationOverlayData.usArtcc,
+    aviationOverlayData.usRefueling,
+    aviationOverlayData.ukMilZones,
+    aviationOverlayData.euMilAwacs,
+    aviationOverlayData.trainingAreas,
+  ]);
 
   // NOTE: Interpolated positions are now read directly from positionsRef in the
   // Leaflet marker update loop, NOT merged into React state. This prevents
@@ -3135,7 +3460,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   // Memoize safety hexes separately to avoid recalculating sortedAircraft on every safetyEvents change
   const safetyHexes = useMemo(() => {
     const hexes = new Set();
-    safetyEvents.forEach(event => {
+    safetyEvents.forEach((event) => {
       if (event.icao) hexes.add(event.icao.toUpperCase());
       if (event.icao_2) hexes.add(event.icao_2.toUpperCase());
     });
@@ -3144,11 +3469,15 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
   const sortedAircraft = useMemo(() => {
     // Debug: Log aircraft data received by MapView
-    console.log('[MapView] sortedAircraft memo running, received', aircraft?.length ?? 0, 'aircraft');
-    let filtered = [...aircraft].filter(a => a.lat && a.lon);
+    console.log(
+      '[MapView] sortedAircraft memo running, received',
+      aircraft?.length ?? 0,
+      'aircraft'
+    );
+    let filtered = [...aircraft].filter((a) => a.lat && a.lon);
 
     // Apply traffic filters
-    filtered = filtered.filter(ac => {
+    filtered = filtered.filter((ac) => {
       // Safety events only filter
       if (trafficFilters.safetyEventsOnly) {
         if (!safetyHexes.has(ac.hex?.toUpperCase())) return false;
@@ -3159,7 +3488,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       if (!ac.military && !trafficFilters.showCivil) return false;
 
       // Ground/Airborne filter
-      const isGround = ac.alt_baro === 'ground' || ac.on_ground || (typeof ac.alt === 'number' && ac.alt < 100);
+      const isGround =
+        ac.alt_baro === 'ground' || ac.on_ground || (typeof ac.alt === 'number' && ac.alt < 100);
       if (isGround && !trafficFilters.showGround) return false;
       if (!isGround && !trafficFilters.showAirborne) return false;
 
@@ -3188,53 +3518,55 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
       return true;
     });
-    
+
     // Apply search filter if in Pro mode and search query exists
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(ac => {
+      filtered = filtered.filter((ac) => {
         const callsign = (ac.flight || '').toLowerCase().trim();
         const hex = (ac.hex || '').toLowerCase();
         const squawk = (ac.squawk || '').toLowerCase();
         const tail = getTailInfo(ac.hex, ac.flight).tailNumber?.toLowerCase() || '';
-        return callsign.includes(query) || 
-               hex.includes(query) || 
-               squawk.includes(query) || 
-               tail.includes(query);
+        return (
+          callsign.includes(query) ||
+          hex.includes(query) ||
+          squawk.includes(query) ||
+          tail.includes(query)
+        );
       });
     }
-    
+
     return filtered.sort((a, b) => (a.distance_nm || 999) - (b.distance_nm || 999));
   }, [aircraft, searchQuery, trafficFilters, safetyHexes]);
 
   // Live aircraft data for selected aircraft (updates in real-time)
   const liveAircraft = useMemo(() => {
     if (!selectedAircraft) return null;
-    return sortedAircraft.find(a => a.hex === selectedAircraft.hex) || selectedAircraft;
+    return sortedAircraft.find((a) => a.hex === selectedAircraft.hex) || selectedAircraft;
   }, [selectedAircraft, sortedAircraft]);
 
   // Calculate bounds for simple radar mode (include feeder location)
   const bounds = useMemo(() => {
-    const allLats = [...sortedAircraft.map(a => a.lat), feederLat];
-    const allLons = [...sortedAircraft.map(a => a.lon), feederLon];
-    
+    const allLats = [...sortedAircraft.map((a) => a.lat), feederLat];
+    const allLons = [...sortedAircraft.map((a) => a.lon), feederLon];
+
     if (sortedAircraft.length === 0) {
       return {
         minLat: feederLat - 1,
         maxLat: feederLat + 1,
         minLon: feederLon - 1.5,
-        maxLon: feederLon + 1.5
+        maxLon: feederLon + 1.5,
       };
     }
-    
+
     const latPad = Math.max(0.3, (Math.max(...allLats) - Math.min(...allLats)) * 0.15);
     const lonPad = Math.max(0.4, (Math.max(...allLons) - Math.min(...allLons)) * 0.15);
-    
+
     return {
       minLat: Math.min(...allLats) - latPad,
       maxLat: Math.max(...allLats) + latPad,
       minLon: Math.min(...allLons) - lonPad,
-      maxLon: Math.max(...allLons) + lonPad
+      maxLon: Math.max(...allLons) + lonPad,
     };
   }, [sortedAircraft, feederLat, feederLon]);
 
@@ -3250,7 +3582,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     const dLat = lat - feederLat;
     const dLon = lon - feederLon;
     const latNm = dLat * 60;
-    const lonNm = dLon * 60 * Math.cos(feederLat * Math.PI / 180);
+    const lonNm = dLon * 60 * Math.cos((feederLat * Math.PI) / 180);
     return Math.sqrt(latNm * latNm + lonNm * lonNm);
   };
 
@@ -3259,8 +3591,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     const dLat = lat - feederLat;
     const dLon = lon - feederLon;
     const latNm = dLat * 60;
-    const lonNm = dLon * 60 * Math.cos(feederLat * Math.PI / 180);
-    return (Math.atan2(lonNm, latNm) * 180 / Math.PI + 360) % 360;
+    const lonNm = dLon * 60 * Math.cos((feederLat * Math.PI) / 180);
+    return ((Math.atan2(lonNm, latNm) * 180) / Math.PI + 360) % 360;
   };
 
   // Get color class for speed based on value and altitude (for pro panel)
@@ -3297,18 +3629,20 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   // Update aircraft history for trails
   useEffect(() => {
     if (config.mapMode !== 'crt') return;
-    
+
     const now = Date.now();
-    sortedAircraft.forEach(ac => {
+    sortedAircraft.forEach((ac) => {
       if (!ac.hex) return;
       if (!historyRef.current[ac.hex]) {
         historyRef.current[ac.hex] = [];
       }
       const history = historyRef.current[ac.hex];
       // Add position if moved significantly or first position
-      if (history.length === 0 || 
-          Math.abs(history[history.length - 1].lat - ac.lat) > 0.001 ||
-          Math.abs(history[history.length - 1].lon - ac.lon) > 0.001) {
+      if (
+        history.length === 0 ||
+        Math.abs(history[history.length - 1].lat - ac.lat) > 0.001 ||
+        Math.abs(history[history.length - 1].lon - ac.lon) > 0.001
+      ) {
         history.push({ lat: ac.lat, lon: ac.lon, time: now });
       }
       // Keep only last 60 seconds of history (about 6 positions at 10s intervals)
@@ -3316,10 +3650,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         history.shift();
       }
     });
-    
+
     // Clean up old aircraft
-    const activeHexes = new Set(sortedAircraft.map(a => a.hex));
-    Object.keys(historyRef.current).forEach(hex => {
+    const activeHexes = new Set(sortedAircraft.map((a) => a.hex));
+    Object.keys(historyRef.current).forEach((hex) => {
       if (!activeHexes.has(hex)) {
         delete historyRef.current[hex];
       }
@@ -3334,7 +3668,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     const canvas = canvasRef.current;
     const container = containerRef.current;
     const ctx = canvas.getContext('2d');
-    
+
     // Set canvas size to match container
     const resize = () => {
       const rect = container.getBoundingClientRect();
@@ -3357,9 +3691,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       if (clampedRange !== radarRange) {
         // Scale factor: when range increases, pixelsPerNm decreases, so offset should scale inversely
         const scaleFactor = radarRange / clampedRange;
-        setProPanOffset(prev => ({
+        setProPanOffset((prev) => ({
           x: prev.x * scaleFactor,
-          y: prev.y * scaleFactor
+          y: prev.y * scaleFactor,
         }));
         updateRadarRange(clampedRange);
       }
@@ -3378,7 +3712,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       if (touches.length < 2) return { x: 0, y: 0 };
       return {
         x: (touches[0].clientX + touches[1].clientX) / 2,
-        y: (touches[0].clientY + touches[1].clientY) / 2
+        y: (touches[0].clientY + touches[1].clientY) / 2,
       };
     };
 
@@ -3392,13 +3726,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           lastCenterX: center.x,
           lastCenterY: center.y,
           startPanX: proPanOffset.x,
-          startPanY: proPanOffset.y
+          startPanY: proPanOffset.y,
         };
       }
     };
 
     const handleTouchMove = (e) => {
-      const { lastDistance, startRange, lastCenterX, lastCenterY, startPanX, startPanY } = pinchStateRef.current;
+      const { lastDistance, startRange, lastCenterX, lastCenterY, startPanX, startPanY } =
+        pinchStateRef.current;
       if (e.touches.length === 2 && lastDistance > 0) {
         e.preventDefault();
         const currentDistance = getTouchDistance(e.touches);
@@ -3418,9 +3753,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         // Apply zoom if changed
         if (clampedRange !== radarRange) {
           const scaleFactor = radarRange / clampedRange;
-          setProPanOffset(prev => ({
+          setProPanOffset((prev) => ({
             x: prev.x * scaleFactor,
-            y: prev.y * scaleFactor
+            y: prev.y * scaleFactor,
           }));
           updateRadarRange(clampedRange);
         }
@@ -3428,14 +3763,21 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         // Apply pan offset (add delta to starting position)
         setProPanOffset({
           x: startPanX + panDeltaX,
-          y: startPanY + panDeltaY
+          y: startPanY + panDeltaY,
         });
       }
     };
 
     const handleTouchEnd = (e) => {
       if (e.touches.length < 2) {
-        pinchStateRef.current = { lastDistance: 0, startRange: radarRange, lastCenterX: 0, lastCenterY: 0, startPanX: 0, startPanY: 0 };
+        pinchStateRef.current = {
+          lastDistance: 0,
+          startRange: radarRange,
+          lastCenterX: 0,
+          lastCenterY: 0,
+          startPanX: 0,
+          startPanY: 0,
+        };
       }
     };
 
@@ -3444,46 +3786,53 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     canvas.addEventListener('touchend', handleTouchEnd);
 
     // Use fetched aviation data or fallback to static
-    const navAids = aviationData.navaids.length > 0 ? aviationData.navaids : [
-      { id: 'SEA', name: 'Seattle VORTAC', lat: 47.435, lon: -122.309, type: 'VORTAC' },
-      { id: 'PAE', name: 'Paine Field', lat: 47.906, lon: -122.283, type: 'VOR/DME' },
-      { id: 'BFI', name: 'Boeing Field', lat: 47.529, lon: -122.302, type: 'VOR/DME' },
-      { id: 'TCM', name: 'McChord', lat: 47.136, lon: -122.476, type: 'TACAN' },
-      { id: 'OLM', name: 'Olympia', lat: 46.969, lon: -122.902, type: 'VOR/DME' },
-      { id: 'EPH', name: 'Ephrata', lat: 47.385, lon: -119.515, type: 'VOR/DME' },
-      { id: 'ELN', name: 'Ellensburg', lat: 47.033, lon: -120.530, type: 'VOR/DME' },
-      { id: 'YYJ', name: 'Victoria', lat: 48.647, lon: -123.426, type: 'VOR/DME' },
-      { id: 'CV', name: 'Coupeville', lat: 48.188, lon: -122.688, type: 'NDB' },
-      { id: 'BTG', name: 'Battleground', lat: 45.816, lon: -122.531, type: 'VOR/DME' },
-      { id: 'UBG', name: 'Bellingham', lat: 48.795, lon: -122.538, type: 'VOR/DME' },
-      { id: 'GEG', name: 'Spokane', lat: 47.625, lon: -117.539, type: 'VORTAC' },
-    ];
+    const navAids =
+      aviationData.navaids.length > 0
+        ? aviationData.navaids
+        : [
+            { id: 'SEA', name: 'Seattle VORTAC', lat: 47.435, lon: -122.309, type: 'VORTAC' },
+            { id: 'PAE', name: 'Paine Field', lat: 47.906, lon: -122.283, type: 'VOR/DME' },
+            { id: 'BFI', name: 'Boeing Field', lat: 47.529, lon: -122.302, type: 'VOR/DME' },
+            { id: 'TCM', name: 'McChord', lat: 47.136, lon: -122.476, type: 'TACAN' },
+            { id: 'OLM', name: 'Olympia', lat: 46.969, lon: -122.902, type: 'VOR/DME' },
+            { id: 'EPH', name: 'Ephrata', lat: 47.385, lon: -119.515, type: 'VOR/DME' },
+            { id: 'ELN', name: 'Ellensburg', lat: 47.033, lon: -120.53, type: 'VOR/DME' },
+            { id: 'YYJ', name: 'Victoria', lat: 48.647, lon: -123.426, type: 'VOR/DME' },
+            { id: 'CV', name: 'Coupeville', lat: 48.188, lon: -122.688, type: 'NDB' },
+            { id: 'BTG', name: 'Battleground', lat: 45.816, lon: -122.531, type: 'VOR/DME' },
+            { id: 'UBG', name: 'Bellingham', lat: 48.795, lon: -122.538, type: 'VOR/DME' },
+            { id: 'GEG', name: 'Spokane', lat: 47.625, lon: -117.539, type: 'VORTAC' },
+          ];
 
-    const airports = aviationData.airports.length > 0 ? aviationData.airports : [
-      { icao: 'KSEA', name: 'Seattle-Tacoma', lat: 47.449, lon: -122.309, class: 'B' },
-      { icao: 'KBFI', name: 'Boeing Field', lat: 47.529, lon: -122.302, class: 'D' },
-      { icao: 'KPAE', name: 'Paine Field', lat: 47.906, lon: -122.283, class: 'D' },
-      { icao: 'KPDX', name: 'Portland Intl', lat: 45.589, lon: -122.597, class: 'C' },
-      { icao: 'KGEG', name: 'Spokane', lat: 47.620, lon: -117.534, class: 'C' },
-    ];
+    const airports =
+      aviationData.airports.length > 0
+        ? aviationData.airports
+        : [
+            { icao: 'KSEA', name: 'Seattle-Tacoma', lat: 47.449, lon: -122.309, class: 'B' },
+            { icao: 'KBFI', name: 'Boeing Field', lat: 47.529, lon: -122.302, class: 'D' },
+            { icao: 'KPAE', name: 'Paine Field', lat: 47.906, lon: -122.283, class: 'D' },
+            { icao: 'KPDX', name: 'Portland Intl', lat: 45.589, lon: -122.597, class: 'C' },
+            { icao: 'KGEG', name: 'Spokane', lat: 47.62, lon: -117.534, class: 'C' },
+          ];
 
     // Combine airspace advisories and boundaries from API, or use static fallback
-    const airspaceData = (aviationData.airspaces.length > 0 || aviationData.boundaries.length > 0)
-      ? [...aviationData.airspaces, ...aviationData.boundaries]
-      : [
-        {
-          name: 'Seattle Class B',
-          type: 'CLASS_B',
-          class: 'B',
-          isBoundary: true,
-          center: { lat: 47.449, lon: -122.309 },
-          rings: [
-            { radius_nm: 10, floor_ft: 0, ceiling_ft: 10000 },
-            { radius_nm: 20, floor_ft: 3000, ceiling_ft: 10000 },
-            { radius_nm: 30, floor_ft: 6000, ceiling_ft: 10000 },
-          ]
-        }
-      ];
+    const airspaceData =
+      aviationData.airspaces.length > 0 || aviationData.boundaries.length > 0
+        ? [...aviationData.airspaces, ...aviationData.boundaries]
+        : [
+            {
+              name: 'Seattle Class B',
+              type: 'CLASS_B',
+              class: 'B',
+              isBoundary: true,
+              center: { lat: 47.449, lon: -122.309 },
+              rings: [
+                { radius_nm: 10, floor_ft: 0, ceiling_ft: 10000 },
+                { radius_nm: 20, floor_ft: 3000, ceiling_ft: 10000 },
+                { radius_nm: 30, floor_ft: 6000, ceiling_ft: 10000 },
+              ],
+            },
+          ];
 
     // Animation loop
     const isPro = config.mapMode === 'pro';
@@ -3499,7 +3848,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       // For Pro mode: use full rectangular area
       // For CRT mode: use circular area that fills more of the canvas
       const maxRadius = isPro
-        ? Math.max(width, height) * 0.5  // Pro: allow overflow for rectangular
+        ? Math.max(width, height) * 0.5 // Pro: allow overflow for rectangular
         : Math.min(width, height) * 0.48; // CRT: fill more of the circle
 
       // Clear with dark background (theme-aware for Pro mode)
@@ -3508,31 +3857,33 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
       // For Pro mode, calculate scale to show full area (no circular limit)
       // nmPerPixel tells us how many nm one pixel represents
-      const nmPerPixel = isPro ? radarRange / (Math.min(width, height) * 0.45) : radarRange / maxRadius;
-      
+      const nmPerPixel = isPro
+        ? radarRange / (Math.min(width, height) * 0.45)
+        : radarRange / maxRadius;
+
       // Helper to convert lat/lon to screen coordinates
       const latLonToScreen = (lat, lon) => {
         const dLat = lat - feederLat;
         const dLon = lon - feederLon;
         const nmY = dLat * 60; // North is up
-        const nmX = dLon * 60 * Math.cos(feederLat * Math.PI / 180);
+        const nmX = dLon * 60 * Math.cos((feederLat * Math.PI) / 180);
 
         if (isPro) {
           // Pro mode: linear mapping, no circular constraint, with pan offset
           const pixelsPerNm = (Math.min(width, height) * 0.45) / radarRange;
           return {
             x: centerX + nmX * pixelsPerNm + proPanOffset.x,
-            y: centerY - nmY * pixelsPerNm + proPanOffset.y // Flip Y for screen coords
+            y: centerY - nmY * pixelsPerNm + proPanOffset.y, // Flip Y for screen coords
           };
         } else {
           // CRT mode: polar mapping with circular constraint
           const dist = Math.sqrt(nmX * nmX + nmY * nmY);
-          const bearing = Math.atan2(nmX, nmY) * 180 / Math.PI;
+          const bearing = (Math.atan2(nmX, nmY) * 180) / Math.PI;
           const radius = (dist / radarRange) * maxRadius;
-          const rad = (bearing - 90) * Math.PI / 180;
+          const rad = ((bearing - 90) * Math.PI) / 180;
           return {
             x: centerX + Math.cos(rad) * radius,
-            y: centerY + Math.sin(rad) * radius
+            y: centerY + Math.sin(rad) * radius,
           };
         }
       };
@@ -3556,15 +3907,18 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         ctx.lineWidth = 1;
         ctx.font = '12px "JetBrains Mono", monospace';
         ctx.fillStyle = gridLabelColor;
-        
+
         // Calculate grid spacing based on range
-        const degPerNm = 1/60;
-        const gridSpacingDeg = radarRange <= 30 ? 0.25 : radarRange <= 75 ? 0.5 : radarRange <= 150 ? 1 : 2;
-        
+        const degPerNm = 1 / 60;
+        const gridSpacingDeg =
+          radarRange <= 30 ? 0.25 : radarRange <= 75 ? 0.5 : radarRange <= 150 ? 1 : 2;
+
         // Latitude lines (horizontal)
-        const minGridLat = Math.floor((feederLat - radarRange * degPerNm) / gridSpacingDeg) * gridSpacingDeg;
-        const maxGridLat = Math.ceil((feederLat + radarRange * degPerNm) / gridSpacingDeg) * gridSpacingDeg;
-        
+        const minGridLat =
+          Math.floor((feederLat - radarRange * degPerNm) / gridSpacingDeg) * gridSpacingDeg;
+        const maxGridLat =
+          Math.ceil((feederLat + radarRange * degPerNm) / gridSpacingDeg) * gridSpacingDeg;
+
         for (let lat = minGridLat; lat <= maxGridLat; lat += gridSpacingDeg) {
           const p1 = latLonToScreen(lat, feederLon - radarRange * degPerNm * 1.5);
           const p2 = latLonToScreen(lat, feederLon + radarRange * degPerNm * 1.5);
@@ -3577,12 +3931,16 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             ctx.fillText(`${lat.toFixed(2)}°`, 8, p1.y - 5);
           }
         }
-        
+
         // Longitude lines (vertical)
-        const lonScale = Math.cos(feederLat * Math.PI / 180);
-        const minGridLon = Math.floor((feederLon - radarRange * degPerNm / lonScale) / gridSpacingDeg) * gridSpacingDeg;
-        const maxGridLon = Math.ceil((feederLon + radarRange * degPerNm / lonScale) / gridSpacingDeg) * gridSpacingDeg;
-        
+        const lonScale = Math.cos((feederLat * Math.PI) / 180);
+        const minGridLon =
+          Math.floor((feederLon - (radarRange * degPerNm) / lonScale) / gridSpacingDeg) *
+          gridSpacingDeg;
+        const maxGridLon =
+          Math.ceil((feederLon + (radarRange * degPerNm) / lonScale) / gridSpacingDeg) *
+          gridSpacingDeg;
+
         for (let lon = minGridLon; lon <= maxGridLon; lon += gridSpacingDeg) {
           const p1 = latLonToScreen(feederLat, lon);
           if (p1.x > 0 && p1.x < width) {
@@ -3594,9 +3952,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             ctx.fillText(`${Math.abs(lon).toFixed(2)}°${lon < 0 ? 'W' : 'E'}`, p1.x, height - 8);
           }
         }
-        
+
         // Scale bar - theme-aware
-        const scaleBarNm = radarRange <= 30 ? 10 : radarRange <= 75 ? 25 : radarRange <= 150 ? 50 : 100;
+        const scaleBarNm =
+          radarRange <= 30 ? 10 : radarRange <= 75 ? 25 : radarRange <= 150 ? 50 : 100;
         const scaleBarPx = (scaleBarNm / radarRange) * (Math.min(width, height) * 0.45);
         const scaleBarY = height - 20;
 
@@ -3604,7 +3963,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         ctx.fillStyle = themeColors.rgba('primary', 0.8);
         ctx.textAlign = 'center';
         ctx.font = '11px "JetBrains Mono", monospace';
-        ctx.fillText(`${scaleBarNm} nm`, width - 20 - scaleBarPx/2, scaleBarY - 10);
+        ctx.fillText(`${scaleBarNm} nm`, width - 20 - scaleBarPx / 2, scaleBarY - 10);
 
         // Draw the scale bar line below text
         ctx.strokeStyle = themeColors.rgba('primary', 0.6);
@@ -3618,19 +3977,23 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         ctx.moveTo(width - 20, scaleBarY - 3);
         ctx.lineTo(width - 20, scaleBarY + 3);
         ctx.stroke();
-        
+
         // PRO MODE: Add range rings (subtle, dashed)
-        const proRingDistances = radarRange <= 30 ? [10, 20, 30] : 
-                                 radarRange <= 75 ? [25, 50, 75] : 
-                                 radarRange <= 150 ? [50, 100, 150] :
-                                 [100, 200, 300];
-        
+        const proRingDistances =
+          radarRange <= 30
+            ? [10, 20, 30]
+            : radarRange <= 75
+              ? [25, 50, 75]
+              : radarRange <= 150
+                ? [50, 100, 150]
+                : [100, 200, 300];
+
         const proPixelsPerNm = (Math.min(width, height) * 0.45) / radarRange;
         ctx.strokeStyle = themeColors.rgba('rangeRing', 0.4);
         ctx.lineWidth = 1;
         ctx.setLineDash([8, 8]);
 
-        proRingDistances.forEach(dist => {
+        proRingDistances.forEach((dist) => {
           if (dist > radarRange * 1.2) return;
           const radius = dist * proPixelsPerNm;
           ctx.beginPath();
@@ -3656,51 +4019,67 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             { angle: 180, label: 'S', major: true },
             { angle: 225, label: 'SW', major: false },
             { angle: 270, label: 'W', major: true },
-            { angle: 315, label: 'NW', major: false }
+            { angle: 315, label: 'NW', major: false },
           ];
 
           // Draw 10-degree tick marks
           ctx.strokeStyle = themeColors.rgba('compass', 0.3);
           ctx.lineWidth = 1;
           for (let angle = 0; angle < 360; angle += 10) {
-            const rad = (angle - 90) * Math.PI / 180;
+            const rad = ((angle - 90) * Math.PI) / 180;
             const isMajor = angle % 90 === 0;
             const isIntermediate = angle % 30 === 0;
             const tickLength = isMajor ? 15 : isIntermediate ? 10 : 5;
             ctx.beginPath();
-            ctx.moveTo(centerX + Math.cos(rad) * (compassRadius - tickLength), centerY + Math.sin(rad) * (compassRadius - tickLength));
-            ctx.lineTo(centerX + Math.cos(rad) * compassRadius, centerY + Math.sin(rad) * compassRadius);
+            ctx.moveTo(
+              centerX + Math.cos(rad) * (compassRadius - tickLength),
+              centerY + Math.sin(rad) * (compassRadius - tickLength)
+            );
+            ctx.lineTo(
+              centerX + Math.cos(rad) * compassRadius,
+              centerY + Math.sin(rad) * compassRadius
+            );
             ctx.stroke();
           }
 
           // Draw cardinal and intercardinal labels
           compassPoints.forEach(({ angle, label, major }) => {
-            const rad = (angle - 90) * Math.PI / 180;
-            ctx.fillStyle = major ? themeColors.rgba('compassMajor', 0.9) : themeColors.rgba('compass', 0.7);
-            ctx.font = major ? 'bold 14px "JetBrains Mono", monospace' : '11px "JetBrains Mono", monospace';
+            const rad = ((angle - 90) * Math.PI) / 180;
+            ctx.fillStyle = major
+              ? themeColors.rgba('compassMajor', 0.9)
+              : themeColors.rgba('compass', 0.7);
+            ctx.font = major
+              ? 'bold 14px "JetBrains Mono", monospace'
+              : '11px "JetBrains Mono", monospace';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             const labelRadius = compassRadius + 15;
-            ctx.fillText(label, centerX + Math.cos(rad) * labelRadius, centerY + Math.sin(rad) * labelRadius);
+            ctx.fillText(
+              label,
+              centerX + Math.cos(rad) * labelRadius,
+              centerY + Math.sin(rad) * labelRadius
+            );
           });
         }
-
       } else {
         // CRT MODE: Draw range rings
-        const ringDistances = radarRange <= 50 ? [10, 20, 30, 40, 50] : 
-                              radarRange <= 100 ? [25, 50, 75, 100] : 
-                              [50, 100, 150];
-        
+        const ringDistances =
+          radarRange <= 50
+            ? [10, 20, 30, 40, 50]
+            : radarRange <= 100
+              ? [25, 50, 75, 100]
+              : [50, 100, 150];
+
         ctx.strokeStyle = 'rgba(0, 180, 80, 0.4)';
         ctx.lineWidth = 1;
-        
-        ringDistances.forEach(dist => {
+
+        ringDistances.forEach((dist) => {
           if (dist > radarRange) return;
           const radius = (dist / radarRange) * maxRadius;
           ctx.beginPath();
           ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
           ctx.stroke();
-          
+
           // Range label
           ctx.fillStyle = 'rgba(0, 180, 80, 0.7)';
           ctx.font = '13px "JetBrains Mono", monospace';
@@ -3713,33 +4092,37 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           { angle: 0, label: 'N' },
           { angle: 90, label: 'E' },
           { angle: 180, label: 'S' },
-          { angle: 270, label: 'W' }
+          { angle: 270, label: 'W' },
         ];
-        
+
         ctx.strokeStyle = 'rgba(0, 180, 80, 0.25)';
         ctx.lineWidth = 1;
-        
+
         compassPoints.forEach(({ angle, label }) => {
-          const rad = (angle - 90) * Math.PI / 180;
+          const rad = ((angle - 90) * Math.PI) / 180;
           ctx.beginPath();
           ctx.moveTo(centerX, centerY);
           ctx.lineTo(centerX + Math.cos(rad) * maxRadius, centerY + Math.sin(rad) * maxRadius);
           ctx.stroke();
-          
+
           // Label
           ctx.fillStyle = 'rgba(0, 200, 100, 0.8)';
           ctx.font = 'bold 18px "JetBrains Mono", monospace';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           const labelRadius = maxRadius + 22;
-          ctx.fillText(label, centerX + Math.cos(rad) * labelRadius, centerY + Math.sin(rad) * labelRadius);
+          ctx.fillText(
+            label,
+            centerX + Math.cos(rad) * labelRadius,
+            centerY + Math.sin(rad) * labelRadius
+          );
         });
 
         // Draw 30-degree lines
         ctx.strokeStyle = 'rgba(0, 180, 80, 0.15)';
         for (let angle = 30; angle < 360; angle += 30) {
           if (angle % 90 === 0) continue;
-          const rad = (angle - 90) * Math.PI / 180;
+          const rad = ((angle - 90) * Math.PI) / 180;
           ctx.beginPath();
           ctx.moveTo(centerX + Math.cos(rad) * 20, centerY + Math.sin(rad) * 20);
           ctx.lineTo(centerX + Math.cos(rad) * maxRadius, centerY + Math.sin(rad) * maxRadius);
@@ -3752,7 +4135,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       ctx.beginPath();
       ctx.arc(centerX, centerY, isPro ? 5 : 4, 0, Math.PI * 2);
       ctx.fill();
-      
+
       ctx.strokeStyle = isPro ? 'rgba(100, 200, 255, 0.5)' : 'rgba(0, 255, 100, 0.4)';
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -3789,9 +4172,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
         // Water bodies (lakes, coastlines) - subtle blue
         if (overlays.water && terrainData.water?.length > 0) {
-          terrainData.water.forEach(feature => {
+          terrainData.water.forEach((feature) => {
             if (feature.type === 'polygon') {
-              drawBoundaryPath(feature.coords, 'rgba(40, 120, 180, 0.5)', 'rgba(20, 60, 100, 0.25)', 1);
+              drawBoundaryPath(
+                feature.coords,
+                'rgba(40, 120, 180, 0.5)',
+                'rgba(20, 60, 100, 0.25)',
+                1
+              );
             } else {
               drawBoundaryPath(feature.coords, 'rgba(40, 120, 180, 0.4)', null, 1);
             }
@@ -3800,21 +4188,21 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
         // Country boundaries - subtle white/gray
         if (overlays.countries && terrainData.countries?.length > 0) {
-          terrainData.countries.forEach(feature => {
+          terrainData.countries.forEach((feature) => {
             drawBoundaryPath(feature.coords, 'rgba(180, 180, 180, 0.5)', null, 1.5);
           });
         }
 
         // State/province boundaries - lighter
         if (overlays.states && terrainData.states?.length > 0) {
-          terrainData.states.forEach(feature => {
+          terrainData.states.forEach((feature) => {
             drawBoundaryPath(feature.coords, 'rgba(120, 160, 200, 0.4)', null, 1);
           });
         }
 
         // County boundaries - very subtle
         if (overlays.counties && terrainData.counties?.length > 0) {
-          terrainData.counties.forEach(feature => {
+          terrainData.counties.forEach((feature) => {
             drawBoundaryPath(feature.coords, 'rgba(100, 130, 160, 0.25)', null, 0.5);
           });
         }
@@ -3824,7 +4212,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         if (overlays.usArtcc && aviationOverlayData.usArtcc?.length > 0) {
           ctx.save();
           ctx.setLineDash([8, 4]);
-          aviationOverlayData.usArtcc.forEach(feature => {
+          aviationOverlayData.usArtcc.forEach((feature) => {
             drawBoundaryPath(feature.coords, 'rgba(0, 200, 255, 0.6)', null, 1.5);
           });
           ctx.setLineDash([]);
@@ -3835,9 +4223,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         if (overlays.usRefueling && aviationOverlayData.usRefueling?.length > 0) {
           ctx.save();
           ctx.setLineDash([6, 3]);
-          aviationOverlayData.usRefueling.forEach(feature => {
+          aviationOverlayData.usRefueling.forEach((feature) => {
             if (feature.type === 'polygon') {
-              drawBoundaryPath(feature.coords, 'rgba(255, 180, 0, 0.7)', 'rgba(255, 180, 0, 0.15)', 2);
+              drawBoundaryPath(
+                feature.coords,
+                'rgba(255, 180, 0, 0.7)',
+                'rgba(255, 180, 0, 0.15)',
+                2
+              );
             } else {
               drawBoundaryPath(feature.coords, 'rgba(255, 180, 0, 0.8)', null, 2);
             }
@@ -3850,18 +4243,33 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         if (overlays.ukMilZones && aviationOverlayData.ukMilZones?.length > 0) {
           ctx.save();
           ctx.setLineDash([5, 3]);
-          aviationOverlayData.ukMilZones.forEach(feature => {
+          aviationOverlayData.ukMilZones.forEach((feature) => {
             const isAwacs = feature.sourceType?.includes('awacs');
             const isAar = feature.sourceType?.includes('aar');
             if (isAwacs) {
               // AWACS orbits - purple dashed circles/polygons
-              drawBoundaryPath(feature.coords, 'rgba(180, 100, 255, 0.7)', 'rgba(180, 100, 255, 0.1)', 2);
+              drawBoundaryPath(
+                feature.coords,
+                'rgba(180, 100, 255, 0.7)',
+                'rgba(180, 100, 255, 0.1)',
+                2
+              );
             } else if (isAar) {
               // AAR zones - magenta
-              drawBoundaryPath(feature.coords, 'rgba(255, 50, 150, 0.7)', 'rgba(255, 50, 150, 0.1)', 2);
+              drawBoundaryPath(
+                feature.coords,
+                'rgba(255, 50, 150, 0.7)',
+                'rgba(255, 50, 150, 0.1)',
+                2
+              );
             } else {
               // RC (restricted/controlled) - red
-              drawBoundaryPath(feature.coords, 'rgba(255, 80, 80, 0.6)', 'rgba(255, 80, 80, 0.1)', 1.5);
+              drawBoundaryPath(
+                feature.coords,
+                'rgba(255, 80, 80, 0.6)',
+                'rgba(255, 80, 80, 0.1)',
+                1.5
+              );
             }
           });
           ctx.setLineDash([]);
@@ -3872,8 +4280,13 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         if (overlays.euMilAwacs && aviationOverlayData.euMilAwacs?.length > 0) {
           ctx.save();
           ctx.setLineDash([5, 3]);
-          aviationOverlayData.euMilAwacs.forEach(feature => {
-            drawBoundaryPath(feature.coords, 'rgba(160, 80, 220, 0.7)', 'rgba(160, 80, 220, 0.1)', 2);
+          aviationOverlayData.euMilAwacs.forEach((feature) => {
+            drawBoundaryPath(
+              feature.coords,
+              'rgba(160, 80, 220, 0.7)',
+              'rgba(160, 80, 220, 0.1)',
+              2
+            );
           });
           ctx.setLineDash([]);
           ctx.restore();
@@ -3883,14 +4296,19 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         if (overlays.trainingAreas && aviationOverlayData.trainingAreas?.length > 0) {
           ctx.save();
           ctx.setLineDash([4, 4]);
-          aviationOverlayData.trainingAreas.forEach(feature => {
+          aviationOverlayData.trainingAreas.forEach((feature) => {
             const isRoute = feature.sourceType?.includes('route');
             if (isRoute) {
               // Nav routes - green lines
               drawBoundaryPath(feature.coords, 'rgba(50, 200, 100, 0.8)', null, 2);
             } else {
               // Training areas - green polygons
-              drawBoundaryPath(feature.coords, 'rgba(50, 200, 100, 0.6)', 'rgba(50, 200, 100, 0.1)', 1.5);
+              drawBoundaryPath(
+                feature.coords,
+                'rgba(50, 200, 100, 0.6)',
+                'rgba(50, 200, 100, 0.1)',
+                1.5
+              );
             }
           });
           ctx.setLineDash([]);
@@ -3900,23 +4318,22 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
       // Draw VORs and Navaids (if overlay enabled)
       if (overlays.vors) {
-        navAids.forEach(nav => {
+        navAids.forEach((nav) => {
           const dist = getDistanceNm(nav.lat, nav.lon);
           if (!isPro && dist > radarRange * 1.1) return;
           if (isPro && dist > radarRange * 1.5) return;
-          
+
           const pos = latLonToScreen(nav.lat, nav.lon);
           const x = pos.x;
           const y = pos.y;
-          
+
           // Skip if outside canvas
           if (x < 0 || x > width || y < 0 || y > height) return;
-          
+
           // Check if selected
-          const isSelected = selectedNavaid && 
-            selectedNavaid.lat === nav.lat && 
-            selectedNavaid.lon === nav.lon;
-          
+          const isSelected =
+            selectedNavaid && selectedNavaid.lat === nav.lat && selectedNavaid.lon === nav.lon;
+
           // Draw selection indicator
           if (isSelected) {
             ctx.save();
@@ -3929,21 +4346,23 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             ctx.setLineDash([]);
             ctx.restore();
           }
-          
+
           // Draw VOR symbol (hexagon)
           const vorSize = isPro ? 9 : 8;
           ctx.save();
           ctx.translate(x, y);
-          
+
           const navType = nav.type || '';
           const baseColor = isSelected ? 1.0 : 0.7;
           if (navType.includes('VORTAC') || navType.includes('VOR')) {
             // Hexagon for VOR
-            ctx.strokeStyle = isPro ? `rgba(80, 140, 220, ${baseColor + 0.1})` : `rgba(100, 150, 255, ${baseColor})`;
+            ctx.strokeStyle = isPro
+              ? `rgba(80, 140, 220, ${baseColor + 0.1})`
+              : `rgba(100, 150, 255, ${baseColor})`;
             ctx.lineWidth = isSelected ? 2 : 1.5;
             ctx.beginPath();
             for (let i = 0; i < 6; i++) {
-              const angle = (i * 60 - 30) * Math.PI / 180;
+              const angle = ((i * 60 - 30) * Math.PI) / 180;
               const px = Math.cos(angle) * vorSize;
               const py = Math.sin(angle) * vorSize;
               if (i === 0) ctx.moveTo(px, py);
@@ -3951,9 +4370,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             }
             ctx.closePath();
             ctx.stroke();
-            
+
             // Center dot
-            ctx.fillStyle = isPro ? `rgba(80, 140, 220, ${baseColor + 0.2})` : `rgba(100, 150, 255, ${baseColor + 0.1})`;
+            ctx.fillStyle = isPro
+              ? `rgba(80, 140, 220, ${baseColor + 0.2})`
+              : `rgba(100, 150, 255, ${baseColor + 0.1})`;
             ctx.beginPath();
             ctx.arc(0, 0, 2, 0, Math.PI * 2);
             ctx.fill();
@@ -3975,15 +4396,19 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             ctx.arc(0, 0, vorSize, 0, Math.PI * 2);
             ctx.stroke();
           }
-          
+
           ctx.restore();
-          
+
           // Label with background
-          ctx.font = isSelected ? 'bold 12px "JetBrains Mono", monospace' : '12px "JetBrains Mono", monospace';
+          ctx.font = isSelected
+            ? 'bold 12px "JetBrains Mono", monospace'
+            : '12px "JetBrains Mono", monospace';
           const navLabelWidth = ctx.measureText(nav.id).width + 6;
           ctx.fillStyle = isPro ? 'rgba(10, 13, 18, 0.8)' : 'rgba(10, 15, 10, 0.75)';
           ctx.fillRect(x + 7, y - 6, navLabelWidth, 16);
-          ctx.fillStyle = isPro ? `rgba(80, 140, 220, ${baseColor + 0.1})` : `rgba(100, 150, 255, ${baseColor})`;
+          ctx.fillStyle = isPro
+            ? `rgba(80, 140, 220, ${baseColor + 0.1})`
+            : `rgba(100, 150, 255, ${baseColor})`;
           ctx.textAlign = 'left';
           ctx.fillText(nav.id, x + 10, y + 4);
         });
@@ -3991,22 +4416,21 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
       // Draw airports (if overlay enabled)
       if (overlays.airports) {
-        airports.forEach(apt => {
+        airports.forEach((apt) => {
           const dist = getDistanceNm(apt.lat, apt.lon);
           if (!isPro && dist > radarRange * 1.1) return;
           if (isPro && dist > radarRange * 1.5) return;
-          
+
           const pos = latLonToScreen(apt.lat, apt.lon);
           const x = pos.x;
           const y = pos.y;
-          
+
           if (x < 0 || x > width || y < 0 || y > height) return;
-          
+
           // Check if selected
-          const isSelected = selectedAirport && 
-            selectedAirport.lat === apt.lat && 
-            selectedAirport.lon === apt.lon;
-          
+          const isSelected =
+            selectedAirport && selectedAirport.lat === apt.lat && selectedAirport.lon === apt.lon;
+
           // Draw selection indicator
           if (isSelected) {
             ctx.save();
@@ -4019,25 +4443,25 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             ctx.setLineDash([]);
             ctx.restore();
           }
-          
+
           // Airport symbol based on class
           ctx.save();
           ctx.translate(x, y);
-          
+
           const aptClass = apt.class || 'E';
           let color = 'rgba(180, 180, 180, 0.6)';
           if (aptClass === 'B') color = 'rgba(100, 150, 255, 0.7)';
           else if (aptClass === 'C') color = 'rgba(200, 100, 200, 0.7)';
           else if (aptClass === 'D') color = 'rgba(100, 200, 100, 0.7)';
-          
+
           // Brighten if selected
           if (isSelected) {
             color = color.replace(/[\d.]+\)$/, '1)');
           }
-          
+
           ctx.strokeStyle = color;
           ctx.lineWidth = isSelected ? 1.5 : 1;
-          
+
           // Draw runway symbol (circle with lines)
           ctx.beginPath();
           ctx.arc(0, 0, isSelected ? 5 : 4, 0, Math.PI * 2);
@@ -4046,12 +4470,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           ctx.moveTo(isSelected ? -10 : -8, 0);
           ctx.lineTo(isSelected ? 10 : 8, 0);
           ctx.stroke();
-          
+
           ctx.restore();
-          
+
           // Label with background
           const aptId = apt.icao || apt.icaoId || apt.faaId || apt.id || 'APT';
-          ctx.font = isSelected ? 'bold 11px "JetBrains Mono", monospace' : '11px "JetBrains Mono", monospace';
+          ctx.font = isSelected
+            ? 'bold 11px "JetBrains Mono", monospace'
+            : '11px "JetBrains Mono", monospace';
           const aptLabelWidth = ctx.measureText(aptId).width + 6;
           ctx.fillStyle = isPro ? 'rgba(10, 13, 18, 0.8)' : 'rgba(10, 15, 10, 0.75)';
           ctx.fillRect(x + 7, y - 6, aptLabelWidth, 15);
@@ -4075,7 +4501,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           return 'rgba(100, 100, 200, 0.3)';
         };
 
-        airspaceData.forEach(as => {
+        airspaceData.forEach((as) => {
           const asColor = getAirspaceColor(as);
 
           // Draw polygon boundaries (from API)
@@ -4109,11 +4535,15 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               if (asCenter?.lat && asCenter?.lon) {
                 const labelPos = latLonToScreen(asCenter.lat, asCenter.lon);
                 ctx.fillStyle = asColor.replace(/[\d.]+\)$/, '0.8)');
-                ctx.font = isPro ? 'bold 12px "JetBrains Mono", monospace' : '11px "JetBrains Mono", monospace';
+                ctx.font = isPro
+                  ? 'bold 12px "JetBrains Mono", monospace'
+                  : '11px "JetBrains Mono", monospace';
                 ctx.textAlign = 'center';
                 ctx.fillText(as.name, labelPos.x, labelPos.y);
                 if (as.floor_ft !== undefined && as.ceiling_ft !== undefined) {
-                  ctx.font = isPro ? '10px "JetBrains Mono", monospace' : '9px "JetBrains Mono", monospace';
+                  ctx.font = isPro
+                    ? '10px "JetBrains Mono", monospace'
+                    : '9px "JetBrains Mono", monospace';
                   ctx.fillText(`${as.floor_ft}-${as.ceiling_ft}ft`, labelPos.x, labelPos.y + 12);
                 }
               }
@@ -4180,25 +4610,24 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
       // Draw PIREPs if enabled (Pro mode primarily)
       if (overlays.pireps && aviationData.pireps.length > 0) {
-        aviationData.pireps.forEach(pirep => {
+        aviationData.pireps.forEach((pirep) => {
           if (!pirep.lat || !pirep.lon) return;
           const pos = latLonToScreen(pirep.lat, pirep.lon);
           if (pos.x < 0 || pos.x > width || pos.y < 0 || pos.y > height) return;
-          
+
           ctx.save();
           ctx.translate(pos.x, pos.y);
-          
+
           // Check if this PIREP is selected
-          const isSelected = selectedPirep && 
-            selectedPirep.lat === pirep.lat && 
-            selectedPirep.lon === pirep.lon;
-          
+          const isSelected =
+            selectedPirep && selectedPirep.lat === pirep.lat && selectedPirep.lon === pirep.lon;
+
           // Draw selection indicator
           if (isSelected) {
             const selFlash = Math.floor(frameCount / 10) % 2 === 0;
             const selAlpha = selFlash ? 0.9 : 0.4;
             const selSize = selFlash ? 18 : 16;
-            
+
             ctx.strokeStyle = `rgba(100, 220, 255, ${selAlpha})`;
             ctx.lineWidth = 2;
             ctx.setLineDash([3, 3]);
@@ -4206,7 +4635,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             ctx.arc(0, 0, selSize, 0, Math.PI * 2);
             ctx.stroke();
             ctx.setLineDash([]);
-            
+
             // Corner brackets
             const bSize = 12;
             const bLen = 5;
@@ -4237,41 +4666,41 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             ctx.lineTo(bSize, bSize - bLen);
             ctx.stroke();
           }
-          
+
           // PIREP color based on type
           const pirepType = getPirepType(pirep);
           let color, fillColor;
           switch (pirepType) {
             case 'urgent':
-              color = 'rgba(255, 50, 50, 0.9)';  // Red for urgent
+              color = 'rgba(255, 50, 50, 0.9)'; // Red for urgent
               fillColor = 'rgba(255, 50, 50, 0.3)';
               break;
             case 'turbulence':
-              color = 'rgba(255, 150, 50, 0.85)';  // Orange for turbulence
+              color = 'rgba(255, 150, 50, 0.85)'; // Orange for turbulence
               fillColor = 'rgba(255, 150, 50, 0.25)';
               break;
             case 'icing':
-              color = 'rgba(100, 180, 255, 0.85)';  // Blue for icing
+              color = 'rgba(100, 180, 255, 0.85)'; // Blue for icing
               fillColor = 'rgba(100, 180, 255, 0.25)';
               break;
             case 'both':
-              color = 'rgba(200, 100, 255, 0.85)';  // Purple for both
+              color = 'rgba(200, 100, 255, 0.85)'; // Purple for both
               fillColor = 'rgba(200, 100, 255, 0.25)';
               break;
             case 'windshear':
-              color = 'rgba(255, 100, 200, 0.85)';  // Magenta for wind shear
+              color = 'rgba(255, 100, 200, 0.85)'; // Magenta for wind shear
               fillColor = 'rgba(255, 100, 200, 0.25)';
               break;
             default:
-              color = 'rgba(255, 220, 100, 0.7)';  // Yellow for routine
+              color = 'rgba(255, 220, 100, 0.7)'; // Yellow for routine
               fillColor = 'rgba(255, 220, 100, 0.15)';
           }
-          
+
           // Make selected PIREPs brighter
           if (isSelected) {
             color = color.replace(/0\.\d+\)/, '1)');
           }
-          
+
           // Draw diamond symbol
           ctx.strokeStyle = color;
           ctx.lineWidth = isSelected ? 2.5 : 1.5;
@@ -4282,11 +4711,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           ctx.lineTo(-6, 0);
           ctx.closePath();
           ctx.stroke();
-          
+
           // Fill based on type (always fill slightly, more if selected)
           ctx.fillStyle = isSelected ? color.replace(/[\d.]+\)$/, '0.4)') : fillColor;
           ctx.fill();
-          
+
           // Add inner symbol for turb/ice
           if (pirepType === 'turbulence' || pirepType === 'both') {
             // Wavy line for turbulence
@@ -4321,29 +4750,28 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             ctx.lineTo(3, 1);
             ctx.stroke();
           }
-          
+
           ctx.restore();
         });
       }
 
       // Draw METARs if enabled
       if (overlays.metars && aviationData.metars.length > 0) {
-        aviationData.metars.forEach(metar => {
+        aviationData.metars.forEach((metar) => {
           if (!metar.lat || !metar.lon) return;
           const pos = latLonToScreen(metar.lat, metar.lon);
           if (pos.x < 0 || pos.x > width || pos.y < 0 || pos.y > height) return;
-          
+
           // Check if this METAR is selected
-          const isSelected = selectedMetar && 
-            selectedMetar.lat === metar.lat && 
-            selectedMetar.lon === metar.lon;
-          
+          const isSelected =
+            selectedMetar && selectedMetar.lat === metar.lat && selectedMetar.lon === metar.lon;
+
           // Draw selection indicator
           if (isSelected) {
             const selFlash = Math.floor(frameCount / 10) % 2 === 0;
             const selAlpha = selFlash ? 0.9 : 0.4;
             const selSize = selFlash ? 18 : 16;
-            
+
             ctx.save();
             ctx.strokeStyle = `rgba(100, 220, 255, ${selAlpha})`;
             ctx.lineWidth = 2;
@@ -4352,7 +4780,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             ctx.arc(pos.x, pos.y, selSize, 0, Math.PI * 2);
             ctx.stroke();
             ctx.setLineDash([]);
-            
+
             // Corner brackets
             const bSize = 12;
             const bLen = 5;
@@ -4384,33 +4812,33 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             ctx.stroke();
             ctx.restore();
           }
-          
+
           // Flight category color
           let color = 'rgba(0, 255, 0, 0.7)'; // VFR
           if (metar.fltCat === 'MVFR') color = 'rgba(100, 150, 255, 0.8)';
           else if (metar.fltCat === 'IFR') color = 'rgba(255, 100, 100, 0.8)';
           else if (metar.fltCat === 'LIFR') color = 'rgba(255, 50, 200, 0.8)';
-          
+
           // Make selected METARs brighter
           if (isSelected) {
             color = color.replace('0.7', '1').replace('0.8', '1');
           }
-          
+
           ctx.fillStyle = color;
           ctx.beginPath();
           ctx.arc(pos.x, pos.y, isSelected ? 7 : 5, 0, Math.PI * 2);
           ctx.fill();
-          
+
           // Add outline if selected
           if (isSelected) {
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
             ctx.lineWidth = 2;
             ctx.stroke();
           }
-          
+
           // Wind barb if significant wind
           if (metar.wspd && metar.wspd > 10) {
-            const windDir = (metar.wdir || 0) * Math.PI / 180;
+            const windDir = ((metar.wdir || 0) * Math.PI) / 180;
             ctx.strokeStyle = color;
             ctx.lineWidth = isSelected ? 2 : 1.5;
             ctx.beginPath();
@@ -4424,7 +4852,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       // Sweep line - CRT mode only (Phase 7.3: respect reduced motion)
       if (!isPro && !reducedMotion) {
         sweepAngleRef.current = (sweepAngleRef.current + 1.5) % 360;
-        const sweepRad = (sweepAngleRef.current - 90) * Math.PI / 180;
+        const sweepRad = ((sweepAngleRef.current - 90) * Math.PI) / 180;
 
         // Draw sweep as gradient arc
         const sweepSpan = 45;
@@ -4432,8 +4860,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         ctx.translate(centerX, centerY);
 
         for (let i = 0; i < sweepSpan; i += 3) {
-          const angle1 = (sweepAngleRef.current - i - 90) * Math.PI / 180;
-          const angle2 = (sweepAngleRef.current - i - 3 - 90) * Math.PI / 180;
+          const angle1 = ((sweepAngleRef.current - i - 90) * Math.PI) / 180;
+          const angle2 = ((sweepAngleRef.current - i - 3 - 90) * Math.PI) / 180;
           const alpha = 0.4 * (1 - i / sweepSpan);
 
           ctx.beginPath();
@@ -4458,7 +4886,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       // Build conflict aircraft set from backend safety events (activeConflicts)
       // No longer doing local proximity calculations - backend handles this
       const conflictAircraft = new Set();
-      activeConflicts.forEach(event => {
+      activeConflicts.forEach((event) => {
         if (event.icao) conflictAircraft.add(event.icao.toUpperCase());
         if (event.icao_2) conflictAircraft.add(event.icao_2.toUpperCase());
       });
@@ -4468,7 +4896,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         ctx.save();
         const drawnPairs = new Set(); // Avoid drawing same pair twice
 
-        activeConflicts.forEach(event => {
+        activeConflicts.forEach((event) => {
           // Skip non-proximity events (single aircraft events)
           if (!event.icao || !event.icao_2) return;
 
@@ -4477,8 +4905,12 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           drawnPairs.add(pairKey);
 
           // Find both aircraft
-          const ac1 = sortedAircraft.find(ac => ac.hex?.toUpperCase() === event.icao?.toUpperCase());
-          const ac2 = sortedAircraft.find(ac => ac.hex?.toUpperCase() === event.icao_2?.toUpperCase());
+          const ac1 = sortedAircraft.find(
+            (ac) => ac.hex?.toUpperCase() === event.icao?.toUpperCase()
+          );
+          const ac2 = sortedAircraft.find(
+            (ac) => ac.hex?.toUpperCase() === event.icao_2?.toUpperCase()
+          );
 
           if (!ac1 || !ac2 || !ac1.lat || !ac2.lat) return;
 
@@ -4491,9 +4923,12 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
           // Determine severity-based color
           const severity = event.severity || 'warning';
-          const lineColor = severity === 'critical' ? 'rgba(255, 80, 150, 0.8)' :
-                           severity === 'warning' ? 'rgba(255, 140, 0, 0.8)' :
-                           'rgba(255, 220, 0, 0.8)';
+          const lineColor =
+            severity === 'critical'
+              ? 'rgba(255, 80, 150, 0.8)'
+              : severity === 'warning'
+                ? 'rgba(255, 140, 0, 0.8)'
+                : 'rgba(255, 220, 0, 0.8)';
 
           // Draw connecting line between aircraft (pulsing effect)
           const pulseAlpha = 0.4 + Math.sin(frameCount * 0.1) * 0.3;
@@ -4517,9 +4952,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           const isCriticalAlt = altDiff < 1000;
 
           // Draw relative altitude label
-          const relAltText = alt1 > alt2 ?
-            `△${Math.round(altDiff)}ft` :
-            `▽${Math.round(altDiff)}ft`;
+          const relAltText =
+            alt1 > alt2 ? `△${Math.round(altDiff)}ft` : `▽${Math.round(altDiff)}ft`;
 
           ctx.font = 'bold 11px "JetBrains Mono", monospace';
           const labelWidth = ctx.measureText(relAltText).width + 10;
@@ -4551,11 +4985,12 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         const wedgePixelsPerNm = (Math.min(width, height) * 0.45) / radarRange;
 
         // Draw wedges for aircraft in conflicts (or all aircraft if toggled)
-        const wedgesToDraw = conflictAircraft.size > 0
-          ? sortedAircraft.filter(ac => conflictAircraft.has(ac.hex?.toUpperCase()))
-          : [];
+        const wedgesToDraw =
+          conflictAircraft.size > 0
+            ? sortedAircraft.filter((ac) => conflictAircraft.has(ac.hex?.toUpperCase()))
+            : [];
 
-        wedgesToDraw.forEach(ac => {
+        wedgesToDraw.forEach((ac) => {
           if (!ac.lat || !ac.lon || !ac.track || !ac.gs) return;
 
           const pos = latLonToScreen(ac.lat, ac.lon);
@@ -4566,23 +5001,35 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           const lookaheadPx = lookaheadNm * wedgePixelsPerNm;
 
           // Heading in radians (canvas 0° is right, aircraft track 0° is north)
-          const headingRad = (ac.track - 90) * Math.PI / 180;
-          const leftRad = ((ac.track - wedgeAngle) - 90) * Math.PI / 180;
-          const rightRad = ((ac.track + wedgeAngle) - 90) * Math.PI / 180;
+          const headingRad = ((ac.track - 90) * Math.PI) / 180;
+          const leftRad = ((ac.track - wedgeAngle - 90) * Math.PI) / 180;
+          const rightRad = ((ac.track + wedgeAngle - 90) * Math.PI) / 180;
 
           // Determine severity color based on whether this aircraft is in a critical conflict
-          const isInCriticalConflict = activeConflicts.some(e =>
-            (e.severity === 'critical') &&
-            (e.icao?.toUpperCase() === ac.hex?.toUpperCase() || e.icao_2?.toUpperCase() === ac.hex?.toUpperCase())
+          const isInCriticalConflict = activeConflicts.some(
+            (e) =>
+              e.severity === 'critical' &&
+              (e.icao?.toUpperCase() === ac.hex?.toUpperCase() ||
+                e.icao_2?.toUpperCase() === ac.hex?.toUpperCase())
           );
-          const wedgeColor = isInCriticalConflict ? 'rgba(255, 80, 150, 0.15)' : 'rgba(255, 180, 0, 0.12)';
-          const wedgeBorderColor = isInCriticalConflict ? 'rgba(255, 80, 150, 0.4)' : 'rgba(255, 180, 0, 0.3)';
+          const wedgeColor = isInCriticalConflict
+            ? 'rgba(255, 80, 150, 0.15)'
+            : 'rgba(255, 180, 0, 0.12)';
+          const wedgeBorderColor = isInCriticalConflict
+            ? 'rgba(255, 80, 150, 0.4)'
+            : 'rgba(255, 180, 0, 0.3)';
 
           // Draw the wedge (triangle from aircraft position)
           ctx.beginPath();
           ctx.moveTo(pos.x, pos.y);
-          ctx.lineTo(pos.x + Math.cos(leftRad) * lookaheadPx, pos.y + Math.sin(leftRad) * lookaheadPx);
-          ctx.lineTo(pos.x + Math.cos(rightRad) * lookaheadPx, pos.y + Math.sin(rightRad) * lookaheadPx);
+          ctx.lineTo(
+            pos.x + Math.cos(leftRad) * lookaheadPx,
+            pos.y + Math.sin(leftRad) * lookaheadPx
+          );
+          ctx.lineTo(
+            pos.x + Math.cos(rightRad) * lookaheadPx,
+            pos.y + Math.sin(rightRad) * lookaheadPx
+          );
           ctx.closePath();
 
           ctx.fillStyle = wedgeColor;
@@ -4594,9 +5041,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           // Draw center line (predicted track)
           ctx.beginPath();
           ctx.moveTo(pos.x, pos.y);
-          ctx.lineTo(pos.x + Math.cos(headingRad) * lookaheadPx, pos.y + Math.sin(headingRad) * lookaheadPx);
+          ctx.lineTo(
+            pos.x + Math.cos(headingRad) * lookaheadPx,
+            pos.y + Math.sin(headingRad) * lookaheadPx
+          );
           ctx.setLineDash([4, 4]);
-          ctx.strokeStyle = isInCriticalConflict ? 'rgba(255, 80, 150, 0.5)' : 'rgba(255, 180, 0, 0.4)';
+          ctx.strokeStyle = isInCriticalConflict
+            ? 'rgba(255, 80, 150, 0.5)'
+            : 'rgba(255, 180, 0, 0.4)';
           ctx.stroke();
           ctx.setLineDash([]);
         });
@@ -4650,9 +5102,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         ctx.lineJoin = 'round';
 
         // Performance: Limit trail length when > 100 aircraft
-        const effectiveTrackLength = perfMode.reduceTrailLength ?
-          Math.min(config.shortTrackLength || 15, 8) :
-          (config.shortTrackLength || 15);
+        const effectiveTrackLength = perfMode.reduceTrailLength
+          ? Math.min(config.shortTrackLength || 15, 8)
+          : config.shortTrackLength || 15;
 
         // Helper to get smooth altitude-based RGB color
         const getAltitudeRGB = (alt) => {
@@ -4665,7 +5117,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             return {
               r: Math.round(50 + 205 * t),
               g: Math.round(255),
-              b: Math.round(100 - 100 * t)
+              b: Math.round(100 - 100 * t),
             };
           } else if (clampedAlt < 25000) {
             // Yellow to Orange transition (10000-25000ft)
@@ -4673,7 +5125,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             return {
               r: Math.round(255),
               g: Math.round(255 - 130 * t),
-              b: Math.round(0)
+              b: Math.round(0),
             };
           } else {
             // Orange to Magenta transition (25000-45000ft)
@@ -4681,7 +5133,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             return {
               r: Math.round(255),
               g: Math.round(125 - 125 * t),
-              b: Math.round(0 + 255 * t)
+              b: Math.round(0 + 255 * t),
             };
           }
         };
@@ -4692,16 +5144,19 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         // Helper to calculate distance between two points in nm
         const getSegmentDistanceNm = (lat1, lon1, lat2, lon2) => {
           const R = 3440.065; // Earth radius in nm
-          const dLat = (lat2 - lat1) * Math.PI / 180;
-          const dLon = (lon2 - lon1) * Math.PI / 180;
-          const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                    Math.sin(dLon/2) * Math.sin(dLon/2);
-          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          const dLat = ((lat2 - lat1) * Math.PI) / 180;
+          const dLon = ((lon2 - lon1) * Math.PI) / 180;
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos((lat1 * Math.PI) / 180) *
+              Math.cos((lat2 * Math.PI) / 180) *
+              Math.sin(dLon / 2) *
+              Math.sin(dLon / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
           return R * c;
         };
 
-        sortedAircraft.forEach(ac => {
+        sortedAircraft.forEach((ac) => {
           if (!ac.hex || !ac.lat || !ac.lon) return;
 
           const dist = ac.distance_nm || getDistanceNm(ac.lat, ac.lon);
@@ -4716,8 +5171,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           const now = Date.now();
           const maxAge = 300000; // 5 minutes max
           const allPositions = [
-            ...historicPositions.filter(p => now - p.time < maxAge),
-            ...realtimePositions.filter(p => now - p.time < maxAge)
+            ...historicPositions.filter((p) => now - p.time < maxAge),
+            ...realtimePositions.filter((p) => now - p.time < maxAge),
           ].sort((a, b) => a.time - b.time);
 
           // Need at least 2 points to draw a line
@@ -4743,7 +5198,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 const ratio = remaining / segDist;
                 const interpLat = nextP.lat + (p.lat - nextP.lat) * ratio;
                 const interpLon = nextP.lon + (p.lon - nextP.lon) * ratio;
-                const interpAlt = nextP.alt && p.alt ? nextP.alt + (p.alt - nextP.alt) * ratio : (p.alt || nextP.alt);
+                const interpAlt =
+                  nextP.alt && p.alt ? nextP.alt + (p.alt - nextP.alt) * ratio : p.alt || nextP.alt;
                 positions.unshift({ lat: interpLat, lon: interpLon, alt: interpAlt, time: p.time });
                 break;
               }
@@ -4765,8 +5221,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               const pos1 = latLonToScreen(p1.lat, p1.lon);
               const pos2 = latLonToScreen(p2.lat, p2.lon);
 
-              if (pos1.x < -50 || pos1.x > width + 50 || pos1.y < -50 || pos1.y > height + 50) continue;
-              if (pos2.x < -50 || pos2.x > width + 50 || pos2.y < -50 || pos2.y > height + 50) continue;
+              if (pos1.x < -50 || pos1.x > width + 50 || pos1.y < -50 || pos1.y > height + 50)
+                continue;
+              if (pos2.x < -50 || pos2.x > width + 50 || pos2.y < -50 || pos2.y > height + 50)
+                continue;
 
               // Create gradient for this segment
               const gradient = ctx.createLinearGradient(pos1.x, pos1.y, pos2.x, pos2.y);
@@ -4815,246 +5273,263 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         const aircraftToDraw = [...sortedAircraft].sort((a, b) => {
           const aHasSafety = conflictAircraft.has(a.hex?.toUpperCase());
           const bHasSafety = conflictAircraft.has(b.hex?.toUpperCase());
-          if (aHasSafety && !bHasSafety) return 1;  // a comes after b (drawn on top)
+          if (aHasSafety && !bHasSafety) return 1; // a comes after b (drawn on top)
           if (!aHasSafety && bHasSafety) return -1; // b comes after a
           return 0;
         });
 
-        aircraftToDraw.forEach(ac => {
-        const dist = ac.distance_nm || getDistanceNm(ac.lat, ac.lon);
-        if (!isPro && dist > radarRange) return;
-        if (isPro && dist > radarRange * 1.5) return;
+        aircraftToDraw.forEach((ac) => {
+          const dist = ac.distance_nm || getDistanceNm(ac.lat, ac.lon);
+          if (!isPro && dist > radarRange) return;
+          if (isPro && dist > radarRange * 1.5) return;
 
-        // Use latLonToScreen for positioning
-        const pos = latLonToScreen(ac.lat, ac.lon);
-        const x = pos.x;
-        const y = pos.y;
+          // Use latLonToScreen for positioning
+          const pos = latLonToScreen(ac.lat, ac.lon);
+          const x = pos.x;
+          const y = pos.y;
 
-        // Skip if outside canvas (Pro mode)
-        if (isPro && (x < 0 || x > width || y < 0 || y > height)) return;
+          // Skip if outside canvas (Pro mode)
+          if (isPro && (x < 0 || x > width || y < 0 || y > height)) return;
 
-        // Calculate blip brightness based on sweep position (CRT) or constant (Pro)
-        const bearing = getBearing(ac.lat, ac.lon);
-        let brightness = 1;
-        if (!isPro) {
-          let sweepDiff = (sweepAngleRef.current - bearing + 360) % 360;
-          if (sweepDiff > 180) sweepDiff = 360 - sweepDiff;
-          brightness = Math.max(0.3, 1 - sweepDiff / 180);
-        }
-
-        // Determine colors - Pro mode uses brighter colors
-        const isEmergency = ac.emergency || ['7500', '7600', '7700'].includes(ac.squawk);
-        const isMilitary = ac.military;
-        const isProximityConflict = conflictAircraft.has(ac.hex);
-
-        // Check for safety events (from API)
-        const safetyEvent = activeConflicts.find(e =>
-          e.icao?.toUpperCase() === ac.hex?.toUpperCase() ||
-          e.icao_2?.toUpperCase() === ac.hex?.toUpperCase()
-        );
-        const hasSafetyAlert = !!safetyEvent || isProximityConflict;
-        const alertSeverity = safetyEvent?.severity || (isProximityConflict ? 'warning' : null);
-        
-        // Emergency flash effect
-        const flashOn = isEmergency ? (Math.floor(frameCount / 15) % 2 === 0) : true;
-        const flashBrightness = flashOn ? 1 : 0.3;
-        
-        // Proximity conflict flash speed based on severity
-        const flashDivisor = alertSeverity === 'critical' ? 4 : alertSeverity === 'warning' ? 8 : 12;
-        const proximityFlashOn = hasSafetyAlert ? (Math.floor(frameCount / flashDivisor) % 2 === 0) : false;
-        
-        // Severity-based colors
-        const getSeverityColors = (severity, flashOn) => {
-          const intensity = flashOn ? 1 : 0.6;
-          switch (severity) {
-            case 'critical':
-              return {
-                primary: `rgba(255, 80, 150, ${intensity})`,
-                text: `rgba(255, 120, 180, ${intensity})`,
-                ring: `rgba(255, 80, 150, ${flashOn ? 0.9 : 0.5})`,
-                ringInner: `rgba(255, 50, 120, ${(flashOn ? 0.9 : 0.5) * 0.6})`
-              };
-            case 'warning':
-              return {
-                primary: `rgba(255, 140, 0, ${intensity})`,
-                text: `rgba(255, 180, 80, ${intensity})`,
-                ring: `rgba(255, 140, 0, ${flashOn ? 0.9 : 0.5})`,
-                ringInner: `rgba(255, 100, 0, ${(flashOn ? 0.9 : 0.5) * 0.6})`
-              };
-            default: // low
-              return {
-                primary: `rgba(255, 220, 0, ${intensity})`,
-                text: `rgba(255, 240, 100, ${intensity})`,
-                ring: `rgba(255, 220, 0, ${flashOn ? 0.9 : 0.5})`,
-                ringInner: `rgba(255, 180, 0, ${(flashOn ? 0.9 : 0.5) * 0.6})`
-              };
+          // Calculate blip brightness based on sweep position (CRT) or constant (Pro)
+          const bearing = getBearing(ac.lat, ac.lon);
+          let brightness = 1;
+          if (!isPro) {
+            let sweepDiff = (sweepAngleRef.current - bearing + 360) % 360;
+            if (sweepDiff > 180) sweepDiff = 360 - sweepDiff;
+            brightness = Math.max(0.3, 1 - sweepDiff / 180);
           }
-        };
-        
-        let primaryColor, textColor;
-        if (hasSafetyAlert) {
-          const sevColors = getSeverityColors(alertSeverity, proximityFlashOn);
-          primaryColor = sevColors.primary;
-          textColor = sevColors.text;
-        } else if (isEmergency) {
-          const r = flashOn ? 255 : 180;
-          const intensity = brightness * flashBrightness;
-          primaryColor = `rgba(${r}, 50, 50, ${Math.max(0.5, intensity)})`;
-          textColor = `rgba(255, 100, 100, ${Math.max(0.6, intensity)})`;
-        } else if (isMilitary) {
-          // Purple for military
-          primaryColor = isPro ? `rgba(200, 100, 255, 0.9)` : `rgba(180, 80, 255, ${brightness})`;
-          textColor = isPro ? 'rgba(220, 150, 255, 0.9)' : `rgba(200, 150, 255, ${brightness})`;
-        } else if (showSpeedColors && ac.gs) {
-          // Speed-based coloring for civilian (Phase 2.2)
-          const speed = ac.gs;
-          if (speed > 500) {
-            // Very fast (> 500 kts): Orange
-            primaryColor = isPro ? 'rgba(255, 165, 0, 0.9)' : `rgba(255, 165, 0, ${brightness})`;
-            textColor = isPro ? 'rgba(255, 200, 100, 0.9)' : `rgba(255, 200, 100, ${brightness})`;
-          } else if (speed > 300) {
-            // Fast (300-500 kts): Yellow
-            primaryColor = isPro ? 'rgba(255, 255, 0, 0.9)' : `rgba(255, 255, 0, ${brightness})`;
-            textColor = isPro ? 'rgba(255, 255, 150, 0.9)' : `rgba(255, 255, 150, ${brightness})`;
-          } else if (speed < 150) {
-            // Slow (< 150 kts): Blue
-            primaryColor = isPro ? 'rgba(100, 180, 255, 0.9)' : `rgba(100, 180, 255, ${brightness})`;
-            textColor = isPro ? 'rgba(150, 200, 255, 0.9)' : `rgba(150, 200, 255, ${brightness})`;
-          } else {
-            // Medium (150-300 kts): Cyan (default)
-            primaryColor = isPro ? 'rgba(0, 255, 200, 0.9)' : `rgba(0, 255, 200, ${brightness})`;
-            textColor = isPro ? 'rgba(150, 255, 220, 0.9)' : `rgba(150, 255, 220, ${brightness})`;
-          }
-        } else {
-          // Green for civilian (default)
-          primaryColor = isPro ? 'rgba(0, 255, 150, 0.9)' : `rgba(0, 255, 150, ${brightness})`;
-          textColor = isPro ? 'rgba(150, 255, 200, 0.9)' : `rgba(150, 255, 200, ${brightness})`;
-        }
 
-        // Draw safety alert warning ring (severity-based colors)
-        if (hasSafetyAlert) {
-          ctx.save();
-          const sevColors = getSeverityColors(alertSeverity, proximityFlashOn);
-          const ringSize = proximityFlashOn ? 24 : 20;
-          
-          // Outer warning ring
-          ctx.beginPath();
-          ctx.arc(x, y, ringSize, 0, Math.PI * 2);
-          ctx.strokeStyle = sevColors.ring;
-          ctx.lineWidth = alertSeverity === 'critical' ? 4 : 3;
-          ctx.stroke();
-          
-          // Inner ring
-          ctx.beginPath();
-          ctx.arc(x, y, ringSize - 6, 0, Math.PI * 2);
-          ctx.strokeStyle = sevColors.ringInner;
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-          
-          ctx.restore();
-        }
+          // Determine colors - Pro mode uses brighter colors
+          const isEmergency = ac.emergency || ['7500', '7600', '7700'].includes(ac.squawk);
+          const isMilitary = ac.military;
+          const isProximityConflict = conflictAircraft.has(ac.hex);
 
-        // Draw emergency glow ring
-        if (isEmergency && flashOn && !hasSafetyAlert) {
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(x, y, 18 + Math.sin(frameCount * 0.2) * 3, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(255, 0, 0, ${0.4 + Math.sin(frameCount * 0.15) * 0.2})`;
-          ctx.lineWidth = 2;
-          ctx.stroke();
-          ctx.restore();
-        }
+          // Check for safety events (from API)
+          const safetyEvent = activeConflicts.find(
+            (e) =>
+              e.icao?.toUpperCase() === ac.hex?.toUpperCase() ||
+              e.icao_2?.toUpperCase() === ac.hex?.toUpperCase()
+          );
+          const hasSafetyAlert = !!safetyEvent || isProximityConflict;
+          const alertSeverity = safetyEvent?.severity || (isProximityConflict ? 'warning' : null);
 
-        // Draw selection highlight (flashing green outline)
-        const isSelected = selectedAircraft && selectedAircraft.hex === ac.hex;
-        if (isSelected) {
-          const selFlash = Math.floor(frameCount / 10) % 2 === 0;
-          const selAlpha = selFlash ? 0.9 : 0.4;
-          const selSize = selFlash ? 22 : 20;
-          
-          ctx.save();
-          ctx.strokeStyle = `rgba(100, 220, 255, ${selAlpha})`;
-          ctx.lineWidth = 2;
-          ctx.setLineDash([4, 4]);
-          ctx.beginPath();
-          ctx.arc(x, y, selSize, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.setLineDash([]);
-          
-          // Corner brackets
-          ctx.strokeStyle = `rgba(100, 220, 255, ${selAlpha})`;
-          ctx.lineWidth = 2;
-          const bSize = 15;
-          const bLen = 6;
-          // Top-left
-          ctx.beginPath();
-          ctx.moveTo(x - bSize, y - bSize + bLen);
-          ctx.lineTo(x - bSize, y - bSize);
-          ctx.lineTo(x - bSize + bLen, y - bSize);
-          ctx.stroke();
-          // Top-right
-          ctx.beginPath();
-          ctx.moveTo(x + bSize - bLen, y - bSize);
-          ctx.lineTo(x + bSize, y - bSize);
-          ctx.lineTo(x + bSize, y - bSize + bLen);
-          ctx.stroke();
-          // Bottom-left
-          ctx.beginPath();
-          ctx.moveTo(x - bSize, y + bSize - bLen);
-          ctx.lineTo(x - bSize, y + bSize);
-          ctx.lineTo(x - bSize + bLen, y + bSize);
-          ctx.stroke();
-          // Bottom-right
-          ctx.beginPath();
-          ctx.moveTo(x + bSize - bLen, y + bSize);
-          ctx.lineTo(x + bSize, y + bSize);
-          ctx.lineTo(x + bSize, y + bSize - bLen);
-          ctx.stroke();
-          
-          ctx.restore();
-        }
+          // Emergency flash effect
+          const flashOn = isEmergency ? Math.floor(frameCount / 15) % 2 === 0 : true;
+          const flashBrightness = flashOn ? 1 : 0.3;
 
-        // Draw aircraft symbol (chevron pointing in direction of travel)
-        const track = (ac.track || 0) * Math.PI / 180;
-        // Phase 5.4: Level of Detail (LOD) - adjust symbol size based on range
-        const lodFactor = radarRange <= 25 ? 1.2 : radarRange <= 75 ? 1 : radarRange <= 150 ? 0.9 : 0.8;
-        const symSize = Math.round((isPro ? 10 : 9) * lodFactor);
-        
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(track);
-        
-        // Main symbol - different shapes for accessibility (Phase 7.1)
-        ctx.fillStyle = primaryColor;
-        ctx.strokeStyle = primaryColor;
-        ctx.lineWidth = 2;
+          // Proximity conflict flash speed based on severity
+          const flashDivisor =
+            alertSeverity === 'critical' ? 4 : alertSeverity === 'warning' ? 8 : 12;
+          const proximityFlashOn = hasSafetyAlert
+            ? Math.floor(frameCount / flashDivisor) % 2 === 0
+            : false;
 
-        if (highContrastMode && isPro) {
-          // High contrast mode: use different shapes per aircraft type
-          if (isEmergency) {
-            // Emergency: Circle with X
-            ctx.beginPath();
-            ctx.arc(0, 0, symSize * 0.8, 0, Math.PI * 2);
-            ctx.stroke();
-            // X inside
-            ctx.beginPath();
-            ctx.moveTo(-symSize * 0.5, -symSize * 0.5);
-            ctx.lineTo(symSize * 0.5, symSize * 0.5);
-            ctx.moveTo(symSize * 0.5, -symSize * 0.5);
-            ctx.lineTo(-symSize * 0.5, symSize * 0.5);
-            ctx.stroke();
+          // Severity-based colors
+          const getSeverityColors = (severity, flashOn) => {
+            const intensity = flashOn ? 1 : 0.6;
+            switch (severity) {
+              case 'critical':
+                return {
+                  primary: `rgba(255, 80, 150, ${intensity})`,
+                  text: `rgba(255, 120, 180, ${intensity})`,
+                  ring: `rgba(255, 80, 150, ${flashOn ? 0.9 : 0.5})`,
+                  ringInner: `rgba(255, 50, 120, ${(flashOn ? 0.9 : 0.5) * 0.6})`,
+                };
+              case 'warning':
+                return {
+                  primary: `rgba(255, 140, 0, ${intensity})`,
+                  text: `rgba(255, 180, 80, ${intensity})`,
+                  ring: `rgba(255, 140, 0, ${flashOn ? 0.9 : 0.5})`,
+                  ringInner: `rgba(255, 100, 0, ${(flashOn ? 0.9 : 0.5) * 0.6})`,
+                };
+              default: // low
+                return {
+                  primary: `rgba(255, 220, 0, ${intensity})`,
+                  text: `rgba(255, 240, 100, ${intensity})`,
+                  ring: `rgba(255, 220, 0, ${flashOn ? 0.9 : 0.5})`,
+                  ringInner: `rgba(255, 180, 0, ${(flashOn ? 0.9 : 0.5) * 0.6})`,
+                };
+            }
+          };
+
+          let primaryColor, textColor;
+          if (hasSafetyAlert) {
+            const sevColors = getSeverityColors(alertSeverity, proximityFlashOn);
+            primaryColor = sevColors.primary;
+            textColor = sevColors.text;
+          } else if (isEmergency) {
+            const r = flashOn ? 255 : 180;
+            const intensity = brightness * flashBrightness;
+            primaryColor = `rgba(${r}, 50, 50, ${Math.max(0.5, intensity)})`;
+            textColor = `rgba(255, 100, 100, ${Math.max(0.6, intensity)})`;
           } else if (isMilitary) {
-            // Military: Diamond
-            ctx.beginPath();
-            ctx.moveTo(0, -symSize);
-            ctx.lineTo(symSize * 0.7, 0);
-            ctx.lineTo(0, symSize);
-            ctx.lineTo(-symSize * 0.7, 0);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
+            // Purple for military
+            primaryColor = isPro ? `rgba(200, 100, 255, 0.9)` : `rgba(180, 80, 255, ${brightness})`;
+            textColor = isPro ? 'rgba(220, 150, 255, 0.9)' : `rgba(200, 150, 255, ${brightness})`;
+          } else if (showSpeedColors && ac.gs) {
+            // Speed-based coloring for civilian (Phase 2.2)
+            const speed = ac.gs;
+            if (speed > 500) {
+              // Very fast (> 500 kts): Orange
+              primaryColor = isPro ? 'rgba(255, 165, 0, 0.9)' : `rgba(255, 165, 0, ${brightness})`;
+              textColor = isPro ? 'rgba(255, 200, 100, 0.9)' : `rgba(255, 200, 100, ${brightness})`;
+            } else if (speed > 300) {
+              // Fast (300-500 kts): Yellow
+              primaryColor = isPro ? 'rgba(255, 255, 0, 0.9)' : `rgba(255, 255, 0, ${brightness})`;
+              textColor = isPro ? 'rgba(255, 255, 150, 0.9)' : `rgba(255, 255, 150, ${brightness})`;
+            } else if (speed < 150) {
+              // Slow (< 150 kts): Blue
+              primaryColor = isPro
+                ? 'rgba(100, 180, 255, 0.9)'
+                : `rgba(100, 180, 255, ${brightness})`;
+              textColor = isPro ? 'rgba(150, 200, 255, 0.9)' : `rgba(150, 200, 255, ${brightness})`;
+            } else {
+              // Medium (150-300 kts): Cyan (default)
+              primaryColor = isPro ? 'rgba(0, 255, 200, 0.9)' : `rgba(0, 255, 200, ${brightness})`;
+              textColor = isPro ? 'rgba(150, 255, 220, 0.9)' : `rgba(150, 255, 220, ${brightness})`;
+            }
           } else {
-            // Civilian: Triangle (default chevron)
+            // Green for civilian (default)
+            primaryColor = isPro ? 'rgba(0, 255, 150, 0.9)' : `rgba(0, 255, 150, ${brightness})`;
+            textColor = isPro ? 'rgba(150, 255, 200, 0.9)' : `rgba(150, 255, 200, ${brightness})`;
+          }
+
+          // Draw safety alert warning ring (severity-based colors)
+          if (hasSafetyAlert) {
+            ctx.save();
+            const sevColors = getSeverityColors(alertSeverity, proximityFlashOn);
+            const ringSize = proximityFlashOn ? 24 : 20;
+
+            // Outer warning ring
+            ctx.beginPath();
+            ctx.arc(x, y, ringSize, 0, Math.PI * 2);
+            ctx.strokeStyle = sevColors.ring;
+            ctx.lineWidth = alertSeverity === 'critical' ? 4 : 3;
+            ctx.stroke();
+
+            // Inner ring
+            ctx.beginPath();
+            ctx.arc(x, y, ringSize - 6, 0, Math.PI * 2);
+            ctx.strokeStyle = sevColors.ringInner;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            ctx.restore();
+          }
+
+          // Draw emergency glow ring
+          if (isEmergency && flashOn && !hasSafetyAlert) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(x, y, 18 + Math.sin(frameCount * 0.2) * 3, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(255, 0, 0, ${0.4 + Math.sin(frameCount * 0.15) * 0.2})`;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          // Draw selection highlight (flashing green outline)
+          const isSelected = selectedAircraft && selectedAircraft.hex === ac.hex;
+          if (isSelected) {
+            const selFlash = Math.floor(frameCount / 10) % 2 === 0;
+            const selAlpha = selFlash ? 0.9 : 0.4;
+            const selSize = selFlash ? 22 : 20;
+
+            ctx.save();
+            ctx.strokeStyle = `rgba(100, 220, 255, ${selAlpha})`;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.arc(x, y, selSize, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Corner brackets
+            ctx.strokeStyle = `rgba(100, 220, 255, ${selAlpha})`;
+            ctx.lineWidth = 2;
+            const bSize = 15;
+            const bLen = 6;
+            // Top-left
+            ctx.beginPath();
+            ctx.moveTo(x - bSize, y - bSize + bLen);
+            ctx.lineTo(x - bSize, y - bSize);
+            ctx.lineTo(x - bSize + bLen, y - bSize);
+            ctx.stroke();
+            // Top-right
+            ctx.beginPath();
+            ctx.moveTo(x + bSize - bLen, y - bSize);
+            ctx.lineTo(x + bSize, y - bSize);
+            ctx.lineTo(x + bSize, y - bSize + bLen);
+            ctx.stroke();
+            // Bottom-left
+            ctx.beginPath();
+            ctx.moveTo(x - bSize, y + bSize - bLen);
+            ctx.lineTo(x - bSize, y + bSize);
+            ctx.lineTo(x - bSize + bLen, y + bSize);
+            ctx.stroke();
+            // Bottom-right
+            ctx.beginPath();
+            ctx.moveTo(x + bSize - bLen, y + bSize);
+            ctx.lineTo(x + bSize, y + bSize);
+            ctx.lineTo(x + bSize, y + bSize - bLen);
+            ctx.stroke();
+
+            ctx.restore();
+          }
+
+          // Draw aircraft symbol (chevron pointing in direction of travel)
+          const track = ((ac.track || 0) * Math.PI) / 180;
+          // Phase 5.4: Level of Detail (LOD) - adjust symbol size based on range
+          const lodFactor =
+            radarRange <= 25 ? 1.2 : radarRange <= 75 ? 1 : radarRange <= 150 ? 0.9 : 0.8;
+          const symSize = Math.round((isPro ? 10 : 9) * lodFactor);
+
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(track);
+
+          // Main symbol - different shapes for accessibility (Phase 7.1)
+          ctx.fillStyle = primaryColor;
+          ctx.strokeStyle = primaryColor;
+          ctx.lineWidth = 2;
+
+          if (highContrastMode && isPro) {
+            // High contrast mode: use different shapes per aircraft type
+            if (isEmergency) {
+              // Emergency: Circle with X
+              ctx.beginPath();
+              ctx.arc(0, 0, symSize * 0.8, 0, Math.PI * 2);
+              ctx.stroke();
+              // X inside
+              ctx.beginPath();
+              ctx.moveTo(-symSize * 0.5, -symSize * 0.5);
+              ctx.lineTo(symSize * 0.5, symSize * 0.5);
+              ctx.moveTo(symSize * 0.5, -symSize * 0.5);
+              ctx.lineTo(-symSize * 0.5, symSize * 0.5);
+              ctx.stroke();
+            } else if (isMilitary) {
+              // Military: Diamond
+              ctx.beginPath();
+              ctx.moveTo(0, -symSize);
+              ctx.lineTo(symSize * 0.7, 0);
+              ctx.lineTo(0, symSize);
+              ctx.lineTo(-symSize * 0.7, 0);
+              ctx.closePath();
+              ctx.fill();
+              ctx.stroke();
+            } else {
+              // Civilian: Triangle (default chevron)
+              ctx.beginPath();
+              ctx.moveTo(0, -symSize);
+              ctx.lineTo(-symSize * 0.6, symSize * 0.5);
+              ctx.lineTo(0, symSize * 0.2);
+              ctx.lineTo(symSize * 0.6, symSize * 0.5);
+              ctx.closePath();
+              ctx.fill();
+            }
+          } else {
+            // Normal mode: filled chevron for all
             ctx.beginPath();
             ctx.moveTo(0, -symSize);
             ctx.lineTo(-symSize * 0.6, symSize * 0.5);
@@ -5063,325 +5538,335 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             ctx.closePath();
             ctx.fill();
           }
-        } else {
-          // Normal mode: filled chevron for all
-          ctx.beginPath();
-          ctx.moveTo(0, -symSize);
-          ctx.lineTo(-symSize * 0.6, symSize * 0.5);
-          ctx.lineTo(0, symSize * 0.2);
-          ctx.lineTo(symSize * 0.6, symSize * 0.5);
-          ctx.closePath();
-          ctx.fill();
-        }
-        
-        // Velocity vector line - basic (short)
-        if (ac.gs > 50) {
-          const vecLen = Math.min(20, ac.gs / 25);
-          ctx.strokeStyle = isPro ? themeColors.rgba('vector', 0.6) : `rgba(0, 220, 255, ${brightness * 0.5})`;
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(0, -symSize);
-          ctx.lineTo(0, -symSize - vecLen);
-          ctx.stroke();
-        }
 
-        // Extended prediction vectors (Phase 2.3) - skip when too many aircraft
-        if (showPredictionVectors && ac.gs > 50 && isPro && !perfMode.skipPredictionVectors) {
-          const pixelsPerNm = (Math.min(width, height) * 0.45) / radarRange;
-          const nmPerSecond = ac.gs / 3600; // Convert knots to nm/second
-
-          // 30-second prediction (dotted)
-          const nm30s = nmPerSecond * 30;
-          const px30s = nm30s * pixelsPerNm;
-          ctx.strokeStyle = themeColors.rgba('vector', 0.4);
-          ctx.lineWidth = 1;
-          ctx.setLineDash([3, 3]);
-          ctx.beginPath();
-          ctx.moveTo(0, -symSize - 20);
-          ctx.lineTo(0, -symSize - 20 - px30s);
-          ctx.stroke();
-
-          // 60-second prediction (fainter dotted)
-          if (predictionSeconds >= 60) {
-            const nm60s = nmPerSecond * 60;
-            const px60s = nm60s * pixelsPerNm;
-            ctx.strokeStyle = themeColors.rgba('vector', 0.25);
-            ctx.setLineDash([2, 4]);
+          // Velocity vector line - basic (short)
+          if (ac.gs > 50) {
+            const vecLen = Math.min(20, ac.gs / 25);
+            ctx.strokeStyle = isPro
+              ? themeColors.rgba('vector', 0.6)
+              : `rgba(0, 220, 255, ${brightness * 0.5})`;
+            ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(0, -symSize - 20 - px30s);
-            ctx.lineTo(0, -symSize - 20 - px60s);
+            ctx.moveTo(0, -symSize);
+            ctx.lineTo(0, -symSize - vecLen);
             ctx.stroke();
           }
 
-          // 120-second prediction (very faint)
-          if (predictionSeconds >= 120) {
-            const nm120s = nmPerSecond * 120;
-            const px120s = nm120s * pixelsPerNm;
-            ctx.strokeStyle = themeColors.rgba('vector', 0.15);
-            ctx.setLineDash([2, 6]);
+          // Extended prediction vectors (Phase 2.3) - skip when too many aircraft
+          if (showPredictionVectors && ac.gs > 50 && isPro && !perfMode.skipPredictionVectors) {
+            const pixelsPerNm = (Math.min(width, height) * 0.45) / radarRange;
+            const nmPerSecond = ac.gs / 3600; // Convert knots to nm/second
+
+            // 30-second prediction (dotted)
+            const nm30s = nmPerSecond * 30;
+            const px30s = nm30s * pixelsPerNm;
+            ctx.strokeStyle = themeColors.rgba('vector', 0.4);
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
             ctx.beginPath();
-            ctx.moveTo(0, -symSize - 20 - (nmPerSecond * 60 * pixelsPerNm));
-            ctx.lineTo(0, -symSize - 20 - px120s);
+            ctx.moveTo(0, -symSize - 20);
+            ctx.lineTo(0, -symSize - 20 - px30s);
             ctx.stroke();
+
+            // 60-second prediction (fainter dotted)
+            if (predictionSeconds >= 60) {
+              const nm60s = nmPerSecond * 60;
+              const px60s = nm60s * pixelsPerNm;
+              ctx.strokeStyle = themeColors.rgba('vector', 0.25);
+              ctx.setLineDash([2, 4]);
+              ctx.beginPath();
+              ctx.moveTo(0, -symSize - 20 - px30s);
+              ctx.lineTo(0, -symSize - 20 - px60s);
+              ctx.stroke();
+            }
+
+            // 120-second prediction (very faint)
+            if (predictionSeconds >= 120) {
+              const nm120s = nmPerSecond * 120;
+              const px120s = nm120s * pixelsPerNm;
+              ctx.strokeStyle = themeColors.rgba('vector', 0.15);
+              ctx.setLineDash([2, 6]);
+              ctx.beginPath();
+              ctx.moveTo(0, -symSize - 20 - nmPerSecond * 60 * pixelsPerNm);
+              ctx.lineTo(0, -symSize - 20 - px120s);
+              ctx.stroke();
+            }
+            ctx.setLineDash([]);
           }
-          ctx.setLineDash([]);
-        }
 
-        ctx.restore();
-
-        // Altitude trend indicators (Phase 2.1) - drawn outside rotation
-        const vs = ac.vr ?? ac.baro_rate ?? ac.geom_rate ?? 0;
-        if (isPro && Math.abs(vs) > 500) {
-          const isClimbing = vs > 0;
-          const isRapid = Math.abs(vs) > 2000;
-          const trendColor = isClimbing ? 'rgba(0, 255, 100, 0.9)' : 'rgba(255, 200, 0, 0.9)';
-
-          ctx.save();
-          ctx.fillStyle = trendColor;
-          ctx.font = isRapid ? 'bold 12px "JetBrains Mono", monospace' : '10px "JetBrains Mono", monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-
-          // Draw single or double chevron
-          const trendX = x - 18;
-          const trendY = y;
-          if (isRapid) {
-            // Double chevron for rapid climb/descent
-            ctx.fillText(isClimbing ? '▲▲' : '▼▼', trendX, trendY);
-          } else {
-            // Single chevron
-            ctx.fillText(isClimbing ? '▲' : '▼', trendX, trendY);
-          }
           ctx.restore();
-        }
 
-        // Position for data block (used by both data block and alert labels)
-        const blockX = x + 14;
-        const blockY = y - 10;
+          // Altitude trend indicators (Phase 2.1) - drawn outside rotation
+          const vs = ac.vr ?? ac.baro_rate ?? ac.geom_rate ?? 0;
+          if (isPro && Math.abs(vs) > 500) {
+            const isClimbing = vs > 0;
+            const isRapid = Math.abs(vs) > 2000;
+            const trendColor = isClimbing ? 'rgba(0, 255, 100, 0.9)' : 'rgba(255, 200, 0, 0.9)';
 
-        // Draw data block (callsign, speed, altitude, etc.) - respects showDataBlocks toggle, performance mode, and dataBlockConfig
-        // Debug: Log first aircraft's data block rendering (only once per draw cycle)
-        if (frameCount === 1 && ac === aircraftToDraw[0]) {
-          console.log('[MapView] Data block render check:', { showDataBlocks, skipDataBlocks: perfMode.skipDataBlocks, aircraftCount });
-        }
-        if (showDataBlocks && !perfMode.skipDataBlocks) {
-          const callsign = ac.flight?.trim() || ac.hex;
-          const speed = ac.gs ? `${Math.round(ac.gs)}` : '---';
-          const altitude = ac.alt ? `${Math.round(ac.alt / 100)}` : '---';
-          const heading = ac.track != null ? `${Math.round(ac.track)}°` : '---';
-          const verticalSpeed = (ac.vr ?? ac.baro_rate) != null ? `${(ac.vr ?? ac.baro_rate) > 0 ? '+' : ''}${Math.round(ac.vr ?? ac.baro_rate)}fpm` : null;
-          const aircraftType = ac.t || ac.desc || null;
-
-          ctx.font = '13px "JetBrains Mono", monospace';
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'top';
-
-          // Build data block content based on config
-          let labelLines = [];
-          let labelWidth = 0;
-
-          if (dataBlockConfig.compact) {
-            // Compact mode: single line with all enabled fields
-            const compactParts = [];
-            if (dataBlockConfig.showCallsign) compactParts.push(callsign);
-            if (dataBlockConfig.showSpeed) compactParts.push(`${speed}kts`);
-            if (dataBlockConfig.showAltitude) compactParts.push(`FL${altitude}`);
-            if (dataBlockConfig.showHeading) compactParts.push(heading);
-            if (dataBlockConfig.showVerticalSpeed && verticalSpeed) compactParts.push(verticalSpeed);
-            if (dataBlockConfig.showAircraftType && aircraftType) compactParts.push(aircraftType);
-
-            const compactLine = compactParts.join(' ');
-            labelLines = [{ text: compactLine, isCallsign: true }];
-            labelWidth = ctx.measureText(compactLine).width + 8;
-          } else {
-            // Multi-line mode: each field on separate line or grouped logically
-            // Line 1: Callsign (if enabled)
-            if (dataBlockConfig.showCallsign) {
-              labelLines.push({ text: callsign, isCallsign: true });
-              labelWidth = Math.max(labelWidth, ctx.measureText(callsign).width);
-            }
-
-            // Line 2: Speed and Altitude (combined if both enabled)
-            const line2Parts = [];
-            if (dataBlockConfig.showSpeed) line2Parts.push(`${speed}kts`);
-            if (dataBlockConfig.showAltitude) line2Parts.push(altitude);
-            if (line2Parts.length > 0) {
-              const line2 = line2Parts.join(' ');
-              labelLines.push({ text: line2, isCallsign: false });
-              labelWidth = Math.max(labelWidth, ctx.measureText(line2).width);
-            }
-
-            // Line 3: Heading (if enabled)
-            if (dataBlockConfig.showHeading) {
-              const headingLine = `HDG ${heading}`;
-              labelLines.push({ text: headingLine, isCallsign: false });
-              labelWidth = Math.max(labelWidth, ctx.measureText(headingLine).width);
-            }
-
-            // Line 4: Vertical Speed (if enabled and available)
-            if (dataBlockConfig.showVerticalSpeed && verticalSpeed) {
-              const vsLine = `VS ${verticalSpeed}`;
-              labelLines.push({ text: vsLine, isCallsign: false });
-              labelWidth = Math.max(labelWidth, ctx.measureText(vsLine).width);
-            }
-
-            // Line 5: Aircraft Type (if enabled and available)
-            if (dataBlockConfig.showAircraftType && aircraftType) {
-              labelLines.push({ text: aircraftType, isCallsign: false });
-              labelWidth = Math.max(labelWidth, ctx.measureText(aircraftType).width);
-            }
-
-            labelWidth += 8;
-          }
-
-          // Calculate label height based on number of lines (15px per line + padding)
-          const lineHeight = 15;
-          const labelHeight = Math.max(18, labelLines.length * lineHeight + 4);
-
-          // Draw background for label readability
-          ctx.fillStyle = isPro ? 'rgba(10, 13, 18, 0.85)' : 'rgba(10, 15, 10, 0.8)';
-          ctx.fillRect(blockX - 4, blockY - 2, labelWidth, labelHeight);
-
-          // ACARS indicator - small green dot at top-right corner if aircraft has ACARS messages
-          const hasAcars = acarsMessages.some(msg =>
-            (msg.icao_hex && msg.icao_hex.toUpperCase() === ac.hex?.toUpperCase()) ||
-            callsignsMatch(msg.callsign, ac.flight)
-          );
-          if (hasAcars) {
             ctx.save();
-            ctx.fillStyle = 'rgba(0, 255, 100, 0.9)';
-            ctx.beginPath();
-            ctx.arc(blockX + labelWidth - 8, blockY + 2, 4, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-          }
+            ctx.fillStyle = trendColor;
+            ctx.font = isRapid
+              ? 'bold 12px "JetBrains Mono", monospace'
+              : '10px "JetBrains Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
 
-          // Draw each line
-          labelLines.forEach((line, index) => {
-            if (line.isCallsign) {
-              ctx.fillStyle = textColor;
-              ctx.font = '13px "JetBrains Mono", monospace';
+            // Draw single or double chevron
+            const trendX = x - 18;
+            const trendY = y;
+            if (isRapid) {
+              // Double chevron for rapid climb/descent
+              ctx.fillText(isClimbing ? '▲▲' : '▼▼', trendX, trendY);
             } else {
-              ctx.fillStyle = isPro ? `rgba(100, 200, 180, 0.85)` : `rgba(0, 200, 100, ${brightness * 0.85})`;
-              ctx.font = '12px "JetBrains Mono", monospace';
-            }
-            ctx.fillText(line.text, blockX, blockY + (index * lineHeight));
-          });
-
-          // Draw status badges (MIL, EMG) after callsign line
-          if (labelLines.length > 0 && (isMilitary || isEmergency)) {
-            ctx.save();
-            ctx.font = 'bold 9px "JetBrains Mono", monospace';
-            const callsignWidth = ctx.measureText(labelLines[0]?.text || '').width;
-            let badgeX = blockX + callsignWidth + 6;
-            const badgeY = blockY - 1;
-
-            // Military badge
-            if (isMilitary) {
-              const milText = 'MIL';
-              const milWidth = ctx.measureText(milText).width + 6;
-              ctx.fillStyle = 'rgba(168, 85, 247, 0.3)';
-              ctx.fillRect(badgeX, badgeY, milWidth, 12);
-              ctx.strokeStyle = 'rgba(168, 85, 247, 0.6)';
-              ctx.lineWidth = 1;
-              ctx.strokeRect(badgeX, badgeY, milWidth, 12);
-              ctx.fillStyle = 'rgba(192, 132, 252, 0.95)';
-              ctx.fillText(milText, badgeX + 3, badgeY + 9);
-              badgeX += milWidth + 4;
-            }
-
-            // Emergency badge
-            if (isEmergency) {
-              const emgText = 'EMG';
-              const emgWidth = ctx.measureText(emgText).width + 6;
-              ctx.fillStyle = 'rgba(248, 81, 73, 0.3)';
-              ctx.fillRect(badgeX, badgeY, emgWidth, 12);
-              ctx.strokeStyle = 'rgba(248, 81, 73, 0.6)';
-              ctx.lineWidth = 1;
-              ctx.strokeRect(badgeX, badgeY, emgWidth, 12);
-              ctx.fillStyle = 'rgba(255, 100, 100, 0.95)';
-              ctx.fillText(emgText, badgeX + 3, badgeY + 9);
+              // Single chevron
+              ctx.fillText(isClimbing ? '▲' : '▼', trendX, trendY);
             }
             ctx.restore();
           }
-        } // end showDataBlocks
 
-        // Emergency squawk meaning label (Pro mode) - slow fade (always shown)
-        if (isEmergency && isPro) {
-          const squawkMeanings = {
-            '7500': 'HIJACK',
-            '7600': 'RADIO FAIL',
-            '7700': 'EMERGENCY'
-          };
-          const meaning = squawkMeanings[ac.squawk] || 'EMERGENCY';
-          
-          // Slow fade effect (cycle over ~3 seconds at 60fps)
-          const fadeAlpha = 0.5 + Math.sin(frameCount * 0.035) * 0.5;
-          
-          ctx.save();
-          ctx.font = 'bold 14px "JetBrains Mono", monospace';
-          ctx.textAlign = 'left';
-          
-          // Draw background box for visibility
-          const labelText = `⚠ ${meaning}`;
-          const textWidth = ctx.measureText(labelText).width;
-          ctx.fillStyle = `rgba(120, 0, 0, 0.85)`;
-          ctx.fillRect(blockX - 3, blockY + 30, textWidth + 8, 20);
-          
-          // Draw border
-          ctx.strokeStyle = `rgba(255, 60, 60, 0.9)`;
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(blockX - 3, blockY + 30, textWidth + 8, 20);
-          
-          // Draw white text with slow fade
-          ctx.fillStyle = `rgba(255, 255, 255, ${fadeAlpha})`;
-          ctx.fillText(labelText, blockX + 1, blockY + 34);
-          ctx.restore();
-        }
-        
-        // Safety event / Proximity conflict warning label (Pro mode)
-        if (hasSafetyAlert && isPro && !isEmergency) {
-          const fadeAlpha = 0.5 + Math.sin(frameCount * 0.05) * 0.5;
-          const sevColors = getSeverityColors(alertSeverity, proximityFlashOn);
-          
-          // Get event type name for label
-          const eventNames = {
-            'tcas_ra': 'TCAS RA',
-            'extreme_vs': 'EXTREME V/S',
-            'vs_reversal': 'V/S REVERSAL',
-            'proximity_conflict': 'PROXIMITY',
-            'rapid_descent': 'RAPID DESCENT',
-            'rapid_climb': 'RAPID CLIMB',
-          };
-          const alertLabel = safetyEvent ? 
-            (eventNames[safetyEvent.event_type] || safetyEvent.event_type?.replace(/_/g, ' ').toUpperCase() || 'ALERT') :
-            'PROXIMITY';
-          
-          ctx.save();
-          ctx.font = 'bold 14px "JetBrains Mono", monospace';
-          ctx.textAlign = 'left';
-          
-          const labelText = `⚠ ${alertLabel}`;
-          const textWidth = ctx.measureText(labelText).width;
-          
-          // Background color based on severity
-          const bgColor = alertSeverity === 'critical' ? 'rgba(100, 30, 60, 0.85)' :
-                          alertSeverity === 'warning' ? 'rgba(100, 60, 0, 0.85)' :
-                          'rgba(100, 80, 0, 0.85)';
-          ctx.fillStyle = bgColor;
-          ctx.fillRect(blockX - 3, blockY + 30, textWidth + 8, 20);
-          
-          // Border color based on severity
-          ctx.strokeStyle = sevColors.ring;
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(blockX - 3, blockY + 30, textWidth + 8, 20);
-          
-          // White text with fade
-          ctx.fillStyle = `rgba(255, 255, 255, ${fadeAlpha})`;
-          ctx.fillText(labelText, blockX + 1, blockY + 34);
-          ctx.restore();
-        }
-      });
+          // Position for data block (used by both data block and alert labels)
+          const blockX = x + 14;
+          const blockY = y - 10;
+
+          // Draw data block (callsign, speed, altitude, etc.) - respects showDataBlocks toggle, performance mode, and dataBlockConfig
+          // Debug: Log first aircraft's data block rendering (only once per draw cycle)
+          if (frameCount === 1 && ac === aircraftToDraw[0]) {
+            console.log('[MapView] Data block render check:', {
+              showDataBlocks,
+              skipDataBlocks: perfMode.skipDataBlocks,
+              aircraftCount,
+            });
+          }
+          if (showDataBlocks && !perfMode.skipDataBlocks) {
+            const callsign = ac.flight?.trim() || ac.hex;
+            const speed = ac.gs ? `${Math.round(ac.gs)}` : '---';
+            const altitude = ac.alt ? `${Math.round(ac.alt / 100)}` : '---';
+            const heading = ac.track != null ? `${Math.round(ac.track)}°` : '---';
+            const verticalSpeed =
+              (ac.vr ?? ac.baro_rate) != null
+                ? `${(ac.vr ?? ac.baro_rate) > 0 ? '+' : ''}${Math.round(ac.vr ?? ac.baro_rate)}fpm`
+                : null;
+            const aircraftType = ac.t || ac.desc || null;
+
+            ctx.font = '13px "JetBrains Mono", monospace';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+
+            // Build data block content based on config
+            let labelLines = [];
+            let labelWidth = 0;
+
+            if (dataBlockConfig.compact) {
+              // Compact mode: single line with all enabled fields
+              const compactParts = [];
+              if (dataBlockConfig.showCallsign) compactParts.push(callsign);
+              if (dataBlockConfig.showSpeed) compactParts.push(`${speed}kts`);
+              if (dataBlockConfig.showAltitude) compactParts.push(`FL${altitude}`);
+              if (dataBlockConfig.showHeading) compactParts.push(heading);
+              if (dataBlockConfig.showVerticalSpeed && verticalSpeed)
+                compactParts.push(verticalSpeed);
+              if (dataBlockConfig.showAircraftType && aircraftType) compactParts.push(aircraftType);
+
+              const compactLine = compactParts.join(' ');
+              labelLines = [{ text: compactLine, isCallsign: true }];
+              labelWidth = ctx.measureText(compactLine).width + 8;
+            } else {
+              // Multi-line mode: each field on separate line or grouped logically
+              // Line 1: Callsign (if enabled)
+              if (dataBlockConfig.showCallsign) {
+                labelLines.push({ text: callsign, isCallsign: true });
+                labelWidth = Math.max(labelWidth, ctx.measureText(callsign).width);
+              }
+
+              // Line 2: Speed and Altitude (combined if both enabled)
+              const line2Parts = [];
+              if (dataBlockConfig.showSpeed) line2Parts.push(`${speed}kts`);
+              if (dataBlockConfig.showAltitude) line2Parts.push(altitude);
+              if (line2Parts.length > 0) {
+                const line2 = line2Parts.join(' ');
+                labelLines.push({ text: line2, isCallsign: false });
+                labelWidth = Math.max(labelWidth, ctx.measureText(line2).width);
+              }
+
+              // Line 3: Heading (if enabled)
+              if (dataBlockConfig.showHeading) {
+                const headingLine = `HDG ${heading}`;
+                labelLines.push({ text: headingLine, isCallsign: false });
+                labelWidth = Math.max(labelWidth, ctx.measureText(headingLine).width);
+              }
+
+              // Line 4: Vertical Speed (if enabled and available)
+              if (dataBlockConfig.showVerticalSpeed && verticalSpeed) {
+                const vsLine = `VS ${verticalSpeed}`;
+                labelLines.push({ text: vsLine, isCallsign: false });
+                labelWidth = Math.max(labelWidth, ctx.measureText(vsLine).width);
+              }
+
+              // Line 5: Aircraft Type (if enabled and available)
+              if (dataBlockConfig.showAircraftType && aircraftType) {
+                labelLines.push({ text: aircraftType, isCallsign: false });
+                labelWidth = Math.max(labelWidth, ctx.measureText(aircraftType).width);
+              }
+
+              labelWidth += 8;
+            }
+
+            // Calculate label height based on number of lines (15px per line + padding)
+            const lineHeight = 15;
+            const labelHeight = Math.max(18, labelLines.length * lineHeight + 4);
+
+            // Draw background for label readability
+            ctx.fillStyle = isPro ? 'rgba(10, 13, 18, 0.85)' : 'rgba(10, 15, 10, 0.8)';
+            ctx.fillRect(blockX - 4, blockY - 2, labelWidth, labelHeight);
+
+            // ACARS indicator - small green dot at top-right corner if aircraft has ACARS messages
+            const hasAcars = acarsMessages.some(
+              (msg) =>
+                (msg.icao_hex && msg.icao_hex.toUpperCase() === ac.hex?.toUpperCase()) ||
+                callsignsMatch(msg.callsign, ac.flight)
+            );
+            if (hasAcars) {
+              ctx.save();
+              ctx.fillStyle = 'rgba(0, 255, 100, 0.9)';
+              ctx.beginPath();
+              ctx.arc(blockX + labelWidth - 8, blockY + 2, 4, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.restore();
+            }
+
+            // Draw each line
+            labelLines.forEach((line, index) => {
+              if (line.isCallsign) {
+                ctx.fillStyle = textColor;
+                ctx.font = '13px "JetBrains Mono", monospace';
+              } else {
+                ctx.fillStyle = isPro
+                  ? `rgba(100, 200, 180, 0.85)`
+                  : `rgba(0, 200, 100, ${brightness * 0.85})`;
+                ctx.font = '12px "JetBrains Mono", monospace';
+              }
+              ctx.fillText(line.text, blockX, blockY + index * lineHeight);
+            });
+
+            // Draw status badges (MIL, EMG) after callsign line
+            if (labelLines.length > 0 && (isMilitary || isEmergency)) {
+              ctx.save();
+              ctx.font = 'bold 9px "JetBrains Mono", monospace';
+              const callsignWidth = ctx.measureText(labelLines[0]?.text || '').width;
+              let badgeX = blockX + callsignWidth + 6;
+              const badgeY = blockY - 1;
+
+              // Military badge
+              if (isMilitary) {
+                const milText = 'MIL';
+                const milWidth = ctx.measureText(milText).width + 6;
+                ctx.fillStyle = 'rgba(168, 85, 247, 0.3)';
+                ctx.fillRect(badgeX, badgeY, milWidth, 12);
+                ctx.strokeStyle = 'rgba(168, 85, 247, 0.6)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(badgeX, badgeY, milWidth, 12);
+                ctx.fillStyle = 'rgba(192, 132, 252, 0.95)';
+                ctx.fillText(milText, badgeX + 3, badgeY + 9);
+                badgeX += milWidth + 4;
+              }
+
+              // Emergency badge
+              if (isEmergency) {
+                const emgText = 'EMG';
+                const emgWidth = ctx.measureText(emgText).width + 6;
+                ctx.fillStyle = 'rgba(248, 81, 73, 0.3)';
+                ctx.fillRect(badgeX, badgeY, emgWidth, 12);
+                ctx.strokeStyle = 'rgba(248, 81, 73, 0.6)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(badgeX, badgeY, emgWidth, 12);
+                ctx.fillStyle = 'rgba(255, 100, 100, 0.95)';
+                ctx.fillText(emgText, badgeX + 3, badgeY + 9);
+              }
+              ctx.restore();
+            }
+          } // end showDataBlocks
+
+          // Emergency squawk meaning label (Pro mode) - slow fade (always shown)
+          if (isEmergency && isPro) {
+            const squawkMeanings = {
+              7500: 'HIJACK',
+              7600: 'RADIO FAIL',
+              7700: 'EMERGENCY',
+            };
+            const meaning = squawkMeanings[ac.squawk] || 'EMERGENCY';
+
+            // Slow fade effect (cycle over ~3 seconds at 60fps)
+            const fadeAlpha = 0.5 + Math.sin(frameCount * 0.035) * 0.5;
+
+            ctx.save();
+            ctx.font = 'bold 14px "JetBrains Mono", monospace';
+            ctx.textAlign = 'left';
+
+            // Draw background box for visibility
+            const labelText = `⚠ ${meaning}`;
+            const textWidth = ctx.measureText(labelText).width;
+            ctx.fillStyle = `rgba(120, 0, 0, 0.85)`;
+            ctx.fillRect(blockX - 3, blockY + 30, textWidth + 8, 20);
+
+            // Draw border
+            ctx.strokeStyle = `rgba(255, 60, 60, 0.9)`;
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(blockX - 3, blockY + 30, textWidth + 8, 20);
+
+            // Draw white text with slow fade
+            ctx.fillStyle = `rgba(255, 255, 255, ${fadeAlpha})`;
+            ctx.fillText(labelText, blockX + 1, blockY + 34);
+            ctx.restore();
+          }
+
+          // Safety event / Proximity conflict warning label (Pro mode)
+          if (hasSafetyAlert && isPro && !isEmergency) {
+            const fadeAlpha = 0.5 + Math.sin(frameCount * 0.05) * 0.5;
+            const sevColors = getSeverityColors(alertSeverity, proximityFlashOn);
+
+            // Get event type name for label
+            const eventNames = {
+              tcas_ra: 'TCAS RA',
+              extreme_vs: 'EXTREME V/S',
+              vs_reversal: 'V/S REVERSAL',
+              proximity_conflict: 'PROXIMITY',
+              rapid_descent: 'RAPID DESCENT',
+              rapid_climb: 'RAPID CLIMB',
+            };
+            const alertLabel = safetyEvent
+              ? eventNames[safetyEvent.event_type] ||
+                safetyEvent.event_type?.replace(/_/g, ' ').toUpperCase() ||
+                'ALERT'
+              : 'PROXIMITY';
+
+            ctx.save();
+            ctx.font = 'bold 14px "JetBrains Mono", monospace';
+            ctx.textAlign = 'left';
+
+            const labelText = `⚠ ${alertLabel}`;
+            const textWidth = ctx.measureText(labelText).width;
+
+            // Background color based on severity
+            const bgColor =
+              alertSeverity === 'critical'
+                ? 'rgba(100, 30, 60, 0.85)'
+                : alertSeverity === 'warning'
+                  ? 'rgba(100, 60, 0, 0.85)'
+                  : 'rgba(100, 80, 0, 0.85)';
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(blockX - 3, blockY + 30, textWidth + 8, 20);
+
+            // Border color based on severity
+            ctx.strokeStyle = sevColors.ring;
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(blockX - 3, blockY + 30, textWidth + 8, 20);
+
+            // White text with fade
+            ctx.fillStyle = `rgba(255, 255, 255, ${fadeAlpha})`;
+            ctx.fillText(labelText, blockX + 1, blockY + 34);
+            ctx.restore();
+          }
+        });
       }
 
       // ========== PRO MODE OVERLAYS ==========
@@ -5397,7 +5882,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
           // Draw point A marker
           const ptA = measurementPoints[0];
-          const aX = centerX + (ptA.lon - feederLon) * 60 * Math.cos(feederLat * Math.PI / 180) * proPixelsPerNm + proPanOffset.x;
+          const aX =
+            centerX +
+            (ptA.lon - feederLon) * 60 * Math.cos((feederLat * Math.PI) / 180) * proPixelsPerNm +
+            proPanOffset.x;
           const aY = centerY - (ptA.lat - feederLat) * 60 * proPixelsPerNm + proPanOffset.y;
           ctx.beginPath();
           ctx.arc(aX, aY, 6, 0, Math.PI * 2);
@@ -5409,7 +5897,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           // Draw line and point B if we have two points
           if (measurementPoints.length === 2) {
             const ptB = measurementPoints[1];
-            const bX = centerX + (ptB.lon - feederLon) * 60 * Math.cos(feederLat * Math.PI / 180) * proPixelsPerNm + proPanOffset.x;
+            const bX =
+              centerX +
+              (ptB.lon - feederLon) * 60 * Math.cos((feederLat * Math.PI) / 180) * proPixelsPerNm +
+              proPanOffset.x;
             const bY = centerY - (ptB.lat - feederLat) * 60 * proPixelsPerNm + proPanOffset.y;
 
             // Draw line between points
@@ -5430,9 +5921,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             const dLat = ptB.lat - ptA.lat;
             const dLon = ptB.lon - ptA.lon;
             const nmY = dLat * 60;
-            const nmX = dLon * 60 * Math.cos(((ptA.lat + ptB.lat) / 2) * Math.PI / 180);
+            const nmX = dLon * 60 * Math.cos((((ptA.lat + ptB.lat) / 2) * Math.PI) / 180);
             const distance = Math.sqrt(nmX * nmX + nmY * nmY);
-            const bearing = (Math.atan2(nmX, nmY) * 180 / Math.PI + 360) % 360;
+            const bearing = ((Math.atan2(nmX, nmY) * 180) / Math.PI + 360) % 360;
 
             // Draw label at midpoint
             const midX = (aX + bX) / 2;
@@ -5484,7 +5975,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           ctx.fillStyle = 'rgba(15, 25, 35, 0.8)';
           ctx.fillRect(width - 70, 10, 60, 22);
           ctx.font = '12px "JetBrains Mono", monospace';
-          ctx.fillStyle = fpsRef.current.fps >= 30 ? 'rgba(0, 255, 100, 0.9)' : 'rgba(255, 150, 0, 0.9)';
+          ctx.fillStyle =
+            fpsRef.current.fps >= 30 ? 'rgba(0, 255, 100, 0.9)' : 'rgba(255, 150, 0, 0.9)';
           ctx.textAlign = 'right';
           ctx.fillText(`${fpsRef.current.fps} FPS`, width - 15, 26);
           ctx.restore();
@@ -5507,7 +5999,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         }
 
         // Subtle vignette - CRT mode only
-        const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, Math.max(width, height) * 0.7);
+        const gradient = ctx.createRadialGradient(
+          centerX,
+          centerY,
+          0,
+          centerX,
+          centerY,
+          Math.max(width, height) * 0.7
+        );
         gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
         gradient.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
         ctx.fillStyle = gradient;
@@ -5529,7 +6028,41 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [config.mapMode, sortedAircraft, radarRange, feederLat, feederLon, selectedAircraft, selectedMetar, selectedPirep, selectedNavaid, selectedAirport, overlays, aviationData, aviationOverlayData, proPanOffset, followingAircraft, trackHistory, showSelectedTrack, safetyEvents, showShortTracks, shortTrackHistory, config.shortTrackLength, gridOpacity, showCompassRose, showSpeedColors, showPredictionVectors, predictionSeconds, showConflictVisualization, showDataBlocks, measurementPoints, cursorInfo, showFpsCounter, showAltitudeTrails, reducedMotion]);
+  }, [
+    config.mapMode,
+    sortedAircraft,
+    radarRange,
+    feederLat,
+    feederLon,
+    selectedAircraft,
+    selectedMetar,
+    selectedPirep,
+    selectedNavaid,
+    selectedAirport,
+    overlays,
+    aviationData,
+    aviationOverlayData,
+    proPanOffset,
+    followingAircraft,
+    trackHistory,
+    showSelectedTrack,
+    safetyEvents,
+    showShortTracks,
+    shortTrackHistory,
+    config.shortTrackLength,
+    gridOpacity,
+    showCompassRose,
+    showSpeedColors,
+    showPredictionVectors,
+    predictionSeconds,
+    showConflictVisualization,
+    showDataBlocks,
+    measurementPoints,
+    cursorInfo,
+    showFpsCounter,
+    showAltitudeTrails,
+    reducedMotion,
+  ]);
 
   // Leaflet map setup
   useEffect(() => {
@@ -5545,19 +6078,19 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       leafletMapRef.current = L.map(mapRef.current, {
         center,
         zoom,
-        zoomControl: true
+        zoomControl: true,
       });
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
+        attribution: '© OpenStreetMap contributors',
       }).addTo(leafletMapRef.current);
-      
+
       // Add feeder marker
       const feederIcon = L.divIcon({
         className: 'feeder-marker',
         html: `<div style="width: 12px; height: 12px; background: #00ff88; border: 2px solid #004422; border-radius: 50%; box-shadow: 0 0 10px #00ff88;"></div>`,
         iconSize: [12, 12],
-        iconAnchor: [6, 6]
+        iconAnchor: [6, 6],
       });
       feederMarkerRef.current = L.marker(center, { icon: feederIcon })
         .addTo(leafletMapRef.current)
@@ -5589,7 +6122,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               updateHash({
                 lat: mapCenter.lat.toFixed(4),
                 lon: mapCenter.lng.toFixed(4),
-                zoom: String(mapZoom)
+                zoom: String(mapZoom),
               });
             } else if (updateHash && latDiff <= 0.01 && lonDiff <= 0.01 && zoomDiff === 0) {
               // Clear center params if back to default
@@ -5640,10 +6173,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
     console.log('Updating markers:', sortedAircraft.length, 'aircraft with position');
 
-    const currentHexes = new Set(sortedAircraft.map(a => a.hex));
+    const currentHexes = new Set(sortedAircraft.map((a) => a.hex));
 
     // Remove markers for aircraft no longer present
-    Object.keys(markersRef.current).forEach(hex => {
+    Object.keys(markersRef.current).forEach((hex) => {
       if (!currentHexes.has(hex)) {
         markersRef.current[hex].remove();
         delete markersRef.current[hex];
@@ -5652,13 +6185,13 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
     // Build set of aircraft with safety events for z-index priority
     const safetyAircraftHexes = new Set();
-    safetyEvents.forEach(event => {
+    safetyEvents.forEach((event) => {
       if (event.icao) safetyAircraftHexes.add(event.icao.toUpperCase());
       if (event.icao_2) safetyAircraftHexes.add(event.icao_2.toUpperCase());
     });
 
     // Create markers for new aircraft (positions updated by animation loop below)
-    sortedAircraft.slice(0, 150).forEach(ac => {
+    sortedAircraft.slice(0, 150).forEach((ac) => {
       if (!ac.lat || !ac.lon) return;
 
       const hasSafetyEvent = safetyAircraftHexes.has(ac.hex?.toUpperCase());
@@ -5672,7 +6205,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           <path d="M12 14v8M8 18l4 2 4-2" stroke="${color}" stroke-width="1.5"/>
         </svg>`,
         iconSize: [24, 24],
-        iconAnchor: [12, 12]
+        iconAnchor: [12, 12],
       });
 
       // Set higher z-index for aircraft with safety events or emergencies
@@ -5689,7 +6222,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           .on('dblclick', () => openAircraftDetail(ac.hex));
         marker.bindTooltip(`${ac.flight || ac.hex}<br>${ac.alt || '?'}ft`, {
           permanent: false,
-          direction: 'top'
+          direction: 'top',
         });
         markersRef.current[ac.hex] = marker;
       }
@@ -5734,10 +6267,12 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   /rotate\([0-9.]+deg\)/,
                   `rotate(${newRotation}deg)`
                 );
-                marker.setIcon(L.divIcon({
-                  ...currentIcon.options,
-                  html: newHtml
-                }));
+                marker.setIcon(
+                  L.divIcon({
+                    ...currentIcon.options,
+                    html: newHtml,
+                  })
+                );
               }
             }
           }
@@ -5762,18 +6297,18 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
     // Remove all polylines if short tracks disabled
     if (!showShortTracks) {
-      Object.values(shortTrackPolylinesRef.current).forEach(polyline => polyline.remove());
+      Object.values(shortTrackPolylinesRef.current).forEach((polyline) => polyline.remove());
       shortTrackPolylinesRef.current = {};
       return;
     }
 
-    const currentHexes = new Set(sortedAircraft.map(a => a.hex));
+    const currentHexes = new Set(sortedAircraft.map((a) => a.hex));
     const now = Date.now();
     const trackLength = config.shortTrackLength || 15;
     const maxAge = trackLength * 6000; // ~6 seconds per position
 
     // Remove polylines for aircraft no longer present
-    Object.keys(shortTrackPolylinesRef.current).forEach(hex => {
+    Object.keys(shortTrackPolylinesRef.current).forEach((hex) => {
       if (!currentHexes.has(hex)) {
         shortTrackPolylinesRef.current[hex].remove();
         delete shortTrackPolylinesRef.current[hex];
@@ -5781,7 +6316,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     });
 
     // Update or create polylines for each aircraft
-    sortedAircraft.slice(0, 150).forEach(ac => {
+    sortedAircraft.slice(0, 150).forEach((ac) => {
       if (!ac.lat || !ac.lon || !ac.hex) return;
 
       // Combine historical and realtime positions
@@ -5789,8 +6324,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       const realtimePositions = trackHistory[ac.hex] || [];
 
       const allPositions = [
-        ...historicPositions.filter(p => now - p.time < maxAge),
-        ...realtimePositions.filter(p => now - p.time < maxAge)
+        ...historicPositions.filter((p) => now - p.time < maxAge),
+        ...realtimePositions.filter((p) => now - p.time < maxAge),
       ].sort((a, b) => a.time - b.time);
 
       // Keep only last N positions (configurable)
@@ -5805,7 +6340,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         return;
       }
 
-      const latlngs = positions.map(p => [p.lat, p.lon]);
+      const latlngs = positions.map((p) => [p.lat, p.lon]);
       const color = '#ffffff';
 
       if (shortTrackPolylinesRef.current[ac.hex]) {
@@ -5815,12 +6350,19 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           color: color,
           weight: 2,
           opacity: 0.5,
-          dashArray: '4, 4'
+          dashArray: '4, 4',
         }).addTo(leafletMapRef.current);
         shortTrackPolylinesRef.current[ac.hex] = polyline;
       }
     });
-  }, [sortedAircraft, config.mapMode, config.shortTrackLength, showShortTracks, shortTrackHistory, trackHistory]);
+  }, [
+    sortedAircraft,
+    config.mapMode,
+    config.shortTrackLength,
+    showShortTracks,
+    shortTrackHistory,
+    trackHistory,
+  ]);
 
   const cycleMapMode = () => {
     const modes = ['radar', 'crt', 'pro', 'map'];
@@ -5869,22 +6411,29 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
   // Update layer opacity
   const updateLayerOpacity = (layer, opacity) => {
-    setLayerOpacities(prev => ({ ...prev, [layer]: opacity }));
+    setLayerOpacities((prev) => ({ ...prev, [layer]: opacity }));
   };
 
   // Update URL when traffic filters change
   const updateTrafficFilters = (newFiltersOrUpdater) => {
-    setTrafficFilters(prev => {
-      const newFilters = typeof newFiltersOrUpdater === 'function'
-        ? newFiltersOrUpdater(prev)
-        : newFiltersOrUpdater;
+    setTrafficFilters((prev) => {
+      const newFilters =
+        typeof newFiltersOrUpdater === 'function' ? newFiltersOrUpdater(prev) : newFiltersOrUpdater;
 
       // Update URL with enabled boolean filters and altitude range
       if (setHashParams) {
-        const boolKeys = ['showMilitary', 'showCivil', 'showGround', 'showAirborne',
-                          'showWithSquawk', 'showWithoutSquawk', 'safetyEventsOnly',
-                          'showGA', 'showAirliners'];
-        const enabledFilters = boolKeys.filter(key => newFilters[key]).join(',');
+        const boolKeys = [
+          'showMilitary',
+          'showCivil',
+          'showGround',
+          'showAirborne',
+          'showWithSquawk',
+          'showWithoutSquawk',
+          'safetyEventsOnly',
+          'showGA',
+          'showAirliners',
+        ];
+        const enabledFilters = boolKeys.filter((key) => newFilters[key]).join(',');
         setHashParams({
           filters: enabledFilters || undefined,
           minAlt: newFilters.minAltitude !== 0 ? String(newFilters.minAltitude) : undefined,
@@ -5924,7 +6473,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const feederPos = getPosition(feederLat, feederLon);
 
   // Count aircraft in range for CRT mode
-  const inRangeCount = sortedAircraft.filter(ac => {
+  const inRangeCount = sortedAircraft.filter((ac) => {
     const dist = ac.distance_nm || getDistanceNm(ac.lat, ac.lon);
     return dist <= radarRange;
   }).length;
@@ -5932,24 +6481,27 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   // Get severity color class
   const getSeverityClass = (severity) => {
     switch (severity) {
-      case 'critical': return 'severity-critical';
-      case 'warning': return 'severity-warning';
-      default: return 'severity-low';
+      case 'critical':
+        return 'severity-critical';
+      case 'warning':
+        return 'severity-warning';
+      default:
+        return 'severity-low';
     }
   };
 
   // Get event type display name
   const getEventTypeName = (eventType) => {
     const names = {
-      'tcas_ra': 'TCAS RA',
-      'extreme_vs': 'EXTREME V/S',
-      'vs_reversal': 'V/S REVERSAL',
-      'proximity_conflict': 'PROXIMITY',
-      'rapid_descent': 'RAPID DESCENT',
-      'rapid_climb': 'RAPID CLIMB',
-      'squawk_hijack': 'SQUAWK 7500',
-      'squawk_radio_failure': 'SQUAWK 7600',
-      'squawk_emergency': 'SQUAWK 7700',
+      tcas_ra: 'TCAS RA',
+      extreme_vs: 'EXTREME V/S',
+      vs_reversal: 'V/S REVERSAL',
+      proximity_conflict: 'PROXIMITY',
+      rapid_descent: 'RAPID DESCENT',
+      rapid_climb: 'RAPID CLIMB',
+      squawk_hijack: 'SQUAWK 7500',
+      squawk_radio_failure: 'SQUAWK 7600',
+      squawk_emergency: 'SQUAWK 7700',
     };
     return names[eventType] || eventType?.replace(/_/g, ' ').toUpperCase() || 'ALERT';
   };
@@ -5962,19 +6514,23 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     // Emergency squawks - show squawk code prominently
     if (eventType?.startsWith('squawk_')) {
       const squawkMeanings = {
-        'squawk_hijack': 'HIJACK',
-        'squawk_radio_failure': 'RADIO FAILURE',
-        'squawk_emergency': 'EMERGENCY'
+        squawk_hijack: 'HIJACK',
+        squawk_radio_failure: 'RADIO FAILURE',
+        squawk_emergency: 'EMERGENCY',
       };
       return (
         <>
           <div className="banner-main-info">
             <span className="banner-squawk-code">{details.squawk || event.squawk}</span>
-            <span className="banner-squawk-meaning">{squawkMeanings[eventType] || 'EMERGENCY'}</span>
+            <span className="banner-squawk-meaning">
+              {squawkMeanings[eventType] || 'EMERGENCY'}
+            </span>
           </div>
           <div className="banner-aircraft">
             <span className="banner-callsign">{event.callsign || event.icao}</span>
-            {details.altitude && <span className="banner-altitude">{details.altitude.toLocaleString()}ft</span>}
+            {details.altitude && (
+              <span className="banner-altitude">{details.altitude.toLocaleString()}ft</span>
+            )}
           </div>
         </>
       );
@@ -5985,9 +6541,13 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       return (
         <>
           <div className="banner-main-info">
-            <span className="banner-separation-horiz">{details.horizontal_nm || details.distance_nm}nm</span>
+            <span className="banner-separation-horiz">
+              {details.horizontal_nm || details.distance_nm}nm
+            </span>
             <span className="banner-separation-divider">/</span>
-            <span className="banner-separation-vert">{details.vertical_ft || details.altitude_diff_ft}ft</span>
+            <span className="banner-separation-vert">
+              {details.vertical_ft || details.altitude_diff_ft}ft
+            </span>
           </div>
           <div className="banner-aircraft">
             <span className="banner-callsign">{event.callsign || event.icao}</span>
@@ -6004,13 +6564,17 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         <>
           <div className="banner-main-info">
             <span className="banner-vs-change">
-              {details.previous_vs > 0 ? '+' : ''}{details.previous_vs} → {details.current_vs > 0 ? '+' : ''}{details.current_vs}
+              {details.previous_vs > 0 ? '+' : ''}
+              {details.previous_vs} → {details.current_vs > 0 ? '+' : ''}
+              {details.current_vs}
             </span>
             <span className="banner-vs-unit">fpm</span>
           </div>
           <div className="banner-aircraft">
             <span className="banner-callsign">{event.callsign || event.icao}</span>
-            {details.altitude && <span className="banner-altitude">{details.altitude.toLocaleString()}ft</span>}
+            {details.altitude && (
+              <span className="banner-altitude">{details.altitude.toLocaleString()}ft</span>
+            )}
           </div>
         </>
       );
@@ -6022,13 +6586,17 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         <>
           <div className="banner-main-info">
             <span className="banner-vs-change">
-              {details.previous_vs > 0 ? '+' : ''}{details.previous_vs} → {details.current_vs > 0 ? '+' : ''}{details.current_vs}
+              {details.previous_vs > 0 ? '+' : ''}
+              {details.previous_vs} → {details.current_vs > 0 ? '+' : ''}
+              {details.current_vs}
             </span>
             <span className="banner-vs-unit">fpm</span>
           </div>
           <div className="banner-aircraft">
             <span className="banner-callsign">{event.callsign || event.icao}</span>
-            {details.altitude && <span className="banner-altitude">{details.altitude.toLocaleString()}ft</span>}
+            {details.altitude && (
+              <span className="banner-altitude">{details.altitude.toLocaleString()}ft</span>
+            )}
           </div>
         </>
       );
@@ -6040,12 +6608,17 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       return (
         <>
           <div className="banner-main-info">
-            <span className="banner-vs-value">{vs > 0 ? '+' : ''}{vs}</span>
+            <span className="banner-vs-value">
+              {vs > 0 ? '+' : ''}
+              {vs}
+            </span>
             <span className="banner-vs-unit">fpm</span>
           </div>
           <div className="banner-aircraft">
             <span className="banner-callsign">{event.callsign || event.icao}</span>
-            {details.altitude && <span className="banner-altitude">{details.altitude.toLocaleString()}ft</span>}
+            {details.altitude && (
+              <span className="banner-altitude">{details.altitude.toLocaleString()}ft</span>
+            )}
           </div>
         </>
       );
@@ -6085,7 +6658,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         {searchQuery && (
           <button
             className="mobile-search-clear"
-            onClick={(e) => { e.stopPropagation(); setSearchQuery(''); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSearchQuery('');
+            }}
           >
             <X size={16} />
           </button>
@@ -6093,7 +6669,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         <div className="mobile-header-actions">
           <button
             className={`mobile-header-btn ${showShortTracks ? 'active' : ''}`}
-            onClick={(e) => { e.stopPropagation(); setShowShortTracks(!showShortTracks); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowShortTracks(!showShortTracks);
+            }}
             title="Trails"
           >
             <Navigation size={18} />
@@ -6114,7 +6693,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           </button>
           <button
             className={`mobile-header-btn ${soundMuted ? 'muted' : ''}`}
-            onClick={(e) => { e.stopPropagation(); setSoundMuted(!soundMuted); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSoundMuted(!soundMuted);
+            }}
             title={soundMuted ? 'Unmute' : 'Mute'}
           >
             {soundMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
@@ -6122,7 +6704,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         </div>
         <button
           className={`mobile-menu-btn ${showMobileControls ? 'active' : ''}`}
-          onClick={(e) => { e.stopPropagation(); setShowMobileControls(!showMobileControls); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowMobileControls(!showMobileControls);
+          }}
         >
           {showMobileControls ? <X size={20} /> : <Menu size={20} />}
         </button>
@@ -6134,21 +6719,30 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           <div className="mobile-controls-grid">
             <button
               className={`mobile-control-item ${showAircraftList ? 'active' : ''}`}
-              onClick={() => { setShowAircraftList(!showAircraftList); setShowMobileControls(false); }}
+              onClick={() => {
+                setShowAircraftList(!showAircraftList);
+                setShowMobileControls(false);
+              }}
             >
               <Plane size={18} />
               <span>Aircraft ({aircraft.length})</span>
             </button>
             <button
               className={`mobile-control-item ${showFilterMenu ? 'active' : ''}`}
-              onClick={() => { setShowFilterMenu(!showFilterMenu); setShowOverlayMenu(false); }}
+              onClick={() => {
+                setShowFilterMenu(!showFilterMenu);
+                setShowOverlayMenu(false);
+              }}
             >
               <Filter size={18} />
               <span>Filters</span>
             </button>
             <button
               className={`mobile-control-item ${showOverlayMenu ? 'active' : ''}`}
-              onClick={() => { setShowOverlayMenu(!showOverlayMenu); setShowFilterMenu(false); }}
+              onClick={() => {
+                setShowOverlayMenu(!showOverlayMenu);
+                setShowFilterMenu(false);
+              }}
             >
               <Layers size={18} />
               <span>Layers</span>
@@ -6189,57 +6783,60 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       {activeConflicts.length > 0 && config.mapMode !== 'pro' && config.mapMode !== 'crt' && (
         <div className="conflict-banners-container">
           {activeConflicts
-            .filter(event => !acknowledgedEvents.has(event.id))
+            .filter((event) => !acknowledgedEvents.has(event.id))
             .slice(0, 1)
             .map((event, idx) => (
-            <div
-              key={event.id || `conflict-${event.icao}-${idx}`}
-              className={`conflict-banner ${getSeverityClass(event.severity)} event-type-${event.event_type}`}
-              onClick={() => {
-                // Find and select the aircraft
-                const ac = aircraft.find(a => a.hex?.toUpperCase() === event.icao?.toUpperCase());
-                if (ac) {
-                  setSelectedMetar(null);
-                  setSelectedPirep(null);
-                  setSelectedNavaid(null);
-                  setSelectedAirport(null);
-                  setPopupPosition({ x: 16, y: 16 });
-                  selectAircraft(ac);
+              <div
+                key={event.id || `conflict-${event.icao}-${idx}`}
+                className={`conflict-banner ${getSeverityClass(event.severity)} event-type-${event.event_type}`}
+                onClick={() => {
+                  // Find and select the aircraft
+                  const ac = aircraft.find(
+                    (a) => a.hex?.toUpperCase() === event.icao?.toUpperCase()
+                  );
+                  if (ac) {
+                    setSelectedMetar(null);
+                    setSelectedPirep(null);
+                    setSelectedNavaid(null);
+                    setSelectedAirport(null);
+                    setPopupPosition({ x: 16, y: 16 });
+                    selectAircraft(ac);
 
-                  // Fly to the aircraft location based on map mode
-                  if (ac.lat && ac.lon) {
-                    if (config.mapMode === 'map' && leafletMapRef.current) {
-                      leafletMapRef.current.flyTo([ac.lat, ac.lon], 12, {
-                        duration: 1.5,
-                        easeLinearity: 0.25
-                      });
+                    // Fly to the aircraft location based on map mode
+                    if (ac.lat && ac.lon) {
+                      if (config.mapMode === 'map' && leafletMapRef.current) {
+                        leafletMapRef.current.flyTo([ac.lat, ac.lon], 12, {
+                          duration: 1.5,
+                          easeLinearity: 0.25,
+                        });
+                      }
+                      // CRT/Radar modes are centered on feeder, no pan available
                     }
-                    // CRT/Radar modes are centered on feeder, no pan available
                   }
-                }
-              }}
-              style={{ cursor: 'pointer' }}
-            >
-              <AlertTriangle size={28} />
-              <div className="conflict-banner-content">
-                <strong className="banner-event-type">{getEventTypeName(event.event_type)}</strong>
-                {renderEventBannerContent(event)}
-              </div>
-              <button
-                className="conflict-ack-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  acknowledgeEvent(event.id);
                 }}
-                title="Acknowledge and dismiss"
+                style={{ cursor: 'pointer' }}
               >
-                <Check size={20} />
-              </button>
-            </div>
-          ))}
+                <AlertTriangle size={28} />
+                <div className="conflict-banner-content">
+                  <strong className="banner-event-type">
+                    {getEventTypeName(event.event_type)}
+                  </strong>
+                  {renderEventBannerContent(event)}
+                </div>
+                <button
+                  className="conflict-ack-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    acknowledgeEvent(event.id);
+                  }}
+                  title="Acknowledge and dismiss"
+                >
+                  <Check size={20} />
+                </button>
+              </div>
+            ))}
         </div>
       )}
-      
 
       {/* Simple Radar Mode */}
       {config.mapMode === 'radar' && (
@@ -6268,7 +6865,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           </div>
 
           <div className="aircraft-blips">
-            {sortedAircraft.slice(0, 100).map(ac => {
+            {sortedAircraft.slice(0, 100).map((ac) => {
               const pos = getPosition(ac.lat, ac.lon);
               return (
                 <div
@@ -6277,7 +6874,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   style={{
                     left: `${pos.x}%`,
                     top: `${pos.y}%`,
-                    transform: `translate(-50%, -50%) rotate(${ac.track || 0}deg)`
+                    transform: `translate(-50%, -50%) rotate(${ac.track || 0}deg)`,
                   }}
                   onClick={() => selectAircraft(ac)}
                   title={`${ac.flight || ac.hex} - ${ac.alt || '?'}ft`}
@@ -6292,8 +6889,8 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
       {/* CRT ATC Radar Mode & Pro Mode - Canvas Based */}
       {(config.mapMode === 'crt' || config.mapMode === 'pro') && (
-        <div 
-          className={`crt-radar-container ${config.mapMode === 'pro' ? 'pro-mode' : ''}`} 
+        <div
+          className={`crt-radar-container ${config.mapMode === 'pro' ? 'pro-mode' : ''}`}
           ref={containerRef}
           onMouseMove={handleContainerMouseMove}
           onMouseLeave={handleContainerMouseLeave}
@@ -6303,249 +6900,337 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             className="crt-radar-canvas"
             onMouseDown={handleProPanStart}
             onContextMenu={(e) => e.preventDefault()}
-            style={{ cursor: isProPanning ? 'grabbing' : (config.mapMode === 'pro' ? 'grab' : 'default') }}
+            style={{
+              cursor: isProPanning ? 'grabbing' : config.mapMode === 'pro' ? 'grab' : 'default',
+            }}
             onClick={(e) => {
-            const rect = canvasRef.current.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const clickY = e.clientY - rect.top;
-            const centerX = rect.width / 2;
-            const centerY = rect.height / 2;
-            const maxRadius = Math.min(rect.width, rect.height) * 0.45;
-            const pixelsPerNm = maxRadius / radarRange;
+              const rect = canvasRef.current.getBoundingClientRect();
+              const clickX = e.clientX - rect.left;
+              const clickY = e.clientY - rect.top;
+              const centerX = rect.width / 2;
+              const centerY = rect.height / 2;
+              const maxRadius = Math.min(rect.width, rect.height) * 0.45;
+              const pixelsPerNm = maxRadius / radarRange;
 
-            // Phase 1.2: Measurement tool (Shift+click)
-            if (e.shiftKey && config.mapMode === 'pro') {
-              // Convert click position to lat/lon
-              const nmX = (clickX - centerX - proPanOffset.x) / pixelsPerNm;
-              const nmY = -(clickY - centerY - proPanOffset.y) / pixelsPerNm;
-              const clickLat = feederLat + (nmY / 60);
-              const clickLon = feederLon + (nmX / (60 * Math.cos(feederLat * Math.PI / 180)));
+              // Phase 1.2: Measurement tool (Shift+click)
+              if (e.shiftKey && config.mapMode === 'pro') {
+                // Convert click position to lat/lon
+                const nmX = (clickX - centerX - proPanOffset.x) / pixelsPerNm;
+                const nmY = -(clickY - centerY - proPanOffset.y) / pixelsPerNm;
+                const clickLat = feederLat + nmY / 60;
+                const clickLon = feederLon + nmX / (60 * Math.cos((feederLat * Math.PI) / 180));
 
-              if (measurementPoints.length === 0) {
-                // First point
-                setMeasurementPoints([{ lat: clickLat, lon: clickLon }]);
-              } else if (measurementPoints.length === 1) {
-                // Second point
-                setMeasurementPoints(prev => [...prev, { lat: clickLat, lon: clickLon }]);
+                if (measurementPoints.length === 0) {
+                  // First point
+                  setMeasurementPoints([{ lat: clickLat, lon: clickLon }]);
+                } else if (measurementPoints.length === 1) {
+                  // Second point
+                  setMeasurementPoints((prev) => [...prev, { lat: clickLat, lon: clickLon }]);
+                } else {
+                  // Third click clears and starts new measurement
+                  setMeasurementPoints([{ lat: clickLat, lon: clickLon }]);
+                }
+                return; // Don't process as regular click
+              }
+
+              // Helper to convert lat/lon to screen position
+              const getScreenPos = (lat, lon) => {
+                const dLat = lat - feederLat;
+                const dLon = lon - feederLon;
+                const nmY = dLat * 60;
+                const nmX = dLon * 60 * Math.cos((feederLat * Math.PI) / 180);
+
+                if (config.mapMode === 'pro') {
+                  return {
+                    x: centerX + nmX * pixelsPerNm + proPanOffset.x,
+                    y: centerY - nmY * pixelsPerNm + proPanOffset.y,
+                  };
+                } else {
+                  const dist = Math.sqrt(nmX * nmX + nmY * nmY);
+                  const bearing = getBearing(lat, lon);
+                  const radius = (dist / radarRange) * maxRadius;
+                  const rad = ((bearing - 90) * Math.PI) / 180;
+                  return {
+                    x: centerX + Math.cos(rad) * radius,
+                    y: centerY + Math.sin(rad) * radius,
+                  };
+                }
+              };
+
+              let closest = null;
+              let closestDist = 30;
+              let closestType = null; // 'aircraft', 'metar', 'pirep', 'navaid', 'airport'
+
+              // Check aircraft (if overlay enabled)
+              if (overlays.aircraft) {
+                sortedAircraft.forEach((ac) => {
+                  const dist = ac.distance_nm || getDistanceNm(ac.lat, ac.lon);
+                  if (config.mapMode === 'crt' && dist > radarRange) return;
+                  if (config.mapMode === 'pro' && dist > radarRange * 1.5) return;
+
+                  const pos = getScreenPos(ac.lat, ac.lon);
+                  const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
+                  if (clickDist < closestDist) {
+                    closestDist = clickDist;
+                    closest = ac;
+                    closestType = 'aircraft';
+                  }
+                });
+              }
+
+              // Check METARs if enabled
+              if (overlays.metars && aviationData.metars.length > 0) {
+                aviationData.metars.forEach((metar) => {
+                  if (!metar.lat || !metar.lon) return;
+                  const pos = getScreenPos(metar.lat, metar.lon);
+                  if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height) return;
+
+                  const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
+                  if (clickDist < closestDist) {
+                    closestDist = clickDist;
+                    closest = metar;
+                    closestType = 'metar';
+                  }
+                });
+              }
+
+              // Check PIREPs if enabled
+              if (overlays.pireps && aviationData.pireps.length > 0) {
+                aviationData.pireps.forEach((pirep) => {
+                  if (!pirep.lat || !pirep.lon) return;
+                  const pos = getScreenPos(pirep.lat, pirep.lon);
+                  if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height) return;
+
+                  const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
+                  if (clickDist < closestDist) {
+                    closestDist = clickDist;
+                    closest = pirep;
+                    closestType = 'pirep';
+                  }
+                });
+              }
+
+              // Check Navaids if enabled (use fallback data if API data empty)
+              if (overlays.vors) {
+                const navAidsToCheck =
+                  aviationData.navaids.length > 0
+                    ? aviationData.navaids
+                    : [
+                        {
+                          id: 'SEA',
+                          name: 'Seattle VORTAC',
+                          lat: 47.435,
+                          lon: -122.309,
+                          type: 'VORTAC',
+                        },
+                        {
+                          id: 'PAE',
+                          name: 'Paine Field',
+                          lat: 47.906,
+                          lon: -122.283,
+                          type: 'VOR/DME',
+                        },
+                        {
+                          id: 'BFI',
+                          name: 'Boeing Field',
+                          lat: 47.529,
+                          lon: -122.302,
+                          type: 'VOR/DME',
+                        },
+                        { id: 'TCM', name: 'McChord', lat: 47.136, lon: -122.476, type: 'TACAN' },
+                        { id: 'OLM', name: 'Olympia', lat: 46.969, lon: -122.902, type: 'VOR/DME' },
+                        { id: 'EPH', name: 'Ephrata', lat: 47.385, lon: -119.515, type: 'VOR/DME' },
+                        {
+                          id: 'ELN',
+                          name: 'Ellensburg',
+                          lat: 47.033,
+                          lon: -120.53,
+                          type: 'VOR/DME',
+                        },
+                        {
+                          id: 'YYJ',
+                          name: 'Victoria',
+                          lat: 48.647,
+                          lon: -123.426,
+                          type: 'VOR/DME',
+                        },
+                        { id: 'CV', name: 'Coupeville', lat: 48.188, lon: -122.688, type: 'NDB' },
+                        {
+                          id: 'BTG',
+                          name: 'Battleground',
+                          lat: 45.816,
+                          lon: -122.531,
+                          type: 'VOR/DME',
+                        },
+                        {
+                          id: 'UBG',
+                          name: 'Bellingham',
+                          lat: 48.795,
+                          lon: -122.538,
+                          type: 'VOR/DME',
+                        },
+                        { id: 'GEG', name: 'Spokane', lat: 47.625, lon: -117.539, type: 'VORTAC' },
+                      ];
+                navAidsToCheck.forEach((nav) => {
+                  if (!nav.lat || !nav.lon) return;
+                  const pos = getScreenPos(nav.lat, nav.lon);
+                  if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height) return;
+
+                  const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
+                  if (clickDist < closestDist) {
+                    closestDist = clickDist;
+                    closest = nav;
+                    closestType = 'navaid';
+                  }
+                });
+              }
+
+              // Check Airports if enabled (use fallback data if API data empty)
+              if (overlays.airports) {
+                const airportsToCheck =
+                  aviationData.airports.length > 0
+                    ? aviationData.airports
+                    : [
+                        {
+                          icao: 'KSEA',
+                          name: 'Seattle-Tacoma',
+                          lat: 47.449,
+                          lon: -122.309,
+                          class: 'B',
+                        },
+                        {
+                          icao: 'KBFI',
+                          name: 'Boeing Field',
+                          lat: 47.529,
+                          lon: -122.302,
+                          class: 'D',
+                        },
+                        {
+                          icao: 'KPAE',
+                          name: 'Paine Field',
+                          lat: 47.906,
+                          lon: -122.283,
+                          class: 'D',
+                        },
+                        {
+                          icao: 'KPDX',
+                          name: 'Portland Intl',
+                          lat: 45.589,
+                          lon: -122.597,
+                          class: 'C',
+                        },
+                        { icao: 'KGEG', name: 'Spokane', lat: 47.62, lon: -117.534, class: 'C' },
+                      ];
+                airportsToCheck.forEach((apt) => {
+                  if (!apt.lat || !apt.lon) return;
+                  const pos = getScreenPos(apt.lat, apt.lon);
+                  if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height) return;
+
+                  const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
+                  if (clickDist < closestDist) {
+                    closestDist = clickDist;
+                    closest = apt;
+                    closestType = 'airport';
+                  }
+                });
+              }
+
+              // Handle click based on type
+              if (closest) {
+                // Only clear aircraft selection if not pinned, or if selecting a new aircraft
+                if (!panelPinned || closestType === 'aircraft') {
+                  selectAircraft(null);
+                }
+                setSelectedMetar(null);
+                setSelectedPirep(null);
+                setSelectedNavaid(null);
+                setSelectedAirport(null);
+
+                if (closestType === 'aircraft') {
+                  selectAircraft(closest);
+                } else if (closestType === 'metar') {
+                  setSelectedMetar(closest);
+                } else if (closestType === 'pirep') {
+                  setSelectedPirep(closest);
+                } else if (closestType === 'navaid') {
+                  setSelectedNavaid(closest);
+                } else if (closestType === 'airport') {
+                  setSelectedAirport(closest);
+                }
               } else {
-                // Third click clears and starts new measurement
-                setMeasurementPoints([{ lat: clickLat, lon: clickLon }]);
-              }
-              return; // Don't process as regular click
-            }
-
-            // Helper to convert lat/lon to screen position
-            const getScreenPos = (lat, lon) => {
-              const dLat = lat - feederLat;
-              const dLon = lon - feederLon;
-              const nmY = dLat * 60;
-              const nmX = dLon * 60 * Math.cos(feederLat * Math.PI / 180);
-
-              if (config.mapMode === 'pro') {
-                return { x: centerX + nmX * pixelsPerNm + proPanOffset.x, y: centerY - nmY * pixelsPerNm + proPanOffset.y };
-              } else {
-                const dist = Math.sqrt(nmX * nmX + nmY * nmY);
-                const bearing = getBearing(lat, lon);
-                const radius = (dist / radarRange) * maxRadius;
-                const rad = (bearing - 90) * Math.PI / 180;
-                return { x: centerX + Math.cos(rad) * radius, y: centerY + Math.sin(rad) * radius };
-              }
-            };
-            
-            let closest = null;
-            let closestDist = 30;
-            let closestType = null; // 'aircraft', 'metar', 'pirep', 'navaid', 'airport'
-            
-            // Check aircraft (if overlay enabled)
-            if (overlays.aircraft) {
-              sortedAircraft.forEach(ac => {
-                const dist = ac.distance_nm || getDistanceNm(ac.lat, ac.lon);
-                if (config.mapMode === 'crt' && dist > radarRange) return;
-                if (config.mapMode === 'pro' && dist > radarRange * 1.5) return;
-                
-                const pos = getScreenPos(ac.lat, ac.lon);
-                const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
-                if (clickDist < closestDist) {
-                  closestDist = clickDist;
-                  closest = ac;
-                  closestType = 'aircraft';
+                // Clicked on empty area - clear all selections (unless panel is pinned)
+                if (!panelPinned) {
+                  selectAircraft(null);
                 }
-              });
-            }
-            
-            // Check METARs if enabled
-            if (overlays.metars && aviationData.metars.length > 0) {
-              aviationData.metars.forEach(metar => {
-                if (!metar.lat || !metar.lon) return;
-                const pos = getScreenPos(metar.lat, metar.lon);
-                if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height) return;
-                
-                const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
-                if (clickDist < closestDist) {
-                  closestDist = clickDist;
-                  closest = metar;
-                  closestType = 'metar';
-                }
-              });
-            }
-            
-            // Check PIREPs if enabled
-            if (overlays.pireps && aviationData.pireps.length > 0) {
-              aviationData.pireps.forEach(pirep => {
-                if (!pirep.lat || !pirep.lon) return;
-                const pos = getScreenPos(pirep.lat, pirep.lon);
-                if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height) return;
-                
-                const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
-                if (clickDist < closestDist) {
-                  closestDist = clickDist;
-                  closest = pirep;
-                  closestType = 'pirep';
-                }
-              });
-            }
-            
-            // Check Navaids if enabled (use fallback data if API data empty)
-            if (overlays.vors) {
-              const navAidsToCheck = aviationData.navaids.length > 0 ? aviationData.navaids : [
-                { id: 'SEA', name: 'Seattle VORTAC', lat: 47.435, lon: -122.309, type: 'VORTAC' },
-                { id: 'PAE', name: 'Paine Field', lat: 47.906, lon: -122.283, type: 'VOR/DME' },
-                { id: 'BFI', name: 'Boeing Field', lat: 47.529, lon: -122.302, type: 'VOR/DME' },
-                { id: 'TCM', name: 'McChord', lat: 47.136, lon: -122.476, type: 'TACAN' },
-                { id: 'OLM', name: 'Olympia', lat: 46.969, lon: -122.902, type: 'VOR/DME' },
-                { id: 'EPH', name: 'Ephrata', lat: 47.385, lon: -119.515, type: 'VOR/DME' },
-                { id: 'ELN', name: 'Ellensburg', lat: 47.033, lon: -120.530, type: 'VOR/DME' },
-                { id: 'YYJ', name: 'Victoria', lat: 48.647, lon: -123.426, type: 'VOR/DME' },
-                { id: 'CV', name: 'Coupeville', lat: 48.188, lon: -122.688, type: 'NDB' },
-                { id: 'BTG', name: 'Battleground', lat: 45.816, lon: -122.531, type: 'VOR/DME' },
-                { id: 'UBG', name: 'Bellingham', lat: 48.795, lon: -122.538, type: 'VOR/DME' },
-                { id: 'GEG', name: 'Spokane', lat: 47.625, lon: -117.539, type: 'VORTAC' },
-              ];
-              navAidsToCheck.forEach(nav => {
-                if (!nav.lat || !nav.lon) return;
-                const pos = getScreenPos(nav.lat, nav.lon);
-                if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height) return;
-                
-                const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
-                if (clickDist < closestDist) {
-                  closestDist = clickDist;
-                  closest = nav;
-                  closestType = 'navaid';
-                }
-              });
-            }
-            
-            // Check Airports if enabled (use fallback data if API data empty)
-            if (overlays.airports) {
-              const airportsToCheck = aviationData.airports.length > 0 ? aviationData.airports : [
-                { icao: 'KSEA', name: 'Seattle-Tacoma', lat: 47.449, lon: -122.309, class: 'B' },
-                { icao: 'KBFI', name: 'Boeing Field', lat: 47.529, lon: -122.302, class: 'D' },
-                { icao: 'KPAE', name: 'Paine Field', lat: 47.906, lon: -122.283, class: 'D' },
-                { icao: 'KPDX', name: 'Portland Intl', lat: 45.589, lon: -122.597, class: 'C' },
-                { icao: 'KGEG', name: 'Spokane', lat: 47.620, lon: -117.534, class: 'C' },
-              ];
-              airportsToCheck.forEach(apt => {
-                if (!apt.lat || !apt.lon) return;
-                const pos = getScreenPos(apt.lat, apt.lon);
-                if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height) return;
-                
-                const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
-                if (clickDist < closestDist) {
-                  closestDist = clickDist;
-                  closest = apt;
-                  closestType = 'airport';
-                }
-              });
-            }
-            
-            // Handle click based on type
-            if (closest) {
-              // Only clear aircraft selection if not pinned, or if selecting a new aircraft
-              if (!panelPinned || closestType === 'aircraft') {
-                selectAircraft(null);
+                setSelectedMetar(null);
+                setSelectedPirep(null);
+                setSelectedNavaid(null);
+                setSelectedAirport(null);
               }
-              setSelectedMetar(null);
-              setSelectedPirep(null);
-              setSelectedNavaid(null);
-              setSelectedAirport(null);
+            }}
+            onDoubleClick={(e) => {
+              // Double-click to open aircraft detail page
+              const rect = canvasRef.current.getBoundingClientRect();
+              const clickX = e.clientX - rect.left;
+              const clickY = e.clientY - rect.top;
+              const centerX = rect.width / 2;
+              const centerY = rect.height / 2;
+              const maxRadius = Math.min(rect.width, rect.height) * 0.45;
+              const pixelsPerNm = maxRadius / radarRange;
 
-              if (closestType === 'aircraft') {
-                selectAircraft(closest);
-              } else if (closestType === 'metar') {
-                setSelectedMetar(closest);
-              } else if (closestType === 'pirep') {
-                setSelectedPirep(closest);
-              } else if (closestType === 'navaid') {
-                setSelectedNavaid(closest);
-              } else if (closestType === 'airport') {
-                setSelectedAirport(closest);
-              }
-            } else {
-              // Clicked on empty area - clear all selections (unless panel is pinned)
-              if (!panelPinned) {
-                selectAircraft(null);
-              }
-              setSelectedMetar(null);
-              setSelectedPirep(null);
-              setSelectedNavaid(null);
-              setSelectedAirport(null);
-            }
-          }} onDoubleClick={(e) => {
-            // Double-click to open aircraft detail page
-            const rect = canvasRef.current.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const clickY = e.clientY - rect.top;
-            const centerX = rect.width / 2;
-            const centerY = rect.height / 2;
-            const maxRadius = Math.min(rect.width, rect.height) * 0.45;
-            const pixelsPerNm = maxRadius / radarRange;
+              const getScreenPos = (lat, lon) => {
+                const dLat = lat - feederLat;
+                const dLon = lon - feederLon;
+                const nmY = dLat * 60;
+                const nmX = dLon * 60 * Math.cos((feederLat * Math.PI) / 180);
 
-            const getScreenPos = (lat, lon) => {
-              const dLat = lat - feederLat;
-              const dLon = lon - feederLon;
-              const nmY = dLat * 60;
-              const nmX = dLon * 60 * Math.cos(feederLat * Math.PI / 180);
-
-              if (config.mapMode === 'pro') {
-                return { x: centerX + nmX * pixelsPerNm + proPanOffset.x, y: centerY - nmY * pixelsPerNm + proPanOffset.y };
-              } else {
-                const dist = Math.sqrt(nmX * nmX + nmY * nmY);
-                const bearing = getBearing(lat, lon);
-                const radius = (dist / radarRange) * maxRadius;
-                const rad = (bearing - 90) * Math.PI / 180;
-                return { x: centerX + Math.cos(rad) * radius, y: centerY + Math.sin(rad) * radius };
-              }
-            };
-
-            let closestAircraft = null;
-            let closestDist = 30;
-
-            if (overlays.aircraft) {
-              sortedAircraft.forEach(ac => {
-                const dist = ac.distance_nm || getDistanceNm(ac.lat, ac.lon);
-                if (config.mapMode === 'crt' && dist > radarRange) return;
-                if (config.mapMode === 'pro' && dist > radarRange * 1.5) return;
-
-                const pos = getScreenPos(ac.lat, ac.lon);
-                const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
-                if (clickDist < closestDist) {
-                  closestDist = clickDist;
-                  closestAircraft = ac;
+                if (config.mapMode === 'pro') {
+                  return {
+                    x: centerX + nmX * pixelsPerNm + proPanOffset.x,
+                    y: centerY - nmY * pixelsPerNm + proPanOffset.y,
+                  };
+                } else {
+                  const dist = Math.sqrt(nmX * nmX + nmY * nmY);
+                  const bearing = getBearing(lat, lon);
+                  const radius = (dist / radarRange) * maxRadius;
+                  const rad = ((bearing - 90) * Math.PI) / 180;
+                  return {
+                    x: centerX + Math.cos(rad) * radius,
+                    y: centerY + Math.sin(rad) * radius,
+                  };
                 }
-              });
-            }
+              };
 
-            if (closestAircraft) {
-              openAircraftDetail(closestAircraft.hex);
-            } else if (config.mapMode === 'pro') {
-              // Phase 1.3: Double-click on empty space to center
-              const newPanX = proPanOffset.x - (clickX - centerX);
-              const newPanY = proPanOffset.y - (clickY - centerY);
-              setFollowingAircraft(null);
-              setProPanOffset({ x: newPanX, y: newPanY });
-            }
-          }} />
-          
+              let closestAircraft = null;
+              let closestDist = 30;
+
+              if (overlays.aircraft) {
+                sortedAircraft.forEach((ac) => {
+                  const dist = ac.distance_nm || getDistanceNm(ac.lat, ac.lon);
+                  if (config.mapMode === 'crt' && dist > radarRange) return;
+                  if (config.mapMode === 'pro' && dist > radarRange * 1.5) return;
+
+                  const pos = getScreenPos(ac.lat, ac.lon);
+                  const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
+                  if (clickDist < closestDist) {
+                    closestDist = clickDist;
+                    closestAircraft = ac;
+                  }
+                });
+              }
+
+              if (closestAircraft) {
+                openAircraftDetail(closestAircraft.hex);
+              } else if (config.mapMode === 'pro') {
+                // Phase 1.3: Double-click on empty space to center
+                const newPanX = proPanOffset.x - (clickX - centerX);
+                const newPanY = proPanOffset.y - (clickY - centerY);
+                setFollowingAircraft(null);
+                setProPanOffset({ x: newPanX, y: newPanY });
+              }
+            }}
+          />
+
           {/* CRT overlay effects (CRT mode only) */}
           {config.mapMode === 'crt' && (
             <div className="crt-effects">
@@ -6559,8 +7244,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               className="pro-hover-tooltip"
               style={{
                 position: 'absolute',
-                left: Math.min(hoverInfo.x + 20, containerRef.current?.clientWidth - 200 || hoverInfo.x),
-                top: Math.min(hoverInfo.y - 10, containerRef.current?.clientHeight - 120 || hoverInfo.y),
+                left: Math.min(
+                  hoverInfo.x + 20,
+                  containerRef.current?.clientWidth - 200 || hoverInfo.x
+                ),
+                top: Math.min(
+                  hoverInfo.y - 10,
+                  containerRef.current?.clientHeight - 120 || hoverInfo.y
+                ),
                 background: 'rgba(15, 25, 35, 0.95)',
                 border: '1px solid rgba(80, 140, 200, 0.6)',
                 borderRadius: '6px',
@@ -6574,26 +7265,44 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
               }}
             >
-              <div style={{ fontWeight: 'bold', fontSize: '13px', color: 'rgba(100, 200, 255, 1)', marginBottom: '6px' }}>
+              <div
+                style={{
+                  fontWeight: 'bold',
+                  fontSize: '13px',
+                  color: 'rgba(100, 200, 255, 1)',
+                  marginBottom: '6px',
+                }}
+              >
                 {hoverInfo.aircraft.flight?.trim() || hoverInfo.aircraft.hex}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr', gap: '3px 8px' }}>
                 <span style={{ color: 'rgba(100, 160, 200, 0.7)' }}>Type:</span>
-                <span>{hoverInfo.aircraft.t || hoverInfo.aircraft.type || hoverInfo.aircraft.desc || '---'}</span>
+                <span>
+                  {hoverInfo.aircraft.t ||
+                    hoverInfo.aircraft.type ||
+                    hoverInfo.aircraft.desc ||
+                    '---'}
+                </span>
                 <span style={{ color: 'rgba(100, 160, 200, 0.7)' }}>Alt:</span>
-                <span>{hoverInfo.aircraft.alt ? `${hoverInfo.aircraft.alt.toLocaleString()} ft` : '---'}</span>
+                <span>
+                  {hoverInfo.aircraft.alt ? `${hoverInfo.aircraft.alt.toLocaleString()} ft` : '---'}
+                </span>
                 <span style={{ color: 'rgba(100, 160, 200, 0.7)' }}>Speed:</span>
-                <span>{hoverInfo.aircraft.gs ? `${Math.round(hoverInfo.aircraft.gs)} kts` : '---'}</span>
+                <span>
+                  {hoverInfo.aircraft.gs ? `${Math.round(hoverInfo.aircraft.gs)} kts` : '---'}
+                </span>
                 <span style={{ color: 'rgba(100, 160, 200, 0.7)' }}>Squawk:</span>
                 <span>{hoverInfo.aircraft.squawk || '---'}</span>
               </div>
             </div>
           )}
-          
+
           {/* Range control */}
-          <div className={`crt-range-control ${config.mapMode === 'pro' ? 'pro-style' : ''} ${showRangeControl ? 'visible' : ''}`}>
+          <div
+            className={`crt-range-control ${config.mapMode === 'pro' ? 'pro-style' : ''} ${showRangeControl ? 'visible' : ''}`}
+          >
             <span className="crt-range-label">RNG</span>
-            {[10, 25, 50, 100, 200].map(r => (
+            {[10, 25, 50, 100, 200].map((r) => (
               <button
                 key={r}
                 className={`crt-range-btn ${radarRange === r ? 'active' : ''}`}
@@ -6603,20 +7312,20 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               </button>
             ))}
           </div>
-
         </div>
       )}
 
       {/* Leaflet Map Mode */}
-      {config.mapMode === 'map' && (
-        <div ref={mapRef} className="leaflet-map" />
-      )}
+      {config.mapMode === 'map' && <div ref={mapRef} className="leaflet-map" />}
 
       {/* Map Controls */}
       <div className="map-controls">
         {config.mapMode === 'map' && (
           <>
-            <button className={`map-control-btn ${config.mapDarkMode ? 'active' : ''}`} onClick={toggleDarkMode}>
+            <button
+              className={`map-control-btn ${config.mapDarkMode ? 'active' : ''}`}
+              onClick={toggleDarkMode}
+            >
               {config.mapDarkMode ? <Moon size={16} /> : <Sun size={16} />}
               <span>{config.mapDarkMode ? 'Dark' : 'Light'}</span>
             </button>
@@ -6637,7 +7346,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   value={config.shortTrackLength || 15}
                   onChange={(e) => {
                     const newValue = parseInt(e.target.value);
-                    setConfig(prev => {
+                    setConfig((prev) => {
                       const newConfig = { ...prev, shortTrackLength: newValue };
                       saveConfig(newConfig);
                       return newConfig;
@@ -6654,14 +7363,20 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           <>
             <button
               className={`map-control-btn ${showFilterMenu ? 'active' : ''}`}
-              onClick={() => { setShowFilterMenu(!showFilterMenu); setShowOverlayMenu(false); }}
+              onClick={() => {
+                setShowFilterMenu(!showFilterMenu);
+                setShowOverlayMenu(false);
+              }}
             >
               <Filter size={16} />
               <span>Filter</span>
             </button>
             <button
               className={`map-control-btn ${showOverlayMenu ? 'active' : ''}`}
-              onClick={() => { setShowOverlayMenu(!showOverlayMenu); setShowFilterMenu(false); }}
+              onClick={() => {
+                setShowOverlayMenu(!showOverlayMenu);
+                setShowFilterMenu(false);
+              }}
             >
               <Layers size={16} />
               <span>Layers</span>
@@ -6683,7 +7398,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   value={config.shortTrackLength || 15}
                   onChange={(e) => {
                     const newValue = parseInt(e.target.value);
-                    setConfig(prev => {
+                    setConfig((prev) => {
                       const newConfig = { ...prev, shortTrackLength: newValue };
                       saveConfig(newConfig);
                       return newConfig;
@@ -6703,7 +7418,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         >
           {soundMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
         </button>
-        <button 
+        <button
           className="map-control-btn"
           onClick={toggleFullscreen}
           title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
@@ -6717,7 +7432,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         <div className="overlay-menu" onClick={(e) => e.stopPropagation()}>
           <div className="overlay-menu-header">
             <span>Map Layers</span>
-            <button onClick={() => setShowOverlayMenu(false)}><X size={14} /></button>
+            <button onClick={() => setShowOverlayMenu(false)}>
+              <X size={14} />
+            </button>
           </div>
           <label className="overlay-toggle">
             <input
@@ -6818,7 +7535,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 <input
                   type="checkbox"
                   checked={overlays.usRefueling}
-                  onChange={() => updateOverlays({ ...overlays, usRefueling: !overlays.usRefueling })}
+                  onChange={() =>
+                    updateOverlays({ ...overlays, usRefueling: !overlays.usRefueling })
+                  }
                 />
                 <span className="toggle-label">US Refueling Tracks</span>
               </label>
@@ -6842,7 +7561,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 <input
                   type="checkbox"
                   checked={overlays.trainingAreas}
-                  onChange={() => updateOverlays({ ...overlays, trainingAreas: !overlays.trainingAreas })}
+                  onChange={() =>
+                    updateOverlays({ ...overlays, trainingAreas: !overlays.trainingAreas })
+                  }
                 />
                 <span className="toggle-label">Training Areas</span>
               </label>
@@ -6876,7 +7597,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                     localStorage.setItem('adsb-pro-compass-rose', String(newVal));
                   }}
                 />
-                <span className="toggle-label"><Compass size={12} /> Compass Rose (P)</span>
+                <span className="toggle-label">
+                  <Compass size={12} /> Compass Rose (P)
+                </span>
               </label>
               {/* Phase 4.2: Grid Opacity */}
               <div className="overlay-setting">
@@ -6964,7 +7687,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   type="checkbox"
                   checked={dataBlockConfig.showAltitude}
                   onChange={() => {
-                    const newConfig = { ...dataBlockConfig, showAltitude: !dataBlockConfig.showAltitude };
+                    const newConfig = {
+                      ...dataBlockConfig,
+                      showAltitude: !dataBlockConfig.showAltitude,
+                    };
                     setDataBlockConfig(newConfig);
                     localStorage.setItem('adsb-pro-datablock-config', JSON.stringify(newConfig));
                   }}
@@ -6988,7 +7714,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   type="checkbox"
                   checked={dataBlockConfig.showHeading}
                   onChange={() => {
-                    const newConfig = { ...dataBlockConfig, showHeading: !dataBlockConfig.showHeading };
+                    const newConfig = {
+                      ...dataBlockConfig,
+                      showHeading: !dataBlockConfig.showHeading,
+                    };
                     setDataBlockConfig(newConfig);
                     localStorage.setItem('adsb-pro-datablock-config', JSON.stringify(newConfig));
                   }}
@@ -7000,7 +7729,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   type="checkbox"
                   checked={dataBlockConfig.showVerticalSpeed}
                   onChange={() => {
-                    const newConfig = { ...dataBlockConfig, showVerticalSpeed: !dataBlockConfig.showVerticalSpeed };
+                    const newConfig = {
+                      ...dataBlockConfig,
+                      showVerticalSpeed: !dataBlockConfig.showVerticalSpeed,
+                    };
                     setDataBlockConfig(newConfig);
                     localStorage.setItem('adsb-pro-datablock-config', JSON.stringify(newConfig));
                   }}
@@ -7012,7 +7744,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   type="checkbox"
                   checked={dataBlockConfig.showAircraftType}
                   onChange={() => {
-                    const newConfig = { ...dataBlockConfig, showAircraftType: !dataBlockConfig.showAircraftType };
+                    const newConfig = {
+                      ...dataBlockConfig,
+                      showAircraftType: !dataBlockConfig.showAircraftType,
+                    };
                     setDataBlockConfig(newConfig);
                     localStorage.setItem('adsb-pro-datablock-config', JSON.stringify(newConfig));
                   }}
@@ -7103,14 +7838,15 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           <div className="overlay-divider" />
           <button
             className="legend-toggle-btn"
-            onClick={() => { setShowLegend(!showLegend); setShowOverlayMenu(false); }}
+            onClick={() => {
+              setShowLegend(!showLegend);
+              setShowOverlayMenu(false);
+            }}
           >
             <HelpCircle size={14} />
             <span>Symbol Legend</span>
           </button>
-          <div className="overlay-note">
-            Weather data from aviationweather.gov
-          </div>
+          <div className="overlay-note">Weather data from aviationweather.gov</div>
         </div>
       )}
 
@@ -7119,7 +7855,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         <div className="overlay-menu filter-menu" onClick={(e) => e.stopPropagation()}>
           <div className="overlay-menu-header">
             <span>Traffic Filters</span>
-            <button onClick={() => setShowFilterMenu(false)}><X size={14} /></button>
+            <button onClick={() => setShowFilterMenu(false)}>
+              <X size={14} />
+            </button>
           </div>
 
           <div className="filter-section">
@@ -7127,9 +7865,16 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               <input
                 type="checkbox"
                 checked={trafficFilters.safetyEventsOnly}
-                onChange={() => updateTrafficFilters(prev => ({ ...prev, safetyEventsOnly: !prev.safetyEventsOnly }))}
+                onChange={() =>
+                  updateTrafficFilters((prev) => ({
+                    ...prev,
+                    safetyEventsOnly: !prev.safetyEventsOnly,
+                  }))
+                }
               />
-              <span className="toggle-label"><AlertTriangle size={12} /> Safety Events Only</span>
+              <span className="toggle-label">
+                <AlertTriangle size={12} /> Safety Events Only
+              </span>
             </label>
           </div>
 
@@ -7141,17 +7886,25 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               <input
                 type="checkbox"
                 checked={trafficFilters.showMilitary}
-                onChange={() => updateTrafficFilters(prev => ({ ...prev, showMilitary: !prev.showMilitary }))}
+                onChange={() =>
+                  updateTrafficFilters((prev) => ({ ...prev, showMilitary: !prev.showMilitary }))
+                }
               />
-              <span className="toggle-label"><Shield size={12} /> Military</span>
+              <span className="toggle-label">
+                <Shield size={12} /> Military
+              </span>
             </label>
             <label className="overlay-toggle">
               <input
                 type="checkbox"
                 checked={trafficFilters.showCivil}
-                onChange={() => updateTrafficFilters(prev => ({ ...prev, showCivil: !prev.showCivil }))}
+                onChange={() =>
+                  updateTrafficFilters((prev) => ({ ...prev, showCivil: !prev.showCivil }))
+                }
               />
-              <span className="toggle-label"><Plane size={12} /> Civil</span>
+              <span className="toggle-label">
+                <Plane size={12} /> Civil
+              </span>
             </label>
           </div>
 
@@ -7161,7 +7914,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               <input
                 type="checkbox"
                 checked={trafficFilters.showGA}
-                onChange={() => updateTrafficFilters(prev => ({ ...prev, showGA: !prev.showGA }))}
+                onChange={() => updateTrafficFilters((prev) => ({ ...prev, showGA: !prev.showGA }))}
               />
               <span className="toggle-label">GA / Light</span>
             </label>
@@ -7169,77 +7922,97 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               <input
                 type="checkbox"
                 checked={trafficFilters.showAirliners}
-                onChange={() => updateTrafficFilters(prev => ({ ...prev, showAirliners: !prev.showAirliners }))}
+                onChange={() =>
+                  updateTrafficFilters((prev) => ({ ...prev, showAirliners: !prev.showAirliners }))
+                }
               />
               <span className="toggle-label">Airliners / Heavy</span>
             </label>
           </div>
-          
+
           <div className="filter-section">
             <div className="filter-section-title">Status</div>
             <label className="overlay-toggle">
-              <input 
-                type="checkbox" 
-                checked={trafficFilters.showAirborne} 
-                onChange={() => updateTrafficFilters(prev => ({ ...prev, showAirborne: !prev.showAirborne }))}
+              <input
+                type="checkbox"
+                checked={trafficFilters.showAirborne}
+                onChange={() =>
+                  updateTrafficFilters((prev) => ({ ...prev, showAirborne: !prev.showAirborne }))
+                }
               />
               <span className="toggle-label">Airborne</span>
             </label>
             <label className="overlay-toggle">
-              <input 
-                type="checkbox" 
-                checked={trafficFilters.showGround} 
-                onChange={() => updateTrafficFilters(prev => ({ ...prev, showGround: !prev.showGround }))}
+              <input
+                type="checkbox"
+                checked={trafficFilters.showGround}
+                onChange={() =>
+                  updateTrafficFilters((prev) => ({ ...prev, showGround: !prev.showGround }))
+                }
               />
               <span className="toggle-label">On Ground</span>
             </label>
           </div>
-          
+
           <div className="filter-section">
             <div className="filter-section-title">Transponder</div>
             <label className="overlay-toggle">
-              <input 
-                type="checkbox" 
-                checked={trafficFilters.showWithSquawk} 
-                onChange={() => updateTrafficFilters(prev => ({ ...prev, showWithSquawk: !prev.showWithSquawk }))}
+              <input
+                type="checkbox"
+                checked={trafficFilters.showWithSquawk}
+                onChange={() =>
+                  updateTrafficFilters((prev) => ({
+                    ...prev,
+                    showWithSquawk: !prev.showWithSquawk,
+                  }))
+                }
               />
               <span className="toggle-label">With Squawk</span>
             </label>
             <label className="overlay-toggle">
-              <input 
-                type="checkbox" 
-                checked={trafficFilters.showWithoutSquawk} 
-                onChange={() => updateTrafficFilters(prev => ({ ...prev, showWithoutSquawk: !prev.showWithoutSquawk }))}
+              <input
+                type="checkbox"
+                checked={trafficFilters.showWithoutSquawk}
+                onChange={() =>
+                  updateTrafficFilters((prev) => ({
+                    ...prev,
+                    showWithoutSquawk: !prev.showWithoutSquawk,
+                  }))
+                }
               />
               <span className="toggle-label">No Squawk (ADS-B)</span>
             </label>
           </div>
-          
+
           <div className="filter-section">
             <div className="filter-section-title">Altitude (ft)</div>
             <div className="filter-range-row">
-              <input 
-                type="number" 
+              <input
+                type="number"
                 className="filter-range-input"
                 value={trafficFilters.minAltitude}
-                onChange={(e) => updateTrafficFilters(prev => ({
-                  ...prev,
-                  minAltitude: Math.max(0, parseInt(e.target.value) || 0)
-                }))}
+                onChange={(e) =>
+                  updateTrafficFilters((prev) => ({
+                    ...prev,
+                    minAltitude: Math.max(0, parseInt(e.target.value) || 0),
+                  }))
+                }
                 min="0"
                 max="60000"
                 step="1000"
                 placeholder="Min"
               />
               <span className="filter-range-sep">to</span>
-              <input 
-                type="number" 
+              <input
+                type="number"
                 className="filter-range-input"
                 value={trafficFilters.maxAltitude}
-                onChange={(e) => updateTrafficFilters(prev => ({
-                  ...prev,
-                  maxAltitude: Math.min(60000, parseInt(e.target.value) || 60000)
-                }))}
+                onChange={(e) =>
+                  updateTrafficFilters((prev) => ({
+                    ...prev,
+                    maxAltitude: Math.min(60000, parseInt(e.target.value) || 60000),
+                  }))
+                }
                 min="0"
                 max="60000"
                 step="1000"
@@ -7247,23 +8020,25 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               />
             </div>
           </div>
-          
+
           <div className="overlay-divider" />
           <button
             className="filter-reset-btn"
-            onClick={() => updateTrafficFilters({
-              showMilitary: true,
-              showCivil: true,
-              showGround: false,
-              showAirborne: true,
-              minAltitude: 0,
-              maxAltitude: 60000,
-              showWithSquawk: true,
-              showWithoutSquawk: true,
-              safetyEventsOnly: false,
-              showGA: true,
-              showAirliners: true,
-            })}
+            onClick={() =>
+              updateTrafficFilters({
+                showMilitary: true,
+                showCivil: true,
+                showGround: false,
+                showAirborne: true,
+                minAltitude: 0,
+                maxAltitude: 60000,
+                showWithSquawk: true,
+                showWithoutSquawk: true,
+                safetyEventsOnly: false,
+                showGA: true,
+                showAirliners: true,
+              })
+            }
           >
             <RefreshCw size={14} />
             <span>Reset Filters</span>
@@ -7273,14 +8048,18 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
       {/* Symbol Legend Panel */}
       {showLegend && (config.mapMode === 'crt' || config.mapMode === 'pro') && (
-        <div 
+        <div
           className={`legend-panel ${config.mapMode === 'pro' ? 'pro-style' : ''} ${isLegendDragging ? 'dragging' : ''} ${legendCollapsed ? 'collapsed' : ''}`}
-          style={legendPosition.x !== null ? { 
-            left: legendPosition.x, 
-            top: legendPosition.y,
-            right: 'auto',
-            bottom: 'auto'
-          } : {}}
+          style={
+            legendPosition.x !== null
+              ? {
+                  left: legendPosition.x,
+                  top: legendPosition.y,
+                  right: 'auto',
+                  bottom: 'auto',
+                }
+              : {}
+          }
           onMouseDown={handleLegendMouseDown}
           onTouchStart={(e) => {
             if (e.target.closest('button')) return;
@@ -7291,20 +8070,25 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               x: touch.clientX,
               y: touch.clientY,
               startX: legendPosition.x ?? rect.left,
-              startY: legendPosition.y ?? rect.top
+              startY: legendPosition.y ?? rect.top,
             };
           }}
         >
           <div className="legend-header">
             <span>Symbol Legend</span>
             <div className="legend-header-buttons">
-              <button onClick={() => setLegendCollapsed(!legendCollapsed)} title={legendCollapsed ? 'Expand' : 'Collapse'}>
+              <button
+                onClick={() => setLegendCollapsed(!legendCollapsed)}
+                title={legendCollapsed ? 'Expand' : 'Collapse'}
+              >
                 {legendCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
               </button>
-              <button onClick={() => setShowLegend(false)} title="Close"><X size={14} /></button>
+              <button onClick={() => setShowLegend(false)} title="Close">
+                <X size={14} />
+              </button>
             </div>
           </div>
-          
+
           {!legendCollapsed && (
             <>
               <div className="legend-section">
@@ -7326,7 +8110,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   <span>LIFR - Low Instrument</span>
                 </div>
               </div>
-              
+
               <div className="legend-section">
                 <div className="legend-section-title">PIREP Types</div>
                 <div className="legend-item">
@@ -7354,7 +8138,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   <span>Urgent (UUA)</span>
                 </div>
               </div>
-              
+
               <div className="legend-section">
                 <div className="legend-section-title">Aircraft</div>
                 <div className="legend-item">
@@ -7374,7 +8158,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   <span>Traffic Conflict</span>
                 </div>
               </div>
-              
+
               <div className="legend-section">
                 <div className="legend-section-title">Navigation</div>
                 <div className="legend-item">
@@ -7393,7 +8177,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
       {/* Show Aircraft List Button (when hidden) */}
       {(config.mapMode === 'crt' || config.mapMode === 'pro') && !showAircraftList && (
-        <button 
+        <button
           className={`aircraft-list-show-btn ${config.mapMode === 'pro' ? 'pro-style' : ''}`}
           onClick={() => setShowAircraftList(true)}
         >
@@ -7405,32 +8189,38 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
       {/* Collapsible Aircraft List Panel */}
       {(config.mapMode === 'crt' || config.mapMode === 'pro') && showAircraftList && (
-        <div 
+        <div
           className={`radar-aircraft-list expanded ${config.mapMode === 'pro' ? 'pro-style' : ''} ${isListDragging ? 'dragging' : ''}`}
-          style={aircraftListPosition.x !== null ? { 
-            left: aircraftListPosition.x, 
-            top: aircraftListPosition.y,
-            right: 'auto',
-            bottom: 'auto'
-          } : {}}
+          style={
+            aircraftListPosition.x !== null
+              ? {
+                  left: aircraftListPosition.x,
+                  top: aircraftListPosition.y,
+                  right: 'auto',
+                  bottom: 'auto',
+                }
+              : {}
+          }
         >
-          <div 
+          <div
             className="aircraft-list-header"
             onMouseDown={handleListMouseDown}
             onTouchStart={(e) => {
               const touch = e.touches[0];
-              handleListMouseDown({ clientX: touch.clientX, clientY: touch.clientY, currentTarget: e.currentTarget.parentElement, preventDefault: () => {} });
+              handleListMouseDown({
+                clientX: touch.clientX,
+                clientY: touch.clientY,
+                currentTarget: e.currentTarget.parentElement,
+                preventDefault: () => {},
+              });
             }}
           >
-            <button 
-              className="aircraft-list-toggle"
-              onClick={() => setListExpanded(!listExpanded)}
-            >
+            <button className="aircraft-list-toggle" onClick={() => setListExpanded(!listExpanded)}>
               <Plane size={14} />
               <span>Aircraft ({inRangeCount})</span>
               {listExpanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
             </button>
-            <button 
+            <button
               className="aircraft-list-close"
               onClick={() => setShowAircraftList(false)}
               title="Hide aircraft list"
@@ -7438,27 +8228,29 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               <X size={14} />
             </button>
           </div>
-          
+
           {listExpanded && (
             <div className="aircraft-list-content">
               {(() => {
                 // Filter aircraft in range
-                const inRangeAircraft = sortedAircraft.filter(ac => {
+                const inRangeAircraft = sortedAircraft.filter((ac) => {
                   const dist = ac.distance_nm || 0;
                   return config.mapMode === 'pro' ? dist <= radarRange * 1.5 : dist <= radarRange;
                 });
-                
+
                 // Sort: emergencies first, then conflicts (from backend), then by distance
                 const prioritySorted = [...inRangeAircraft].sort((a, b) => {
                   const aEmergency = a.emergency || ['7500', '7600', '7700'].includes(a.squawk);
                   const bEmergency = b.emergency || ['7500', '7600', '7700'].includes(b.squawk);
-                  const aConflict = activeConflicts.some(e =>
-                    e.icao?.toUpperCase() === a.hex?.toUpperCase() ||
-                    e.icao_2?.toUpperCase() === a.hex?.toUpperCase()
+                  const aConflict = activeConflicts.some(
+                    (e) =>
+                      e.icao?.toUpperCase() === a.hex?.toUpperCase() ||
+                      e.icao_2?.toUpperCase() === a.hex?.toUpperCase()
                   );
-                  const bConflict = activeConflicts.some(e =>
-                    e.icao?.toUpperCase() === b.hex?.toUpperCase() ||
-                    e.icao_2?.toUpperCase() === b.hex?.toUpperCase()
+                  const bConflict = activeConflicts.some(
+                    (e) =>
+                      e.icao?.toUpperCase() === b.hex?.toUpperCase() ||
+                      e.icao_2?.toUpperCase() === b.hex?.toUpperCase()
                   );
 
                   // Emergency first
@@ -7470,46 +8262,68 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   // Then by distance
                   return (a.distance_nm || 999) - (b.distance_nm || 999);
                 });
-                
+
                 // Lazy load - show initial batch plus loaded items
                 const displayCount = Math.min(listDisplayCount, prioritySorted.length);
                 const displayAircraft = prioritySorted.slice(0, displayCount);
                 const hasMore = prioritySorted.length > displayCount;
-                
+
                 return (
                   <>
-                    {displayAircraft.map(ac => {
+                    {displayAircraft.map((ac) => {
                       const tailInfo = getTailInfo(ac.hex, ac.flight);
-                      const isEmergency = ac.emergency || ['7500', '7600', '7700'].includes(ac.squawk);
-                      const safetyEvent = activeConflicts.find(e =>
-                        e.icao?.toUpperCase() === ac.hex?.toUpperCase() ||
-                        e.icao_2?.toUpperCase() === ac.hex?.toUpperCase()
+                      const isEmergency =
+                        ac.emergency || ['7500', '7600', '7700'].includes(ac.squawk);
+                      const safetyEvent = activeConflicts.find(
+                        (e) =>
+                          e.icao?.toUpperCase() === ac.hex?.toUpperCase() ||
+                          e.icao_2?.toUpperCase() === ac.hex?.toUpperCase()
                       );
                       const isConflict = !!safetyEvent;
                       const conflictSeverity = safetyEvent?.severity || null;
-                      
+
                       return (
-                        <div 
+                        <div
                           key={ac.hex}
                           className={`aircraft-list-item ${selectedAircraft?.hex === ac.hex ? 'selected' : ''} ${isEmergency ? 'emergency flash-emergency' : ''} ${isConflict ? `conflict flash-conflict ${getSeverityClass(conflictSeverity)}` : ''} ${ac.military ? 'military' : ''}`}
                           onClick={() => selectAircraft(ac)}
-                          title={safetyEvent ? `${getEventTypeName(safetyEvent.event_type)}: ${safetyEvent.message}` : ''}
+                          title={
+                            safetyEvent
+                              ? `${getEventTypeName(safetyEvent.event_type)}: ${safetyEvent.message}`
+                              : ''
+                          }
                         >
                           <div className="aircraft-list-primary">
                             <span className="aircraft-flag">{tailInfo.flag}</span>
                             <span className="aircraft-callsign">{ac.flight?.trim() || ac.hex}</span>
-                            {tailInfo.tailNumber && <span className="aircraft-tail">({tailInfo.tailNumber})</span>}
+                            {tailInfo.tailNumber && (
+                              <span className="aircraft-tail">({tailInfo.tailNumber})</span>
+                            )}
                             {ac.military && <Shield size={10} className="mil-icon" />}
                             {isEmergency && <AlertTriangle size={10} className="emerg-icon" />}
-                            {isConflict && <Zap size={10} className={`conflict-icon ${getSeverityClass(conflictSeverity)}`} />}
+                            {isConflict && (
+                              <Zap
+                                size={10}
+                                className={`conflict-icon ${getSeverityClass(conflictSeverity)}`}
+                              />
+                            )}
                           </div>
                           <div className="aircraft-list-secondary">
-                            <span className="aircraft-alt">{ac.alt ? `${(ac.alt/1000).toFixed(1)}k` : '--'}</span>
-                            <span className="aircraft-speed">{ac.gs ? `${Math.round(ac.gs)}kt` : '--'}</span>
-                            <span className="aircraft-dist">{ac.distance_nm?.toFixed(1) || '--'}nm</span>
-                            <button 
+                            <span className="aircraft-alt">
+                              {ac.alt ? `${(ac.alt / 1000).toFixed(1)}k` : '--'}
+                            </span>
+                            <span className="aircraft-speed">
+                              {ac.gs ? `${Math.round(ac.gs)}kt` : '--'}
+                            </span>
+                            <span className="aircraft-dist">
+                              {ac.distance_nm?.toFixed(1) || '--'}nm
+                            </span>
+                            <button
                               className="aircraft-detail-link"
-                              onClick={(e) => { e.stopPropagation(); openAircraftDetail(ac.hex); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openAircraftDetail(ac.hex);
+                              }}
                               title="View full details"
                             >
                               <ExternalLink size={10} />
@@ -7519,11 +8333,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                       );
                     })}
                     {hasMore && (
-                      <button 
+                      <button
                         className="aircraft-list-load-more"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setListDisplayCount(prev => prev + 20);
+                          setListDisplayCount((prev) => prev + 20);
                         }}
                       >
                         Load more ({prioritySorted.length - displayCount} remaining)
@@ -7543,10 +8357,22 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       {/* Legend (hidden in CRT/Pro mode) */}
       {config.mapMode !== 'crt' && config.mapMode !== 'pro' && (
         <div className="map-legend">
-          <div className="legend-item"><span className="dot civilian" /> Civilian ({sortedAircraft.filter(a => !a.military && !a.emergency).length})</div>
-          <div className="legend-item"><span className="dot military" /> Military ({sortedAircraft.filter(a => a.military).length})</div>
-          <div className="legend-item"><span className="dot emergency" /> Emergency ({sortedAircraft.filter(a => a.emergency).length})</div>
-          <div className="legend-item" style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', marginTop: '4px' }}>
+          <div className="legend-item">
+            <span className="dot civilian" /> Civilian (
+            {sortedAircraft.filter((a) => !a.military && !a.emergency).length})
+          </div>
+          <div className="legend-item">
+            <span className="dot military" /> Military (
+            {sortedAircraft.filter((a) => a.military).length})
+          </div>
+          <div className="legend-item">
+            <span className="dot emergency" /> Emergency (
+            {sortedAircraft.filter((a) => a.emergency).length})
+          </div>
+          <div
+            className="legend-item"
+            style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', marginTop: '4px' }}
+          >
             <span style={{ color: 'var(--text-dim)', fontSize: '11px' }}>
               {sortedAircraft.length} with position / {aircraft.length} total
             </span>
@@ -7555,625 +8381,721 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       )}
 
       {/* Selected Aircraft Popup */}
-      {liveAircraft && (() => {
-        const isEmergency = liveAircraft.emergency || ['7500', '7600', '7700'].includes(liveAircraft.squawk);
-        const squawkMeanings = { '7500': 'HIJACK', '7600': 'RADIO', '7700': 'EMERG' };
-        const squawkLabel = squawkMeanings[liveAircraft.squawk];
+      {liveAircraft &&
+        (() => {
+          const isEmergency =
+            liveAircraft.emergency || ['7500', '7600', '7700'].includes(liveAircraft.squawk);
+          const squawkMeanings = { 7500: 'HIJACK', 7600: 'RADIO', 7700: 'EMERG' };
+          const squawkLabel = squawkMeanings[liveAircraft.squawk];
 
-        // Check if this aircraft has a safety event
-        const safetyEvent = activeConflicts.find(e =>
-          e.icao?.toUpperCase() === liveAircraft.hex?.toUpperCase() ||
-          e.icao_2?.toUpperCase() === liveAircraft.hex?.toUpperCase()
-        );
+          // Check if this aircraft has a safety event
+          const safetyEvent = activeConflicts.find(
+            (e) =>
+              e.icao?.toUpperCase() === liveAircraft.hex?.toUpperCase() ||
+              e.icao_2?.toUpperCase() === liveAircraft.hex?.toUpperCase()
+          );
 
-        const isConflict = !!safetyEvent;
-        const conflictSeverity = safetyEvent?.severity || null;
-        const conflictTitle = safetyEvent ? getEventTypeName(safetyEvent.event_type) : null;
+          const isConflict = !!safetyEvent;
+          const conflictSeverity = safetyEvent?.severity || null;
+          const conflictTitle = safetyEvent ? getEventTypeName(safetyEvent.event_type) : null;
 
-        // Get the other aircraft in a two-aircraft conflict from safety event
-        const otherAircraftHex = safetyEvent?.icao_2
-          ? (safetyEvent.icao?.toUpperCase() === liveAircraft.hex?.toUpperCase()
+          // Get the other aircraft in a two-aircraft conflict from safety event
+          const otherAircraftHex = safetyEvent?.icao_2
+            ? safetyEvent.icao?.toUpperCase() === liveAircraft.hex?.toUpperCase()
               ? safetyEvent.icao_2
-              : safetyEvent.icao)
-          : null;
-        const otherAircraft = otherAircraftHex
-          ? aircraft.find(ac => ac.hex?.toUpperCase() === otherAircraftHex?.toUpperCase())
-          : null;
+              : safetyEvent.icao
+            : null;
+          const otherAircraft = otherAircraftHex
+            ? aircraft.find((ac) => ac.hex?.toUpperCase() === otherAircraftHex?.toUpperCase())
+            : null;
 
-        // Build conflictInfo for display
-        const conflictInfo = safetyEvent?.icao_2 ? {
-          hex1: safetyEvent.icao,
-          hex2: safetyEvent.icao_2,
-          horizontalNm: safetyEvent.horizontalNm || safetyEvent.details?.horizontal_nm?.toFixed(1) || '--',
-          verticalFt: safetyEvent.verticalFt || safetyEvent.details?.altitude_diff_ft || '--'
-        } : null;
-        
-        // Vertical rate arrows - chevron style like ATC displays
-        const vr = liveAircraft.vr || 0;
-        const absVr = Math.abs(vr);
-        const vrArrows = absVr > 2000 ? 3 : absVr > 1000 ? 2 : absVr > 300 ? 1 : 0;
-        // Use chevron characters that look like the image
-        const vrChevron = vr > 0 ? '▲' : vr < 0 ? '▼' : '';
-        
-        // Other aircraft vertical rate
-        const otherVr = otherAircraft?.vr || 0;
-        const otherAbsVr = Math.abs(otherVr);
-        const otherVrArrows = otherAbsVr > 2000 ? 3 : otherAbsVr > 1000 ? 2 : otherAbsVr > 300 ? 1 : 0;
-        const otherVrChevron = otherVr > 0 ? '▲' : otherVr < 0 ? '▼' : '';
-        
-        return (
-        <div 
-          className={`aircraft-popup-container ${isConflict ? 'with-conflict' : ''}`}
-          style={{ left: popupPosition.x, top: popupPosition.y }}
-        >
-          {/* Main Aircraft Panel */}
-          <div 
-            className={`aircraft-popup ${config.mapMode === 'crt' ? 'crt-popup' : ''} ${config.mapMode === 'pro' ? 'pro-popup' : ''} ${isEmergency ? 'emergency-popup' : ''} ${isConflict ? `conflict-popup ${getSeverityClass(conflictSeverity)}` : ''} ${isDragging ? 'dragging' : ''}`}
-            onMouseDown={handlePopupMouseDown}
-          >
-            <button className="popup-close" onClick={() => selectAircraft(null)}>
-              <X size={16} />
-            </button>
-            <div className={`popup-header ${isEmergency ? 'emergency-header' : ''} ${isConflict ? `conflict-header ${getSeverityClass(conflictSeverity)}` : ''}`}>
-              <Plane size={20} />
-              <span className="popup-callsign">{liveAircraft.flight || liveAircraft.hex}</span>
-              {isConflict && <span className={`popup-conflict-tag ${getSeverityClass(conflictSeverity)}`}>⚠️ {conflictTitle}</span>}
-              {isEmergency && squawkLabel && <span className="popup-squawk-tag">{squawkLabel}</span>}
-              {liveAircraft.military && <Shield size={14} className="military-badge" />}
-            </div>
-          
-            <div className="popup-details">
-              <div className="detail-row"><span>ICAO</span><span>{liveAircraft.hex}</span></div>
-              {(() => {
-                const tailInfo = getTailInfo(liveAircraft.hex, liveAircraft.flight);
-                return (
-                  <>
-                    <div className="detail-row">
-                      <span>Tail #</span>
-                      <span className={tailInfo.tailNumber ? 'tail-number' : 'tail-unknown'}>
-                        {tailInfo.tailNumber || '--'}
+          // Build conflictInfo for display
+          const conflictInfo = safetyEvent?.icao_2
+            ? {
+                hex1: safetyEvent.icao,
+                hex2: safetyEvent.icao_2,
+                horizontalNm:
+                  safetyEvent.horizontalNm ||
+                  safetyEvent.details?.horizontal_nm?.toFixed(1) ||
+                  '--',
+                verticalFt: safetyEvent.verticalFt || safetyEvent.details?.altitude_diff_ft || '--',
+              }
+            : null;
+
+          // Vertical rate arrows - chevron style like ATC displays
+          const vr = liveAircraft.vr || 0;
+          const absVr = Math.abs(vr);
+          const vrArrows = absVr > 2000 ? 3 : absVr > 1000 ? 2 : absVr > 300 ? 1 : 0;
+          // Use chevron characters that look like the image
+          const vrChevron = vr > 0 ? '▲' : vr < 0 ? '▼' : '';
+
+          // Other aircraft vertical rate
+          const otherVr = otherAircraft?.vr || 0;
+          const otherAbsVr = Math.abs(otherVr);
+          const otherVrArrows =
+            otherAbsVr > 2000 ? 3 : otherAbsVr > 1000 ? 2 : otherAbsVr > 300 ? 1 : 0;
+          const otherVrChevron = otherVr > 0 ? '▲' : otherVr < 0 ? '▼' : '';
+
+          return (
+            <div
+              className={`aircraft-popup-container ${isConflict ? 'with-conflict' : ''}`}
+              style={{ left: popupPosition.x, top: popupPosition.y }}
+            >
+              {/* Main Aircraft Panel */}
+              <div
+                className={`aircraft-popup ${config.mapMode === 'crt' ? 'crt-popup' : ''} ${config.mapMode === 'pro' ? 'pro-popup' : ''} ${isEmergency ? 'emergency-popup' : ''} ${isConflict ? `conflict-popup ${getSeverityClass(conflictSeverity)}` : ''} ${isDragging ? 'dragging' : ''}`}
+                onMouseDown={handlePopupMouseDown}
+              >
+                <button className="popup-close" onClick={() => selectAircraft(null)}>
+                  <X size={16} />
+                </button>
+                <div
+                  className={`popup-header ${isEmergency ? 'emergency-header' : ''} ${isConflict ? `conflict-header ${getSeverityClass(conflictSeverity)}` : ''}`}
+                >
+                  <Plane size={20} />
+                  <span className="popup-callsign">{liveAircraft.flight || liveAircraft.hex}</span>
+                  {isConflict && (
+                    <span className={`popup-conflict-tag ${getSeverityClass(conflictSeverity)}`}>
+                      ⚠️ {conflictTitle}
+                    </span>
+                  )}
+                  {isEmergency && squawkLabel && (
+                    <span className="popup-squawk-tag">{squawkLabel}</span>
+                  )}
+                  {liveAircraft.military && <Shield size={14} className="military-badge" />}
+                </div>
+
+                <div className="popup-details">
+                  <div className="detail-row">
+                    <span>ICAO</span>
+                    <span>{liveAircraft.hex}</span>
+                  </div>
+                  {(() => {
+                    const tailInfo = getTailInfo(liveAircraft.hex, liveAircraft.flight);
+                    return (
+                      <>
+                        <div className="detail-row">
+                          <span>Tail #</span>
+                          <span className={tailInfo.tailNumber ? 'tail-number' : 'tail-unknown'}>
+                            {tailInfo.tailNumber || '--'}
+                          </span>
+                        </div>
+                        <div className="detail-row">
+                          <span>Country</span>
+                          <span>{tailInfo.country || '--'}</span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                  <div className="detail-row">
+                    <span>Type</span>
+                    <span>{liveAircraft.type || '--'}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span>Altitude</span>
+                    <span>{liveAircraft.alt?.toLocaleString() || '--'} ft</span>
+                  </div>
+                  <div className="detail-row">
+                    <span>Speed</span>
+                    <span>{liveAircraft.gs?.toFixed(0) || '--'} kts</span>
+                  </div>
+                  <div className="detail-row">
+                    <span>Distance</span>
+                    <span>{liveAircraft.distance_nm?.toFixed(1) || '--'} nm</span>
+                  </div>
+                  <div className="detail-row">
+                    <span>Track</span>
+                    <span>{liveAircraft.track?.toFixed(0) || '--'}°</span>
+                  </div>
+                  <div className="detail-row">
+                    <span>V/S</span>
+                    <span
+                      className={`vs-value ${vr > 0 ? 'climbing' : vr < 0 ? 'descending' : ''}`}
+                    >
+                      {vrArrows > 0 && (
+                        <span className={`vs-chevrons chevrons-${vrArrows}`}>
+                          {Array(vrArrows)
+                            .fill(vrChevron)
+                            .map((c, i) => (
+                              <span key={i} className="vs-chevron">
+                                {c}
+                              </span>
+                            ))}
+                        </span>
+                      )}
+                      {liveAircraft.vr || '--'} fpm
+                    </span>
+                  </div>
+                  <div className="detail-row">
+                    <span>Squawk</span>
+                    <span
+                      className={liveAircraft.squawk?.match(/^7[567]00$/) ? 'emergency-squawk' : ''}
+                    >
+                      {liveAircraft.squawk || '--'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* External Lookup Links */}
+                <div className="popup-links">
+                  <span className="links-label">Lookup:</span>
+                  <div className="links-row">
+                    {liveAircraft.flight && (
+                      <a
+                        href={`https://flightaware.com/live/flight/${liveAircraft.flight.trim()}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="lookup-link"
+                        title="FlightAware"
+                      >
+                        <ExternalLink size={12} /> FA
+                      </a>
+                    )}
+                    <a
+                      href={`https://globe.adsbexchange.com/?icao=${liveAircraft.hex}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="lookup-link"
+                      title="ADS-B Exchange"
+                    >
+                      <ExternalLink size={12} /> ADSBx
+                    </a>
+                    <a
+                      href={`https://www.planespotters.net/hex/${liveAircraft.hex.toUpperCase()}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="lookup-link"
+                      title="Planespotters"
+                    >
+                      <ExternalLink size={12} /> PS
+                    </a>
+                    <a
+                      href={`https://www.jetphotos.com/registration/${liveAircraft.hex.toUpperCase()}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="lookup-link"
+                      title="JetPhotos"
+                    >
+                      <ExternalLink size={12} /> JP
+                    </a>
+                    <a
+                      href={`https://opensky-network.org/aircraft-profile?icao24=${liveAircraft.hex.toLowerCase()}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="lookup-link"
+                      title="OpenSky Network"
+                    >
+                      <ExternalLink size={12} /> OSN
+                    </a>
+                    {liveAircraft.flight && (
+                      <a
+                        href={`https://www.flightradar24.com/${liveAircraft.flight.trim()}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="lookup-link"
+                        title="Flightradar24"
+                      >
+                        <ExternalLink size={12} /> FR24
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="popup-action-buttons">
+                  <button
+                    className={`popup-action-btn ${followingAircraft === liveAircraft.hex ? 'active' : ''}`}
+                    onClick={() => {
+                      if (!liveAircraft.lat || !liveAircraft.lon) return;
+
+                      if (config.mapMode === 'map' && leafletMapRef.current) {
+                        // Leaflet map mode - fly to location
+                        leafletMapRef.current.flyTo([liveAircraft.lat, liveAircraft.lon], 14, {
+                          duration: 1.5,
+                          easeLinearity: 0.25,
+                        });
+                      } else if (config.mapMode === 'pro') {
+                        // Pro mode - toggle following this aircraft
+                        if (followingAircraft === liveAircraft.hex) {
+                          setFollowingAircraft(null);
+                        } else {
+                          setFollowingAircraft(liveAircraft.hex);
+                        }
+                      }
+                      // CRT/Radar modes are always centered on feeder, no jump needed
+                    }}
+                  >
+                    <Crosshair size={14} />
+                    {followingAircraft === liveAircraft.hex ? 'Following' : 'Follow Aircraft'}
+                  </button>
+                  <button
+                    className="popup-action-btn"
+                    onClick={() => openAircraftDetail(liveAircraft.hex)}
+                  >
+                    <ExternalLink size={14} />
+                    Full Details
+                  </button>
+                </div>
+
+                {/* Create Alert Button */}
+                <button
+                  className="popup-create-alert"
+                  onClick={() => {
+                    // Store selected aircraft for alert creation
+                    window.dispatchEvent(
+                      new CustomEvent('createAlertFromAircraft', {
+                        detail: liveAircraft,
+                      })
+                    );
+                    selectAircraft(null);
+                  }}
+                >
+                  <Bell size={14} />
+                  Create Alert for this Aircraft
+                </button>
+              </div>
+
+              {/* Conflict Side Panel - Shows other aircraft */}
+              {isConflict && otherAircraft && (
+                <div
+                  className={`conflict-side-panel ${config.mapMode === 'pro' ? 'pro-style' : ''} ${getSeverityClass(conflictSeverity)}`}
+                >
+                  <div
+                    className={`conflict-separation-header ${getSeverityClass(conflictSeverity)}`}
+                  >
+                    <AlertTriangle size={16} />
+                    <span>{conflictTitle}</span>
+                  </div>
+                  <div className="conflict-separation-info">
+                    <div className="separation-value">
+                      {conflictInfo?.horizontalNm || '--'}
+                      <span>nm</span>
+                    </div>
+                    <div className="separation-value">
+                      {conflictInfo?.verticalFt || '--'}
+                      <span>ft</span>
+                    </div>
+                  </div>
+                  {safetyEvent && (
+                    <div
+                      className="conflict-message-row clickable"
+                      onClick={() => onViewHistoryEvent?.(safetyEvent.id)}
+                      title="View in History"
+                    >
+                      <span className="conflict-event-message">{safetyEvent.message}</span>
+                    </div>
+                  )}
+                  <div className="conflict-other-header">
+                    <Plane size={16} />
+                    <span>{otherAircraft.flight?.trim() || otherAircraft.hex}</span>
+                  </div>
+                  <div className="conflict-other-details">
+                    <div className="conflict-detail">
+                      <span>Alt</span>
+                      <span>{otherAircraft.alt?.toLocaleString() || '--'} ft</span>
+                    </div>
+                    <div className="conflict-detail">
+                      <span>Spd</span>
+                      <span>{otherAircraft.gs?.toFixed(0) || '--'} kts</span>
+                    </div>
+                    <div className="conflict-detail">
+                      <span>V/S</span>
+                      <span
+                        className={`vs-value ${otherVr > 0 ? 'climbing' : otherVr < 0 ? 'descending' : ''}`}
+                      >
+                        {otherVrArrows > 0 && (
+                          <span className={`vs-chevrons chevrons-${otherVrArrows}`}>
+                            {Array(otherVrArrows).fill(otherVrChevron).join('')}
+                          </span>
+                        )}{' '}
+                        {otherAircraft.vr || '--'}
                       </span>
                     </div>
-                    <div className="detail-row">
-                      <span>Country</span>
-                      <span>{tailInfo.country || '--'}</span>
+                    <div className="conflict-detail">
+                      <span>Trk</span>
+                      <span>{otherAircraft.track?.toFixed(0) || '--'}°</span>
                     </div>
-                  </>
-                );
-              })()}
-            <div className="detail-row"><span>Type</span><span>{liveAircraft.type || '--'}</span></div>
-            <div className="detail-row"><span>Altitude</span><span>{liveAircraft.alt?.toLocaleString() || '--'} ft</span></div>
-            <div className="detail-row"><span>Speed</span><span>{liveAircraft.gs?.toFixed(0) || '--'} kts</span></div>
-            <div className="detail-row"><span>Distance</span><span>{liveAircraft.distance_nm?.toFixed(1) || '--'} nm</span></div>
-            <div className="detail-row"><span>Track</span><span>{liveAircraft.track?.toFixed(0) || '--'}°</span></div>
-            <div className="detail-row">
-              <span>V/S</span>
-              <span className={`vs-value ${vr > 0 ? 'climbing' : vr < 0 ? 'descending' : ''}`}>
-                {vrArrows > 0 && (
-                  <span className={`vs-chevrons chevrons-${vrArrows}`}>
-                    {Array(vrArrows).fill(vrChevron).map((c, i) => (
-                      <span key={i} className="vs-chevron">{c}</span>
-                    ))}
-                  </span>
-                )}
-                {liveAircraft.vr || '--'} fpm
-              </span>
-            </div>
-            <div className="detail-row">
-              <span>Squawk</span>
-              <span className={liveAircraft.squawk?.match(/^7[567]00$/) ? 'emergency-squawk' : ''}>
-                {liveAircraft.squawk || '--'}
-              </span>
-            </div>
-          </div>
-          
-          {/* External Lookup Links */}
-          <div className="popup-links">
-            <span className="links-label">Lookup:</span>
-            <div className="links-row">
-              {liveAircraft.flight && (
-                <a
-                  href={`https://flightaware.com/live/flight/${liveAircraft.flight.trim()}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="lookup-link"
-                  title="FlightAware"
-                >
-                  <ExternalLink size={12} /> FA
-                </a>
-              )}
-              <a
-                href={`https://globe.adsbexchange.com/?icao=${liveAircraft.hex}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="lookup-link"
-                title="ADS-B Exchange"
-              >
-                <ExternalLink size={12} /> ADSBx
-              </a>
-              <a
-                href={`https://www.planespotters.net/hex/${liveAircraft.hex.toUpperCase()}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="lookup-link"
-                title="Planespotters"
-              >
-                <ExternalLink size={12} /> PS
-              </a>
-              <a
-                href={`https://www.jetphotos.com/registration/${liveAircraft.hex.toUpperCase()}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="lookup-link"
-                title="JetPhotos"
-              >
-                <ExternalLink size={12} /> JP
-              </a>
-              <a
-                href={`https://opensky-network.org/aircraft-profile?icao24=${liveAircraft.hex.toLowerCase()}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="lookup-link"
-                title="OpenSky Network"
-              >
-                <ExternalLink size={12} /> OSN
-              </a>
-              {liveAircraft.flight && (
-                <a
-                  href={`https://www.flightradar24.com/${liveAircraft.flight.trim()}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="lookup-link"
-                  title="Flightradar24"
-                >
-                  <ExternalLink size={12} /> FR24
-                </a>
+                    <div className="conflict-detail">
+                      <span>Type</span>
+                      <span>{otherAircraft.type || '--'}</span>
+                    </div>
+                  </div>
+                  <button
+                    className={`conflict-select-btn ${getSeverityClass(conflictSeverity)}`}
+                    onClick={() => selectAircraft(otherAircraft)}
+                  >
+                    Select {otherAircraft.flight?.trim() || otherAircraft.hex}
+                  </button>
+                </div>
               )}
             </div>
-          </div>
-          
-          {/* Action Buttons */}
-          <div className="popup-action-buttons">
-            <button
-              className={`popup-action-btn ${followingAircraft === liveAircraft.hex ? 'active' : ''}`}
-              onClick={() => {
-                if (!liveAircraft.lat || !liveAircraft.lon) return;
-
-                if (config.mapMode === 'map' && leafletMapRef.current) {
-                  // Leaflet map mode - fly to location
-                  leafletMapRef.current.flyTo([liveAircraft.lat, liveAircraft.lon], 14, {
-                    duration: 1.5,
-                    easeLinearity: 0.25
-                  });
-                } else if (config.mapMode === 'pro') {
-                  // Pro mode - toggle following this aircraft
-                  if (followingAircraft === liveAircraft.hex) {
-                    setFollowingAircraft(null);
-                  } else {
-                    setFollowingAircraft(liveAircraft.hex);
-                  }
-                }
-                // CRT/Radar modes are always centered on feeder, no jump needed
-              }}
-            >
-              <Crosshair size={14} />
-              {followingAircraft === liveAircraft.hex ? 'Following' : 'Follow Aircraft'}
-            </button>
-            <button
-              className="popup-action-btn"
-              onClick={() => openAircraftDetail(liveAircraft.hex)}
-            >
-              <ExternalLink size={14} />
-              Full Details
-            </button>
-          </div>
-
-          {/* Create Alert Button */}
-          <button
-            className="popup-create-alert"
-            onClick={() => {
-              // Store selected aircraft for alert creation
-              window.dispatchEvent(new CustomEvent('createAlertFromAircraft', {
-                detail: liveAircraft
-              }));
-              selectAircraft(null);
-            }}
-          >
-            <Bell size={14} />
-            Create Alert for this Aircraft
-          </button>
-        </div>
-        
-        {/* Conflict Side Panel - Shows other aircraft */}
-        {isConflict && otherAircraft && (
-          <div className={`conflict-side-panel ${config.mapMode === 'pro' ? 'pro-style' : ''} ${getSeverityClass(conflictSeverity)}`}>
-            <div className={`conflict-separation-header ${getSeverityClass(conflictSeverity)}`}>
-              <AlertTriangle size={16} />
-              <span>{conflictTitle}</span>
-            </div>
-            <div className="conflict-separation-info">
-              <div className="separation-value">{conflictInfo?.horizontalNm || '--'}<span>nm</span></div>
-              <div className="separation-value">{conflictInfo?.verticalFt || '--'}<span>ft</span></div>
-            </div>
-            {safetyEvent && (
-              <div
-                className="conflict-message-row clickable"
-                onClick={() => onViewHistoryEvent?.(safetyEvent.id)}
-                title="View in History"
-              >
-                <span className="conflict-event-message">{safetyEvent.message}</span>
-              </div>
-            )}
-            <div className="conflict-other-header">
-              <Plane size={16} />
-              <span>{otherAircraft.flight?.trim() || otherAircraft.hex}</span>
-            </div>
-            <div className="conflict-other-details">
-              <div className="conflict-detail">
-                <span>Alt</span>
-                <span>{otherAircraft.alt?.toLocaleString() || '--'} ft</span>
-              </div>
-              <div className="conflict-detail">
-                <span>Spd</span>
-                <span>{otherAircraft.gs?.toFixed(0) || '--'} kts</span>
-              </div>
-              <div className="conflict-detail">
-                <span>V/S</span>
-                <span className={`vs-value ${otherVr > 0 ? 'climbing' : otherVr < 0 ? 'descending' : ''}`}>
-                  {otherVrArrows > 0 && (
-                    <span className={`vs-chevrons chevrons-${otherVrArrows}`}>
-                      {Array(otherVrArrows).fill(otherVrChevron).join('')}
-                    </span>
-                  )}
-                  {' '}{otherAircraft.vr || '--'}
-                </span>
-              </div>
-              <div className="conflict-detail">
-                <span>Trk</span>
-                <span>{otherAircraft.track?.toFixed(0) || '--'}°</span>
-              </div>
-              <div className="conflict-detail">
-                <span>Type</span>
-                <span>{otherAircraft.type || '--'}</span>
-              </div>
-            </div>
-            <button 
-              className={`conflict-select-btn ${getSeverityClass(conflictSeverity)}`}
-              onClick={() => selectAircraft(otherAircraft)}
-            >
-              Select {otherAircraft.flight?.trim() || otherAircraft.hex}
-            </button>
-          </div>
-        )}
-        </div>
-        );
-      })()}
+          );
+        })()}
 
       {/* METAR Popup */}
-      {selectedMetar && (() => {
-        const decoded = decodeMetar(selectedMetar);
-        return (
-        <div 
-          className={`weather-popup ${config.mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''}`}
-          style={{ left: popupPosition.x, top: popupPosition.y }}
-          onMouseDown={handlePopupMouseDown}
-        >
-          <button className="popup-close" onClick={() => setSelectedMetar(null)}>
-            <X size={16} />
-          </button>
-          <div className="popup-header">
-            <MapPin size={20} />
-            <span className="popup-callsign">{selectedMetar.stationId || selectedMetar.icaoId || 'METAR'}</span>
-            <span className={`flt-cat-badge ${(selectedMetar.fltCat || 'VFR').toLowerCase()}`}>
-              {selectedMetar.fltCat || 'VFR'}
-            </span>
-          </div>
-          <div className="popup-details">
-            {selectedMetar.name && (
-              <div className="detail-row"><span>Name</span><span>{selectedMetar.name}</span></div>
-            )}
-            
-            {/* Flight Category with explanation */}
-            <div className="detail-row decoded-section">
-              <span>Conditions</span>
-              <div className="decoded-value">
-                <strong>{decoded?.flightCategory || 'VFR'}</strong>
-                <span className="decoded-desc">{decoded?.flightCategoryDesc}</span>
+      {selectedMetar &&
+        (() => {
+          const decoded = decodeMetar(selectedMetar);
+          return (
+            <div
+              className={`weather-popup ${config.mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''}`}
+              style={{ left: popupPosition.x, top: popupPosition.y }}
+              onMouseDown={handlePopupMouseDown}
+            >
+              <button className="popup-close" onClick={() => setSelectedMetar(null)}>
+                <X size={16} />
+              </button>
+              <div className="popup-header">
+                <MapPin size={20} />
+                <span className="popup-callsign">
+                  {selectedMetar.stationId || selectedMetar.icaoId || 'METAR'}
+                </span>
+                <span className={`flt-cat-badge ${(selectedMetar.fltCat || 'VFR').toLowerCase()}`}>
+                  {selectedMetar.fltCat || 'VFR'}
+                </span>
               </div>
-            </div>
-            
-            {/* Temperature with description */}
-            {decoded?.temperature && (
-              <div className="detail-row decoded-section">
-                <span>Temperature</span>
-                <div className="decoded-value">
-                  <strong>{decoded.temperature.celsius}°C / {decoded.temperature.fahrenheit}°F</strong>
-                  <span className="decoded-desc">{decoded.temperature.description}</span>
+              <div className="popup-details">
+                {selectedMetar.name && (
+                  <div className="detail-row">
+                    <span>Name</span>
+                    <span>{selectedMetar.name}</span>
+                  </div>
+                )}
+
+                {/* Flight Category with explanation */}
+                <div className="detail-row decoded-section">
+                  <span>Conditions</span>
+                  <div className="decoded-value">
+                    <strong>{decoded?.flightCategory || 'VFR'}</strong>
+                    <span className="decoded-desc">{decoded?.flightCategoryDesc}</span>
+                  </div>
                 </div>
-              </div>
-            )}
-            
-            {/* Dewpoint with fog risk */}
-            {decoded?.dewpoint && (
-              <div className="detail-row decoded-section">
-                <span>Dewpoint</span>
-                <div className="decoded-value">
-                  <strong>{decoded.dewpoint.celsius}°C</strong>
-                  {decoded.dewpoint.spread !== undefined && (
-                    <span className="decoded-desc">
-                      Spread: {decoded.dewpoint.spread}°C • {decoded.dewpoint.fogRisk}
+
+                {/* Temperature with description */}
+                {decoded?.temperature && (
+                  <div className="detail-row decoded-section">
+                    <span>Temperature</span>
+                    <div className="decoded-value">
+                      <strong>
+                        {decoded.temperature.celsius}°C / {decoded.temperature.fahrenheit}°F
+                      </strong>
+                      <span className="decoded-desc">{decoded.temperature.description}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Dewpoint with fog risk */}
+                {decoded?.dewpoint && (
+                  <div className="detail-row decoded-section">
+                    <span>Dewpoint</span>
+                    <div className="decoded-value">
+                      <strong>{decoded.dewpoint.celsius}°C</strong>
+                      {decoded.dewpoint.spread !== undefined && (
+                        <span className="decoded-desc">
+                          Spread: {decoded.dewpoint.spread}°C • {decoded.dewpoint.fogRisk}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Wind with description */}
+                {decoded?.wind && (
+                  <div className="detail-row decoded-section">
+                    <span className="section-icon">
+                      <Navigation size={14} /> Wind
                     </span>
-                  )}
-                </div>
-              </div>
-            )}
-            
-            {/* Wind with description */}
-            {decoded?.wind && (
-              <div className="detail-row decoded-section">
-                <span className="section-icon"><Navigation size={14} /> Wind</span>
-                <div className="decoded-value">
-                  <strong>{windDirToCardinal(decoded.wind.direction)} {decoded.wind.text}</strong>
-                  <span className="decoded-desc">{decoded.wind.description}</span>
-                </div>
-              </div>
-            )}
-            
-            {/* Visibility with description */}
-            {decoded?.visibility && (
-              <div className="detail-row decoded-section">
-                <span>Visibility</span>
-                <div className="decoded-value">
-                  <strong>{decoded.visibility.value} {decoded.visibility.unit}</strong>
-                  <span className="decoded-desc">{decoded.visibility.description}</span>
-                </div>
-              </div>
-            )}
-            
-            {/* Altimeter with description */}
-            {decoded?.altimeter && (
-              <div className="detail-row decoded-section">
-                <span>Altimeter</span>
-                <div className="decoded-value">
-                  <strong>{decoded.altimeter.inhg}" Hg</strong>
-                  <span className="decoded-desc">{decoded.altimeter.description}</span>
-                </div>
-              </div>
-            )}
-            
-            {/* Clouds with decoded descriptions */}
-            {decoded?.clouds && decoded.clouds.length > 0 && (
-              <div className="detail-row decoded-section">
-                <span>Clouds</span>
-                <div className="decoded-value cloud-layers">
-                  {decoded.clouds.map((c, i) => (
-                    <div key={i} className="cloud-layer">
-                      <strong>{c.cover} @ {c.baseDesc}</strong>
-                      <span className="decoded-desc">{c.coverDesc}</span>
+                    <div className="decoded-value">
+                      <strong>
+                        {windDirToCardinal(decoded.wind.direction)} {decoded.wind.text}
+                      </strong>
+                      <span className="decoded-desc">{decoded.wind.description}</span>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {/* Weather phenomena */}
-            {decoded?.weather && decoded.weather.length > 0 && (
-              <div className="detail-row decoded-section wx-section">
-                <span>Weather</span>
-                <div className="decoded-value">
-                  {decoded.weather.map((w, i) => (
-                    <div key={i} className="wx-item">
-                      <strong>{w.code}</strong>
-                      <span className="decoded-desc">{w.description}</span>
+                  </div>
+                )}
+
+                {/* Visibility with description */}
+                {decoded?.visibility && (
+                  <div className="detail-row decoded-section">
+                    <span>Visibility</span>
+                    <div className="decoded-value">
+                      <strong>
+                        {decoded.visibility.value} {decoded.visibility.unit}
+                      </strong>
+                      <span className="decoded-desc">{decoded.visibility.description}</span>
                     </div>
-                  ))}
+                  </div>
+                )}
+
+                {/* Altimeter with description */}
+                {decoded?.altimeter && (
+                  <div className="detail-row decoded-section">
+                    <span>Altimeter</span>
+                    <div className="decoded-value">
+                      <strong>{decoded.altimeter.inhg}" Hg</strong>
+                      <span className="decoded-desc">{decoded.altimeter.description}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Clouds with decoded descriptions */}
+                {decoded?.clouds && decoded.clouds.length > 0 && (
+                  <div className="detail-row decoded-section">
+                    <span>Clouds</span>
+                    <div className="decoded-value cloud-layers">
+                      {decoded.clouds.map((c, i) => (
+                        <div key={i} className="cloud-layer">
+                          <strong>
+                            {c.cover} @ {c.baseDesc}
+                          </strong>
+                          <span className="decoded-desc">{c.coverDesc}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Weather phenomena */}
+                {decoded?.weather && decoded.weather.length > 0 && (
+                  <div className="detail-row decoded-section wx-section">
+                    <span>Weather</span>
+                    <div className="decoded-value">
+                      {decoded.weather.map((w, i) => (
+                        <div key={i} className="wx-item">
+                          <strong>{w.code}</strong>
+                          <span className="decoded-desc">{w.description}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Raw METAR */}
+                {selectedMetar.rawOb && (
+                  <div className="detail-row raw-section">
+                    <span>Raw METAR</span>
+                    <span className="mono raw-text">{selectedMetar.rawOb}</span>
+                  </div>
+                )}
+
+                <div className="detail-row">
+                  <span>Observed</span>
+                  <span>{decoded?.time || '--'}</span>
                 </div>
               </div>
-            )}
-            
-            {/* Raw METAR */}
-            {selectedMetar.rawOb && (
-              <div className="detail-row raw-section">
-                <span>Raw METAR</span>
-                <span className="mono raw-text">{selectedMetar.rawOb}</span>
-              </div>
-            )}
-            
-            <div className="detail-row">
-              <span>Observed</span>
-              <span>{decoded?.time || '--'}</span>
             </div>
-          </div>
-        </div>
-        );
-      })()}
+          );
+        })()}
 
       {/* PIREP Popup */}
-      {selectedPirep && (() => {
-        const decoded = decodePirep(selectedPirep);
-        return (
-        <div 
-          className={`weather-popup pirep-popup ${config.mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${decoded?.type === 'UUA' ? 'urgent-pirep' : ''} ${isDragging ? 'dragging' : ''}`}
-          style={{ left: popupPosition.x, top: popupPosition.y }}
-          onMouseDown={handlePopupMouseDown}
-        >
-          <button className="popup-close" onClick={() => setSelectedPirep(null)}>
-            <X size={16} />
-          </button>
-          <div className="popup-header">
-            <AlertTriangle size={20} />
-            <span className="popup-callsign">PIREP</span>
-            <span className={`pirep-type-badge ${decoded?.type === 'UUA' ? 'urgent' : ''}`}>
-              {decoded?.type || 'UA'}
-            </span>
-          </div>
-          
-          {/* Urgent warning banner */}
-          {decoded?.type === 'UUA' && (
-            <div className="urgent-banner">
-              ⚠️ URGENT PILOT REPORT - Significant weather hazard
-            </div>
-          )}
-          
-          <div className="popup-details">
-            {/* Location */}
-            {decoded?.location && (
-              <div className="detail-row">
-                <span>Location</span>
-                <span>{decoded.location}</span>
+      {selectedPirep &&
+        (() => {
+          const decoded = decodePirep(selectedPirep);
+          return (
+            <div
+              className={`weather-popup pirep-popup ${config.mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${decoded?.type === 'UUA' ? 'urgent-pirep' : ''} ${isDragging ? 'dragging' : ''}`}
+              style={{ left: popupPosition.x, top: popupPosition.y }}
+              onMouseDown={handlePopupMouseDown}
+            >
+              <button className="popup-close" onClick={() => setSelectedPirep(null)}>
+                <X size={16} />
+              </button>
+              <div className="popup-header">
+                <AlertTriangle size={20} />
+                <span className="popup-callsign">PIREP</span>
+                <span className={`pirep-type-badge ${decoded?.type === 'UUA' ? 'urgent' : ''}`}>
+                  {decoded?.type || 'UA'}
+                </span>
               </div>
-            )}
-            
-            {/* Aircraft */}
-            {decoded?.aircraft && (
-              <div className="detail-row">
-                <span>Aircraft</span>
-                <span>{decoded.aircraft}</span>
-              </div>
-            )}
-            
-            {/* Altitude/Flight Level */}
-            {decoded?.altitude && (
-              <div className="detail-row decoded-section">
-                <span>Altitude</span>
-                <div className="decoded-value">
-                  <strong>{decoded.altitude.text}</strong>
+
+              {/* Urgent warning banner */}
+              {decoded?.type === 'UUA' && (
+                <div className="urgent-banner">
+                  ⚠️ URGENT PILOT REPORT - Significant weather hazard
                 </div>
-              </div>
-            )}
-            
-            {/* Sky Condition */}
-            {decoded?.sky && (
-              <div className="detail-row decoded-section">
-                <span>Sky</span>
-                <div className="decoded-value">
-                  <strong>{decoded.sky.description}</strong>
-                </div>
-              </div>
-            )}
-            
-            {/* Turbulence with full decoding */}
-            {decoded?.turbulence && (
-              <div className={`detail-row decoded-section turb-section level-${decoded.turbulence.level}`}>
-                <span className="section-icon"><Wind size={14} /> Turbulence</span>
-                <div className="decoded-value">
-                  <strong className="turb-intensity">{decoded.turbulence.intensity}</strong>
-                  {decoded.turbulence.type && (
-                    <span className="turb-type">{decoded.turbulence.type}</span>
-                  )}
-                  {decoded.turbulence.detail && (
-                    <span className="decoded-desc">{decoded.turbulence.detail}</span>
-                  )}
-                  {decoded.turbulence.warning && (
-                    <span className="hazard-warning">{decoded.turbulence.warning}</span>
-                  )}
-                </div>
-              </div>
-            )}
-            
-            {/* Icing with full decoding */}
-            {decoded?.icing && (
-              <div className={`detail-row decoded-section icing-section level-${decoded.icing.level}`}>
-                <span className="section-icon"><Snowflake size={14} /> Icing</span>
-                <div className="decoded-value">
-                  <strong className="icing-intensity">{decoded.icing.intensity}</strong>
-                  {decoded.icing.type && (
-                    <span className="icing-type">{decoded.icing.type}</span>
-                  )}
-                  {decoded.icing.detail && (
-                    <span className="decoded-desc">{decoded.icing.detail}</span>
-                  )}
-                  {decoded.icing.warning && (
-                    <span className="hazard-warning">{decoded.icing.warning}</span>
-                  )}
-                </div>
-              </div>
-            )}
-            
-            {/* Wind Shear / LLWS with full decoding */}
-            {decoded?.windshear && (
-              <div className={`detail-row decoded-section ws-section level-${decoded.windshear.level}`}>
-                <span className="section-icon"><Wind size={14} /> Wind Shear</span>
-                <div className="decoded-value">
-                  <strong className="ws-intensity">{decoded.windshear.intensity}</strong>
-                  {decoded.windshear.gainLoss && (
-                    <span className="ws-type">{decoded.windshear.gainLoss}</span>
-                  )}
-                  {decoded.windshear.altRange && (
-                    <span className="ws-type">at {decoded.windshear.altRange}</span>
-                  )}
-                  {decoded.windshear.detail && (
-                    <span className="decoded-desc">{decoded.windshear.detail}</span>
-                  )}
-                  {decoded.windshear.warning && (
-                    <span className="hazard-warning">{decoded.windshear.warning}</span>
-                  )}
-                </div>
-              </div>
-            )}
-            
-            {/* Weather */}
-            {decoded?.weather && (
-              <div className="detail-row">
-                <span>Weather</span>
-                <span>{decoded.weather.description}</span>
-              </div>
-            )}
-            
-            {/* Temperature at altitude */}
-            {decoded?.temperature && (
-              <div className="detail-row decoded-section">
-                <span className="section-icon"><Thermometer size={14} /> Temp</span>
-                <div className="decoded-value">
-                  <strong>{decoded.temperature.celsius}°C / {decoded.temperature.fahrenheit}°F</strong>
-                  {decoded.temperature.isaDeviation !== null && (
-                    <span className="decoded-desc">
-                      ISA deviation: {decoded.temperature.isaDeviation > 0 ? '+' : ''}{decoded.temperature.isaDeviation}°C
+              )}
+
+              <div className="popup-details">
+                {/* Location */}
+                {decoded?.location && (
+                  <div className="detail-row">
+                    <span>Location</span>
+                    <span>{decoded.location}</span>
+                  </div>
+                )}
+
+                {/* Aircraft */}
+                {decoded?.aircraft && (
+                  <div className="detail-row">
+                    <span>Aircraft</span>
+                    <span>{decoded.aircraft}</span>
+                  </div>
+                )}
+
+                {/* Altitude/Flight Level */}
+                {decoded?.altitude && (
+                  <div className="detail-row decoded-section">
+                    <span>Altitude</span>
+                    <div className="decoded-value">
+                      <strong>{decoded.altitude.text}</strong>
+                    </div>
+                  </div>
+                )}
+
+                {/* Sky Condition */}
+                {decoded?.sky && (
+                  <div className="detail-row decoded-section">
+                    <span>Sky</span>
+                    <div className="decoded-value">
+                      <strong>{decoded.sky.description}</strong>
+                    </div>
+                  </div>
+                )}
+
+                {/* Turbulence with full decoding */}
+                {decoded?.turbulence && (
+                  <div
+                    className={`detail-row decoded-section turb-section level-${decoded.turbulence.level}`}
+                  >
+                    <span className="section-icon">
+                      <Wind size={14} /> Turbulence
                     </span>
-                  )}
-                </div>
+                    <div className="decoded-value">
+                      <strong className="turb-intensity">{decoded.turbulence.intensity}</strong>
+                      {decoded.turbulence.type && (
+                        <span className="turb-type">{decoded.turbulence.type}</span>
+                      )}
+                      {decoded.turbulence.detail && (
+                        <span className="decoded-desc">{decoded.turbulence.detail}</span>
+                      )}
+                      {decoded.turbulence.warning && (
+                        <span className="hazard-warning">{decoded.turbulence.warning}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Icing with full decoding */}
+                {decoded?.icing && (
+                  <div
+                    className={`detail-row decoded-section icing-section level-${decoded.icing.level}`}
+                  >
+                    <span className="section-icon">
+                      <Snowflake size={14} /> Icing
+                    </span>
+                    <div className="decoded-value">
+                      <strong className="icing-intensity">{decoded.icing.intensity}</strong>
+                      {decoded.icing.type && (
+                        <span className="icing-type">{decoded.icing.type}</span>
+                      )}
+                      {decoded.icing.detail && (
+                        <span className="decoded-desc">{decoded.icing.detail}</span>
+                      )}
+                      {decoded.icing.warning && (
+                        <span className="hazard-warning">{decoded.icing.warning}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Wind Shear / LLWS with full decoding */}
+                {decoded?.windshear && (
+                  <div
+                    className={`detail-row decoded-section ws-section level-${decoded.windshear.level}`}
+                  >
+                    <span className="section-icon">
+                      <Wind size={14} /> Wind Shear
+                    </span>
+                    <div className="decoded-value">
+                      <strong className="ws-intensity">{decoded.windshear.intensity}</strong>
+                      {decoded.windshear.gainLoss && (
+                        <span className="ws-type">{decoded.windshear.gainLoss}</span>
+                      )}
+                      {decoded.windshear.altRange && (
+                        <span className="ws-type">at {decoded.windshear.altRange}</span>
+                      )}
+                      {decoded.windshear.detail && (
+                        <span className="decoded-desc">{decoded.windshear.detail}</span>
+                      )}
+                      {decoded.windshear.warning && (
+                        <span className="hazard-warning">{decoded.windshear.warning}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Weather */}
+                {decoded?.weather && (
+                  <div className="detail-row">
+                    <span>Weather</span>
+                    <span>{decoded.weather.description}</span>
+                  </div>
+                )}
+
+                {/* Temperature at altitude */}
+                {decoded?.temperature && (
+                  <div className="detail-row decoded-section">
+                    <span className="section-icon">
+                      <Thermometer size={14} /> Temp
+                    </span>
+                    <div className="decoded-value">
+                      <strong>
+                        {decoded.temperature.celsius}°C / {decoded.temperature.fahrenheit}°F
+                      </strong>
+                      {decoded.temperature.isaDeviation !== null && (
+                        <span className="decoded-desc">
+                          ISA deviation: {decoded.temperature.isaDeviation > 0 ? '+' : ''}
+                          {decoded.temperature.isaDeviation}°C
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Wind at altitude */}
+                {decoded?.wind && (
+                  <div className="detail-row">
+                    <span className="section-icon">
+                      <Navigation size={14} /> Wind
+                    </span>
+                    <span>
+                      {windDirToCardinal(decoded.wind.direction)} ({decoded.wind.direction}°) at{' '}
+                      {decoded.wind.speed}kt
+                    </span>
+                  </div>
+                )}
+
+                {/* Remarks */}
+                {decoded?.remarks && (
+                  <div className="detail-row">
+                    <span>Remarks</span>
+                    <span>{decoded.remarks}</span>
+                  </div>
+                )}
+
+                {/* Raw PIREP */}
+                {selectedPirep.rawOb && (
+                  <div className="detail-row raw-section">
+                    <span>Raw PIREP</span>
+                    <span className="mono raw-text">{selectedPirep.rawOb}</span>
+                  </div>
+                )}
+
+                {/* Reported time - only show if valid */}
+                {decoded?.time && (
+                  <div className="detail-row">
+                    <span>Reported</span>
+                    <span>{decoded.time}</span>
+                  </div>
+                )}
               </div>
-            )}
-            
-            {/* Wind at altitude */}
-            {decoded?.wind && (
-              <div className="detail-row">
-                <span className="section-icon"><Navigation size={14} /> Wind</span>
-                <span>{windDirToCardinal(decoded.wind.direction)} ({decoded.wind.direction}°) at {decoded.wind.speed}kt</span>
-              </div>
-            )}
-            
-            {/* Remarks */}
-            {decoded?.remarks && (
-              <div className="detail-row">
-                <span>Remarks</span>
-                <span>{decoded.remarks}</span>
-              </div>
-            )}
-            
-            {/* Raw PIREP */}
-            {selectedPirep.rawOb && (
-              <div className="detail-row raw-section">
-                <span>Raw PIREP</span>
-                <span className="mono raw-text">{selectedPirep.rawOb}</span>
-              </div>
-            )}
-            
-            {/* Reported time - only show if valid */}
-            {decoded?.time && (
-              <div className="detail-row">
-                <span>Reported</span>
-                <span>{decoded.time}</span>
-              </div>
-            )}
-          </div>
-        </div>
-        );
-      })()}
+            </div>
+          );
+        })()}
 
       {/* Navaid Popup */}
       {selectedNavaid && (
-        <div 
+        <div
           className={`weather-popup navaid-popup ${config.mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''}`}
           style={{ left: popupPosition.x, top: popupPosition.y }}
           onMouseDown={handlePopupMouseDown}
@@ -8186,51 +9108,53 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             <span className="popup-callsign">{selectedNavaid.id}</span>
             <span className="navaid-type-badge">{selectedNavaid.type || 'NAV'}</span>
           </div>
-          
+
           <div className="popup-details">
             <div className="detail-row">
               <span>Type</span>
               <span>{selectedNavaid.type || 'Unknown'}</span>
             </div>
-            
+
             {selectedNavaid.name && (
               <div className="detail-row">
                 <span>Name</span>
                 <span>{selectedNavaid.name}</span>
               </div>
             )}
-            
+
             {selectedNavaid.freq && (
               <div className="detail-row">
                 <span>Frequency</span>
                 <span>{selectedNavaid.freq} MHz</span>
               </div>
             )}
-            
+
             {selectedNavaid.channel && (
               <div className="detail-row">
                 <span>Channel</span>
                 <span>{selectedNavaid.channel}</span>
               </div>
             )}
-            
+
             <div className="detail-row">
               <span>Position</span>
-              <span>{selectedNavaid.lat?.toFixed(4)}°, {selectedNavaid.lon?.toFixed(4)}°</span>
+              <span>
+                {selectedNavaid.lat?.toFixed(4)}°, {selectedNavaid.lon?.toFixed(4)}°
+              </span>
             </div>
-            
+
             {selectedNavaid.elev && (
               <div className="detail-row">
                 <span>Elevation</span>
                 <span>{selectedNavaid.elev.toLocaleString()} ft</span>
               </div>
             )}
-            
+
             <div className="detail-row">
               <span>Distance</span>
               <span>{getDistanceNm(selectedNavaid.lat, selectedNavaid.lon).toFixed(1)} nm</span>
             </div>
-            
+
             <div className="detail-row">
               <span>Bearing</span>
               <span>{Math.round(getBearing(selectedNavaid.lat, selectedNavaid.lon))}°</span>
@@ -8241,7 +9165,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
       {/* Airport Popup */}
       {selectedAirport && (
-        <div 
+        <div
           className={`weather-popup airport-popup ${config.mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''}`}
           style={{ left: popupPosition.x, top: popupPosition.y }}
           onMouseDown={handlePopupMouseDown}
@@ -8251,14 +9175,20 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           </button>
           <div className="popup-header">
             <Plane size={20} />
-            <span className="popup-callsign">{selectedAirport.icao || selectedAirport.icaoId || selectedAirport.faaId || selectedAirport.id || 'APT'}</span>
+            <span className="popup-callsign">
+              {selectedAirport.icao ||
+                selectedAirport.icaoId ||
+                selectedAirport.faaId ||
+                selectedAirport.id ||
+                'APT'}
+            </span>
             {selectedAirport.class && (
               <span className={`airport-class-badge class-${selectedAirport.class.toLowerCase()}`}>
                 Class {selectedAirport.class}
               </span>
             )}
           </div>
-          
+
           <div className="popup-details">
             {(selectedAirport.name || selectedAirport.site) && (
               <div className="detail-row">
@@ -8266,58 +9196,69 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                 <span>{selectedAirport.name || selectedAirport.site}</span>
               </div>
             )}
-            
+
             {(selectedAirport.city || selectedAirport.assocCity) && (
               <div className="detail-row">
                 <span>City</span>
                 <span>{selectedAirport.city || selectedAirport.assocCity}</span>
               </div>
             )}
-            
+
             {(selectedAirport.state || selectedAirport.stateProv) && (
               <div className="detail-row">
                 <span>State</span>
                 <span>{selectedAirport.state || selectedAirport.stateProv}</span>
               </div>
             )}
-            
+
             <div className="detail-row">
               <span>Position</span>
-              <span>{selectedAirport.lat?.toFixed(4)}°, {selectedAirport.lon?.toFixed(4)}°</span>
+              <span>
+                {selectedAirport.lat?.toFixed(4)}°, {selectedAirport.lon?.toFixed(4)}°
+              </span>
             </div>
-            
-            {(selectedAirport.elev !== undefined && selectedAirport.elev !== null) || selectedAirport.elev_ft ? (
+
+            {(selectedAirport.elev !== undefined && selectedAirport.elev !== null) ||
+            selectedAirport.elev_ft ? (
               <div className="detail-row">
                 <span>Elevation</span>
                 <span>{(selectedAirport.elev ?? selectedAirport.elev_ft).toLocaleString()} ft</span>
               </div>
             ) : null}
-            
+
             {selectedAirport.rwy_length && (
               <div className="detail-row">
                 <span>Longest Runway</span>
                 <span>{selectedAirport.rwy_length.toLocaleString()} ft</span>
               </div>
             )}
-            
+
             <div className="detail-row">
               <span>Distance</span>
               <span>{getDistanceNm(selectedAirport.lat, selectedAirport.lon).toFixed(1)} nm</span>
             </div>
-            
+
             <div className="detail-row">
               <span>Bearing</span>
               <span>{Math.round(getBearing(selectedAirport.lat, selectedAirport.lon))}°</span>
             </div>
-            
+
             {/* External links */}
             <div className="detail-row lookup-section">
               <span>LOOKUP:</span>
               <div className="lookup-links">
-                <a href={`https://www.airnav.com/airport/${selectedAirport.icao || selectedAirport.icaoId || selectedAirport.faaId || selectedAirport.id}`} target="_blank" rel="noopener noreferrer">
+                <a
+                  href={`https://www.airnav.com/airport/${selectedAirport.icao || selectedAirport.icaoId || selectedAirport.faaId || selectedAirport.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   <ExternalLink size={12} /> AirNav
                 </a>
-                <a href={`https://skyvector.com/airport/${selectedAirport.icao || selectedAirport.icaoId || selectedAirport.faaId || selectedAirport.id}`} target="_blank" rel="noopener noreferrer">
+                <a
+                  href={`https://skyvector.com/airport/${selectedAirport.icao || selectedAirport.icaoId || selectedAirport.faaId || selectedAirport.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   <ExternalLink size={12} /> SkyVector
                 </a>
               </div>
@@ -8330,9 +9271,9 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       {config.mapMode === 'pro' && (
         <div className="pro-search-bar">
           <Search size={18} className="search-icon" />
-          <input 
-            type="text" 
-            placeholder="Search callsign, squawk, or ICAO..." 
+          <input
+            type="text"
+            placeholder="Search callsign, squawk, or ICAO..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="search-input"
@@ -8343,43 +9284,67 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               <span>{new Date().toISOString().slice(11, 19)} Z</span>
             </div>
             {acarsStatus && (
-              <div className={`acars-status-badge ${acarsStatus.running ? 'running' : 'stopped'}`} title={`ACARS: ${acarsStatus.running ? 'Running' : 'Stopped'}`}>
+              <div
+                className={`acars-status-badge ${acarsStatus.running ? 'running' : 'stopped'}`}
+                title={`ACARS: ${acarsStatus.running ? 'Running' : 'Stopped'}`}
+              >
                 <MessageCircle size={12} />
                 <span>{acarsStatus.buffer_size || 0}</span>
               </div>
             )}
             <button
               className={`pro-header-btn ${soundMuted ? 'muted' : ''}`}
-              onClick={(e) => { e.stopPropagation(); setSoundMuted(!soundMuted); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSoundMuted(!soundMuted);
+              }}
               title={soundMuted ? 'Unmute' : 'Mute'}
             >
               {soundMuted ? <VolumeX size={18} /> : <Bell size={18} />}
             </button>
             <button
               className={`pro-header-btn ${showAcarsPanel ? 'active' : ''}`}
-              onClick={(e) => { e.stopPropagation(); setShowAcarsPanel(!showAcarsPanel); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowAcarsPanel(!showAcarsPanel);
+              }}
               title="ACARS Messages"
             >
               <MessageCircle size={18} />
             </button>
             <button
               className={`pro-header-btn ${showFilterMenu ? 'active' : ''}`}
-              onClick={(e) => { e.stopPropagation(); setShowFilterMenu(!showFilterMenu); setShowOverlayMenu(false); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowFilterMenu(!showFilterMenu);
+                setShowOverlayMenu(false);
+              }}
               title="Traffic Filters"
             >
               <Filter size={18} />
             </button>
             <button
               className={`pro-header-btn ${showOverlayMenu ? 'active' : ''}`}
-              onClick={(e) => { e.stopPropagation(); setShowOverlayMenu(!showOverlayMenu); setShowFilterMenu(false); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowOverlayMenu(!showOverlayMenu);
+                setShowFilterMenu(false);
+              }}
               title="Map Layers"
             >
               <Layers size={18} />
             </button>
             <button
               className={`pro-header-btn ${showShortTracks ? 'active' : ''}`}
-              onClick={(e) => { e.stopPropagation(); setShowShortTracks(!showShortTracks); }}
-              title={showShortTracks ? 'Hide short tracks (ATC trails)' : 'Show short tracks (ATC trails)'}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowShortTracks(!showShortTracks);
+              }}
+              title={
+                showShortTracks
+                  ? 'Hide short tracks (ATC trails)'
+                  : 'Show short tracks (ATC trails)'
+              }
             >
               <Navigation size={18} />
             </button>
@@ -8393,7 +9358,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   value={config.shortTrackLength || 15}
                   onChange={(e) => {
                     const newValue = parseInt(e.target.value);
-                    setConfig(prev => {
+                    setConfig((prev) => {
                       const newConfig = { ...prev, shortTrackLength: newValue };
                       saveConfig(newConfig);
                       return newConfig;
@@ -8406,7 +9371,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             )}
             <button
               className={`pro-header-btn ${showSelectedTrack ? 'active' : ''}`}
-              onClick={(e) => { e.stopPropagation(); setShowSelectedTrack(!showSelectedTrack); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowSelectedTrack(!showSelectedTrack);
+              }}
               title={showSelectedTrack ? 'Hide flight track' : 'Show flight track'}
               disabled={!selectedAircraft}
             >
@@ -8428,7 +9396,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             </button>
             <button
               className="pro-header-btn"
-              onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFullscreen();
+              }}
               title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
             >
               {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
@@ -8437,481 +9408,598 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         </div>
       )}
 
-
       {/* Pro Mode Details Panel */}
-      {config.mapMode === 'pro' && liveAircraft && (() => {
-        // liveAircraft is already memoized above for live updates
-        const isEmergency = ['7500', '7600', '7700'].includes(liveAircraft.squawk);
-        const emergencyType = liveAircraft.squawk === '7500' ? 'HIJACK' :
-                             liveAircraft.squawk === '7600' ? 'RADIO FAILURE' :
-                             liveAircraft.squawk === '7700' ? 'EMERGENCY' : null;
+      {config.mapMode === 'pro' &&
+        liveAircraft &&
+        (() => {
+          // liveAircraft is already memoized above for live updates
+          const isEmergency = ['7500', '7600', '7700'].includes(liveAircraft.squawk);
+          const emergencyType =
+            liveAircraft.squawk === '7500'
+              ? 'HIJACK'
+              : liveAircraft.squawk === '7600'
+                ? 'RADIO FAILURE'
+                : liveAircraft.squawk === '7700'
+                  ? 'EMERGENCY'
+                  : null;
 
-        // Check for safety event from backend
-        const safetyEvent = activeConflicts.find(e =>
-          e.icao?.toUpperCase() === liveAircraft.hex?.toUpperCase() ||
-          e.icao_2?.toUpperCase() === liveAircraft.hex?.toUpperCase()
-        );
+          // Check for safety event from backend
+          const safetyEvent = activeConflicts.find(
+            (e) =>
+              e.icao?.toUpperCase() === liveAircraft.hex?.toUpperCase() ||
+              e.icao_2?.toUpperCase() === liveAircraft.hex?.toUpperCase()
+          );
 
-        const isInConflict = !!safetyEvent;
-        const conflictSeverity = safetyEvent?.severity || null;
-        const conflictTitle = safetyEvent ? getEventTypeName(safetyEvent.event_type) : null;
-        
-        return (
-        <div className={`pro-details-panel ${isEmergency ? 'emergency' : ''} ${isInConflict ? `conflict ${getSeverityClass(conflictSeverity)}` : ''} ${panelPinned ? 'pinned' : ''}`}>
-          <div className="pro-panel-title-bar">
-            <span className="pro-panel-title">TARGET DETAILS</span>
-            <div className="pro-panel-actions">
-              <button
-                className={`pro-panel-btn ${followingAircraft === liveAircraft.hex ? 'active' : ''}`}
-                onClick={() => {
-                  if (!liveAircraft.lat || !liveAircraft.lon) return;
-                  // Toggle following this aircraft
-                  if (followingAircraft === liveAircraft.hex) {
-                    setFollowingAircraft(null);
-                  } else {
-                    setFollowingAircraft(liveAircraft.hex);
-                  }
-                }}
-                title={followingAircraft === liveAircraft.hex ? 'Stop following' : 'Follow aircraft'}
-              >
-                <Crosshair size={14} />
-              </button>
-              <button
-                className={`pro-panel-btn ${panelPinned ? 'active' : ''}`}
-                onClick={() => setPanelPinned(!panelPinned)}
-                title={panelPinned ? 'Unpin panel' : 'Pin panel open'}
-              >
-                {panelPinned ? <PinOff size={14} /> : <Pin size={14} />}
-              </button>
-              <button
-                className="pro-panel-btn"
-                onClick={() => openAircraftDetail(liveAircraft.hex)}
-                title="View full aircraft details"
-              >
-                <ExternalLink size={14} />
-              </button>
-              <button className="pro-panel-close" onClick={() => !panelPinned && selectAircraft(null)}>
-                <X size={18} />
-              </button>
-            </div>
-          </div>
-          
-          {/* Emergency Banner */}
-          {isEmergency && (
-            <div className={`pro-emergency-banner squawk-${liveAircraft.squawk}`}>
-              <AlertTriangle size={18} />
-              <span className="emergency-type">{emergencyType}</span>
-              <span className="emergency-squawk">SQUAWK {liveAircraft.squawk}</span>
-            </div>
-          )}
+          const isInConflict = !!safetyEvent;
+          const conflictSeverity = safetyEvent?.severity || null;
+          const conflictTitle = safetyEvent ? getEventTypeName(safetyEvent.event_type) : null;
 
-          {/* Safety Event / Conflict Banner */}
-          {isInConflict && safetyEvent && (
+          return (
             <div
-              className={`pro-conflict-banner ${getSeverityClass(conflictSeverity)} clickable`}
-              onClick={() => onViewHistoryEvent?.(safetyEvent.id)}
-              title="View in History"
+              className={`pro-details-panel ${isEmergency ? 'emergency' : ''} ${isInConflict ? `conflict ${getSeverityClass(conflictSeverity)}` : ''} ${panelPinned ? 'pinned' : ''}`}
             >
-              <Zap size={18} />
-              <div className="conflict-info">
-                <span className="conflict-label">{conflictTitle}</span>
-                <span className="conflict-message">{safetyEvent.message}</span>
-              </div>
-              {safetyEvent.hex2 && (
-                <div className="conflict-separation">
-                  <span>{safetyEvent.horizontalNm}nm</span>
-                  <span>{safetyEvent.verticalFt}ft</span>
-                </div>
-              )}
-            </div>
-          )}
-          
-          <div className="pro-panel-header">
-            <div className="pro-callsign-row">
-              <span className="pro-flag">{getTailInfo(liveAircraft.hex, liveAircraft.flight).flag}</span>
-              <h2 className="pro-callsign">{liveAircraft.flight?.trim() || liveAircraft.hex?.toUpperCase()}</h2>
-            </div>
-            <div className="pro-badges">
-              <span className="pro-badge hex">{liveAircraft.hex?.toUpperCase()}</span>
-              {(aircraftInfo[liveAircraft.hex]?.type_name || aircraftInfo[liveAircraft.hex]?.model || liveAircraft.type) && (
-                <span className={`pro-badge model ${liveAircraft.military ? 'military' : ''}`}>
-                  {aircraftInfo[liveAircraft.hex]?.type_name || aircraftInfo[liveAircraft.hex]?.model || liveAircraft.type}
-                </span>
-              )}
-              <span className="pro-badge category" title={liveAircraft.category || 'A3'}>{getCategoryName(liveAircraft.category)}</span>
-              {aircraftInfo[liveAircraft.hex]?.registration && (
-                <span className="pro-badge reg">{aircraftInfo[liveAircraft.hex].registration}</span>
-              )}
-              {aircraftInfo[liveAircraft.hex]?.year_built && (
-                <span className="pro-badge built">
-                  {aircraftInfo[liveAircraft.hex].year_built}
-                  {aircraftInfo[liveAircraft.hex].age_years && ` (${aircraftInfo[liveAircraft.hex].age_years}y)`}
-                </span>
-              )}
-              {isEmergency && <span className="pro-badge emergency">EMG</span>}
-            </div>
-            {/* Quick Alert Actions */}
-            <div className="pro-quick-alerts">
-              {liveAircraft.flight?.trim() && (() => {
-                const callsign = liveAircraft.flight.trim();
-                const callsignKey = `callsign:${callsign}`;
-                const isCreated = quickAlertsCreated[callsignKey];
-                return (
+              <div className="pro-panel-title-bar">
+                <span className="pro-panel-title">TARGET DETAILS</span>
+                <div className="pro-panel-actions">
                   <button
-                    className={`pro-alert-btn ${isCreated ? 'created' : ''}`}
-                    onClick={() => createQuickAlert('callsign', callsign, callsign)}
-                    disabled={quickAlertLoading !== null || isCreated}
-                    title={isCreated ? `Alert exists for ${callsign}` : `Add alert for ${callsign}`}
-                  >
-                    {quickAlertLoading === 'callsign' ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : isCreated ? (
-                      <Check size={12} />
-                    ) : (
-                      <BellPlus size={12} />
-                    )}
-                    <span>{isCreated ? 'Alert Set' : `Alert ${callsign}`}</span>
-                  </button>
-                );
-              })()}
-              {(() => {
-                const tail = getTailInfo(liveAircraft.hex, liveAircraft.flight).tailNumber;
-                if (!tail) return null;
-                const registrationKey = `registration:${tail}`;
-                const isCreated = quickAlertsCreated[registrationKey];
-                return (
-                  <button
-                    className={`pro-alert-btn ${isCreated ? 'created' : ''}`}
-                    onClick={() => createQuickAlert('registration', tail, tail)}
-                    disabled={quickAlertLoading !== null || isCreated}
-                    title={isCreated ? `Alert exists for ${tail}` : `Add alert for ${tail}`}
-                  >
-                    {quickAlertLoading === 'registration' ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : isCreated ? (
-                      <Check size={12} />
-                    ) : (
-                      <BellPlus size={12} />
-                    )}
-                    <span>{isCreated ? 'Alert Set' : `Alert ${tail}`}</span>
-                  </button>
-                );
-              })()}
-            </div>
-          </div>
-
-          {/* Aircraft Thumbnail - Using S3 URL directly */}
-          <div className="pro-aircraft-photo">
-            {proPhotoLoading && !proPhotoError && (
-              <div className="pro-photo-loading">
-                <div className="pro-photo-loading-radar">
-                  <Radar size={32} className="pro-photo-radar-icon" />
-                  <div className="pro-photo-radar-sweep" />
-                </div>
-                <span>{proPhotoStatus?.message || 'Loading photo...'}</span>
-              </div>
-            )}
-            {!proPhotoError && proPhotoUrl && (
-              <img
-                key={`${liveAircraft.hex}-${proPhotoRetry}-${proPhotoUrl}`}
-                src={proPhotoUrl}
-                alt={liveAircraft.flight?.trim() || liveAircraft.hex}
-                onLoad={() => { setProPhotoLoading(false); setProPhotoStatus(null); }}
-                onError={() => { setProPhotoError(true); setProPhotoLoading(false); setProPhotoStatus(null); }}
-                style={{ opacity: proPhotoLoading ? 0 : 1 }}
-                loading="lazy"
-              />
-            )}
-            {proPhotoError && !proPhotoLoading && (
-              <div className="pro-photo-placeholder">
-                <Plane size={48} />
-                <span>{proPhotoStatus?.message || 'No Photo Available'}</span>
-                <button
-                  className="pro-photo-retry"
-                  onClick={() => {
-                    // Clear any existing retry loop
-                    if (proPhotoRetryRef.current) {
-                      clearInterval(proPhotoRetryRef.current);
-                      proPhotoRetryRef.current = null;
-                    }
-
-                    setProPhotoError(false);
-                    setProPhotoLoading(true);
-                    setProPhotoRetry(c => c + 1);
-
-                    const startTime = Date.now();
-                    const retryDuration = 30000; // 30 seconds
-                    const retryInterval = 3000; // Try every 3 seconds
-                    const aircraftHex = liveAircraft.hex;
-
-                    const attemptFetch = async () => {
-                      const elapsed = Date.now() - startTime;
-                      const remaining = Math.ceil((retryDuration - elapsed) / 1000);
-                      setProPhotoStatus({ message: `Fetching photo... (${remaining}s)` });
-
-                      try {
-                        let data = null;
-                        if (wsRequest && wsConnected) {
-                          data = await wsRequest('photo-cache', { icao: aircraftHex });
-                          if (data?.error) data = null;
-                        } else {
-                          const res = await fetch(`${config.apiBaseUrl || ''}/api/v1/airframes/${aircraftHex}/photos`);
-                          data = await safeJson(res);
-                        }
-
-                        if (data?.photo_url || data?.photo_thumbnail_url || data?.thumbnail_url) {
-                          setProPhotoUrl(resolvePhotoUrl(data.photo_url || data.photo_thumbnail_url || data.thumbnail_url));
-                          if (proPhotoRetryRef.current) {
-                            clearInterval(proPhotoRetryRef.current);
-                            proPhotoRetryRef.current = null;
-                          }
-                          return true;
-                        }
-                      } catch {
-                        // Continue retrying
+                    className={`pro-panel-btn ${followingAircraft === liveAircraft.hex ? 'active' : ''}`}
+                    onClick={() => {
+                      if (!liveAircraft.lat || !liveAircraft.lon) return;
+                      // Toggle following this aircraft
+                      if (followingAircraft === liveAircraft.hex) {
+                        setFollowingAircraft(null);
+                      } else {
+                        setFollowingAircraft(liveAircraft.hex);
                       }
-                      return false;
-                    };
-
-                    // First attempt immediately
-                    attemptFetch().then(success => {
-                      if (success) return;
-
-                      // Set up retry loop
-                      proPhotoRetryRef.current = setInterval(async () => {
-                        const elapsed = Date.now() - startTime;
-                        if (elapsed >= retryDuration) {
-                          // Time's up
-                          clearInterval(proPhotoRetryRef.current);
-                          proPhotoRetryRef.current = null;
-                          setProPhotoError(true);
-                          setProPhotoLoading(false);
-                          setProPhotoStatus({ message: 'Photo fetch timed out' });
-                          return;
-                        }
-                        await attemptFetch();
-                      }, retryInterval);
-                    });
-                  }}
-                >
-                  <RefreshCw size={14} /> Retry
-                </button>
+                    }}
+                    title={
+                      followingAircraft === liveAircraft.hex ? 'Stop following' : 'Follow aircraft'
+                    }
+                  >
+                    <Crosshair size={14} />
+                  </button>
+                  <button
+                    className={`pro-panel-btn ${panelPinned ? 'active' : ''}`}
+                    onClick={() => setPanelPinned(!panelPinned)}
+                    title={panelPinned ? 'Unpin panel' : 'Pin panel open'}
+                  >
+                    {panelPinned ? <PinOff size={14} /> : <Pin size={14} />}
+                  </button>
+                  <button
+                    className="pro-panel-btn"
+                    onClick={() => openAircraftDetail(liveAircraft.hex)}
+                    title="View full aircraft details"
+                  >
+                    <ExternalLink size={14} />
+                  </button>
+                  <button
+                    className="pro-panel-close"
+                    onClick={() => !panelPinned && selectAircraft(null)}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
               </div>
-            )}
-          </div>
 
-          {/* Operator Label */}
-          {aircraftInfo[liveAircraft.hex] && (aircraftInfo[liveAircraft.hex].operator || aircraftInfo[liveAircraft.hex].owner) && (
-            <div className="pro-operator-label">
-              <Building2 size={14} />
-              <span>{aircraftInfo[liveAircraft.hex].operator || aircraftInfo[liveAircraft.hex].owner}</span>
-            </div>
-          )}
+              {/* Emergency Banner */}
+              {isEmergency && (
+                <div className={`pro-emergency-banner squawk-${liveAircraft.squawk}`}>
+                  <AlertTriangle size={18} />
+                  <span className="emergency-type">{emergencyType}</span>
+                  <span className="emergency-squawk">SQUAWK {liveAircraft.squawk}</span>
+                </div>
+              )}
 
-          {/* Airframe Lookup Error */}
-          {getAircraftError(liveAircraft.hex) && (
-            <div className="pro-airframe-error" title={getAircraftError(liveAircraft.hex).error_message}>
-              <AlertTriangle size={14} />
-              <span>
-                Info lookup failed ({getAircraftError(liveAircraft.hex).source})
-              </span>
-              <button
-                className="pro-error-dismiss"
-                onClick={() => clearAircraftError(liveAircraft.hex)}
-                title="Dismiss"
-              >
-                <X size={12} />
-              </button>
-            </div>
-          )}
-
-          <div className="pro-stats-grid">
-            {(() => {
-              // Calculate values for color coding
-              const proAltitude = liveAircraft.alt_baro || liveAircraft.alt_geom || liveAircraft.alt || 0;
-              const proSpeed = liveAircraft.gs || liveAircraft.tas;
-              const proAltClass = getAltitudeColorClass(proAltitude);
-              const proSpeedClass = getSpeedColorClass(proSpeed, proAltitude);
-
-              // Track distance trend - reset if aircraft changed
-              const proDistanceNm = liveAircraft.distance_nm || getDistanceNm(liveAircraft.lat, liveAircraft.lon);
-              if (proTrackedAircraftRef.current !== liveAircraft.hex) {
-                // Aircraft changed, reset tracking
-                proTrackedAircraftRef.current = liveAircraft.hex;
-                proPrevDistanceRef.current = proDistanceNm;
-                proDistanceTrendRef.current = null;
-              } else if (proPrevDistanceRef.current !== null) {
-                const delta = proDistanceNm - proPrevDistanceRef.current;
-                // Use very small threshold (0.01 nm = ~60 feet) to detect movement
-                if (delta < -0.01) {
-                  proDistanceTrendRef.current = 'approaching';
-                } else if (delta > 0.01) {
-                  proDistanceTrendRef.current = 'receding';
-                }
-                // Keep previous trend if no significant change (don't reset to stable)
-                proPrevDistanceRef.current = proDistanceNm;
-              }
-              const proDistTrend = proDistanceTrendRef.current;
-
-              // RSSI signal strength
-              const proRssi = liveAircraft.rssi;
-              const proSignalClass = proRssi !== undefined ? getSignalStrengthClass(proRssi) : 'weak';
-
-              return (
-                <>
-                  <div className="pro-stat">
-                    <div className="pro-stat-label"><Crosshair size={14} /> ALTITUDE</div>
-                    <div className={`pro-stat-value ${proAltClass}`}>{proAltitude.toLocaleString()} <span className="unit">ft</span></div>
+              {/* Safety Event / Conflict Banner */}
+              {isInConflict && safetyEvent && (
+                <div
+                  className={`pro-conflict-banner ${getSeverityClass(conflictSeverity)} clickable`}
+                  onClick={() => onViewHistoryEvent?.(safetyEvent.id)}
+                  title="View in History"
+                >
+                  <Zap size={18} />
+                  <div className="conflict-info">
+                    <span className="conflict-label">{conflictTitle}</span>
+                    <span className="conflict-message">{safetyEvent.message}</span>
                   </div>
-                  <div className="pro-stat">
-                    <div className="pro-stat-label"><Navigation size={14} /> SPEED</div>
-                    <div className={`pro-stat-value ${proSpeedClass}`}>{proSpeed || '--'} <span className="unit">kts</span></div>
-                  </div>
-                  <div className="pro-stat">
-                    <div className="pro-stat-label"><Plane size={14} /> TYPE</div>
-                    <div className="pro-stat-value">{liveAircraft.type || '--'}</div>
-                  </div>
-                  <div className="pro-stat">
-                    <div className="pro-stat-label"><Radio size={14} /> SQUAWK</div>
-                    <div className="pro-stat-value">{liveAircraft.squawk || '1200'}</div>
-                  </div>
-                  <div className="pro-stat">
-                    <div className="pro-stat-label"><TrendingUp size={14} /> V/S</div>
-                    {(() => {
-                      const vs = liveAircraft.vr ?? liveAircraft.baro_rate ?? liveAircraft.geom_rate ?? 0;
-                      const isExtreme = Math.abs(vs) > 3000;
-                      const vsClass = vs > 0 ? 'climbing' : vs < 0 ? 'descending' : '';
+                  {safetyEvent.hex2 && (
+                    <div className="conflict-separation">
+                      <span>{safetyEvent.horizontalNm}nm</span>
+                      <span>{safetyEvent.verticalFt}ft</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="pro-panel-header">
+                <div className="pro-callsign-row">
+                  <span className="pro-flag">
+                    {getTailInfo(liveAircraft.hex, liveAircraft.flight).flag}
+                  </span>
+                  <h2 className="pro-callsign">
+                    {liveAircraft.flight?.trim() || liveAircraft.hex?.toUpperCase()}
+                  </h2>
+                </div>
+                <div className="pro-badges">
+                  <span className="pro-badge hex">{liveAircraft.hex?.toUpperCase()}</span>
+                  {(aircraftInfo[liveAircraft.hex]?.type_name ||
+                    aircraftInfo[liveAircraft.hex]?.model ||
+                    liveAircraft.type) && (
+                    <span className={`pro-badge model ${liveAircraft.military ? 'military' : ''}`}>
+                      {aircraftInfo[liveAircraft.hex]?.type_name ||
+                        aircraftInfo[liveAircraft.hex]?.model ||
+                        liveAircraft.type}
+                    </span>
+                  )}
+                  <span className="pro-badge category" title={liveAircraft.category || 'A3'}>
+                    {getCategoryName(liveAircraft.category)}
+                  </span>
+                  {aircraftInfo[liveAircraft.hex]?.registration && (
+                    <span className="pro-badge reg">
+                      {aircraftInfo[liveAircraft.hex].registration}
+                    </span>
+                  )}
+                  {aircraftInfo[liveAircraft.hex]?.year_built && (
+                    <span className="pro-badge built">
+                      {aircraftInfo[liveAircraft.hex].year_built}
+                      {aircraftInfo[liveAircraft.hex].age_years &&
+                        ` (${aircraftInfo[liveAircraft.hex].age_years}y)`}
+                    </span>
+                  )}
+                  {isEmergency && <span className="pro-badge emergency">EMG</span>}
+                </div>
+                {/* Quick Alert Actions */}
+                <div className="pro-quick-alerts">
+                  {liveAircraft.flight?.trim() &&
+                    (() => {
+                      const callsign = liveAircraft.flight.trim();
+                      const callsignKey = `callsign:${callsign}`;
+                      const isCreated = quickAlertsCreated[callsignKey];
                       return (
-                        <div className={`pro-stat-value ${vsClass} ${isExtreme ? 'extreme-vs' : ''}`}>
-                          {vs > 0 ? '+' : ''}{vs} <span className="unit">fpm</span>
-                        </div>
+                        <button
+                          className={`pro-alert-btn ${isCreated ? 'created' : ''}`}
+                          onClick={() => createQuickAlert('callsign', callsign, callsign)}
+                          disabled={quickAlertLoading !== null || isCreated}
+                          title={
+                            isCreated ? `Alert exists for ${callsign}` : `Add alert for ${callsign}`
+                          }
+                        >
+                          {quickAlertLoading === 'callsign' ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : isCreated ? (
+                            <Check size={12} />
+                          ) : (
+                            <BellPlus size={12} />
+                          )}
+                          <span>{isCreated ? 'Alert Set' : `Alert ${callsign}`}</span>
+                        </button>
                       );
                     })()}
-                  </div>
-                  <div className="pro-stat">
-                    <div className="pro-stat-label"><LocateFixed size={14} /> TRACK</div>
-                    <div className="pro-stat-value">
-                      {Math.round(liveAircraft.track || liveAircraft.true_heading || 0)}°
-                      <span className="unit cardinal">{windDirToCardinal(liveAircraft.track || liveAircraft.true_heading)}</span>
+                  {(() => {
+                    const tail = getTailInfo(liveAircraft.hex, liveAircraft.flight).tailNumber;
+                    if (!tail) return null;
+                    const registrationKey = `registration:${tail}`;
+                    const isCreated = quickAlertsCreated[registrationKey];
+                    return (
+                      <button
+                        className={`pro-alert-btn ${isCreated ? 'created' : ''}`}
+                        onClick={() => createQuickAlert('registration', tail, tail)}
+                        disabled={quickAlertLoading !== null || isCreated}
+                        title={isCreated ? `Alert exists for ${tail}` : `Add alert for ${tail}`}
+                      >
+                        {quickAlertLoading === 'registration' ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : isCreated ? (
+                          <Check size={12} />
+                        ) : (
+                          <BellPlus size={12} />
+                        )}
+                        <span>{isCreated ? 'Alert Set' : `Alert ${tail}`}</span>
+                      </button>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Aircraft Thumbnail - Using S3 URL directly */}
+              <div className="pro-aircraft-photo">
+                {proPhotoLoading && !proPhotoError && (
+                  <div className="pro-photo-loading">
+                    <div className="pro-photo-loading-radar">
+                      <Radar size={32} className="pro-photo-radar-icon" />
+                      <div className="pro-photo-radar-sweep" />
                     </div>
+                    <span>{proPhotoStatus?.message || 'Loading photo...'}</span>
                   </div>
-                  <div className="pro-stat">
-                    <div className="pro-stat-label"><MapPin size={14} /> DISTANCE</div>
-                    <div className={`pro-stat-value distance-value ${proDistTrend || ''}`}>
-                      {proDistTrend === 'approaching' ? (
-                        <ArrowDownRight size={14} className="trend-icon approaching" />
-                      ) : proDistTrend === 'receding' ? (
-                        <ArrowUpRight size={14} className="trend-icon receding" />
-                      ) : (
-                        <ArrowRight size={14} className="trend-icon stable" />
-                      )}
-                      {proDistanceNm?.toFixed(1) ?? '--'} <span className="unit">nm</span>
-                    </div>
+                )}
+                {!proPhotoError && proPhotoUrl && (
+                  <img
+                    key={`${liveAircraft.hex}-${proPhotoRetry}-${proPhotoUrl}`}
+                    src={proPhotoUrl}
+                    alt={liveAircraft.flight?.trim() || liveAircraft.hex}
+                    onLoad={() => {
+                      setProPhotoLoading(false);
+                      setProPhotoStatus(null);
+                    }}
+                    onError={() => {
+                      setProPhotoError(true);
+                      setProPhotoLoading(false);
+                      setProPhotoStatus(null);
+                    }}
+                    style={{ opacity: proPhotoLoading ? 0 : 1 }}
+                    loading="lazy"
+                  />
+                )}
+                {proPhotoError && !proPhotoLoading && (
+                  <div className="pro-photo-placeholder">
+                    <Plane size={48} />
+                    <span>{proPhotoStatus?.message || 'No Photo Available'}</span>
+                    <button
+                      className="pro-photo-retry"
+                      onClick={() => {
+                        // Clear any existing retry loop
+                        if (proPhotoRetryRef.current) {
+                          clearInterval(proPhotoRetryRef.current);
+                          proPhotoRetryRef.current = null;
+                        }
+
+                        setProPhotoError(false);
+                        setProPhotoLoading(true);
+                        setProPhotoRetry((c) => c + 1);
+
+                        const startTime = Date.now();
+                        const retryDuration = 30000; // 30 seconds
+                        const retryInterval = 3000; // Try every 3 seconds
+                        const aircraftHex = liveAircraft.hex;
+
+                        const attemptFetch = async () => {
+                          const elapsed = Date.now() - startTime;
+                          const remaining = Math.ceil((retryDuration - elapsed) / 1000);
+                          setProPhotoStatus({ message: `Fetching photo... (${remaining}s)` });
+
+                          try {
+                            let data = null;
+                            if (wsRequest && wsConnected) {
+                              data = await wsRequest('photo-cache', { icao: aircraftHex });
+                              if (data?.error) data = null;
+                            } else {
+                              const res = await fetch(
+                                `${config.apiBaseUrl || ''}/api/v1/airframes/${aircraftHex}/photos`
+                              );
+                              data = await safeJson(res);
+                            }
+
+                            if (
+                              data?.photo_url ||
+                              data?.photo_thumbnail_url ||
+                              data?.thumbnail_url
+                            ) {
+                              setProPhotoUrl(
+                                resolvePhotoUrl(
+                                  data.photo_url || data.photo_thumbnail_url || data.thumbnail_url
+                                )
+                              );
+                              if (proPhotoRetryRef.current) {
+                                clearInterval(proPhotoRetryRef.current);
+                                proPhotoRetryRef.current = null;
+                              }
+                              return true;
+                            }
+                          } catch {
+                            // Continue retrying
+                          }
+                          return false;
+                        };
+
+                        // First attempt immediately
+                        attemptFetch().then((success) => {
+                          if (success) return;
+
+                          // Set up retry loop
+                          proPhotoRetryRef.current = setInterval(async () => {
+                            const elapsed = Date.now() - startTime;
+                            if (elapsed >= retryDuration) {
+                              // Time's up
+                              clearInterval(proPhotoRetryRef.current);
+                              proPhotoRetryRef.current = null;
+                              setProPhotoError(true);
+                              setProPhotoLoading(false);
+                              setProPhotoStatus({ message: 'Photo fetch timed out' });
+                              return;
+                            }
+                            await attemptFetch();
+                          }, retryInterval);
+                        });
+                      }}
+                    >
+                      <RefreshCw size={14} /> Retry
+                    </button>
                   </div>
-                  <div className="pro-stat">
-                    <div className="pro-stat-label"><Signal size={14} /> RSSI</div>
-                    <div className="pro-stat-value rssi-stat">
-                      {proRssi != null ? (
-                        <>
-                          <span className={`signal-bars ${proSignalClass}`}>
-                            <span className="bar bar-1"></span>
-                            <span className="bar bar-2"></span>
-                            <span className="bar bar-3"></span>
-                            <span className="bar bar-4"></span>
+                )}
+              </div>
+
+              {/* Operator Label */}
+              {aircraftInfo[liveAircraft.hex] &&
+                (aircraftInfo[liveAircraft.hex].operator ||
+                  aircraftInfo[liveAircraft.hex].owner) && (
+                  <div className="pro-operator-label">
+                    <Building2 size={14} />
+                    <span>
+                      {aircraftInfo[liveAircraft.hex].operator ||
+                        aircraftInfo[liveAircraft.hex].owner}
+                    </span>
+                  </div>
+                )}
+
+              {/* Airframe Lookup Error */}
+              {getAircraftError(liveAircraft.hex) && (
+                <div
+                  className="pro-airframe-error"
+                  title={getAircraftError(liveAircraft.hex).error_message}
+                >
+                  <AlertTriangle size={14} />
+                  <span>Info lookup failed ({getAircraftError(liveAircraft.hex).source})</span>
+                  <button
+                    className="pro-error-dismiss"
+                    onClick={() => clearAircraftError(liveAircraft.hex)}
+                    title="Dismiss"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
+
+              <div className="pro-stats-grid">
+                {(() => {
+                  // Calculate values for color coding
+                  const proAltitude =
+                    liveAircraft.alt_baro || liveAircraft.alt_geom || liveAircraft.alt || 0;
+                  const proSpeed = liveAircraft.gs || liveAircraft.tas;
+                  const proAltClass = getAltitudeColorClass(proAltitude);
+                  const proSpeedClass = getSpeedColorClass(proSpeed, proAltitude);
+
+                  // Track distance trend - reset if aircraft changed
+                  const proDistanceNm =
+                    liveAircraft.distance_nm || getDistanceNm(liveAircraft.lat, liveAircraft.lon);
+                  if (proTrackedAircraftRef.current !== liveAircraft.hex) {
+                    // Aircraft changed, reset tracking
+                    proTrackedAircraftRef.current = liveAircraft.hex;
+                    proPrevDistanceRef.current = proDistanceNm;
+                    proDistanceTrendRef.current = null;
+                  } else if (proPrevDistanceRef.current !== null) {
+                    const delta = proDistanceNm - proPrevDistanceRef.current;
+                    // Use very small threshold (0.01 nm = ~60 feet) to detect movement
+                    if (delta < -0.01) {
+                      proDistanceTrendRef.current = 'approaching';
+                    } else if (delta > 0.01) {
+                      proDistanceTrendRef.current = 'receding';
+                    }
+                    // Keep previous trend if no significant change (don't reset to stable)
+                    proPrevDistanceRef.current = proDistanceNm;
+                  }
+                  const proDistTrend = proDistanceTrendRef.current;
+
+                  // RSSI signal strength
+                  const proRssi = liveAircraft.rssi;
+                  const proSignalClass =
+                    proRssi !== undefined ? getSignalStrengthClass(proRssi) : 'weak';
+
+                  return (
+                    <>
+                      <div className="pro-stat">
+                        <div className="pro-stat-label">
+                          <Crosshair size={14} /> ALTITUDE
+                        </div>
+                        <div className={`pro-stat-value ${proAltClass}`}>
+                          {proAltitude.toLocaleString()} <span className="unit">ft</span>
+                        </div>
+                      </div>
+                      <div className="pro-stat">
+                        <div className="pro-stat-label">
+                          <Navigation size={14} /> SPEED
+                        </div>
+                        <div className={`pro-stat-value ${proSpeedClass}`}>
+                          {proSpeed || '--'} <span className="unit">kts</span>
+                        </div>
+                      </div>
+                      <div className="pro-stat">
+                        <div className="pro-stat-label">
+                          <Plane size={14} /> TYPE
+                        </div>
+                        <div className="pro-stat-value">{liveAircraft.type || '--'}</div>
+                      </div>
+                      <div className="pro-stat">
+                        <div className="pro-stat-label">
+                          <Radio size={14} /> SQUAWK
+                        </div>
+                        <div className="pro-stat-value">{liveAircraft.squawk || '1200'}</div>
+                      </div>
+                      <div className="pro-stat">
+                        <div className="pro-stat-label">
+                          <TrendingUp size={14} /> V/S
+                        </div>
+                        {(() => {
+                          const vs =
+                            liveAircraft.vr ??
+                            liveAircraft.baro_rate ??
+                            liveAircraft.geom_rate ??
+                            0;
+                          const isExtreme = Math.abs(vs) > 3000;
+                          const vsClass = vs > 0 ? 'climbing' : vs < 0 ? 'descending' : '';
+                          return (
+                            <div
+                              className={`pro-stat-value ${vsClass} ${isExtreme ? 'extreme-vs' : ''}`}
+                            >
+                              {vs > 0 ? '+' : ''}
+                              {vs} <span className="unit">fpm</span>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                      <div className="pro-stat">
+                        <div className="pro-stat-label">
+                          <LocateFixed size={14} /> TRACK
+                        </div>
+                        <div className="pro-stat-value">
+                          {Math.round(liveAircraft.track || liveAircraft.true_heading || 0)}°
+                          <span className="unit cardinal">
+                            {windDirToCardinal(liveAircraft.track || liveAircraft.true_heading)}
                           </span>
-                          <span>{proRssi.toFixed(0)}</span>
-                          <span className="unit">dB</span>
-                        </>
-                      ) : (
-                        <>-- <span className="unit">dB</span></>
-                      )}
-                    </div>
+                        </div>
+                      </div>
+                      <div className="pro-stat">
+                        <div className="pro-stat-label">
+                          <MapPin size={14} /> DISTANCE
+                        </div>
+                        <div className={`pro-stat-value distance-value ${proDistTrend || ''}`}>
+                          {proDistTrend === 'approaching' ? (
+                            <ArrowDownRight size={14} className="trend-icon approaching" />
+                          ) : proDistTrend === 'receding' ? (
+                            <ArrowUpRight size={14} className="trend-icon receding" />
+                          ) : (
+                            <ArrowRight size={14} className="trend-icon stable" />
+                          )}
+                          {proDistanceNm?.toFixed(1) ?? '--'} <span className="unit">nm</span>
+                        </div>
+                      </div>
+                      <div className="pro-stat">
+                        <div className="pro-stat-label">
+                          <Signal size={14} /> RSSI
+                        </div>
+                        <div className="pro-stat-value rssi-stat">
+                          {proRssi != null ? (
+                            <>
+                              <span className={`signal-bars ${proSignalClass}`}>
+                                <span className="bar bar-1"></span>
+                                <span className="bar bar-2"></span>
+                                <span className="bar bar-3"></span>
+                                <span className="bar bar-4"></span>
+                              </span>
+                              <span>{proRssi.toFixed(0)}</span>
+                              <span className="unit">dB</span>
+                            </>
+                          ) : (
+                            <>
+                              -- <span className="unit">dB</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+
+              <div className="pro-graphs-container">
+                <div className="pro-profile-chart">
+                  <div className="pro-section-header">
+                    ALTITUDE PROFILE
+                    <span className="profile-value cyan">
+                      {(
+                        liveAircraft.alt_baro ||
+                        liveAircraft.alt_geom ||
+                        liveAircraft.alt ||
+                        0
+                      ).toLocaleString()}
+                    </span>
                   </div>
-                </>
-              );
-            })()}
-          </div>
+                  <canvas
+                    className="profile-canvas"
+                    width={280}
+                    height={60}
+                    ref={altProfileCanvasRef}
+                  />
+                </div>
 
-          <div className="pro-graphs-container">
-            <div className="pro-profile-chart">
-              <div className="pro-section-header">
-                ALTITUDE PROFILE
-                <span className="profile-value cyan">{(liveAircraft.alt_baro || liveAircraft.alt_geom || liveAircraft.alt || 0).toLocaleString()}</span>
+                <div className="pro-profile-chart">
+                  <div className="pro-section-header">
+                    SPEED PROFILE
+                    <span className="profile-value green">
+                      {liveAircraft.gs || liveAircraft.tas || '--'}
+                    </span>
+                  </div>
+                  <canvas
+                    className="profile-canvas"
+                    width={280}
+                    height={60}
+                    ref={speedProfileCanvasRef}
+                  />
+                </div>
+
+                <div className="pro-profile-chart">
+                  <div className="pro-section-header">
+                    VERTICAL SPEED
+                    <span
+                      className={`profile-value ${(liveAircraft.vr ?? liveAircraft.baro_rate ?? 0) > 0 ? 'cyan' : (liveAircraft.vr ?? liveAircraft.baro_rate ?? 0) < 0 ? 'red' : ''}`}
+                    >
+                      {(liveAircraft.vr ?? liveAircraft.baro_rate ?? liveAircraft.geom_rate ?? 0) >
+                      0
+                        ? '+'
+                        : ''}
+                      {liveAircraft.vr ?? liveAircraft.baro_rate ?? liveAircraft.geom_rate ?? 0}
+                    </span>
+                  </div>
+                  <canvas
+                    className="profile-canvas"
+                    width={280}
+                    height={60}
+                    ref={vsProfileCanvasRef}
+                  />
+                </div>
+
+                <div className="pro-profile-chart">
+                  <div className="pro-section-header">
+                    DISTANCE
+                    <span className="profile-value purple">
+                      {(
+                        liveAircraft.distance_nm ||
+                        getDistanceNm(liveAircraft.lat, liveAircraft.lon)
+                      ).toFixed(1)}
+                    </span>
+                  </div>
+                  <canvas
+                    className="profile-canvas"
+                    width={280}
+                    height={60}
+                    ref={distProfileCanvasRef}
+                  />
+                </div>
+
+                <div className="pro-track-history">
+                  <div className="pro-section-header">TRACK HISTORY</div>
+                  <canvas
+                    className="track-history-canvas"
+                    width={280}
+                    height={80}
+                    ref={trackCanvasRef}
+                  />
+                </div>
               </div>
-              <canvas
-                className="profile-canvas"
-                width={280}
-                height={60}
-                ref={altProfileCanvasRef}
-              />
-            </div>
 
-            <div className="pro-profile-chart">
-              <div className="pro-section-header">
-                SPEED PROFILE
-                <span className="profile-value green">{liveAircraft.gs || liveAircraft.tas || '--'}</span>
+              <div className="pro-external-links">
+                <div className="pro-section-header">EXTERNAL</div>
+                <div className="pro-links">
+                  <a
+                    href={`https://flightaware.com/live/flight/${liveAircraft.flight?.trim() || liveAircraft.hex}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="pro-link"
+                  >
+                    FlightAware <ExternalLink size={12} />
+                  </a>
+                  <a
+                    href={`https://globe.adsbexchange.com/?icao=${liveAircraft.hex}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="pro-link"
+                  >
+                    ADSBx <ExternalLink size={12} />
+                  </a>
+                </div>
               </div>
-              <canvas
-                className="profile-canvas"
-                width={280}
-                height={60}
-                ref={speedProfileCanvasRef}
-              />
             </div>
-
-            <div className="pro-profile-chart">
-              <div className="pro-section-header">
-                VERTICAL SPEED
-                <span className={`profile-value ${(liveAircraft.vr ?? liveAircraft.baro_rate ?? 0) > 0 ? 'cyan' : (liveAircraft.vr ?? liveAircraft.baro_rate ?? 0) < 0 ? 'red' : ''}`}>
-                  {(liveAircraft.vr ?? liveAircraft.baro_rate ?? liveAircraft.geom_rate ?? 0) > 0 ? '+' : ''}{liveAircraft.vr ?? liveAircraft.baro_rate ?? liveAircraft.geom_rate ?? 0}
-                </span>
-              </div>
-              <canvas
-                className="profile-canvas"
-                width={280}
-                height={60}
-                ref={vsProfileCanvasRef}
-              />
-            </div>
-
-            <div className="pro-profile-chart">
-              <div className="pro-section-header">
-                DISTANCE
-                <span className="profile-value purple">{(liveAircraft.distance_nm || getDistanceNm(liveAircraft.lat, liveAircraft.lon)).toFixed(1)}</span>
-              </div>
-              <canvas
-                className="profile-canvas"
-                width={280}
-                height={60}
-                ref={distProfileCanvasRef}
-              />
-            </div>
-
-            <div className="pro-track-history">
-              <div className="pro-section-header">TRACK HISTORY</div>
-              <canvas
-                className="track-history-canvas"
-                width={280}
-                height={80}
-                ref={trackCanvasRef}
-              />
-            </div>
-          </div>
-
-          <div className="pro-external-links">
-            <div className="pro-section-header">EXTERNAL</div>
-            <div className="pro-links">
-              <a href={`https://flightaware.com/live/flight/${liveAircraft.flight?.trim() || liveAircraft.hex}`} target="_blank" rel="noopener noreferrer" className="pro-link">
-                FlightAware <ExternalLink size={12} />
-              </a>
-              <a href={`https://globe.adsbexchange.com/?icao=${liveAircraft.hex}`} target="_blank" rel="noopener noreferrer" className="pro-link">
-                ADSBx <ExternalLink size={12} />
-              </a>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
+          );
+        })()}
 
       {/* ACARS Messages Panel */}
       {showAcarsPanel && (
@@ -8947,67 +10035,71 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           {/* ACARS Filters */}
           <div className="acars-filters">
             <label className="acars-filter-toggle">
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 checked={acarsFilters.hideEmpty}
-                onChange={(e) => setAcarsFilters({...acarsFilters, hideEmpty: e.target.checked})}
+                onChange={(e) => setAcarsFilters({ ...acarsFilters, hideEmpty: e.target.checked })}
               />
               <span>Hide empty</span>
             </label>
-            <select 
+            <select
               className="acars-source-filter"
               value={acarsFilters.sourceFilter}
-              onChange={(e) => setAcarsFilters({...acarsFilters, sourceFilter: e.target.value})}
+              onChange={(e) => setAcarsFilters({ ...acarsFilters, sourceFilter: e.target.value })}
             >
               <option value="all">All Sources</option>
               <option value="acars">ACARS Only</option>
               <option value="vdlm2">VDL2 Only</option>
             </select>
-            <input 
+            <input
               type="text"
               className="acars-callsign-filter"
               placeholder="Callsign..."
               value={acarsFilters.callsignFilter}
-              onChange={(e) => setAcarsFilters({...acarsFilters, callsignFilter: e.target.value})}
+              onChange={(e) => setAcarsFilters({ ...acarsFilters, callsignFilter: e.target.value })}
             />
           </div>
           <div className="acars-messages">
             {(() => {
               // Filter messages
               let filtered = acarsMessages;
-              
+
               // Hide empty messages
               if (acarsFilters.hideEmpty) {
-                filtered = filtered.filter(msg => msg.text && msg.text.trim().length > 0);
+                filtered = filtered.filter((msg) => msg.text && msg.text.trim().length > 0);
               }
-              
+
               // Source filter
               if (acarsFilters.sourceFilter !== 'all') {
-                filtered = filtered.filter(msg => msg.source === acarsFilters.sourceFilter);
+                filtered = filtered.filter((msg) => msg.source === acarsFilters.sourceFilter);
               }
-              
+
               // Callsign filter
               if (acarsFilters.callsignFilter) {
                 const cf = acarsFilters.callsignFilter.toLowerCase();
-                filtered = filtered.filter(msg => 
-                  (msg.callsign && msg.callsign.toLowerCase().includes(cf)) ||
-                  (msg.icao_hex && msg.icao_hex.toLowerCase().includes(cf))
+                filtered = filtered.filter(
+                  (msg) =>
+                    (msg.callsign && msg.callsign.toLowerCase().includes(cf)) ||
+                    (msg.icao_hex && msg.icao_hex.toLowerCase().includes(cf))
                 );
               }
-              
+
               if (filtered.length === 0) {
                 return <div className="acars-empty">No messages match filters</div>;
               }
-              
+
               return filtered.slice(0, 50).map((msg, i) => {
                 // Find matching aircraft by ICAO hex or callsign (handles IATA/ICAO conversion)
-                const matchingAircraft = aircraft.find(ac =>
-                  (msg.icao_hex && ac.hex?.toUpperCase() === msg.icao_hex.toUpperCase()) ||
-                  callsignsMatch(msg.callsign, ac.flight)
+                const matchingAircraft = aircraft.find(
+                  (ac) =>
+                    (msg.icao_hex && ac.hex?.toUpperCase() === msg.icao_hex.toUpperCase()) ||
+                    callsignsMatch(msg.callsign, ac.flight)
                 );
 
                 // Check cache for hex lookup by callsign (from history API)
-                const cachedHex = msg.callsign ? callsignHexCache[msg.callsign.trim().toUpperCase()] : null;
+                const cachedHex = msg.callsign
+                  ? callsignHexCache[msg.callsign.trim().toUpperCase()]
+                  : null;
 
                 // Get hex for linking - prefer matched aircraft, then message icao_hex, then cached lookup
                 const linkHex = matchingAircraft?.hex || msg.icao_hex || cachedHex;
@@ -9025,10 +10117,20 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                         setAircraftDetailHex(linkHex);
                       }
                     }}
-                    title={isMatched ? 'Click to view aircraft (in range)' : isFromHistory ? 'Click to view aircraft (from history)' : canLink ? 'Click to view aircraft details' : 'Aircraft not in range - no ICAO hex'}
+                    title={
+                      isMatched
+                        ? 'Click to view aircraft (in range)'
+                        : isFromHistory
+                          ? 'Click to view aircraft (from history)'
+                          : canLink
+                            ? 'Click to view aircraft details'
+                            : 'Aircraft not in range - no ICAO hex'
+                    }
                   >
                     <div className="acars-msg-header">
-                      <span className={`acars-callsign ${canLink ? 'clickable' : ''}`}>{msg.callsign || msg.icao_hex || 'Unknown'}</span>
+                      <span className={`acars-callsign ${canLink ? 'clickable' : ''}`}>
+                        {msg.callsign || msg.icao_hex || 'Unknown'}
+                      </span>
                       <span className="acars-label">{msg.label || '--'}</span>
                       <span className={`acars-source-badge ${msg.source}`}>{msg.source}</span>
                       <span className="acars-time">
@@ -9047,13 +10149,13 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       {/* Aircraft Detail Modal */}
       {aircraftDetailHex && (
         <div className="aircraft-detail-overlay" onClick={() => openAircraftDetail(null)}>
-          <div className="aircraft-detail-modal" onClick={e => e.stopPropagation()}>
+          <div className="aircraft-detail-modal" onClick={(e) => e.stopPropagation()}>
             <AircraftDetailPage
               hex={aircraftDetailHex}
               apiUrl={config.apiBaseUrl}
               onClose={() => openAircraftDetail(null)}
               onSelectAircraft={(newHex) => openAircraftDetail(newHex)}
-              aircraft={aircraft.find(a => a.hex === aircraftDetailHex)}
+              aircraft={aircraft.find((a) => a.hex === aircraftDetailHex)}
               aircraftInfo={aircraftInfo[aircraftDetailHex]}
               feederLocation={{ lat: feederLat, lon: feederLon }}
             />
@@ -9082,14 +10184,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         {/* Announce aircraft count */}
         {`${sortedAircraft.length} aircraft in view.`}
         {/* Announce selected aircraft */}
-        {selectedAircraft && ` Selected: ${selectedAircraft.flight?.trim() || selectedAircraft.hex}, altitude ${selectedAircraft.alt || 'unknown'} feet, speed ${selectedAircraft.gs || 'unknown'} knots.`}
+        {selectedAircraft &&
+          ` Selected: ${selectedAircraft.flight?.trim() || selectedAircraft.hex}, altitude ${selectedAircraft.alt || 'unknown'} feet, speed ${selectedAircraft.gs || 'unknown'} knots.`}
         {/* Announce active safety alerts */}
-        {safetyEvents.length > 0 && ` ${safetyEvents.length} active safety alert${safetyEvents.length > 1 ? 's' : ''}.`}
+        {safetyEvents.length > 0 &&
+          ` ${safetyEvents.length} active safety alert${safetyEvents.length > 1 ? 's' : ''}.`}
       </div>
     </div>
   );
 }
-
-
 
 export { MapView };

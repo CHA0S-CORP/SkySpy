@@ -786,7 +786,9 @@
 /* Selected for comparison state on event cards */
 .safety-event-item.selected-for-comparison {
   border-color: var(--accent-cyan);
-  box-shadow: 0 0 0 2px rgba(0, 200, 255, 0.2), 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 0 0 2px rgba(0, 200, 255, 0.2),
+    0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
 /* Comparison checkbox styling */
@@ -988,7 +990,8 @@
 }
 
 @keyframes live-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1);
   }

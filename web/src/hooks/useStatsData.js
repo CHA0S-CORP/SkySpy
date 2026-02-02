@@ -7,7 +7,7 @@ import {
   computeTopAircraft,
   computeAltitudeData,
   computeFleetBreakdown,
-  computeSafetyEventsByType
+  computeSafetyEventsByType,
 } from '../components/views/stats/statsHelpers';
 
 /**
@@ -25,7 +25,7 @@ export function useStatsData({
   wsStats,
   antennaAnalyticsProp,
   extendedStatsProp,
-  filters
+  filters,
 }) {
   const {
     timeRange,
@@ -35,7 +35,7 @@ export function useStatsData({
     maxAltitude,
     minDistance,
     maxDistance,
-    aircraftType
+    aircraftType,
   } = filters;
 
   // Local antenna analytics state - uses prop if available, otherwise fetches once on mount
@@ -60,7 +60,7 @@ export function useStatsData({
     maxAltitude,
     minDistance,
     maxDistance,
-    aircraftType
+    aircraftType,
   });
 
   // Socket options
@@ -70,12 +70,12 @@ export function useStatsData({
   useEffect(() => {
     if (!antennaAnalyticsProp && wsRequest && wsConnected) {
       wsRequest('antenna-analytics', {})
-        .then(data => {
+        .then((data) => {
           if (data && !data.error) {
             setLocalAntennaAnalytics(data);
           }
         })
-        .catch(err => console.debug('Antenna analytics fetch error:', err.message));
+        .catch((err) => console.debug('Antenna analytics fetch error:', err.message));
     }
   }, [antennaAnalyticsProp, wsRequest, wsConnected]);
 
@@ -113,28 +113,103 @@ export function useStatsData({
   const top = computedTop || fetchedTop;
 
   // Historical data - fetch once, refresh only on filter change (no interval polling)
-  const { data: histStats } = useSocketApi(`/api/v1/history/stats?${filterParams}`, null, apiBase, socketOpts);
-  const { data: acarsStats, loading: acarsStatsLoading } = useSocketApi(`/api/v1/acars/stats?hours=${selectedHours}`, null, apiBase, socketOpts);
-  const { data: safetyStats } = useSocketApi(`/api/v1/safety/stats?hours=${selectedHours}`, null, apiBase, socketOpts);
-  const { data: sessionsData } = useSocketApi(`/api/v1/sessions?hours=${selectedHours}&limit=500${showMilitaryOnly ? '&military_only=true' : ''}`, null, apiBase, socketOpts);
+  const { data: histStats } = useSocketApi(
+    `/api/v1/history/stats?${filterParams}`,
+    null,
+    apiBase,
+    socketOpts
+  );
+  const { data: acarsStats, loading: acarsStatsLoading } = useSocketApi(
+    `/api/v1/acars/stats?hours=${selectedHours}`,
+    null,
+    apiBase,
+    socketOpts
+  );
+  const { data: safetyStats } = useSocketApi(
+    `/api/v1/safety/stats?hours=${selectedHours}`,
+    null,
+    apiBase,
+    socketOpts
+  );
+  const { data: sessionsData } = useSocketApi(
+    `/api/v1/sessions?hours=${selectedHours}&limit=500${showMilitaryOnly ? '&military_only=true' : ''}`,
+    null,
+    apiBase,
+    socketOpts
+  );
 
   // System status from Django API - very infrequent polling (5 min) or socket request
-  const { data: systemData } = useSocketApi('/api/v1/system/status', wsConnected ? null : 300000, apiBase, socketOpts);
+  const { data: systemData } = useSocketApi(
+    '/api/v1/system/status',
+    wsConnected ? null : 300000,
+    apiBase,
+    socketOpts
+  );
 
   // Analytics endpoints - fetch once, no polling (data doesn't change rapidly)
-  const { data: trendsData } = useSocketApi(`/api/v1/history/trends?${filterParams}&interval=hour`, null, apiBase, socketOpts);
-  const { data: topPerformersData } = useSocketApi(`/api/v1/history/top?${filterParams}&limit=10`, null, apiBase, socketOpts);
-  const { data: distanceAnalytics } = useSocketApi(`/api/v1/history/analytics/distance?${filterParams}`, null, apiBase, socketOpts);
-  const { data: speedAnalytics } = useSocketApi(`/api/v1/history/analytics/speed?${filterParams}`, null, apiBase, socketOpts);
-  const { data: correlationData } = useSocketApi(`/api/v1/history/analytics/correlation?${filterParams}`, null, apiBase, socketOpts);
+  const { data: trendsData } = useSocketApi(
+    `/api/v1/history/trends?${filterParams}&interval=hour`,
+    null,
+    apiBase,
+    socketOpts
+  );
+  const { data: topPerformersData } = useSocketApi(
+    `/api/v1/history/top?${filterParams}&limit=10`,
+    null,
+    apiBase,
+    socketOpts
+  );
+  const { data: distanceAnalytics } = useSocketApi(
+    `/api/v1/history/analytics/distance?${filterParams}`,
+    null,
+    apiBase,
+    socketOpts
+  );
+  const { data: speedAnalytics } = useSocketApi(
+    `/api/v1/history/analytics/speed?${filterParams}`,
+    null,
+    apiBase,
+    socketOpts
+  );
+  const { data: correlationData } = useSocketApi(
+    `/api/v1/history/analytics/correlation?${filterParams}`,
+    null,
+    apiBase,
+    socketOpts
+  );
 
   // Extended stats from Django API (with pushed data override)
   // When Socket.IO pushes stats:update events, use that data instead of fetching
-  const { data: fetchedFlightPatterns, loading: flightPatternsLoading } = useSocketApi(`/api/v1/stats/flight-patterns?${filterParams}`, null, apiBase, socketOpts);
-  const { data: fetchedGeographic, loading: geographicLoading } = useSocketApi(`/api/v1/stats/geographic?${filterParams}`, null, apiBase, socketOpts);
-  const { data: fetchedTrackingQuality, loading: trackingQualityLoading } = useSocketApi(`/api/v1/stats/tracking-quality?${filterParams}`, null, apiBase, socketOpts);
-  const { data: fetchedEngagement, loading: engagementLoading } = useSocketApi(`/api/v1/stats/engagement?${filterParams}`, null, apiBase, socketOpts);
-  const { data: favoritesData, loading: favoritesLoading } = useSocketApi(`/api/v1/stats/favorites?hours=${selectedHours}`, null, apiBase, socketOpts);
+  const { data: fetchedFlightPatterns, loading: flightPatternsLoading } = useSocketApi(
+    `/api/v1/stats/flight-patterns?${filterParams}`,
+    null,
+    apiBase,
+    socketOpts
+  );
+  const { data: fetchedGeographic, loading: geographicLoading } = useSocketApi(
+    `/api/v1/stats/geographic?${filterParams}`,
+    null,
+    apiBase,
+    socketOpts
+  );
+  const { data: fetchedTrackingQuality, loading: trackingQualityLoading } = useSocketApi(
+    `/api/v1/stats/tracking-quality?${filterParams}`,
+    null,
+    apiBase,
+    socketOpts
+  );
+  const { data: fetchedEngagement, loading: engagementLoading } = useSocketApi(
+    `/api/v1/stats/engagement?${filterParams}`,
+    null,
+    apiBase,
+    socketOpts
+  );
+  const { data: favoritesData, loading: favoritesLoading } = useSocketApi(
+    `/api/v1/stats/favorites?hours=${selectedHours}`,
+    null,
+    apiBase,
+    socketOpts
+  );
 
   // Use pushed stats when available, otherwise use fetched data
   const flightPatternsData = extendedStatsProp?.flightPatterns || fetchedFlightPatterns;
@@ -158,16 +233,21 @@ export function useStatsData({
     // Only update if stats changed meaningfully or enough time has passed (1 second minimum)
     const prev = lastStatsRef.current;
     const timeSinceLastUpdate = now - lastUpdateTimeRef.current;
-    const statsChanged = prev.messages !== currentMessages ||
-                         prev.total !== currentTotal ||
-                         prev.with_position !== currentWithPosition;
+    const statsChanged =
+      prev.messages !== currentMessages ||
+      prev.total !== currentTotal ||
+      prev.with_position !== currentWithPosition;
 
     if (!statsChanged || timeSinceLastUpdate < 1000) {
       return;
     }
 
     // Update refs
-    lastStatsRef.current = { messages: currentMessages, total: currentTotal, with_position: currentWithPosition };
+    lastStatsRef.current = {
+      messages: currentMessages,
+      total: currentTotal,
+      with_position: currentWithPosition,
+    };
     lastUpdateTimeRef.current = now;
 
     let rate = 0;
@@ -186,16 +266,19 @@ export function useStatsData({
       time: now,
       messages: rate,
       aircraft: currentTotal,
-      withPosition: currentWithPosition
+      withPosition: currentWithPosition,
     };
 
-    setThroughputHistory(prev => [...prev, newPoint].slice(-60));
-    setAircraftHistory(prev => [...prev, { time: now, count: currentTotal }].slice(-60));
+    setThroughputHistory((prev) => [...prev, newPoint].slice(-60));
+    setAircraftHistory((prev) => [...prev, { time: now, count: currentTotal }].slice(-60));
   }, [stats, lastMessageCount, throughputHistory]);
 
   // Computed data for charts
   const altitudeData = useMemo(() => computeAltitudeData(stats), [stats]);
-  const fleetBreakdown = useMemo(() => computeFleetBreakdown(sessionsData, showMilitaryOnly), [sessionsData, showMilitaryOnly]);
+  const fleetBreakdown = useMemo(
+    () => computeFleetBreakdown(sessionsData, showMilitaryOnly),
+    [sessionsData, showMilitaryOnly]
+  );
   const safetyEventsByType = useMemo(() => computeSafetyEventsByType(safetyStats), [safetyStats]);
 
   const emergencyAircraft = stats?.emergency_squawks || [];
@@ -247,7 +330,7 @@ export function useStatsData({
 
     // Helpers
     selectedHours,
-    filterParams
+    filterParams,
   };
 }
 

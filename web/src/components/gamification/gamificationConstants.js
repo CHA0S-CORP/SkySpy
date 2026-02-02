@@ -1,6 +1,4 @@
-import {
-  Target, Zap, Clock, Flame, Crown, Plane, Globe, Radio, Star, Award
-} from 'lucide-react';
+import { Target, Zap, Clock, Flame, Crown, Plane, Globe, Radio, Star, Award } from 'lucide-react';
 
 // Time range options
 export const TIME_RANGES = {
@@ -8,7 +6,7 @@ export const TIME_RANGES = {
   '7d': 168,
   '30d': 720,
   '90d': 2160,
-  'all': 8760
+  all: 8760,
 };
 
 // Icon mapping for records
@@ -23,7 +21,7 @@ export const RECORD_ICONS = {
   most_acars: Radio,
   earliest_morning: Star,
   latest_night: Star,
-  default: Award
+  default: Award,
 };
 
 // Rarity colors
@@ -32,7 +30,7 @@ export const RARITY_COLORS = {
   epic: '#a371f7',
   rare: '#00c8ff',
   uncommon: '#00ff88',
-  common: '#6b7280'
+  common: '#6b7280',
 };
 
 // Rarity labels
@@ -41,5 +39,5 @@ export const RARITY_LABELS = {
   epic: 'Epic',
   rare: 'Rare',
   uncommon: 'Uncommon',
-  common: 'Common'
+  common: 'Common',
 };

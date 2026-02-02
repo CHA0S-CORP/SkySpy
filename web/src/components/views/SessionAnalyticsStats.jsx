@@ -1,8 +1,19 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Activity, Signal, BarChart3, Users, RefreshCw,
-  Gauge, CheckCircle, AlertCircle, TrendingUp,
-  Clock, Filter, ChevronDown, Eye, Repeat
+  Activity,
+  Signal,
+  BarChart3,
+  Users,
+  RefreshCw,
+  Gauge,
+  CheckCircle,
+  AlertCircle,
+  TrendingUp,
+  Clock,
+  Filter,
+  ChevronDown,
+  Eye,
+  Repeat,
 } from 'lucide-react';
 import { useStats } from '../../hooks';
 
@@ -23,7 +34,7 @@ export function SessionAnalyticsStats({ apiBase, wsRequest, wsConnected }) {
   const { sessionAnalytics, loading, error, refetch } = useStats(apiBase, {
     wsRequest,
     wsConnected,
-    hours: selectedHours
+    hours: selectedHours,
   });
 
   const data = sessionAnalytics;
@@ -34,7 +45,7 @@ export function SessionAnalyticsStats({ apiBase, wsRequest, wsConnected }) {
     session_stats = {},
     data_completeness = {},
     most_watched = [],
-    return_visitors = {}
+    return_visitors = {},
   } = data || {};
 
   // Quality score color
@@ -56,27 +67,29 @@ export function SessionAnalyticsStats({ apiBase, wsRequest, wsConnected }) {
       value: engagement.peak_concurrent ?? '--',
       icon: Users,
       trend: engagement.peak_trend,
-      description: 'Maximum aircraft tracked simultaneously'
+      description: 'Maximum aircraft tracked simultaneously',
     },
     {
       label: 'Return Aircraft',
       value: engagement.return_aircraft ?? '--',
       subtext: engagement.return_percentage ? `${engagement.return_percentage.toFixed(1)}%` : null,
       icon: Repeat,
-      description: 'Aircraft seen more than once'
+      description: 'Aircraft seen more than once',
     },
     {
       label: 'Avg Track Duration',
-      value: session_stats.avg_duration_min ? `${session_stats.avg_duration_min.toFixed(0)}m` : '--',
+      value: session_stats.avg_duration_min
+        ? `${session_stats.avg_duration_min.toFixed(0)}m`
+        : '--',
       icon: Clock,
-      description: 'Average time an aircraft is tracked'
+      description: 'Average time an aircraft is tracked',
     },
     {
       label: 'Total Sessions',
       value: session_stats.total_sessions?.toLocaleString() ?? '--',
       icon: Activity,
-      description: 'Total unique tracking sessions'
-    }
+      description: 'Total unique tracking sessions',
+    },
   ];
 
   // Completeness metrics
@@ -86,16 +99,19 @@ export function SessionAnalyticsStats({ apiBase, wsRequest, wsConnected }) {
     { label: 'Speed', value: data_completeness.speed_pct ?? 0, icon: Activity },
     { label: 'Callsign', value: data_completeness.callsign_pct ?? 0, icon: Users },
     { label: 'Squawk', value: data_completeness.squawk_pct ?? 0, icon: AlertCircle },
-    { label: 'Type', value: data_completeness.aircraft_type_pct ?? 0, icon: BarChart3 }
+    { label: 'Type', value: data_completeness.aircraft_type_pct ?? 0, icon: BarChart3 },
   ];
 
   // Summary stats
-  const summaryStats = useMemo(() => ({
-    qualityScore: qualityScore.toFixed(0),
-    peakConcurrent: engagement.peak_concurrent ?? 0,
-    totalSessions: session_stats.total_sessions ?? 0,
-    avgDuration: session_stats.avg_duration_min?.toFixed(0) ?? 0
-  }), [qualityScore, engagement, session_stats]);
+  const summaryStats = useMemo(
+    () => ({
+      qualityScore: qualityScore.toFixed(0),
+      peakConcurrent: engagement.peak_concurrent ?? 0,
+      totalSessions: session_stats.total_sessions ?? 0,
+      avgDuration: session_stats.avg_duration_min?.toFixed(0) ?? 0,
+    }),
+    [qualityScore, engagement, session_stats]
+  );
 
   if (loading && !data) {
     return (
@@ -140,7 +156,7 @@ export function SessionAnalyticsStats({ apiBase, wsRequest, wsConnected }) {
           <Clock size={14} />
           <span className="filter-label">Time Range</span>
           <div className="time-range-buttons">
-            {Object.keys(hours).map(range => (
+            {Object.keys(hours).map((range) => (
               <button
                 key={range}
                 className={`time-btn ${timeRange === range ? 'active' : ''}`}
@@ -156,7 +172,9 @@ export function SessionAnalyticsStats({ apiBase, wsRequest, wsConnected }) {
       {/* Summary Cards */}
       <div className="summary-cards">
         <div className="summary-card quality">
-          <div className="summary-icon"><Gauge size={20} /></div>
+          <div className="summary-icon">
+            <Gauge size={20} />
+          </div>
           <div className="summary-content">
             <span className="summary-value" style={{ color: getQualityColor(qualityScore) }}>
               {summaryStats.qualityScore}%
@@ -165,21 +183,27 @@ export function SessionAnalyticsStats({ apiBase, wsRequest, wsConnected }) {
           </div>
         </div>
         <div className="summary-card">
-          <div className="summary-icon"><Users size={20} /></div>
+          <div className="summary-icon">
+            <Users size={20} />
+          </div>
           <div className="summary-content">
             <span className="summary-value">{summaryStats.peakConcurrent}</span>
             <span className="summary-label">Peak Concurrent</span>
           </div>
         </div>
         <div className="summary-card">
-          <div className="summary-icon"><Activity size={20} /></div>
+          <div className="summary-icon">
+            <Activity size={20} />
+          </div>
           <div className="summary-content">
             <span className="summary-value">{summaryStats.totalSessions.toLocaleString()}</span>
             <span className="summary-label">Total Sessions</span>
           </div>
         </div>
         <div className="summary-card">
-          <div className="summary-icon"><Clock size={20} /></div>
+          <div className="summary-icon">
+            <Clock size={20} />
+          </div>
           <div className="summary-content">
             <span className="summary-value">{summaryStats.avgDuration}m</span>
             <span className="summary-label">Avg Duration</span>
@@ -228,7 +252,9 @@ export function SessionAnalyticsStats({ apiBase, wsRequest, wsConnected }) {
             <div className="quality-item">
               <span className="quality-label">Update Rate</span>
               <span className="quality-value">
-                {tracking_quality.update_rate_hz ? `${tracking_quality.update_rate_hz.toFixed(1)} Hz` : '--'}
+                {tracking_quality.update_rate_hz
+                  ? `${tracking_quality.update_rate_hz.toFixed(1)} Hz`
+                  : '--'}
               </span>
             </div>
             <div className="quality-item">
@@ -240,13 +266,17 @@ export function SessionAnalyticsStats({ apiBase, wsRequest, wsConnected }) {
             <div className="quality-item">
               <span className="quality-label">Coverage</span>
               <span className="quality-value">
-                {tracking_quality.coverage_pct ? `${tracking_quality.coverage_pct.toFixed(0)}%` : '--'}
+                {tracking_quality.coverage_pct
+                  ? `${tracking_quality.coverage_pct.toFixed(0)}%`
+                  : '--'}
               </span>
             </div>
             <div className="quality-item">
               <span className="quality-label">Msg Drop Rate</span>
               <span className="quality-value">
-                {tracking_quality.drop_rate_pct ? `${tracking_quality.drop_rate_pct.toFixed(2)}%` : '--'}
+                {tracking_quality.drop_rate_pct
+                  ? `${tracking_quality.drop_rate_pct.toFixed(2)}%`
+                  : '--'}
               </span>
             </div>
           </div>
@@ -266,15 +296,14 @@ export function SessionAnalyticsStats({ apiBase, wsRequest, wsConnected }) {
                 </div>
                 <div className="metric-content">
                   <span className="metric-value">{metric.value}</span>
-                  {metric.subtext && (
-                    <span className="metric-subtext">{metric.subtext}</span>
-                  )}
+                  {metric.subtext && <span className="metric-subtext">{metric.subtext}</span>}
                   <span className="metric-label">{metric.label}</span>
                   <span className="metric-description">{metric.description}</span>
                 </div>
                 {metric.trend && (
                   <span className={`metric-trend ${metric.trend > 0 ? 'up' : 'down'}`}>
-                    {metric.trend > 0 ? '+' : ''}{metric.trend}%
+                    {metric.trend > 0 ? '+' : ''}
+                    {metric.trend}%
                   </span>
                 )}
               </div>
@@ -306,7 +335,7 @@ export function SessionAnalyticsStats({ apiBase, wsRequest, wsConnected }) {
                     className="completeness-bar-fill"
                     style={{
                       width: `${item.value}%`,
-                      backgroundColor: getQualityColor(item.value)
+                      backgroundColor: getQualityColor(item.value),
                     }}
                   />
                 </div>
@@ -327,11 +356,15 @@ export function SessionAnalyticsStats({ apiBase, wsRequest, wsConnected }) {
                 <div key={aircraft.icao_hex || i} className="watched-item">
                   <span className="watched-rank">{i + 1}</span>
                   <div className="watched-info">
-                    <span className="watched-callsign">{aircraft.callsign || aircraft.icao_hex}</span>
+                    <span className="watched-callsign">
+                      {aircraft.callsign || aircraft.icao_hex}
+                    </span>
                     <span className="watched-type">{aircraft.aircraft_type || 'Unknown'}</span>
                   </div>
                   <div className="watched-stats">
-                    <span className="watched-duration">{aircraft.total_duration_min?.toFixed(0)}m</span>
+                    <span className="watched-duration">
+                      {aircraft.total_duration_min?.toFixed(0)}m
+                    </span>
                     <span className="watched-sessions">{aircraft.session_count} sessions</span>
                   </div>
                 </div>
@@ -353,7 +386,9 @@ export function SessionAnalyticsStats({ apiBase, wsRequest, wsConnected }) {
                 <span className="return-label">Returning Aircraft</span>
               </div>
               <div className="return-stat">
-                <span className="return-value">{return_visitors.return_rate?.toFixed(1) || 0}%</span>
+                <span className="return-value">
+                  {return_visitors.return_rate?.toFixed(1) || 0}%
+                </span>
                 <span className="return-label">Return Rate</span>
               </div>
               <div className="return-stat">
@@ -366,7 +401,9 @@ export function SessionAnalyticsStats({ apiBase, wsRequest, wsConnected }) {
                   <div className="frequent-list">
                     {return_visitors.frequent_visitors.slice(0, 5).map((visitor, i) => (
                       <div key={visitor.icao_hex || i} className="frequent-item">
-                        <span className="frequent-callsign">{visitor.callsign || visitor.icao_hex}</span>
+                        <span className="frequent-callsign">
+                          {visitor.callsign || visitor.icao_hex}
+                        </span>
                         <span className="frequent-visits">{visitor.visit_count} visits</span>
                       </div>
                     ))}

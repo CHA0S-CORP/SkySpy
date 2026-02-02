@@ -1,11 +1,7 @@
 import React from 'react';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 
-export function TelemetryOverlay({
-  telemetry,
-  isCollapsed,
-  onToggle
-}) {
+export function TelemetryOverlay({ telemetry, isCollapsed, onToggle }) {
   if (!telemetry) return null;
 
   const vs = telemetry.vr ?? telemetry.baro_rate ?? telemetry.geom_rate ?? null;
@@ -36,16 +32,12 @@ export function TelemetryOverlay({
           <div className="telem-row" aria-live="polite">
             <div className="telem-item">
               <span className="telem-label">ALT</span>
-              <span className="telem-value">
-                {telemetry.altitude?.toLocaleString() || '--'}
-              </span>
+              <span className="telem-value">{telemetry.altitude?.toLocaleString() || '--'}</span>
               <span className="telem-unit">ft</span>
             </div>
             <div className="telem-item">
               <span className="telem-label">GS</span>
-              <span className="telem-value">
-                {telemetry.gs?.toFixed(0) || '--'}
-              </span>
+              <span className="telem-value">{telemetry.gs?.toFixed(0) || '--'}</span>
               <span className="telem-unit">kts</span>
             </div>
             <div className="telem-item">
@@ -57,16 +49,12 @@ export function TelemetryOverlay({
             </div>
             <div className="telem-item">
               <span className="telem-label">HDG</span>
-              <span className="telem-value">
-                {telemetry.track?.toFixed(0) || '--'}
-              </span>
+              <span className="telem-value">{telemetry.track?.toFixed(0) || '--'}</span>
               <span className="telem-unit">°</span>
             </div>
           </div>
           <div className="telem-time">
-            {telemetry.timestamp
-              ? new Date(telemetry.timestamp).toLocaleTimeString()
-              : '--:--'}
+            {telemetry.timestamp ? new Date(telemetry.timestamp).toLocaleTimeString() : '--:--'}
           </div>
         </>
       )}

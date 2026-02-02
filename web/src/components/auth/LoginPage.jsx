@@ -31,11 +31,7 @@ function RadarBackground() {
       {/* Concentric rings */}
       <div className="radar-rings">
         {[1, 2, 3, 4, 5].map((ring) => (
-          <div
-            key={ring}
-            className="radar-ring-login"
-            style={{ '--ring-size': `${ring * 20}%` }}
-          />
+          <div key={ring} className="radar-ring-login" style={{ '--ring-size': `${ring * 20}%` }} />
         ))}
       </div>
 
@@ -84,9 +80,7 @@ function SkySkyLogo({ size = 'large' }) {
         <span className="logo-sky">Sky</span>
         <span className="logo-spy">Spy</span>
       </div>
-      {size === 'large' && (
-        <div className="logo-tagline">Aircraft Intelligence Platform</div>
-      )}
+      {size === 'large' && <div className="logo-tagline">Aircraft Intelligence Platform</div>}
     </div>
   );
 }
@@ -210,11 +204,7 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <button
-                type="submit"
-                className="login-button primary"
-                disabled={isSubmitting}
-              >
+              <button type="submit" className="login-button primary" disabled={isSubmitting}>
                 {isSubmitting ? (
                   <>
                     <Loader2 size={18} className="spin" />

@@ -4,7 +4,7 @@ export function LiveTabSkeleton() {
   return (
     <div className="detail-live skeleton" aria-busy="true" aria-label="Loading live status">
       <div className="live-stats-grid">
-        {[1, 2, 3, 4, 5, 6, 7].map(i => (
+        {[1, 2, 3, 4, 5, 6, 7].map((i) => (
           <div key={i} className="live-stat skeleton-stat">
             <div className="skeleton-text skeleton-label" />
             <div className="skeleton-value-pulse" />

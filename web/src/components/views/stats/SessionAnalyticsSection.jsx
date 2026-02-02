@@ -1,7 +1,15 @@
 import React, { useMemo } from 'react';
 import {
-  Activity, Signal, BarChart3, Users, RefreshCw,
-  Gauge, CheckCircle, AlertCircle, TrendingUp, Loader2
+  Activity,
+  Signal,
+  BarChart3,
+  Users,
+  RefreshCw,
+  Gauge,
+  CheckCircle,
+  AlertCircle,
+  TrendingUp,
+  Loader2,
 } from 'lucide-react';
 
 /**
@@ -32,7 +40,7 @@ export function SessionAnalyticsSection({ data, loading }) {
     tracking_quality = {},
     engagement = {},
     session_stats = {},
-    data_completeness = {}
+    data_completeness = {},
   } = data;
 
   // Quality score color
@@ -53,24 +61,26 @@ export function SessionAnalyticsSection({ data, loading }) {
       label: 'Peak Concurrent',
       value: engagement.peak_concurrent ?? '--',
       icon: Users,
-      trend: engagement.peak_trend
+      trend: engagement.peak_trend,
     },
     {
       label: 'Return Aircraft',
       value: engagement.return_aircraft ?? '--',
       subtext: engagement.return_percentage ? `${engagement.return_percentage.toFixed(1)}%` : null,
-      icon: RefreshCw
+      icon: RefreshCw,
     },
     {
       label: 'Avg Track Duration',
-      value: session_stats.avg_duration_min ? `${session_stats.avg_duration_min.toFixed(0)}m` : '--',
-      icon: Activity
+      value: session_stats.avg_duration_min
+        ? `${session_stats.avg_duration_min.toFixed(0)}m`
+        : '--',
+      icon: Activity,
     },
     {
       label: 'Total Sessions',
       value: session_stats.total_sessions?.toLocaleString() ?? '--',
-      icon: BarChart3
-    }
+      icon: BarChart3,
+    },
   ];
 
   // Completeness metrics
@@ -80,7 +90,7 @@ export function SessionAnalyticsSection({ data, loading }) {
     { label: 'Speed', value: data_completeness.speed_pct ?? 0 },
     { label: 'Callsign', value: data_completeness.callsign_pct ?? 0 },
     { label: 'Squawk', value: data_completeness.squawk_pct ?? 0 },
-    { label: 'Type', value: data_completeness.aircraft_type_pct ?? 0 }
+    { label: 'Type', value: data_completeness.aircraft_type_pct ?? 0 },
   ];
 
   return (
@@ -130,7 +140,9 @@ export function SessionAnalyticsSection({ data, loading }) {
             <div className="quality-item">
               <span className="quality-label">Update Rate</span>
               <span className="quality-value">
-                {tracking_quality.update_rate_hz ? `${tracking_quality.update_rate_hz.toFixed(1)} Hz` : '--'}
+                {tracking_quality.update_rate_hz
+                  ? `${tracking_quality.update_rate_hz.toFixed(1)} Hz`
+                  : '--'}
               </span>
             </div>
             <div className="quality-item">
@@ -142,7 +154,9 @@ export function SessionAnalyticsSection({ data, loading }) {
             <div className="quality-item">
               <span className="quality-label">Coverage</span>
               <span className="quality-value">
-                {tracking_quality.coverage_pct ? `${tracking_quality.coverage_pct.toFixed(0)}%` : '--'}
+                {tracking_quality.coverage_pct
+                  ? `${tracking_quality.coverage_pct.toFixed(0)}%`
+                  : '--'}
               </span>
             </div>
           </div>
@@ -162,14 +176,13 @@ export function SessionAnalyticsSection({ data, loading }) {
                 </div>
                 <div className="metric-content">
                   <span className="metric-value">{metric.value}</span>
-                  {metric.subtext && (
-                    <span className="metric-subtext">{metric.subtext}</span>
-                  )}
+                  {metric.subtext && <span className="metric-subtext">{metric.subtext}</span>}
                   <span className="metric-label">{metric.label}</span>
                 </div>
                 {metric.trend && (
                   <span className={`metric-trend ${metric.trend > 0 ? 'up' : 'down'}`}>
-                    {metric.trend > 0 ? '+' : ''}{metric.trend}%
+                    {metric.trend > 0 ? '+' : ''}
+                    {metric.trend}%
                   </span>
                 )}
               </div>
@@ -195,7 +208,7 @@ export function SessionAnalyticsSection({ data, loading }) {
                     className="completeness-bar-fill"
                     style={{
                       width: `${item.value}%`,
-                      backgroundColor: getQualityColor(item.value)
+                      backgroundColor: getQualityColor(item.value),
                     }}
                   />
                 </div>

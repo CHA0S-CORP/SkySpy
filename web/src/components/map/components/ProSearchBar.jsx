@@ -1,7 +1,17 @@
 import React from 'react';
 import {
-  Search, Clock, MessageCircle, Bell, VolumeX, Filter, Layers,
-  Navigation, Activity, Crosshair, Maximize2, Minimize2
+  Search,
+  Clock,
+  MessageCircle,
+  Bell,
+  VolumeX,
+  Filter,
+  Layers,
+  Navigation,
+  Activity,
+  Crosshair,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 
 /**
@@ -52,43 +62,65 @@ export function ProSearchBar({
           <span>{new Date().toISOString().slice(11, 19)} Z</span>
         </div>
         {acarsStatus && (
-          <div className={`acars-status-badge ${acarsStatus.running ? 'running' : 'stopped'}`} title={`ACARS: ${acarsStatus.running ? 'Running' : 'Stopped'}`}>
+          <div
+            className={`acars-status-badge ${acarsStatus.running ? 'running' : 'stopped'}`}
+            title={`ACARS: ${acarsStatus.running ? 'Running' : 'Stopped'}`}
+          >
             <MessageCircle size={12} />
             <span>{acarsStatus.buffer_size || 0}</span>
           </div>
         )}
         <button
           className={`pro-header-btn ${soundMuted ? 'muted' : ''}`}
-          onClick={(e) => { e.stopPropagation(); setSoundMuted(!soundMuted); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setSoundMuted(!soundMuted);
+          }}
           title={soundMuted ? 'Unmute' : 'Mute'}
         >
           {soundMuted ? <VolumeX size={18} /> : <Bell size={18} />}
         </button>
         <button
           className={`pro-header-btn ${showAcarsPanel ? 'active' : ''}`}
-          onClick={(e) => { e.stopPropagation(); setShowAcarsPanel(!showAcarsPanel); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowAcarsPanel(!showAcarsPanel);
+          }}
           title="ACARS Messages"
         >
           <MessageCircle size={18} />
         </button>
         <button
           className={`pro-header-btn ${showFilterMenu ? 'active' : ''}`}
-          onClick={(e) => { e.stopPropagation(); setShowFilterMenu(!showFilterMenu); setShowOverlayMenu(false); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowFilterMenu(!showFilterMenu);
+            setShowOverlayMenu(false);
+          }}
           title="Traffic Filters"
         >
           <Filter size={18} />
         </button>
         <button
           className={`pro-header-btn ${showOverlayMenu ? 'active' : ''}`}
-          onClick={(e) => { e.stopPropagation(); setShowOverlayMenu(!showOverlayMenu); setShowFilterMenu(false); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowOverlayMenu(!showOverlayMenu);
+            setShowFilterMenu(false);
+          }}
           title="Map Layers"
         >
           <Layers size={18} />
         </button>
         <button
           className={`pro-header-btn ${showShortTracks ? 'active' : ''}`}
-          onClick={(e) => { e.stopPropagation(); setShowShortTracks(!showShortTracks); }}
-          title={showShortTracks ? 'Hide short tracks (ATC trails)' : 'Show short tracks (ATC trails)'}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowShortTracks(!showShortTracks);
+          }}
+          title={
+            showShortTracks ? 'Hide short tracks (ATC trails)' : 'Show short tracks (ATC trails)'
+          }
         >
           <Navigation size={18} />
         </button>
@@ -108,7 +140,10 @@ export function ProSearchBar({
         )}
         <button
           className={`pro-header-btn ${showSelectedTrack ? 'active' : ''}`}
-          onClick={(e) => { e.stopPropagation(); setShowSelectedTrack(!showSelectedTrack); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowSelectedTrack(!showSelectedTrack);
+          }}
           title={showSelectedTrack ? 'Hide flight track' : 'Show flight track'}
           disabled={!selectedAircraft}
         >
@@ -130,7 +165,10 @@ export function ProSearchBar({
         </button>
         <button
           className="pro-header-btn"
-          onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleFullscreen();
+          }}
           title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
         >
           {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}

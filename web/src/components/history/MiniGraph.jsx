@@ -17,22 +17,24 @@ export function MiniGraph({
   onDragStart,
   onDragMove,
   onDragEnd,
-  onResetZoom
+  onResetZoom,
 }) {
   if (!track || track.length < 2) return null;
 
   // Reverse so oldest is first (left to right timeline)
   const ordered = [...track].reverse();
-  const values = ordered.map(p => p[dataKey]).filter(v => v != null);
+  const values = ordered.map((p) => p[dataKey]).filter((v) => v != null);
   if (values.length < 2) return null;
 
-  const format = formatFn || (v => v?.toLocaleString());
+  const format = formatFn || ((v) => v?.toLocaleString());
   const width = 200;
   const height = 40;
   const padding = 2;
 
   // Get zoom state for this event
-  const zoomState = eventKey ? (graphZoomState[eventKey] || { zoom: 1, offset: 0 }) : { zoom: 1, offset: 0 };
+  const zoomState = eventKey
+    ? graphZoomState[eventKey] || { zoom: 1, offset: 0 }
+    : { zoom: 1, offset: 0 };
   const { zoom, offset } = zoomState;
   const isZoomed = zoom > 1;
 
@@ -64,11 +66,13 @@ export function MiniGraph({
   }
 
   // Create SVG path
-  const points = visibleValues.map((v, i) => {
-    const x = padding + (i / Math.max(1, visibleValues.length - 1)) * (width - padding * 2);
-    const y = height - padding - ((v - fullMin) / fullRange) * (height - padding * 2);
-    return `${x},${y}`;
-  }).join(' ');
+  const points = visibleValues
+    .map((v, i) => {
+      const x = padding + (i / Math.max(1, visibleValues.length - 1)) * (width - padding * 2);
+      const y = height - padding - ((v - fullMin) / fullRange) * (height - padding * 2);
+      return `${x},${y}`;
+    })
+    .join(' ');
 
   // Get current value at position
   let currentValue = null;
@@ -81,28 +85,32 @@ export function MiniGraph({
   // Calculate position indicator
   let indicatorX = null;
   let indicatorY = null;
-  const positionInWindow = positionPercent !== null && positionPercent >= startPercent && positionPercent <= endPercent;
+  const positionInWindow =
+    positionPercent !== null && positionPercent >= startPercent && positionPercent <= endPercent;
   if (positionInWindow) {
     const visiblePercent = 100 / zoom;
     const relativePosition = (positionPercent - startPercent) / visiblePercent;
     indicatorX = padding + relativePosition * (width - padding * 2);
     if (currentValue !== null) {
-      indicatorY = height - padding - ((currentValue - fullMin) / fullRange) * (height - padding * 2);
+      indicatorY =
+        height - padding - ((currentValue - fullMin) / fullRange) * (height - padding * 2);
     }
   }
 
   // Graph container props for zoom/scroll
-  const graphProps = eventKey ? {
-    className: `mini-graph${isZoomed ? ' zoomable' : ''}`,
-    onWheel: (e) => onWheel?.(eventKey, e),
-    onMouseDown: (e) => onDragStart?.(eventKey, e),
-    onMouseMove: (e) => onDragMove?.(eventKey, e),
-    onMouseUp: () => onDragEnd?.(eventKey),
-    onMouseLeave: () => onDragEnd?.(eventKey),
-    onTouchStart: (e) => onDragStart?.(eventKey, e),
-    onTouchMove: (e) => onDragMove?.(eventKey, e),
-    onTouchEnd: () => onDragEnd?.(eventKey),
-  } : { className: 'mini-graph' };
+  const graphProps = eventKey
+    ? {
+        className: `mini-graph${isZoomed ? ' zoomable' : ''}`,
+        onWheel: (e) => onWheel?.(eventKey, e),
+        onMouseDown: (e) => onDragStart?.(eventKey, e),
+        onMouseMove: (e) => onDragMove?.(eventKey, e),
+        onMouseUp: () => onDragEnd?.(eventKey),
+        onMouseLeave: () => onDragEnd?.(eventKey),
+        onTouchStart: (e) => onDragStart?.(eventKey, e),
+        onTouchMove: (e) => onDragMove?.(eventKey, e),
+        onTouchEnd: () => onDragEnd?.(eventKey),
+      }
+    : { className: 'mini-graph' };
 
   return (
     <div {...graphProps}>
@@ -120,13 +128,7 @@ export function MiniGraph({
         )}
       </div>
       <svg width={width} height={height} className="mini-graph-svg">
-        <polyline
-          points={points}
-          fill="none"
-          stroke={color}
-          strokeWidth="1.5"
-          opacity="0.6"
-        />
+        <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" opacity="0.6" />
         {indicatorX !== null && (
           <>
             <line
@@ -152,8 +154,12 @@ export function MiniGraph({
         )}
       </svg>
       <div className="mini-graph-range">
-        <span>{format(isZoomed ? visibleMin : fullMin)} {unit}</span>
-        <span>{format(isZoomed ? visibleMax : fullMax)} {unit}</span>
+        <span>
+          {format(isZoomed ? visibleMin : fullMin)} {unit}
+        </span>
+        <span>
+          {format(isZoomed ? visibleMax : fullMax)} {unit}
+        </span>
       </div>
     </div>
   );

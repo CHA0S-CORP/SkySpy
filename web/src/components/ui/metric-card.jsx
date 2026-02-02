@@ -15,22 +15,10 @@ const metricCardVariants = cva(
   {
     variants: {
       variant: {
-        default: [
-          'bg-white/[0.03] backdrop-blur-sm',
-          'border-white/[0.08]',
-        ],
-        primary: [
-          'bg-white/[0.04] backdrop-blur-sm',
-          'border-white/[0.1]',
-        ],
-        emergency: [
-          'bg-red-500/10 backdrop-blur-sm',
-          'border-red-500/30',
-        ],
-        warning: [
-          'bg-yellow-500/10 backdrop-blur-sm',
-          'border-yellow-500/30',
-        ],
+        default: ['bg-white/[0.03] backdrop-blur-sm', 'border-white/[0.08]'],
+        primary: ['bg-white/[0.04] backdrop-blur-sm', 'border-white/[0.1]'],
+        emergency: ['bg-red-500/10 backdrop-blur-sm', 'border-red-500/30'],
+        warning: ['bg-yellow-500/10 backdrop-blur-sm', 'border-yellow-500/30'],
       },
       size: {
         sm: 'p-2.5',
@@ -107,11 +95,12 @@ const MetricCard = forwardRef(function MetricCard(
   const displayValue = formatValue ? formatValue(value) : value;
 
   // Get trend-based classes
-  const trendClass = trendProp === 'climbing' || trendProp === 'increasing'
-    ? 'climbing'
-    : trendProp === 'descending' || trendProp === 'decreasing'
-      ? 'descending'
-      : '';
+  const trendClass =
+    trendProp === 'climbing' || trendProp === 'increasing'
+      ? 'climbing'
+      : trendProp === 'descending' || trendProp === 'decreasing'
+        ? 'descending'
+        : '';
 
   return (
     <motion.div
@@ -127,13 +116,7 @@ const MetricCard = forwardRef(function MetricCard(
     >
       {/* Label with icon */}
       <div className="metric-card-label flex items-center gap-1.5 mb-1">
-        {Icon && (
-          <Icon
-            size={12}
-            className="flex-shrink-0 text-text-dim"
-            aria-hidden="true"
-          />
-        )}
+        {Icon && <Icon size={12} className="flex-shrink-0 text-text-dim" aria-hidden="true" />}
         <span className="text-[10px] font-medium uppercase tracking-wider text-text-dim">
           {label}
         </span>
@@ -165,11 +148,7 @@ const MetricCard = forwardRef(function MetricCard(
           />
         )}
         <span className="metric-value-text">{displayValue}</span>
-        {unit && (
-          <span className="text-xs font-normal text-text-secondary ml-0.5">
-            {unit}
-          </span>
-        )}
+        {unit && <span className="text-xs font-normal text-text-secondary ml-0.5">{unit}</span>}
       </div>
     </motion.div>
   );
@@ -246,12 +225,7 @@ const PrimaryMetrics = memo(function PrimaryMetrics({
         unit="ft"
         valueClassName={altitudeClass}
       />
-      <MetricCard
-        label="Speed"
-        value={speed || '--'}
-        unit="kts"
-        valueClassName={speedClass}
-      />
+      <MetricCard label="Speed" value={speed || '--'} unit="kts" valueClassName={speedClass} />
       <MetricCard
         label="V/S"
         value={formatVS(verticalSpeed)}
@@ -297,17 +271,8 @@ const SecondaryMetrics = memo(function SecondaryMetrics({
 
   return (
     <MetricsGrid columns={2} gap={3} className={cn('secondary-metrics', className)}>
-      <MetricCard
-        label="Track"
-        value={formatTrack(track)}
-        unit={trackCardinal || ''}
-        size="sm"
-      />
-      <MetricCard
-        label="Squawk"
-        value={squawk || '1200'}
-        size="sm"
-      />
+      <MetricCard label="Track" value={formatTrack(track)} unit={trackCardinal || ''} size="sm" />
+      <MetricCard label="Squawk" value={squawk || '1200'} size="sm" />
       <MetricCard
         label="RSSI"
         value={formatRssi(rssi)}
@@ -315,11 +280,7 @@ const SecondaryMetrics = memo(function SecondaryMetrics({
         valueClassName={signalClass}
         size="sm"
       />
-      <MetricCard
-        label="Type"
-        value={type || '--'}
-        size="sm"
-      />
+      <MetricCard label="Type" value={type || '--'} size="sm" />
     </MetricsGrid>
   );
 });

@@ -6,7 +6,11 @@ const safeJson = async (res) => {
   if (!res.ok) return null;
   const ct = res.headers.get('content-type');
   if (!ct || !ct.includes('application/json')) return null;
-  try { return await res.json(); } catch { return null; }
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
 };
 
 /**
@@ -21,20 +25,22 @@ export const AcarsPanel = memo(function AcarsPanel({
   onSelectAircraft,
   wsRequest,
   wsConnected,
-  acarsMessages: wsAcarsMessages
+  acarsMessages: wsAcarsMessages,
 }) {
   const [messages, setMessages] = useState([]);
   const [status, setStatus] = useState(null);
   const [labels, setLabels] = useState({});
   const [filters, setFilters] = useState(() => {
     const saved = localStorage.getItem('adsb-acars-filters');
-    return saved ? JSON.parse(saved) : {
-      hideEmpty: true,
-      sourceFilter: 'all',
-      labelFilter: '',
-      callsignFilter: '',
-      airlineFilter: '',
-    };
+    return saved
+      ? JSON.parse(saved)
+      : {
+          hideEmpty: true,
+          sourceFilter: 'all',
+          labelFilter: '',
+          callsignFilter: '',
+          airlineFilter: '',
+        };
   });
   const [showFilters, setShowFilters] = useState(false);
 
@@ -148,33 +154,35 @@ export const AcarsPanel = memo(function AcarsPanel({
     let filtered = messages;
 
     if (filters.hideEmpty) {
-      filtered = filtered.filter(msg => msg.text && msg.text.trim().length > 0);
+      filtered = filtered.filter((msg) => msg.text && msg.text.trim().length > 0);
     }
 
     if (filters.sourceFilter !== 'all') {
-      filtered = filtered.filter(msg => msg.source === filters.sourceFilter);
+      filtered = filtered.filter((msg) => msg.source === filters.sourceFilter);
     }
 
     if (filters.callsignFilter) {
       const cf = filters.callsignFilter.toLowerCase();
-      filtered = filtered.filter(msg =>
-        (msg.callsign && msg.callsign.toLowerCase().includes(cf)) ||
-        (msg.icao_hex && msg.icao_hex.toLowerCase().includes(cf))
+      filtered = filtered.filter(
+        (msg) =>
+          (msg.callsign && msg.callsign.toLowerCase().includes(cf)) ||
+          (msg.icao_hex && msg.icao_hex.toLowerCase().includes(cf))
       );
     }
 
     if (filters.airlineFilter) {
       const af = filters.airlineFilter.toLowerCase();
-      filtered = filtered.filter(msg =>
-        (msg.airline?.icao && msg.airline.icao.toLowerCase().includes(af)) ||
-        (msg.airline?.iata && msg.airline.iata.toLowerCase().includes(af)) ||
-        (msg.airline?.name && msg.airline.name.toLowerCase().includes(af))
+      filtered = filtered.filter(
+        (msg) =>
+          (msg.airline?.icao && msg.airline.icao.toLowerCase().includes(af)) ||
+          (msg.airline?.iata && msg.airline.iata.toLowerCase().includes(af)) ||
+          (msg.airline?.name && msg.airline.name.toLowerCase().includes(af))
       );
     }
 
     if (filters.labelFilter) {
       const lf = filters.labelFilter.toUpperCase();
-      filtered = filtered.filter(msg => msg.label === lf);
+      filtered = filtered.filter((msg) => msg.label === lf);
     }
 
     return filtered.slice(0, 50);
@@ -193,9 +201,7 @@ export const AcarsPanel = memo(function AcarsPanel({
         <div className="acars-panel-title">
           <MessageCircle size={18} />
           <span>ACARS Messages</span>
-          {status && (
-            <span className={`acars-status-dot ${status.running ? 'active' : ''}`} />
-          )}
+          {status && <span className={`acars-status-dot ${status.running ? 'active' : ''}`} />}
         </div>
         <div className="acars-header-actions">
           <button
@@ -235,14 +241,14 @@ export const AcarsPanel = memo(function AcarsPanel({
               <input
                 type="checkbox"
                 checked={filters.hideEmpty}
-                onChange={(e) => setFilters({...filters, hideEmpty: e.target.checked})}
+                onChange={(e) => setFilters({ ...filters, hideEmpty: e.target.checked })}
               />
               <span>Hide empty</span>
             </label>
             <select
               className="acars-source-filter"
               value={filters.sourceFilter}
-              onChange={(e) => setFilters({...filters, sourceFilter: e.target.value})}
+              onChange={(e) => setFilters({ ...filters, sourceFilter: e.target.value })}
             >
               <option value="all">All Sources</option>
               <option value="acars">ACARS Only</option>
@@ -255,21 +261,21 @@ export const AcarsPanel = memo(function AcarsPanel({
               className="acars-filter-input"
               placeholder="Callsign..."
               value={filters.callsignFilter}
-              onChange={(e) => setFilters({...filters, callsignFilter: e.target.value})}
+              onChange={(e) => setFilters({ ...filters, callsignFilter: e.target.value })}
             />
             <input
               type="text"
               className="acars-filter-input"
               placeholder="Airline..."
               value={filters.airlineFilter}
-              onChange={(e) => setFilters({...filters, airlineFilter: e.target.value})}
+              onChange={(e) => setFilters({ ...filters, airlineFilter: e.target.value })}
             />
             <input
               type="text"
               className="acars-filter-input"
               placeholder="Label..."
               value={filters.labelFilter}
-              onChange={(e) => setFilters({...filters, labelFilter: e.target.value})}
+              onChange={(e) => setFilters({ ...filters, labelFilter: e.target.value })}
               style={{ width: '60px' }}
             />
           </div>
@@ -284,7 +290,7 @@ export const AcarsPanel = memo(function AcarsPanel({
             className="acars-callsign-filter"
             placeholder="Filter callsign..."
             value={filters.callsignFilter}
-            onChange={(e) => setFilters({...filters, callsignFilter: e.target.value})}
+            onChange={(e) => setFilters({ ...filters, callsignFilter: e.target.value })}
           />
         </div>
       )}
@@ -294,7 +300,10 @@ export const AcarsPanel = memo(function AcarsPanel({
           <div className="acars-empty">No messages match filters</div>
         ) : (
           filteredMessages.map((msg) => (
-            <div key={msg.id || `${msg.icao_hex}-${msg.timestamp}-${msg.label}`} className="acars-message">
+            <div
+              key={msg.id || `${msg.icao_hex}-${msg.timestamp}-${msg.label}`}
+              className="acars-message"
+            >
               <div className="acars-msg-header">
                 <div className="acars-msg-flight">
                   <span
@@ -305,7 +314,10 @@ export const AcarsPanel = memo(function AcarsPanel({
                     {msg.callsign || msg.icao_hex || 'Unknown'}
                   </span>
                   {msg.airline?.name && (
-                    <span className="acars-airline" title={`${msg.airline.icao || msg.airline.iata}`}>
+                    <span
+                      className="acars-airline"
+                      title={`${msg.airline.icao || msg.airline.iata}`}
+                    >
                       <Plane size={10} />
                       {msg.airline.name}
                     </span>
@@ -343,38 +355,41 @@ export const AcarsPanel = memo(function AcarsPanel({
               ) : (
                 msg.text && <div className="acars-text">{msg.text}</div>
               )}
-              {msg.decoded_text && Object.keys(msg.decoded_text).length > 0 && !msg.formatted_text && (
-                <div className="acars-decoded">
-                  {msg.decoded_text.message_type && (
-                    <span className="acars-decoded-type">{msg.decoded_text.message_type}</span>
-                  )}
-                  {msg.decoded_text.airports_mentioned && (
-                    <span className="acars-decoded-item" title="Airports mentioned">
-                      ✈ {msg.decoded_text.airports_mentioned.join(', ')}
-                    </span>
-                  )}
-                  {msg.decoded_text.airports && (
-                    <span className="acars-decoded-item" title="Airports">
-                      ✈ {msg.decoded_text.airports.join(', ')}
-                    </span>
-                  )}
-                  {msg.decoded_text.flight_levels && (
-                    <span className="acars-decoded-item" title="Flight levels">
-                      ⬆ {msg.decoded_text.flight_levels.join(', ')}
-                    </span>
-                  )}
-                  {msg.decoded_text.position && (
-                    <span className="acars-decoded-item" title="Position">
-                      📍 {msg.decoded_text.position.lat.toFixed(3)}, {msg.decoded_text.position.lon.toFixed(3)}
-                    </span>
-                  )}
-                  {msg.decoded_text.ground_station && (
-                    <span className="acars-decoded-item" title="Ground Station">
-                      📡 {msg.decoded_text.ground_station}
-                    </span>
-                  )}
-                </div>
-              )}
+              {msg.decoded_text &&
+                Object.keys(msg.decoded_text).length > 0 &&
+                !msg.formatted_text && (
+                  <div className="acars-decoded">
+                    {msg.decoded_text.message_type && (
+                      <span className="acars-decoded-type">{msg.decoded_text.message_type}</span>
+                    )}
+                    {msg.decoded_text.airports_mentioned && (
+                      <span className="acars-decoded-item" title="Airports mentioned">
+                        ✈ {msg.decoded_text.airports_mentioned.join(', ')}
+                      </span>
+                    )}
+                    {msg.decoded_text.airports && (
+                      <span className="acars-decoded-item" title="Airports">
+                        ✈ {msg.decoded_text.airports.join(', ')}
+                      </span>
+                    )}
+                    {msg.decoded_text.flight_levels && (
+                      <span className="acars-decoded-item" title="Flight levels">
+                        ⬆ {msg.decoded_text.flight_levels.join(', ')}
+                      </span>
+                    )}
+                    {msg.decoded_text.position && (
+                      <span className="acars-decoded-item" title="Position">
+                        📍 {msg.decoded_text.position.lat.toFixed(3)},{' '}
+                        {msg.decoded_text.position.lon.toFixed(3)}
+                      </span>
+                    )}
+                    {msg.decoded_text.ground_station && (
+                      <span className="acars-decoded-item" title="Ground Station">
+                        📡 {msg.decoded_text.ground_station}
+                      </span>
+                    )}
+                  </div>
+                )}
             </div>
           ))
         )}

@@ -60,7 +60,7 @@ export function DateRangePicker({ value = '24h', customRange, onChange }) {
       const end = new Date(customRange.end);
       return `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
     }
-    const preset = PRESETS.find(p => p.value === value);
+    const preset = PRESETS.find((p) => p.value === value);
     return preset?.label || value;
   };
 
@@ -83,7 +83,7 @@ export function DateRangePicker({ value = '24h', customRange, onChange }) {
 
     onChange?.({
       preset: 'custom',
-      customRange: { start, end }
+      customRange: { start, end },
     });
     setIsOpen(false);
   };
@@ -118,10 +118,7 @@ export function DateRangePicker({ value = '24h', customRange, onChange }) {
 
   return (
     <div className="date-range-picker" ref={containerRef}>
-      <button
-        className="date-range-trigger"
-        onClick={() => setIsOpen(!isOpen)}
-      >
+      <button className="date-range-trigger" onClick={() => setIsOpen(!isOpen)}>
         <Calendar size={14} />
         <span>{getDisplayLabel()}</span>
         <ChevronDown size={12} className={isOpen ? 'rotated' : ''} />
@@ -130,17 +127,11 @@ export function DateRangePicker({ value = '24h', customRange, onChange }) {
       {isOpen && (
         <div className="date-range-dropdown">
           <div className="date-range-tabs">
-            <button
-              className={mode === 'preset' ? 'active' : ''}
-              onClick={() => setMode('preset')}
-            >
+            <button className={mode === 'preset' ? 'active' : ''} onClick={() => setMode('preset')}>
               <Clock size={14} />
               Presets
             </button>
-            <button
-              className={mode === 'custom' ? 'active' : ''}
-              onClick={() => setMode('custom')}
-            >
+            <button className={mode === 'custom' ? 'active' : ''} onClick={() => setMode('custom')}>
               <Calendar size={14} />
               Custom
             </button>
@@ -178,16 +169,8 @@ export function DateRangePicker({ value = '24h', customRange, onChange }) {
               <div className="date-input-group">
                 <label>End</label>
                 <div className="date-time-inputs">
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                  />
-                  <input
-                    type="time"
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                  />
+                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                  <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
                 </div>
               </div>
               <div className="date-range-actions">

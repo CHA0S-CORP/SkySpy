@@ -8,18 +8,10 @@ import { InfoRow } from './InfoRow';
  * RegistrationCard - Card displaying registration and identification information
  */
 function RegistrationCard({ data, hex }) {
-  const {
-    registration,
-    is_military,
-    category,
-  } = data;
+  const { registration, is_military, category } = data;
 
   return (
-    <BentoCard
-      icon={Hash}
-      title="Registration"
-      aria-labelledby="registration-heading"
-    >
+    <BentoCard icon={Hash} title="Registration" aria-labelledby="registration-heading">
       <div className="space-y-1">
         <InfoRow label="Registration" value={registration} mono />
         <InfoRow label="ICAO Hex" value={hex?.toUpperCase() || 'N/A'} mono />

@@ -93,53 +93,62 @@ export function useAircraftInfo({
   /**
    * Check if cached data is still valid
    */
-  const isCacheValid = useCallback((entry) => {
-    if (!entry || !entry.fetchedAt) return false;
-    if (entry.error) return false; // Don't use errored entries
-    return Date.now() - entry.fetchedAt < cacheTTL;
-  }, [cacheTTL]);
+  const isCacheValid = useCallback(
+    (entry) => {
+      if (!entry || !entry.fetchedAt) return false;
+      if (entry.error) return false; // Don't use errored entries
+      return Date.now() - entry.fetchedAt < cacheTTL;
+    },
+    [cacheTTL]
+  );
 
   /**
    * Get error for an aircraft (from WebSocket or local state)
    * Returns: { error_type, error_message, source, details?, timestamp } or null
    */
-  const getError = useCallback((icao) => {
-    icao = icao?.toUpperCase();
-    if (!icao) return null;
+  const getError = useCallback(
+    (icao) => {
+      icao = icao?.toUpperCase();
+      if (!icao) return null;
 
-    // Check local errors state first
-    if (errors[icao]) {
-      return errors[icao];
-    }
+      // Check local errors state first
+      if (errors[icao]) {
+        return errors[icao];
+      }
 
-    // Check WebSocket errors if available
-    if (getAirframeError) {
-      return getAirframeError(icao);
-    }
+      // Check WebSocket errors if available
+      if (getAirframeError) {
+        return getAirframeError(icao);
+      }
 
-    return null;
-  }, [errors, getAirframeError]);
+      return null;
+    },
+    [errors, getAirframeError]
+  );
 
   /**
    * Clear error for an aircraft
    */
-  const clearError = useCallback((icao) => {
-    icao = icao?.toUpperCase();
-    if (!icao) return;
+  const clearError = useCallback(
+    (icao) => {
+      icao = icao?.toUpperCase();
+      if (!icao) return;
 
-    // Clear from local state
-    setErrors(prev => {
-      if (!prev[icao]) return prev;
-      const next = { ...prev };
-      delete next[icao];
-      return next;
-    });
+      // Clear from local state
+      setErrors((prev) => {
+        if (!prev[icao]) return prev;
+        const next = { ...prev };
+        delete next[icao];
+        return next;
+      });
 
-    // Clear from WebSocket if available
-    if (clearAirframeError) {
-      clearAirframeError(icao);
-    }
-  }, [clearAirframeError]);
+      // Clear from WebSocket if available
+      if (clearAirframeError) {
+        clearAirframeError(icao);
+      }
+    },
+    [clearAirframeError]
+  );
 
   /**
    * Record an error for an aircraft
@@ -148,262 +157,278 @@ export function useAircraftInfo({
     icao = icao?.toUpperCase();
     if (!icao) return;
 
-    setErrors(prev => ({
+    setErrors((prev) => ({
       ...prev,
       [icao]: {
         ...errorInfo,
         timestamp: errorInfo.timestamp || new Date().toISOString(),
-      }
+      },
     }));
   }, []);
 
   /**
    * Get cached info for an aircraft (returns null if not cached or expired)
    */
-  const getCached = useCallback((icao) => {
-    const entry = cache[icao?.toUpperCase()];
-    if (isCacheValid(entry)) {
-      return entry.data;
-    }
-    return null;
-  }, [cache, isCacheValid]);
+  const getCached = useCallback(
+    (icao) => {
+      const entry = cache[icao?.toUpperCase()];
+      if (isCacheValid(entry)) {
+        return entry.data;
+      }
+      return null;
+    },
+    [cache, isCacheValid]
+  );
 
   /**
    * Fetch single aircraft info via WebSocket or HTTP
    * When socket is connected, we only use WebSocket to reduce API calls
    */
-  const fetchSingleInfo = useCallback(async (icao) => {
-    icao = icao.toUpperCase();
+  const fetchSingleInfo = useCallback(
+    async (icao) => {
+      icao = icao.toUpperCase();
 
-    // Skip TIS-B aircraft
-    if (icao.startsWith('~')) return null;
+      // Skip TIS-B aircraft
+      if (icao.startsWith('~')) return null;
 
-    // Check if already fetching
-    if (pendingFetches.current.has(icao)) return null;
+      // Check if already fetching
+      if (pendingFetches.current.has(icao)) return null;
 
-    pendingFetches.current.add(icao);
+      pendingFetches.current.add(icao);
 
-    try {
-      let data = null;
+      try {
+        let data = null;
 
-      // Use WebSocket exclusively when connected to reduce HTTP calls
-      if (wsRequest && wsConnected) {
-        try {
-          data = await wsRequest('aircraft-info', { icao });
-          // Backend returns null when not found, or {error: ...} on error
-          if (!data) {
-            // Not found in database - cache as empty to avoid re-fetching
-            data = { icao_hex: icao, found: false };
-          } else if (data?.error) {
-            // Explicit error response
-            if (data.error === 'not_found' || data.error_type === 'not_found') {
+        // Use WebSocket exclusively when connected to reduce HTTP calls
+        if (wsRequest && wsConnected) {
+          try {
+            data = await wsRequest('aircraft-info', { icao });
+            // Backend returns null when not found, or {error: ...} on error
+            if (!data) {
+              // Not found in database - cache as empty to avoid re-fetching
+              data = { icao_hex: icao, found: false };
+            } else if (data?.error) {
+              // Explicit error response
+              if (data.error === 'not_found' || data.error_type === 'not_found') {
+                data = { icao_hex: icao, found: false };
+              } else {
+                data = null;
+              }
+            }
+          } catch (err) {
+            console.debug('Aircraft info WS request failed:', icao, err.message);
+            // Don't fall back to HTTP when socket is connected - schedule retry instead
+            throw err;
+          }
+        } else {
+          // HTTP fallback only when socket is not connected
+          try {
+            // Try airframes endpoint first (most complete data)
+            let res = await fetch(`${apiBaseUrl}/api/v1/airframes/${icao}/`);
+            if (res.status === 404) {
+              // Try lookup endpoint as fallback
+              res = await fetch(`${apiBaseUrl}/api/v1/lookup/aircraft/${icao}`);
+            }
+            if (res.status === 404) {
+              // No info found, cache as empty to avoid re-fetching
               data = { icao_hex: icao, found: false };
             } else {
-              data = null;
+              data = await safeJson(res);
             }
+          } catch (err) {
+            console.debug('Aircraft info HTTP fetch failed:', icao, err.message);
+            throw err; // Trigger retry
           }
-        } catch (err) {
-          console.debug('Aircraft info WS request failed:', icao, err.message);
-          // Don't fall back to HTTP when socket is connected - schedule retry instead
-          throw err;
         }
-      } else {
-        // HTTP fallback only when socket is not connected
-        try {
-          // Try airframes endpoint first (most complete data)
-          let res = await fetch(`${apiBaseUrl}/api/v1/airframes/${icao}/`);
-          if (res.status === 404) {
-            // Try lookup endpoint as fallback
-            res = await fetch(`${apiBaseUrl}/api/v1/lookup/aircraft/${icao}`);
-          }
-          if (res.status === 404) {
-            // No info found, cache as empty to avoid re-fetching
-            data = { icao_hex: icao, found: false };
-          } else {
-            data = await safeJson(res);
-          }
-        } catch (err) {
-          console.debug('Aircraft info HTTP fetch failed:', icao, err.message);
-          throw err; // Trigger retry
+
+        if (data) {
+          setCache((prev) =>
+            enforceMaxCacheSize({
+              ...prev,
+              [icao]: { data, fetchedAt: Date.now() },
+            })
+          );
+          // Clear from retry queue on success
+          retryQueue.current.delete(icao);
+          // Clear any previous error state on success
+          clearError(icao);
         }
-      }
 
-      if (data) {
-        setCache(prev => enforceMaxCacheSize({
-          ...prev,
-          [icao]: { data, fetchedAt: Date.now() }
-        }));
-        // Clear from retry queue on success
-        retryQueue.current.delete(icao);
-        // Clear any previous error state on success
-        clearError(icao);
+        return data;
+      } catch (err) {
+        // Schedule retry with exponential backoff
+        const currentRetry = retryQueue.current.get(icao) || { retryCount: 0 };
+        if (currentRetry.retryCount < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, currentRetry.retryCount), 30000); // Max 30s
+          retryQueue.current.set(icao, {
+            retryCount: currentRetry.retryCount + 1,
+            nextRetryAt: Date.now() + delay,
+          });
+          scheduleRetryProcessing();
+        } else {
+          // Max retries exhausted - clear cache entry so it can be retried fresh later
+          // and record the error for visibility
+          setCache((prev) => {
+            const next = { ...prev };
+            delete next[icao];
+            return next;
+          });
+          retryQueue.current.delete(icao);
+          recordError(icao, {
+            error_type: 'fetch_failed',
+            error_message: `Failed to fetch aircraft info after ${maxRetries} retries`,
+            source: 'useAircraftInfo',
+          });
+        }
+        return null;
+      } finally {
+        pendingFetches.current.delete(icao);
       }
-
-      return data;
-    } catch (err) {
-      // Schedule retry with exponential backoff
-      const currentRetry = retryQueue.current.get(icao) || { retryCount: 0 };
-      if (currentRetry.retryCount < maxRetries) {
-        const delay = Math.min(1000 * Math.pow(2, currentRetry.retryCount), 30000); // Max 30s
-        retryQueue.current.set(icao, {
-          retryCount: currentRetry.retryCount + 1,
-          nextRetryAt: Date.now() + delay
-        });
-        scheduleRetryProcessing();
-      } else {
-        // Max retries exhausted - clear cache entry so it can be retried fresh later
-        // and record the error for visibility
-        setCache(prev => {
-          const next = { ...prev };
-          delete next[icao];
-          return next;
-        });
-        retryQueue.current.delete(icao);
-        recordError(icao, {
-          error_type: 'fetch_failed',
-          error_message: `Failed to fetch aircraft info after ${maxRetries} retries`,
-          source: 'useAircraftInfo',
-        });
-      }
-      return null;
-    } finally {
-      pendingFetches.current.delete(icao);
-    }
-  }, [wsRequest, wsConnected, apiBaseUrl, maxRetries, recordError, clearError, enforceMaxCacheSize]);
+    },
+    [wsRequest, wsConnected, apiBaseUrl, maxRetries, recordError, clearError, enforceMaxCacheSize]
+  );
 
   /**
    * Fetch bulk aircraft info (cached data only from backend)
    * Uses WebSocket when available to reduce HTTP calls
    */
-  const fetchBulkInfo = useCallback(async (icaos) => {
-    if (!icaos || icaos.length === 0) return {};
+  const fetchBulkInfo = useCallback(
+    async (icaos) => {
+      if (!icaos || icaos.length === 0) return {};
 
-    // Filter out TIS-B and already cached
-    const toFetch = icaos
-      .map(i => i.toUpperCase())
-      .filter(icao => !icao.startsWith('~') && !getCached(icao) && !pendingFetches.current.has(icao));
+      // Filter out TIS-B and already cached
+      const toFetch = icaos
+        .map((i) => i.toUpperCase())
+        .filter(
+          (icao) => !icao.startsWith('~') && !getCached(icao) && !pendingFetches.current.has(icao)
+        );
 
-    if (toFetch.length === 0) return {};
+      if (toFetch.length === 0) return {};
 
-    // Mark as pending
-    toFetch.forEach(icao => pendingFetches.current.add(icao));
+      // Mark as pending
+      toFetch.forEach((icao) => pendingFetches.current.add(icao));
 
-    try {
-      const results = {};
+      try {
+        const results = {};
 
-      // Prefer WebSocket for bulk lookups when connected
-      if (wsRequest && wsConnected) {
-        // Split into batches
-        const batches = [];
-        for (let i = 0; i < toFetch.length; i += bulkBatchSize) {
-          batches.push(toFetch.slice(i, i + bulkBatchSize));
-        }
-
-        for (const batch of batches) {
-          try {
-            const data = await wsRequest('aircraft-info-bulk', { icaos: batch });
-            if (data && !data.error && data.aircraft) {
-              Object.assign(results, data.aircraft);
-            }
-          } catch (err) {
-            console.debug('Bulk aircraft info WS request failed:', err.message);
+        // Prefer WebSocket for bulk lookups when connected
+        if (wsRequest && wsConnected) {
+          // Split into batches
+          const batches = [];
+          for (let i = 0; i < toFetch.length; i += bulkBatchSize) {
+            batches.push(toFetch.slice(i, i + bulkBatchSize));
           }
-        }
-      } else {
-        // HTTP fallback only when socket is not connected
-        const batches = [];
-        for (let i = 0; i < toFetch.length; i += bulkBatchSize) {
-          batches.push(toFetch.slice(i, i + bulkBatchSize));
-        }
 
-        for (const batch of batches) {
-          try {
-            // Django API: use /api/v1/airframes/bulk/?icao=A,B,C endpoint
-            const icaoList = batch.join(',');
-            const res = await fetch(`${apiBaseUrl}/api/v1/airframes/bulk/?icao=${icaoList}`);
-            const data = await safeJson(res);
-
-            // If that fails, try individual lookups for each ICAO
-            if (!data || res.status === 400 || res.status === 404) {
-              for (const icao of batch) {
-                try {
-                  const singleRes = await fetch(`${apiBaseUrl}/api/v1/airframes/${icao}/`);
-                  const singleData = await safeJson(singleRes);
-                  if (singleData && singleData.icao_hex) {
-                    results[singleData.icao_hex.toUpperCase()] = singleData;
-                  }
-                } catch (e) {
-                  // Individual lookup failed, skip
-                }
+          for (const batch of batches) {
+            try {
+              const data = await wsRequest('aircraft-info-bulk', { icaos: batch });
+              if (data && !data.error && data.aircraft) {
+                Object.assign(results, data.aircraft);
               }
-              continue;
+            } catch (err) {
+              console.debug('Bulk aircraft info WS request failed:', err.message);
             }
+          }
+        } else {
+          // HTTP fallback only when socket is not connected
+          const batches = [];
+          for (let i = 0; i < toFetch.length; i += bulkBatchSize) {
+            batches.push(toFetch.slice(i, i + bulkBatchSize));
+          }
 
-            // Response format: { aircraft: { ICAO: {...}, ... }, found: N, requested: M }
-            if (data?.aircraft && typeof data.aircraft === 'object') {
-              Object.assign(results, data.aircraft);
-            } else if (Array.isArray(data)) {
-              // Fallback: array of airframes
-              data.forEach(af => {
-                if (af?.icao_hex) {
-                  results[af.icao_hex.toUpperCase()] = af;
+          for (const batch of batches) {
+            try {
+              // Django API: use /api/v1/airframes/bulk/?icao=A,B,C endpoint
+              const icaoList = batch.join(',');
+              const res = await fetch(`${apiBaseUrl}/api/v1/airframes/bulk/?icao=${icaoList}`);
+              const data = await safeJson(res);
+
+              // If that fails, try individual lookups for each ICAO
+              if (!data || res.status === 400 || res.status === 404) {
+                for (const icao of batch) {
+                  try {
+                    const singleRes = await fetch(`${apiBaseUrl}/api/v1/airframes/${icao}/`);
+                    const singleData = await safeJson(singleRes);
+                    if (singleData && singleData.icao_hex) {
+                      results[singleData.icao_hex.toUpperCase()] = singleData;
+                    }
+                  } catch (e) {
+                    // Individual lookup failed, skip
+                  }
                 }
-              });
-            } else if (data?.results) {
-              // Fallback: paginated response
-              data.results.forEach(af => {
-                if (af?.icao_hex) {
-                  results[af.icao_hex.toUpperCase()] = af;
-                }
-              });
+                continue;
+              }
+
+              // Response format: { aircraft: { ICAO: {...}, ... }, found: N, requested: M }
+              if (data?.aircraft && typeof data.aircraft === 'object') {
+                Object.assign(results, data.aircraft);
+              } else if (Array.isArray(data)) {
+                // Fallback: array of airframes
+                data.forEach((af) => {
+                  if (af?.icao_hex) {
+                    results[af.icao_hex.toUpperCase()] = af;
+                  }
+                });
+              } else if (data?.results) {
+                // Fallback: paginated response
+                data.results.forEach((af) => {
+                  if (af?.icao_hex) {
+                    results[af.icao_hex.toUpperCase()] = af;
+                  }
+                });
+              }
+            } catch (err) {
+              console.debug('Bulk aircraft info HTTP fetch failed:', err.message);
             }
-          } catch (err) {
-            console.debug('Bulk aircraft info HTTP fetch failed:', err.message);
           }
         }
-      }
 
-      // Update cache with results (with LRU eviction if needed)
-      const now = Date.now();
-      setCache(prev => {
-        const updates = {};
-        for (const [icao, data] of Object.entries(results)) {
-          updates[icao.toUpperCase()] = { data, fetchedAt: now };
+        // Update cache with results (with LRU eviction if needed)
+        const now = Date.now();
+        setCache((prev) => {
+          const updates = {};
+          for (const [icao, data] of Object.entries(results)) {
+            updates[icao.toUpperCase()] = { data, fetchedAt: now };
+          }
+          return enforceMaxCacheSize({ ...prev, ...updates });
+        });
+
+        // Clear any previous error state on success (outside state setter to avoid side effects)
+        for (const icao of Object.keys(results)) {
+          clearError(icao.toUpperCase());
         }
-        return enforceMaxCacheSize({ ...prev, ...updates });
-      });
 
-      // Clear any previous error state on success (outside state setter to avoid side effects)
-      for (const icao of Object.keys(results)) {
-        clearError(icao.toUpperCase());
+        // Queue individual lookups for aircraft not in bulk results (will trigger backend fetch)
+        const notFound = toFetch.filter((icao) => !results[icao]);
+        notFound.forEach((icao) => queueForLookup(icao));
+
+        return results;
+      } finally {
+        toFetch.forEach((icao) => pendingFetches.current.delete(icao));
       }
-
-      // Queue individual lookups for aircraft not in bulk results (will trigger backend fetch)
-      const notFound = toFetch.filter(icao => !results[icao]);
-      notFound.forEach(icao => queueForLookup(icao));
-
-      return results;
-    } finally {
-      toFetch.forEach(icao => pendingFetches.current.delete(icao));
-    }
-  }, [apiBaseUrl, bulkBatchSize, getCached, wsRequest, wsConnected, clearError, enforceMaxCacheSize]);
+    },
+    [apiBaseUrl, bulkBatchSize, getCached, wsRequest, wsConnected, clearError, enforceMaxCacheSize]
+  );
 
   /**
    * Queue an aircraft for deferred bulk lookup
    */
-  const queueForLookup = useCallback((icao) => {
-    icao = icao?.toUpperCase();
-    if (!icao || icao.startsWith('~')) return;
-    if (getCached(icao) || pendingFetches.current.has(icao)) return;
+  const queueForLookup = useCallback(
+    (icao) => {
+      icao = icao?.toUpperCase();
+      if (!icao || icao.startsWith('~')) return;
+      if (getCached(icao) || pendingFetches.current.has(icao)) return;
 
-    bulkQueue.current.add(icao);
+      bulkQueue.current.add(icao);
 
-    // Debounce bulk processing
-    if (bulkTimeoutRef.current) clearTimeout(bulkTimeoutRef.current);
-    bulkTimeoutRef.current = setTimeout(() => {
-      processBulkQueue();
-    }, 100); // 100ms debounce
-  }, [getCached]);
+      // Debounce bulk processing
+      if (bulkTimeoutRef.current) clearTimeout(bulkTimeoutRef.current);
+      bulkTimeoutRef.current = setTimeout(() => {
+        processBulkQueue();
+      }, 100); // 100ms debounce
+    },
+    [getCached]
+  );
 
   /**
    * Check if icao is in cache using ref (for use in async callbacks to avoid stale closures)
@@ -431,7 +456,9 @@ export function useAircraftInfo({
 
     // Then trigger individual fetches for remaining (will populate backend cache)
     // Use isInCacheRef to check latest cache state (avoids stale closure issue)
-    const stillMissing = icaos.filter(icao => !isInCacheRef(icao) && !pendingFetches.current.has(icao));
+    const stillMissing = icaos.filter(
+      (icao) => !isInCacheRef(icao) && !pendingFetches.current.has(icao)
+    );
 
     // Clear any previously stored timeout IDs before creating new ones
     bulkFetchTimeoutIdsRef.current = [];
@@ -479,7 +506,7 @@ export function useAircraftInfo({
     }
 
     // Process retries
-    toRetry.forEach(icao => {
+    toRetry.forEach((icao) => {
       fetchSingleInfo(icao);
     });
 
@@ -493,48 +520,55 @@ export function useAircraftInfo({
    * Prefetch info for a list of visible aircraft
    * Uses bulk endpoint for efficiency
    */
-  const prefetchForAircraft = useCallback((aircraftList) => {
-    if (!aircraftList || aircraftList.length === 0) return;
+  const prefetchForAircraft = useCallback(
+    (aircraftList) => {
+      if (!aircraftList || aircraftList.length === 0) return;
 
-    const icaos = aircraftList
-      .map(a => a.hex || a.icao)
-      .filter(Boolean);
+      const icaos = aircraftList.map((a) => a.hex || a.icao).filter(Boolean);
 
-    // Queue all for lookup
-    icaos.forEach(icao => queueForLookup(icao));
-  }, [queueForLookup]);
+      // Queue all for lookup
+      icaos.forEach((icao) => queueForLookup(icao));
+    },
+    [queueForLookup]
+  );
 
   /**
    * Get info for an aircraft (returns cached or triggers fetch)
    */
-  const getInfo = useCallback((icao) => {
-    icao = icao?.toUpperCase();
-    if (!icao) return null;
+  const getInfo = useCallback(
+    (icao) => {
+      icao = icao?.toUpperCase();
+      if (!icao) return null;
 
-    const cached = getCached(icao);
-    if (cached) return cached;
+      const cached = getCached(icao);
+      if (cached) return cached;
 
-    // Queue for fetch if not cached
-    queueForLookup(icao);
-    return null;
-  }, [getCached, queueForLookup]);
+      // Queue for fetch if not cached
+      queueForLookup(icao);
+      return null;
+    },
+    [getCached, queueForLookup]
+  );
 
   /**
    * Force refresh info for an aircraft
    */
-  const refreshInfo = useCallback(async (icao) => {
-    icao = icao?.toUpperCase();
-    if (!icao) return null;
+  const refreshInfo = useCallback(
+    async (icao) => {
+      icao = icao?.toUpperCase();
+      if (!icao) return null;
 
-    // Clear from cache to force refresh
-    setCache(prev => {
-      const next = { ...prev };
-      delete next[icao];
-      return next;
-    });
+      // Clear from cache to force refresh
+      setCache((prev) => {
+        const next = { ...prev };
+        delete next[icao];
+        return next;
+      });
 
-    return fetchSingleInfo(icao);
-  }, [fetchSingleInfo]);
+      return fetchSingleInfo(icao);
+    },
+    [fetchSingleInfo]
+  );
 
   /**
    * Clear cache (useful for memory management)
@@ -574,32 +608,35 @@ export function useAircraftInfo({
 
   // Periodic cache cleanup (remove expired entries and enforce max size with LRU eviction)
   useEffect(() => {
-    const cleanup = setInterval(() => {
-      setCache(prev => {
-        const now = Date.now();
-        const entries = Object.entries(prev);
+    const cleanup = setInterval(
+      () => {
+        setCache((prev) => {
+          const now = Date.now();
+          const entries = Object.entries(prev);
 
-        // First pass: remove expired entries
-        let validEntries = entries.filter(([, entry]) =>
-          now - entry.fetchedAt < cacheTTLRef.current * 2
-        );
+          // First pass: remove expired entries
+          let validEntries = entries.filter(
+            ([, entry]) => now - entry.fetchedAt < cacheTTLRef.current * 2
+          );
 
-        // Second pass: LRU eviction if still over max size
-        if (validEntries.length > MAX_CACHE_SIZE) {
-          // Sort by fetchedAt (oldest first) for LRU eviction
-          validEntries.sort((a, b) => a[1].fetchedAt - b[1].fetchedAt);
-          // Keep only the most recent MAX_CACHE_SIZE entries
-          validEntries = validEntries.slice(validEntries.length - MAX_CACHE_SIZE);
-        }
+          // Second pass: LRU eviction if still over max size
+          if (validEntries.length > MAX_CACHE_SIZE) {
+            // Sort by fetchedAt (oldest first) for LRU eviction
+            validEntries.sort((a, b) => a[1].fetchedAt - b[1].fetchedAt);
+            // Keep only the most recent MAX_CACHE_SIZE entries
+            validEntries = validEntries.slice(validEntries.length - MAX_CACHE_SIZE);
+          }
 
-        // Convert back to object
-        const next = {};
-        for (const [icao, entry] of validEntries) {
-          next[icao] = entry;
-        }
-        return next;
-      });
-    }, 5 * 60 * 1000); // Cleanup every 5 minutes
+          // Convert back to object
+          const next = {};
+          for (const [icao, entry] of validEntries) {
+            next[icao] = entry;
+          }
+          return next;
+        });
+      },
+      5 * 60 * 1000
+    ); // Cleanup every 5 minutes
 
     return () => clearInterval(cleanup);
   }, []); // No dependencies needed - uses refs for current values
@@ -624,9 +661,9 @@ export function useAircraftInfo({
     clearCache,
 
     // Error handling
-    getError,      // Get error for an aircraft (from WebSocket or local)
-    clearError,    // Clear error for an aircraft
-    errors,        // All current errors as object { [icao]: errorInfo }
+    getError, // Get error for an aircraft (from WebSocket or local)
+    clearError, // Clear error for an aircraft
+    errors, // All current errors as object { [icao]: errorInfo }
 
     // Stats
     cacheSize: Object.keys(cache).length,

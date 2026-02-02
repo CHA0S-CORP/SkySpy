@@ -18,7 +18,7 @@ const DEFAULT_COLUMNS = [
 const COLUMN_PRESETS = {
   default: ['hex', 'flight', 'type', 'alt', 'gs', 'vr', 'track', 'distance_nm', 'rssi', 'squawk'],
   minimal: ['hex', 'flight', 'alt', 'gs', 'distance_nm'],
-  all: DEFAULT_COLUMNS.map(c => c.id),
+  all: DEFAULT_COLUMNS.map((c) => c.id),
 };
 
 const DEFAULT_PREFERENCES = {
@@ -54,18 +54,18 @@ export function useListPreferences() {
   }, [preferences]);
 
   const setViewMode = useCallback((mode) => {
-    setPreferences(prev => ({ ...prev, viewMode: mode }));
+    setPreferences((prev) => ({ ...prev, viewMode: mode }));
   }, []);
 
   const setDensity = useCallback((density) => {
-    setPreferences(prev => ({ ...prev, density }));
+    setPreferences((prev) => ({ ...prev, density }));
   }, []);
 
   const toggleColumn = useCallback((columnId) => {
-    setPreferences(prev => {
+    setPreferences((prev) => {
       const isVisible = prev.visibleColumns.includes(columnId);
       const visibleColumns = isVisible
-        ? prev.visibleColumns.filter(id => id !== columnId)
+        ? prev.visibleColumns.filter((id) => id !== columnId)
         : [...prev.visibleColumns, columnId];
       return { ...prev, visibleColumns };
     });
@@ -73,13 +73,16 @@ export function useListPreferences() {
 
   const setColumnPreset = useCallback((preset) => {
     if (COLUMN_PRESETS[preset]) {
-      setPreferences(prev => ({ ...prev, visibleColumns: COLUMN_PRESETS[preset] }));
+      setPreferences((prev) => ({ ...prev, visibleColumns: COLUMN_PRESETS[preset] }));
     }
   }, []);
 
-  const isColumnVisible = useCallback((columnId) => {
-    return preferences.visibleColumns.includes(columnId);
-  }, [preferences.visibleColumns]);
+  const isColumnVisible = useCallback(
+    (columnId) => {
+      return preferences.visibleColumns.includes(columnId);
+    },
+    [preferences.visibleColumns]
+  );
 
   const resetToDefaults = useCallback(() => {
     setPreferences(DEFAULT_PREFERENCES);

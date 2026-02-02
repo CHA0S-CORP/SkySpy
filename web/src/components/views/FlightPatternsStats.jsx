@@ -1,7 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Navigation2, Clock, Plane, Timer, TrendingUp,
-  ArrowRight, BarChart2, Filter, ChevronDown, RefreshCw
+  Navigation2,
+  Clock,
+  Plane,
+  Timer,
+  TrendingUp,
+  ArrowRight,
+  BarChart2,
+  Filter,
+  ChevronDown,
+  RefreshCw,
 } from 'lucide-react';
 import { useStats } from '../../hooks';
 
@@ -23,7 +31,7 @@ export function FlightPatternsStats({ apiBase, wsRequest, wsConnected, onSelectA
   const { flightPatterns, loading, error, refetch } = useStats(apiBase, {
     wsRequest,
     wsConnected,
-    hours: selectedHours
+    hours: selectedHours,
   });
 
   const data = flightPatterns;
@@ -33,21 +41,19 @@ export function FlightPatternsStats({ apiBase, wsRequest, wsConnected, onSelectA
     top_routes = [],
     busiest_hours = [],
     aircraft_types = [],
-    duration_by_type = []
+    duration_by_type = [],
   } = data || {};
 
   // Filter aircraft types if filter is set
   const filteredTypes = useMemo(() => {
     if (!typeFilter) return aircraft_types;
-    return aircraft_types.filter(t =>
-      t.type?.toLowerCase().includes(typeFilter.toLowerCase())
-    );
+    return aircraft_types.filter((t) => t.type?.toLowerCase().includes(typeFilter.toLowerCase()));
   }, [aircraft_types, typeFilter]);
 
   // Find max values for normalization
-  const maxRouteCount = Math.max(...top_routes.map(r => r.count || 0), 1);
-  const maxHourCount = Math.max(...busiest_hours.map(h => h.count || 0), 1);
-  const maxTypeCount = Math.max(...filteredTypes.map(t => t.count || 0), 1);
+  const maxRouteCount = Math.max(...top_routes.map((r) => r.count || 0), 1);
+  const maxHourCount = Math.max(...busiest_hours.map((h) => h.count || 0), 1);
+  const maxTypeCount = Math.max(...filteredTypes.map((t) => t.count || 0), 1);
 
   // Color scale for hours heatmap
   const getHourColor = (count) => {
@@ -63,22 +69,26 @@ export function FlightPatternsStats({ apiBase, wsRequest, wsConnected, onSelectA
   // Prepare hours data (0-23)
   const hoursData = useMemo(() => {
     const hourMap = {};
-    busiest_hours.forEach(h => {
+    busiest_hours.forEach((h) => {
       hourMap[h.hour] = h.count;
     });
     return Array.from({ length: 24 }, (_, i) => ({
       hour: i,
       count: hourMap[i] || 0,
-      label: `${i.toString().padStart(2, '0')}:00`
+      label: `${i.toString().padStart(2, '0')}:00`,
     }));
   }, [busiest_hours]);
 
   // Calculate summary stats
   const summaryStats = useMemo(() => {
     const totalFlights = busiest_hours.reduce((sum, h) => sum + (h.count || 0), 0);
-    const peakHour = busiest_hours.reduce((max, h) => (h.count || 0) > (max?.count || 0) ? h : max, busiest_hours[0]);
+    const peakHour = busiest_hours.reduce(
+      (max, h) => ((h.count || 0) > (max?.count || 0) ? h : max),
+      busiest_hours[0]
+    );
     const uniqueTypes = aircraft_types.length;
-    const avgFlightsPerHour = busiest_hours.length > 0 ? (totalFlights / busiest_hours.length).toFixed(1) : 0;
+    const avgFlightsPerHour =
+      busiest_hours.length > 0 ? (totalFlights / busiest_hours.length).toFixed(1) : 0;
 
     return { totalFlights, peakHour, uniqueTypes, avgFlightsPerHour };
   }, [busiest_hours, aircraft_types]);
@@ -126,7 +136,7 @@ export function FlightPatternsStats({ apiBase, wsRequest, wsConnected, onSelectA
           <Clock size={14} />
           <span className="filter-label">Time Range</span>
           <div className="time-range-buttons">
-            {Object.keys(hours).map(range => (
+            {Object.keys(hours).map((range) => (
               <button
                 key={range}
                 className={`time-btn ${timeRange === range ? 'active' : ''}`}
@@ -167,30 +177,40 @@ export function FlightPatternsStats({ apiBase, wsRequest, wsConnected, onSelectA
       {/* Summary Cards */}
       <div className="summary-cards">
         <div className="summary-card">
-          <div className="summary-icon"><TrendingUp size={20} /></div>
+          <div className="summary-icon">
+            <TrendingUp size={20} />
+          </div>
           <div className="summary-content">
             <span className="summary-value">{summaryStats.totalFlights.toLocaleString()}</span>
             <span className="summary-label">Total Flights</span>
           </div>
         </div>
         <div className="summary-card">
-          <div className="summary-icon"><Clock size={20} /></div>
+          <div className="summary-icon">
+            <Clock size={20} />
+          </div>
           <div className="summary-content">
             <span className="summary-value">
-              {summaryStats.peakHour?.hour !== undefined ? `${summaryStats.peakHour.hour}:00` : '--'}
+              {summaryStats.peakHour?.hour !== undefined
+                ? `${summaryStats.peakHour.hour}:00`
+                : '--'}
             </span>
             <span className="summary-label">Peak Hour</span>
           </div>
         </div>
         <div className="summary-card">
-          <div className="summary-icon"><Plane size={20} /></div>
+          <div className="summary-icon">
+            <Plane size={20} />
+          </div>
           <div className="summary-content">
             <span className="summary-value">{summaryStats.uniqueTypes}</span>
             <span className="summary-label">Aircraft Types</span>
           </div>
         </div>
         <div className="summary-card">
-          <div className="summary-icon"><BarChart2 size={20} /></div>
+          <div className="summary-icon">
+            <BarChart2 size={20} />
+          </div>
           <div className="summary-content">
             <span className="summary-value">{summaryStats.avgFlightsPerHour}</span>
             <span className="summary-label">Avg/Hour</span>
@@ -292,8 +312,14 @@ export function FlightPatternsStats({ apiBase, wsRequest, wsConnected, onSelectA
             <div className="types-chart">
               {filteredTypes.slice(0, 12).map((type, i) => {
                 const colors = [
-                  '#00c8ff', '#00ff88', '#a371f7', '#ff9f43',
-                  '#f85149', '#f7d794', '#4ecdc4', '#95e1d3'
+                  '#00c8ff',
+                  '#00ff88',
+                  '#a371f7',
+                  '#ff9f43',
+                  '#f85149',
+                  '#f7d794',
+                  '#4ecdc4',
+                  '#95e1d3',
                 ];
                 const color = colors[i % colors.length];
                 return (
@@ -307,7 +333,7 @@ export function FlightPatternsStats({ apiBase, wsRequest, wsConnected, onSelectA
                         className="type-bar-fill"
                         style={{
                           width: `${(type.count / maxTypeCount) * 100}%`,
-                          backgroundColor: color
+                          backgroundColor: color,
                         }}
                       />
                     </div>

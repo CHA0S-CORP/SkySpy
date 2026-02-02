@@ -1,10 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Archive, FileWarning, Cloud, Search, MapPin, AlertTriangle, Loader2, X
+  Archive,
+  FileWarning,
+  Cloud,
+  Search,
+  MapPin,
+  AlertTriangle,
+  Loader2,
+  X,
 } from 'lucide-react';
 import {
-  ArchivedNotamCard, ArchivedPirepCard, ArchiveStats,
-  NOTAM_TYPES, DATE_RANGES
+  ArchivedNotamCard,
+  ArchivedPirepCard,
+  ArchiveStats,
+  NOTAM_TYPES,
+  DATE_RANGES,
 } from '../archive';
 
 // Main ArchiveView component
@@ -51,19 +61,28 @@ export function ArchiveView({ apiBase, hashParams = {}, setHashParams }) {
       try {
         const res = await fetch(`${apiBase}/api/v1/archive/stats/`);
         if (!res.ok) {
-          setStats({ notams: { total_archived: 0, by_type: {} }, pireps: { total_archived: 0, by_type: {} } });
+          setStats({
+            notams: { total_archived: 0, by_type: {} },
+            pireps: { total_archived: 0, by_type: {} },
+          });
           return;
         }
         const contentType = res.headers.get('content-type');
         if (!contentType || !contentType.includes('application/json')) {
-          setStats({ notams: { total_archived: 0, by_type: {} }, pireps: { total_archived: 0, by_type: {} } });
+          setStats({
+            notams: { total_archived: 0, by_type: {} },
+            pireps: { total_archived: 0, by_type: {} },
+          });
           return;
         }
         const data = await res.json();
         setStats(data);
       } catch (err) {
         console.error('Failed to fetch archive stats:', err);
-        setStats({ notams: { total_archived: 0, by_type: {} }, pireps: { total_archived: 0, by_type: {} } });
+        setStats({
+          notams: { total_archived: 0, by_type: {} },
+          pireps: { total_archived: 0, by_type: {} },
+        });
       } finally {
         setStatsLoading(false);
       }
@@ -147,11 +166,17 @@ export function ArchiveView({ apiBase, hashParams = {}, setHashParams }) {
 
       <div className="archive-toolbar">
         <div className="tab-buttons">
-          <button className={activeTab === 'notams' ? 'active' : ''} onClick={() => handleTabChange('notams')}>
+          <button
+            className={activeTab === 'notams' ? 'active' : ''}
+            onClick={() => handleTabChange('notams')}
+          >
             <FileWarning size={16} /> Expired NOTAMs
             {notamsTotalCount > 0 && <span className="count">{notamsTotalCount}</span>}
           </button>
-          <button className={activeTab === 'pireps' ? 'active' : ''} onClick={() => handleTabChange('pireps')}>
+          <button
+            className={activeTab === 'pireps' ? 'active' : ''}
+            onClick={() => handleTabChange('pireps')}
+          >
             <Cloud size={16} /> Historical PIREPs
             {pirepsTotalCount > 0 && <span className="count">{pirepsTotalCount}</span>}
           </button>
@@ -184,11 +209,17 @@ export function ArchiveView({ apiBase, hashParams = {}, setHashParams }) {
             />
           </div>
 
-          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="type-filter">
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="type-filter"
+          >
             <option value="all">All Types</option>
             {activeTab === 'notams' ? (
               Object.entries(NOTAM_TYPES).map(([key, { label }]) => (
-                <option key={key} value={key}>{label}</option>
+                <option key={key} value={key}>
+                  {label}
+                </option>
               ))
             ) : (
               <>
@@ -198,9 +229,15 @@ export function ArchiveView({ apiBase, hashParams = {}, setHashParams }) {
             )}
           </select>
 
-          <select value={dateRange} onChange={(e) => setDateRange(parseInt(e.target.value) || 30)} className="date-filter">
-            {DATE_RANGES.filter(r => r.value !== 'custom').map(({ value, label }) => (
-              <option key={value} value={value}>{label}</option>
+          <select
+            value={dateRange}
+            onChange={(e) => setDateRange(parseInt(e.target.value) || 30)}
+            className="date-filter"
+          >
+            {DATE_RANGES.filter((r) => r.value !== 'custom').map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
             ))}
           </select>
         </div>
@@ -229,25 +266,27 @@ export function ArchiveView({ apiBase, hashParams = {}, setHashParams }) {
         ) : (
           <>
             <div className="archive-list">
-              {activeTab === 'notams' ? (
-                notams.map(notam => (
-                  <ArchivedNotamCard
-                    key={notam.notam_id}
-                    notam={notam}
-                    expanded={expandedId === notam.notam_id}
-                    onToggle={() => setExpandedId(expandedId === notam.notam_id ? null : notam.notam_id)}
-                  />
-                ))
-              ) : (
-                pireps.map(pirep => (
-                  <ArchivedPirepCard
-                    key={pirep.pirep_id}
-                    pirep={pirep}
-                    expanded={expandedId === pirep.pirep_id}
-                    onToggle={() => setExpandedId(expandedId === pirep.pirep_id ? null : pirep.pirep_id)}
-                  />
-                ))
-              )}
+              {activeTab === 'notams'
+                ? notams.map((notam) => (
+                    <ArchivedNotamCard
+                      key={notam.notam_id}
+                      notam={notam}
+                      expanded={expandedId === notam.notam_id}
+                      onToggle={() =>
+                        setExpandedId(expandedId === notam.notam_id ? null : notam.notam_id)
+                      }
+                    />
+                  ))
+                : pireps.map((pirep) => (
+                    <ArchivedPirepCard
+                      key={pirep.pirep_id}
+                      pirep={pirep}
+                      expanded={expandedId === pirep.pirep_id}
+                      onToggle={() =>
+                        setExpandedId(expandedId === pirep.pirep_id ? null : pirep.pirep_id)
+                      }
+                    />
+                  ))}
             </div>
 
             <div className="archive-pagination">

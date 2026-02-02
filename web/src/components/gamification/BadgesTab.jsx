@@ -22,7 +22,7 @@ export function BadgesTab({ badges }) {
           <Award size={16} />
           <span>Badges</span>
           <span className="card-badge">
-            {badges.filter(b => b.unlocked).length}/{badges.length} unlocked
+            {badges.filter((b) => b.unlocked).length}/{badges.length} unlocked
           </span>
         </div>
         {badges.length === 0 ? (

@@ -21,7 +21,7 @@ function AudioList({
   onPlay,
   onSeek,
   onToggleExpand,
-  onSelectAircraft
+  onSelectAircraft,
 }) {
   // Lazy loading: only render visible items
   const [visibleCount, setVisibleCount] = useState(20);
@@ -37,7 +37,7 @@ function AudioList({
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          setVisibleCount(prev => Math.min(prev + 20, transmissions.length));
+          setVisibleCount((prev) => Math.min(prev + 20, transmissions.length));
         }
       },
       { rootMargin: '200px' }
@@ -108,7 +108,8 @@ function AudioList({
       {/* Footer Count */}
       <div className="audio-footer">
         <span>
-          Showing {Math.min(visibleCount, transmissions.length)} of {transmissions.length} transmissions
+          Showing {Math.min(visibleCount, transmissions.length)} of {transmissions.length}{' '}
+          transmissions
         </span>
       </div>
     </>

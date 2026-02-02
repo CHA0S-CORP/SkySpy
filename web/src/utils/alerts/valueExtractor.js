@@ -19,9 +19,11 @@ export function safeIntAltitude(value) {
  * Get altitude from aircraft data (checks multiple fields)
  */
 export function getAircraftAltitude(aircraft) {
-  return safeIntAltitude(aircraft.alt_baro) ||
-         safeIntAltitude(aircraft.alt_geom) ||
-         safeIntAltitude(aircraft.alt);
+  return (
+    safeIntAltitude(aircraft.alt_baro) ||
+    safeIntAltitude(aircraft.alt_geom) ||
+    safeIntAltitude(aircraft.alt)
+  );
 }
 
 /**

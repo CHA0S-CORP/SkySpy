@@ -47,11 +47,7 @@ export function ConnectionRequired({
       <WifiOff size={32} aria-hidden="true" />
       <p className="connection-message">{message}</p>
       {onReconnect && (
-        <button
-          className="btn-primary reconnect-btn"
-          onClick={onReconnect}
-          type="button"
-        >
+        <button className="btn-primary reconnect-btn" onClick={onReconnect} type="button">
           <RefreshCw size={16} aria-hidden="true" />
           Reconnect
         </button>
@@ -94,11 +90,7 @@ export function ConnectionBanner({
             <AlertCircle size={16} aria-hidden="true" />
             <span>{message}</span>
             {onReconnect && (
-              <button
-                className="btn-secondary btn-sm"
-                onClick={onReconnect}
-                type="button"
-              >
+              <button className="btn-secondary btn-sm" onClick={onReconnect} type="button">
                 Reconnect
               </button>
             )}

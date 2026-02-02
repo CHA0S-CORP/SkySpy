@@ -44,7 +44,9 @@ export function OverlayMenu({
     <div className="overlay-menu" onClick={(e) => e.stopPropagation()}>
       <div className="overlay-menu-header">
         <span>Map Layers</span>
-        <button onClick={() => setShowOverlayMenu(false)}><X size={14} /></button>
+        <button onClick={() => setShowOverlayMenu(false)}>
+          <X size={14} />
+        </button>
       </div>
 
       <label className="overlay-toggle">
@@ -187,7 +189,9 @@ export function OverlayMenu({
             <input
               type="checkbox"
               checked={overlays.trainingAreas}
-              onChange={() => updateOverlays({ ...overlays, trainingAreas: !overlays.trainingAreas })}
+              onChange={() =>
+                updateOverlays({ ...overlays, trainingAreas: !overlays.trainingAreas })
+              }
             />
             <span className="toggle-label">Training Areas</span>
           </label>
@@ -224,7 +228,9 @@ export function OverlayMenu({
                 localStorage.setItem('adsb-pro-compass-rose', String(newVal));
               }}
             />
-            <span className="toggle-label"><Compass size={12} /> Compass Rose (P)</span>
+            <span className="toggle-label">
+              <Compass size={12} /> Compass Rose (P)
+            </span>
           </label>
 
           {/* Grid Opacity */}
@@ -319,7 +325,10 @@ export function OverlayMenu({
               type="checkbox"
               checked={dataBlockConfig.showAltitude}
               onChange={() => {
-                const newConfig = { ...dataBlockConfig, showAltitude: !dataBlockConfig.showAltitude };
+                const newConfig = {
+                  ...dataBlockConfig,
+                  showAltitude: !dataBlockConfig.showAltitude,
+                };
                 setDataBlockConfig(newConfig);
                 localStorage.setItem('adsb-pro-datablock-config', JSON.stringify(newConfig));
               }}
@@ -358,7 +367,10 @@ export function OverlayMenu({
               type="checkbox"
               checked={dataBlockConfig.showVerticalSpeed}
               onChange={() => {
-                const newConfig = { ...dataBlockConfig, showVerticalSpeed: !dataBlockConfig.showVerticalSpeed };
+                const newConfig = {
+                  ...dataBlockConfig,
+                  showVerticalSpeed: !dataBlockConfig.showVerticalSpeed,
+                };
                 setDataBlockConfig(newConfig);
                 localStorage.setItem('adsb-pro-datablock-config', JSON.stringify(newConfig));
               }}
@@ -371,7 +383,10 @@ export function OverlayMenu({
               type="checkbox"
               checked={dataBlockConfig.showAircraftType}
               onChange={() => {
-                const newConfig = { ...dataBlockConfig, showAircraftType: !dataBlockConfig.showAircraftType };
+                const newConfig = {
+                  ...dataBlockConfig,
+                  showAircraftType: !dataBlockConfig.showAircraftType,
+                };
                 setDataBlockConfig(newConfig);
                 localStorage.setItem('adsb-pro-datablock-config', JSON.stringify(newConfig));
               }}
@@ -468,14 +483,15 @@ export function OverlayMenu({
       <div className="overlay-divider" />
       <button
         className="legend-toggle-btn"
-        onClick={() => { setShowLegend(!showLegend); setShowOverlayMenu(false); }}
+        onClick={() => {
+          setShowLegend(!showLegend);
+          setShowOverlayMenu(false);
+        }}
       >
         <HelpCircle size={14} />
         <span>Symbol Legend</span>
       </button>
-      <div className="overlay-note">
-        Weather data from aviationweather.gov
-      </div>
+      <div className="overlay-note">Weather data from aviationweather.gov</div>
     </div>
   );
 }

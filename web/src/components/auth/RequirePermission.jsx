@@ -19,7 +19,7 @@ export default function RequirePermission({
   permission,
   requireAll = true,
   children,
-  fallback = null
+  fallback = null,
 }) {
   const { config, hasPermission, hasAnyPermission, hasAllPermissions } = useAuth();
 
@@ -32,11 +32,12 @@ export default function RequirePermission({
   const permissions = Array.isArray(permission) ? permission : [permission];
 
   // Check permissions
-  const hasAccess = permissions.length === 1
-    ? hasPermission(permissions[0])
-    : requireAll
-      ? hasAllPermissions(permissions)
-      : hasAnyPermission(permissions);
+  const hasAccess =
+    permissions.length === 1
+      ? hasPermission(permissions[0])
+      : requireAll
+        ? hasAllPermissions(permissions)
+        : hasAnyPermission(permissions);
 
   return hasAccess ? children : fallback;
 }

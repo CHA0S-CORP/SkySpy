@@ -6,7 +6,11 @@ const safeJson = async (res) => {
   if (!res.ok) return null;
   const ct = res.headers.get('content-type');
   if (!ct || !ct.includes('application/json')) return null;
-  try { return await res.json(); } catch { return null; }
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
 };
 
 // Alert severity levels and their configuration
@@ -143,106 +147,116 @@ export function useAlertNotifications(options = {}) {
   /**
    * Play alert sound based on severity
    */
-  const playAlertSound = useCallback((severity) => {
-    if (!soundEnabled) return;
+  const playAlertSound = useCallback(
+    (severity) => {
+      if (!soundEnabled) return;
 
-    try {
-      const config = SEVERITY_CONFIG[severity] || {};
-      const soundUrl = config.sound || DEFAULT_ALERT_SOUND;
+      try {
+        const config = SEVERITY_CONFIG[severity] || {};
+        const soundUrl = config.sound || DEFAULT_ALERT_SOUND;
 
-      // Create audio element if needed
-      if (!audioRef.current) {
-        audioRef.current = new Audio();
-        audioRef.current.volume = 0.5;
+        // Create audio element if needed
+        if (!audioRef.current) {
+          audioRef.current = new Audio();
+          audioRef.current.volume = 0.5;
+        }
+
+        // Play sound
+        audioRef.current.src = soundUrl;
+        audioRef.current.play().catch((err) => {
+          // Silently fail if autoplay is blocked
+          console.debug('Alert sound blocked:', err.message);
+        });
+      } catch (err) {
+        console.warn('Failed to play alert sound:', err.message);
       }
-
-      // Play sound
-      audioRef.current.src = soundUrl;
-      audioRef.current.play().catch(err => {
-        // Silently fail if autoplay is blocked
-        console.debug('Alert sound blocked:', err.message);
-      });
-    } catch (err) {
-      console.warn('Failed to play alert sound:', err.message);
-    }
-  }, [soundEnabled]);
+    },
+    [soundEnabled]
+  );
 
   /**
    * Show toast notification for a triggered alert
    */
-  const showAlertToast = useCallback((alertData) => {
-    if (!toast) return;
+  const showAlertToast = useCallback(
+    (alertData) => {
+      if (!toast) return;
 
-    const severity = alertData.severity || alertData.priority || 'info';
-    const config = SEVERITY_CONFIG[severity] || SEVERITY_CONFIG.info;
-    const ruleName = alertData.rule_name || 'Alert';
-    const aircraft = alertData.callsign || alertData.hex || alertData.icao || 'Unknown';
-    const message = `${ruleName}: ${aircraft}`;
+      const severity = alertData.severity || alertData.priority || 'info';
+      const config = SEVERITY_CONFIG[severity] || SEVERITY_CONFIG.info;
+      const ruleName = alertData.rule_name || 'Alert';
+      const aircraft = alertData.callsign || alertData.hex || alertData.icao || 'Unknown';
+      const message = `${ruleName}: ${aircraft}`;
 
-    // Map severity to toast type
-    let toastType = 'info';
-    if (severity === 'critical' || severity === 'emergency') {
-      toastType = 'error';
-    } else if (severity === 'high' || severity === 'warning') {
-      toastType = 'warning';
-    }
+      // Map severity to toast type
+      let toastType = 'info';
+      if (severity === 'critical' || severity === 'emergency') {
+        toastType = 'error';
+      } else if (severity === 'high' || severity === 'warning') {
+        toastType = 'warning';
+      }
 
-    // Show toast with appropriate duration and click handler to navigate to alerts
-    const toastId = toast.addToast(message, toastType, config.duration, {
-      onClick: onNavigateToAlerts,
-      actionLabel: 'View Alerts',
-      onAction: onNavigateToAlerts,
-    });
+      // Show toast with appropriate duration and click handler to navigate to alerts
+      const toastId = toast.addToast(message, toastType, config.duration, {
+        onClick: onNavigateToAlerts,
+        actionLabel: 'View Alerts',
+        onAction: onNavigateToAlerts,
+      });
 
-    return toastId;
-  }, [toast, onNavigateToAlerts]);
+      return toastId;
+    },
+    [toast, onNavigateToAlerts]
+  );
 
   /**
    * Handle incoming alert:triggered event (internal implementation)
    */
-  const handleAlertTriggeredInternal = useCallback((alertData) => {
-    if (!mountedRef.current) return;
+  const handleAlertTriggeredInternal = useCallback(
+    (alertData) => {
+      if (!mountedRef.current) return;
 
-    console.log('Alert notification received:', alertData);
+      console.log('Alert notification received:', alertData);
 
-    // Update unacknowledged count
-    setUnacknowledgedCount(prev => prev + 1);
+      // Update unacknowledged count
+      setUnacknowledgedCount((prev) => prev + 1);
 
-    // Add to recent alerts
-    const newAlert = {
-      ...alertData,
-      id: alertData.id || Date.now(),
-      triggered_at: alertData.triggered_at || new Date().toISOString(),
-    };
+      // Add to recent alerts
+      const newAlert = {
+        ...alertData,
+        id: alertData.id || Date.now(),
+        triggered_at: alertData.triggered_at || new Date().toISOString(),
+      };
 
-    setRecentAlerts(prev => {
-      const updated = [newAlert, ...prev].slice(0, 20);
-      // Persist to localStorage
-      try {
-        localStorage.setItem(UNACKED_ALERTS_KEY, JSON.stringify(updated));
-      } catch (e) {
-        // Ignore storage errors
-      }
-      return updated;
-    });
-
-    // Show toast notification
-    showAlertToast(alertData);
-
-    // Play alert sound
-    playAlertSound(alertData.severity || alertData.priority);
-
-    // Show browser notification if enabled
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-      const severity = alertData.severity || alertData.priority || 'info';
-      new Notification(alertData.rule_name || 'SkySpy Alert', {
-        body: alertData.message || `Aircraft ${alertData.callsign || alertData.hex} triggered alert`,
-        icon: '/static/favicon.svg',
-        tag: `alert-${alertData.id || Date.now()}`,
-        requireInteraction: severity === 'critical' || severity === 'emergency',
+      setRecentAlerts((prev) => {
+        const updated = [newAlert, ...prev].slice(0, 20);
+        // Persist to localStorage
+        try {
+          localStorage.setItem(UNACKED_ALERTS_KEY, JSON.stringify(updated));
+        } catch (e) {
+          // Ignore storage errors
+        }
+        return updated;
       });
-    }
-  }, [showAlertToast, playAlertSound]);
+
+      // Show toast notification
+      showAlertToast(alertData);
+
+      // Play alert sound
+      playAlertSound(alertData.severity || alertData.priority);
+
+      // Show browser notification if enabled
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        const severity = alertData.severity || alertData.priority || 'info';
+        new Notification(alertData.rule_name || 'SkySpy Alert', {
+          body:
+            alertData.message || `Aircraft ${alertData.callsign || alertData.hex} triggered alert`,
+          icon: '/static/favicon.svg',
+          tag: `alert-${alertData.id || Date.now()}`,
+          requireInteraction: severity === 'critical' || severity === 'emergency',
+        });
+      }
+    },
+    [showAlertToast, playAlertSound]
+  );
 
   // Listen for WebSocket alert events via custom event
   useEffect(() => {
@@ -265,32 +279,35 @@ export function useAlertNotifications(options = {}) {
   /**
    * Mark an alert as acknowledged
    */
-  const acknowledgeAlert = useCallback(async (alertId) => {
-    try {
-      // Update local state
-      setRecentAlerts(prev => {
-        const updated = prev.filter(a => a.id !== alertId);
-        try {
-          localStorage.setItem(UNACKED_ALERTS_KEY, JSON.stringify(updated));
-        } catch (e) {
-          // Ignore
-        }
-        return updated;
-      });
-      setUnacknowledgedCount(prev => Math.max(0, prev - 1));
-
-      // Send to server if connected
-      if (wsRequest && wsConnected) {
-        await wsRequest('acknowledge-alert', { id: alertId });
-      } else if (apiBase) {
-        await fetch(`${apiBase}/api/v1/alerts/history/${alertId}/acknowledge`, {
-          method: 'POST',
+  const acknowledgeAlert = useCallback(
+    async (alertId) => {
+      try {
+        // Update local state
+        setRecentAlerts((prev) => {
+          const updated = prev.filter((a) => a.id !== alertId);
+          try {
+            localStorage.setItem(UNACKED_ALERTS_KEY, JSON.stringify(updated));
+          } catch (e) {
+            // Ignore
+          }
+          return updated;
         });
+        setUnacknowledgedCount((prev) => Math.max(0, prev - 1));
+
+        // Send to server if connected
+        if (wsRequest && wsConnected) {
+          await wsRequest('acknowledge-alert', { id: alertId });
+        } else if (apiBase) {
+          await fetch(`${apiBase}/api/v1/alerts/history/${alertId}/acknowledge`, {
+            method: 'POST',
+          });
+        }
+      } catch (err) {
+        console.error('Failed to acknowledge alert:', err);
       }
-    } catch (err) {
-      console.error('Failed to acknowledge alert:', err);
-    }
-  }, [apiBase, wsRequest, wsConnected]);
+    },
+    [apiBase, wsRequest, wsConnected]
+  );
 
   /**
    * Mark all alerts as acknowledged

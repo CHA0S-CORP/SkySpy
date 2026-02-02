@@ -19,10 +19,7 @@ const MAX_HISTORY_SIZE = 100;
  * @param {number} options.maxEntries Maximum history entries to keep
  * @returns {Object} History state and controls
  */
-export function useThreatHistory({
-  persistent = true,
-  maxEntries = MAX_HISTORY_SIZE,
-} = {}) {
+export function useThreatHistory({ persistent = true, maxEntries = MAX_HISTORY_SIZE } = {}) {
   const [history, setHistory] = useState([]);
   const [stats, setStats] = useState({
     totalEncounters: 0,
@@ -72,8 +69,8 @@ export function useThreatHistory({
       return;
     }
 
-    const lawEnforcementCount = entries.filter(e => e.is_law_enforcement).length;
-    const helicopterCount = entries.filter(e => e.is_helicopter).length;
+    const lawEnforcementCount = entries.filter((e) => e.is_law_enforcement).length;
+    const helicopterCount = entries.filter((e) => e.is_helicopter).length;
 
     // Find closest approach
     const closestEntry = entries.reduce((closest, entry) => {
@@ -87,109 +84,117 @@ export function useThreatHistory({
       totalEncounters: entries.length,
       lawEnforcementCount,
       helicopterCount,
-      closestApproach: closestEntry ? {
-        distance: closestEntry.closest_distance,
-        callsign: closestEntry.callsign,
-        timestamp: closestEntry.closest_time,
-      } : null,
+      closestApproach: closestEntry
+        ? {
+            distance: closestEntry.closest_distance,
+            callsign: closestEntry.callsign,
+            timestamp: closestEntry.closest_time,
+          }
+        : null,
       mostRecent: entries[0] || null,
     });
   }, []);
 
   // Log a new threat encounter
-  const logThreat = useCallback((threat) => {
-    if (!threat) return;
+  const logThreat = useCallback(
+    (threat) => {
+      if (!threat) return;
 
-    const entry = {
-      id: `${threat.hex}-${Date.now()}`,
-      hex: threat.hex,
-      callsign: threat.callsign,
-      category: threat.category,
-      description: threat.description,
-      is_law_enforcement: threat.is_law_enforcement,
-      is_helicopter: threat.is_helicopter,
-      threat_level: threat.threat_level,
-      aircraft_type: threat.aircraft_type,
-      registration: threat.registration,
+      const entry = {
+        id: `${threat.hex}-${Date.now()}`,
+        hex: threat.hex,
+        callsign: threat.callsign,
+        category: threat.category,
+        description: threat.description,
+        is_law_enforcement: threat.is_law_enforcement,
+        is_helicopter: threat.is_helicopter,
+        threat_level: threat.threat_level,
+        aircraft_type: threat.aircraft_type,
+        registration: threat.registration,
 
-      // Encounter details
-      first_seen: new Date().toISOString(),
-      last_seen: new Date().toISOString(),
-      closest_distance: threat.distance_nm,
-      closest_time: new Date().toISOString(),
-      initial_bearing: threat.bearing,
-      initial_trend: threat.trend,
-
-      // Position at first sight
-      first_position: threat.lat && threat.lon ? {
-        lat: threat.lat,
-        lon: threat.lon,
-        altitude: threat.altitude,
-      } : null,
-    };
-
-    setHistory(prev => {
-      // Check if this threat already exists (update instead of add)
-      const existingIndex = prev.findIndex(e => e.hex === threat.hex);
-
-      let updated;
-      if (existingIndex >= 0) {
-        // Update existing entry
-        const existing = prev[existingIndex];
-        const updatedEntry = {
-          ...existing,
-          last_seen: new Date().toISOString(),
-          closest_distance: Math.min(existing.closest_distance, threat.distance_nm),
-          closest_time: threat.distance_nm < existing.closest_distance
-            ? new Date().toISOString()
-            : existing.closest_time,
-        };
-        updated = [
-          updatedEntry,
-          ...prev.slice(0, existingIndex),
-          ...prev.slice(existingIndex + 1),
-        ];
-      } else {
-        // Add new entry at beginning
-        updated = [entry, ...prev].slice(0, maxEntries);
-      }
-
-      updateStats(updated);
-      return updated;
-    });
-
-    return entry;
-  }, [maxEntries, updateStats]);
-
-  // Update an existing encounter (e.g., when it gets closer)
-  const updateThreat = useCallback((hex, updates) => {
-    setHistory(prev => {
-      const index = prev.findIndex(e => e.hex === hex);
-      if (index < 0) return prev;
-
-      const existing = prev[index];
-      const updated = {
-        ...existing,
-        ...updates,
+        // Encounter details
+        first_seen: new Date().toISOString(),
         last_seen: new Date().toISOString(),
+        closest_distance: threat.distance_nm,
+        closest_time: new Date().toISOString(),
+        initial_bearing: threat.bearing,
+        initial_trend: threat.trend,
+
+        // Position at first sight
+        first_position:
+          threat.lat && threat.lon
+            ? {
+                lat: threat.lat,
+                lon: threat.lon,
+                altitude: threat.altitude,
+              }
+            : null,
       };
 
-      // Update closest distance if applicable
-      if (updates.distance_nm !== undefined && updates.distance_nm < existing.closest_distance) {
-        updated.closest_distance = updates.distance_nm;
-        updated.closest_time = new Date().toISOString();
-      }
+      setHistory((prev) => {
+        // Check if this threat already exists (update instead of add)
+        const existingIndex = prev.findIndex((e) => e.hex === threat.hex);
 
-      const newHistory = [
-        updated,
-        ...prev.slice(0, index),
-        ...prev.slice(index + 1),
-      ];
+        let updated;
+        if (existingIndex >= 0) {
+          // Update existing entry
+          const existing = prev[existingIndex];
+          const updatedEntry = {
+            ...existing,
+            last_seen: new Date().toISOString(),
+            closest_distance: Math.min(existing.closest_distance, threat.distance_nm),
+            closest_time:
+              threat.distance_nm < existing.closest_distance
+                ? new Date().toISOString()
+                : existing.closest_time,
+          };
+          updated = [
+            updatedEntry,
+            ...prev.slice(0, existingIndex),
+            ...prev.slice(existingIndex + 1),
+          ];
+        } else {
+          // Add new entry at beginning
+          updated = [entry, ...prev].slice(0, maxEntries);
+        }
 
-      updateStats(newHistory);
-      return newHistory;
-    });
-  }, [updateStats]);
+        updateStats(updated);
+        return updated;
+      });
+
+      return entry;
+    },
+    [maxEntries, updateStats]
+  );
+
+  // Update an existing encounter (e.g., when it gets closer)
+  const updateThreat = useCallback(
+    (hex, updates) => {
+      setHistory((prev) => {
+        const index = prev.findIndex((e) => e.hex === hex);
+        if (index < 0) return prev;
+
+        const existing = prev[index];
+        const updated = {
+          ...existing,
+          ...updates,
+          last_seen: new Date().toISOString(),
+        };
+
+        // Update closest distance if applicable
+        if (updates.distance_nm !== undefined && updates.distance_nm < existing.closest_distance) {
+          updated.closest_distance = updates.distance_nm;
+          updated.closest_time = new Date().toISOString();
+        }
+
+        const newHistory = [updated, ...prev.slice(0, index), ...prev.slice(index + 1)];
+
+        updateStats(newHistory);
+        return newHistory;
+      });
+    },
+    [updateStats]
+  );
 
   // Clear all history
   const clearHistory = useCallback(() => {
@@ -212,13 +217,16 @@ export function useThreatHistory({
   }, [persistent]);
 
   // Remove a specific entry
-  const removeEntry = useCallback((id) => {
-    setHistory(prev => {
-      const filtered = prev.filter(e => e.id !== id);
-      updateStats(filtered);
-      return filtered;
-    });
-  }, [updateStats]);
+  const removeEntry = useCallback(
+    (id) => {
+      setHistory((prev) => {
+        const filtered = prev.filter((e) => e.id !== id);
+        updateStats(filtered);
+        return filtered;
+      });
+    },
+    [updateStats]
+  );
 
   // Export history as JSON
   const exportHistory = useCallback(() => {
@@ -231,29 +239,35 @@ export function useThreatHistory({
   }, [history, stats]);
 
   // Import history from JSON
-  const importHistory = useCallback((jsonString) => {
-    try {
-      const data = JSON.parse(jsonString);
-      if (data.entries && Array.isArray(data.entries)) {
-        setHistory(data.entries.slice(0, maxEntries));
-        updateStats(data.entries);
-        return true;
+  const importHistory = useCallback(
+    (jsonString) => {
+      try {
+        const data = JSON.parse(jsonString);
+        if (data.entries && Array.isArray(data.entries)) {
+          setHistory(data.entries.slice(0, maxEntries));
+          updateStats(data.entries);
+          return true;
+        }
+        return false;
+      } catch (err) {
+        console.error('Failed to import history:', err);
+        return false;
       }
-      return false;
-    } catch (err) {
-      console.error('Failed to import history:', err);
-      return false;
-    }
-  }, [maxEntries, updateStats]);
+    },
+    [maxEntries, updateStats]
+  );
 
   // Get encounters by threat level
-  const getByThreatLevel = useCallback((level) => {
-    return history.filter(e => e.threat_level === level);
-  }, [history]);
+  const getByThreatLevel = useCallback(
+    (level) => {
+      return history.filter((e) => e.threat_level === level);
+    },
+    [history]
+  );
 
   // Get law enforcement encounters
   const getLawEnforcementEncounters = useCallback(() => {
-    return history.filter(e => e.is_law_enforcement);
+    return history.filter((e) => e.is_law_enforcement);
   }, [history]);
 
   return {

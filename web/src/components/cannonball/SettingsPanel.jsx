@@ -10,10 +10,27 @@
  */
 import React, { useState, useCallback } from 'react';
 import {
-  X, Volume2, VolumeX, Smartphone, Eye, EyeOff,
-  Bell, BellOff, Radar, Filter, Moon, Sun,
-  ChevronDown, ChevronUp, Vibrate,
-  Plane, Shield, AlertTriangle, Navigation, Server, Cpu
+  X,
+  Volume2,
+  VolumeX,
+  Smartphone,
+  Eye,
+  EyeOff,
+  Bell,
+  BellOff,
+  Radar,
+  Filter,
+  Moon,
+  Sun,
+  ChevronDown,
+  ChevronUp,
+  Vibrate,
+  Plane,
+  Shield,
+  AlertTriangle,
+  Navigation,
+  Server,
+  Cpu,
 } from 'lucide-react';
 
 // Default settings
@@ -59,12 +76,9 @@ export const DEFAULT_SETTINGS = {
 };
 
 function ToggleButton({ active, onToggle, icon: Icon, activeIcon: ActiveIcon, label }) {
-  const DisplayIcon = active ? (ActiveIcon || Icon) : Icon;
+  const DisplayIcon = active ? ActiveIcon || Icon : Icon;
   return (
-    <button
-      className={`settings-toggle ${active ? 'active' : ''}`}
-      onClick={onToggle}
-    >
+    <button className={`settings-toggle ${active ? 'active' : ''}`} onClick={onToggle}>
       <DisplayIcon size={20} />
       <span>{label}</span>
     </button>
@@ -76,7 +90,10 @@ function SliderSetting({ label, value, onChange, min, max, step = 1, unit = '' }
     <div className="settings-slider">
       <div className="slider-header">
         <span className="slider-label">{label}</span>
-        <span className="slider-value">{value}{unit}</span>
+        <span className="slider-value">
+          {value}
+          {unit}
+        </span>
       </div>
       <input
         type="range"
@@ -102,12 +119,15 @@ function SectionHeader({ title, expanded, onToggle }) {
 export function SettingsPanel({ settings, onChange, onClose }) {
   const [expandedSection, setExpandedSection] = useState('alerts');
 
-  const updateSetting = useCallback((key, value) => {
-    onChange({ ...settings, [key]: value });
-  }, [settings, onChange]);
+  const updateSetting = useCallback(
+    (key, value) => {
+      onChange({ ...settings, [key]: value });
+    },
+    [settings, onChange]
+  );
 
   const toggleSection = useCallback((section) => {
-    setExpandedSection(prev => prev === section ? null : section);
+    setExpandedSection((prev) => (prev === section ? null : section));
   }, []);
 
   return (
@@ -180,7 +200,7 @@ export function SettingsPanel({ settings, onChange, onClose }) {
               <div className="settings-row">
                 <span>Haptic Intensity</span>
                 <div className="button-group">
-                  {['gentle', 'normal', 'strong'].map(intensity => (
+                  {['gentle', 'normal', 'strong'].map((intensity) => (
                     <button
                       key={intensity}
                       className={settings.hapticIntensity === intensity ? 'active' : ''}
@@ -327,7 +347,9 @@ export function SettingsPanel({ settings, onChange, onClose }) {
                 unit="k ft"
               />
               <div className="settings-toggle-row">
-                <span><Plane size={14} /> All Helicopters</span>
+                <span>
+                  <Plane size={14} /> All Helicopters
+                </span>
                 <input
                   type="checkbox"
                   checked={settings.showAllHelicopters}
@@ -335,7 +357,9 @@ export function SettingsPanel({ settings, onChange, onClose }) {
                 />
               </div>
               <div className="settings-toggle-row">
-                <span><Shield size={14} /> Law Enforcement Only</span>
+                <span>
+                  <Shield size={14} /> Law Enforcement Only
+                </span>
                 <input
                   type="checkbox"
                   checked={settings.showLawEnforcementOnly}
@@ -393,7 +417,9 @@ export function SettingsPanel({ settings, onChange, onClose }) {
           {expandedSection === 'advanced' && (
             <div className="section-content">
               <div className="settings-toggle-row">
-                <span><Server size={14} /> Use Server Analysis</span>
+                <span>
+                  <Server size={14} /> Use Server Analysis
+                </span>
                 <input
                   type="checkbox"
                   checked={settings.useBackend !== false}
@@ -430,10 +456,7 @@ export function SettingsPanel({ settings, onChange, onClose }) {
 
       {/* Reset button */}
       <div className="settings-footer">
-        <button
-          className="reset-btn"
-          onClick={() => onChange(DEFAULT_SETTINGS)}
-        >
+        <button className="reset-btn" onClick={() => onChange(DEFAULT_SETTINGS)}>
           Reset to Defaults
         </button>
       </div>

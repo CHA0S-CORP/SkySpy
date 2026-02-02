@@ -10,7 +10,7 @@ export const handleAlertTriggered = (alertData) => {
   history.unshift({
     ...alertData,
     id: Date.now(),
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
   localStorage.setItem('alert-history', JSON.stringify(history.slice(0, 100)));
 
@@ -19,7 +19,7 @@ export const handleAlertTriggered = (alertData) => {
       body: alertData.message || `Aircraft ${alertData.icao} triggered alert`,
       icon: '/static/favicon.svg',
       tag: `alert-${alertData.icao}`,
-      requireInteraction: alertData.priority === 'emergency'
+      requireInteraction: alertData.priority === 'emergency',
     });
   }
 };

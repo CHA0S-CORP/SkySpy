@@ -15,7 +15,7 @@ export function SessionsFilters({
   sessionSortDirection,
   handleSessionSort,
   filteredCount,
-  totalCount
+  totalCount,
 }) {
   return (
     <div className="sessions-filters">

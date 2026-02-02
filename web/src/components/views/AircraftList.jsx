@@ -1,7 +1,17 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
-  ChevronUp, ChevronDown, Search, Shield, AlertTriangle,
-  ArrowUp, ArrowDown, Plane, Radio, Filter, X, ChevronRight
+  ChevronUp,
+  ChevronDown,
+  Search,
+  Shield,
+  AlertTriangle,
+  ArrowUp,
+  ArrowDown,
+  Plane,
+  Radio,
+  Filter,
+  X,
+  ChevronRight,
 } from 'lucide-react';
 import { VirtualList } from '../common/VirtualList';
 import { AircraftRow } from '../aircraft-list/AircraftRow';
@@ -54,15 +64,39 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
 
   // Quick filter presets
   const quickFilters = [
-    { id: 'emergency', label: 'Emergency', icon: AlertTriangle, color: 'red', filter: { emergency: true } },
-    { id: 'military', label: 'Military', icon: Shield, color: 'purple', filter: { military: true } },
-    { id: 'climbing', label: 'Climbing', icon: ArrowUp, color: 'green', filter: { climbing: true } },
-    { id: 'descending', label: 'Descending', icon: ArrowDown, color: 'orange', filter: { descending: true } },
+    {
+      id: 'emergency',
+      label: 'Emergency',
+      icon: AlertTriangle,
+      color: 'red',
+      filter: { emergency: true },
+    },
+    {
+      id: 'military',
+      label: 'Military',
+      icon: Shield,
+      color: 'purple',
+      filter: { military: true },
+    },
+    {
+      id: 'climbing',
+      label: 'Climbing',
+      icon: ArrowUp,
+      color: 'green',
+      filter: { climbing: true },
+    },
+    {
+      id: 'descending',
+      label: 'Descending',
+      icon: ArrowDown,
+      color: 'orange',
+      filter: { descending: true },
+    },
     { id: 'ground', label: 'On Ground', icon: Plane, color: 'blue', filter: { onGround: true } },
   ];
 
   const toggleQuickFilter = (filterId, filterValues) => {
-    setFilters(prev => {
+    setFilters((prev) => {
       const newFilters = { ...prev };
       Object.entries(filterValues).forEach(([key, value]) => {
         if (prev[key] === value) {
@@ -97,7 +131,8 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
   };
 
   const hasActiveFilters = useMemo(() => {
-    return searchFilter ||
+    return (
+      searchFilter ||
       filters.military !== null ||
       filters.emergency ||
       filters.climbing ||
@@ -108,7 +143,8 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
       filters.minDistance ||
       filters.maxDistance ||
       filters.minSpeed ||
-      filters.maxSpeed;
+      filters.maxSpeed
+    );
   }, [searchFilter, filters]);
 
   const filteredAircraft = useMemo(() => {
@@ -117,52 +153,53 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
     // Text search
     if (searchFilter) {
       const f = searchFilter.toLowerCase();
-      filtered = filtered.filter(ac =>
-        ac.hex?.toLowerCase().includes(f) ||
-        ac.flight?.toLowerCase().includes(f) ||
-        ac.type?.toLowerCase().includes(f) ||
-        ac.squawk?.includes(f)
+      filtered = filtered.filter(
+        (ac) =>
+          ac.hex?.toLowerCase().includes(f) ||
+          ac.flight?.toLowerCase().includes(f) ||
+          ac.type?.toLowerCase().includes(f) ||
+          ac.squawk?.includes(f)
       );
     }
 
     // Military filter
     if (filters.military === true) {
-      filtered = filtered.filter(ac => ac.military);
+      filtered = filtered.filter((ac) => ac.military);
     } else if (filters.military === false) {
-      filtered = filtered.filter(ac => !ac.military);
+      filtered = filtered.filter((ac) => !ac.military);
     }
 
     // Emergency filter
     if (filters.emergency) {
-      filtered = filtered.filter(ac => ac.emergency || ac.squawk?.match(/^7[567]00$/));
+      filtered = filtered.filter((ac) => ac.emergency || ac.squawk?.match(/^7[567]00$/));
     }
 
     // Climbing filter (> 500 fpm)
     if (filters.climbing) {
-      filtered = filtered.filter(ac => (ac.vr || 0) > 500);
+      filtered = filtered.filter((ac) => (ac.vr || 0) > 500);
     }
 
     // Descending filter (< -500 fpm)
     if (filters.descending) {
-      filtered = filtered.filter(ac => (ac.vr || 0) < -500);
+      filtered = filtered.filter((ac) => (ac.vr || 0) < -500);
     }
 
     // On ground filter
     if (filters.onGround) {
-      filtered = filtered.filter(ac => ac.alt === 0 || ac.alt === null || ac.alt === 'ground');
+      filtered = filtered.filter((ac) => ac.alt === 0 || ac.alt === null || ac.alt === 'ground');
     }
 
     // Altitude range
     if (filters.minAltitude) {
       const min = parseInt(filters.minAltitude, 10);
       if (!isNaN(min)) {
-        filtered = filtered.filter(ac => (ac.alt || 0) >= min);
+        filtered = filtered.filter((ac) => (ac.alt || 0) >= min);
       }
     }
     if (filters.maxAltitude) {
       const max = parseInt(filters.maxAltitude, 10);
       if (!isNaN(max)) {
-        filtered = filtered.filter(ac => (ac.alt || 0) <= max);
+        filtered = filtered.filter((ac) => (ac.alt || 0) <= max);
       }
     }
 
@@ -170,13 +207,13 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
     if (filters.minDistance) {
       const min = parseFloat(filters.minDistance);
       if (!isNaN(min)) {
-        filtered = filtered.filter(ac => (ac.distance_nm || 0) >= min);
+        filtered = filtered.filter((ac) => (ac.distance_nm || 0) >= min);
       }
     }
     if (filters.maxDistance) {
       const max = parseFloat(filters.maxDistance);
       if (!isNaN(max)) {
-        filtered = filtered.filter(ac => (ac.distance_nm || 999999) <= max);
+        filtered = filtered.filter((ac) => (ac.distance_nm || 999999) <= max);
       }
     }
 
@@ -184,13 +221,13 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
     if (filters.minSpeed) {
       const min = parseInt(filters.minSpeed, 10);
       if (!isNaN(min)) {
-        filtered = filtered.filter(ac => (ac.gs || 0) >= min);
+        filtered = filtered.filter((ac) => (ac.gs || 0) >= min);
       }
     }
     if (filters.maxSpeed) {
       const max = parseInt(filters.maxSpeed, 10);
       if (!isNaN(max)) {
-        filtered = filtered.filter(ac => (ac.gs || 0) <= max);
+        filtered = filtered.filter((ac) => (ac.gs || 0) <= max);
       }
     }
 
@@ -223,17 +260,18 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
     }
   };
 
-  const SortIcon = ({ field }) => (
-    sortField === field ? (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />) : null
-  );
+  const SortIcon = ({ field }) =>
+    sortField === field ? sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} /> : null;
 
   // Calculate stats for display
   const stats = useMemo(() => {
     const total = aircraft.length;
-    const military = aircraft.filter(ac => ac.military).length;
-    const emergency = aircraft.filter(ac => ac.emergency || ac.squawk?.match(/^7[567]00$/)).length;
-    const climbing = aircraft.filter(ac => (ac.vr || 0) > 500).length;
-    const descending = aircraft.filter(ac => (ac.vr || 0) < -500).length;
+    const military = aircraft.filter((ac) => ac.military).length;
+    const emergency = aircraft.filter(
+      (ac) => ac.emergency || ac.squawk?.match(/^7[567]00$/)
+    ).length;
+    const climbing = aircraft.filter((ac) => (ac.vr || 0) > 500).length;
+    const descending = aircraft.filter((ac) => (ac.vr || 0) < -500).length;
     return { total, military, emergency, climbing, descending };
   }, [aircraft]);
 
@@ -241,27 +279,29 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
   const rowHeight = density === 'compact' ? ROW_HEIGHT_COMPACT : ROW_HEIGHT_COMFORTABLE;
 
   // Render table row for virtual list
-  const renderTableRow = useCallback((ac, index) => (
-    <AircraftRow
-      aircraft={ac}
-      index={index}
-      onSelect={onSelectAircraft}
-      visibleColumns={visibleColumns}
-      density={density}
-    />
-  ), [onSelectAircraft, visibleColumns, density]);
+  const renderTableRow = useCallback(
+    (ac, index) => (
+      <AircraftRow
+        aircraft={ac}
+        index={index}
+        onSelect={onSelectAircraft}
+        visibleColumns={visibleColumns}
+        density={density}
+      />
+    ),
+    [onSelectAircraft, visibleColumns, density]
+  );
 
   // Render card for virtual list (used in grid layout)
-  const renderCard = useCallback((ac, index) => (
-    <AircraftCard
-      aircraft={ac}
-      onSelect={onSelectAircraft}
-      compact={window.innerWidth < 480}
-    />
-  ), [onSelectAircraft]);
+  const renderCard = useCallback(
+    (ac, index) => (
+      <AircraftCard aircraft={ac} onSelect={onSelectAircraft} compact={window.innerWidth < 480} />
+    ),
+    [onSelectAircraft]
+  );
 
   // Get visible column headers
-  const visibleColumnHeaders = columns.filter(col => visibleColumns.includes(col.id));
+  const visibleColumnHeaders = columns.filter((col) => visibleColumns.includes(col.id));
 
   return (
     <div className={`aircraft-list-container view-${viewMode}`} ref={containerRef}>
@@ -273,7 +313,7 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
             type="text"
             placeholder="Search ICAO, callsign, type, squawk..."
             value={searchFilter}
-            onChange={e => setSearchFilter(e.target.value)}
+            onChange={(e) => setSearchFilter(e.target.value)}
           />
           {searchFilter && (
             <button className="search-clear" onClick={() => setSearchFilter('')}>
@@ -321,13 +361,19 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
 
       {/* Quick filter chips */}
       <div className="quick-filters">
-        {quickFilters.map(qf => {
+        {quickFilters.map((qf) => {
           const Icon = qf.icon;
           const isActive = isQuickFilterActive(qf.filter);
-          const count = qf.id === 'emergency' ? stats.emergency :
-                       qf.id === 'military' ? stats.military :
-                       qf.id === 'climbing' ? stats.climbing :
-                       qf.id === 'descending' ? stats.descending : 0;
+          const count =
+            qf.id === 'emergency'
+              ? stats.emergency
+              : qf.id === 'military'
+                ? stats.military
+                : qf.id === 'climbing'
+                  ? stats.climbing
+                  : qf.id === 'descending'
+                    ? stats.descending
+                    : 0;
           return (
             <button
               key={qf.id}
@@ -352,14 +398,14 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
                 type="number"
                 placeholder="Min"
                 value={filters.minAltitude}
-                onChange={e => setFilters(prev => ({ ...prev, minAltitude: e.target.value }))}
+                onChange={(e) => setFilters((prev) => ({ ...prev, minAltitude: e.target.value }))}
               />
               <span>to</span>
               <input
                 type="number"
                 placeholder="Max"
                 value={filters.maxAltitude}
-                onChange={e => setFilters(prev => ({ ...prev, maxAltitude: e.target.value }))}
+                onChange={(e) => setFilters((prev) => ({ ...prev, maxAltitude: e.target.value }))}
               />
             </div>
           </div>
@@ -370,14 +416,14 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
                 type="number"
                 placeholder="Min"
                 value={filters.minDistance}
-                onChange={e => setFilters(prev => ({ ...prev, minDistance: e.target.value }))}
+                onChange={(e) => setFilters((prev) => ({ ...prev, minDistance: e.target.value }))}
               />
               <span>to</span>
               <input
                 type="number"
                 placeholder="Max"
                 value={filters.maxDistance}
-                onChange={e => setFilters(prev => ({ ...prev, maxDistance: e.target.value }))}
+                onChange={(e) => setFilters((prev) => ({ ...prev, maxDistance: e.target.value }))}
               />
             </div>
           </div>
@@ -388,14 +434,14 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
                 type="number"
                 placeholder="Min"
                 value={filters.minSpeed}
-                onChange={e => setFilters(prev => ({ ...prev, minSpeed: e.target.value }))}
+                onChange={(e) => setFilters((prev) => ({ ...prev, minSpeed: e.target.value }))}
               />
               <span>to</span>
               <input
                 type="number"
                 placeholder="Max"
                 value={filters.maxSpeed}
-                onChange={e => setFilters(prev => ({ ...prev, maxSpeed: e.target.value }))}
+                onChange={(e) => setFilters((prev) => ({ ...prev, maxSpeed: e.target.value }))}
               />
             </div>
           </div>
@@ -409,7 +455,7 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
           <table className={`aircraft-table al-table density-${density}`}>
             <thead>
               <tr>
-                {visibleColumnHeaders.map(col => (
+                {visibleColumnHeaders.map((col) => (
                   <th
                     key={col.id}
                     onClick={col.sortable ? () => handleSort(col.id) : undefined}
@@ -439,9 +485,7 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
               getItemKey={(item) => item.hex}
               renderItem={(ac, index) => (
                 <table className={`aircraft-table al-table density-${density}`}>
-                  <tbody>
-                    {renderTableRow(ac, index)}
-                  </tbody>
+                  <tbody>{renderTableRow(ac, index)}</tbody>
                 </table>
               )}
             />
@@ -460,11 +504,7 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
           ) : (
             <div className="al-card-grid">
               {filteredAircraft.map((ac, index) => (
-                <AircraftCard
-                  key={ac.hex}
-                  aircraft={ac}
-                  onSelect={onSelectAircraft}
-                />
+                <AircraftCard key={ac.hex} aircraft={ac} onSelect={onSelectAircraft} />
               ))}
             </div>
           )}
@@ -492,8 +532,12 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
           )}
         </div>
         <div className="footer-legend">
-          <span className="legend-item climbing"><ArrowUp size={12} /> Climbing</span>
-          <span className="legend-item descending"><ArrowDown size={12} /> Descending</span>
+          <span className="legend-item climbing">
+            <ArrowUp size={12} /> Climbing
+          </span>
+          <span className="legend-item descending">
+            <ArrowDown size={12} /> Descending
+          </span>
         </div>
       </div>
     </div>

@@ -81,8 +81,13 @@
 }
 
 @keyframes simple-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 .map-legend {
@@ -114,9 +119,15 @@
   border-radius: 50%;
 }
 
-.dot.civilian { background: var(--accent-cyan); }
-.dot.military { background: var(--accent-purple); }
-.dot.emergency { background: var(--accent-red); }
+.dot.civilian {
+  background: var(--accent-cyan);
+}
+.dot.military {
+  background: var(--accent-purple);
+}
+.dot.emergency {
+  background: var(--accent-red);
+}
 
 .map-controls {
   position: absolute;
@@ -171,7 +182,7 @@
   border-radius: 4px;
 }
 
-.track-length-control input[type="range"] {
+.track-length-control input[type='range'] {
   width: 80px;
   height: 4px;
   -webkit-appearance: none;
@@ -181,7 +192,7 @@
   cursor: pointer;
 }
 
-.track-length-control input[type="range"]::-webkit-slider-thumb {
+.track-length-control input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 12px;
@@ -191,7 +202,7 @@
   cursor: pointer;
 }
 
-.track-length-control input[type="range"]::-moz-range-thumb {
+.track-length-control input[type='range']::-moz-range-thumb {
   width: 12px;
   height: 12px;
   background: var(--accent-cyan);
@@ -225,7 +236,9 @@
   background: #0a0f0a;
   overflow: hidden;
   border-radius: 8px;
-  transition: width 0.3s ease, right 0.3s ease;
+  transition:
+    width 0.3s ease,
+    right 0.3s ease;
 }
 
 .crt-radar-canvas {
@@ -509,8 +522,13 @@
 }
 
 @keyframes squawk-tag-flash {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 /* Vertical Speed Chevrons - stacked like ATC displays */
@@ -544,9 +562,15 @@
 }
 
 /* Size variations based on rate */
-.vs-chevrons.chevrons-1 .vs-chevron { font-size: 10px; }
-.vs-chevrons.chevrons-2 .vs-chevron { font-size: 9px; }
-.vs-chevrons.chevrons-3 .vs-chevron { font-size: 8px; }
+.vs-chevrons.chevrons-1 .vs-chevron {
+  font-size: 10px;
+}
+.vs-chevrons.chevrons-2 .vs-chevron {
+  font-size: 9px;
+}
+.vs-chevrons.chevrons-3 .vs-chevron {
+  font-size: 8px;
+}
 
 /* Weather Popup (METAR/PIREP) */
 .weather-popup {
@@ -568,7 +592,7 @@
 
 .weather-popup .popup-header {
   padding: 14px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -583,7 +607,7 @@
   justify-content: space-between;
   align-items: flex-start;
   padding: 10px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   gap: 12px;
 }
 
@@ -592,7 +616,7 @@
 }
 
 .weather-popup .detail-row > span:first-child {
-  color: rgba(255,255,255,0.5);
+  color: rgba(255, 255, 255, 0.5);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -612,15 +636,15 @@
   right: 10px;
   background: none;
   border: none;
-  color: rgba(255,255,255,0.5);
+  color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
 }
 
 .weather-popup .popup-close:hover {
-  color: rgba(255,255,255,0.9);
-  background: rgba(255,255,255,0.1);
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .weather-popup.crt-popup {
@@ -761,7 +785,7 @@
 .lookup-section {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid rgba(255,255,255,0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .lookup-links {
@@ -847,7 +871,7 @@
 
 .decoded-desc {
   font-size: 11px;
-  color: rgba(255,255,255,0.5);
+  color: rgba(255, 255, 255, 0.5);
   line-height: 1.5;
   margin-top: 4px;
 }
@@ -870,7 +894,7 @@
   flex-direction: column;
   gap: 1px;
   padding: 4px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .cloud-layer:last-child {
@@ -889,15 +913,15 @@
   gap: 8px;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid rgba(255,255,255,0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .raw-text {
   font-size: 10px;
   word-break: break-all;
   line-height: 1.5;
-  color: rgba(255,255,255,0.6);
-  background: rgba(0,0,0,0.3);
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(0, 0, 0, 0.3);
   padding: 10px 12px;
   border-radius: 6px;
   width: 100%;
@@ -921,12 +945,30 @@
   overflow: hidden;
 }
 
-.turb-section.level-1 { border-color: #88cc44; background: rgba(136, 204, 68, 0.05); }
-.turb-section.level-2 { border-color: #cccc44; background: rgba(204, 204, 68, 0.08); }
-.turb-section.level-3 { border-color: #ffaa44; background: rgba(255, 170, 68, 0.1); }
-.turb-section.level-4 { border-color: #ff6644; background: rgba(255, 102, 68, 0.12); }
-.turb-section.level-5 { border-color: #ff4444; background: rgba(255, 68, 68, 0.15); }
-.turb-section.level-6 { border-color: #ff0000; background: rgba(255, 0, 0, 0.18); }
+.turb-section.level-1 {
+  border-color: #88cc44;
+  background: rgba(136, 204, 68, 0.05);
+}
+.turb-section.level-2 {
+  border-color: #cccc44;
+  background: rgba(204, 204, 68, 0.08);
+}
+.turb-section.level-3 {
+  border-color: #ffaa44;
+  background: rgba(255, 170, 68, 0.1);
+}
+.turb-section.level-4 {
+  border-color: #ff6644;
+  background: rgba(255, 102, 68, 0.12);
+}
+.turb-section.level-5 {
+  border-color: #ff4444;
+  background: rgba(255, 68, 68, 0.15);
+}
+.turb-section.level-6 {
+  border-color: #ff0000;
+  background: rgba(255, 0, 0, 0.18);
+}
 
 .turb-intensity {
   color: #ff9944 !important;
@@ -956,10 +998,22 @@
   overflow: hidden;
 }
 
-.icing-section.level-1 { border-color: #88ccff; background: rgba(136, 204, 255, 0.05); }
-.icing-section.level-2 { border-color: #66aaff; background: rgba(102, 170, 255, 0.08); }
-.icing-section.level-3 { border-color: #4488ff; background: rgba(68, 136, 255, 0.12); }
-.icing-section.level-4 { border-color: #ff4488; background: rgba(255, 68, 136, 0.15); }
+.icing-section.level-1 {
+  border-color: #88ccff;
+  background: rgba(136, 204, 255, 0.05);
+}
+.icing-section.level-2 {
+  border-color: #66aaff;
+  background: rgba(102, 170, 255, 0.08);
+}
+.icing-section.level-3 {
+  border-color: #4488ff;
+  background: rgba(68, 136, 255, 0.12);
+}
+.icing-section.level-4 {
+  border-color: #ff4488;
+  background: rgba(255, 68, 136, 0.15);
+}
 
 .icing-intensity {
   color: #66ccff !important;
@@ -989,10 +1043,22 @@
   overflow: hidden;
 }
 
-.ws-section.level-0 { border-color: #88cc88; background: rgba(136, 204, 136, 0.05); }
-.ws-section.level-1 { border-color: #cc88ff; background: rgba(204, 136, 255, 0.08); }
-.ws-section.level-2 { border-color: #ff88cc; background: rgba(255, 136, 204, 0.1); }
-.ws-section.level-3 { border-color: #ff4488; background: rgba(255, 68, 136, 0.15); }
+.ws-section.level-0 {
+  border-color: #88cc88;
+  background: rgba(136, 204, 136, 0.05);
+}
+.ws-section.level-1 {
+  border-color: #cc88ff;
+  background: rgba(204, 136, 255, 0.08);
+}
+.ws-section.level-2 {
+  border-color: #ff88cc;
+  background: rgba(255, 136, 204, 0.1);
+}
+.ws-section.level-3 {
+  border-color: #ff4488;
+  background: rgba(255, 68, 136, 0.15);
+}
 
 .ws-intensity {
   color: #cc88ff !important;
@@ -1181,28 +1247,60 @@
 }
 
 /* METAR symbols */
-.legend-symbol.metar-vfr { color: rgba(0, 255, 0, 0.9); }
-.legend-symbol.metar-mvfr { color: rgba(100, 150, 255, 0.9); }
-.legend-symbol.metar-ifr { color: rgba(255, 100, 100, 0.9); }
-.legend-symbol.metar-lifr { color: rgba(255, 50, 200, 0.9); }
+.legend-symbol.metar-vfr {
+  color: rgba(0, 255, 0, 0.9);
+}
+.legend-symbol.metar-mvfr {
+  color: rgba(100, 150, 255, 0.9);
+}
+.legend-symbol.metar-ifr {
+  color: rgba(255, 100, 100, 0.9);
+}
+.legend-symbol.metar-lifr {
+  color: rgba(255, 50, 200, 0.9);
+}
 
 /* PIREP symbols */
-.legend-symbol.pirep-routine { color: rgba(255, 220, 100, 0.9); }
-.legend-symbol.pirep-turb { color: rgba(255, 150, 50, 0.9); }
-.legend-symbol.pirep-ice { color: rgba(100, 180, 255, 0.9); }
-.legend-symbol.pirep-both { color: rgba(200, 100, 255, 0.9); }
-.legend-symbol.pirep-ws { color: rgba(255, 100, 200, 0.9); }
-.legend-symbol.pirep-urgent { color: rgba(255, 50, 50, 0.9); }
+.legend-symbol.pirep-routine {
+  color: rgba(255, 220, 100, 0.9);
+}
+.legend-symbol.pirep-turb {
+  color: rgba(255, 150, 50, 0.9);
+}
+.legend-symbol.pirep-ice {
+  color: rgba(100, 180, 255, 0.9);
+}
+.legend-symbol.pirep-both {
+  color: rgba(200, 100, 255, 0.9);
+}
+.legend-symbol.pirep-ws {
+  color: rgba(255, 100, 200, 0.9);
+}
+.legend-symbol.pirep-urgent {
+  color: rgba(255, 50, 50, 0.9);
+}
 
 /* Aircraft symbols */
-.legend-symbol.aircraft-normal { color: rgba(0, 255, 150, 0.9); }
-.legend-symbol.aircraft-military { color: rgba(200, 100, 255, 0.9); }
-.legend-symbol.aircraft-emergency { color: rgba(255, 50, 50, 0.9); }
-.legend-symbol.aircraft-conflict { color: rgba(255, 200, 0, 0.9); }
+.legend-symbol.aircraft-normal {
+  color: rgba(0, 255, 150, 0.9);
+}
+.legend-symbol.aircraft-military {
+  color: rgba(200, 100, 255, 0.9);
+}
+.legend-symbol.aircraft-emergency {
+  color: rgba(255, 50, 50, 0.9);
+}
+.legend-symbol.aircraft-conflict {
+  color: rgba(255, 200, 0, 0.9);
+}
 
 /* Nav symbols */
-.legend-symbol.nav-vor { color: rgba(100, 200, 255, 0.9); }
-.legend-symbol.nav-airport { color: rgba(255, 200, 100, 0.9); }
+.legend-symbol.nav-vor {
+  color: rgba(100, 200, 255, 0.9);
+}
+.legend-symbol.nav-airport {
+  color: rgba(255, 200, 100, 0.9);
+}
 
 /* Legend toggle button in overlay menu */
 .legend-toggle-btn {
@@ -1251,8 +1349,15 @@
 }
 
 @keyframes feeder-pulse {
-  0%, 100% { opacity: 0.8; transform: translate(-50%, -50%) scale(1); }
-  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+  0%,
+  100% {
+    opacity: 0.8;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
 }
 
 /* ============================================================================
@@ -1273,8 +1378,13 @@
 }
 
 @keyframes safety-pulse {
-  0%, 100% { filter: drop-shadow(0 0 4px currentColor); }
-  50% { filter: drop-shadow(0 0 12px currentColor) drop-shadow(0 0 20px rgba(255, 100, 50, 0.5)); }
+  0%,
+  100% {
+    filter: drop-shadow(0 0 4px currentColor);
+  }
+  50% {
+    filter: drop-shadow(0 0 12px currentColor) drop-shadow(0 0 20px rgba(255, 100, 50, 0.5));
+  }
 }
 
 /* Track/History aircraft markers */

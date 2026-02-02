@@ -17,7 +17,7 @@ export function TabBar({
   timeRanges,
   activeTimeRange,
   onTimeRangeChange,
-  className = ''
+  className = '',
 }) {
   return (
     <div className={`tab-bar-unified ${className}`}>
@@ -31,9 +31,7 @@ export function TabBar({
             {tab.icon && <span className="tab-bar-tab-icon">{tab.icon}</span>}
             <span className="tab-bar-tab-label">{tab.label}</span>
             {tab.count !== undefined && tab.count !== null && (
-              <span className={`tab-bar-badge ${tab.badgeVariant || 'default'}`}>
-                {tab.count}
-              </span>
+              <span className={`tab-bar-badge ${tab.badgeVariant || 'default'}`}>{tab.count}</span>
             )}
             {tab.alertDot && <span className="tab-bar-alert-dot" />}
           </button>

@@ -61,11 +61,14 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
   const [auditLogLoading, setAuditLogLoading] = useState(false);
 
   // Toast helper
-  const showToast = useCallback((message, type = 'info') => {
-    if (onToast) {
-      onToast(message, type);
-    }
-  }, [onToast]);
+  const showToast = useCallback(
+    (message, type = 'info') => {
+      if (onToast) {
+        onToast(message, type);
+      }
+    },
+    [onToast]
+  );
 
   // Fetch all configurations
   const fetchConfigs = useCallback(async () => {
@@ -99,7 +102,7 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
 
   // Update a single configuration value (local state only)
   const updateValue = useCallback((key, value) => {
-    setPendingChanges(prev => ({
+    setPendingChanges((prev) => ({
       ...prev,
       [key]: value,
     }));
@@ -107,7 +110,7 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
 
   // Reset pending change for a key
   const resetValue = useCallback((key) => {
-    setPendingChanges(prev => {
+    setPendingChanges((prev) => {
       const next = { ...prev };
       delete next[key];
       return next;
@@ -120,38 +123,41 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
   }, []);
 
   // Save a single configuration value
-  const saveValue = useCallback(async (key, value) => {
-    setSaving(true);
+  const saveValue = useCallback(
+    async (key, value) => {
+      setSaving(true);
 
-    try {
-      const res = await fetch(`${apiBase}/api/v1/admin/config/${encodeURIComponent(key)}/`, {
-        method: 'PATCH',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ value: String(value) }),
-      });
+      try {
+        const res = await fetch(`${apiBase}/api/v1/admin/config/${encodeURIComponent(key)}/`, {
+          method: 'PATCH',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ value: String(value) }),
+        });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data ? parseDRFError(data) : `HTTP ${res.status}`);
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data ? parseDRFError(data) : `HTTP ${res.status}`);
+        }
+
+        // Remove from pending changes
+        setPendingChanges((prev) => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+
+        showToast('Configuration saved', 'success');
+        await fetchConfigs();
+        return true;
+      } catch (err) {
+        showToast(`Failed to save: ${err.message}`, 'error');
+        return false;
+      } finally {
+        setSaving(false);
       }
-
-      // Remove from pending changes
-      setPendingChanges(prev => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-
-      showToast('Configuration saved', 'success');
-      await fetchConfigs();
-      return true;
-    } catch (err) {
-      showToast(`Failed to save: ${err.message}`, 'error');
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  }, [apiBase, fetchConfigs, showToast]);
+    },
+    [apiBase, fetchConfigs, showToast]
+  );
 
   // Save all pending changes
   const saveAllPendingChanges = useCallback(async () => {
@@ -184,7 +190,7 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
 
       // Clear saved changes from pending
       if (result.updated) {
-        setPendingChanges(prev => {
+        setPendingChanges((prev) => {
           const next = { ...prev };
           for (const key of result.updated) {
             delete next[key];
@@ -209,191 +215,212 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
   }, [apiBase, pendingChanges, fetchConfigs, showToast]);
 
   // Reset a configuration to its default value
-  const resetToDefault = useCallback(async (key) => {
-    setSaving(true);
+  const resetToDefault = useCallback(
+    async (key) => {
+      setSaving(true);
 
-    try {
-      const res = await fetch(`${apiBase}/api/v1/admin/config/reset_to_default/`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ keys: [key] }),
-      });
+      try {
+        const res = await fetch(`${apiBase}/api/v1/admin/config/reset_to_default/`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ keys: [key] }),
+        });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data ? parseDRFError(data) : `HTTP ${res.status}`);
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data ? parseDRFError(data) : `HTTP ${res.status}`);
+        }
+
+        // Clear from pending changes
+        setPendingChanges((prev) => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+
+        showToast('Configuration reset to default', 'success');
+        await fetchConfigs();
+        return true;
+      } catch (err) {
+        showToast(`Failed to reset: ${err.message}`, 'error');
+        return false;
+      } finally {
+        setSaving(false);
       }
-
-      // Clear from pending changes
-      setPendingChanges(prev => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-
-      showToast('Configuration reset to default', 'success');
-      await fetchConfigs();
-      return true;
-    } catch (err) {
-      showToast(`Failed to reset: ${err.message}`, 'error');
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  }, [apiBase, fetchConfigs, showToast]);
+    },
+    [apiBase, fetchConfigs, showToast]
+  );
 
   // Fetch audit log
-  const fetchAuditLog = useCallback(async (configKey = null, hours = 24) => {
-    setAuditLogLoading(true);
+  const fetchAuditLog = useCallback(
+    async (configKey = null, hours = 24) => {
+      setAuditLogLoading(true);
 
-    try {
-      let url = `${apiBase}/api/v1/admin/config/audit_log/?hours=${hours}&limit=100`;
-      if (configKey) {
-        url += `&config_key=${encodeURIComponent(configKey)}`;
+      try {
+        let url = `${apiBase}/api/v1/admin/config/audit_log/?hours=${hours}&limit=100`;
+        if (configKey) {
+          url += `&config_key=${encodeURIComponent(configKey)}`;
+        }
+
+        const res = await fetch(url, {
+          headers: getAuthHeaders(),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data ? parseDRFError(data) : `HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        setAuditLog(data.audit_log || []);
+      } catch (err) {
+        showToast(`Failed to load audit log: ${err.message}`, 'error');
+      } finally {
+        setAuditLogLoading(false);
       }
-
-      const res = await fetch(url, {
-        headers: getAuthHeaders(),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data ? parseDRFError(data) : `HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      setAuditLog(data.audit_log || []);
-    } catch (err) {
-      showToast(`Failed to load audit log: ${err.message}`, 'error');
-    } finally {
-      setAuditLogLoading(false);
-    }
-  }, [apiBase, showToast]);
+    },
+    [apiBase, showToast]
+  );
 
   // Export configurations
-  const exportConfigs = useCallback(async (includeSensitive = false) => {
-    try {
-      const res = await fetch(
-        `${apiBase}/api/v1/admin/config/export/?include_sensitive=${includeSensitive}`,
-        { headers: getAuthHeaders() }
-      );
+  const exportConfigs = useCallback(
+    async (includeSensitive = false) => {
+      try {
+        const res = await fetch(
+          `${apiBase}/api/v1/admin/config/export/?include_sensitive=${includeSensitive}`,
+          { headers: getAuthHeaders() }
+        );
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data ? parseDRFError(data) : `HTTP ${res.status}`);
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data ? parseDRFError(data) : `HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+
+        // Download as JSON file
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `skyspy-config-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showToast('Configuration exported', 'success');
+      } catch (err) {
+        showToast(`Failed to export: ${err.message}`, 'error');
       }
-
-      const data = await res.json();
-
-      // Download as JSON file
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `skyspy-config-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      showToast('Configuration exported', 'success');
-    } catch (err) {
-      showToast(`Failed to export: ${err.message}`, 'error');
-    }
-  }, [apiBase, showToast]);
+    },
+    [apiBase, showToast]
+  );
 
   // Import configurations
-  const importConfigs = useCallback(async (file, options = {}) => {
-    const { skipReadonly = true, dryRun = false } = options;
+  const importConfigs = useCallback(
+    async (file, options = {}) => {
+      const { skipReadonly = true, dryRun = false } = options;
 
-    try {
-      const text = await file.text();
-      const imported = JSON.parse(text);
+      try {
+        const text = await file.text();
+        const imported = JSON.parse(text);
 
-      // Extract configs from exported format
-      const configs = imported.configs || imported;
+        // Extract configs from exported format
+        const configs = imported.configs || imported;
 
-      const res = await fetch(`${apiBase}/api/v1/admin/config/import_config/`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          configs,
-          skip_readonly: skipReadonly,
-          dry_run: dryRun,
-        }),
-      });
+        const res = await fetch(`${apiBase}/api/v1/admin/config/import_config/`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            configs,
+            skip_readonly: skipReadonly,
+            dry_run: dryRun,
+          }),
+        });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data ? parseDRFError(data) : `HTTP ${res.status}`);
-      }
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data ? parseDRFError(data) : `HTTP ${res.status}`);
+        }
 
-      const result = await res.json();
+        const result = await res.json();
 
-      if (dryRun) {
+        if (dryRun) {
+          return result;
+        }
+
+        const message = `Imported ${result.imported} configs, skipped ${result.skipped}`;
+        if (result.errors && Object.keys(result.errors).length > 0) {
+          showToast(`${message}. Some errors occurred.`, 'warning');
+        } else {
+          showToast(message, 'success');
+        }
+
+        await fetchConfigs();
         return result;
+      } catch (err) {
+        showToast(`Failed to import: ${err.message}`, 'error');
+        throw err;
       }
-
-      const message = `Imported ${result.imported} configs, skipped ${result.skipped}`;
-      if (result.errors && Object.keys(result.errors).length > 0) {
-        showToast(`${message}. Some errors occurred.`, 'warning');
-      } else {
-        showToast(message, 'success');
-      }
-
-      await fetchConfigs();
-      return result;
-    } catch (err) {
-      showToast(`Failed to import: ${err.message}`, 'error');
-      throw err;
-    }
-  }, [apiBase, fetchConfigs, showToast]);
+    },
+    [apiBase, fetchConfigs, showToast]
+  );
 
   // Validate a configuration value
-  const validateValue = useCallback(async (key, value) => {
-    try {
-      const res = await fetch(`${apiBase}/api/v1/admin/config/validate/`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ key, value: String(value) }),
-      });
+  const validateValue = useCallback(
+    async (key, value) => {
+      try {
+        const res = await fetch(`${apiBase}/api/v1/admin/config/validate/`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ key, value: String(value) }),
+        });
 
-      if (!res.ok) {
-        return { valid: false, errors: ['Failed to validate'] };
+        if (!res.ok) {
+          return { valid: false, errors: ['Failed to validate'] };
+        }
+
+        return await res.json();
+      } catch {
+        return { valid: false, errors: ['Validation request failed'] };
       }
-
-      return await res.json();
-    } catch {
-      return { valid: false, errors: ['Validation request failed'] };
-    }
-  }, [apiBase]);
+    },
+    [apiBase]
+  );
 
   // Reveal sensitive value
-  const revealSensitiveValue = useCallback(async (key) => {
-    try {
-      const res = await fetch(`${apiBase}/api/v1/admin/config/${encodeURIComponent(key)}/reveal/`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-      });
+  const revealSensitiveValue = useCallback(
+    async (key) => {
+      try {
+        const res = await fetch(
+          `${apiBase}/api/v1/admin/config/${encodeURIComponent(key)}/reveal/`,
+          {
+            method: 'POST',
+            headers: getAuthHeaders(),
+          }
+        );
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data ? parseDRFError(data) : `HTTP ${res.status}`);
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data ? parseDRFError(data) : `HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        return data.value;
+      } catch (err) {
+        showToast(`Failed to reveal value: ${err.message}`, 'error');
+        return null;
       }
-
-      const data = await res.json();
-      return data.value;
-    } catch (err) {
-      showToast(`Failed to reveal value: ${err.message}`, 'error');
-      return null;
-    }
-  }, [apiBase, showToast]);
+    },
+    [apiBase, showToast]
+  );
 
   // Compute all configs as flat array
   const allConfigs = useMemo(() => {
     const configs = [];
     for (const category of categories) {
-      for (const config of (category.configs || [])) {
+      for (const config of category.configs || []) {
         configs.push(config);
       }
     }
@@ -401,26 +428,32 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
   }, [categories]);
 
   // Get config value (with pending change if exists)
-  const getConfigValue = useCallback((key) => {
-    if (key in pendingChanges) {
-      return pendingChanges[key];
-    }
-    const config = allConfigs.find(c => c.key === key);
-    return config?.value ?? '';
-  }, [allConfigs, pendingChanges]);
+  const getConfigValue = useCallback(
+    (key) => {
+      if (key in pendingChanges) {
+        return pendingChanges[key];
+      }
+      const config = allConfigs.find((c) => c.key === key);
+      return config?.value ?? '';
+    },
+    [allConfigs, pendingChanges]
+  );
 
   // Check if config has pending change
-  const hasChange = useCallback((key) => {
-    return key in pendingChanges;
-  }, [pendingChanges]);
+  const hasChange = useCallback(
+    (key) => {
+      return key in pendingChanges;
+    },
+    [pendingChanges]
+  );
 
   // Count of pending changes
   const pendingChangeCount = Object.keys(pendingChanges).length;
 
   // Check if any pending changes require restart
   const hasRestartRequired = useMemo(() => {
-    return Object.keys(pendingChanges).some(key => {
-      const config = allConfigs.find(c => c.key === key);
+    return Object.keys(pendingChanges).some((key) => {
+      const config = allConfigs.find((c) => c.key === key);
       return config?.requires_restart;
     });
   }, [allConfigs, pendingChanges]);

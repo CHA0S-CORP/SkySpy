@@ -29,9 +29,8 @@ export function VirtualList({
   const [containerHeight, setContainerHeight] = useState(height === 'auto' ? 400 : height);
 
   // Validate itemHeight to prevent division by zero and invalid calculations
-  const safeItemHeight = typeof itemHeight === 'number' && itemHeight > 0 && isFinite(itemHeight)
-    ? itemHeight
-    : 50; // Default fallback height
+  const safeItemHeight =
+    typeof itemHeight === 'number' && itemHeight > 0 && isFinite(itemHeight) ? itemHeight : 50; // Default fallback height
 
   // Update container height when 'auto' or on resize
   useEffect(() => {
@@ -87,42 +86,54 @@ export function VirtualList({
   }, [items, visibleRange, safeItemHeight]);
 
   // Handle scroll
-  const handleScroll = useCallback((e) => {
-    const newScrollTop = e.target.scrollTop;
-    setScrollTop(newScrollTop);
+  const handleScroll = useCallback(
+    (e) => {
+      const newScrollTop = e.target.scrollTop;
+      setScrollTop(newScrollTop);
 
-    if (onScroll) {
-      onScroll({
-        scrollTop: newScrollTop,
-        scrollHeight: e.target.scrollHeight,
-        clientHeight: e.target.clientHeight,
-      });
-    }
-  }, [onScroll]);
+      if (onScroll) {
+        onScroll({
+          scrollTop: newScrollTop,
+          scrollHeight: e.target.scrollHeight,
+          clientHeight: e.target.clientHeight,
+        });
+      }
+    },
+    [onScroll]
+  );
 
   // Scroll to index
-  const scrollToIndex = useCallback((index, align = 'start') => {
-    if (!containerRef.current) return;
+  const scrollToIndex = useCallback(
+    (index, align = 'start') => {
+      if (!containerRef.current) return;
 
-    let targetScrollTop;
-    if (align === 'start') {
-      targetScrollTop = index * safeItemHeight;
-    } else if (align === 'center') {
-      targetScrollTop = index * safeItemHeight - containerHeight / 2 + safeItemHeight / 2;
-    } else if (align === 'end') {
-      targetScrollTop = (index + 1) * safeItemHeight - containerHeight;
-    }
+      let targetScrollTop;
+      if (align === 'start') {
+        targetScrollTop = index * safeItemHeight;
+      } else if (align === 'center') {
+        targetScrollTop = index * safeItemHeight - containerHeight / 2 + safeItemHeight / 2;
+      } else if (align === 'end') {
+        targetScrollTop = (index + 1) * safeItemHeight - containerHeight;
+      }
 
-    containerRef.current.scrollTop = Math.max(0, Math.min(totalHeight - containerHeight, targetScrollTop));
-  }, [safeItemHeight, containerHeight, totalHeight]);
+      containerRef.current.scrollTop = Math.max(
+        0,
+        Math.min(totalHeight - containerHeight, targetScrollTop)
+      );
+    },
+    [safeItemHeight, containerHeight, totalHeight]
+  );
 
   // Get item key
-  const getKey = useCallback((item, index) => {
-    if (getItemKey) return getItemKey(item, index);
-    if (item.id !== undefined) return item.id;
-    if (item.key !== undefined) return item.key;
-    return index;
-  }, [getItemKey]);
+  const getKey = useCallback(
+    (item, index) => {
+      if (getItemKey) return getItemKey(item, index);
+      if (item.id !== undefined) return item.id;
+      if (item.key !== undefined) return item.key;
+      return index;
+    },
+    [getItemKey]
+  );
 
   return (
     <div
@@ -143,11 +154,7 @@ export function VirtualList({
         }}
       >
         {visibleItems.map(({ item, index, style }) => (
-          <div
-            key={getKey(item, index)}
-            className="virtual-list-item"
-            style={style}
-          >
+          <div key={getKey(item, index)} className="virtual-list-item" style={style}>
             {renderItem(item, index)}
           </div>
         ))}
@@ -159,18 +166,12 @@ export function VirtualList({
 /**
  * Hook for virtual list functionality (for custom implementations)
  */
-export function useVirtualList({
-  itemCount,
-  itemHeight,
-  containerHeight,
-  overscan = 5,
-}) {
+export function useVirtualList({ itemCount, itemHeight, containerHeight, overscan = 5 }) {
   const [scrollTop, setScrollTop] = useState(0);
 
   // Validate itemHeight to prevent division by zero and invalid calculations
-  const safeItemHeight = typeof itemHeight === 'number' && itemHeight > 0 && isFinite(itemHeight)
-    ? itemHeight
-    : 50; // Default fallback height
+  const safeItemHeight =
+    typeof itemHeight === 'number' && itemHeight > 0 && isFinite(itemHeight) ? itemHeight : 50; // Default fallback height
 
   const totalHeight = itemCount * safeItemHeight;
 
@@ -188,19 +189,22 @@ export function useVirtualList({
     setScrollTop(e.target.scrollTop);
   }, []);
 
-  const scrollToIndex = useCallback((index, align = 'start') => {
-    let targetScrollTop;
-    if (align === 'start') {
-      targetScrollTop = index * safeItemHeight;
-    } else if (align === 'center') {
-      targetScrollTop = index * safeItemHeight - containerHeight / 2 + safeItemHeight / 2;
-    } else if (align === 'end') {
-      targetScrollTop = (index + 1) * safeItemHeight - containerHeight;
-    }
+  const scrollToIndex = useCallback(
+    (index, align = 'start') => {
+      let targetScrollTop;
+      if (align === 'start') {
+        targetScrollTop = index * safeItemHeight;
+      } else if (align === 'center') {
+        targetScrollTop = index * safeItemHeight - containerHeight / 2 + safeItemHeight / 2;
+      } else if (align === 'end') {
+        targetScrollTop = (index + 1) * safeItemHeight - containerHeight;
+      }
 
-    setScrollTop(Math.max(0, Math.min(totalHeight - containerHeight, targetScrollTop)));
-    return targetScrollTop;
-  }, [safeItemHeight, containerHeight, totalHeight]);
+      setScrollTop(Math.max(0, Math.min(totalHeight - containerHeight, targetScrollTop)));
+      return targetScrollTop;
+    },
+    [safeItemHeight, containerHeight, totalHeight]
+  );
 
   return {
     visibleRange,

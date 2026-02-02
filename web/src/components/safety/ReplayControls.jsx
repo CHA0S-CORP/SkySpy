@@ -23,7 +23,7 @@ export function ReplayControls({
   onSkipToEnd,
   onJumpToEvent,
   onSpeedChange,
-  className = ''
+  className = '',
 }) {
   const controlsRef = useRef(null);
   const speeds = [0.5, 1, 2, 4];
@@ -63,10 +63,7 @@ export function ReplayControls({
       <div className="rc-timeline-container">
         <div className="rc-timeline-track">
           {/* Progress fill */}
-          <div
-            className="rc-timeline-progress"
-            style={{ width: `${position}%` }}
-          />
+          <div className="rc-timeline-progress" style={{ width: `${position}%` }} />
 
           {/* Timeline ticks */}
           <div className="rc-timeline-ticks">
@@ -147,11 +144,7 @@ export function ReplayControls({
         </div>
 
         {/* Jump to event button */}
-        <button
-          className="rc-btn rc-btn-event"
-          onClick={onJumpToEvent}
-          title="Jump to event"
-        >
+        <button className="rc-btn rc-btn-event" onClick={onJumpToEvent} title="Jump to event">
           <AlertTriangle size={14} />
           <span>Event</span>
         </button>

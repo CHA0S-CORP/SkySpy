@@ -38,10 +38,13 @@ export function ConfigField({
     setRevealedValue(null);
   }, []);
 
-  const handleChange = useCallback((e) => {
-    const newValue = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-    onChange(config.key, newValue);
-  }, [config.key, onChange]);
+  const handleChange = useCallback(
+    (e) => {
+      const newValue = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+      onChange(config.key, newValue);
+    },
+    [config.key, onChange]
+  );
 
   const handleReset = useCallback(() => {
     if (onReset) {
@@ -114,7 +117,9 @@ export function ConfigField({
             />
             <span className="config-toggle-slider"></span>
             <span className="config-toggle-label">
-              {value === true || value === 'true' || value === 'True' || value === '1' ? 'Enabled' : 'Disabled'}
+              {value === true || value === 'true' || value === 'True' || value === '1'
+                ? 'Enabled'
+                : 'Disabled'}
             </span>
           </label>
         );
@@ -194,7 +199,9 @@ export function ConfigField({
   };
 
   return (
-    <div className={`config-field ${hasChange ? 'config-field-changed' : ''} ${config.is_readonly ? 'config-field-readonly' : ''}`}>
+    <div
+      className={`config-field ${hasChange ? 'config-field-changed' : ''} ${config.is_readonly ? 'config-field-readonly' : ''}`}
+    >
       <div className="config-field-header">
         <label className="config-field-label">
           {config.display_name}
@@ -236,11 +243,13 @@ export function ConfigField({
         </p>
       )}
 
-      {config.validation_rules && (config.validation_rules.min !== undefined || config.validation_rules.max !== undefined) && (
-        <p className="config-field-range">
-          Range: {config.validation_rules.min ?? '-∞'} to {config.validation_rules.max ?? '∞'}
-        </p>
-      )}
+      {config.validation_rules &&
+        (config.validation_rules.min !== undefined ||
+          config.validation_rules.max !== undefined) && (
+          <p className="config-field-range">
+            Range: {config.validation_rules.min ?? '-∞'} to {config.validation_rules.max ?? '∞'}
+          </p>
+        )}
     </div>
   );
 }

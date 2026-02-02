@@ -17,7 +17,7 @@ export function TelemetryGraphs({
   aircraftInfo,
   position = 100,
   onPositionChange,
-  className = ''
+  className = '',
 }) {
   const [zoomState, setZoomState] = useState({ zoom: 1, offset: 0 });
   const dragRef = useRef({ isDragging: false, startX: 0, startPosition: 0 });
@@ -38,26 +38,32 @@ export function TelemetryGraphs({
   }, []);
 
   // Handle drag for scrubbing timeline
-  const handleDragStart = useCallback((e) => {
-    e.preventDefault();
-    const clientX = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
-    dragRef.current = {
-      isDragging: true,
-      startX: clientX,
-      startPosition: position
-    };
-  }, [position]);
+  const handleDragStart = useCallback(
+    (e) => {
+      e.preventDefault();
+      const clientX = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+      dragRef.current = {
+        isDragging: true,
+        startX: clientX,
+        startPosition: position,
+      };
+    },
+    [position]
+  );
 
-  const handleDragMove = useCallback((e) => {
-    if (!dragRef.current?.isDragging) return;
-    e.preventDefault();
-    const currentX = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
-    const deltaX = currentX - dragRef.current.startX;
-    const graphWidth = e.currentTarget?.getBoundingClientRect?.()?.width || 300;
-    const percentDelta = (deltaX / graphWidth) * 100;
-    const newPosition = Math.max(0, Math.min(100, dragRef.current.startPosition + percentDelta));
-    onPositionChange?.(newPosition);
-  }, [onPositionChange]);
+  const handleDragMove = useCallback(
+    (e) => {
+      if (!dragRef.current?.isDragging) return;
+      e.preventDefault();
+      const currentX = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+      const deltaX = currentX - dragRef.current.startX;
+      const graphWidth = e.currentTarget?.getBoundingClientRect?.()?.width || 300;
+      const percentDelta = (deltaX / graphWidth) * 100;
+      const newPosition = Math.max(0, Math.min(100, dragRef.current.startPosition + percentDelta));
+      onPositionChange?.(newPosition);
+    },
+    [onPositionChange]
+  );
 
   const handleDragEnd = useCallback(() => {
     dragRef.current.isDragging = false;
@@ -161,7 +167,7 @@ function TelemetryGraph({
   onWheel,
   onDragStart,
   onDragMove,
-  onDragEnd
+  onDragEnd,
 }) {
   const format = formatFn || ((v) => v?.toLocaleString());
   const width = 280;
@@ -238,7 +244,8 @@ function TelemetryGraph({
     const relativePosition = (position - startPercent) / visiblePercent;
     indicatorX = padding + relativePosition * (width - padding * 2);
     if (currentValue !== null) {
-      indicatorY = height - padding - ((currentValue - fullMin) / fullRange) * (height - padding * 2);
+      indicatorY =
+        height - padding - ((currentValue - fullMin) / fullRange) * (height - padding * 2);
     }
   }
 

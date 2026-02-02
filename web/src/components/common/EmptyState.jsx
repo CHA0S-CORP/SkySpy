@@ -1,7 +1,16 @@
 import React from 'react';
 import {
-  Plane, Activity, AlertTriangle, Radio, BarChart3,
-  Target, Zap, Shield, Clock, Search, Database
+  Plane,
+  Activity,
+  AlertTriangle,
+  Radio,
+  BarChart3,
+  Target,
+  Zap,
+  Shield,
+  Clock,
+  Search,
+  Database,
 } from 'lucide-react';
 
 /**
@@ -12,92 +21,86 @@ import {
  * @param {function} action - Optional action callback
  * @param {string} actionLabel - Optional action button label
  */
-export function EmptyState({
-  type = 'generic',
-  title,
-  message,
-  action,
-  actionLabel = 'Refresh'
-}) {
+export function EmptyState({ type = 'generic', title, message, action, actionLabel = 'Refresh' }) {
   const configs = {
     aircraft: {
       icon: Plane,
       title: 'No aircraft detected',
       message: 'Aircraft will appear here when they come within range of your receiver.',
-      color: 'cyan'
+      color: 'cyan',
     },
     leaderboard: {
       icon: Activity,
       title: 'No data yet',
       message: 'Rankings will populate as aircraft are tracked over time.',
-      color: 'cyan'
+      color: 'cyan',
     },
     emergencies: {
       icon: AlertTriangle,
       title: 'All clear',
       message: 'No emergency squawk codes detected.',
-      color: 'green'
+      color: 'green',
     },
     safety: {
       icon: Shield,
       title: 'No safety events',
       message: 'No safety events have been recorded in this time period.',
-      color: 'green'
+      color: 'green',
     },
     acars: {
       icon: Radio,
       title: 'No ACARS messages',
       message: 'ACARS/VDL2 messages will appear when received.',
-      color: 'cyan'
+      color: 'cyan',
     },
     analytics: {
       icon: BarChart3,
       title: 'Insufficient data',
       message: 'More tracking data is needed to generate analytics.',
-      color: 'purple'
+      color: 'purple',
     },
     trends: {
       icon: Activity,
       title: 'No trend data',
       message: 'Trend data will be available after more tracking time.',
-      color: 'cyan'
+      color: 'cyan',
     },
     distance: {
       icon: Target,
       title: 'No distance data',
       message: 'Distance analytics require position data from tracked aircraft.',
-      color: 'green'
+      color: 'green',
     },
     speed: {
       icon: Zap,
       title: 'No speed data',
       message: 'Speed analytics require ground speed data from tracked aircraft.',
-      color: 'orange'
+      color: 'orange',
     },
     history: {
       icon: Clock,
       title: 'No history',
       message: 'Historical data will appear as aircraft are tracked.',
-      color: 'cyan'
+      color: 'cyan',
     },
     search: {
       icon: Search,
       title: 'No results',
       message: 'Try adjusting your search or filter criteria.',
-      color: 'cyan'
+      color: 'cyan',
     },
     filtered: {
       icon: Search,
       title: 'No matches',
       message: 'No aircraft match the current filter criteria.',
-      color: 'cyan'
+      color: 'cyan',
     },
     generic: {
       icon: Database,
       title: 'No data available',
       message: 'Data will appear here when available.',
-      color: 'cyan'
-    }
+      color: 'cyan',
+    },
   };
 
   const config = configs[type] || configs.generic;
@@ -109,7 +112,7 @@ export function EmptyState({
     cyan: 'empty-state-cyan',
     green: 'empty-state-green',
     purple: 'empty-state-purple',
-    orange: 'empty-state-orange'
+    orange: 'empty-state-orange',
   };
 
   return (

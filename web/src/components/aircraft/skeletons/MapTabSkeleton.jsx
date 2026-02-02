@@ -2,11 +2,15 @@ import React from 'react';
 
 export function MapTabSkeleton() {
   return (
-    <div className="track-replay-container skeleton" aria-busy="true" aria-label="Loading track map">
+    <div
+      className="track-replay-container skeleton"
+      aria-busy="true"
+      aria-label="Loading track map"
+    >
       {/* Skeleton telemetry overlay */}
       <div className="track-telemetry-overlay skeleton-overlay">
         <div className="telem-row">
-          {[1, 2, 3, 4].map(i => (
+          {[1, 2, 3, 4].map((i) => (
             <div key={i} className="telem-item">
               <div className="skeleton-text skeleton-label-small" />
               <div className="skeleton-value-pulse" />
@@ -36,7 +40,7 @@ export function MapTabSkeleton() {
       {/* Skeleton graphs */}
       <div className="track-graphs skeleton-graphs">
         <div className="graphs-row">
-          {[1, 2, 3].map(i => (
+          {[1, 2, 3].map((i) => (
             <div key={i} className="mini-graph skeleton-graph">
               <div className="mini-graph-header">
                 <div className="skeleton-text skeleton-label" />
@@ -50,7 +54,7 @@ export function MapTabSkeleton() {
       {/* Skeleton controls */}
       <div className="track-controls skeleton-controls">
         <div className="replay-buttons">
-          {[1, 2, 3, 4, 5].map(i => (
+          {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="skeleton-btn" />
           ))}
         </div>

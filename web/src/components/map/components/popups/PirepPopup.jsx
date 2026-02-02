@@ -5,14 +5,7 @@ import { decodePirep, windDirToCardinal } from '../../../../utils';
 /**
  * PIREP (Pilot Report) popup component
  */
-export function PirepPopup({
-  pirep,
-  config,
-  popupPosition,
-  isDragging,
-  onClose,
-  onMouseDown,
-}) {
+export function PirepPopup({ pirep, config, popupPosition, isDragging, onClose, onMouseDown }) {
   if (!pirep) return null;
 
   const decoded = decodePirep(pirep);
@@ -80,8 +73,12 @@ export function PirepPopup({
 
         {/* Turbulence with full decoding */}
         {decoded?.turbulence && (
-          <div className={`detail-row decoded-section turb-section level-${decoded.turbulence.level}`}>
-            <span className="section-icon"><Wind size={14} /> Turbulence</span>
+          <div
+            className={`detail-row decoded-section turb-section level-${decoded.turbulence.level}`}
+          >
+            <span className="section-icon">
+              <Wind size={14} /> Turbulence
+            </span>
             <div className="decoded-value">
               <strong className="turb-intensity">{decoded.turbulence.intensity}</strong>
               {decoded.turbulence.type && (
@@ -100,15 +97,13 @@ export function PirepPopup({
         {/* Icing with full decoding */}
         {decoded?.icing && (
           <div className={`detail-row decoded-section icing-section level-${decoded.icing.level}`}>
-            <span className="section-icon"><Snowflake size={14} /> Icing</span>
+            <span className="section-icon">
+              <Snowflake size={14} /> Icing
+            </span>
             <div className="decoded-value">
               <strong className="icing-intensity">{decoded.icing.intensity}</strong>
-              {decoded.icing.type && (
-                <span className="icing-type">{decoded.icing.type}</span>
-              )}
-              {decoded.icing.detail && (
-                <span className="decoded-desc">{decoded.icing.detail}</span>
-              )}
+              {decoded.icing.type && <span className="icing-type">{decoded.icing.type}</span>}
+              {decoded.icing.detail && <span className="decoded-desc">{decoded.icing.detail}</span>}
               {decoded.icing.warning && (
                 <span className="hazard-warning">{decoded.icing.warning}</span>
               )}
@@ -119,7 +114,9 @@ export function PirepPopup({
         {/* Wind Shear / LLWS with full decoding */}
         {decoded?.windshear && (
           <div className={`detail-row decoded-section ws-section level-${decoded.windshear.level}`}>
-            <span className="section-icon"><Wind size={14} /> Wind Shear</span>
+            <span className="section-icon">
+              <Wind size={14} /> Wind Shear
+            </span>
             <div className="decoded-value">
               <strong className="ws-intensity">{decoded.windshear.intensity}</strong>
               {decoded.windshear.gainLoss && (
@@ -149,12 +146,17 @@ export function PirepPopup({
         {/* Temperature at altitude */}
         {decoded?.temperature && (
           <div className="detail-row decoded-section">
-            <span className="section-icon"><Thermometer size={14} /> Temp</span>
+            <span className="section-icon">
+              <Thermometer size={14} /> Temp
+            </span>
             <div className="decoded-value">
-              <strong>{decoded.temperature.celsius}°C / {decoded.temperature.fahrenheit}°F</strong>
+              <strong>
+                {decoded.temperature.celsius}°C / {decoded.temperature.fahrenheit}°F
+              </strong>
               {decoded.temperature.isaDeviation !== null && (
                 <span className="decoded-desc">
-                  ISA deviation: {decoded.temperature.isaDeviation > 0 ? '+' : ''}{decoded.temperature.isaDeviation}°C
+                  ISA deviation: {decoded.temperature.isaDeviation > 0 ? '+' : ''}
+                  {decoded.temperature.isaDeviation}°C
                 </span>
               )}
             </div>
@@ -164,8 +166,13 @@ export function PirepPopup({
         {/* Wind at altitude */}
         {decoded?.wind && (
           <div className="detail-row">
-            <span className="section-icon"><Navigation size={14} /> Wind</span>
-            <span>{windDirToCardinal(decoded.wind.direction)} ({decoded.wind.direction}°) at {decoded.wind.speed}kt</span>
+            <span className="section-icon">
+              <Navigation size={14} /> Wind
+            </span>
+            <span>
+              {windDirToCardinal(decoded.wind.direction)} ({decoded.wind.direction}°) at{' '}
+              {decoded.wind.speed}kt
+            </span>
           </div>
         )}
 

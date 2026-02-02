@@ -11,8 +11,14 @@
  */
 import React, { memo } from 'react';
 import {
-  Navigation2, ChevronUp, ChevronDown, Minus,
-  AlertTriangle, Target, Circle, RefreshCw,
+  Navigation2,
+  ChevronUp,
+  ChevronDown,
+  Minus,
+  AlertTriangle,
+  Target,
+  Circle,
+  RefreshCw,
 } from 'lucide-react';
 import { getDirectionName } from '../../utils/lawEnforcement';
 import { MiniRadar } from './MiniRadar';
@@ -27,9 +33,7 @@ export const DirectionArrow = memo(function DirectionArrow({
   size = 80,
 }) {
   // Calculate relative bearing if user heading is available
-  const rotation = userHeading !== null
-    ? (bearing - userHeading + 360) % 360
-    : bearing;
+  const rotation = userHeading !== null ? (bearing - userHeading + 360) % 360 : bearing;
 
   return (
     <div
@@ -46,7 +50,7 @@ export const DirectionArrow = memo(function DirectionArrow({
  */
 export function formatDistance(nm) {
   if (nm < 0.5) {
-    const feet = Math.round(nm * 6076.12 / 100) * 100;
+    const feet = Math.round((nm * 6076.12) / 100) * 100;
     return { value: feet, unit: 'FT' };
   } else if (nm < 10) {
     return { value: nm.toFixed(1), unit: 'NM' };
@@ -81,9 +85,8 @@ export const ThreatDisplay = memo(function ThreatDisplay({
   const distance = formatDistance(threat.distance_nm);
 
   // Trend indicator
-  const TrendIcon = threat.trend === 'approaching' ? ChevronDown
-    : threat.trend === 'departing' ? ChevronUp
-    : Minus;
+  const TrendIcon =
+    threat.trend === 'approaching' ? ChevronDown : threat.trend === 'departing' ? ChevronUp : Minus;
 
   // Calculate urgency display
   const urgencyLevel = threat.urgencyScore ? getUrgencyLevel(threat.urgencyScore) : null;
@@ -92,17 +95,13 @@ export const ThreatDisplay = memo(function ThreatDisplay({
     <div className={`threat-display threat-${threatLevel}`}>
       <div className="threat-header">
         <span className="threat-category">{threat.category || 'AIRCRAFT'}</span>
-        {threat.callsign && (
-          <span className="threat-callsign">{threat.callsign}</span>
-        )}
+        {threat.callsign && <span className="threat-callsign">{threat.callsign}</span>}
         {/* Show agency name if known (from backend) */}
         {showAgencyInfo && threat.agencyName && (
           <span className="threat-agency">{threat.agencyName}</span>
         )}
         {/* Show known LE badge */}
-        {threat.knownLE && (
-          <span className="known-le-badge">KNOWN LE</span>
-        )}
+        {threat.knownLE && <span className="known-le-badge">KNOWN LE</span>}
         {showUrgency && urgencyLevel && (
           <span className={`urgency-badge urgency-${urgencyLevel}`}>
             <AlertTriangle size={12} />
@@ -123,9 +122,7 @@ export const ThreatDisplay = memo(function ThreatDisplay({
           <span className="distance-unit">{distance.unit}</span>
         </div>
 
-        <div className="direction-label">
-          {getDirectionName(threat.bearing)}
-        </div>
+        <div className="direction-label">{getDirectionName(threat.bearing)}</div>
       </div>
 
       <div className="threat-footer">
@@ -171,7 +168,9 @@ export const ThreatDisplay = memo(function ThreatDisplay({
               <span key={idx} className={`pattern-badge ${pattern.type || pattern.pattern_type}`}>
                 {pattern.type === 'circling' && <RefreshCw size={10} />}
                 {pattern.type === 'grid_search' && <Target size={10} />}
-                {(pattern.type || pattern.pattern_type || 'unknown').replace('_', ' ').toUpperCase()}
+                {(pattern.type || pattern.pattern_type || 'unknown')
+                  .replace('_', ' ')
+                  .toUpperCase()}
                 {pattern.confidence_score && ` (${Math.round(pattern.confidence_score * 100)}%)`}
               </span>
             ))}

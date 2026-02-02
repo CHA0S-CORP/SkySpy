@@ -50,14 +50,17 @@ function normalizeAircraftInfo(info) {
     model: info.model || info.modelName,
     serial_number: info.serial_number || info.serialNumber || info.manufacturerSerial,
     year_built: info.year_built || info.yearBuilt || info.built,
-    age_years: info.age_years ?? info.ageYears ?? (() => {
-      const year = info.year_built || info.yearBuilt || info.built;
-      const yearNum = Number(year);
-      if (!year || isNaN(yearNum) || yearNum < 1900 || yearNum > new Date().getFullYear()) {
-        return null;
-      }
-      return new Date().getFullYear() - yearNum;
-    })(),
+    age_years:
+      info.age_years ??
+      info.ageYears ??
+      (() => {
+        const year = info.year_built || info.yearBuilt || info.built;
+        const yearNum = Number(year);
+        if (!year || isNaN(yearNum) || yearNum < 1900 || yearNum > new Date().getFullYear()) {
+          return null;
+        }
+        return new Date().getFullYear() - yearNum;
+      })(),
 
     // Operator fields
     operator: info.operator || info.operatorName || info.owner_operator,

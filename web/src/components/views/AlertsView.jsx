@@ -9,11 +9,18 @@ import {
   AlertsFilterToolbar,
   TestRuleModal,
   ImportRulesModal,
-  UNDO_GRACE_PERIOD
+  UNDO_GRACE_PERIOD,
 } from '../alerts';
 import { useAlertRules } from '../../hooks/useAlertRules';
 
-export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], feederLocation = null, onToast }) {
+export function AlertsView({
+  apiBase,
+  wsRequest,
+  wsConnected,
+  aircraft = [],
+  feederLocation = null,
+  onToast,
+}) {
   const [activeTab, setActiveTab] = useState('rules');
   const [showForm, setShowForm] = useState(false);
   const [editRule, setEditRule] = useState(null);
@@ -72,7 +79,7 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
       ...rule,
       id: undefined,
       name: `${rule.name} (Copy)`,
-      enabled: false
+      enabled: false,
     };
     setEditRule(duplicatedRule);
     setShowForm(true);
@@ -188,16 +195,10 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
       {pendingDelete && (
         <div className="undo-delete-banner" role="alert" aria-live="assertive">
           <span>Rule "{pendingDelete.rule.name}" will be deleted</span>
-          <button
-            className="btn-secondary btn-sm"
-            onClick={handleUndoDelete}
-          >
+          <button className="btn-secondary btn-sm" onClick={handleUndoDelete}>
             <Undo2 size={14} /> Undo
           </button>
-          <div
-            className="undo-progress"
-            style={{ animationDuration: `${UNDO_GRACE_PERIOD}ms` }}
-          />
+          <div className="undo-progress" style={{ animationDuration: `${UNDO_GRACE_PERIOD}ms` }} />
         </div>
       )}
 
@@ -216,33 +217,23 @@ export function AlertsView({ apiBase, wsRequest, wsConnected, aircraft = [], fee
           />
 
           {/* Rules List */}
-          <div
-            className="rules-list"
-            role="list"
-            aria-label="Alert rules"
-          >
+          <div className="rules-list" role="list" aria-label="Alert rules">
             {filteredRules.length === 0 ? (
               <div className="rules-empty" role="status">
                 <AlertCircle size={32} aria-hidden="true" />
                 <p>No rules found</p>
                 {hasActiveFilters ? (
-                  <button
-                    className="btn-secondary"
-                    onClick={clearFilters}
-                  >
+                  <button className="btn-secondary" onClick={clearFilters}>
                     Clear Filters
                   </button>
                 ) : (
-                  <button
-                    className="btn-primary"
-                    onClick={handleNewRule}
-                  >
+                  <button className="btn-primary" onClick={handleNewRule}>
                     <Plus size={16} aria-hidden="true" /> Create First Rule
                   </button>
                 )}
               </div>
             ) : (
-              filteredRules.map(rule => (
+              filteredRules.map((rule) => (
                 <AlertRuleCard
                   key={rule.id}
                   rule={rule}

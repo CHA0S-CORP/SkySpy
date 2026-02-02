@@ -10,10 +10,21 @@
  */
 import React, { memo } from 'react';
 import {
-  X, Volume2, VolumeX, History,
-  Wifi, WifiOff, MapPin, MapPinOff,
-  Settings, AlertTriangle, Eye, EyeOff,
-  Mic, MicOff, Server,
+  X,
+  Volume2,
+  VolumeX,
+  History,
+  Wifi,
+  WifiOff,
+  MapPin,
+  MapPinOff,
+  Settings,
+  AlertTriangle,
+  Eye,
+  EyeOff,
+  Mic,
+  MicOff,
+  Server,
 } from 'lucide-react';
 
 /**
@@ -41,7 +52,9 @@ export const StatusBar = memo(function StatusBar({
       <div className="status-left">
         <div className={`status-indicator ${gpsActive ? 'active' : 'inactive'}`}>
           {gpsActive ? <MapPin size={18} /> : <MapPinOff size={18} />}
-          <span>{gpsActive ? `GPS ${gpsAccuracy ? `(${Math.round(gpsAccuracy)}m)` : ''}` : 'NO GPS'}</span>
+          <span>
+            {gpsActive ? `GPS ${gpsAccuracy ? `(${Math.round(gpsAccuracy)}m)` : ''}` : 'NO GPS'}
+          </span>
         </div>
         <div className={`status-indicator ${connected ? 'active' : 'inactive'}`}>
           {connected ? <Wifi size={18} /> : <WifiOff size={18} />}

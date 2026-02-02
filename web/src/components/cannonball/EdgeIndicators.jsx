@@ -17,9 +17,10 @@ export const EdgeIndicators = memo(function EdgeIndicators({ threats, userHeadin
   if (!criticalThreat || criticalThreat.threat_level === 'info') return null;
 
   // Calculate relative bearing
-  const bearing = userHeading !== null
-    ? (criticalThreat.bearing - userHeading + 360) % 360
-    : criticalThreat.bearing;
+  const bearing =
+    userHeading !== null
+      ? (criticalThreat.bearing - userHeading + 360) % 360
+      : criticalThreat.bearing;
 
   // Determine which edge(s) to highlight
   const indicators = [];

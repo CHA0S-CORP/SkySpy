@@ -1,8 +1,22 @@
 import React, { useMemo } from 'react';
 import {
-  Trophy, Award, Star, Target, Flame, Zap,
-  Crown, Medal, Gift, Sparkles, CheckCircle,
-  Clock, Plane, Globe, Radio, Eye, Loader2
+  Trophy,
+  Award,
+  Star,
+  Target,
+  Flame,
+  Zap,
+  Crown,
+  Medal,
+  Gift,
+  Sparkles,
+  CheckCircle,
+  Clock,
+  Plane,
+  Globe,
+  Radio,
+  Eye,
+  Loader2,
 } from 'lucide-react';
 
 /**
@@ -37,7 +51,7 @@ export function AchievementsSection({ data, loading, onSelectAircraft }) {
     collection_progress = {},
     streaks = {},
     milestones = [],
-    badges = []
+    badges = [],
   } = data;
 
   // Icon mapping for records
@@ -52,7 +66,7 @@ export function AchievementsSection({ data, loading, onSelectAircraft }) {
     most_acars: Radio,
     earliest_morning: Star,
     latest_night: Star,
-    default: Award
+    default: Award,
   };
 
   // Rarity colors
@@ -61,7 +75,7 @@ export function AchievementsSection({ data, loading, onSelectAircraft }) {
     epic: '#a371f7',
     rare: '#00c8ff',
     uncommon: '#00ff88',
-    common: '#6b7280'
+    common: '#6b7280',
   };
 
   // Calculate collection percentages
@@ -112,9 +126,7 @@ export function AchievementsSection({ data, loading, onSelectAircraft }) {
                       {record.aircraft && (
                         <span className="record-aircraft">{record.aircraft}</span>
                       )}
-                      {record.date && (
-                        <span className="record-date">{record.date}</span>
-                      )}
+                      {record.date && <span className="record-date">{record.date}</span>}
                     </div>
                   </div>
                 );
@@ -141,19 +153,21 @@ export function AchievementsSection({ data, loading, onSelectAircraft }) {
                 >
                   <div
                     className="sighting-rarity"
-                    style={{ backgroundColor: rarityColors[sighting.rarity] || rarityColors.common }}
+                    style={{
+                      backgroundColor: rarityColors[sighting.rarity] || rarityColors.common,
+                    }}
                     title={sighting.rarity}
                   >
                     <Sparkles size={12} />
                   </div>
                   <div className="sighting-info">
                     <span className="sighting-type">{sighting.aircraft_type || 'Unknown'}</span>
-                    <span className="sighting-callsign">{sighting.callsign || sighting.icao_hex}</span>
+                    <span className="sighting-callsign">
+                      {sighting.callsign || sighting.icao_hex}
+                    </span>
                   </div>
                   <div className="sighting-details">
-                    {sighting.reason && (
-                      <span className="sighting-reason">{sighting.reason}</span>
-                    )}
+                    {sighting.reason && <span className="sighting-reason">{sighting.reason}</span>}
                     <span className="sighting-date">{sighting.date}</span>
                   </div>
                 </div>
@@ -173,13 +187,12 @@ export function AchievementsSection({ data, loading, onSelectAircraft }) {
               <div className="collection-header">
                 <Plane size={16} />
                 <span>Aircraft Types</span>
-                <span className="collection-count">{typesCollected}/{typesToTarget}</span>
+                <span className="collection-count">
+                  {typesCollected}/{typesToTarget}
+                </span>
               </div>
               <div className="collection-bar-track">
-                <div
-                  className="collection-bar-fill types"
-                  style={{ width: `${typesPct}%` }}
-                />
+                <div className="collection-bar-fill types" style={{ width: `${typesPct}%` }} />
               </div>
             </div>
 
@@ -187,7 +200,9 @@ export function AchievementsSection({ data, loading, onSelectAircraft }) {
               <div className="collection-header">
                 <Globe size={16} />
                 <span>Airlines</span>
-                <span className="collection-count">{airlinesCollected}/{airlinesToTarget}</span>
+                <span className="collection-count">
+                  {airlinesCollected}/{airlinesToTarget}
+                </span>
               </div>
               <div className="collection-bar-track">
                 <div
@@ -201,7 +216,9 @@ export function AchievementsSection({ data, loading, onSelectAircraft }) {
               <div className="collection-header">
                 <Globe size={16} />
                 <span>Countries</span>
-                <span className="collection-count">{countriesCollected}/{countriesToTarget}</span>
+                <span className="collection-count">
+                  {countriesCollected}/{countriesToTarget}
+                </span>
               </div>
               <div className="collection-bar-track">
                 <div
@@ -341,7 +358,10 @@ export function AchievementsSection({ data, loading, onSelectAircraft }) {
                     {badge.icon === 'trophy' && <Trophy size={20} />}
                     {badge.icon === 'medal' && <Medal size={20} />}
                     {badge.icon === 'crown' && <Crown size={20} />}
-                    {(!badge.icon || !['star', 'trophy', 'medal', 'crown'].includes(badge.icon)) && <Award size={20} />}
+                    {(!badge.icon ||
+                      !['star', 'trophy', 'medal', 'crown'].includes(badge.icon)) && (
+                      <Award size={20} />
+                    )}
                   </div>
                   <span className="badge-name">{badge.name}</span>
                 </div>

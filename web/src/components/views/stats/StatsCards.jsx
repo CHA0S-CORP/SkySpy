@@ -11,7 +11,7 @@ export function KPICard({ title, icon: Icon, metrics, accentColor = 'cyan' }) {
     green: 'kpi-accent-green',
     purple: 'kpi-accent-purple',
     orange: 'kpi-accent-orange',
-    red: 'kpi-accent-red'
+    red: 'kpi-accent-red',
   };
 
   return (
@@ -35,7 +35,14 @@ export function KPICard({ title, icon: Icon, metrics, accentColor = 'cyan' }) {
 /**
  * LeaderboardCard - Live feed metric with pulse animation on update
  */
-export function LeaderboardCard({ title, icon: Icon, items, onSelect, valueFormatter, emptyText = "No data" }) {
+export function LeaderboardCard({
+  title,
+  icon: Icon,
+  items,
+  onSelect,
+  valueFormatter,
+  emptyText = 'No data',
+}) {
   const [pulse, setPulse] = useState(false);
   const prevItemsRef = useRef([]);
 
@@ -44,11 +51,12 @@ export function LeaderboardCard({ title, icon: Icon, items, onSelect, valueForma
 
     // Efficient comparison: check length first, then compare first item's key properties
     const prevItems = prevItemsRef.current;
-    const hasChanged = items.length !== prevItems.length ||
-      (items[0]?.hex !== prevItems[0]?.hex) ||
-      (items[0]?.distance !== prevItems[0]?.distance) ||
-      (items[0]?.gs !== prevItems[0]?.gs) ||
-      (items[0]?.alt_baro !== prevItems[0]?.alt_baro);
+    const hasChanged =
+      items.length !== prevItems.length ||
+      items[0]?.hex !== prevItems[0]?.hex ||
+      items[0]?.distance !== prevItems[0]?.distance ||
+      items[0]?.gs !== prevItems[0]?.gs ||
+      items[0]?.alt_baro !== prevItems[0]?.alt_baro;
 
     if (hasChanged) {
       setPulse(true);
@@ -96,16 +104,16 @@ export function SquawkWatchlist({ aircraftData, onSelect }) {
     if (!aircraft?.length) return { active: [], allClear: true };
 
     const watchCodes = {
-      '7700': { label: 'EMERGENCY', severity: 'critical', description: 'General Emergency' },
-      '7600': { label: 'RADIO FAIL', severity: 'warning', description: 'Radio Failure' },
-      '7500': { label: 'HIJACK', severity: 'critical', description: 'Hijacking' }
+      7700: { label: 'EMERGENCY', severity: 'critical', description: 'General Emergency' },
+      7600: { label: 'RADIO FAIL', severity: 'warning', description: 'Radio Failure' },
+      7500: { label: 'HIJACK', severity: 'critical', description: 'Hijacking' },
     };
 
     const active = aircraft
-      .filter(ac => ac.squawk && watchCodes[ac.squawk])
-      .map(ac => ({
+      .filter((ac) => ac.squawk && watchCodes[ac.squawk])
+      .map((ac) => ({
         ...ac,
-        ...watchCodes[ac.squawk]
+        ...watchCodes[ac.squawk],
       }));
 
     return { active, allClear: active.length === 0 };

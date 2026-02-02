@@ -15,11 +15,10 @@ export function AcarsMessageItem({
   expandedMessages,
   toggleMessageExpansion,
   onSelectAircraft,
-  onSelectByTail
+  onSelectByTail,
 }) {
-  const timestamp = typeof msg.timestamp === 'number'
-    ? new Date(msg.timestamp * 1000)
-    : new Date(msg.timestamp);
+  const timestamp =
+    typeof msg.timestamp === 'number' ? new Date(msg.timestamp * 1000) : new Date(msg.timestamp);
 
   // Check cache for hex lookup
   const cachedHex = msg.callsign ? callsignHexCache[msg.callsign.trim().toUpperCase()] : null;
@@ -43,7 +42,13 @@ export function AcarsMessageItem({
           onSelectAircraft(linkHex);
         }
       }}
-      title={canLink ? (isFromHistory ? 'Click to view aircraft (from sightings)' : 'Click to view aircraft details') : 'No ICAO hex available'}
+      title={
+        canLink
+          ? isFromHistory
+            ? 'Click to view aircraft (from sightings)'
+            : 'Click to view aircraft details'
+          : 'No ICAO hex available'
+      }
     >
       <div className="acars-history-header">
         {msg.callsign && (
@@ -86,18 +91,20 @@ export function AcarsMessageItem({
         )}
         <span className="acars-history-time">{timestamp.toLocaleString()}</span>
         {msg.label && (
-          <span className={`acars-history-label ${category ? `category-${category}` : ''}`} title={msg.label_info?.description || labelDesc || msg.label}>
+          <span
+            className={`acars-history-label ${category ? `category-${category}` : ''}`}
+            title={msg.label_info?.description || labelDesc || msg.label}
+          >
             {msg.label}
-            {labelDesc && (
-              <span className="acars-label-desc">{labelDesc}</span>
-            )}
+            {labelDesc && <span className="acars-label-desc">{labelDesc}</span>}
           </span>
         )}
         <span className={`acars-history-source ${msg.source}`}>{msg.source?.toUpperCase()}</span>
         {msg.frequency && <span className="acars-history-freq">{msg.frequency} MHz</span>}
         {/* Compact mode preview */}
         <span className="acars-compact-preview">
-          {textContent.slice(0, 60)}{textContent.length > 60 ? '...' : ''}
+          {textContent.slice(0, 60)}
+          {textContent.length > 60 ? '...' : ''}
         </span>
       </div>
       {(msg.icao_hex || cachedHex) && (
@@ -121,11 +128,18 @@ export function AcarsMessageItem({
       {msg.formatted_text ? (
         <div className="acars-formatted-text">
           <div className="acars-formatted-header">Decoded:</div>
-          <pre className={`acars-formatted-content ${!isExpanded && isLongText ? 'collapsed' : ''}`}>{msg.formatted_text}</pre>
+          <pre
+            className={`acars-formatted-content ${!isExpanded && isLongText ? 'collapsed' : ''}`}
+          >
+            {msg.formatted_text}
+          </pre>
           {isLongText && (
             <button
               className="acars-text-toggle"
-              onClick={(e) => { e.stopPropagation(); toggleMessageExpansion(msgId); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleMessageExpansion(msgId);
+              }}
             >
               {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               {isExpanded ? 'Show less' : 'Show more'}
@@ -141,11 +155,16 @@ export function AcarsMessageItem({
       ) : (
         msg.text && (
           <>
-            <pre className={`acars-history-text ${!isExpanded && isLongText ? 'collapsed' : ''}`}>{msg.text}</pre>
+            <pre className={`acars-history-text ${!isExpanded && isLongText ? 'collapsed' : ''}`}>
+              {msg.text}
+            </pre>
             {isLongText && (
               <button
                 className="acars-text-toggle"
-                onClick={(e) => { e.stopPropagation(); toggleMessageExpansion(msgId); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleMessageExpansion(msgId);
+                }}
               >
                 {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                 {isExpanded ? 'Show less' : 'Show more'}
@@ -176,7 +195,8 @@ export function AcarsMessageItem({
           )}
           {msg.decoded_text.position && (
             <span className="acars-decoded-item" title="Position">
-              @ {msg.decoded_text.position.lat.toFixed(3)}, {msg.decoded_text.position.lon.toFixed(3)}
+              @ {msg.decoded_text.position.lat.toFixed(3)},{' '}
+              {msg.decoded_text.position.lon.toFixed(3)}
             </span>
           )}
           {msg.decoded_text.ground_station && (

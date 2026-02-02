@@ -1,12 +1,22 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { getGlobalAudioState, subscribeToAudioStateChanges, setAutoplay, setAutoplayFilter, clearAutoplayFilter } from '../../views/AudioView';
+import {
+  getGlobalAudioState,
+  subscribeToAudioStateChanges,
+  setAutoplay,
+  setAutoplayFilter,
+  clearAutoplayFilter,
+} from '../../views/AudioView';
 
 // Helper to safely parse JSON from fetch response
 const safeJson = async (res) => {
   if (!res.ok) return null;
   const ct = res.headers.get('content-type');
   if (!ct || !ct.includes('application/json')) return null;
-  try { return await res.json(); } catch { return null; }
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
 };
 
 /**
@@ -70,7 +80,12 @@ export function useAircraftRadio({
         let radioData = null;
         if (wsRequest && wsConnected) {
           try {
-            const params = { icao: hex, include_radio_calls: true, radio_hours: radioHours, radio_limit: 50 };
+            const params = {
+              icao: hex,
+              include_radio_calls: true,
+              radio_hours: radioHours,
+              radio_limit: 50,
+            };
             if (callsign) params.callsign = callsign;
             radioData = await wsRequest('aircraft-info', params);
             if (radioData?.error) radioData = null;
@@ -89,7 +104,7 @@ export function useAircraftRadio({
           });
           if (callsign) params.append('callsign', callsign);
           const res = await fetch(`${baseUrl}/api/v1/audio/matched/?${params}`, {
-            signal: abortController.signal
+            signal: abortController.signal,
           });
           radioData = await safeJson(res);
         }
@@ -131,7 +146,12 @@ export function useAircraftRadio({
         let radioData = null;
         if (wsRequest && wsConnected) {
           try {
-            const params = { icao: hex, include_radio_calls: true, radio_hours: radioHours, radio_limit: 50 };
+            const params = {
+              icao: hex,
+              include_radio_calls: true,
+              radio_hours: radioHours,
+              radio_limit: 50,
+            };
             if (callsign) params.callsign = callsign;
             radioData = await wsRequest('aircraft-info', params);
             if (radioData?.error) radioData = null;
@@ -150,7 +170,7 @@ export function useAircraftRadio({
           });
           if (callsign) params.append('callsign', callsign);
           const res = await fetch(`${baseUrl}/api/v1/audio/matched/?${params}`, {
-            signal: abortController.signal
+            signal: abortController.signal,
           });
           radioData = await safeJson(res);
         }
@@ -177,7 +197,7 @@ export function useAircraftRadio({
   // Filter radio transmissions
   const filteredRadioTransmissions = useMemo(() => {
     if (!radioTransmissions.length) return [];
-    return radioTransmissions.filter(t => {
+    return radioTransmissions.filter((t) => {
       if (radioSearchQuery) {
         const query = radioSearchQuery.toLowerCase();
         const matchesSearch =
@@ -193,72 +213,75 @@ export function useAircraftRadio({
   }, [radioTransmissions, radioSearchQuery, radioStatusFilter]);
 
   // Radio audio handlers
-  const handleRadioPlay = useCallback((transmission) => {
-    const globalState = getGlobalAudioState();
-    const id = transmission.id;
+  const handleRadioPlay = useCallback(
+    (transmission) => {
+      const globalState = getGlobalAudioState();
+      const id = transmission.id;
 
-    if (globalState.playingId && globalState.playingId !== id) {
-      const prevAudio = globalState.audioRefs[globalState.playingId];
-      if (prevAudio) {
-        prevAudio.pause();
-        prevAudio.currentTime = 0;
+      if (globalState.playingId && globalState.playingId !== id) {
+        const prevAudio = globalState.audioRefs[globalState.playingId];
+        if (prevAudio) {
+          prevAudio.pause();
+          prevAudio.currentTime = 0;
+        }
       }
-    }
 
-    let audio = globalState.audioRefs[id];
-    if (!audio) {
-      audio = new Audio(transmission.audio_url);
-      globalState.audioRefs[id] = audio;
+      let audio = globalState.audioRefs[id];
+      if (!audio) {
+        audio = new Audio(transmission.audio_url);
+        globalState.audioRefs[id] = audio;
 
-      audio.addEventListener('loadedmetadata', () => {
-        globalState.audioDurations[id] = audio.duration;
-        setRadioAudioDurations(prev => ({ ...prev, [id]: audio.duration }));
-      });
+        audio.addEventListener('loadedmetadata', () => {
+          globalState.audioDurations[id] = audio.duration;
+          setRadioAudioDurations((prev) => ({ ...prev, [id]: audio.duration }));
+        });
 
-      audio.addEventListener('ended', () => {
-        globalState.playingId = null;
-        globalState.audioProgress[id] = 0;
-        setRadioPlayingId(null);
-        setRadioAudioProgress(prev => ({ ...prev, [id]: 0 }));
+        audio.addEventListener('ended', () => {
+          globalState.playingId = null;
+          globalState.audioProgress[id] = 0;
+          setRadioPlayingId(null);
+          setRadioAudioProgress((prev) => ({ ...prev, [id]: 0 }));
 
-        if (globalState.autoplay && globalState.autoplayFilter?.hex === hex) {
-          const filteredList = filteredRadioTransmissions;
-          const currentIndex = filteredList.findIndex(t => t.id === id);
-          if (currentIndex !== -1 && currentIndex < filteredList.length - 1) {
-            const nextTransmission = filteredList[currentIndex + 1];
-            if (nextTransmission?.audio_url) {
-              setTimeout(() => handleRadioPlay(nextTransmission), 100);
+          if (globalState.autoplay && globalState.autoplayFilter?.hex === hex) {
+            const filteredList = filteredRadioTransmissions;
+            const currentIndex = filteredList.findIndex((t) => t.id === id);
+            if (currentIndex !== -1 && currentIndex < filteredList.length - 1) {
+              const nextTransmission = filteredList[currentIndex + 1];
+              if (nextTransmission?.audio_url) {
+                setTimeout(() => handleRadioPlay(nextTransmission), 100);
+              }
             }
           }
-        }
-      });
+        });
 
-      audio.addEventListener('error', (e) => {
-        console.error('Radio audio playback error:', e);
+        audio.addEventListener('error', (e) => {
+          console.error('Radio audio playback error:', e);
+          globalState.playingId = null;
+          setRadioPlayingId(null);
+        });
+      }
+
+      if (globalState.playingId === id) {
+        audio.pause();
         globalState.playingId = null;
         setRadioPlayingId(null);
-      });
-    }
+        if (globalState.progressIntervalRef) clearInterval(globalState.progressIntervalRef);
+      } else {
+        audio.play().catch((err) => console.error('Failed to play radio audio:', err));
+        globalState.playingId = id;
+        setRadioPlayingId(id);
 
-    if (globalState.playingId === id) {
-      audio.pause();
-      globalState.playingId = null;
-      setRadioPlayingId(null);
-      if (globalState.progressIntervalRef) clearInterval(globalState.progressIntervalRef);
-    } else {
-      audio.play().catch(err => console.error('Failed to play radio audio:', err));
-      globalState.playingId = id;
-      setRadioPlayingId(id);
-
-      globalState.progressIntervalRef = setInterval(() => {
-        if (audio && !audio.paused) {
-          const progress = (audio.currentTime / audio.duration) * 100 || 0;
-          globalState.audioProgress[id] = progress;
-          setRadioAudioProgress(prev => ({ ...prev, [id]: progress }));
-        }
-      }, 100);
-    }
-  }, [hex, filteredRadioTransmissions]);
+        globalState.progressIntervalRef = setInterval(() => {
+          if (audio && !audio.paused) {
+            const progress = (audio.currentTime / audio.duration) * 100 || 0;
+            globalState.audioProgress[id] = progress;
+            setRadioAudioProgress((prev) => ({ ...prev, [id]: progress }));
+          }
+        }, 100);
+      }
+    },
+    [hex, filteredRadioTransmissions]
+  );
 
   const handleRadioSeek = useCallback((id, e) => {
     const globalState = getGlobalAudioState();
@@ -268,7 +291,7 @@ export function useAircraftRadio({
     const percent = (e.clientX - rect.left) / rect.width;
     audio.currentTime = percent * audio.duration;
     globalState.audioProgress[id] = percent * 100;
-    setRadioAudioProgress(prev => ({ ...prev, [id]: percent * 100 }));
+    setRadioAudioProgress((prev) => ({ ...prev, [id]: percent * 100 }));
   }, []);
 
   const toggleRadioAutoplay = useCallback(() => {

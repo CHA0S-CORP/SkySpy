@@ -1,5 +1,15 @@
 import React from 'react';
-import { Cloud, MapPin, Plane, Archive, ChevronDown, ChevronUp, Clock, Wind, ThermometerSnowflake } from 'lucide-react';
+import {
+  Cloud,
+  MapPin,
+  Plane,
+  Archive,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Wind,
+  ThermometerSnowflake,
+} from 'lucide-react';
 import { SEVERITY_COLORS } from './archiveConstants';
 import { formatDate, formatRelativeTime } from './archiveUtils';
 
@@ -38,13 +48,19 @@ export function ArchivedPirepCard({ pirep, expanded, onToggle }) {
 
       <div className="archive-card-conditions">
         {hasTurbulence && (
-          <div className="condition-badge turbulence" style={{ borderColor: SEVERITY_COLORS[pirep.turbulence_type] }}>
+          <div
+            className="condition-badge turbulence"
+            style={{ borderColor: SEVERITY_COLORS[pirep.turbulence_type] }}
+          >
             <Wind size={14} />
             <span>Turb: {pirep.turbulence_type}</span>
           </div>
         )}
         {hasIcing && (
-          <div className="condition-badge icing" style={{ borderColor: SEVERITY_COLORS[pirep.icing_type] }}>
+          <div
+            className="condition-badge icing"
+            style={{ borderColor: SEVERITY_COLORS[pirep.icing_type] }}
+          >
             <ThermometerSnowflake size={14} />
             <span>Ice: {pirep.icing_type}</span>
           </div>
@@ -86,7 +102,9 @@ export function ArchivedPirepCard({ pirep, expanded, onToggle }) {
             {pirep.wind_dir != null && pirep.wind_speed_kt != null && (
               <div className="pirep-detail">
                 <span className="label">Wind</span>
-                <span className="value">{pirep.wind_dir}deg / {pirep.wind_speed_kt} kt</span>
+                <span className="value">
+                  {pirep.wind_dir}deg / {pirep.wind_speed_kt} kt
+                </span>
               </div>
             )}
             {pirep.visibility_sm != null && (

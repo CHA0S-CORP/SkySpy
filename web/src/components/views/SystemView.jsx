@@ -2,9 +2,29 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
-  Activity, Database, Zap, Bell, MapPin, RefreshCw, TestTube2, AlertTriangle, Wifi, WifiOff,
-  HardDrive, CheckCircle, XCircle, ChevronDown, ChevronRight, Clock, Radio, Cpu,
-  Thermometer, Copy, History, AlertCircle, Loader2
+  Activity,
+  Database,
+  Zap,
+  Bell,
+  MapPin,
+  RefreshCw,
+  TestTube2,
+  AlertTriangle,
+  Wifi,
+  WifiOff,
+  HardDrive,
+  CheckCircle,
+  XCircle,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  Radio,
+  Cpu,
+  Thermometer,
+  Copy,
+  History,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react';
 import { useSocketApi } from '../../hooks';
 
@@ -54,15 +74,50 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
   // - /api/v1/system/health - Health check
   // - /api/v1/system/info - System info
   // - /api/v1/system/databases - Database stats
-  const { data: httpStatus, refetch: refetchHttpStatus } = useSocketApi('/api/v1/system/status', pollInterval, apiBase, socketOpts);
-  const { data: httpHealth } = useSocketApi('/api/v1/system/health', pollInterval, apiBase, socketOpts);
-  const { data: httpSystemInfo } = useSocketApi('/api/v1/system/info', pollInterval, apiBase, socketOpts);
-  const { data: httpDatabaseStats } = useSocketApi('/api/v1/system/databases', pollInterval, apiBase, socketOpts);
+  const { data: httpStatus, refetch: refetchHttpStatus } = useSocketApi(
+    '/api/v1/system/status',
+    pollInterval,
+    apiBase,
+    socketOpts
+  );
+  const { data: httpHealth } = useSocketApi(
+    '/api/v1/system/health',
+    pollInterval,
+    apiBase,
+    socketOpts
+  );
+  const { data: httpSystemInfo } = useSocketApi(
+    '/api/v1/system/info',
+    pollInterval,
+    apiBase,
+    socketOpts
+  );
+  const { data: httpDatabaseStats } = useSocketApi(
+    '/api/v1/system/databases',
+    pollInterval,
+    apiBase,
+    socketOpts
+  );
   // Legacy fallback endpoints (try both old and new)
   const { data: httpHealthRoot } = useSocketApi('/health', pollInterval, apiBase, socketOpts);
-  const { data: httpNotifConfig } = useSocketApi('/api/v1/notifications/config', null, apiBase, socketOpts);
-  const { data: httpSafetyStatus } = useSocketApi('/api/v1/safety/monitor/status', pollInterval, apiBase, socketOpts);
-  const { data: httpAcarsStats } = useSocketApi('/api/v1/acars/stats?hours=1', pollInterval, apiBase, socketOpts);
+  const { data: httpNotifConfig } = useSocketApi(
+    '/api/v1/notifications/config',
+    null,
+    apiBase,
+    socketOpts
+  );
+  const { data: httpSafetyStatus } = useSocketApi(
+    '/api/v1/safety/monitor/status',
+    pollInterval,
+    apiBase,
+    socketOpts
+  );
+  const { data: httpAcarsStats } = useSocketApi(
+    '/api/v1/acars/stats?hours=1',
+    pollInterval,
+    apiBase,
+    socketOpts
+  );
 
   // Fetch all status data via WebSocket - using Django API events
   const fetchViaSocket = useCallback(async () => {
@@ -120,7 +175,22 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
     if (httpStatus || httpHealth || httpHealthRoot || httpSafetyStatus) {
       setLoading(false);
     }
-  }, [httpStatus, httpHealth, httpHealthRoot, httpSystemInfo, httpDatabaseStats, httpSafetyStatus, httpAcarsStats, status, health, systemInfo, databaseStats, wsStatus, safetyStatus, acarsStats]);
+  }, [
+    httpStatus,
+    httpHealth,
+    httpHealthRoot,
+    httpSystemInfo,
+    httpDatabaseStats,
+    httpSafetyStatus,
+    httpAcarsStats,
+    status,
+    health,
+    systemInfo,
+    databaseStats,
+    wsStatus,
+    safetyStatus,
+    acarsStats,
+  ]);
 
   // Always use HTTP for notification config (not available via WebSocket)
   useEffect(() => {
@@ -158,29 +228,38 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
       severity,
       timestamp: new Date(),
     };
-    setSystemEvents(prev => [event, ...prev].slice(0, 10));
+    setSystemEvents((prev) => [event, ...prev].slice(0, 10));
   }, []);
 
   // Helper to check service status from Django health response
-  const getServiceStatus = useCallback((serviceName) => {
-    // Check health.services structure (Django format)
-    if (health?.services?.[serviceName]?.status === 'up' || health?.services?.[serviceName]?.status === 'healthy') {
-      return 'online';
-    }
-    // Check health.components structure (alternate format)
-    if (health?.components?.[serviceName]?.status === 'up' || health?.components?.[serviceName]?.status === 'healthy') {
-      return 'online';
-    }
-    // Check status object directly
-    if (status?.[`${serviceName}_online`] || status?.[`${serviceName}_status`] === 'online') {
-      return 'online';
-    }
-    // Loading state
-    if (health === null && status === null) {
-      return 'warning';
-    }
-    return 'offline';
-  }, [health, status]);
+  const getServiceStatus = useCallback(
+    (serviceName) => {
+      // Check health.services structure (Django format)
+      if (
+        health?.services?.[serviceName]?.status === 'up' ||
+        health?.services?.[serviceName]?.status === 'healthy'
+      ) {
+        return 'online';
+      }
+      // Check health.components structure (alternate format)
+      if (
+        health?.components?.[serviceName]?.status === 'up' ||
+        health?.components?.[serviceName]?.status === 'healthy'
+      ) {
+        return 'online';
+      }
+      // Check status object directly
+      if (status?.[`${serviceName}_online`] || status?.[`${serviceName}_status`] === 'online') {
+        return 'online';
+      }
+      // Loading state
+      if (health === null && status === null) {
+        return 'warning';
+      }
+      return 'offline';
+    },
+    [health, status]
+  );
 
   // Track service status changes for events timeline
   const prevStatusRef = useRef({});
@@ -221,8 +300,15 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
         throw new Error('Invalid response');
       }
       const data = await res.json();
-      setTestResult({ success: data.success, message: data.success ? 'Notification sent!' : 'Failed to send' });
-      addSystemEvent('notification_test', data.success ? 'Test notification sent' : 'Test notification failed', data.success ? 'success' : 'error');
+      setTestResult({
+        success: data.success,
+        message: data.success ? 'Notification sent!' : 'Failed to send',
+      });
+      addSystemEvent(
+        'notification_test',
+        data.success ? 'Test notification sent' : 'Test notification failed',
+        data.success ? 'success' : 'error'
+      );
     } catch {
       setTestResult({ success: false, message: 'Error sending test' });
       addSystemEvent('notification_test', 'Test notification error', 'error');
@@ -242,8 +328,15 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
         throw new Error('Invalid response');
       }
       const data = await res.json();
-      setSafetyTestResult({ success: data.success, message: data.success ? `Generated ${data.count} events` : 'Failed to generate' });
-      addSystemEvent('safety_test', data.success ? `Generated ${data.count} test events` : 'Safety test failed', data.success ? 'success' : 'error');
+      setSafetyTestResult({
+        success: data.success,
+        message: data.success ? `Generated ${data.count} events` : 'Failed to generate',
+      });
+      addSystemEvent(
+        'safety_test',
+        data.success ? `Generated ${data.count} test events` : 'Safety test failed',
+        data.success ? 'success' : 'error'
+      );
     } catch {
       setSafetyTestResult({ success: false, message: 'Error generating events' });
       addSystemEvent('safety_test', 'Safety test error', 'error');
@@ -253,15 +346,19 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
   };
 
   // Get service details (for expanded view)
-  const getServiceDetails = useCallback((serviceName) => {
-    const serviceHealth = health?.services?.[serviceName] || health?.components?.[serviceName] || {};
-    return {
-      lastCheck: serviceHealth.last_check || lastUpdate?.toISOString(),
-      latency: serviceHealth.latency_ms || serviceHealth.response_time_ms,
-      error: serviceHealth.error || serviceHealth.message,
-      version: serviceHealth.version,
-    };
-  }, [health, lastUpdate]);
+  const getServiceDetails = useCallback(
+    (serviceName) => {
+      const serviceHealth =
+        health?.services?.[serviceName] || health?.components?.[serviceName] || {};
+      return {
+        lastCheck: serviceHealth.last_check || lastUpdate?.toISOString(),
+        latency: serviceHealth.latency_ms || serviceHealth.response_time_ms,
+        error: serviceHealth.error || serviceHealth.message,
+        version: serviceHealth.version,
+      };
+    },
+    [health, lastUpdate]
+  );
 
   // Get database stats from databaseStats or status
   const dbStats = databaseStats || status?.database || {};
@@ -272,13 +369,21 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
       { name: 'ADS-B Receiver', status: getServiceStatus('adsb') },
       { name: 'Database', status: getServiceStatus('database') },
       { name: 'Redis', status: getServiceStatus('redis') },
-      { name: 'WebSocket Server', status: status?.websocket?.active || wsStatus?.mode ? 'online' : (status === null ? 'warning' : 'offline') },
+      {
+        name: 'WebSocket Server',
+        status:
+          status?.websocket?.active || wsStatus?.mode
+            ? 'online'
+            : status === null
+              ? 'warning'
+              : 'offline',
+      },
       { name: 'Celery Workers', status: getServiceStatus('celery') },
     ];
 
-    const online = services.filter(s => s.status === 'online').length;
-    const offline = services.filter(s => s.status === 'offline').length;
-    const warning = services.filter(s => s.status === 'warning').length;
+    const online = services.filter((s) => s.status === 'online').length;
+    const offline = services.filter((s) => s.status === 'offline').length;
+    const warning = services.filter((s) => s.status === 'warning').length;
     const total = services.length;
 
     let overallStatus = 'healthy';
@@ -369,7 +474,7 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
 
   // Toggle service expansion
   const toggleServiceExpand = useCallback((serviceName) => {
-    setExpandedService(prev => prev === serviceName ? null : serviceName);
+    setExpandedService((prev) => (prev === serviceName ? null : serviceName));
   }, []);
 
   // Get system metrics from status
@@ -386,14 +491,20 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
         label: 'CPU',
         value: status?.cpu_percent ?? systemInfo?.cpu_percent ?? '--',
         unit: '%',
-        status: getStatusColor(status?.cpu_percent || systemInfo?.cpu_percent || 0, { warning: 70, critical: 90 }),
+        status: getStatusColor(status?.cpu_percent || systemInfo?.cpu_percent || 0, {
+          warning: 70,
+          critical: 90,
+        }),
       },
       {
         icon: HardDrive,
         label: 'RAM',
         value: status?.memory_percent ?? systemInfo?.memory_percent ?? '--',
         unit: '%',
-        status: getStatusColor(status?.memory_percent || systemInfo?.memory_percent || 0, { warning: 80, critical: 95 }),
+        status: getStatusColor(status?.memory_percent || systemInfo?.memory_percent || 0, {
+          warning: 80,
+          critical: 95,
+        }),
       },
       {
         icon: Thermometer,
@@ -426,7 +537,13 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
             {displayName}
           </span>
           <span className={`status-badge ${statusValue} ${isOnline ? 'pulse' : ''}`}>
-            {isOnline ? <CheckCircle size={12} /> : statusValue === 'warning' ? <Clock size={12} /> : <XCircle size={12} />}
+            {isOnline ? (
+              <CheckCircle size={12} />
+            ) : statusValue === 'warning' ? (
+              <Clock size={12} />
+            ) : (
+              <XCircle size={12} />
+            )}
             {statusLabel}
           </span>
         </div>
@@ -435,7 +552,9 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
             {details.lastCheck && (
               <div className="detail-row">
                 <span className="detail-label">Last Check</span>
-                <span className="detail-value">{new Date(details.lastCheck).toLocaleTimeString()}</span>
+                <span className="detail-value">
+                  {new Date(details.lastCheck).toLocaleTimeString()}
+                </span>
               </div>
             )}
             {details.latency && (
@@ -498,7 +617,7 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
           </span>
         </div>
         <div className="health-services-quick">
-          {healthSummary.services.map(s => (
+          {healthSummary.services.map((s) => (
             <div
               key={s.name}
               className={`health-service-dot ${s.status}`}
@@ -511,12 +630,21 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
       <div className="system-grid">
         {/* Services Card */}
         <div className="system-card">
-          <div className="card-header"><Activity size={20} /><span>Services</span></div>
+          <div className="card-header">
+            <Activity size={20} />
+            <span>Services</span>
+          </div>
           <div className="status-list">
-            <div className={`status-item expandable ${expandedService === 'client' ? 'expanded' : ''}`}>
+            <div
+              className={`status-item expandable ${expandedService === 'client' ? 'expanded' : ''}`}
+            >
               <div className="status-item-header" onClick={() => toggleServiceExpand('client')}>
                 <span className="service-name">
-                  {expandedService === 'client' ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  {expandedService === 'client' ? (
+                    <ChevronDown size={14} />
+                  ) : (
+                    <ChevronRight size={14} />
+                  )}
                   Client Connection
                 </span>
                 <span className={`status-badge ${wsConnected ? 'online pulse' : 'warning'}`}>
@@ -528,7 +656,9 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
                 <div className="status-item-details">
                   <div className="detail-row">
                     <span className="detail-label">Mode</span>
-                    <span className="detail-value">{wsConnected ? 'Real-time WebSocket' : 'HTTP Polling'}</span>
+                    <span className="detail-value">
+                      {wsConnected ? 'Real-time WebSocket' : 'HTTP Polling'}
+                    </span>
                   </div>
                   <div className="detail-row">
                     <span className="detail-label">Poll Interval</span>
@@ -542,51 +672,79 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
               'adsb',
               'ADS-B Receiver',
               getServiceStatus('adsb'),
-              status?.adsb_online || status?.adsb_status === 'online' ? 'Online' : status === null ? 'Loading...' : 'Offline'
+              status?.adsb_online || status?.adsb_status === 'online'
+                ? 'Online'
+                : status === null
+                  ? 'Loading...'
+                  : 'Offline'
             )}
 
             {renderServiceItem(
               'database',
               'Database',
               getServiceStatus('database'),
-              getServiceStatus('database') === 'online' ? 'Connected' : health === null && status === null ? 'Loading...' : 'Error'
+              getServiceStatus('database') === 'online'
+                ? 'Connected'
+                : health === null && status === null
+                  ? 'Loading...'
+                  : 'Error'
             )}
 
             {renderServiceItem(
               'redis',
               'Redis',
               getServiceStatus('redis'),
-              getServiceStatus('redis') === 'online' ? 'Connected' : (health?.services?.redis?.status === 'not_configured' ? 'Not Configured' : 'Disabled')
+              getServiceStatus('redis') === 'online'
+                ? 'Connected'
+                : health?.services?.redis?.status === 'not_configured'
+                  ? 'Not Configured'
+                  : 'Disabled'
             )}
 
             {renderServiceItem(
               'websocket',
               'WebSocket Server',
-              status?.websocket?.active || wsStatus?.mode ? 'online' : status === null ? 'warning' : 'offline',
+              status?.websocket?.active || wsStatus?.mode
+                ? 'online'
+                : status === null
+                  ? 'warning'
+                  : 'offline',
               status?.websocket?.mode || wsStatus?.mode
-                ? ((status?.websocket?.mode || wsStatus?.mode) === 'redis' ? 'Redis Mode' : 'Memory Mode')
-                : (status === null ? 'Loading...' : 'Unknown')
+                ? (status?.websocket?.mode || wsStatus?.mode) === 'redis'
+                  ? 'Redis Mode'
+                  : 'Memory Mode'
+                : status === null
+                  ? 'Loading...'
+                  : 'Unknown'
             )}
 
             {renderServiceItem(
               'celery',
               'Celery Workers',
               getServiceStatus('celery'),
-              getServiceStatus('celery') === 'online' ? 'Running' : status === null ? 'Loading...' : 'Stopped'
+              getServiceStatus('celery') === 'online'
+                ? 'Running'
+                : status === null
+                  ? 'Loading...'
+                  : 'Stopped'
             )}
           </div>
         </div>
 
         {/* System Metrics Card */}
         <div className="system-card">
-          <div className="card-header"><Cpu size={20} /><span>System Health</span></div>
+          <div className="card-header">
+            <Cpu size={20} />
+            <span>System Health</span>
+          </div>
           <div className="system-metrics-grid">
             {systemMetrics.map((metric, i) => (
               <div key={i} className={`system-metric-item ${metric.status}`}>
                 <metric.icon size={16} />
                 <span className="metric-label">{metric.label}</span>
                 <span className="metric-value">
-                  {metric.value}{metric.value !== '--' ? metric.unit : ''}
+                  {metric.value}
+                  {metric.value !== '--' ? metric.unit : ''}
                 </span>
               </div>
             ))}
@@ -595,15 +753,45 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
 
         {/* Database Stats Card */}
         <div className="system-card">
-          <div className="card-header"><Database size={20} /><span>Database Stats</span></div>
+          <div className="card-header">
+            <Database size={20} />
+            <span>Database Stats</span>
+          </div>
           <div className="stats-list">
-            <div className="stat-row"><span>Total Sightings</span><span className="mono">{dbStats?.total_sightings?.toLocaleString() || status?.total_sightings?.toLocaleString() || '--'}</span></div>
-            <div className="stat-row"><span>Total Sessions</span><span className="mono">{dbStats?.total_sessions?.toLocaleString() || status?.total_sessions?.toLocaleString() || '--'}</span></div>
-            <div className="stat-row"><span>Active Rules</span><span className="mono">{dbStats?.active_rules || status?.active_rules || 0}</span></div>
+            <div className="stat-row">
+              <span>Total Sightings</span>
+              <span className="mono">
+                {dbStats?.total_sightings?.toLocaleString() ||
+                  status?.total_sightings?.toLocaleString() ||
+                  '--'}
+              </span>
+            </div>
+            <div className="stat-row">
+              <span>Total Sessions</span>
+              <span className="mono">
+                {dbStats?.total_sessions?.toLocaleString() ||
+                  status?.total_sessions?.toLocaleString() ||
+                  '--'}
+              </span>
+            </div>
+            <div className="stat-row">
+              <span>Active Rules</span>
+              <span className="mono">{dbStats?.active_rules || status?.active_rules || 0}</span>
+            </div>
             {dbStats?.table_counts && (
               <>
-                <div className="stat-row"><span>Aircraft</span><span className="mono">{dbStats.table_counts?.aircraft?.toLocaleString() || '--'}</span></div>
-                <div className="stat-row"><span>Alerts</span><span className="mono">{dbStats.table_counts?.alerts?.toLocaleString() || '--'}</span></div>
+                <div className="stat-row">
+                  <span>Aircraft</span>
+                  <span className="mono">
+                    {dbStats.table_counts?.aircraft?.toLocaleString() || '--'}
+                  </span>
+                </div>
+                <div className="stat-row">
+                  <span>Alerts</span>
+                  <span className="mono">
+                    {dbStats.table_counts?.alerts?.toLocaleString() || '--'}
+                  </span>
+                </div>
               </>
             )}
           </div>
@@ -611,16 +799,51 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
 
         {/* Real-time Card */}
         <div className="system-card">
-          <div className="card-header"><Zap size={20} /><span>Real-time</span></div>
+          <div className="card-header">
+            <Zap size={20} />
+            <span>Real-time</span>
+          </div>
           <div className="stats-list">
-            <div className="stat-row"><span>WS Clients</span><span className="mono">{status?.websocket?.clients || wsStatus?.subscribers || 0}</span></div>
-            <div className="stat-row"><span>Tracked Aircraft</span><span className="mono">{status?.websocket?.tracked_aircraft || wsStatus?.tracked_aircraft || 0}</span></div>
-            <div className="stat-row"><span>Poll Interval</span><span className="mono">{status?.polling_interval_seconds || systemInfo?.poll_interval || '--'}s</span></div>
-            <div className="stat-row"><span>DB Store Interval</span><span className="mono">{status?.db_store_interval_seconds || systemInfo?.db_store_interval || '--'}s</span></div>
+            <div className="stat-row">
+              <span>WS Clients</span>
+              <span className="mono">
+                {status?.websocket?.clients || wsStatus?.subscribers || 0}
+              </span>
+            </div>
+            <div className="stat-row">
+              <span>Tracked Aircraft</span>
+              <span className="mono">
+                {status?.websocket?.tracked_aircraft || wsStatus?.tracked_aircraft || 0}
+              </span>
+            </div>
+            <div className="stat-row">
+              <span>Poll Interval</span>
+              <span className="mono">
+                {status?.polling_interval_seconds || systemInfo?.poll_interval || '--'}s
+              </span>
+            </div>
+            <div className="stat-row">
+              <span>DB Store Interval</span>
+              <span className="mono">
+                {status?.db_store_interval_seconds || systemInfo?.db_store_interval || '--'}s
+              </span>
+            </div>
             {(status?.websocket?.redis_enabled || wsStatus?.redis_enabled) && (
               <>
-                <div className="stat-row"><span>Redis Pub/Sub</span><span className="mono">Active</span></div>
-                <div className="stat-row"><span>Last Publish</span><span className="mono">{(status?.websocket?.last_publish || wsStatus?.last_publish) ? new Date(status?.websocket?.last_publish || wsStatus?.last_publish).toLocaleTimeString() : '--'}</span></div>
+                <div className="stat-row">
+                  <span>Redis Pub/Sub</span>
+                  <span className="mono">Active</span>
+                </div>
+                <div className="stat-row">
+                  <span>Last Publish</span>
+                  <span className="mono">
+                    {status?.websocket?.last_publish || wsStatus?.last_publish
+                      ? new Date(
+                          status?.websocket?.last_publish || wsStatus?.last_publish
+                        ).toLocaleTimeString()
+                      : '--'}
+                  </span>
+                </div>
               </>
             )}
           </div>
@@ -628,7 +851,10 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
 
         {/* Notifications Card */}
         <div className="system-card">
-          <div className="card-header"><Bell size={20} /><span>Notifications</span></div>
+          <div className="card-header">
+            <Bell size={20} />
+            <span>Notifications</span>
+          </div>
           <div className="stats-list">
             <div className="stat-row">
               <span>Status</span>
@@ -637,12 +863,26 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
                 {notifConfig?.enabled ? 'Enabled' : 'Disabled'}
               </span>
             </div>
-            <div className="stat-row"><span>Servers</span><span className="mono">{notifConfig?.server_count || 0}</span></div>
-            <div className="stat-row"><span>Cooldown</span><span className="mono">{notifConfig?.cooldown_seconds || 300}s</span></div>
+            <div className="stat-row">
+              <span>Servers</span>
+              <span className="mono">{notifConfig?.server_count || 0}</span>
+            </div>
+            <div className="stat-row">
+              <span>Cooldown</span>
+              <span className="mono">{notifConfig?.cooldown_seconds || 300}s</span>
+            </div>
             <div className="stat-row">
               <span>Browser</span>
-              <span className={`status-badge ${typeof Notification !== 'undefined' && Notification.permission === 'granted' ? 'online' : 'warning'}`}>
-                {typeof Notification !== 'undefined' ? (Notification.permission === 'granted' ? 'Enabled' : Notification.permission === 'denied' ? 'Blocked' : 'Not Set') : 'N/A'}
+              <span
+                className={`status-badge ${typeof Notification !== 'undefined' && Notification.permission === 'granted' ? 'online' : 'warning'}`}
+              >
+                {typeof Notification !== 'undefined'
+                  ? Notification.permission === 'granted'
+                    ? 'Enabled'
+                    : Notification.permission === 'denied'
+                      ? 'Blocked'
+                      : 'Not Set'
+                  : 'N/A'}
               </span>
             </div>
           </div>
@@ -664,7 +904,10 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
 
         {/* Safety Monitor Card */}
         <div className="system-card">
-          <div className="card-header"><AlertTriangle size={20} /><span>Safety Monitor</span></div>
+          <div className="card-header">
+            <AlertTriangle size={20} />
+            <span>Safety Monitor</span>
+          </div>
           <div className="stats-list">
             <div className="stat-row">
               <span>Status</span>
@@ -673,7 +916,10 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
                 {safetyStatus?.enabled ? 'Enabled' : 'Disabled'}
               </span>
             </div>
-            <div className="stat-row"><span>Tracked Aircraft</span><span className="mono">{safetyStatus?.tracked_aircraft || 0}</span></div>
+            <div className="stat-row">
+              <span>Tracked Aircraft</span>
+              <span className="mono">{safetyStatus?.tracked_aircraft || 0}</span>
+            </div>
           </div>
           <button
             className={`btn-secondary test-btn ${safetyTestLoading ? 'loading' : ''}`}
@@ -693,26 +939,47 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
 
         {/* ACARS Service Card */}
         <div className="system-card">
-          <div className="card-header"><Radio size={20} /><span>ACARS Service</span></div>
+          <div className="card-header">
+            <Radio size={20} />
+            <span>ACARS Service</span>
+          </div>
           <div className="stats-list">
             <div className="stat-row">
               <span>Status</span>
-              <span className={`status-badge ${acarsStats?.service_stats?.running ? 'online' : 'offline'}`}>
-                {acarsStats?.service_stats?.running ? <CheckCircle size={12} /> : <XCircle size={12} />}
+              <span
+                className={`status-badge ${acarsStats?.service_stats?.running ? 'online' : 'offline'}`}
+              >
+                {acarsStats?.service_stats?.running ? (
+                  <CheckCircle size={12} />
+                ) : (
+                  <XCircle size={12} />
+                )}
                 {acarsStats?.service_stats?.running ? 'Running' : 'Stopped'}
               </span>
             </div>
-            <div className="stat-row"><span>Last Hour</span><span className="mono">{acarsStats?.last_hour || 0}</span></div>
-            <div className="stat-row"><span>Today</span><span className="mono">{acarsStats?.today || 0}</span></div>
+            <div className="stat-row">
+              <span>Last Hour</span>
+              <span className="mono">{acarsStats?.last_hour || 0}</span>
+            </div>
+            <div className="stat-row">
+              <span>Today</span>
+              <span className="mono">{acarsStats?.today || 0}</span>
+            </div>
             {acarsStats?.total && (
-              <div className="stat-row"><span>Total</span><span className="mono">{acarsStats.total.toLocaleString()}</span></div>
+              <div className="stat-row">
+                <span>Total</span>
+                <span className="mono">{acarsStats.total.toLocaleString()}</span>
+              </div>
             )}
           </div>
         </div>
 
         {/* Recent Events Timeline Card */}
         <div className="system-card">
-          <div className="card-header"><History size={20} /><span>Recent Events</span></div>
+          <div className="card-header">
+            <History size={20} />
+            <span>Recent Events</span>
+          </div>
           <div className="events-timeline">
             {systemEvents.length === 0 ? (
               <div className="events-empty">
@@ -720,7 +987,7 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
                 <span>No recent events</span>
               </div>
             ) : (
-              systemEvents.map(event => (
+              systemEvents.map((event) => (
                 <div key={event.id} className={`event-item ${event.severity}`}>
                   {getEventIcon(event.type)}
                   <span className="event-message">{event.message}</span>
@@ -733,7 +1000,10 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
 
         {/* Feeder Location Card with Mini-Map */}
         <div className="system-card wide feeder-location-card">
-          <div className="card-header"><MapPin size={20} /><span>Feeder Location</span></div>
+          <div className="card-header">
+            <MapPin size={20} />
+            <span>Feeder Location</span>
+          </div>
           <div className="feeder-location-content">
             <div className="feeder-mini-map-container">
               <div ref={mapContainerRef} className="feeder-mini-map" />
@@ -784,9 +1054,7 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
         <span>Django: {systemInfo?.django_version || '--'}</span>
         <span>Python: {systemInfo?.python_version || '--'}</span>
         {lastUpdate && (
-          <span className="last-update">
-            Updated: {lastUpdate.toLocaleTimeString()}
-          </span>
+          <span className="last-update">Updated: {lastUpdate.toLocaleTimeString()}</span>
         )}
         <span className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
           {wsConnected ? <Wifi size={14} /> : <WifiOff size={14} />}

@@ -105,7 +105,8 @@ export function ConfigPage({ apiBase = '', onToast }) {
             (config) =>
               config.display_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
               config.key.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              (config.description && config.description.toLowerCase().includes(searchQuery.toLowerCase()))
+              (config.description &&
+                config.description.toLowerCase().includes(searchQuery.toLowerCase()))
           ),
         }))
         .filter((cat) => cat.configs.length > 0)
@@ -301,9 +302,7 @@ export function ConfigPage({ apiBase = '', onToast }) {
           {/* Categories */}
           <div className="config-categories">
             {filteredCategories.length === 0 ? (
-              <div className="config-no-results">
-                No settings match your search.
-              </div>
+              <div className="config-no-results">No settings match your search.</div>
             ) : (
               filteredCategories.map((category) => (
                 <ConfigCategory
@@ -327,11 +326,7 @@ export function ConfigPage({ apiBase = '', onToast }) {
       {/* Audit Log Tab */}
       {activeTab === 'history' && (
         <div className="config-history-tab">
-          <ConfigAuditLog
-            auditLog={auditLog}
-            loading={auditLogLoading}
-            onRefresh={fetchAuditLog}
-          />
+          <ConfigAuditLog auditLog={auditLog} loading={auditLogLoading} onRefresh={fetchAuditLog} />
         </div>
       )}
 

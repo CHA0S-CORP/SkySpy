@@ -38,15 +38,18 @@ const CollapsibleSection = forwardRef(function CollapsibleSection(
   // Track if section has ever been opened (for lazy loading)
   const [hasOpened, setHasOpened] = useState(defaultOpen);
 
-  const handleOpenChange = useCallback((open) => {
-    if (!isControlled) {
-      setInternalOpen(open);
-    }
-    if (open && !hasOpened) {
-      setHasOpened(true);
-    }
-    onOpenChange?.(open);
-  }, [isControlled, hasOpened, onOpenChange]);
+  const handleOpenChange = useCallback(
+    (open) => {
+      if (!isControlled) {
+        setInternalOpen(open);
+      }
+      if (open && !hasOpened) {
+        setHasOpened(true);
+      }
+      onOpenChange?.(open);
+    },
+    [isControlled, hasOpened, onOpenChange]
+  );
 
   // For lazy loading, only render children after first open
   const shouldRenderChildren = lazy ? hasOpened : true;
@@ -74,13 +77,7 @@ const CollapsibleSection = forwardRef(function CollapsibleSection(
         aria-expanded={isOpen}
       >
         <span className="flex items-center gap-2">
-          {Icon && (
-            <Icon
-              size={16}
-              className="flex-shrink-0 text-text-dim"
-              aria-hidden="true"
-            />
-          )}
+          {Icon && <Icon size={16} className="flex-shrink-0 text-text-dim" aria-hidden="true" />}
           <span className="collapsible-title">{title}</span>
           {badge !== undefined && badge !== null && (
             <span className="collapsible-badge ml-2 px-2 py-0.5 text-xs font-medium rounded-full bg-accent-cyan/20 text-accent-cyan">
@@ -121,9 +118,7 @@ const CollapsibleSection = forwardRef(function CollapsibleSection(
               }}
               className={cn('overflow-hidden', contentClassName)}
             >
-              <div className="collapsible-content pb-2">
-                {shouldRenderChildren && children}
-              </div>
+              <div className="collapsible-content pb-2">{shouldRenderChildren && children}</div>
             </motion.div>
           </CollapsiblePrimitive.Content>
         )}

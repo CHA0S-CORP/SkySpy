@@ -73,9 +73,12 @@ export function useDeviceGPS({
     if ('permissions' in navigator) {
       try {
         const result = await navigator.permissions.query({ name: 'geolocation' });
-        const state = result.state === 'granted' ? GPS_PERMISSION_STATES.GRANTED
-          : result.state === 'denied' ? GPS_PERMISSION_STATES.DENIED
-          : GPS_PERMISSION_STATES.PROMPT;
+        const state =
+          result.state === 'granted'
+            ? GPS_PERMISSION_STATES.GRANTED
+            : result.state === 'denied'
+              ? GPS_PERMISSION_STATES.DENIED
+              : GPS_PERMISSION_STATES.PROMPT;
         setPermissionState(state);
 
         // Clean up previous listener if exists
@@ -86,9 +89,12 @@ export function useDeviceGPS({
 
         // Listen for permission changes
         result.onchange = () => {
-          const newState = result.state === 'granted' ? GPS_PERMISSION_STATES.GRANTED
-            : result.state === 'denied' ? GPS_PERMISSION_STATES.DENIED
-            : GPS_PERMISSION_STATES.PROMPT;
+          const newState =
+            result.state === 'granted'
+              ? GPS_PERMISSION_STATES.GRANTED
+              : result.state === 'denied'
+                ? GPS_PERMISSION_STATES.DENIED
+                : GPS_PERMISSION_STATES.PROMPT;
           setPermissionState(newState);
         };
 
@@ -173,7 +179,7 @@ export function useDeviceGPS({
 
     if (compassHeading !== undefined && !isNaN(compassHeading)) {
       // Only update heading from orientation if GPS didn't provide it
-      setHeading(prev => prev === null ? compassHeading : prev);
+      setHeading((prev) => (prev === null ? compassHeading : prev));
     }
   }, []);
 
@@ -229,8 +235,10 @@ export function useDeviceGPS({
     }
 
     // If permission state is unknown or prompt, request it first
-    if (permissionState === GPS_PERMISSION_STATES.PROMPT ||
-        permissionState === GPS_PERMISSION_STATES.UNKNOWN) {
+    if (
+      permissionState === GPS_PERMISSION_STATES.PROMPT ||
+      permissionState === GPS_PERMISSION_STATES.UNKNOWN
+    ) {
       const granted = await requestPermission();
       if (!granted) return;
     }
@@ -268,7 +276,16 @@ export function useDeviceGPS({
         orientationRef.current = true;
       }
     }
-  }, [isSupported, highAccuracy, interval, permissionState, requestPermission, handlePositionUpdate, handlePositionError, handleOrientation]);
+  }, [
+    isSupported,
+    highAccuracy,
+    interval,
+    permissionState,
+    requestPermission,
+    handlePositionUpdate,
+    handlePositionError,
+    handleOrientation,
+  ]);
 
   // Stop tracking
   const stopTracking = useCallback(() => {
@@ -318,9 +335,8 @@ export function useDeviceGPS({
   // Auto-start/stop based on enabled prop
   useEffect(() => {
     // Only auto-start if autoRequest is true or permission is already granted
-    const shouldAutoStart = enabled &&
-      !isTracking &&
-      (autoRequest || permissionState === GPS_PERMISSION_STATES.GRANTED);
+    const shouldAutoStart =
+      enabled && !isTracking && (autoRequest || permissionState === GPS_PERMISSION_STATES.GRANTED);
 
     if (shouldAutoStart) {
       startTracking();
@@ -338,7 +354,15 @@ export function useDeviceGPS({
         window.removeEventListener('deviceorientation', handleOrientation, true);
       }
     };
-  }, [enabled, isTracking, autoRequest, permissionState, startTracking, stopTracking, handleOrientation]);
+  }, [
+    enabled,
+    isTracking,
+    autoRequest,
+    permissionState,
+    startTracking,
+    stopTracking,
+    handleOrientation,
+  ]);
 
   // Retry tracking after permission change
   useEffect(() => {

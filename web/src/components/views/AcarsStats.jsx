@@ -1,9 +1,19 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Radio, MessageSquare, TrendingUp, Users,
-  FileText, Clock, Activity, BarChart2,
-  Filter, ChevronDown, RefreshCw, Signal,
-  Zap, AlertCircle
+  Radio,
+  MessageSquare,
+  TrendingUp,
+  Users,
+  FileText,
+  Clock,
+  Activity,
+  BarChart2,
+  Filter,
+  ChevronDown,
+  RefreshCw,
+  Signal,
+  Zap,
+  AlertCircle,
 } from 'lucide-react';
 import { useStats } from '../../hooks';
 
@@ -25,7 +35,7 @@ export function AcarsStats({ apiBase, wsRequest, wsConnected }) {
   const { acarsStats, loading, error, refetch } = useStats(apiBase, {
     wsRequest,
     wsConnected,
-    hours: selectedHours
+    hours: selectedHours,
   });
 
   const data = acarsStats;
@@ -38,35 +48,35 @@ export function AcarsStats({ apiBase, wsRequest, wsConnected }) {
     last_24h = 0,
     last_hour = 0,
     service_stats = {},
-    top_labels = []
+    top_labels = [],
   } = data || {};
 
   // ACARS label descriptions
   const labelDescriptions = {
-    '_d': 'Command',
-    'H1': 'Departure',
-    'H2': 'Arrival',
-    '10': 'OUT Gate',
-    '11': 'OFF Takeoff',
-    '12': 'ON Landing',
-    '13': 'IN Gate',
-    '44': 'Position Report',
+    _d: 'Command',
+    H1: 'Departure',
+    H2: 'Arrival',
+    10: 'OUT Gate',
+    11: 'OFF Takeoff',
+    12: 'ON Landing',
+    13: 'IN Gate',
+    44: 'Position Report',
     '5Z': 'Airline Ops',
-    'AA': 'Free Text',
-    'SA': 'System',
-    'CA': 'CPDLC',
-    'Q0': 'Weather Request',
-    'QA': 'ATIS',
-    'QC': 'Clearance',
-    'QD': 'METAR',
-    'QE': 'TAF',
-    'QF': 'NOTAM',
-    'SQ': 'SELCAL',
-    'B0': 'Booking',
-    'B1': 'Passenger',
-    'B2': 'Load Info',
-    'B3': 'Cargo',
-    'M1': 'Maintenance'
+    AA: 'Free Text',
+    SA: 'System',
+    CA: 'CPDLC',
+    Q0: 'Weather Request',
+    QA: 'ATIS',
+    QC: 'Clearance',
+    QD: 'METAR',
+    QE: 'TAF',
+    QF: 'NOTAM',
+    SQ: 'SELCAL',
+    B0: 'Booking',
+    B1: 'Passenger',
+    B2: 'Load Info',
+    B3: 'Cargo',
+    M1: 'Maintenance',
   };
 
   // Use message_types or top_labels depending on what's available
@@ -75,40 +85,50 @@ export function AcarsStats({ apiBase, wsRequest, wsConnected }) {
   // Filter message types if filter is set
   const filteredTypes = useMemo(() => {
     if (!typeFilter) return messageTypesData;
-    return messageTypesData.filter(t =>
-      t.label?.toLowerCase().includes(typeFilter.toLowerCase()) ||
-      labelDescriptions[t.label]?.toLowerCase().includes(typeFilter.toLowerCase())
+    return messageTypesData.filter(
+      (t) =>
+        t.label?.toLowerCase().includes(typeFilter.toLowerCase()) ||
+        labelDescriptions[t.label]?.toLowerCase().includes(typeFilter.toLowerCase())
     );
   }, [messageTypesData, typeFilter]);
 
-  const maxTypeCount = Math.max(...filteredTypes.map(t => t.count || 0), 1);
-  const maxAirlineCount = Math.max(...top_airlines.map(a => a.count || 0), 1);
+  const maxTypeCount = Math.max(...filteredTypes.map((t) => t.count || 0), 1);
+  const maxAirlineCount = Math.max(...top_airlines.map((a) => a.count || 0), 1);
 
   // Message type colors
   const typeColors = [
-    '#00c8ff', '#00ff88', '#a371f7', '#ff9f43',
-    '#f85149', '#f7d794', '#4ecdc4', '#95e1d3'
+    '#00c8ff',
+    '#00ff88',
+    '#a371f7',
+    '#ff9f43',
+    '#f85149',
+    '#f7d794',
+    '#4ecdc4',
+    '#95e1d3',
   ];
 
   // Normalize hourly trend
   const trendData = useMemo(() => {
     if (!hourly_trend.length) return [];
-    const max = Math.max(...hourly_trend.map(h => h.count || 0), 1);
-    return hourly_trend.map(h => ({
+    const max = Math.max(...hourly_trend.map((h) => h.count || 0), 1);
+    return hourly_trend.map((h) => ({
       ...h,
-      normalized: ((h.count || 0) / max) * 100
+      normalized: ((h.count || 0) / max) * 100,
     }));
   }, [hourly_trend]);
 
   // Summary stats
-  const summaryStats = useMemo(() => ({
-    totalMessages: total_messages || 0,
-    last24h: last_24h || 0,
-    lastHour: last_hour || 0,
-    msgPerHour: last_24h > 0 ? Math.round(last_24h / 24) : 0,
-    uniqueTypes: messageTypesData.length,
-    topAirlines: top_airlines.length
-  }), [total_messages, last_24h, last_hour, messageTypesData, top_airlines]);
+  const summaryStats = useMemo(
+    () => ({
+      totalMessages: total_messages || 0,
+      last24h: last_24h || 0,
+      lastHour: last_hour || 0,
+      msgPerHour: last_24h > 0 ? Math.round(last_24h / 24) : 0,
+      uniqueTypes: messageTypesData.length,
+      topAirlines: top_airlines.length,
+    }),
+    [total_messages, last_24h, last_hour, messageTypesData, top_airlines]
+  );
 
   if (loading && !data) {
     return (
@@ -156,7 +176,7 @@ export function AcarsStats({ apiBase, wsRequest, wsConnected }) {
           <Clock size={14} />
           <span className="filter-label">Time Range</span>
           <div className="time-range-buttons">
-            {Object.keys(hours).map(range => (
+            {Object.keys(hours).map((range) => (
               <button
                 key={range}
                 className={`time-btn ${timeRange === range ? 'active' : ''}`}
@@ -197,28 +217,36 @@ export function AcarsStats({ apiBase, wsRequest, wsConnected }) {
       {/* Summary Cards */}
       <div className="summary-cards">
         <div className="summary-card">
-          <div className="summary-icon"><MessageSquare size={20} /></div>
+          <div className="summary-icon">
+            <MessageSquare size={20} />
+          </div>
           <div className="summary-content">
             <span className="summary-value">{summaryStats.totalMessages.toLocaleString()}</span>
             <span className="summary-label">Total Messages</span>
           </div>
         </div>
         <div className="summary-card">
-          <div className="summary-icon"><Clock size={20} /></div>
+          <div className="summary-icon">
+            <Clock size={20} />
+          </div>
           <div className="summary-content">
             <span className="summary-value">{summaryStats.last24h.toLocaleString()}</span>
             <span className="summary-label">Last 24h</span>
           </div>
         </div>
         <div className="summary-card">
-          <div className="summary-icon"><Zap size={20} /></div>
+          <div className="summary-icon">
+            <Zap size={20} />
+          </div>
           <div className="summary-content">
             <span className="summary-value">{summaryStats.lastHour.toLocaleString()}</span>
             <span className="summary-label">Last Hour</span>
           </div>
         </div>
         <div className="summary-card">
-          <div className="summary-icon"><Activity size={20} /></div>
+          <div className="summary-icon">
+            <Activity size={20} />
+          </div>
           <div className="summary-content">
             <span className="summary-value">{summaryStats.msgPerHour}</span>
             <span className="summary-label">Avg/Hour</span>
@@ -256,7 +284,7 @@ export function AcarsStats({ apiBase, wsRequest, wsConnected }) {
                         className="acars-type-bar-fill"
                         style={{
                           width: `${(type.count / maxTypeCount) * 100}%`,
-                          backgroundColor: color
+                          backgroundColor: color,
                         }}
                       />
                     </div>
@@ -283,9 +311,7 @@ export function AcarsStats({ apiBase, wsRequest, wsConnected }) {
                   <span className="airline-rank">{i + 1}</span>
                   <div className="airline-info">
                     <span className="airline-code">{airline.code || '???'}</span>
-                    {airline.name && (
-                      <span className="airline-name">{airline.name}</span>
-                    )}
+                    {airline.name && <span className="airline-name">{airline.name}</span>}
                   </div>
                   <div className="airline-bar-container">
                     <div
@@ -317,13 +343,8 @@ export function AcarsStats({ apiBase, wsRequest, wsConnected }) {
                     className="acars-trend-bar-wrapper"
                     title={`${point.hour ?? i}:00 - ${point.count} messages`}
                   >
-                    <div
-                      className="acars-trend-bar"
-                      style={{ height: `${point.normalized}%` }}
-                    />
-                    {i % 4 === 0 && (
-                      <span className="trend-hour-label">{point.hour ?? i}h</span>
-                    )}
+                    <div className="acars-trend-bar" style={{ height: `${point.normalized}%` }} />
+                    {i % 4 === 0 && <span className="trend-hour-label">{point.hour ?? i}h</span>}
                   </div>
                 ))}
               </div>
@@ -344,7 +365,9 @@ export function AcarsStats({ apiBase, wsRequest, wsConnected }) {
             <div className="card-header">
               <BarChart2 size={16} />
               <span>Service Statistics</span>
-              <span className={`service-indicator ${service_stats.running ? 'running' : 'stopped'}`}>
+              <span
+                className={`service-indicator ${service_stats.running ? 'running' : 'stopped'}`}
+              >
                 {service_stats.running ? 'Running' : 'Stopped'}
               </span>
             </div>
@@ -374,21 +397,27 @@ export function AcarsStats({ apiBase, wsRequest, wsConnected }) {
                 <div className="service-stat">
                   <Signal size={18} />
                   <span className="service-stat-label">Avg Signal</span>
-                  <span className="service-stat-value">{service_stats.avg_signal.toFixed(1)} dB</span>
+                  <span className="service-stat-value">
+                    {service_stats.avg_signal.toFixed(1)} dB
+                  </span>
                 </div>
               )}
               {service_stats.messages_decoded !== undefined && (
                 <div className="service-stat">
                   <MessageSquare size={18} />
                   <span className="service-stat-label">Decoded</span>
-                  <span className="service-stat-value">{service_stats.messages_decoded.toLocaleString()}</span>
+                  <span className="service-stat-value">
+                    {service_stats.messages_decoded.toLocaleString()}
+                  </span>
                 </div>
               )}
               {service_stats.decode_rate !== undefined && (
                 <div className="service-stat">
                   <Zap size={18} />
                   <span className="service-stat-label">Decode Rate</span>
-                  <span className="service-stat-value">{service_stats.decode_rate.toFixed(1)}/s</span>
+                  <span className="service-stat-value">
+                    {service_stats.decode_rate.toFixed(1)}/s
+                  </span>
                 </div>
               )}
             </div>
@@ -411,7 +440,7 @@ export function AcarsStats({ apiBase, wsRequest, wsConnected }) {
                     className="distribution-bar"
                     style={{
                       width: `${pct}%`,
-                      backgroundColor: typeColors[i % typeColors.length]
+                      backgroundColor: typeColors[i % typeColors.length],
                     }}
                   />
                   <span className="distribution-label">{type.label}</span>

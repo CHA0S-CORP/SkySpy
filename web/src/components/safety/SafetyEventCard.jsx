@@ -12,12 +12,7 @@ import { AlertTriangle, Plane, ExternalLink, ArrowRight, Check } from 'lucide-re
  * - Prominent separation metrics
  * - Clear CTA button
  */
-export function SafetyEventCard({
-  event,
-  onSelectAircraft,
-  onViewEvent,
-  className = ''
-}) {
+export function SafetyEventCard({ event, onSelectAircraft, onViewEvent, className = '' }) {
   const getSeverityConfig = (severity) => {
     switch (severity) {
       case 'critical':
@@ -104,9 +99,7 @@ export function SafetyEventCard({
           <div className="sec-metrics">
             {event.details?.horizontal_nm && (
               <div className="sec-metric">
-                <span className="sec-metric-value">
-                  {event.details.horizontal_nm.toFixed(1)}
-                </span>
+                <span className="sec-metric-value">{event.details.horizontal_nm.toFixed(1)}</span>
                 <span className="sec-metric-unit">nm</span>
               </div>
             )}

@@ -9,8 +9,18 @@ import { LayoutDashboard, MessageSquare, AlertTriangle, Map as MapIcon } from 'l
  * - Track: Combined History + Track (all positional/temporal data)
  */
 const TAB_CONFIG = [
-  { id: 'overview', label: 'Overview', icon: LayoutDashboard, ariaLabel: 'Overview (info and live status)' },
-  { id: 'communications', label: 'Comms', icon: MessageSquare, ariaLabel: 'Communications (radio and ACARS)' },
+  {
+    id: 'overview',
+    label: 'Overview',
+    icon: LayoutDashboard,
+    ariaLabel: 'Overview (info and live status)',
+  },
+  {
+    id: 'communications',
+    label: 'Comms',
+    icon: MessageSquare,
+    ariaLabel: 'Communications (radio and ACARS)',
+  },
   { id: 'safety', label: 'Safety', icon: AlertTriangle, ariaLabel: 'Safety events', isAlert: true },
   { id: 'track', label: 'Track', icon: MapIcon, ariaLabel: 'Track and history' },
 ];
@@ -20,7 +30,7 @@ export function TabNavigation({
   onTabChange,
   radioCount = 0,
   acarsCount = 0,
-  safetyCount = 0
+  safetyCount = 0,
 }) {
   const tabListRef = useRef(null);
   const [showLeftFade, setShowLeftFade] = useState(false);
@@ -47,28 +57,31 @@ export function TabNavigation({
   }, [updateFadeIndicators]);
 
   // Keyboard navigation
-  const handleKeyDown = useCallback((e) => {
-    const tabs = TAB_CONFIG.map(t => t.id);
-    const currentIndex = tabs.indexOf(activeTab);
+  const handleKeyDown = useCallback(
+    (e) => {
+      const tabs = TAB_CONFIG.map((t) => t.id);
+      const currentIndex = tabs.indexOf(activeTab);
 
-    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-      e.preventDefault();
-      const direction = e.key === 'ArrowRight' ? 1 : -1;
-      const newIndex = (currentIndex + direction + tabs.length) % tabs.length;
-      onTabChange(tabs[newIndex]);
-      // Focus the new tab button
-      const buttons = tabListRef.current?.querySelectorAll('[role="tab"]');
-      buttons?.[newIndex]?.focus();
-    } else if (e.key === 'Home') {
-      e.preventDefault();
-      onTabChange(tabs[0]);
-      tabListRef.current?.querySelectorAll('[role="tab"]')?.[0]?.focus();
-    } else if (e.key === 'End') {
-      e.preventDefault();
-      onTabChange(tabs[tabs.length - 1]);
-      tabListRef.current?.querySelectorAll('[role="tab"]')?.[tabs.length - 1]?.focus();
-    }
-  }, [activeTab, onTabChange]);
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const direction = e.key === 'ArrowRight' ? 1 : -1;
+        const newIndex = (currentIndex + direction + tabs.length) % tabs.length;
+        onTabChange(tabs[newIndex]);
+        // Focus the new tab button
+        const buttons = tabListRef.current?.querySelectorAll('[role="tab"]');
+        buttons?.[newIndex]?.focus();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        onTabChange(tabs[0]);
+        tabListRef.current?.querySelectorAll('[role="tab"]')?.[0]?.focus();
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        onTabChange(tabs[tabs.length - 1]);
+        tabListRef.current?.querySelectorAll('[role="tab"]')?.[tabs.length - 1]?.focus();
+      }
+    },
+    [activeTab, onTabChange]
+  );
 
   const getTabBadge = (tabId) => {
     switch (tabId) {
@@ -85,7 +98,9 @@ export function TabNavigation({
   };
 
   return (
-    <div className={`detail-tabs-wrapper ${showLeftFade ? 'fade-left' : ''} ${showRightFade ? 'fade-right' : ''}`}>
+    <div
+      className={`detail-tabs-wrapper ${showLeftFade ? 'fade-left' : ''} ${showRightFade ? 'fade-right' : ''}`}
+    >
       <nav
         ref={tabListRef}
         className="detail-tabs"

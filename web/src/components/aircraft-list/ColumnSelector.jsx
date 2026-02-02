@@ -94,9 +94,7 @@ export const ColumnSelector = memo(function ColumnSelector({
                     checked={isVisible}
                     onChange={() => onToggleColumn(column.id)}
                   />
-                  <span className="al-column-checkbox">
-                    {isVisible && <Check size={12} />}
-                  </span>
+                  <span className="al-column-checkbox">{isVisible && <Check size={12} />}</span>
                   <span className="al-column-name">{column.label}</span>
                 </label>
               );
@@ -106,10 +104,7 @@ export const ColumnSelector = memo(function ColumnSelector({
           <div className="al-column-divider" />
 
           {/* Reset Button */}
-          <button
-            className="al-column-reset"
-            onClick={() => onSetPreset('default')}
-          >
+          <button className="al-column-reset" onClick={() => onSetPreset('default')}>
             <RotateCcw size={14} />
             Reset to Default
           </button>

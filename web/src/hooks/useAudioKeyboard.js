@@ -1,5 +1,9 @@
 import { useEffect, useCallback } from 'react';
-import { getGlobalAudioState, subscribeToAudioStateChanges, setAutoplay as setGlobalAutoplay } from '../components/views/AudioView';
+import {
+  getGlobalAudioState,
+  subscribeToAudioStateChanges,
+  setAutoplay as setGlobalAutoplay,
+} from '../components/views/AudioView';
 
 /**
  * Hook for global keyboard shortcuts for audio playback control.
@@ -52,7 +56,7 @@ export function useAudioKeyboard(options = {}) {
       const audio = audioState.audioRefs?.[playingId];
       if (audio) {
         if (audio.paused) {
-          audio.play().catch(err => console.warn('Audio play failed:', err));
+          audio.play().catch((err) => console.warn('Audio play failed:', err));
         } else {
           audio.pause();
         }
@@ -137,10 +141,12 @@ export function useAudioKeyboard(options = {}) {
       audioState.playingId = null;
       audioState.currentTransmission = null;
       // Notify subscribers
-      audioState.subscribers.forEach(callback => callback({
-        playingId: null,
-        currentTransmission: null,
-      }));
+      audioState.subscribers.forEach((callback) =>
+        callback({
+          playingId: null,
+          currentTransmission: null,
+        })
+      );
     }
     // Also disable autoplay
     setGlobalAutoplay(false);
@@ -154,9 +160,7 @@ export function useAudioKeyboard(options = {}) {
     if (recentTransmissions.length === 0) return;
 
     // Find current index
-    const currentIndex = playingId
-      ? recentTransmissions.findIndex(t => t.id === playingId)
-      : -1;
+    const currentIndex = playingId ? recentTransmissions.findIndex((t) => t.id === playingId) : -1;
 
     // Get next transmission (older, since list is newest first)
     const nextIndex = currentIndex + 1;
@@ -177,7 +181,7 @@ export function useAudioKeyboard(options = {}) {
 
     // Find current index
     const currentIndex = playingId
-      ? recentTransmissions.findIndex(t => t.id === playingId)
+      ? recentTransmissions.findIndex((t) => t.id === playingId)
       : recentTransmissions.length;
 
     // Get previous transmission (newer, since list is newest first)
@@ -221,9 +225,11 @@ export function useAudioKeyboard(options = {}) {
 
       audio.addEventListener('loadedmetadata', () => {
         audioState.audioDurations[id] = audio.duration;
-        audioState.subscribers.forEach(callback => callback({
-          audioDurations: { ...audioState.audioDurations }
-        }));
+        audioState.subscribers.forEach((callback) =>
+          callback({
+            audioDurations: { ...audioState.audioDurations },
+          })
+        );
       });
 
       audio.addEventListener('ended', () => {
@@ -234,46 +240,57 @@ export function useAudioKeyboard(options = {}) {
           clearInterval(audioState.progressIntervalRef);
           audioState.progressIntervalRef = null;
         }
-        audioState.subscribers.forEach(callback => callback({
-          playingId: null,
-          currentTransmission: null,
-          audioProgress: { ...audioState.audioProgress }
-        }));
+        audioState.subscribers.forEach((callback) =>
+          callback({
+            playingId: null,
+            currentTransmission: null,
+            audioProgress: { ...audioState.audioProgress },
+          })
+        );
       });
 
       audio.addEventListener('error', (e) => {
         console.error('Audio playback error:', e);
         audioState.playingId = null;
         audioState.currentTransmission = null;
-        audioState.subscribers.forEach(callback => callback({
-          playingId: null,
-          currentTransmission: null
-        }));
+        audioState.subscribers.forEach((callback) =>
+          callback({
+            playingId: null,
+            currentTransmission: null,
+          })
+        );
       });
     }
 
     // Play
-    audio.play().then(() => {
-      audioState.playingId = id;
-      audioState.currentTransmission = transmission;
-      audioState.subscribers.forEach(callback => callback({
-        playingId: id,
-        currentTransmission: transmission
-      }));
+    audio
+      .play()
+      .then(() => {
+        audioState.playingId = id;
+        audioState.currentTransmission = transmission;
+        audioState.subscribers.forEach((callback) =>
+          callback({
+            playingId: id,
+            currentTransmission: transmission,
+          })
+        );
 
-      // Update progress
-      audioState.progressIntervalRef = setInterval(() => {
-        if (audio && !audio.paused && isFinite(audio.duration) && audio.duration > 0) {
-          const progress = (audio.currentTime / audio.duration) * 100 || 0;
-          audioState.audioProgress[id] = progress;
-          audioState.subscribers.forEach(callback => callback({
-            audioProgress: { ...audioState.audioProgress }
-          }));
-        }
-      }, 100);
-    }).catch(err => {
-      console.error('Failed to play audio:', err);
-    });
+        // Update progress
+        audioState.progressIntervalRef = setInterval(() => {
+          if (audio && !audio.paused && isFinite(audio.duration) && audio.duration > 0) {
+            const progress = (audio.currentTime / audio.duration) * 100 || 0;
+            audioState.audioProgress[id] = progress;
+            audioState.subscribers.forEach((callback) =>
+              callback({
+                audioProgress: { ...audioState.audioProgress },
+              })
+            );
+          }
+        }, 100);
+      })
+      .catch((err) => {
+        console.error('Failed to play audio:', err);
+      });
   }, []);
 
   // Check if the target is an input element
@@ -290,122 +307,126 @@ export function useAudioKeyboard(options = {}) {
   }, []);
 
   // Keyboard event handler
-  const handleKeyDown = useCallback((event) => {
-    // Don't handle if shortcuts are disabled
-    if (!enabled) return;
+  const handleKeyDown = useCallback(
+    (event) => {
+      // Don't handle if shortcuts are disabled
+      if (!enabled) return;
 
-    // Don't handle if typing in an input field
-    if (isInputElement(event.target)) return;
+      // Don't handle if typing in an input field
+      if (isInputElement(event.target)) return;
 
-    // Don't handle if modifier keys are pressed (except for some shortcuts)
-    if (event.ctrlKey || event.metaKey || event.altKey) return;
+      // Don't handle if modifier keys are pressed (except for some shortcuts)
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
 
-    const audioState = getGlobalAudioState();
-    const hasActivePlayback = !!audioState.playingId;
-    const hasAudioCapability = hasActivePlayback || audioState.autoplay || audioState.recentTransmissions?.length > 0;
+      const audioState = getGlobalAudioState();
+      const hasActivePlayback = !!audioState.playingId;
+      const hasAudioCapability =
+        hasActivePlayback || audioState.autoplay || audioState.recentTransmissions?.length > 0;
 
-    // Handle keyboard shortcuts
-    switch (event.key) {
-      case ' ': // Space - Play/Pause
-        if (hasActivePlayback) {
+      // Handle keyboard shortcuts
+      switch (event.key) {
+        case ' ': // Space - Play/Pause
+          if (hasActivePlayback) {
+            event.preventDefault();
+            (onPlayPause || defaultPlayPause)();
+          }
+          break;
+
+        case 'n': // N - Next track
+        case 'N':
+          if (hasAudioCapability) {
+            event.preventDefault();
+            (onNextTrack || defaultNextTrack)();
+          }
+          break;
+
+        case 'p': // P - Previous track
+        case 'P':
+          if (hasAudioCapability) {
+            event.preventDefault();
+            (onPrevTrack || defaultPrevTrack)();
+          }
+          break;
+
+        case 'm': // M - Toggle mute
+        case 'M':
+          if (hasActivePlayback) {
+            event.preventDefault();
+            (onToggleMute || defaultToggleMute)();
+          }
+          break;
+
+        case 'a': // A - Toggle autoplay
+        case 'A':
           event.preventDefault();
-          (onPlayPause || defaultPlayPause)();
-        }
-        break;
+          (onToggleAutoplay || defaultToggleAutoplay)();
+          break;
 
-      case 'n': // N - Next track
-      case 'N':
-        if (hasAudioCapability) {
-          event.preventDefault();
-          (onNextTrack || defaultNextTrack)();
-        }
-        break;
+        case 'ArrowLeft': // Left arrow - Seek backward 5 seconds
+          if (hasActivePlayback) {
+            event.preventDefault();
+            (onSeekBackward || defaultSeekBackward)(5);
+          }
+          break;
 
-      case 'p': // P - Previous track
-      case 'P':
-        if (hasAudioCapability) {
-          event.preventDefault();
-          (onPrevTrack || defaultPrevTrack)();
-        }
-        break;
+        case 'ArrowRight': // Right arrow - Seek forward 5 seconds
+          if (hasActivePlayback) {
+            event.preventDefault();
+            (onSeekForward || defaultSeekForward)(5);
+          }
+          break;
 
-      case 'm': // M - Toggle mute
-      case 'M':
-        if (hasActivePlayback) {
-          event.preventDefault();
-          (onToggleMute || defaultToggleMute)();
-        }
-        break;
+        case 'ArrowUp': // Up arrow - Volume up 10%
+          if (hasActivePlayback) {
+            event.preventDefault();
+            (onVolumeUp || defaultVolumeUp)(0.1);
+          }
+          break;
 
-      case 'a': // A - Toggle autoplay
-      case 'A':
-        event.preventDefault();
-        (onToggleAutoplay || defaultToggleAutoplay)();
-        break;
+        case 'ArrowDown': // Down arrow - Volume down 10%
+          if (hasActivePlayback) {
+            event.preventDefault();
+            (onVolumeDown || defaultVolumeDown)(0.1);
+          }
+          break;
 
-      case 'ArrowLeft': // Left arrow - Seek backward 5 seconds
-        if (hasActivePlayback) {
-          event.preventDefault();
-          (onSeekBackward || defaultSeekBackward)(5);
-        }
-        break;
+        case 'Escape': // Escape - Stop playback
+          if (hasActivePlayback) {
+            event.preventDefault();
+            (onStop || defaultStop)();
+          }
+          break;
 
-      case 'ArrowRight': // Right arrow - Seek forward 5 seconds
-        if (hasActivePlayback) {
-          event.preventDefault();
-          (onSeekForward || defaultSeekForward)(5);
-        }
-        break;
-
-      case 'ArrowUp': // Up arrow - Volume up 10%
-        if (hasActivePlayback) {
-          event.preventDefault();
-          (onVolumeUp || defaultVolumeUp)(0.1);
-        }
-        break;
-
-      case 'ArrowDown': // Down arrow - Volume down 10%
-        if (hasActivePlayback) {
-          event.preventDefault();
-          (onVolumeDown || defaultVolumeDown)(0.1);
-        }
-        break;
-
-      case 'Escape': // Escape - Stop playback
-        if (hasActivePlayback) {
-          event.preventDefault();
-          (onStop || defaultStop)();
-        }
-        break;
-
-      default:
-        // Don't handle other keys
-        break;
-    }
-  }, [
-    enabled,
-    isInputElement,
-    onPlayPause,
-    onNextTrack,
-    onPrevTrack,
-    onToggleMute,
-    onToggleAutoplay,
-    onSeekForward,
-    onSeekBackward,
-    onVolumeUp,
-    onVolumeDown,
-    onStop,
-    defaultPlayPause,
-    defaultNextTrack,
-    defaultPrevTrack,
-    defaultToggleMute,
-    defaultToggleAutoplay,
-    defaultSeekForward,
-    defaultSeekBackward,
-    defaultVolumeUp,
-    defaultVolumeDown,
-    defaultStop,
-  ]);
+        default:
+          // Don't handle other keys
+          break;
+      }
+    },
+    [
+      enabled,
+      isInputElement,
+      onPlayPause,
+      onNextTrack,
+      onPrevTrack,
+      onToggleMute,
+      onToggleAutoplay,
+      onSeekForward,
+      onSeekBackward,
+      onVolumeUp,
+      onVolumeDown,
+      onStop,
+      defaultPlayPause,
+      defaultNextTrack,
+      defaultPrevTrack,
+      defaultToggleMute,
+      defaultToggleAutoplay,
+      defaultSeekForward,
+      defaultSeekBackward,
+      defaultVolumeUp,
+      defaultVolumeDown,
+      defaultStop,
+    ]
+  );
 
   // Set up global keydown listener
   useEffect(() => {

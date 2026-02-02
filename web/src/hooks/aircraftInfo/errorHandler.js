@@ -23,7 +23,7 @@ export function createErrorManager(initialErrors = {}) {
   const listeners = new Set();
 
   function notifyListeners() {
-    listeners.forEach(cb => cb({ ...errors }));
+    listeners.forEach((cb) => cb({ ...errors }));
   }
 
   return {
@@ -46,7 +46,7 @@ export function createErrorManager(initialErrors = {}) {
         [icao]: {
           ...errorInfo,
           timestamp: errorInfo.timestamp || new Date().toISOString(),
-        }
+        },
       };
       notifyListeners();
     },

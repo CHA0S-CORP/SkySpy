@@ -39,9 +39,8 @@ export const HeadsUpDisplay = memo(function HeadsUpDisplay({
   const distance = formatDistance(threat.distance_nm);
 
   // Calculate relative bearing
-  const rotation = userHeading !== null
-    ? (threat.bearing - userHeading + 360) % 360
-    : threat.bearing;
+  const rotation =
+    userHeading !== null ? (threat.bearing - userHeading + 360) % 360 : threat.bearing;
 
   return (
     <div className={`heads-up-display threat-level-${threatLevel}`}>

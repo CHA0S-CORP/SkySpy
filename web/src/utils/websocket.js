@@ -26,7 +26,9 @@ export const RECONNECT_CONFIG = {
 export function getWebSocketUrl(apiBase, path) {
   try {
     // Parse the base URL
-    const url = apiBase ? new URL(apiBase, window.location.origin) : new URL(window.location.origin);
+    const url = apiBase
+      ? new URL(apiBase, window.location.origin)
+      : new URL(window.location.origin);
 
     // Convert protocol to WebSocket protocol
     const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';

@@ -53,7 +53,7 @@ export function useCannonballSettings() {
 
   // Update a single setting
   const updateSetting = useCallback((key, value) => {
-    setSettings(prev => {
+    setSettings((prev) => {
       const newSettings = { ...prev, [key]: value };
       saveSettings(newSettings);
       return newSettings;

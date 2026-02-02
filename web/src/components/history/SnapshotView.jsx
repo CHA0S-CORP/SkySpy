@@ -19,10 +19,7 @@ export function SnapshotView({ snapshot, label, onSelectAircraft }) {
         {snapshot.hex && (
           <div className="snapshot-item">
             <span>ICAO</span>
-            <span
-              className="icao-link"
-              onClick={() => onSelectAircraft?.(snapshot.hex)}
-            >
+            <span className="icao-link" onClick={() => onSelectAircraft?.(snapshot.hex)}>
               {snapshot.hex}
             </span>
           </div>
@@ -66,13 +63,19 @@ export function SnapshotView({ snapshot, label, onSelectAircraft }) {
         {snapshot.baro_rate && (
           <div className="snapshot-item">
             <span>Baro Rate</span>
-            <span>{snapshot.baro_rate > 0 ? '+' : ''}{snapshot.baro_rate} fpm</span>
+            <span>
+              {snapshot.baro_rate > 0 ? '+' : ''}
+              {snapshot.baro_rate} fpm
+            </span>
           </div>
         )}
         {snapshot.geom_rate && (
           <div className="snapshot-item">
             <span>Geom Rate</span>
-            <span>{snapshot.geom_rate > 0 ? '+' : ''}{snapshot.geom_rate} fpm</span>
+            <span>
+              {snapshot.geom_rate > 0 ? '+' : ''}
+              {snapshot.geom_rate} fpm
+            </span>
           </div>
         )}
         {snapshot.squawk && (

@@ -27,13 +27,17 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 20px rgba(74, 222, 128, 0.2);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(74, 222, 128, 0.2);
   transition: all 0.2s ease;
 }
 
 .mobile-menu-toggle:hover {
   transform: scale(1.05);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), 0 0 25px rgba(74, 222, 128, 0.3);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.5),
+    0 0 25px rgba(74, 222, 128, 0.3);
   border-color: var(--brand-green);
 }
 
@@ -590,8 +594,8 @@
   }
 
   /* Hide pin button on mobile - not needed */
-  .pro-details-panel .pro-panel-btn[title*="Pin"],
-  .pro-details-panel .pro-panel-btn[title*="Unpin"] {
+  .pro-details-panel .pro-panel-btn[title*='Pin'],
+  .pro-details-panel .pro-panel-btn[title*='Unpin'] {
     display: none !important;
   }
 
@@ -1842,7 +1846,7 @@
   }
 
   /* Hide non-essential telemetry in compact mode */
-  .al-card.compact .al-card-telem-item:nth-child(n+4) {
+  .al-card.compact .al-card-telem-item:nth-child(n + 4) {
     display: none;
   }
 

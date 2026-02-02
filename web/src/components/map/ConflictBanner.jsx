@@ -11,19 +11,19 @@ export const ConflictBanner = memo(function ConflictBanner({
   onAcknowledge,
   onSelectAircraft,
   soundMuted,
-  onToggleMute
+  onToggleMute,
 }) {
   // Filter to proximity conflicts that are not acknowledged
-  const proximityConflicts = safetyEvents.filter(e =>
-    e.event_type === 'proximity_conflict' && !acknowledgedEvents?.has(e.id)
+  const proximityConflicts = safetyEvents.filter(
+    (e) => e.event_type === 'proximity_conflict' && !acknowledgedEvents?.has(e.id)
   );
 
   if (proximityConflicts.length === 0) return null;
 
   // Get highest severity
-  const highestSeverity = proximityConflicts.some(c => c.severity === 'critical')
+  const highestSeverity = proximityConflicts.some((c) => c.severity === 'critical')
     ? 'critical'
-    : proximityConflicts.some(c => c.severity === 'warning')
+    : proximityConflicts.some((c) => c.severity === 'warning')
       ? 'warning'
       : 'info';
 
@@ -52,10 +52,7 @@ export const ConflictBanner = memo(function ConflictBanner({
           const altDiff = details.altitude_diff_ft || 0;
 
           return (
-            <div
-              key={event.id}
-              className={`conflict-item severity-${event.severity}`}
-            >
+            <div key={event.id} className={`conflict-item severity-${event.severity}`}>
               <div className="conflict-aircraft">
                 <span
                   className="conflict-callsign clickable"
@@ -73,13 +70,9 @@ export const ConflictBanner = memo(function ConflictBanner({
               </div>
 
               <div className="conflict-separation">
-                <span className="horizontal">
-                  {distanceNm.toFixed(1)} nm
-                </span>
+                <span className="horizontal">{distanceNm.toFixed(1)} nm</span>
                 <span className="separator">|</span>
-                <span className="vertical">
-                  {altDiff.toLocaleString()} ft
-                </span>
+                <span className="vertical">{altDiff.toLocaleString()} ft</span>
               </div>
 
               <div className="conflict-altitudes">

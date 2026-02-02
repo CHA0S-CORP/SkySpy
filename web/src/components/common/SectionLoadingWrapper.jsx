@@ -16,7 +16,7 @@ export function SectionLoadingWrapper({
   children,
   skeleton,
   onRetry,
-  minHeight = '100px'
+  minHeight = '100px',
 }) {
   if (loading) {
     if (skeleton) {
@@ -62,7 +62,10 @@ export function SectionSkeleton({ rows = 3, showHeader = true }) {
       <div className="skeleton-content">
         {Array.from({ length: rows }).map((_, i) => (
           <div key={i} className="skeleton-row">
-            <div className="skeleton skeleton-text" style={{ width: `${70 + Math.random() * 30}%`, height: '14px' }} />
+            <div
+              className="skeleton skeleton-text"
+              style={{ width: `${70 + Math.random() * 30}%`, height: '14px' }}
+            />
           </div>
         ))}
       </div>
@@ -77,12 +80,18 @@ export function CardSkeleton({ showIcon = true, rows = 2 }) {
   return (
     <div className="card-skeleton">
       <div className="card-skeleton-header">
-        {showIcon && <div className="skeleton skeleton-circle" style={{ width: '24px', height: '24px' }} />}
+        {showIcon && (
+          <div className="skeleton skeleton-circle" style={{ width: '24px', height: '24px' }} />
+        )}
         <div className="skeleton skeleton-text" style={{ width: '100px', height: '14px' }} />
       </div>
       <div className="card-skeleton-content">
         {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="skeleton skeleton-text" style={{ width: `${50 + Math.random() * 40}%`, height: '20px' }} />
+          <div
+            key={i}
+            className="skeleton skeleton-text"
+            style={{ width: `${50 + Math.random() * 40}%`, height: '20px' }}
+          />
         ))}
       </div>
     </div>

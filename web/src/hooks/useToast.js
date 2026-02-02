@@ -45,7 +45,7 @@ export function useToast() {
       timeoutsRef.current.delete(id);
     }
     if (mountedRef.current) {
-      setToasts(prev => prev.filter(toast => toast.id !== id));
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
     }
   }, []);
 
@@ -60,32 +60,35 @@ export function useToast() {
    * @param {Function} options.onAction - Handler for action button click
    * @returns {number} The toast ID
    */
-  const addToast = useCallback((message, type = TOAST_TYPES.INFO, duration = 3000, options = {}) => {
-    const id = generateId();
-    const toast = {
-      id,
-      message,
-      type,
-      duration,
-      createdAt: Date.now(),
-      onClick: options.onClick,
-      actionLabel: options.actionLabel,
-      onAction: options.onAction,
-    };
+  const addToast = useCallback(
+    (message, type = TOAST_TYPES.INFO, duration = 3000, options = {}) => {
+      const id = generateId();
+      const toast = {
+        id,
+        message,
+        type,
+        duration,
+        createdAt: Date.now(),
+        onClick: options.onClick,
+        actionLabel: options.actionLabel,
+        onAction: options.onAction,
+      };
 
-    setToasts(prev => [...prev, toast]);
+      setToasts((prev) => [...prev, toast]);
 
-    // Auto-dismiss after duration (if duration > 0)
-    if (duration > 0) {
-      const timeoutId = setTimeout(() => {
-        timeoutsRef.current.delete(id);
-        removeToast(id);
-      }, duration);
-      timeoutsRef.current.set(id, timeoutId);
-    }
+      // Auto-dismiss after duration (if duration > 0)
+      if (duration > 0) {
+        const timeoutId = setTimeout(() => {
+          timeoutsRef.current.delete(id);
+          removeToast(id);
+        }, duration);
+        timeoutsRef.current.set(id, timeoutId);
+      }
 
-    return id;
-  }, [removeToast]);
+      return id;
+    },
+    [removeToast]
+  );
 
   /**
    * Remove all toasts
@@ -95,10 +98,22 @@ export function useToast() {
   }, []);
 
   // Convenience methods for different toast types
-  const success = useCallback((message, duration) => addToast(message, TOAST_TYPES.SUCCESS, duration), [addToast]);
-  const error = useCallback((message, duration) => addToast(message, TOAST_TYPES.ERROR, duration), [addToast]);
-  const warning = useCallback((message, duration) => addToast(message, TOAST_TYPES.WARNING, duration), [addToast]);
-  const info = useCallback((message, duration) => addToast(message, TOAST_TYPES.INFO, duration), [addToast]);
+  const success = useCallback(
+    (message, duration) => addToast(message, TOAST_TYPES.SUCCESS, duration),
+    [addToast]
+  );
+  const error = useCallback(
+    (message, duration) => addToast(message, TOAST_TYPES.ERROR, duration),
+    [addToast]
+  );
+  const warning = useCallback(
+    (message, duration) => addToast(message, TOAST_TYPES.WARNING, duration),
+    [addToast]
+  );
+  const info = useCallback(
+    (message, duration) => addToast(message, TOAST_TYPES.INFO, duration),
+    [addToast]
+  );
 
   return {
     toasts,

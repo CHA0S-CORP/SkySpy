@@ -43,8 +43,12 @@
 }
 
 @keyframes radar-rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Concentric rings */
@@ -68,8 +72,13 @@
 }
 
 @keyframes ring-pulse {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 /* Crosshairs */
@@ -179,11 +188,7 @@
   position: relative;
   width: 100%;
   max-width: 420px;
-  background: linear-gradient(
-    165deg,
-    rgba(21, 27, 36, 0.95) 0%,
-    rgba(13, 17, 23, 0.98) 100%
-  );
+  background: linear-gradient(165deg, rgba(21, 27, 36, 0.95) 0%, rgba(13, 17, 23, 0.98) 100%);
   border-radius: 20px;
   border: 1px solid rgba(0, 212, 255, 0.15);
   box-shadow:
@@ -226,8 +231,12 @@
 }
 
 @keyframes card-glow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* =============================================================================
@@ -239,11 +248,7 @@
   padding: 2.5rem 2rem 1.5rem;
   text-align: center;
   border-bottom: 1px solid rgba(0, 212, 255, 0.1);
-  background: linear-gradient(
-    180deg,
-    rgba(0, 212, 255, 0.03) 0%,
-    transparent 100%
-  );
+  background: linear-gradient(180deg, rgba(0, 212, 255, 0.03) 0%, transparent 100%);
 }
 
 .skyspy-logo {
@@ -499,12 +504,7 @@
   content: '';
   flex: 1;
   height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(90, 122, 154, 0.3) 50%,
-    transparent 100%
-  );
+  background: linear-gradient(90deg, transparent 0%, rgba(90, 122, 154, 0.3) 50%, transparent 100%);
 }
 
 .login-divider span {
@@ -537,11 +537,22 @@
 }
 
 @keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  20% { transform: translateX(-8px); }
-  40% { transform: translateX(8px); }
-  60% { transform: translateX(-4px); }
-  80% { transform: translateX(4px); }
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-8px);
+  }
+  40% {
+    transform: translateX(8px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
 }
 
 /* =============================================================================
@@ -552,11 +563,7 @@
   padding: 1.25rem 2rem 1.75rem;
   text-align: center;
   border-top: 1px solid rgba(90, 122, 154, 0.1);
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgba(0, 0, 0, 0.2) 100%
-  );
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.2) 100%);
 }
 
 .footer-stats {
@@ -645,8 +652,15 @@
 }
 
 @keyframes loading-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.95); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.95);
+  }
 }
 
 .login-loading span {
@@ -682,8 +696,12 @@
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* =============================================================================

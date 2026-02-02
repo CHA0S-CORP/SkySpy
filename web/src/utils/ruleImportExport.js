@@ -6,8 +6,17 @@ const EXPORT_VERSION = '1.0';
 
 // Valid condition types from RuleForm.jsx
 const VALID_CONDITION_TYPES = [
-  'callsign', 'hex', 'squawk', 'altitude_above', 'altitude_below',
-  'speed_above', 'speed_below', 'distance_within', 'military', 'emergency', 'type'
+  'callsign',
+  'hex',
+  'squawk',
+  'altitude_above',
+  'altitude_below',
+  'speed_above',
+  'speed_below',
+  'distance_within',
+  'military',
+  'emergency',
+  'type',
 ];
 
 const VALID_OPERATORS = ['equals', 'contains', 'starts_with'];
@@ -23,9 +32,10 @@ export function exportRule(rule) {
     priority: rule.priority || rule.severity || 'info',
     enabled: rule.enabled !== false,
     conditions: rule.conditions || [],
-    cooldown_minutes: typeof rule.cooldown === 'number'
-      ? Math.round(rule.cooldown / 60)
-      : (rule.cooldown_minutes || 5),
+    cooldown_minutes:
+      typeof rule.cooldown === 'number'
+        ? Math.round(rule.cooldown / 60)
+        : rule.cooldown_minutes || 5,
   };
 }
 
@@ -59,7 +69,7 @@ export function exportSingleRule(rule) {
 export function downloadAsCsv(rules, filename) {
   const headers = ['name', 'description', 'priority', 'enabled', 'cooldown_minutes', 'conditions'];
 
-  const rows = rules.map(rule => {
+  const rows = rules.map((rule) => {
     const exportedRule = exportRule(rule);
     return [
       escapeCsvField(exportedRule.name),
@@ -71,10 +81,7 @@ export function downloadAsCsv(rules, filename) {
     ];
   });
 
-  const csvContent = [
-    headers.join(','),
-    ...rows.map(row => row.join(','))
-  ].join('\n');
+  const csvContent = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -147,17 +154,24 @@ function validateCondition(condition, index) {
   }
 
   if (!condition.type || !VALID_CONDITION_TYPES.includes(condition.type)) {
-    errors.push(`Condition ${index + 1}: Invalid type "${condition.type}". Valid types: ${VALID_CONDITION_TYPES.join(', ')}`);
+    errors.push(
+      `Condition ${index + 1}: Invalid type "${condition.type}". Valid types: ${VALID_CONDITION_TYPES.join(', ')}`
+    );
   }
 
   // Boolean types don't need values
   if (!['military', 'emergency'].includes(condition.type)) {
     if (condition.operator && !VALID_OPERATORS.includes(condition.operator)) {
-      errors.push(`Condition ${index + 1}: Invalid operator "${condition.operator}". Valid operators: ${VALID_OPERATORS.join(', ')}`);
+      errors.push(
+        `Condition ${index + 1}: Invalid operator "${condition.operator}". Valid operators: ${VALID_OPERATORS.join(', ')}`
+      );
     }
 
-    if (condition.value === undefined || condition.value === null ||
-        (typeof condition.value === 'string' && condition.value.trim() === '')) {
+    if (
+      condition.value === undefined ||
+      condition.value === null ||
+      (typeof condition.value === 'string' && condition.value.trim() === '')
+    ) {
       errors.push(`Condition ${index + 1}: Value is required for type "${condition.type}"`);
     }
   }
@@ -186,7 +200,9 @@ function validateRule(rule, index) {
 
   // Optional but validated fields
   if (rule.priority && !VALID_PRIORITIES.includes(rule.priority)) {
-    errors.push(`${ruleLabel}: Invalid priority "${rule.priority}". Valid values: ${VALID_PRIORITIES.join(', ')}`);
+    errors.push(
+      `${ruleLabel}: Invalid priority "${rule.priority}". Valid values: ${VALID_PRIORITIES.join(', ')}`
+    );
   }
 
   // Conditions validation
@@ -199,7 +215,7 @@ function validateRule(rule, index) {
   } else {
     rule.conditions.forEach((condition, condIndex) => {
       const conditionErrors = validateCondition(condition, condIndex);
-      errors.push(...conditionErrors.map(e => `${ruleLabel} - ${e}`));
+      errors.push(...conditionErrors.map((e) => `${ruleLabel} - ${e}`));
     });
   }
 
@@ -241,7 +257,9 @@ export function validateImportedRules(data) {
 
     // Version check (warning only)
     if (data.version && data.version !== EXPORT_VERSION) {
-      errors.push(`Warning: File was exported with version ${data.version}, current version is ${EXPORT_VERSION}`);
+      errors.push(
+        `Warning: File was exported with version ${data.version}, current version is ${EXPORT_VERSION}`
+      );
     }
   } else {
     return {
@@ -266,7 +284,7 @@ export function validateImportedRules(data) {
   });
 
   // Filter out warnings for validity check
-  const criticalErrors = errors.filter(e => !e.startsWith('Warning:'));
+  const criticalErrors = errors.filter((e) => !e.startsWith('Warning:'));
 
   return {
     valid: criticalErrors.length === 0,
@@ -344,14 +362,12 @@ export function convertToApiFormat(rule) {
     enabled: rule.enabled !== false,
     severity: rule.priority || 'info',
     priority: rule.priority || 'info',
-    conditions: rule.conditions.map(c => ({
+    conditions: rule.conditions.map((c) => ({
       type: c.type,
       operator: c.operator || 'equals',
       value: c.value ?? '',
     })),
-    cooldown: typeof rule.cooldown_minutes === 'number'
-      ? rule.cooldown_minutes * 60
-      : 300, // Default 5 minutes in seconds
+    cooldown: typeof rule.cooldown_minutes === 'number' ? rule.cooldown_minutes * 60 : 300, // Default 5 minutes in seconds
   };
 }
 
@@ -359,11 +375,11 @@ export function convertToApiFormat(rule) {
  * Check for duplicate rules by name
  */
 export function findDuplicates(importedRules, existingRules) {
-  const existingNames = new Set(existingRules.map(r => r.name.toLowerCase()));
+  const existingNames = new Set(existingRules.map((r) => r.name.toLowerCase()));
   const duplicates = [];
   const unique = [];
 
-  importedRules.forEach(rule => {
+  importedRules.forEach((rule) => {
     if (existingNames.has(rule.name.toLowerCase())) {
       duplicates.push(rule);
     } else {

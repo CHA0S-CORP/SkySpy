@@ -7,7 +7,7 @@ export function formatDate(isoString) {
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    timeZoneName: 'short'
+    timeZoneName: 'short',
   });
 }
 

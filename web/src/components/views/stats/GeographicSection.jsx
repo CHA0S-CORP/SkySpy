@@ -1,8 +1,5 @@
 import React, { useMemo } from 'react';
-import {
-  Globe, Building2, MapPin, Flag, Users,
-  Plane, ExternalLink, Loader2
-} from 'lucide-react';
+import { Globe, Building2, MapPin, Flag, Users, Plane, ExternalLink, Loader2 } from 'lucide-react';
 
 /**
  * GeographicSection - Displays geographic analytics
@@ -11,23 +8,25 @@ import {
  * - Connected airports
  */
 export function GeographicSection({ data, loading, onSelectAircraft }) {
-  const {
-    countries = [],
-    airlines = [],
-    airports = [],
-    regions = []
-  } = data || {};
+  const { countries = [], airlines = [], airports = [], regions = [] } = data || {};
 
   // Colors for countries pie
   const countryColors = [
-    '#00c8ff', '#00ff88', '#a371f7', '#ff9f43',
-    '#f85149', '#f7d794', '#4ecdc4', '#95e1d3',
-    '#a8dadc', '#6b7280'
+    '#00c8ff',
+    '#00ff88',
+    '#a371f7',
+    '#ff9f43',
+    '#f85149',
+    '#f7d794',
+    '#4ecdc4',
+    '#95e1d3',
+    '#a8dadc',
+    '#6b7280',
   ];
 
   // Calculate totals for percentage - must be called before any conditional returns
-  const totalCountryFlights = useMemo(() =>
-    countries.reduce((sum, c) => sum + (c.count || 0), 0) || 1,
+  const totalCountryFlights = useMemo(
+    () => countries.reduce((sum, c) => sum + (c.count || 0), 0) || 1,
     [countries]
   );
 
@@ -37,14 +36,14 @@ export function GeographicSection({ data, loading, onSelectAircraft }) {
     let startAngle = 0;
 
     countries.slice(0, 10).forEach((country, i) => {
-      const percentage = (country.count / totalCountryFlights);
+      const percentage = country.count / totalCountryFlights;
       const angle = percentage * 360;
       segments.push({
         ...country,
         startAngle,
         endAngle: startAngle + angle,
         color: countryColors[i % countryColors.length],
-        percentage: (percentage * 100).toFixed(1)
+        percentage: (percentage * 100).toFixed(1),
       });
       startAngle += angle;
     });
@@ -70,28 +69,39 @@ export function GeographicSection({ data, loading, onSelectAircraft }) {
 
   if (!data) return null;
 
-  const maxAirlineCount = Math.max(...airlines.map(a => a.count || 0), 1);
-  const maxAirportCount = Math.max(...airports.map(a => a.count || 0), 1);
-  const maxRegionCount = Math.max(...regions.map(r => r.count || 0), 1);
+  const maxAirlineCount = Math.max(...airlines.map((a) => a.count || 0), 1);
+  const maxAirportCount = Math.max(...airports.map((a) => a.count || 0), 1);
+  const maxRegionCount = Math.max(...regions.map((r) => r.count || 0), 1);
 
   // SVG arc path helper
   const describeArc = (cx, cy, radius, startAngle, endAngle) => {
     const start = polarToCartesian(cx, cy, radius, endAngle);
     const end = polarToCartesian(cx, cy, radius, startAngle);
-    const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+    const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
     return [
-      "M", cx, cy,
-      "L", start.x, start.y,
-      "A", radius, radius, 0, largeArcFlag, 0, end.x, end.y,
-      "Z"
-    ].join(" ");
+      'M',
+      cx,
+      cy,
+      'L',
+      start.x,
+      start.y,
+      'A',
+      radius,
+      radius,
+      0,
+      largeArcFlag,
+      0,
+      end.x,
+      end.y,
+      'Z',
+    ].join(' ');
   };
 
   const polarToCartesian = (cx, cy, radius, angle) => {
-    const rad = (angle - 90) * Math.PI / 180;
+    const rad = ((angle - 90) * Math.PI) / 180;
     return {
       x: cx + radius * Math.cos(rad),
-      y: cy + radius * Math.sin(rad)
+      y: cy + radius * Math.sin(rad),
     };
   };
 
@@ -123,7 +133,9 @@ export function GeographicSection({ data, loading, onSelectAircraft }) {
                       fill={segment.color}
                       className="pie-segment"
                     >
-                      <title>{segment.country}: {segment.count} ({segment.percentage}%)</title>
+                      <title>
+                        {segment.country}: {segment.count} ({segment.percentage}%)
+                      </title>
                     </path>
                   ))}
                   <circle cx="50" cy="50" r="25" fill="var(--bg-card)" />
@@ -138,10 +150,7 @@ export function GeographicSection({ data, loading, onSelectAircraft }) {
               <div className="countries-legend">
                 {pieSegments.slice(0, 6).map((segment, i) => (
                   <div key={segment.country || i} className="legend-item">
-                    <span
-                      className="legend-dot"
-                      style={{ backgroundColor: segment.color }}
-                    />
+                    <span className="legend-dot" style={{ backgroundColor: segment.color }} />
                     <span className="legend-label">{segment.country || 'Unknown'}</span>
                     <span className="legend-value">{segment.percentage}%</span>
                   </div>
@@ -198,9 +207,7 @@ export function GeographicSection({ data, loading, onSelectAircraft }) {
             <div className="airports-grid">
               {airports.slice(0, 12).map((airport, i) => (
                 <div key={airport.icao || airport.iata || i} className="airport-chip">
-                  <span className="airport-code">
-                    {airport.icao || airport.iata || '????'}
-                  </span>
+                  <span className="airport-code">{airport.icao || airport.iata || '????'}</span>
                   {airport.name && (
                     <span className="airport-name" title={airport.name}>
                       {airport.name.length > 15 ? `${airport.name.slice(0, 15)}...` : airport.name}
@@ -212,9 +219,7 @@ export function GeographicSection({ data, loading, onSelectAircraft }) {
             </div>
           )}
           {airports.length > 12 && (
-            <div className="airports-overflow">
-              +{airports.length - 12} more airports
-            </div>
+            <div className="airports-overflow">+{airports.length - 12} more airports</div>
           )}
         </div>
 

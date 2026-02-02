@@ -8,10 +8,22 @@ export const CARD_HEIGHT_COMPACT = 100;
 
 // Quick filter presets
 export const QUICK_FILTERS = [
-  { id: 'emergency', label: 'Emergency', icon: AlertTriangle, color: 'red', filter: { emergency: true } },
+  {
+    id: 'emergency',
+    label: 'Emergency',
+    icon: AlertTriangle,
+    color: 'red',
+    filter: { emergency: true },
+  },
   { id: 'military', label: 'Military', icon: Shield, color: 'purple', filter: { military: true } },
   { id: 'climbing', label: 'Climbing', icon: ArrowUp, color: 'green', filter: { climbing: true } },
-  { id: 'descending', label: 'Descending', icon: ArrowDown, color: 'orange', filter: { descending: true } },
+  {
+    id: 'descending',
+    label: 'Descending',
+    icon: ArrowDown,
+    color: 'orange',
+    filter: { descending: true },
+  },
   { id: 'ground', label: 'On Ground', icon: Plane, color: 'blue', filter: { onGround: true } },
 ];
 

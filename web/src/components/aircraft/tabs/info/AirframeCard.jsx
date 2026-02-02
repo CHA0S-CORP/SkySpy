@@ -7,15 +7,7 @@ import { InfoRow } from './InfoRow';
  * AirframeCard - Hero card displaying aircraft type and airframe information
  */
 function AirframeCard({ data }) {
-  const {
-    type_name,
-    type_code,
-    manufacturer,
-    model,
-    serial_number,
-    year_built,
-    age_years,
-  } = data;
+  const { type_name, type_code, manufacturer, model, serial_number, year_built, age_years } = data;
 
   // Don't render if no airframe data
   const hasData = type_name || type_code || manufacturer || model || serial_number || year_built;

@@ -35,54 +35,66 @@ export function useAudioFavorites() {
   }, []);
 
   // Check if a transmission is favorited
-  const isFavorite = useCallback((transmissionId) => {
-    return favorites.some(fav => fav.id === transmissionId);
-  }, [favorites]);
+  const isFavorite = useCallback(
+    (transmissionId) => {
+      return favorites.some((fav) => fav.id === transmissionId);
+    },
+    [favorites]
+  );
 
   // Add a transmission to favorites
-  const addFavorite = useCallback((transmission) => {
-    if (!transmission || !transmission.id) return;
+  const addFavorite = useCallback(
+    (transmission) => {
+      if (!transmission || !transmission.id) return;
 
-    // Don't add duplicates
-    if (favorites.some(fav => fav.id === transmission.id)) return;
+      // Don't add duplicates
+      if (favorites.some((fav) => fav.id === transmission.id)) return;
 
-    // Extract relevant fields to store
-    const favoriteItem = {
-      id: transmission.id,
-      callsign: transmission.identified_airframes?.[0]?.callsign || null,
-      timestamp: transmission.created_at || new Date().toISOString(),
-      channel: transmission.channel_name || 'Unknown Channel',
-      frequency_mhz: transmission.frequency_mhz || null,
-      transcript: transmission.transcript || null,
-      s3_url: transmission.s3_url || null,
-      duration_seconds: transmission.duration_seconds || null,
-      identified_airframes: transmission.identified_airframes || [],
-      addedAt: new Date().toISOString(),
-    };
+      // Extract relevant fields to store
+      const favoriteItem = {
+        id: transmission.id,
+        callsign: transmission.identified_airframes?.[0]?.callsign || null,
+        timestamp: transmission.created_at || new Date().toISOString(),
+        channel: transmission.channel_name || 'Unknown Channel',
+        frequency_mhz: transmission.frequency_mhz || null,
+        transcript: transmission.transcript || null,
+        s3_url: transmission.s3_url || null,
+        duration_seconds: transmission.duration_seconds || null,
+        identified_airframes: transmission.identified_airframes || [],
+        addedAt: new Date().toISOString(),
+      };
 
-    // Add to beginning, limit to MAX_FAVORITES
-    const newFavorites = [favoriteItem, ...favorites].slice(0, MAX_FAVORITES);
-    setFavorites(newFavorites);
-    saveFavorites(newFavorites);
-  }, [favorites, saveFavorites]);
+      // Add to beginning, limit to MAX_FAVORITES
+      const newFavorites = [favoriteItem, ...favorites].slice(0, MAX_FAVORITES);
+      setFavorites(newFavorites);
+      saveFavorites(newFavorites);
+    },
+    [favorites, saveFavorites]
+  );
 
   // Remove a transmission from favorites
-  const removeFavorite = useCallback((transmissionId) => {
-    const newFavorites = favorites.filter(fav => fav.id !== transmissionId);
-    setFavorites(newFavorites);
-    saveFavorites(newFavorites);
-  }, [favorites, saveFavorites]);
+  const removeFavorite = useCallback(
+    (transmissionId) => {
+      const newFavorites = favorites.filter((fav) => fav.id !== transmissionId);
+      setFavorites(newFavorites);
+      saveFavorites(newFavorites);
+    },
+    [favorites, saveFavorites]
+  );
 
   // Toggle favorite status
-  const toggleFavorite = useCallback((transmission) => {
-    if (!transmission || !transmission.id) return;
+  const toggleFavorite = useCallback(
+    (transmission) => {
+      if (!transmission || !transmission.id) return;
 
-    if (isFavorite(transmission.id)) {
-      removeFavorite(transmission.id);
-    } else {
-      addFavorite(transmission);
-    }
-  }, [isFavorite, addFavorite, removeFavorite]);
+      if (isFavorite(transmission.id)) {
+        removeFavorite(transmission.id);
+      } else {
+        addFavorite(transmission);
+      }
+    },
+    [isFavorite, addFavorite, removeFavorite]
+  );
 
   // Clear all favorites
   const clearFavorites = useCallback(() => {
@@ -91,9 +103,12 @@ export function useAudioFavorites() {
   }, [saveFavorites]);
 
   // Get a favorite by ID (returns the stored favorite object)
-  const getFavorite = useCallback((transmissionId) => {
-    return favorites.find(fav => fav.id === transmissionId) || null;
-  }, [favorites]);
+  const getFavorite = useCallback(
+    (transmissionId) => {
+      return favorites.find((fav) => fav.id === transmissionId) || null;
+    },
+    [favorites]
+  );
 
   return {
     favorites,

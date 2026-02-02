@@ -16,12 +16,8 @@ function PreviewAircraftItem({ aircraft, conditions }) {
         <span className="preview-hex">{aircraft.hex}</span>
       </div>
       <div className="preview-aircraft-values">
-        {values.altitude != null && (
-          <span className="preview-value">Alt: {values.altitude}ft</span>
-        )}
-        {values.speed != null && (
-          <span className="preview-value">Spd: {values.speed}kts</span>
-        )}
+        {values.altitude != null && <span className="preview-value">Alt: {values.altitude}ft</span>}
+        {values.speed != null && <span className="preview-value">Spd: {values.speed}kts</span>}
         {(values.distance != null || aircraft.calculatedDistance != null) && (
           <span className="preview-value">
             Dist: {(values.distance ?? aircraft.calculatedDistance ?? 0).toFixed(1)}nm
@@ -92,12 +88,8 @@ export function LivePreview({
         <div id="preview-content" className="preview-content">
           {matchingAircraft.length > 0 ? (
             <div className="preview-aircraft-list" role="list">
-              {matchingAircraft.slice(0, 5).map(ac => (
-                <PreviewAircraftItem
-                  key={ac.hex}
-                  aircraft={ac}
-                  conditions={conditions}
-                />
+              {matchingAircraft.slice(0, 5).map((ac) => (
+                <PreviewAircraftItem key={ac.hex} aircraft={ac} conditions={conditions} />
               ))}
               {matchingAircraft.length > 5 && (
                 <div className="preview-more">
@@ -106,9 +98,7 @@ export function LivePreview({
               )}
             </div>
           ) : (
-            <div className="preview-empty">
-              No aircraft currently match these conditions
-            </div>
+            <div className="preview-empty">No aircraft currently match these conditions</div>
           )}
         </div>
       )}

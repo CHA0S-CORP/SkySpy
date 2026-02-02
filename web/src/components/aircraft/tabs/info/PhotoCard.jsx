@@ -14,12 +14,7 @@ function PhotoCard({ photoInfo }) {
   if (!hasData) return null;
 
   return (
-    <BentoCard
-      icon={Camera}
-      title="Photo"
-      colSpan={2}
-      aria-labelledby="photo-heading"
-    >
+    <BentoCard icon={Camera} title="Photo" colSpan={2} aria-labelledby="photo-heading">
       <div className="space-y-1">
         <InfoRow label="Photographer" value={photographer} />
         <InfoRow label="Source" value={source} />

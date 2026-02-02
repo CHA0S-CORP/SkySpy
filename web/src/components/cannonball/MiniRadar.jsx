@@ -55,8 +55,8 @@ export function MiniRadar({
   // Calculate threat positions (filter out threats without valid distance/bearing)
   const threatPositions = useMemo(() => {
     return threats
-      .filter(threat => threat.distance_nm != null && threat.bearing != null)
-      .map(threat => ({
+      .filter((threat) => threat.distance_nm != null && threat.bearing != null)
+      .map((threat) => ({
         ...threat,
         ...threatToPosition(threat, effectiveRadius, maxRange, userHeading),
       }));
@@ -216,8 +216,8 @@ export function MiniRadar({
                 <line
                   x1={threat.x + padding}
                   y1={threat.y + padding}
-                  x2={threat.x + padding + Math.cos((threat.bearing - 90) * Math.PI / 180) * 12}
-                  y2={threat.y + padding + Math.sin((threat.bearing - 90) * Math.PI / 180) * 12}
+                  x2={threat.x + padding + Math.cos(((threat.bearing - 90) * Math.PI) / 180) * 12}
+                  y2={threat.y + padding + Math.sin(((threat.bearing - 90) * Math.PI) / 180) * 12}
                   stroke={color}
                   strokeWidth="2"
                   strokeLinecap="round"
@@ -242,14 +242,7 @@ export function MiniRadar({
         })}
 
         {/* Center marker (user position) */}
-        <circle
-          cx={radius}
-          cy={radius}
-          r={4}
-          fill="#3b82f6"
-          stroke="white"
-          strokeWidth="2"
-        />
+        <circle cx={radius} cy={radius} r={4} fill="#3b82f6" stroke="white" strokeWidth="2" />
 
         {/* User heading indicator */}
         {userHeading !== null && userHeading !== undefined && (

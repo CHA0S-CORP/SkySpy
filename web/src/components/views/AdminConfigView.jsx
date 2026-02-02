@@ -9,13 +9,16 @@ import { useToast } from '../../hooks/useToast';
 export function AdminConfigView({ apiBase = '' }) {
   const { showToast: toastFn } = useToast();
 
-  const handleToast = useCallback((message, type = 'info') => {
-    if (toastFn) {
-      toastFn(message, type);
-    } else {
-      console.log(`[Toast ${type}]:`, message);
-    }
-  }, [toastFn]);
+  const handleToast = useCallback(
+    (message, type = 'info') => {
+      if (toastFn) {
+        toastFn(message, type);
+      } else {
+        console.log(`[Toast ${type}]:`, message);
+      }
+    },
+    [toastFn]
+  );
 
   return (
     <div className="view-admin-config">

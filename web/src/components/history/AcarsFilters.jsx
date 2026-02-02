@@ -29,7 +29,7 @@ export function AcarsFilters({
   acarsSortDirection,
   handleAcarsSort,
   filteredCount,
-  totalCount
+  totalCount,
 }) {
   return (
     <div className="acars-history-filters">
@@ -76,10 +76,7 @@ export function AcarsFilters({
             <div className="label-filter-header">
               <span>Filter by Message Type</span>
               {acarsSelectedLabels.length > 0 && (
-                <button
-                  className="label-clear-btn"
-                  onClick={() => setAcarsSelectedLabels([])}
-                >
+                <button className="label-clear-btn" onClick={() => setAcarsSelectedLabels([])}>
                   Clear all
                 </button>
               )}
@@ -94,7 +91,7 @@ export function AcarsFilters({
                       if (e.target.checked) {
                         setAcarsSelectedLabels([...acarsSelectedLabels, label]);
                       } else {
-                        setAcarsSelectedLabels(acarsSelectedLabels.filter(l => l !== label));
+                        setAcarsSelectedLabels(acarsSelectedLabels.filter((l) => l !== label));
                       }
                     }}
                   />
@@ -158,11 +155,7 @@ export function AcarsFilters({
 /**
  * Quick filter chips for ACARS categories
  */
-export function AcarsQuickFilters({
-  acarsQuickFilters,
-  toggleQuickFilter,
-  clearQuickFilters
-}) {
+export function AcarsQuickFilters({ acarsQuickFilters, toggleQuickFilter, clearQuickFilters }) {
   return (
     <div className="acars-quick-filter-chips">
       {Object.entries(ACARS_QUICK_FILTER_CATEGORIES).map(([key, { name }]) => (

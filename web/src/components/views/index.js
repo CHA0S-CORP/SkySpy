@@ -27,5 +27,5 @@ export {
   SessionAnalyticsSection,
   TimeComparisonSection,
   AcarsStatsSection,
-  AchievementsSection
+  AchievementsSection,
 } from './stats';

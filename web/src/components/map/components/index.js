@@ -1,4 +1,9 @@
-export { ConflictBanner, getSeverityClass, getEventTypeName, renderEventBannerContent } from './ConflictBanner';
+export {
+  ConflictBanner,
+  getSeverityClass,
+  getEventTypeName,
+  renderEventBannerContent,
+} from './ConflictBanner';
 export { AircraftListPanel, AircraftListShowButton } from './AircraftListPanel';
 export { LegendPanel } from './LegendPanel';
 export { OverlayMenu } from './OverlayMenu';

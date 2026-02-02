@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  AlertTriangle, FileWarning, Search, RefreshCw, X,
-  Plane, Shield, Loader2
+  AlertTriangle,
+  FileWarning,
+  Search,
+  RefreshCw,
+  X,
+  Plane,
+  Shield,
+  Loader2,
 } from 'lucide-react';
 import { useSocketIO } from '../../hooks/socket';
 import { NotamCard, TfrCard, NotamStats, AirportSearch, NOTAM_TYPES } from '../notams';
@@ -43,12 +49,12 @@ export function NotamsView({ apiBase }) {
       const statsData = statsRes.ok ? await statsRes.json() : null;
 
       if (notamsData?.notams) {
-        const mappedNotams = notamsData.notams.map(n => ({ ...n, type: n.notam_type }));
+        const mappedNotams = notamsData.notams.map((n) => ({ ...n, type: n.notam_type }));
         setNotams(mappedNotams);
       }
 
       if (tfrsData?.tfrs) {
-        const mappedTfrs = tfrsData.tfrs.map(t => ({ ...t, type: 'TFR' }));
+        const mappedTfrs = tfrsData.tfrs.map((t) => ({ ...t, type: 'TFR' }));
         setTfrs(mappedTfrs);
       }
 
@@ -81,27 +87,27 @@ export function NotamsView({ apiBase }) {
         setError(null);
         break;
       case 'notam:new':
-        setNotams(prev => [data.data, ...prev]);
-        if (data.data?.type === 'TFR') setTfrs(prev => [data.data, ...prev]);
+        setNotams((prev) => [data.data, ...prev]);
+        if (data.data?.type === 'TFR') setTfrs((prev) => [data.data, ...prev]);
         break;
       case 'notam:update':
-        setNotams(prev => prev.map(n =>
-          n.notam_id === data.data?.notam_id ? { ...n, ...data.data } : n
-        ));
+        setNotams((prev) =>
+          prev.map((n) => (n.notam_id === data.data?.notam_id ? { ...n, ...data.data } : n))
+        );
         if (data.data?.type === 'TFR') {
-          setTfrs(prev => prev.map(t =>
-            t.notam_id === data.data?.notam_id ? { ...t, ...data.data } : t
-          ));
+          setTfrs((prev) =>
+            prev.map((t) => (t.notam_id === data.data?.notam_id ? { ...t, ...data.data } : t))
+          );
         }
         break;
       case 'notam:expired':
       case 'notam:tfr_expired':
-        setNotams(prev => prev.filter(n => n.notam_id !== data.data?.notam_id));
-        setTfrs(prev => prev.filter(t => t.notam_id !== data.data?.notam_id));
+        setNotams((prev) => prev.filter((n) => n.notam_id !== data.data?.notam_id));
+        setTfrs((prev) => prev.filter((t) => t.notam_id !== data.data?.notam_id));
         break;
       case 'notam:tfr_new':
-        setTfrs(prev => [data.data, ...prev]);
-        setNotams(prev => [data.data, ...prev]);
+        setTfrs((prev) => [data.data, ...prev]);
+        setNotams((prev) => [data.data, ...prev]);
         break;
       case 'notam:stats':
         setStats(data.data);
@@ -173,25 +179,28 @@ export function NotamsView({ apiBase }) {
       'error',
     ];
 
-    const unsubscribers = eventTypes.map(eventType => {
+    const unsubscribers = eventTypes.map((eventType) => {
       return on(eventType, (data) => {
         handleMessage({ type: eventType, data });
       });
     });
 
     return () => {
-      unsubscribers.forEach(unsub => unsub && unsub());
+      unsubscribers.forEach((unsub) => unsub && unsub());
     };
   }, [connected, on, handleMessage]);
 
   // Send helper that wraps emit for compatibility
-  const send = useCallback((data) => {
-    if (data.action === 'request') {
-      emit('request', { type: data.type, request_id: data.request_id, params: data.params });
-    } else {
-      emit(data.action || 'message', data);
-    }
-  }, [emit]);
+  const send = useCallback(
+    (data) => {
+      if (data.action === 'request') {
+        emit('request', { type: data.type, request_id: data.request_id, params: data.params });
+      } else {
+        emit(data.action || 'message', data);
+      }
+    },
+    [emit]
+  );
 
   // If WebSocket connected but no data after 5 seconds, try HTTP fallback
   useEffect(() => {
@@ -207,61 +216,69 @@ export function NotamsView({ apiBase }) {
   }, [connected, loading, notams.length, httpFallbackAttempted, fetchNotamsHttp]);
 
   // Make a request and wait for response
-  const request = useCallback(async (type, params = {}) => {
-    return new Promise((resolve, reject) => {
-      const requestId = `req_${++requestIdRef.current}`;
-      pendingRequestsRef.current.set(requestId, { resolve, reject });
+  const request = useCallback(
+    async (type, params = {}) => {
+      return new Promise((resolve, reject) => {
+        const requestId = `req_${++requestIdRef.current}`;
+        pendingRequestsRef.current.set(requestId, { resolve, reject });
 
-      setTimeout(() => {
-        if (pendingRequestsRef.current.has(requestId)) {
-          pendingRequestsRef.current.delete(requestId);
-          reject(new Error('Request timeout'));
-        }
-      }, 30000);
+        setTimeout(() => {
+          if (pendingRequestsRef.current.has(requestId)) {
+            pendingRequestsRef.current.delete(requestId);
+            reject(new Error('Request timeout'));
+          }
+        }, 30000);
 
-      send({ action: 'request', type, request_id: requestId, params });
-    });
-  }, [send]);
+        send({ action: 'request', type, request_id: requestId, params });
+      });
+    },
+    [send]
+  );
 
   // Search for airport NOTAMs
-  const handleAirportSearch = useCallback(async (icao) => {
-    setAirportLoading(true);
-    setSelectedAirport(icao);
-    const base = (apiBase || '').replace(/\/$/, '');
+  const handleAirportSearch = useCallback(
+    async (icao) => {
+      setAirportLoading(true);
+      setSelectedAirport(icao);
+      const base = (apiBase || '').replace(/\/$/, '');
 
-    try {
-      let data = null;
-      if (connected) {
-        try {
-          data = await request('airport', { icao });
-        } catch (wsErr) {
-          console.debug('WebSocket airport request failed, trying HTTP');
+      try {
+        let data = null;
+        if (connected) {
+          try {
+            data = await request('airport', { icao });
+          } catch (wsErr) {
+            console.debug('WebSocket airport request failed, trying HTTP');
+          }
         }
-      }
 
-      if (!data) {
-        const res = await fetch(`${base}/api/v1/notams/airport/${icao.toUpperCase()}/`);
-        if (res.ok) {
-          const json = await res.json();
-          data = (json.notams || []).map(n => ({ ...n, type: n.notam_type }));
+        if (!data) {
+          const res = await fetch(`${base}/api/v1/notams/airport/${icao.toUpperCase()}/`);
+          if (res.ok) {
+            const json = await res.json();
+            data = (json.notams || []).map((n) => ({ ...n, type: n.notam_type }));
+          }
         }
-      }
 
-      setAirportNotams(data || []);
-      setActiveTab('airport');
-    } catch (err) {
-      setError(`Failed to load NOTAMs for ${icao}: ${err.message}`);
-    } finally {
-      setAirportLoading(false);
-    }
-  }, [apiBase, connected, request]);
+        setAirportNotams(data || []);
+        setActiveTab('airport');
+      } catch (err) {
+        setError(`Failed to load NOTAMs for ${icao}: ${err.message}`);
+      } finally {
+        setAirportLoading(false);
+      }
+    },
+    [apiBase, connected, request]
+  );
 
   // Refresh NOTAMs
   const handleRefresh = useCallback(async () => {
     const base = (apiBase || '').replace(/\/$/, '');
     try {
       if (connected) {
-        try { await request('refresh'); } catch (wsErr) {
+        try {
+          await request('refresh');
+        } catch (wsErr) {
           console.debug('WebSocket refresh failed, trying HTTP');
         }
       }
@@ -276,20 +293,21 @@ export function NotamsView({ apiBase }) {
   // Filter notams based on search and type
   const filteredNotams = useMemo(() => {
     let list = activeTab === 'tfrs' ? tfrs : notams;
-    if (typeFilter !== 'all') list = list.filter(n => n.type === typeFilter);
+    if (typeFilter !== 'all') list = list.filter((n) => n.type === typeFilter);
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      list = list.filter(n =>
-        n.location?.toLowerCase().includes(query) ||
-        n.notam_id?.toLowerCase().includes(query) ||
-        n.text?.toLowerCase().includes(query) ||
-        n.reason?.toLowerCase().includes(query)
+      list = list.filter(
+        (n) =>
+          n.location?.toLowerCase().includes(query) ||
+          n.notam_id?.toLowerCase().includes(query) ||
+          n.text?.toLowerCase().includes(query) ||
+          n.reason?.toLowerCase().includes(query)
       );
     }
     return list;
   }, [activeTab, notams, tfrs, typeFilter, searchQuery]);
 
-  const displayList = activeTab === 'airport' ? (airportNotams || []) : filteredNotams;
+  const displayList = activeTab === 'airport' ? airportNotams || [] : filteredNotams;
 
   return (
     <div className="notams-view">
@@ -302,10 +320,19 @@ export function NotamsView({ apiBase }) {
           </div>
         </div>
         <div className="header-actions">
-          <button className="refresh-btn" onClick={handleRefresh} disabled={!connected} title="Refresh NOTAMs">
+          <button
+            className="refresh-btn"
+            onClick={handleRefresh}
+            disabled={!connected}
+            title="Refresh NOTAMs"
+          >
             <RefreshCw size={16} />
           </button>
-          {!connected && <button className="reconnect-btn" onClick={reconnect}>Reconnect</button>}
+          {!connected && (
+            <button className="reconnect-btn" onClick={reconnect}>
+              Reconnect
+            </button>
+          )}
         </div>
       </div>
 
@@ -313,36 +340,64 @@ export function NotamsView({ apiBase }) {
 
       <div className="notams-toolbar">
         <div className="tab-buttons">
-          <button className={activeTab === 'all' ? 'active' : ''} onClick={() => setActiveTab('all')}>
+          <button
+            className={activeTab === 'all' ? 'active' : ''}
+            onClick={() => setActiveTab('all')}
+          >
             <FileWarning size={16} /> All NOTAMs <span className="count">{notams.length}</span>
           </button>
-          <button className={activeTab === 'tfrs' ? 'active' : ''} onClick={() => setActiveTab('tfrs')}>
+          <button
+            className={activeTab === 'tfrs' ? 'active' : ''}
+            onClick={() => setActiveTab('tfrs')}
+          >
             <Shield size={16} /> TFRs <span className="count">{tfrs.length}</span>
           </button>
           {selectedAirport && (
-            <button className={activeTab === 'airport' ? 'active' : ''} onClick={() => setActiveTab('airport')}>
+            <button
+              className={activeTab === 'airport' ? 'active' : ''}
+              onClick={() => setActiveTab('airport')}
+            >
               <Plane size={16} /> {selectedAirport}
               <span className="count">{airportNotams?.length || 0}</span>
-              <X size={14} className="close-tab" onClick={(e) => {
-                e.stopPropagation();
-                setSelectedAirport(null);
-                setAirportNotams(null);
-                if (activeTab === 'airport') setActiveTab('all');
-              }} />
+              <X
+                size={14}
+                className="close-tab"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedAirport(null);
+                  setAirportNotams(null);
+                  if (activeTab === 'airport') setActiveTab('all');
+                }}
+              />
             </button>
           )}
         </div>
         <div className="filter-controls">
           <div className="search-box">
             <Search size={16} />
-            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search NOTAMs..." />
-            {searchQuery && <button className="clear-search" onClick={() => setSearchQuery('')}><X size={14} /></button>}
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search NOTAMs..."
+            />
+            {searchQuery && (
+              <button className="clear-search" onClick={() => setSearchQuery('')}>
+                <X size={14} />
+              </button>
+            )}
           </div>
           {activeTab === 'all' && (
-            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="type-filter">
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="type-filter"
+            >
               <option value="all">All Types</option>
               {Object.entries(NOTAM_TYPES).map(([key, { label }]) => (
-                <option key={key} value={key}>{label}</option>
+                <option key={key} value={key}>
+                  {label}
+                </option>
               ))}
             </select>
           )}
@@ -373,21 +428,25 @@ export function NotamsView({ apiBase }) {
           <div className="notams-list">
             {activeTab === 'tfrs' ? (
               <div className="tfr-grid">
-                {displayList.map(tfr => (
+                {displayList.map((tfr) => (
                   <TfrCard
                     key={tfr.notam_id}
                     tfr={tfr}
-                    onViewDetails={() => setExpandedId(expandedId === tfr.notam_id ? null : tfr.notam_id)}
+                    onViewDetails={() =>
+                      setExpandedId(expandedId === tfr.notam_id ? null : tfr.notam_id)
+                    }
                   />
                 ))}
               </div>
             ) : (
-              displayList.map(notam => (
+              displayList.map((notam) => (
                 <NotamCard
                   key={notam.notam_id}
                   notam={notam}
                   expanded={expandedId === notam.notam_id}
-                  onToggle={() => setExpandedId(expandedId === notam.notam_id ? null : notam.notam_id)}
+                  onToggle={() =>
+                    setExpandedId(expandedId === notam.notam_id ? null : notam.notam_id)
+                  }
                 />
               ))
             )}

@@ -5,13 +5,7 @@ import { SIGHTINGS_COLUMNS } from './historyConstants';
 /**
  * Table component for displaying sightings data
  */
-export function SightingsTable({
-  sightings,
-  sortField,
-  sortDirection,
-  onSort,
-  onSelectAircraft
-}) {
+export function SightingsTable({ sightings, sortField, sortDirection, onSort, onSelectAircraft }) {
   return (
     <div className="sightings-table-wrapper">
       <table className="sightings-table">
@@ -26,10 +20,7 @@ export function SightingsTable({
             <tr key={i}>
               <td>{new Date(s.timestamp).toLocaleTimeString()}</td>
               <td className="mono">
-                <span
-                  className="icao-link"
-                  onClick={() => onSelectAircraft?.(s.icao_hex)}
-                >
+                <span className="icao-link" onClick={() => onSelectAircraft?.(s.icao_hex)}>
                   {s.icao_hex}
                 </span>
               </td>

@@ -49,10 +49,7 @@ export default function UserMenu() {
   // Show login button if not authenticated
   if (status !== 'authenticated') {
     return (
-      <button
-        className="user-menu-login"
-        onClick={() => window.location.hash = '#login'}
-      >
+      <button className="user-menu-login" onClick={() => (window.location.hash = '#login')}>
         <User size={16} />
         <span>Sign In</span>
       </button>

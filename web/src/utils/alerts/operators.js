@@ -7,21 +7,21 @@
  */
 export function normalizeOperator(op) {
   const map = {
-    'equals': 'eq',
-    'eq': 'eq',
-    'not_equals': 'neq',
-    'neq': 'neq',
-    'contains': 'contains',
-    'starts_with': 'startswith',
-    'startswith': 'startswith',
-    'ends_with': 'endswith',
-    'endswith': 'endswith',
-    'greater_than': 'gt',
-    'gt': 'gt',
-    'less_than': 'lt',
-    'lt': 'lt',
-    'gte': 'gte',
-    'lte': 'lte',
+    equals: 'eq',
+    eq: 'eq',
+    not_equals: 'neq',
+    neq: 'neq',
+    contains: 'contains',
+    starts_with: 'startswith',
+    startswith: 'startswith',
+    ends_with: 'endswith',
+    endswith: 'endswith',
+    greater_than: 'gt',
+    gt: 'gt',
+    less_than: 'lt',
+    lt: 'lt',
+    gte: 'gte',
+    lte: 'lte',
   };
   return map[op] || 'eq';
 }

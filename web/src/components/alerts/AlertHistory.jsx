@@ -1,8 +1,20 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Bell, Trash2, Check, Clock, Plane,
-  Radar, RefreshCw, Search, Filter, ChevronDown, CheckCheck, X, Download,
-  AlertCircle, Info
+  Bell,
+  Trash2,
+  Check,
+  Clock,
+  Plane,
+  Radar,
+  RefreshCw,
+  Search,
+  Filter,
+  ChevronDown,
+  CheckCheck,
+  X,
+  Download,
+  AlertCircle,
+  Info,
 } from 'lucide-react';
 import { useSocketApi } from '../../hooks';
 import { ConfirmModal } from '../common/ConfirmModal';
@@ -51,12 +63,15 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
   }, [page, pageSize, searchQuery, severityFilter, acknowledgedFilter]);
 
   // Fetch alert history
-  const { data: historyData, loading, error, refetch } = useSocketApi(
-    `/api/v1/alerts/history?${queryParams}`,
-    null,
-    apiBase,
-    { wsRequest, wsConnected }
-  );
+  const {
+    data: historyData,
+    loading,
+    error,
+    refetch,
+  } = useSocketApi(`/api/v1/alerts/history?${queryParams}`, null, apiBase, {
+    wsRequest,
+    wsConnected,
+  });
 
   // Normalize history data from Django API
   const { alerts, totalCount } = useMemo(() => {
@@ -86,7 +101,7 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
 
   // Count unacknowledged alerts
   const unacknowledgedCount = useMemo(() => {
-    return alerts.filter(a => !a.acknowledged && !localAcknowledgedIds.has(a.id)).length;
+    return alerts.filter((a) => !a.acknowledged && !localAcknowledgedIds.has(a.id)).length;
   }, [alerts, localAcknowledgedIds]);
 
   // Reset page when filters change
@@ -98,12 +113,12 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
   const handleAcknowledge = async (id) => {
     try {
       // Optimistic update
-      setLocalAcknowledgedIds(prev => new Set([...prev, id]));
+      setLocalAcknowledgedIds((prev) => new Set([...prev, id]));
 
       const res = await fetch(`${apiBase}/api/v1/alerts/history/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ acknowledged: true })
+        body: JSON.stringify({ acknowledged: true }),
       });
 
       if (!res.ok) {
@@ -114,7 +129,7 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
       refetch();
     } catch (err) {
       // Rollback optimistic update
-      setLocalAcknowledgedIds(prev => {
+      setLocalAcknowledgedIds((prev) => {
         const next = new Set(prev);
         next.delete(id);
         return next;
@@ -130,12 +145,14 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
     setConfirmModal({ isOpen: false, type: null });
 
     try {
-      const unacknowledgedAlerts = alerts.filter(a => !a.acknowledged && !localAcknowledgedIds.has(a.id));
+      const unacknowledgedAlerts = alerts.filter(
+        (a) => !a.acknowledged && !localAcknowledgedIds.has(a.id)
+      );
 
       // Optimistic update for all
-      setLocalAcknowledgedIds(prev => {
+      setLocalAcknowledgedIds((prev) => {
         const next = new Set(prev);
-        unacknowledgedAlerts.forEach(a => next.add(a.id));
+        unacknowledgedAlerts.forEach((a) => next.add(a.id));
         return next;
       });
 
@@ -148,11 +165,11 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
       if (!res.ok) {
         // Fallback to individual acknowledgments
         await Promise.all(
-          unacknowledgedAlerts.map(alert =>
+          unacknowledgedAlerts.map((alert) =>
             fetch(`${apiBase}/api/v1/alerts/history/${alert.id}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ acknowledged: true })
+              body: JSON.stringify({ acknowledged: true }),
             })
           )
         );
@@ -198,17 +215,17 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
   // Export history as CSV
   const handleExportCSV = () => {
     const headers = ['Time', 'Rule', 'Aircraft', 'Severity', 'Message', 'Acknowledged'];
-    const rows = alerts.map(alert => [
+    const rows = alerts.map((alert) => [
       alert.triggered_at ? new Date(alert.triggered_at).toISOString() : '',
       alert.rule_name || '',
       alert.callsign || alert.hex || alert.icao || '',
       alert.severity || alert.priority || 'info',
       alert.message || '',
-      alert.acknowledged ? 'Yes' : 'No'
+      alert.acknowledged ? 'Yes' : 'No',
     ]);
 
     const csv = [headers, ...rows]
-      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
       .join('\n');
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -360,9 +377,7 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
         <span className="alert-count">
           {totalCount} alert{totalCount !== 1 ? 's' : ''}
           {unacknowledgedCount > 0 && (
-            <span className="unacknowledged-count">
-              ({unacknowledgedCount} unacknowledged)
-            </span>
+            <span className="unacknowledged-count">({unacknowledgedCount} unacknowledged)</span>
           )}
         </span>
 
@@ -374,8 +389,10 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
             value={pageSize}
             onChange={(e) => setPageSize(Number(e.target.value))}
           >
-            {PAGE_SIZE_OPTIONS.map(size => (
-              <option key={size} value={size}>{size}</option>
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
             ))}
           </select>
         </div>
@@ -434,10 +451,10 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
 
                 <div className="alert-history-content">
                   <div className="alert-history-header">
-                    <span className="alert-history-title">{alert.rule_name || 'Alert Triggered'}</span>
-                    <span className={`alert-severity-badge ${severity}`}>
-                      {severity}
+                    <span className="alert-history-title">
+                      {alert.rule_name || 'Alert Triggered'}
                     </span>
+                    <span className={`alert-severity-badge ${severity}`}>{severity}</span>
                   </div>
 
                   <div className="alert-history-aircraft">
@@ -445,11 +462,7 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
                     <span>{alertIdentifier}</span>
                   </div>
 
-                  {alert.message && (
-                    <div className="alert-history-message">
-                      {alert.message}
-                    </div>
-                  )}
+                  {alert.message && <div className="alert-history-message">{alert.message}</div>}
                 </div>
 
                 <div className="alert-history-meta">
@@ -481,7 +494,11 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="alert-history-pagination" role="navigation" aria-label="Alert history pages">
+        <div
+          className="alert-history-pagination"
+          role="navigation"
+          aria-label="Alert history pages"
+        >
           <button
             className="btn-secondary btn-sm"
             onClick={() => setPage(1)}
@@ -492,7 +509,7 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
           </button>
           <button
             className="btn-secondary btn-sm"
-            onClick={() => setPage(p => p - 1)}
+            onClick={() => setPage((p) => p - 1)}
             disabled={!hasPrevPage}
             aria-label="Previous page"
           >
@@ -505,7 +522,7 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
 
           <button
             className="btn-secondary btn-sm"
-            onClick={() => setPage(p => p + 1)}
+            onClick={() => setPage((p) => p + 1)}
             disabled={!hasNextPage}
             aria-label="Next page"
           >

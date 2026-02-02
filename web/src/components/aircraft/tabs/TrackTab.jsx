@@ -24,7 +24,7 @@ export function TrackTab({
   graphZoom,
   setGraphZoom,
   graphScrollOffset,
-  setGraphScrollOffset
+  setGraphScrollOffset,
 }) {
   const trackMapRef = useRef(null);
   const trackMarkerRef = useRef(null);
@@ -38,7 +38,7 @@ export function TrackTab({
     handleGraphDragStart,
     handleGraphDragMove,
     handleGraphDragEnd,
-    resetGraphZoom
+    resetGraphZoom,
   } = useGraphInteraction(graphZoom, setGraphZoom, graphScrollOffset, setGraphScrollOffset);
 
   // Create aircraft icon
@@ -53,7 +53,7 @@ export function TrackTab({
         </svg>
       `,
       iconSize: [24, 24],
-      iconAnchor: [12, 12]
+      iconAnchor: [12, 12],
     });
   }, []);
 
@@ -73,13 +73,13 @@ export function TrackTab({
     const p1 = ordered[lowerIndex];
     const p2 = ordered[upperIndex];
 
-    const lerp = (v1, v2, t) => v1 == null ? v2 : v2 == null ? v1 : v1 + (v2 - v1) * t;
+    const lerp = (v1, v2, t) => (v1 == null ? v2 : v2 == null ? v1 : v1 + (v2 - v1) * t);
     const lerpAngle = (a1, a2, t) => {
       if (a1 == null || a2 == null) return a1;
       let diff = a2 - a1;
       if (diff > 180) diff -= 360;
       if (diff < -180) diff += 360;
-      return ((a1 + diff * t) + 360) % 360;
+      return (a1 + diff * t + 360) % 360;
     };
 
     return {
@@ -92,7 +92,7 @@ export function TrackTab({
       baro_rate: Math.round(lerp(p1.baro_rate, p2.baro_rate, fraction)),
       geom_rate: Math.round(lerp(p1.geom_rate, p2.geom_rate, fraction)),
       track: lerpAngle(p1.track, p2.track, fraction),
-      timestamp: p1.timestamp
+      timestamp: p1.timestamp,
     };
   }, []);
 
@@ -108,112 +108,134 @@ export function TrackTab({
         baro_rate: aircraft.baro_rate,
         geom_rate: aircraft.geom_rate,
         track: aircraft.track,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
     }
     if (!sightings || sightings.length === 0) return null;
-    const validSightings = sightings.filter(s => s.lat && s.lon);
+    const validSightings = sightings.filter((s) => s.lat && s.lon);
     return getInterpolatedPosition(validSightings, trackReplayPosition);
   }, [sightings, trackReplayPosition, getInterpolatedPosition, trackLiveMode, aircraft]);
 
   // Initialize track map
-  const initializeTrackMap = useCallback((containerEl) => {
-    if (!containerEl || trackMapRef.current) return;
-    if (!sightings || sightings.length === 0) return;
+  const initializeTrackMap = useCallback(
+    (containerEl) => {
+      if (!containerEl || trackMapRef.current) return;
+      if (!sightings || sightings.length === 0) return;
 
-    const validSightings = sightings.filter(s => s.lat && s.lon);
-    if (validSightings.length === 0) return;
+      const validSightings = sightings.filter((s) => s.lat && s.lon);
+      if (validSightings.length === 0) return;
 
-    const latest = validSightings[0];
+      const latest = validSightings[0];
 
-    const map = L.map(containerEl, {
-      center: [latest.lat, latest.lon],
-      zoom: 10,
-      zoomControl: false,
-      attributionControl: false
-    });
+      const map = L.map(containerEl, {
+        center: [latest.lat, latest.lon],
+        zoom: 10,
+        zoomControl: false,
+        attributionControl: false,
+      });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19
-    }).addTo(map);
-
-    const trackCoords = [...validSightings].reverse().map(s => [s.lat, s.lon]);
-    if (trackCoords.length > 1) {
-      trackPolylineRef.current = L.polyline(trackCoords, {
-        color: '#00ff88', weight: 3, opacity: 0.7
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
       }).addTo(map);
-    }
 
-    trackPointsLayerRef.current = L.layerGroup().addTo(map);
-
-    const step = Math.max(1, Math.floor(validSightings.length / 20));
-    validSightings.forEach((s, i) => {
-      if (i % step === 0 || i === 0 || i === validSightings.length - 1) {
-        const isFirst = i === validSightings.length - 1;
-        const isLast = i === 0;
-
-        const marker = L.circleMarker([s.lat, s.lon], {
-          radius: isFirst || isLast ? 6 : 3,
-          color: isLast ? '#00ff88' : isFirst ? '#ff8844' : '#5a7a9a',
-          fillColor: isLast ? '#00ff88' : isFirst ? '#ff8844' : '#5a7a9a',
-          fillOpacity: 0.8,
-          weight: 1
-        });
-
-        if (isFirst || isLast) {
-          marker.addTo(map);
-        } else if (showTrackPoints) {
-          marker.addTo(trackPointsLayerRef.current);
-        }
+      const trackCoords = [...validSightings].reverse().map((s) => [s.lat, s.lon]);
+      if (trackCoords.length > 1) {
+        trackPolylineRef.current = L.polyline(trackCoords, {
+          color: '#00ff88',
+          weight: 3,
+          opacity: 0.7,
+        }).addTo(map);
       }
-    });
 
-    if (feederLocation?.lat && feederLocation?.lon) {
-      L.circleMarker([feederLocation.lat, feederLocation.lon], {
-        radius: 8, color: '#ff4444', fillColor: '#ff4444', fillOpacity: 0.3, weight: 2
-      }).addTo(map);
-    }
+      trackPointsLayerRef.current = L.layerGroup().addTo(map);
 
-    const pos = getInterpolatedPosition(validSightings, trackReplayPosition);
-    if (pos) {
-      const icon = createAircraftIcon(pos.track, '#00ff88');
-      trackMarkerRef.current = L.marker([pos.lat, pos.lon], { icon }).addTo(map);
-    }
+      const step = Math.max(1, Math.floor(validSightings.length / 20));
+      validSightings.forEach((s, i) => {
+        if (i % step === 0 || i === 0 || i === validSightings.length - 1) {
+          const isFirst = i === validSightings.length - 1;
+          const isLast = i === 0;
 
-    if (trackCoords.length > 1) {
-      const bounds = L.latLngBounds(trackCoords);
-      map.fitBounds(bounds.pad(0.1));
-    }
+          const marker = L.circleMarker([s.lat, s.lon], {
+            radius: isFirst || isLast ? 6 : 3,
+            color: isLast ? '#00ff88' : isFirst ? '#ff8844' : '#5a7a9a',
+            fillColor: isLast ? '#00ff88' : isFirst ? '#ff8844' : '#5a7a9a',
+            fillOpacity: 0.8,
+            weight: 1,
+          });
 
-    trackMapRef.current = map;
-  }, [sightings, feederLocation, trackReplayPosition, getInterpolatedPosition, createAircraftIcon, showTrackPoints]);
+          if (isFirst || isLast) {
+            marker.addTo(map);
+          } else if (showTrackPoints) {
+            marker.addTo(trackPointsLayerRef.current);
+          }
+        }
+      });
+
+      if (feederLocation?.lat && feederLocation?.lon) {
+        L.circleMarker([feederLocation.lat, feederLocation.lon], {
+          radius: 8,
+          color: '#ff4444',
+          fillColor: '#ff4444',
+          fillOpacity: 0.3,
+          weight: 2,
+        }).addTo(map);
+      }
+
+      const pos = getInterpolatedPosition(validSightings, trackReplayPosition);
+      if (pos) {
+        const icon = createAircraftIcon(pos.track, '#00ff88');
+        trackMarkerRef.current = L.marker([pos.lat, pos.lon], { icon }).addTo(map);
+      }
+
+      if (trackCoords.length > 1) {
+        const bounds = L.latLngBounds(trackCoords);
+        map.fitBounds(bounds.pad(0.1));
+      }
+
+      trackMapRef.current = map;
+    },
+    [
+      sightings,
+      feederLocation,
+      trackReplayPosition,
+      getInterpolatedPosition,
+      createAircraftIcon,
+      showTrackPoints,
+    ]
+  );
 
   // Update track marker position
-  const updateTrackMarker = useCallback((position, follow = true) => {
-    if (!trackMapRef.current || !sightings || sightings.length === 0) return;
+  const updateTrackMarker = useCallback(
+    (position, follow = true) => {
+      if (!trackMapRef.current || !sightings || sightings.length === 0) return;
 
-    const validSightings = sightings.filter(s => s.lat && s.lon);
-    const pos = getInterpolatedPosition(validSightings, position);
-    if (!pos) return;
+      const validSightings = sightings.filter((s) => s.lat && s.lon);
+      const pos = getInterpolatedPosition(validSightings, position);
+      if (!pos) return;
 
-    if (trackMarkerRef.current) {
-      trackMapRef.current.removeLayer(trackMarkerRef.current);
-    }
+      if (trackMarkerRef.current) {
+        trackMapRef.current.removeLayer(trackMarkerRef.current);
+      }
 
-    const icon = createAircraftIcon(pos.track, '#00ff88');
-    trackMarkerRef.current = L.marker([pos.lat, pos.lon], { icon }).addTo(trackMapRef.current);
+      const icon = createAircraftIcon(pos.track, '#00ff88');
+      trackMarkerRef.current = L.marker([pos.lat, pos.lon], { icon }).addTo(trackMapRef.current);
 
-    if (follow) {
-      trackMapRef.current.panTo([pos.lat, pos.lon], { animate: true, duration: 0.15 });
-    }
-  }, [sightings, getInterpolatedPosition, createAircraftIcon]);
+      if (follow) {
+        trackMapRef.current.panTo([pos.lat, pos.lon], { animate: true, duration: 0.15 });
+      }
+    },
+    [sightings, getInterpolatedPosition, createAircraftIcon]
+  );
 
   // Handle replay slider change
-  const handleTrackReplayChange = useCallback((newPosition) => {
-    if (newPosition < 100) setTrackLiveMode(false);
-    setTrackReplayPosition(newPosition);
-    updateTrackMarker(newPosition);
-  }, [setTrackLiveMode, setTrackReplayPosition, updateTrackMarker]);
+  const handleTrackReplayChange = useCallback(
+    (newPosition) => {
+      if (newPosition < 100) setTrackLiveMode(false);
+      setTrackReplayPosition(newPosition);
+      updateTrackMarker(newPosition);
+    },
+    [setTrackLiveMode, setTrackReplayPosition, updateTrackMarker]
+  );
 
   // Toggle play/pause
   const toggleTrackPlay = useCallback(() => {
@@ -253,7 +275,14 @@ export function TrackTab({
 
       trackAnimationRef.current = requestAnimationFrame(animate);
     }
-  }, [trackReplayPosition, trackReplaySpeed, setTrackReplayPosition, updateTrackMarker, setTrackIsPlaying, setTrackLiveMode]);
+  }, [
+    trackReplayPosition,
+    trackReplaySpeed,
+    setTrackReplayPosition,
+    updateTrackMarker,
+    setTrackIsPlaying,
+    setTrackLiveMode,
+  ]);
 
   // Skip to start/end
   const skipTrackToStart = useCallback(() => {
@@ -291,10 +320,10 @@ export function TrackTab({
   useEffect(() => {
     if (!trackMapRef.current || !sightings || sightings.length === 0) return;
 
-    const validSightings = sightings.filter(s => s.lat && s.lon);
+    const validSightings = sightings.filter((s) => s.lat && s.lon);
     if (validSightings.length === 0) return;
 
-    const trackCoords = [...validSightings].reverse().map(s => [s.lat, s.lon]);
+    const trackCoords = [...validSightings].reverse().map((s) => [s.lat, s.lon]);
     if (trackPolylineRef.current) {
       trackPolylineRef.current.setLatLngs(trackCoords);
     }
@@ -305,7 +334,9 @@ export function TrackTab({
       if (latest && trackMarkerRef.current) {
         trackMapRef.current.removeLayer(trackMarkerRef.current);
         const icon = createAircraftIcon(latest.track, '#00ff88');
-        trackMarkerRef.current = L.marker([latest.lat, latest.lon], { icon }).addTo(trackMapRef.current);
+        trackMarkerRef.current = L.marker([latest.lat, latest.lon], { icon }).addTo(
+          trackMapRef.current
+        );
         trackMapRef.current.panTo([latest.lat, latest.lon], { animate: true, duration: 0.3 });
       }
     }
@@ -320,9 +351,18 @@ export function TrackTab({
       trackMapRef.current.removeLayer(trackMarkerRef.current);
     }
     const icon = createAircraftIcon(aircraft.track, '#00ff88');
-    trackMarkerRef.current = L.marker([aircraft.lat, aircraft.lon], { icon }).addTo(trackMapRef.current);
+    trackMarkerRef.current = L.marker([aircraft.lat, aircraft.lon], { icon }).addTo(
+      trackMapRef.current
+    );
     trackMapRef.current.panTo([aircraft.lat, aircraft.lon], { animate: true, duration: 0.3 });
-  }, [aircraft?.lat, aircraft?.lon, aircraft?.track, trackLiveMode, trackIsPlaying, createAircraftIcon]);
+  }, [
+    aircraft?.lat,
+    aircraft?.lon,
+    aircraft?.track,
+    trackLiveMode,
+    trackIsPlaying,
+    createAircraftIcon,
+  ]);
 
   // Toggle track points visibility
   useEffect(() => {
@@ -331,13 +371,17 @@ export function TrackTab({
     trackPointsLayerRef.current.clearLayers();
 
     if (showTrackPoints && sightings && sightings.length > 0) {
-      const validSightings = sightings.filter(s => s.lat && s.lon);
+      const validSightings = sightings.filter((s) => s.lat && s.lon);
       const step = Math.max(1, Math.floor(validSightings.length / 20));
 
       validSightings.forEach((s, i) => {
         if (i !== 0 && i !== validSightings.length - 1 && i % step === 0) {
           L.circleMarker([s.lat, s.lon], {
-            radius: 3, color: '#5a7a9a', fillColor: '#5a7a9a', fillOpacity: 0.8, weight: 1
+            radius: 3,
+            color: '#5a7a9a',
+            fillColor: '#5a7a9a',
+            fillOpacity: 0.8,
+            weight: 1,
           }).addTo(trackPointsLayerRef.current);
         }
       });
@@ -358,7 +402,7 @@ export function TrackTab({
   }, []);
 
   // Empty state
-  if (sightings.length === 0 || !sightings.some(s => s.lat && s.lon)) {
+  if (sightings.length === 0 || !sightings.some((s) => s.lat && s.lon)) {
     return (
       <div className="detail-track" id="panel-track" role="tabpanel" aria-labelledby="tab-track">
         <div className="detail-empty" role="status">
@@ -415,7 +459,7 @@ export function TrackTab({
               color="#44aaff"
               label="Speed"
               unit="kts"
-              formatFn={v => v?.toFixed(0)}
+              formatFn={(v) => v?.toFixed(0)}
               positionPercent={trackLiveMode ? null : trackReplayPosition}
               graphZoom={graphZoom}
               graphScrollOffset={graphScrollOffset}
@@ -431,7 +475,7 @@ export function TrackTab({
               color="#ffaa44"
               label="V/S"
               unit="fpm"
-              formatFn={v => (v > 0 ? '+' : '') + v}
+              formatFn={(v) => (v > 0 ? '+' : '') + v}
               positionPercent={trackLiveMode ? null : trackReplayPosition}
               graphZoom={graphZoom}
               graphScrollOffset={graphScrollOffset}

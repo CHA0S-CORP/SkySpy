@@ -63,13 +63,17 @@ export function StreaksTab({ streaks }) {
           {streaks.best_daily && (
             <div className="best-streak">
               <Crown size={16} />
-              <span>Best daily streak: <strong>{streaks.best_daily} days</strong></span>
+              <span>
+                Best daily streak: <strong>{streaks.best_daily} days</strong>
+              </span>
             </div>
           )}
           {streaks.best_variety && (
             <div className="best-streak">
               <Crown size={16} />
-              <span>Best variety streak: <strong>{streaks.best_variety} days</strong></span>
+              <span>
+                Best variety streak: <strong>{streaks.best_variety} days</strong>
+              </span>
             </div>
           )}
         </div>

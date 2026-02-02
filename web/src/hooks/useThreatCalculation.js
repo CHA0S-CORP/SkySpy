@@ -52,8 +52,8 @@ function transformBackendThreat(t) {
     // Backend patterns data
     patterns: t.patterns || [],
     behavior: {
-      isCircling: t.patterns?.some(p => p.type === 'circling'),
-      isLoitering: t.patterns?.some(p => p.type === 'loitering'),
+      isCircling: t.patterns?.some((p) => p.type === 'circling'),
+      isLoitering: t.patterns?.some((p) => p.type === 'loitering'),
     },
     // Additional backend data
     agencyName: t.agency_name,
@@ -108,39 +108,42 @@ export function useThreatCalculation({
   const updateTimeRef = useRef(Date.now());
 
   // Process new threats and trigger alerts
-  const processNewThreats = useCallback((newThreats, oldThreats) => {
-    // Check for new threats to announce
-    for (const threat of newThreats) {
-      const wasTracked = oldThreats.find(t => t.hex === threat.hex);
-      if (!wasTracked) {
-        if (settings.voiceEnabled && announceNewThreat) {
-          announceNewThreat(threat);
-        }
-        if (settings.hapticEnabled && vibrateNewThreat) {
-          vibrateNewThreat(threat.threat_level);
-        }
-      }
-    }
-
-    // Announce if all clear
-    if (newThreats.length === 0 && oldThreats.length > 0) {
-      if (settings.voiceEnabled && announceClear) {
-        announceClear();
-      }
-      if (settings.hapticEnabled && vibrateClear) {
-        vibrateClear();
-      }
-    }
-
-    // Log threats to history
-    if (settings.persistent && logThreat) {
+  const processNewThreats = useCallback(
+    (newThreats, oldThreats) => {
+      // Check for new threats to announce
       for (const threat of newThreats) {
-        if (threat.is_law_enforcement || threat.threat_level === 'critical' || threat.knownLE) {
-          logThreat(threat);
+        const wasTracked = oldThreats.find((t) => t.hex === threat.hex);
+        if (!wasTracked) {
+          if (settings.voiceEnabled && announceNewThreat) {
+            announceNewThreat(threat);
+          }
+          if (settings.hapticEnabled && vibrateNewThreat) {
+            vibrateNewThreat(threat.threat_level);
+          }
         }
       }
-    }
-  }, [settings, announceNewThreat, announceClear, vibrateNewThreat, vibrateClear, logThreat]);
+
+      // Announce if all clear
+      if (newThreats.length === 0 && oldThreats.length > 0) {
+        if (settings.voiceEnabled && announceClear) {
+          announceClear();
+        }
+        if (settings.hapticEnabled && vibrateClear) {
+          vibrateClear();
+        }
+      }
+
+      // Log threats to history
+      if (settings.persistent && logThreat) {
+        for (const threat of newThreats) {
+          if (threat.is_law_enforcement || threat.threat_level === 'critical' || threat.knownLE) {
+            logThreat(threat);
+          }
+        }
+      }
+    },
+    [settings, announceNewThreat, announceClear, vibrateNewThreat, vibrateClear, logThreat]
+  );
 
   // Calculate threats from aircraft list
   useEffect(() => {
@@ -211,7 +214,7 @@ export function useThreatCalculation({
       // Determine trend and calculate closing speed
       let trend = 'unknown';
       let closingSpeed = null;
-      const prevThreat = lastThreatsRef.current.find(t => t.hex === ac.hex);
+      const prevThreat = lastThreatsRef.current.find((t) => t.hex === ac.hex);
 
       if (prevThreat && distanceNm !== null && prevThreat.distance_nm !== null) {
         const distDiff = distanceNm - prevThreat.distance_nm;
@@ -314,9 +317,7 @@ export function useThreatCalculation({
     lastThreatsRef.current = sortedThreats;
     setThreats(sortedThreats);
     setConnected(true);
-  }, [
-    position, aircraft, settings, backendThreats, backendConnected, processNewThreats
-  ]);
+  }, [position, aircraft, settings, backendThreats, backendConnected, processNewThreats]);
 
   return {
     threats,

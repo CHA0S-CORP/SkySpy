@@ -1,5 +1,13 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { ZoomIn, ZoomOut, RotateCcw, AlertTriangle, Plane, MessageCircle, Radio } from 'lucide-react';
+import {
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  AlertTriangle,
+  Plane,
+  MessageCircle,
+  Radio,
+} from 'lucide-react';
 
 // Severity color mapping
 const SEVERITY_COLORS = {
@@ -26,13 +34,7 @@ const EVENT_TYPE_CONFIG = {
  * @param {Date} props.startTime - Timeline start time
  * @param {Date} props.endTime - Timeline end time
  */
-export function TimelineView({
-  events = [],
-  onEventClick,
-  selectedEventId,
-  startTime,
-  endTime,
-}) {
+export function TimelineView({ events = [], onEventClick, selectedEventId, startTime, endTime }) {
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -57,7 +59,7 @@ export function TimelineView({
       return { start: now - 24 * 60 * 60 * 1000, end: now };
     }
 
-    const timestamps = events.map(e => new Date(e.timestamp).getTime());
+    const timestamps = events.map((e) => new Date(e.timestamp).getTime());
     const min = Math.min(...timestamps);
     const max = Math.max(...timestamps);
     // Add 5% padding on each side
@@ -68,13 +70,13 @@ export function TimelineView({
   // Process events and group by severity
   const processedEvents = useMemo(() => {
     return events
-      .map(event => ({
+      .map((event) => ({
         ...event,
         time: new Date(event.timestamp).getTime(),
         type: event.event_type || event.type || 'session',
         severity: event.severity || 'info',
       }))
-      .filter(e => e.time >= timeBounds.start && e.time <= timeBounds.end)
+      .filter((e) => e.time >= timeBounds.start && e.time <= timeBounds.end)
       .sort((a, b) => a.time - b.time);
   }, [events, timeBounds]);
 
@@ -93,7 +95,7 @@ export function TimelineView({
   // Filter events in visible window
   const visibleEvents = useMemo(() => {
     return processedEvents.filter(
-      e => e.time >= visibleWindow.start && e.time <= visibleWindow.end
+      (e) => e.time >= visibleWindow.start && e.time <= visibleWindow.end
     );
   }, [processedEvents, visibleWindow]);
 
@@ -104,10 +106,14 @@ export function TimelineView({
 
     // Determine appropriate interval based on duration
     let interval;
-    if (duration < 3600000) interval = 300000; // 5 min
-    else if (duration < 21600000) interval = 1800000; // 30 min
-    else if (duration < 86400000) interval = 3600000; // 1 hour
-    else if (duration < 604800000) interval = 21600000; // 6 hours
+    if (duration < 3600000)
+      interval = 300000; // 5 min
+    else if (duration < 21600000)
+      interval = 1800000; // 30 min
+    else if (duration < 86400000)
+      interval = 3600000; // 1 hour
+    else if (duration < 604800000)
+      interval = 21600000; // 6 hours
     else interval = 86400000; // 1 day
 
     const startTick = Math.ceil(visibleWindow.start / interval) * interval;
@@ -133,20 +139,23 @@ export function TimelineView({
   }
 
   // Event position calculation
-  const getEventPosition = useCallback((event) => {
-    return ((event.time - visibleWindow.start) / visibleWindow.duration) * 100;
-  }, [visibleWindow]);
+  const getEventPosition = useCallback(
+    (event) => {
+      return ((event.time - visibleWindow.start) / visibleWindow.duration) * 100;
+    },
+    [visibleWindow]
+  );
 
   // Zoom handlers
   const handleZoomIn = useCallback(() => {
-    setZoom(z => Math.min(10, z + 0.5));
+    setZoom((z) => Math.min(10, z + 0.5));
   }, []);
 
   const handleZoomOut = useCallback(() => {
-    setZoom(z => {
+    setZoom((z) => {
       const newZoom = Math.max(1, z - 0.5);
-      const maxOffset = Math.max(0, 100 - (100 / newZoom));
-      setOffset(o => Math.min(o, maxOffset));
+      const maxOffset = Math.max(0, 100 - 100 / newZoom);
+      setOffset((o) => Math.min(o, maxOffset));
       return newZoom;
     });
   }, []);
@@ -160,36 +169,42 @@ export function TimelineView({
   const handleWheel = useCallback((e) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.25 : 0.25;
-    setZoom(z => {
+    setZoom((z) => {
       const newZoom = Math.max(1, Math.min(10, z + delta));
       if (newZoom < z) {
-        const maxOffset = Math.max(0, 100 - (100 / newZoom));
-        setOffset(o => Math.min(o, maxOffset));
+        const maxOffset = Math.max(0, 100 - 100 / newZoom);
+        setOffset((o) => Math.min(o, maxOffset));
       }
       return newZoom;
     });
   }, []);
 
   // Pan handlers
-  const handleDragStart = useCallback((e) => {
-    if (zoom <= 1) return;
-    setIsDragging(true);
-    setDragStart({
-      x: e.clientX || e.touches?.[0]?.clientX || 0,
-      offset,
-    });
-  }, [zoom, offset]);
+  const handleDragStart = useCallback(
+    (e) => {
+      if (zoom <= 1) return;
+      setIsDragging(true);
+      setDragStart({
+        x: e.clientX || e.touches?.[0]?.clientX || 0,
+        offset,
+      });
+    },
+    [zoom, offset]
+  );
 
-  const handleDragMove = useCallback((e) => {
-    if (!isDragging || !containerRef.current) return;
-    const currentX = e.clientX || e.touches?.[0]?.clientX || 0;
-    const containerWidth = containerRef.current.offsetWidth;
-    const deltaX = dragStart.x - currentX;
-    const visiblePercent = 100 / zoom;
-    const maxOffset = 100 - visiblePercent;
-    const percentDelta = (deltaX / containerWidth) * visiblePercent;
-    setOffset(Math.max(0, Math.min(maxOffset, dragStart.offset + percentDelta)));
-  }, [isDragging, dragStart, zoom]);
+  const handleDragMove = useCallback(
+    (e) => {
+      if (!isDragging || !containerRef.current) return;
+      const currentX = e.clientX || e.touches?.[0]?.clientX || 0;
+      const containerWidth = containerRef.current.offsetWidth;
+      const deltaX = dragStart.x - currentX;
+      const visiblePercent = 100 / zoom;
+      const maxOffset = 100 - visiblePercent;
+      const percentDelta = (deltaX / containerWidth) * visiblePercent;
+      setOffset(Math.max(0, Math.min(maxOffset, dragStart.offset + percentDelta)));
+    },
+    [isDragging, dragStart, zoom]
+  );
 
   const handleDragEnd = useCallback(() => {
     setIsDragging(false);
@@ -212,9 +227,12 @@ export function TimelineView({
   }, []);
 
   // Click handling
-  const handleEventClick = useCallback((event) => {
-    onEventClick?.(event.id || event);
-  }, [onEventClick]);
+  const handleEventClick = useCallback(
+    (event) => {
+      onEventClick?.(event.id || event);
+    },
+    [onEventClick]
+  );
 
   // Keyboard navigation
   useEffect(() => {
@@ -236,9 +254,7 @@ export function TimelineView({
         <div className="timeline-title">Event Timeline</div>
         <div className="timeline-stats">
           {visibleEvents.length} events
-          {isZoomed && (
-            <span className="timeline-zoom-indicator">{zoom.toFixed(1)}x</span>
-          )}
+          {isZoomed && <span className="timeline-zoom-indicator">{zoom.toFixed(1)}x</span>}
         </div>
         <div className="timeline-controls">
           <button onClick={handleZoomOut} disabled={zoom <= 1} title="Zoom out (-)">
@@ -272,21 +288,17 @@ export function TimelineView({
         onMouseDown={handleDragStart}
         onMouseMove={handleDragMove}
         onMouseUp={handleDragEnd}
-        onMouseLeave={() => { handleDragEnd(); handleEventLeave(); }}
+        onMouseLeave={() => {
+          handleDragEnd();
+          handleEventLeave();
+        }}
         onTouchStart={handleDragStart}
         onTouchMove={handleDragMove}
         onTouchEnd={handleDragEnd}
       >
         <svg ref={svgRef} className="timeline-svg" width="100%" height="120">
           {/* Time axis */}
-          <line
-            x1="0%"
-            y1="60"
-            x2="100%"
-            y2="60"
-            stroke="rgba(255,255,255,0.2)"
-            strokeWidth="1"
-          />
+          <line x1="0%" y1="60" x2="100%" y2="60" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
 
           {/* Time ticks */}
           {timeTicks.map((tick, i) => (
@@ -406,18 +418,16 @@ export function TimelineView({
             <div className="tooltip-header">
               <span
                 className="tooltip-severity"
-                style={{ background: SEVERITY_COLORS[hoveredEvent.severity] || SEVERITY_COLORS.default }}
+                style={{
+                  background: SEVERITY_COLORS[hoveredEvent.severity] || SEVERITY_COLORS.default,
+                }}
               >
                 {hoveredEvent.severity?.toUpperCase() || 'INFO'}
               </span>
               <span className="tooltip-type">{hoveredEvent.type?.replace(/_/g, ' ')}</span>
             </div>
-            <div className="tooltip-time">
-              {new Date(hoveredEvent.timestamp).toLocaleString()}
-            </div>
-            {hoveredEvent.message && (
-              <div className="tooltip-message">{hoveredEvent.message}</div>
-            )}
+            <div className="tooltip-time">{new Date(hoveredEvent.timestamp).toLocaleString()}</div>
+            {hoveredEvent.message && <div className="tooltip-message">{hoveredEvent.message}</div>}
             {hoveredEvent.callsign && (
               <div className="tooltip-aircraft">{hoveredEvent.callsign}</div>
             )}

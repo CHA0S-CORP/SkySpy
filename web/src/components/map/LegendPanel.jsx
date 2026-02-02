@@ -6,25 +6,28 @@ import { useDraggable } from '../../hooks/useDraggable';
  * Draggable legend panel showing aircraft symbols and color meanings
  * Memoized to prevent re-renders when other map state changes
  */
-export const LegendPanel = memo(function LegendPanel({ 
-  show, 
+export const LegendPanel = memo(function LegendPanel({
+  show,
   onClose,
   collapsed,
   onToggleCollapsed,
-  mapMode = 'crt'
+  mapMode = 'crt',
 }) {
   const { position, isDragging, handleMouseDown } = useDraggable({ x: null, y: null });
 
   if (!show) return null;
 
-  const legendStyle = position.x !== null ? {
-    position: 'fixed',
-    left: position.x,
-    top: position.y,
-  } : {};
+  const legendStyle =
+    position.x !== null
+      ? {
+          position: 'fixed',
+          left: position.x,
+          top: position.y,
+        }
+      : {};
 
   return (
-    <div 
+    <div
       className={`legend-panel ${mapMode === 'pro' ? 'pro-legend' : 'crt-legend'} ${isDragging ? 'dragging' : ''}`}
       style={legendStyle}
       onMouseDown={handleMouseDown}
@@ -34,17 +37,14 @@ export const LegendPanel = memo(function LegendPanel({
         <Move size={14} className="drag-handle" />
         <Info size={16} />
         <span>Legend</span>
-        <button 
-          className="legend-collapse-btn"
-          onClick={onToggleCollapsed}
-        >
+        <button className="legend-collapse-btn" onClick={onToggleCollapsed}>
           {collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
         </button>
         <button className="legend-close-btn" onClick={onClose}>
           <X size={14} />
         </button>
       </div>
-      
+
       {!collapsed && (
         <div className="legend-content">
           <div className="legend-section">
@@ -66,7 +66,7 @@ export const LegendPanel = memo(function LegendPanel({
               <span>Helicopter/Rotorcraft</span>
             </div>
           </div>
-          
+
           <div className="legend-section">
             <div className="legend-section-title">Altitude Colors</div>
             <div className="legend-item">
@@ -86,7 +86,7 @@ export const LegendPanel = memo(function LegendPanel({
               <span>Ground/Unknown</span>
             </div>
           </div>
-          
+
           <div className="legend-section">
             <div className="legend-section-title">Special Status</div>
             <div className="legend-item">
@@ -106,7 +106,7 @@ export const LegendPanel = memo(function LegendPanel({
               <span>Selected Aircraft</span>
             </div>
           </div>
-          
+
           <div className="legend-section">
             <div className="legend-section-title">Aviation Data</div>
             <div className="legend-item">

@@ -5,11 +5,7 @@ import { cn } from './cn';
 
 const bentoCardVariants = cva(
   // Base styles - glassmorphism foundation
-  [
-    'relative rounded-2xl',
-    'border transition-all duration-300',
-    'overflow-hidden',
-  ],
+  ['relative rounded-2xl', 'border transition-all duration-300', 'overflow-hidden'],
   {
     variants: {
       variant: {
@@ -48,7 +44,7 @@ const cardMotionVariants = {
   initial: {
     opacity: 0,
     y: 15,
-    scale: 0.98
+    scale: 0.98,
   },
   animate: {
     opacity: 1,
@@ -57,7 +53,7 @@ const cardMotionVariants = {
     transition: {
       duration: 0.4,
       ease: [0.25, 0.46, 0.45, 0.94], // Custom easing
-    }
+    },
   },
   hover: {
     scale: 1.02,
@@ -65,7 +61,7 @@ const cardMotionVariants = {
     transition: {
       duration: 0.2,
       ease: 'easeOut',
-    }
+    },
   },
 };
 
@@ -90,12 +86,14 @@ const BentoCard = forwardRef(function BentoCard(
   const colSpanClass = colSpan === 2 ? 'md:col-span-2' : '';
 
   const CardWrapper = animate ? motion.div : 'div';
-  const motionProps = animate ? {
-    variants: cardMotionVariants,
-    initial: 'initial',
-    animate: 'animate',
-    whileHover: hoverable ? 'hover' : undefined,
-  } : {};
+  const motionProps = animate
+    ? {
+        variants: cardMotionVariants,
+        initial: 'initial',
+        animate: 'animate',
+        whileHover: hoverable ? 'hover' : undefined,
+      }
+    : {};
 
   return (
     <CardWrapper
@@ -124,10 +122,12 @@ const BentoCard = forwardRef(function BentoCard(
             />
           )}
           {title && (
-            <h3 className={cn(
-              'text-sm font-medium tracking-wide',
-              variant === 'hero' ? 'text-accent-cyan' : 'text-text-secondary'
-            )}>
+            <h3
+              className={cn(
+                'text-sm font-medium tracking-wide',
+                variant === 'hero' ? 'text-accent-cyan' : 'text-text-secondary'
+              )}
+            >
               {title}
             </h3>
           )}
@@ -135,9 +135,7 @@ const BentoCard = forwardRef(function BentoCard(
       )}
 
       {/* Card content */}
-      <div className="relative">
-        {children}
-      </div>
+      <div className="relative">{children}</div>
     </CardWrapper>
   );
 });

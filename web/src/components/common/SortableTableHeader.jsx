@@ -13,13 +13,7 @@ import { ArrowUp, ArrowDown } from 'lucide-react';
  * @param {Function} props.onSort - Callback when sort changes: (fieldKey) => void
  * @param {string} [props.className] - Additional CSS class for the thead
  */
-export function SortableTableHeader({
-  columns,
-  sortField,
-  sortDirection,
-  onSort,
-  className = ''
-}) {
+export function SortableTableHeader({ columns, sortField, sortDirection, onSort, className = '' }) {
   return (
     <thead className={`sortable-table-header ${className}`}>
       <tr>

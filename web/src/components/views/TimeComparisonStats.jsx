@@ -1,8 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Calendar, TrendingUp, TrendingDown, Sun, Moon,
-  ArrowUpRight, ArrowDownRight, Minus, BarChart2,
-  Clock, Filter, ChevronDown, RefreshCw
+  Calendar,
+  TrendingUp,
+  TrendingDown,
+  Sun,
+  Moon,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
+  BarChart2,
+  Clock,
+  Filter,
+  ChevronDown,
+  RefreshCw,
 } from 'lucide-react';
 import { useStats } from '../../hooks';
 
@@ -23,7 +33,7 @@ export function TimeComparisonStats({ apiBase, wsRequest, wsConnected }) {
   const { timeComparison, loading, error, refetch } = useStats(apiBase, {
     wsRequest,
     wsConnected,
-    hours: selectedHours
+    hours: selectedHours,
   });
 
   const data = timeComparison;
@@ -32,7 +42,7 @@ export function TimeComparisonStats({ apiBase, wsRequest, wsConnected }) {
     week_over_week = {},
     day_night_ratio = {},
     weekend_weekday = {},
-    trends = {}
+    trends = {},
   } = data || {};
 
   // Calculate change indicators
@@ -55,29 +65,33 @@ export function TimeComparisonStats({ apiBase, wsRequest, wsConnected }) {
       current: week_over_week.current_total ?? '--',
       previous: week_over_week.previous_total ?? '--',
       change: week_over_week.total_change_pct ?? 0,
-      icon: TrendingUp
+      icon: TrendingUp,
     },
     {
       label: 'Unique Types',
       current: week_over_week.current_types ?? '--',
       previous: week_over_week.previous_types ?? '--',
       change: week_over_week.types_change_pct ?? 0,
-      icon: BarChart2
+      icon: BarChart2,
     },
     {
       label: 'Peak Concurrent',
       current: week_over_week.current_peak ?? '--',
       previous: week_over_week.previous_peak ?? '--',
       change: week_over_week.peak_change_pct ?? 0,
-      icon: TrendingUp
+      icon: TrendingUp,
     },
     {
       label: 'Avg Duration',
-      current: week_over_week.current_avg_duration ? `${week_over_week.current_avg_duration.toFixed(0)}m` : '--',
-      previous: week_over_week.previous_avg_duration ? `${week_over_week.previous_avg_duration.toFixed(0)}m` : '--',
+      current: week_over_week.current_avg_duration
+        ? `${week_over_week.current_avg_duration.toFixed(0)}m`
+        : '--',
+      previous: week_over_week.previous_avg_duration
+        ? `${week_over_week.previous_avg_duration.toFixed(0)}m`
+        : '--',
       change: week_over_week.duration_change_pct ?? 0,
-      icon: Clock
-    }
+      icon: Clock,
+    },
   ];
 
   // Day/Night data
@@ -97,35 +111,36 @@ export function TimeComparisonStats({ apiBase, wsRequest, wsConnected }) {
   const normalizeTrendData = (trendData, maxPoints) => {
     if (!trendData || trendData.length === 0) return [];
     const data = trendData.slice(-maxPoints);
-    const max = Math.max(...data.map(d => d.value || 0), 1);
-    return data.map(d => ({
+    const max = Math.max(...data.map((d) => d.value || 0), 1);
+    return data.map((d) => ({
       ...d,
-      normalized: ((d.value || 0) / max) * 100
+      normalized: ((d.value || 0) / max) * 100,
     }));
   };
 
-  const thirtyDayTrend = useMemo(() =>
-    normalizeTrendData(trends.daily_30, 30),
-    [trends.daily_30]
-  );
+  const thirtyDayTrend = useMemo(() => normalizeTrendData(trends.daily_30, 30), [trends.daily_30]);
 
-  const twelveWeekTrend = useMemo(() =>
-    normalizeTrendData(trends.weekly_12, 12),
+  const twelveWeekTrend = useMemo(
+    () => normalizeTrendData(trends.weekly_12, 12),
     [trends.weekly_12]
   );
 
-  const twelveMonthTrend = useMemo(() =>
-    normalizeTrendData(trends.monthly_12, 12),
+  const twelveMonthTrend = useMemo(
+    () => normalizeTrendData(trends.monthly_12, 12),
     [trends.monthly_12]
   );
 
   // Summary stats
-  const summaryStats = useMemo(() => ({
-    dayNightRatio: dayCount > 0 ? `${(dayCount / nightCount).toFixed(1)}:1` : '--',
-    weekendVsWeekday: weekdayAvg > 0 ? `${((weekendAvg / weekdayAvg) * 100 - 100).toFixed(0)}%` : '--',
-    totalChange: week_over_week.total_change_pct?.toFixed(1) ?? '--',
-    trendDirection: (week_over_week.total_change_pct ?? 0) > 0 ? 'up' : 'down'
-  }), [dayCount, nightCount, weekendAvg, weekdayAvg, week_over_week]);
+  const summaryStats = useMemo(
+    () => ({
+      dayNightRatio: dayCount > 0 ? `${(dayCount / nightCount).toFixed(1)}:1` : '--',
+      weekendVsWeekday:
+        weekdayAvg > 0 ? `${((weekendAvg / weekdayAvg) * 100 - 100).toFixed(0)}%` : '--',
+      totalChange: week_over_week.total_change_pct?.toFixed(1) ?? '--',
+      trendDirection: (week_over_week.total_change_pct ?? 0) > 0 ? 'up' : 'down',
+    }),
+    [dayCount, nightCount, weekendAvg, weekdayAvg, week_over_week]
+  );
 
   if (loading && !data) {
     return (
@@ -170,7 +185,7 @@ export function TimeComparisonStats({ apiBase, wsRequest, wsConnected }) {
           <Clock size={14} />
           <span className="filter-label">Time Range</span>
           <div className="time-range-buttons">
-            {Object.keys(hours).map(range => (
+            {Object.keys(hours).map((range) => (
               <button
                 key={range}
                 className={`time-btn ${timeRange === range ? 'active' : ''}`}
@@ -186,14 +201,18 @@ export function TimeComparisonStats({ apiBase, wsRequest, wsConnected }) {
       {/* Summary Cards */}
       <div className="summary-cards">
         <div className="summary-card">
-          <div className="summary-icon"><Sun size={20} /></div>
+          <div className="summary-icon">
+            <Sun size={20} />
+          </div>
           <div className="summary-content">
             <span className="summary-value">{summaryStats.dayNightRatio}</span>
             <span className="summary-label">Day/Night Ratio</span>
           </div>
         </div>
         <div className="summary-card">
-          <div className="summary-icon"><Calendar size={20} /></div>
+          <div className="summary-icon">
+            <Calendar size={20} />
+          </div>
           <div className="summary-content">
             <span className="summary-value">{summaryStats.weekendVsWeekday}</span>
             <span className="summary-label">Weekend vs Weekday</span>
@@ -201,10 +220,16 @@ export function TimeComparisonStats({ apiBase, wsRequest, wsConnected }) {
         </div>
         <div className="summary-card">
           <div className={`summary-icon ${summaryStats.trendDirection}`}>
-            {summaryStats.trendDirection === 'up' ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
+            {summaryStats.trendDirection === 'up' ? (
+              <TrendingUp size={20} />
+            ) : (
+              <TrendingDown size={20} />
+            )}
           </div>
           <div className="summary-content">
-            <span className={`summary-value ${getChangeClass(week_over_week.total_change_pct || 0)}`}>
+            <span
+              className={`summary-value ${getChangeClass(week_over_week.total_change_pct || 0)}`}
+            >
               {summaryStats.totalChange}%
             </span>
             <span className="summary-label">Week Change</span>
@@ -287,15 +312,21 @@ export function TimeComparisonStats({ apiBase, wsRequest, wsConnected }) {
                   <span className="daynight-value">{nightCount.toLocaleString()}</span>
                   <span className="daynight-label">Night Flights ({nightPct}%)</span>
                   {day_night_ratio.night_peak_hour !== undefined && (
-                    <span className="daynight-peak">Peak: {day_night_ratio.night_peak_hour}:00</span>
+                    <span className="daynight-peak">
+                      Peak: {day_night_ratio.night_peak_hour}:00
+                    </span>
                   )}
                 </div>
               </div>
             </div>
             {day_night_ratio.sunrise && day_night_ratio.sunset && (
               <div className="daynight-times expanded">
-                <span><Sun size={12} /> Sunrise: {day_night_ratio.sunrise}</span>
-                <span><Moon size={12} /> Sunset: {day_night_ratio.sunset}</span>
+                <span>
+                  <Sun size={12} /> Sunrise: {day_night_ratio.sunrise}
+                </span>
+                <span>
+                  <Moon size={12} /> Sunset: {day_night_ratio.sunset}
+                </span>
               </div>
             )}
           </div>
@@ -315,7 +346,7 @@ export function TimeComparisonStats({ apiBase, wsRequest, wsConnected }) {
                   <div
                     className="weekend-bar-fill weekday"
                     style={{
-                      width: `${Math.min((weekdayAvg / Math.max(weekdayAvg, weekendAvg, 1)) * 100, 100)}%`
+                      width: `${Math.min((weekdayAvg / Math.max(weekdayAvg, weekendAvg, 1)) * 100, 100)}%`,
                     }}
                   />
                 </div>
@@ -327,7 +358,7 @@ export function TimeComparisonStats({ apiBase, wsRequest, wsConnected }) {
                   <div
                     className="weekend-bar-fill weekend"
                     style={{
-                      width: `${Math.min((weekendAvg / Math.max(weekdayAvg, weekendAvg, 1)) * 100, 100)}%`
+                      width: `${Math.min((weekendAvg / Math.max(weekdayAvg, weekendAvg, 1)) * 100, 100)}%`,
                     }}
                   />
                 </div>
@@ -364,8 +395,8 @@ export function TimeComparisonStats({ apiBase, wsRequest, wsConnected }) {
               {[
                 { key: 'daily', label: '30 Days' },
                 { key: 'weekly', label: '12 Weeks' },
-                { key: 'monthly', label: '12 Months' }
-              ].map(tab => (
+                { key: 'monthly', label: '12 Months' },
+              ].map((tab) => (
                 <button
                   key={tab.key}
                   className={`trend-tab ${activeTrendView === tab.key ? 'active' : ''}`}
@@ -389,10 +420,7 @@ export function TimeComparisonStats({ apiBase, wsRequest, wsConnected }) {
                         className="trend-bar-wrapper"
                         title={`${point.label || point.date}: ${point.value}`}
                       >
-                        <div
-                          className="trend-bar"
-                          style={{ height: `${point.normalized}%` }}
-                        />
+                        <div className="trend-bar" style={{ height: `${point.normalized}%` }} />
                       </div>
                     ))}
                   </div>
@@ -444,7 +472,9 @@ export function TimeComparisonStats({ apiBase, wsRequest, wsConnected }) {
                           className="trend-bar monthly"
                           style={{ height: `${point.normalized}%` }}
                         />
-                        <span className="trend-bar-label">{point.label?.slice(0, 3) || `M${i + 1}`}</span>
+                        <span className="trend-bar-label">
+                          {point.label?.slice(0, 3) || `M${i + 1}`}
+                        </span>
                       </div>
                     ))}
                   </div>

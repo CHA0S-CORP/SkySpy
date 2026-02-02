@@ -1,5 +1,13 @@
 import React from 'react';
-import { Archive, MapPin, ChevronDown, ChevronUp, Clock, Calendar, AlertTriangle } from 'lucide-react';
+import {
+  Archive,
+  MapPin,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Calendar,
+  AlertTriangle,
+} from 'lucide-react';
 import { NOTAM_TYPES } from './archiveConstants';
 import { formatDate, formatRelativeTime } from './archiveUtils';
 
@@ -32,7 +40,8 @@ export function ArchivedNotamCard({ notam, expanded, onToggle }) {
 
       <div className="archive-card-summary">
         <p className="archive-text-preview">
-          {notam.text?.slice(0, 150)}{notam.text?.length > 150 ? '...' : ''}
+          {notam.text?.slice(0, 150)}
+          {notam.text?.length > 150 ? '...' : ''}
         </p>
       </div>
 
@@ -79,10 +88,12 @@ export function ArchivedNotamCard({ notam, expanded, onToggle }) {
             </div>
           )}
 
-          {(notam.latitude && notam.longitude) && (
+          {notam.latitude && notam.longitude && (
             <div className="archive-coords">
               <h4>Coordinates</h4>
-              <span>{notam.latitude.toFixed(4)}, {notam.longitude.toFixed(4)}</span>
+              <span>
+                {notam.latitude.toFixed(4)}, {notam.longitude.toFixed(4)}
+              </span>
             </div>
           )}
 

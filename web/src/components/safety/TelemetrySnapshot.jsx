@@ -11,9 +11,7 @@ export function TelemetrySnapshot({ snapshot, label, onSelectAircraft }) {
     <div className="snapshot-section large">
       {label && <div className="snapshot-label">{label}</div>}
       <div className="snapshot-grid">
-        {snapshot.flight && (
-          <SnapshotItem label="Callsign" value={snapshot.flight} />
-        )}
+        {snapshot.flight && <SnapshotItem label="Callsign" value={snapshot.flight} />}
         {snapshot.hex && (
           <SnapshotItem
             label="ICAO"
@@ -22,12 +20,8 @@ export function TelemetrySnapshot({ snapshot, label, onSelectAircraft }) {
             onClick={() => onSelectAircraft?.(snapshot.hex)}
           />
         )}
-        {snapshot.lat && (
-          <SnapshotItem label="Lat" value={snapshot.lat?.toFixed(5)} />
-        )}
-        {snapshot.lon && (
-          <SnapshotItem label="Lon" value={snapshot.lon?.toFixed(5)} />
-        )}
+        {snapshot.lat && <SnapshotItem label="Lat" value={snapshot.lat?.toFixed(5)} />}
+        {snapshot.lon && <SnapshotItem label="Lon" value={snapshot.lon?.toFixed(5)} />}
         {snapshot.alt_baro && (
           <SnapshotItem label="Alt (baro)" value={`${snapshot.alt_baro?.toLocaleString()} ft`} />
         )}
@@ -52,24 +46,19 @@ export function TelemetrySnapshot({ snapshot, label, onSelectAircraft }) {
             value={`${snapshot.geom_rate > 0 ? '+' : ''}${snapshot.geom_rate} fpm`}
           />
         )}
-        {snapshot.squawk && (
-          <SnapshotItem label="Squawk" value={snapshot.squawk} />
-        )}
-        {snapshot.category && (
-          <SnapshotItem label="Category" value={snapshot.category} />
-        )}
+        {snapshot.squawk && <SnapshotItem label="Squawk" value={snapshot.squawk} />}
+        {snapshot.category && <SnapshotItem label="Category" value={snapshot.category} />}
         {snapshot.nav_altitude_mcp && (
-          <SnapshotItem label="MCP Alt" value={`${snapshot.nav_altitude_mcp?.toLocaleString()} ft`} />
+          <SnapshotItem
+            label="MCP Alt"
+            value={`${snapshot.nav_altitude_mcp?.toLocaleString()} ft`}
+          />
         )}
         {snapshot.nav_heading !== undefined && snapshot.nav_heading !== null && (
           <SnapshotItem label="Nav Heading" value={`${snapshot.nav_heading?.toFixed(0)}deg`} />
         )}
         {snapshot.emergency && (
-          <SnapshotItem
-            label="Emergency"
-            value={snapshot.emergency}
-            className="emergency-value"
-          />
+          <SnapshotItem label="Emergency" value={snapshot.emergency} className="emergency-value" />
         )}
       </div>
     </div>
@@ -83,7 +72,9 @@ function SnapshotItem({ label, value, className = '', onClick }) {
   return (
     <div className="snapshot-item">
       <span>{label}</span>
-      <span className={className} onClick={onClick}>{value}</span>
+      <span className={className} onClick={onClick}>
+        {value}
+      </span>
     </div>
   );
 }

@@ -42,13 +42,19 @@ function flushAircraftBatch() {
     pendingAircraftRemovals = new Set();
 
     if (import.meta.env.DEV) {
-      console.log('[batchFlush] Flushing', Object.keys(updates).length, 'updates and', removals.size, 'removals');
+      console.log(
+        '[batchFlush] Flushing',
+        Object.keys(updates).length,
+        'updates and',
+        removals.size,
+        'removals'
+      );
     }
 
-    batchSetAircraftRef(prev => {
+    batchSetAircraftRef((prev) => {
       const next = { ...prev, ...updates };
       // Apply removals
-      removals.forEach(hex => {
+      removals.forEach((hex) => {
         delete next[hex];
       });
       return next;
@@ -128,7 +134,7 @@ export function processAircraftSnapshot(data, setAircraft, setStats) {
     }
     const newAircraft = {};
     let normalizedCount = 0;
-    data.data.aircraft.forEach(ac => {
+    data.data.aircraft.forEach((ac) => {
       if (ac && typeof ac === 'object') {
         const normalized = normalizeAircraft(ac);
         if (normalized.hex) {
@@ -138,10 +144,14 @@ export function processAircraftSnapshot(data, setAircraft, setStats) {
       }
     });
     if (import.meta.env.DEV) {
-      console.log('[processAircraftSnapshot] Normalized', normalizedCount, 'aircraft, calling setAircraft');
+      console.log(
+        '[processAircraftSnapshot] Normalized',
+        normalizedCount,
+        'aircraft, calling setAircraft'
+      );
     }
     setAircraft(newAircraft);
-    setStats(prev => ({ ...prev, count: Object.keys(newAircraft).length }));
+    setStats((prev) => ({ ...prev, count: Object.keys(newAircraft).length }));
   } else if (import.meta.env.DEV) {
     console.warn('[processAircraftSnapshot] Invalid data format:', data);
   }
@@ -154,11 +164,15 @@ export function processAircraftSnapshot(data, setAircraft, setStats) {
 export function processAircraftUpdate(data, setAircraft) {
   const aircraftData = data?.data?.aircraft || (data?.data ? [data.data] : []);
   if (import.meta.env.DEV) {
-    console.log('[processAircraftUpdate] Received update with', aircraftData?.length ?? 0, 'aircraft');
+    console.log(
+      '[processAircraftUpdate] Received update with',
+      aircraftData?.length ?? 0,
+      'aircraft'
+    );
   }
   if (Array.isArray(aircraftData) && aircraftData.length > 0) {
     const updates = {};
-    aircraftData.forEach(ac => {
+    aircraftData.forEach((ac) => {
       if (ac && typeof ac === 'object') {
         const normalized = normalizeAircraft(ac);
         if (normalized.hex) {
@@ -180,7 +194,7 @@ export function processAircraftNew(data, setAircraft) {
   const aircraftData = data?.data?.aircraft || (data?.data ? [data.data] : []);
   if (Array.isArray(aircraftData)) {
     const updates = {};
-    aircraftData.forEach(ac => {
+    aircraftData.forEach((ac) => {
       if (ac && typeof ac === 'object') {
         const normalized = normalizeAircraft(ac);
         if (normalized.hex) {
@@ -199,10 +213,13 @@ export function processAircraftNew(data, setAircraft) {
  * Removals are accumulated and flushed every 50ms to reduce re-renders
  */
 export function processAircraftRemove(data, setAircraft) {
-  const hexList = data?.data?.icaos || data?.data?.icao_list || data?.data?.hex_list ||
-                 (data?.data?.hex ? [data.data.hex] : []);
+  const hexList =
+    data?.data?.icaos ||
+    data?.data?.icao_list ||
+    data?.data?.hex_list ||
+    (data?.data?.hex ? [data.data.hex] : []);
   if (Array.isArray(hexList) && hexList.length > 0) {
-    hexList.forEach(hex => {
+    hexList.forEach((hex) => {
       if (hex && typeof hex === 'string') {
         queueAircraftRemoval(hex.toUpperCase(), setAircraft);
       }
@@ -230,7 +247,7 @@ export function processSafetyEvent(data, setSafetyEvents) {
     if (import.meta.env.DEV) {
       console.log('Safety event received:', data.data);
     }
-    setSafetyEvents(prev => [data.data, ...prev].slice(0, 100));
+    setSafetyEvents((prev) => [data.data, ...prev].slice(0, 100));
   }
 }
 
@@ -242,18 +259,18 @@ export function processSafetyEventUpdated(data, setSafetyEvents) {
     if (import.meta.env.DEV) {
       console.log('Safety event updated:', data.data);
     }
-    setSafetyEvents(prev => {
+    setSafetyEvents((prev) => {
       const eventId = data.data.id || data.data.event_id;
       if (!eventId) return prev;
-      return prev.map(event =>
-        (event.id === eventId || event.event_id === eventId)
-          ? { ...event, ...data.data }
-          : event
+      return prev.map((event) =>
+        event.id === eventId || event.event_id === eventId ? { ...event, ...data.data } : event
       );
     });
-    window.dispatchEvent(new CustomEvent('skyspy:safety:event_updated', {
-      detail: data.data
-    }));
+    window.dispatchEvent(
+      new CustomEvent('skyspy:safety:event_updated', {
+        detail: data.data,
+      })
+    );
   }
 }
 
@@ -267,16 +284,18 @@ export function processSafetyEventResolved(data, setSafetyEvents) {
     }
     const eventId = data.data.id || data.data.event_id;
     if (eventId) {
-      setSafetyEvents(prev =>
-        prev.map(event =>
-          (event.id === eventId || event.event_id === eventId)
+      setSafetyEvents((prev) =>
+        prev.map((event) =>
+          event.id === eventId || event.event_id === eventId
             ? { ...event, ...data.data, resolved: true }
             : event
         )
       );
-      window.dispatchEvent(new CustomEvent('skyspy:safety:event_resolved', {
-        detail: { ...data.data, resolved: true }
-      }));
+      window.dispatchEvent(
+        new CustomEvent('skyspy:safety:event_resolved', {
+          detail: { ...data.data, resolved: true },
+        })
+      );
     }
   }
 }
@@ -290,7 +309,7 @@ export function processAlertTriggered(data, setAlerts) {
       console.log('Alert triggered:', data.data);
     }
     handleAlertTriggered(data.data);
-    setAlerts(prev => [data.data, ...prev].slice(0, 100));
+    setAlerts((prev) => [data.data, ...prev].slice(0, 100));
   }
 }
 
@@ -312,9 +331,9 @@ export function processAlertSnapshot(data, setAlerts) {
 export function processAcarsMessage(data, setAcarsMessages) {
   if (data?.data) {
     const newMessages = Array.isArray(data.data) ? data.data : [data.data];
-    const validMessages = newMessages.filter(m => m && typeof m === 'object');
+    const validMessages = newMessages.filter((m) => m && typeof m === 'object');
     if (validMessages.length > 0) {
-      setAcarsMessages(prev => [...validMessages, ...prev].slice(0, 100));
+      setAcarsMessages((prev) => [...validMessages, ...prev].slice(0, 100));
     }
   }
 }
@@ -337,10 +356,12 @@ export function processAudioTransmission(data, setAudioTransmissions) {
       console.log('Audio transmission received:', data.data);
     }
     const transmission = data.data;
-    setAudioTransmissions(prev => [transmission, ...prev].slice(0, 50));
-    window.dispatchEvent(new CustomEvent('skyspy:audio:transmission', {
-      detail: transmission
-    }));
+    setAudioTransmissions((prev) => [transmission, ...prev].slice(0, 50));
+    window.dispatchEvent(
+      new CustomEvent('skyspy:audio:transmission', {
+        detail: transmission,
+      })
+    );
   }
 }
 

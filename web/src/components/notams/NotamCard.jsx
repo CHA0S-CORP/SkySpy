@@ -30,7 +30,8 @@ export function NotamCard({ notam, expanded, onToggle }) {
 
       <div className="notam-card-summary">
         <p className="notam-text-preview">
-          {notam.text?.slice(0, 150)}{notam.text?.length > 150 ? '...' : ''}
+          {notam.text?.slice(0, 150)}
+          {notam.text?.length > 150 ? '...' : ''}
         </p>
       </div>
 
@@ -79,10 +80,12 @@ export function NotamCard({ notam, expanded, onToggle }) {
             </div>
           )}
 
-          {(notam.latitude && notam.longitude) && (
+          {notam.latitude && notam.longitude && (
             <div className="notam-coords">
               <h4>Coordinates</h4>
-              <span>{notam.latitude.toFixed(4)}, {notam.longitude.toFixed(4)}</span>
+              <span>
+                {notam.latitude.toFixed(4)}, {notam.longitude.toFixed(4)}
+              </span>
             </div>
           )}
 
@@ -98,7 +101,9 @@ export function NotamCard({ notam, expanded, onToggle }) {
               <h4>Keywords</h4>
               <div className="keyword-tags">
                 {notam.keywords.map((kw, i) => (
-                  <span key={i} className="keyword-tag">{kw}</span>
+                  <span key={i} className="keyword-tag">
+                    {kw}
+                  </span>
                 ))}
               </div>
             </div>

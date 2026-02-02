@@ -24,14 +24,14 @@ export const EMERGENCY_KEYWORDS = [
   '7700',
   'souls on board',
   'distress',
-  'urgent'
+  'urgent',
 ];
 
 // Helper to check if transcript contains emergency keywords
 export const hasEmergencyKeyword = (transcript) => {
   if (!transcript) return false;
   const lowerTranscript = transcript.toLowerCase();
-  return EMERGENCY_KEYWORDS.some(keyword => lowerTranscript.includes(keyword));
+  return EMERGENCY_KEYWORDS.some((keyword) => lowerTranscript.includes(keyword));
 };
 
 // Maximum age (in ms) for a transmission to be eligible for autoplay
@@ -62,14 +62,14 @@ export const globalAudioState = {
 export const subscribeToAudioState = (callback) => {
   globalAudioState.subscribers.push(callback);
   return () => {
-    globalAudioState.subscribers = globalAudioState.subscribers.filter(cb => cb !== callback);
+    globalAudioState.subscribers = globalAudioState.subscribers.filter((cb) => cb !== callback);
   };
 };
 
 // Notify all subscribers of state changes
 // Wrapped in try-catch to handle errors from subscriber callbacks
 export const notifySubscribers = (updates) => {
-  globalAudioState.subscribers.forEach(callback => {
+  globalAudioState.subscribers.forEach((callback) => {
     try {
       callback(updates);
     } catch (err) {
@@ -128,8 +128,10 @@ export const clearQueue = () => {
 
 export const reorderQueue = (fromIndex, toIndex) => {
   if (
-    fromIndex >= 0 && fromIndex < globalAudioState.autoplayQueue.length &&
-    toIndex >= 0 && toIndex < globalAudioState.autoplayQueue.length &&
+    fromIndex >= 0 &&
+    fromIndex < globalAudioState.autoplayQueue.length &&
+    toIndex >= 0 &&
+    toIndex < globalAudioState.autoplayQueue.length &&
     fromIndex !== toIndex
   ) {
     const queue = [...globalAudioState.autoplayQueue];
@@ -168,7 +170,11 @@ export const processGlobalAutoplayQueue = () => {
 
   if (transmissionAge > AUTOPLAY_MAX_AGE_MS * 2) {
     // Skip stale queued items (use 2x threshold since it already passed initial check)
-    console.log('Skipping stale queued transmission:', next.id, `(${Math.round(transmissionAge / 1000)}s old)`);
+    console.log(
+      'Skipping stale queued transmission:',
+      next.id,
+      `(${Math.round(transmissionAge / 1000)}s old)`
+    );
     // Try next item
     if (globalAudioState.autoplayQueue.length > 0) {
       processGlobalAutoplayQueue();
@@ -219,7 +225,7 @@ export const playAudioFromGlobal = (transmission) => {
       notifySubscribers({
         playingId: null,
         currentTransmission: null,
-        audioProgress: { ...globalAudioState.audioProgress }
+        audioProgress: { ...globalAudioState.audioProgress },
       });
 
       // Clear progress interval
@@ -244,27 +250,30 @@ export const playAudioFromGlobal = (transmission) => {
   }
 
   // Play
-  audio.play().then(() => {
-    globalAudioState.playingId = id;
-    globalAudioState.currentTransmission = transmission;
-    notifySubscribers({ playingId: id, currentTransmission: transmission });
+  audio
+    .play()
+    .then(() => {
+      globalAudioState.playingId = id;
+      globalAudioState.currentTransmission = transmission;
+      notifySubscribers({ playingId: id, currentTransmission: transmission });
 
-    // Update progress
-    if (globalAudioState.progressIntervalRef) {
-      clearInterval(globalAudioState.progressIntervalRef);
-    }
-    globalAudioState.progressIntervalRef = setInterval(() => {
-      if (audio && !audio.paused) {
-        const progress = (audio.currentTime / audio.duration) * 100 || 0;
-        globalAudioState.audioProgress[id] = progress;
-        notifySubscribers({ audioProgress: { ...globalAudioState.audioProgress } });
+      // Update progress
+      if (globalAudioState.progressIntervalRef) {
+        clearInterval(globalAudioState.progressIntervalRef);
       }
-    }, 100);
-  }).catch(err => {
-    console.error('Failed to play audio:', err);
-    // Try next in queue
-    setTimeout(() => processGlobalAutoplayQueue(), 100);
-  });
+      globalAudioState.progressIntervalRef = setInterval(() => {
+        if (audio && !audio.paused) {
+          const progress = (audio.currentTime / audio.duration) * 100 || 0;
+          globalAudioState.audioProgress[id] = progress;
+          notifySubscribers({ audioProgress: { ...globalAudioState.audioProgress } });
+        }
+      }, 100);
+    })
+    .catch((err) => {
+      console.error('Failed to play audio:', err);
+      // Try next in queue
+      setTimeout(() => processGlobalAutoplayQueue(), 100);
+    });
 };
 
 /**
@@ -276,7 +285,9 @@ export function useAudioState() {
   const [audioProgress, setAudioProgress] = useState(globalAudioState.audioProgress);
   const [audioDurations, setAudioDurations] = useState(globalAudioState.audioDurations);
   const [autoplay, setAutoplayState] = useState(globalAudioState.autoplay);
-  const [currentTransmission, setCurrentTransmission] = useState(globalAudioState.currentTransmission);
+  const [currentTransmission, setCurrentTransmission] = useState(
+    globalAudioState.currentTransmission
+  );
   const [autoplayQueue, setAutoplayQueue] = useState(globalAudioState.autoplayQueue);
 
   const audioRefs = globalAudioState.audioRefs;

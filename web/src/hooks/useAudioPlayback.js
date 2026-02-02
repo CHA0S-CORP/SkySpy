@@ -9,10 +9,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  globalAudioState,
-  notifySubscribers,
-} from './useAudioState';
+import { globalAudioState, notifySubscribers } from './useAudioState';
 
 /**
  * Hook for managing audio playback.
@@ -51,10 +48,10 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
 
   // Subscribe to global audio state changes
   useEffect(() => {
-    const unsubscribe = (callback => {
+    const unsubscribe = ((callback) => {
       globalAudioState.subscribers.push(callback);
       return () => {
-        globalAudioState.subscribers = globalAudioState.subscribers.filter(cb => cb !== callback);
+        globalAudioState.subscribers = globalAudioState.subscribers.filter((cb) => cb !== callback);
       };
     })((updates) => {
       if ('playingId' in updates) setLocalPlayingId(updates.playingId);
@@ -62,7 +59,11 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
       if ('audioDurations' in updates) setLocalAudioDurations(updates.audioDurations);
       if ('autoplay' in updates) {
         setLocalAutoplay(updates.autoplay);
-        if (updates.autoplay && autoplayQueueRef.current.length > 0 && processAutoplayQueueRef.current) {
+        if (
+          updates.autoplay &&
+          autoplayQueueRef.current.length > 0 &&
+          processAutoplayQueueRef.current
+        ) {
           setTimeout(() => processAutoplayQueueRef.current?.(), 0);
         }
       }
@@ -106,14 +107,14 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
       };
 
       // Create named handler functions so they can be removed later
-      const handleLoadedMetadata = function() {
+      const handleLoadedMetadata = function () {
         cleanup();
         globalAudioState.audioDurations[next.id] = audio.duration;
         notifySubscribers({ audioDurations: { ...globalAudioState.audioDurations } });
-        setLocalAudioDurations(prev => ({ ...prev, [next.id]: audio.duration }));
+        setLocalAudioDurations((prev) => ({ ...prev, [next.id]: audio.duration }));
       };
 
-      const handleEnded = function() {
+      const handleEnded = function () {
         cleanup();
         if (globalAudioState.progressIntervalRef) {
           clearInterval(globalAudioState.progressIntervalRef);
@@ -122,13 +123,17 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
         globalAudioState.playingId = null;
         globalAudioState.currentTransmission = null;
         globalAudioState.audioProgress[next.id] = 0;
-        notifySubscribers({ playingId: null, currentTransmission: null, audioProgress: { ...globalAudioState.audioProgress } });
+        notifySubscribers({
+          playingId: null,
+          currentTransmission: null,
+          audioProgress: { ...globalAudioState.audioProgress },
+        });
         setLocalPlayingId(null);
-        setLocalAudioProgress(prev => ({ ...prev, [next.id]: 0 }));
+        setLocalAudioProgress((prev) => ({ ...prev, [next.id]: 0 }));
         processAutoplayQueue();
       };
 
-      const handleError = function() {
+      const handleError = function () {
         cleanup();
         if (globalAudioState.progressIntervalRef) {
           clearInterval(globalAudioState.progressIntervalRef);
@@ -165,28 +170,31 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
         globalAudioState.progressIntervalRef = null;
       }
 
-      audio.play().then(() => {
-        globalAudioState.playingId = next.id;
-        globalAudioState.currentTransmission = next;
-        notifySubscribers({ playingId: next.id, currentTransmission: next });
-        setLocalPlayingId(next.id);
-        globalAudioState.progressIntervalRef = setInterval(() => {
-          if (audio && !audio.paused) {
-            const progress = (audio.currentTime / audio.duration) * 100 || 0;
-            globalAudioState.audioProgress[next.id] = progress;
-            notifySubscribers({ audioProgress: { ...globalAudioState.audioProgress } });
-            setLocalAudioProgress(prev => ({ ...prev, [next.id]: progress }));
-          }
-        }, 100);
-      }).catch(err => {
-        cleanup();
-        console.warn(`Autoplay failed for ${next.id}: ${err.message}, trying next file...`);
-        globalAudioState.playingId = null;
-        globalAudioState.currentTransmission = null;
-        notifySubscribers({ playingId: null, currentTransmission: null });
-        setLocalPlayingId(null);
-        processAutoplayQueue();
-      });
+      audio
+        .play()
+        .then(() => {
+          globalAudioState.playingId = next.id;
+          globalAudioState.currentTransmission = next;
+          notifySubscribers({ playingId: next.id, currentTransmission: next });
+          setLocalPlayingId(next.id);
+          globalAudioState.progressIntervalRef = setInterval(() => {
+            if (audio && !audio.paused) {
+              const progress = (audio.currentTime / audio.duration) * 100 || 0;
+              globalAudioState.audioProgress[next.id] = progress;
+              notifySubscribers({ audioProgress: { ...globalAudioState.audioProgress } });
+              setLocalAudioProgress((prev) => ({ ...prev, [next.id]: progress }));
+            }
+          }, 100);
+        })
+        .catch((err) => {
+          cleanup();
+          console.warn(`Autoplay failed for ${next.id}: ${err.message}, trying next file...`);
+          globalAudioState.playingId = null;
+          globalAudioState.currentTransmission = null;
+          notifySubscribers({ playingId: null, currentTransmission: null });
+          setLocalPlayingId(null);
+          processAutoplayQueue();
+        });
     }
   }, [audioRefs, removeAudioListeners]);
 
@@ -196,178 +204,197 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
   }, [processAutoplayQueue]);
 
   // Audio playback handler
-  const handlePlay = useCallback((transmission) => {
-    const id = transmission.id;
+  const handlePlay = useCallback(
+    (transmission) => {
+      const id = transmission.id;
 
-    // Stop any currently playing audio
-    if (globalAudioState.playingId && globalAudioState.playingId !== id) {
-      const prevAudio = audioRefs[globalAudioState.playingId];
-      if (prevAudio) {
-        prevAudio.pause();
-        prevAudio.currentTime = 0;
+      // Stop any currently playing audio
+      if (globalAudioState.playingId && globalAudioState.playingId !== id) {
+        const prevAudio = audioRefs[globalAudioState.playingId];
+        if (prevAudio) {
+          prevAudio.pause();
+          prevAudio.currentTime = 0;
+        }
       }
-    }
 
-    // Get or create audio element
-    let audio = audioRefs[id];
-    if (!audio) {
-      const audioUrl = transmission.s3_url || transmission.audio_url;
-      if (!audioUrl) {
-        console.warn('No audio URL for transmission:', id);
-        return;
-      }
-      audio = new Audio(audioUrl);
-      audio.volume = isMuted ? 0 : audioVolume;
-      audioRefs[id] = audio;
+      // Get or create audio element
+      let audio = audioRefs[id];
+      if (!audio) {
+        const audioUrl = transmission.s3_url || transmission.audio_url;
+        if (!audioUrl) {
+          console.warn('No audio URL for transmission:', id);
+          return;
+        }
+        audio = new Audio(audioUrl);
+        audio.volume = isMuted ? 0 : audioVolume;
+        audioRefs[id] = audio;
 
-      // Create named handler functions so they can be removed later
-      const handleLoadedMetadata = function() {
-        globalAudioState.audioDurations[id] = audio.duration;
-        notifySubscribers({ audioDurations: { ...globalAudioState.audioDurations } });
-        setLocalAudioDurations(prev => ({ ...prev, [id]: audio.duration }));
-      };
+        // Create named handler functions so they can be removed later
+        const handleLoadedMetadata = function () {
+          globalAudioState.audioDurations[id] = audio.duration;
+          notifySubscribers({ audioDurations: { ...globalAudioState.audioDurations } });
+          setLocalAudioDurations((prev) => ({ ...prev, [id]: audio.duration }));
+        };
 
-      const handleEnded = function() {
-        globalAudioState.playingId = null;
-        globalAudioState.currentTransmission = null;
-        globalAudioState.audioProgress[id] = 0;
-        notifySubscribers({ playingId: null, currentTransmission: null, audioProgress: { ...globalAudioState.audioProgress } });
-        setLocalPlayingId(null);
-        setLocalAudioProgress(prev => ({ ...prev, [id]: 0 }));
+        const handleEnded = function () {
+          globalAudioState.playingId = null;
+          globalAudioState.currentTransmission = null;
+          globalAudioState.audioProgress[id] = 0;
+          notifySubscribers({
+            playingId: null,
+            currentTransmission: null,
+            audioProgress: { ...globalAudioState.audioProgress },
+          });
+          setLocalPlayingId(null);
+          setLocalAudioProgress((prev) => ({ ...prev, [id]: 0 }));
 
-        // Autoplay next transmission
-        if (globalAudioState.autoplay && filteredTransmissionsRef?.current) {
-          const transmissions = filteredTransmissionsRef.current;
-          const currentIndex = transmissions.findIndex(t => t.id === id);
-          if (currentIndex !== -1 && currentIndex < transmissions.length - 1) {
-            const nextTransmission = transmissions[currentIndex + 1];
-            if (nextTransmission && nextTransmission.s3_url) {
-              setTimeout(() => handlePlay(nextTransmission), 100);
+          // Autoplay next transmission
+          if (globalAudioState.autoplay && filteredTransmissionsRef?.current) {
+            const transmissions = filteredTransmissionsRef.current;
+            const currentIndex = transmissions.findIndex((t) => t.id === id);
+            if (currentIndex !== -1 && currentIndex < transmissions.length - 1) {
+              const nextTransmission = transmissions[currentIndex + 1];
+              if (nextTransmission && nextTransmission.s3_url) {
+                setTimeout(() => handlePlay(nextTransmission), 100);
+              }
             }
           }
+        };
+
+        const handleError = function (e) {
+          console.error('Audio playback error:', e);
+          globalAudioState.playingId = null;
+          globalAudioState.currentTransmission = null;
+          notifySubscribers({ playingId: null, currentTransmission: null });
+          setLocalPlayingId(null);
+        };
+
+        // Store listeners for later cleanup
+        audioListenersRef.current.set(id, {
+          loadedmetadata: handleLoadedMetadata,
+          ended: handleEnded,
+          error: handleError,
+        });
+
+        audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+        audio.addEventListener('ended', handleEnded);
+        audio.addEventListener('error', handleError);
+      }
+
+      if (globalAudioState.playingId === id) {
+        // Pause
+        audio.pause();
+        globalAudioState.playingId = null;
+        globalAudioState.currentTransmission = null;
+        notifySubscribers({ playingId: null, currentTransmission: null });
+        setLocalPlayingId(null);
+        if (globalAudioState.progressIntervalRef) {
+          clearInterval(globalAudioState.progressIntervalRef);
+          globalAudioState.progressIntervalRef = null;
         }
-      };
+      } else {
+        // Play - enable autoplay
+        if (!globalAudioState.autoplay) {
+          globalAudioState.autoplay = true;
+          notifySubscribers({ autoplay: true });
+          setLocalAutoplay(true);
+        }
 
-      const handleError = function(e) {
-        console.error('Audio playback error:', e);
-        globalAudioState.playingId = null;
-        globalAudioState.currentTransmission = null;
-        notifySubscribers({ playingId: null, currentTransmission: null });
-        setLocalPlayingId(null);
-      };
+        if (globalAudioState.progressIntervalRef) {
+          clearInterval(globalAudioState.progressIntervalRef);
+          globalAudioState.progressIntervalRef = null;
+        }
 
-      // Store listeners for later cleanup
-      audioListenersRef.current.set(id, {
-        loadedmetadata: handleLoadedMetadata,
-        ended: handleEnded,
-        error: handleError,
-      });
+        audio
+          .play()
+          .then(() => {
+            globalAudioState.playingId = id;
+            globalAudioState.currentTransmission = transmission;
+            notifySubscribers({ playingId: id, currentTransmission: transmission });
+            setLocalPlayingId(id);
 
-      audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.addEventListener('ended', handleEnded);
-      audio.addEventListener('error', handleError);
-    }
-
-    if (globalAudioState.playingId === id) {
-      // Pause
-      audio.pause();
-      globalAudioState.playingId = null;
-      globalAudioState.currentTransmission = null;
-      notifySubscribers({ playingId: null, currentTransmission: null });
-      setLocalPlayingId(null);
-      if (globalAudioState.progressIntervalRef) {
-        clearInterval(globalAudioState.progressIntervalRef);
-        globalAudioState.progressIntervalRef = null;
+            globalAudioState.progressIntervalRef = setInterval(() => {
+              if (audio && !audio.paused) {
+                const progress = (audio.currentTime / audio.duration) * 100 || 0;
+                globalAudioState.audioProgress[id] = progress;
+                notifySubscribers({ audioProgress: { ...globalAudioState.audioProgress } });
+                setLocalAudioProgress((prev) => ({ ...prev, [id]: progress }));
+              }
+            }, 100);
+          })
+          .catch((err) => {
+            console.error('Failed to play audio:', err);
+            globalAudioState.playingId = null;
+            globalAudioState.currentTransmission = null;
+            notifySubscribers({ playingId: null, currentTransmission: null });
+            setLocalPlayingId(null);
+          });
       }
-    } else {
-      // Play - enable autoplay
-      if (!globalAudioState.autoplay) {
-        globalAudioState.autoplay = true;
-        notifySubscribers({ autoplay: true });
-        setLocalAutoplay(true);
-      }
-
-      if (globalAudioState.progressIntervalRef) {
-        clearInterval(globalAudioState.progressIntervalRef);
-        globalAudioState.progressIntervalRef = null;
-      }
-
-      audio.play().then(() => {
-        globalAudioState.playingId = id;
-        globalAudioState.currentTransmission = transmission;
-        notifySubscribers({ playingId: id, currentTransmission: transmission });
-        setLocalPlayingId(id);
-
-        globalAudioState.progressIntervalRef = setInterval(() => {
-          if (audio && !audio.paused) {
-            const progress = (audio.currentTime / audio.duration) * 100 || 0;
-            globalAudioState.audioProgress[id] = progress;
-            notifySubscribers({ audioProgress: { ...globalAudioState.audioProgress } });
-            setLocalAudioProgress(prev => ({ ...prev, [id]: progress }));
-          }
-        }, 100);
-      }).catch(err => {
-        console.error('Failed to play audio:', err);
-        globalAudioState.playingId = null;
-        globalAudioState.currentTransmission = null;
-        notifySubscribers({ playingId: null, currentTransmission: null });
-        setLocalPlayingId(null);
-      });
-    }
-  }, [audioRefs, isMuted, audioVolume, filteredTransmissionsRef]);
+    },
+    [audioRefs, isMuted, audioVolume, filteredTransmissionsRef]
+  );
 
   // Seek handler
-  const handleSeek = useCallback((id, e) => {
-    const audio = audioRefs[id];
-    if (!audio) return;
+  const handleSeek = useCallback(
+    (id, e) => {
+      const audio = audioRefs[id];
+      if (!audio) return;
 
-    const rect = e.currentTarget.getBoundingClientRect();
-    const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const duration = audio.duration;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const duration = audio.duration;
 
-    if (!isFinite(duration) || duration <= 0) return;
+      if (!isFinite(duration) || duration <= 0) return;
 
-    audio.currentTime = percent * duration;
-    globalAudioState.audioProgress[id] = percent * 100;
-    notifySubscribers({ audioProgress: { ...globalAudioState.audioProgress } });
-    setLocalAudioProgress(prev => ({ ...prev, [id]: percent * 100 }));
-  }, [audioRefs]);
+      audio.currentTime = percent * duration;
+      globalAudioState.audioProgress[id] = percent * 100;
+      notifySubscribers({ audioProgress: { ...globalAudioState.audioProgress } });
+      setLocalAudioProgress((prev) => ({ ...prev, [id]: percent * 100 }));
+    },
+    [audioRefs]
+  );
 
   // Volume handlers
   const toggleMute = useCallback(() => {
-    setIsMuted(prev => {
+    setIsMuted((prev) => {
       const newMuted = !prev;
-      Object.values(audioRefs).forEach(audio => {
+      Object.values(audioRefs).forEach((audio) => {
         if (audio) audio.volume = newMuted ? 0 : audioVolume;
       });
       return newMuted;
     });
   }, [audioRefs, audioVolume]);
 
-  const handleVolumeChange = useCallback((vol) => {
-    setAudioVolume(vol);
-    if (!isMuted) {
-      Object.values(audioRefs).forEach(audio => {
-        if (audio) audio.volume = vol;
-      });
-    }
-  }, [audioRefs, isMuted]);
+  const handleVolumeChange = useCallback(
+    (vol) => {
+      setAudioVolume(vol);
+      if (!isMuted) {
+        Object.values(audioRefs).forEach((audio) => {
+          if (audio) audio.volume = vol;
+        });
+      }
+    },
+    [audioRefs, isMuted]
+  );
 
   // Autoplay toggle handler
-  const handleToggleAutoplay = useCallback((realtimeTransmissions, filteredTransmissions) => {
-    const newAutoplay = !localAutoplay;
-    setLocalAutoplay(newAutoplay);
-    globalAudioState.autoplay = newAutoplay;
-    notifySubscribers({ autoplay: newAutoplay });
+  const handleToggleAutoplay = useCallback(
+    (realtimeTransmissions, filteredTransmissions) => {
+      const newAutoplay = !localAutoplay;
+      setLocalAutoplay(newAutoplay);
+      globalAudioState.autoplay = newAutoplay;
+      notifySubscribers({ autoplay: newAutoplay });
 
-    if (newAutoplay && !globalAudioState.playingId) {
-      const next = realtimeTransmissions[0] || filteredTransmissions[0];
-      if (next && next.s3_url) {
-        autoplayQueueRef.current = [next];
-        handlePlay(next);
+      if (newAutoplay && !globalAudioState.playingId) {
+        const next = realtimeTransmissions[0] || filteredTransmissions[0];
+        if (next && next.s3_url) {
+          autoplayQueueRef.current = [next];
+          handlePlay(next);
+        }
       }
-    }
-  }, [localAutoplay, handlePlay]);
+    },
+    [localAutoplay, handlePlay]
+  );
 
   // Cleanup on unmount - clear intervals AND remove all audio event listeners
   useEffect(() => {

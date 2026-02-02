@@ -1,10 +1,29 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
-  Plane, Radio, Bell, Activity, BarChart3, History,
-  Map as MapIcon, Radar, ChevronLeft, ChevronRight, ChevronDown,
-  Layers, ExternalLink, Ship, LineChart, MessageSquare,
-  LayoutDashboard, Database, Clock, Settings, FileWarning, Archive,
-  Crosshair, Cog
+  Plane,
+  Radio,
+  Bell,
+  Activity,
+  BarChart3,
+  History,
+  Map as MapIcon,
+  Radar,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  Layers,
+  ExternalLink,
+  Ship,
+  LineChart,
+  MessageSquare,
+  LayoutDashboard,
+  Database,
+  Clock,
+  Settings,
+  FileWarning,
+  Archive,
+  Crosshair,
+  Cog,
 } from 'lucide-react';
 import { useAlertNotifications } from '../../hooks/useAlertNotifications';
 import { useAuth } from '../../contexts/AuthContext';
@@ -20,7 +39,7 @@ const tabs = [
   { id: 'archive', icon: Archive, label: 'Archive', feature: 'history' },
   { id: 'alerts', icon: Bell, label: 'Alerts', feature: 'alerts' },
   { id: 'system', icon: Activity, label: 'System', feature: 'system' },
-  { id: 'admin', icon: Cog, label: 'Admin Config', feature: 'system', permission: 'system.manage' }
+  { id: 'admin', icon: Cog, label: 'Admin Config', feature: 'system', permission: 'system.manage' },
 ];
 
 const externalServices = [
@@ -34,7 +53,16 @@ const externalServices = [
   { id: 'prometheus', icon: Database, label: 'Prometheus', path: '/prometheus/', desc: 'Metrics' },
 ];
 
-export function Sidebar({ activeTab, setActiveTab, connected, collapsed, setCollapsed, stats, onOpenSettings, onLaunchCannonball }) {
+export function Sidebar({
+  activeTab,
+  setActiveTab,
+  connected,
+  collapsed,
+  setCollapsed,
+  stats,
+  onOpenSettings,
+  onLaunchCannonball,
+}) {
   const [servicesExpanded, setServicesExpanded] = useState(false);
   const [time, setTime] = useState(new Date());
   const { unacknowledgedCount, markAllAsRead } = useAlertNotifications();
@@ -44,11 +72,11 @@ export function Sidebar({ activeTab, setActiveTab, connected, collapsed, setColl
   const visibleTabs = useMemo(() => {
     // If auth is disabled or public mode, show all tabs (except admin which requires explicit permission)
     if (!authConfig.authEnabled || authConfig.publicMode) {
-      return tabs.filter(tab => !tab.permission);
+      return tabs.filter((tab) => !tab.permission);
     }
 
     // Filter based on feature access and specific permissions
-    return tabs.filter(tab => {
+    return tabs.filter((tab) => {
       // Check specific permission first (e.g., system.manage for admin)
       if (tab.permission) {
         return canAccessFeature(tab.permission.split('.')[0], 'write');
@@ -119,7 +147,10 @@ export function Sidebar({ activeTab, setActiveTab, connected, collapsed, setColl
             <Icon size={18} />
             {!collapsed && <span>{label}</span>}
             {id === 'alerts' && unacknowledgedCount > 0 && (
-              <span className="nav-badge" title={`${unacknowledgedCount} unread alert${unacknowledgedCount !== 1 ? 's' : ''}`}>
+              <span
+                className="nav-badge"
+                title={`${unacknowledgedCount} unread alert${unacknowledgedCount !== 1 ? 's' : ''}`}
+              >
                 {unacknowledgedCount > 99 ? '99+' : unacknowledgedCount}
               </span>
             )}
@@ -149,7 +180,10 @@ export function Sidebar({ activeTab, setActiveTab, connected, collapsed, setColl
           {!collapsed && (
             <>
               <span>Services</span>
-              <ChevronDown size={14} className={`toggle-icon ${servicesExpanded ? 'rotated' : ''}`} />
+              <ChevronDown
+                size={14}
+                className={`toggle-icon ${servicesExpanded ? 'rotated' : ''}`}
+              />
             </>
           )}
         </button>
@@ -188,7 +222,10 @@ export function Sidebar({ activeTab, setActiveTab, connected, collapsed, setColl
           </>
         ) : (
           <>
-            <div className={`connection-dot ${connected ? 'connected' : 'disconnected'}`} title={connected ? 'Connected' : 'Disconnected'}>
+            <div
+              className={`connection-dot ${connected ? 'connected' : 'disconnected'}`}
+              title={connected ? 'Connected' : 'Disconnected'}
+            >
               <span className="status-dot" />
             </div>
             <div className="version-mini">2.5</div>

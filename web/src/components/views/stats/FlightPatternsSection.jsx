@@ -1,7 +1,13 @@
 import React, { useMemo } from 'react';
 import {
-  Navigation2, Clock, Plane, Timer, TrendingUp,
-  ArrowRight, BarChart2, Loader2
+  Navigation2,
+  Clock,
+  Plane,
+  Timer,
+  TrendingUp,
+  ArrowRight,
+  BarChart2,
+  Loader2,
 } from 'lucide-react';
 
 /**
@@ -16,19 +22,19 @@ export function FlightPatternsSection({ data, loading, onSelectAircraft }) {
     top_routes = [],
     busiest_hours = [],
     aircraft_types = [],
-    duration_by_type = []
+    duration_by_type = [],
   } = data || {};
 
   // Prepare hours data (0-23) - must be called before any conditional returns
   const hoursData = useMemo(() => {
     const hourMap = {};
-    busiest_hours.forEach(h => {
+    busiest_hours.forEach((h) => {
       hourMap[h.hour] = h.count;
     });
     return Array.from({ length: 24 }, (_, i) => ({
       hour: i,
       count: hourMap[i] || 0,
-      label: `${i.toString().padStart(2, '0')}:00`
+      label: `${i.toString().padStart(2, '0')}:00`,
     }));
   }, [busiest_hours]);
 
@@ -51,9 +57,9 @@ export function FlightPatternsSection({ data, loading, onSelectAircraft }) {
   if (!data) return null;
 
   // Find max values for normalization
-  const maxRouteCount = Math.max(...top_routes.map(r => r.count || 0), 1);
-  const maxHourCount = Math.max(...busiest_hours.map(h => h.count || 0), 1);
-  const maxTypeCount = Math.max(...aircraft_types.map(t => t.count || 0), 1);
+  const maxRouteCount = Math.max(...top_routes.map((r) => r.count || 0), 1);
+  const maxHourCount = Math.max(...busiest_hours.map((h) => h.count || 0), 1);
+  const maxTypeCount = Math.max(...aircraft_types.map((t) => t.count || 0), 1);
 
   // Color scale for hours heatmap
   const getHourColor = (count) => {
@@ -144,8 +150,14 @@ export function FlightPatternsSection({ data, loading, onSelectAircraft }) {
             <div className="types-chart">
               {aircraft_types.slice(0, 8).map((type, i) => {
                 const colors = [
-                  '#00c8ff', '#00ff88', '#a371f7', '#ff9f43',
-                  '#f85149', '#f7d794', '#4ecdc4', '#95e1d3'
+                  '#00c8ff',
+                  '#00ff88',
+                  '#a371f7',
+                  '#ff9f43',
+                  '#f85149',
+                  '#f7d794',
+                  '#4ecdc4',
+                  '#95e1d3',
                 ];
                 const color = colors[i % colors.length];
                 return (
@@ -159,7 +171,7 @@ export function FlightPatternsSection({ data, loading, onSelectAircraft }) {
                         className="type-bar-fill"
                         style={{
                           width: `${(type.count / maxTypeCount) * 100}%`,
-                          backgroundColor: color
+                          backgroundColor: color,
                         }}
                       />
                     </div>

@@ -568,7 +568,9 @@
 
 .top-item.clickable {
   cursor: pointer;
-  transition: background 0.15s, transform 0.1s;
+  transition:
+    background 0.15s,
+    transform 0.1s;
 }
 
 .top-item.clickable:hover {
@@ -1062,7 +1064,9 @@
   border-radius: 6px;
   min-width: 48px;
   cursor: default;
-  transition: transform 0.15s, box-shadow 0.15s;
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
 }
 
 .heatmap-cell:hover {
@@ -1093,8 +1097,13 @@
 }
 
 @keyframes pulse-emergency {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.4); }
-  50% { box-shadow: 0 0 0 6px rgba(255, 71, 87, 0); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(255, 71, 87, 0);
+  }
 }
 
 /* ============================================================================
@@ -1106,8 +1115,12 @@
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ============================================================================
@@ -1330,7 +1343,9 @@
   border-radius: 12px;
   padding: 16px 20px;
   margin-bottom: 20px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(10px);
 }
 
@@ -1444,8 +1459,13 @@
 }
 
 @keyframes icon-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 /* Vertical speed indicator */
@@ -1898,8 +1918,8 @@
 @media (prefers-reduced-motion: reduce) {
   .row-icon.emergency-icon,
   .loading-spinner,
-  [class*="pulse"],
-  [class*="spin"] {
+  [class*='pulse'],
+  [class*='spin'] {
     animation: none !important;
   }
 
@@ -2062,11 +2082,11 @@
   border-color: var(--accent-cyan);
 }
 
-.date-time-inputs input[type="date"] {
+.date-time-inputs input[type='date'] {
   flex: 1.5;
 }
 
-.date-time-inputs input[type="time"] {
+.date-time-inputs input[type='time'] {
   flex: 1;
 }
 
@@ -2364,8 +2384,13 @@
 }
 
 @keyframes card-emergency-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(248, 81, 73, 0.3); }
-  50% { box-shadow: 0 0 10px 2px rgba(248, 81, 73, 0.2); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(248, 81, 73, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 10px 2px rgba(248, 81, 73, 0.2);
+  }
 }
 
 .al-card.climbing {
@@ -2438,8 +2463,13 @@
 }
 
 @keyframes badge-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 .al-card-badge.climbing {
@@ -2659,10 +2689,18 @@
   transition: background 0.15s ease;
 }
 
-.signal-bars .bar:nth-child(1) { height: 4px; }
-.signal-bars .bar:nth-child(2) { height: 6px; }
-.signal-bars .bar:nth-child(3) { height: 8px; }
-.signal-bars .bar:nth-child(4) { height: 10px; }
+.signal-bars .bar:nth-child(1) {
+  height: 4px;
+}
+.signal-bars .bar:nth-child(2) {
+  height: 6px;
+}
+.signal-bars .bar:nth-child(3) {
+  height: 8px;
+}
+.signal-bars .bar:nth-child(4) {
+  height: 10px;
+}
 
 .signal-bars .bar.active {
   background: currentColor;
@@ -2702,8 +2740,13 @@
 }
 
 @keyframes skeleton-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .al-card-skeleton-header {
@@ -2911,6 +2954,10 @@
 }
 
 @keyframes undo-countdown {
-  0% { width: 100%; }
-  100% { width: 0%; }
+  0% {
+    width: 100%;
+  }
+  100% {
+    width: 0%;
+  }
 }

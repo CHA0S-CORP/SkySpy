@@ -1,6 +1,13 @@
 import React from 'react';
 import {
-  Search, Filter, ChevronDown, ArrowUpAZ, ArrowDownAZ, Calendar, Activity, AlertCircle
+  Search,
+  Filter,
+  ChevronDown,
+  ArrowUpAZ,
+  ArrowDownAZ,
+  Calendar,
+  Activity,
+  AlertCircle,
 } from 'lucide-react';
 
 export function AlertsFilterToolbar({
@@ -12,7 +19,7 @@ export function AlertsFilterToolbar({
   onStatusFilterChange,
   sortBy,
   onSortChange,
-  ruleCount
+  ruleCount,
 }) {
   return (
     <div className="rules-toolbar">
@@ -59,10 +66,15 @@ export function AlertsFilterToolbar({
         </div>
 
         <div className="filter-select">
-          {sortBy === 'name-asc' ? <ArrowUpAZ size={14} aria-hidden="true" /> :
-           sortBy === 'name-desc' ? <ArrowDownAZ size={14} aria-hidden="true" /> :
-           sortBy === 'priority' ? <AlertCircle size={14} aria-hidden="true" /> :
-           <Calendar size={14} aria-hidden="true" />}
+          {sortBy === 'name-asc' ? (
+            <ArrowUpAZ size={14} aria-hidden="true" />
+          ) : sortBy === 'name-desc' ? (
+            <ArrowDownAZ size={14} aria-hidden="true" />
+          ) : sortBy === 'priority' ? (
+            <AlertCircle size={14} aria-hidden="true" />
+          ) : (
+            <Calendar size={14} aria-hidden="true" />
+          )}
           <select
             value={sortBy}
             onChange={(e) => onSortChange(e.target.value)}

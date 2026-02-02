@@ -1,8 +1,17 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Globe, Building2, MapPin, Flag, Users,
-  Plane, ExternalLink, Clock, Filter, ChevronDown,
-  RefreshCw, BarChart2
+  Globe,
+  Building2,
+  MapPin,
+  Flag,
+  Users,
+  Plane,
+  ExternalLink,
+  Clock,
+  Filter,
+  ChevronDown,
+  RefreshCw,
+  BarChart2,
 } from 'lucide-react';
 import { useStats } from '../../hooks';
 
@@ -24,40 +33,40 @@ export function GeographicStats({ apiBase, wsRequest, wsConnected, onSelectAircr
   const { geographicStats, loading, error, refetch } = useStats(apiBase, {
     wsRequest,
     wsConnected,
-    hours: selectedHours
+    hours: selectedHours,
   });
 
   const data = geographicStats;
 
-  const {
-    countries = [],
-    airlines = [],
-    airports = [],
-    regions = []
-  } = data || {};
+  const { countries = [], airlines = [], airports = [], regions = [] } = data || {};
 
   // Filter countries if filter is set
   const filteredCountries = useMemo(() => {
     if (!countryFilter) return countries;
-    return countries.filter(c =>
-      c.country?.toLowerCase().includes(countryFilter.toLowerCase())
-    );
+    return countries.filter((c) => c.country?.toLowerCase().includes(countryFilter.toLowerCase()));
   }, [countries, countryFilter]);
 
   // Calculate totals for percentage
-  const totalCountryFlights = useMemo(() =>
-    filteredCountries.reduce((sum, c) => sum + (c.count || 0), 0) || 1,
+  const totalCountryFlights = useMemo(
+    () => filteredCountries.reduce((sum, c) => sum + (c.count || 0), 0) || 1,
     [filteredCountries]
   );
 
-  const maxAirlineCount = Math.max(...airlines.map(a => a.count || 0), 1);
-  const maxAirportCount = Math.max(...airports.map(a => a.count || 0), 1);
+  const maxAirlineCount = Math.max(...airlines.map((a) => a.count || 0), 1);
+  const maxAirportCount = Math.max(...airports.map((a) => a.count || 0), 1);
 
   // Colors for countries pie
   const countryColors = [
-    '#00c8ff', '#00ff88', '#a371f7', '#ff9f43',
-    '#f85149', '#f7d794', '#4ecdc4', '#95e1d3',
-    '#a8dadc', '#6b7280'
+    '#00c8ff',
+    '#00ff88',
+    '#a371f7',
+    '#ff9f43',
+    '#f85149',
+    '#f7d794',
+    '#4ecdc4',
+    '#95e1d3',
+    '#a8dadc',
+    '#6b7280',
   ];
 
   // Build pie chart segments
@@ -66,14 +75,14 @@ export function GeographicStats({ apiBase, wsRequest, wsConnected, onSelectAircr
     let startAngle = 0;
 
     filteredCountries.slice(0, 10).forEach((country, i) => {
-      const percentage = (country.count / totalCountryFlights);
+      const percentage = country.count / totalCountryFlights;
       const angle = percentage * 360;
       segments.push({
         ...country,
         startAngle,
         endAngle: startAngle + angle,
         color: countryColors[i % countryColors.length],
-        percentage: (percentage * 100).toFixed(1)
+        percentage: (percentage * 100).toFixed(1),
       });
       startAngle += angle;
     });
@@ -85,30 +94,44 @@ export function GeographicStats({ apiBase, wsRequest, wsConnected, onSelectAircr
   const describeArc = (cx, cy, radius, startAngle, endAngle) => {
     const start = polarToCartesian(cx, cy, radius, endAngle);
     const end = polarToCartesian(cx, cy, radius, startAngle);
-    const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+    const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
     return [
-      "M", cx, cy,
-      "L", start.x, start.y,
-      "A", radius, radius, 0, largeArcFlag, 0, end.x, end.y,
-      "Z"
-    ].join(" ");
+      'M',
+      cx,
+      cy,
+      'L',
+      start.x,
+      start.y,
+      'A',
+      radius,
+      radius,
+      0,
+      largeArcFlag,
+      0,
+      end.x,
+      end.y,
+      'Z',
+    ].join(' ');
   };
 
   const polarToCartesian = (cx, cy, radius, angle) => {
-    const rad = (angle - 90) * Math.PI / 180;
+    const rad = ((angle - 90) * Math.PI) / 180;
     return {
       x: cx + radius * Math.cos(rad),
-      y: cy + radius * Math.sin(rad)
+      y: cy + radius * Math.sin(rad),
     };
   };
 
   // Summary statistics
-  const summaryStats = useMemo(() => ({
-    totalCountries: countries.length,
-    totalAirlines: airlines.length,
-    totalAirports: airports.length,
-    topCountry: countries[0]?.country || 'N/A'
-  }), [countries, airlines, airports]);
+  const summaryStats = useMemo(
+    () => ({
+      totalCountries: countries.length,
+      totalAirlines: airlines.length,
+      totalAirports: airports.length,
+      topCountry: countries[0]?.country || 'N/A',
+    }),
+    [countries, airlines, airports]
+  );
 
   if (loading && !data) {
     return (
@@ -153,7 +176,7 @@ export function GeographicStats({ apiBase, wsRequest, wsConnected, onSelectAircr
           <Clock size={14} />
           <span className="filter-label">Time Range</span>
           <div className="time-range-buttons">
-            {Object.keys(hours).map(range => (
+            {Object.keys(hours).map((range) => (
               <button
                 key={range}
                 className={`time-btn ${timeRange === range ? 'active' : ''}`}
@@ -194,28 +217,36 @@ export function GeographicStats({ apiBase, wsRequest, wsConnected, onSelectAircr
       {/* Summary Cards */}
       <div className="summary-cards">
         <div className="summary-card">
-          <div className="summary-icon"><Flag size={20} /></div>
+          <div className="summary-icon">
+            <Flag size={20} />
+          </div>
           <div className="summary-content">
             <span className="summary-value">{summaryStats.totalCountries}</span>
             <span className="summary-label">Countries</span>
           </div>
         </div>
         <div className="summary-card">
-          <div className="summary-icon"><Users size={20} /></div>
+          <div className="summary-icon">
+            <Users size={20} />
+          </div>
           <div className="summary-content">
             <span className="summary-value">{summaryStats.totalAirlines}</span>
             <span className="summary-label">Airlines</span>
           </div>
         </div>
         <div className="summary-card">
-          <div className="summary-icon"><MapPin size={20} /></div>
+          <div className="summary-icon">
+            <MapPin size={20} />
+          </div>
           <div className="summary-content">
             <span className="summary-value">{summaryStats.totalAirports}</span>
             <span className="summary-label">Airports</span>
           </div>
         </div>
         <div className="summary-card">
-          <div className="summary-icon"><Globe size={20} /></div>
+          <div className="summary-icon">
+            <Globe size={20} />
+          </div>
           <div className="summary-content">
             <span className="summary-value">{summaryStats.topCountry}</span>
             <span className="summary-label">Top Country</span>
@@ -245,7 +276,9 @@ export function GeographicStats({ apiBase, wsRequest, wsConnected, onSelectAircr
                       fill={segment.color}
                       className="pie-segment"
                     >
-                      <title>{segment.country}: {segment.count} ({segment.percentage}%)</title>
+                      <title>
+                        {segment.country}: {segment.count} ({segment.percentage}%)
+                      </title>
                     </path>
                   ))}
                   <circle cx="50" cy="50" r="25" fill="var(--bg-card)" />
@@ -260,10 +293,7 @@ export function GeographicStats({ apiBase, wsRequest, wsConnected, onSelectAircr
               <div className="countries-legend expanded">
                 {pieSegments.map((segment, i) => (
                   <div key={segment.country || i} className="legend-item">
-                    <span
-                      className="legend-dot"
-                      style={{ backgroundColor: segment.color }}
-                    />
+                    <span className="legend-dot" style={{ backgroundColor: segment.color }} />
                     <span className="legend-label">{segment.country || 'Unknown'}</span>
                     <span className="legend-value">{segment.percentage}%</span>
                     <span className="legend-count">{segment.count}</span>
@@ -322,9 +352,7 @@ export function GeographicStats({ apiBase, wsRequest, wsConnected, onSelectAircr
             <div className="airports-grid expanded">
               {airports.slice(0, 20).map((airport, i) => (
                 <div key={airport.icao || airport.iata || i} className="airport-chip">
-                  <span className="airport-code">
-                    {airport.icao || airport.iata || '????'}
-                  </span>
+                  <span className="airport-code">{airport.icao || airport.iata || '????'}</span>
                   {airport.name && (
                     <span className="airport-name" title={airport.name}>
                       {airport.name.length > 20 ? `${airport.name.slice(0, 20)}...` : airport.name}
@@ -336,9 +364,7 @@ export function GeographicStats({ apiBase, wsRequest, wsConnected, onSelectAircr
             </div>
           )}
           {airports.length > 20 && (
-            <div className="airports-overflow">
-              +{airports.length - 20} more airports
-            </div>
+            <div className="airports-overflow">+{airports.length - 20} more airports</div>
           )}
         </div>
 
@@ -351,7 +377,7 @@ export function GeographicStats({ apiBase, wsRequest, wsConnected, onSelectAircr
             </div>
             <div className="regions-list">
               {regions.slice(0, 10).map((region, i) => {
-                const maxRegionCount = Math.max(...regions.map(r => r.count || 0), 1);
+                const maxRegionCount = Math.max(...regions.map((r) => r.count || 0), 1);
                 return (
                   <div key={region.name || i} className="region-item">
                     <span className="region-name">{region.name || 'Unknown'}</span>
@@ -386,7 +412,7 @@ export function GeographicStats({ apiBase, wsRequest, wsConnected, onSelectAircr
                       className="country-bar-fill"
                       style={{
                         width: `${(country.count / maxCount) * 100}%`,
-                        backgroundColor: countryColors[i % countryColors.length]
+                        backgroundColor: countryColors[i % countryColors.length],
                       }}
                     />
                   </div>

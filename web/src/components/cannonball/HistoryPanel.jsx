@@ -10,9 +10,18 @@
  */
 import React, { useState, useMemo, useCallback } from 'react';
 import {
-  X, Trash2, Download, Share2, Clock, MapPin,
-  Shield, Navigation2, AlertTriangle, ChevronRight,
-  BarChart2, Map as MapIcon
+  X,
+  Trash2,
+  Download,
+  Share2,
+  Clock,
+  MapPin,
+  Shield,
+  Navigation2,
+  AlertTriangle,
+  ChevronRight,
+  BarChart2,
+  Map as MapIcon,
 } from 'lucide-react';
 import { formatETA } from '../../utils/threatPrediction';
 
@@ -43,7 +52,9 @@ function TimelineEntry({ entry, onSelect }) {
       style={{ '--entry-color': color }}
     >
       <div className="entry-time">
-        <span className="time-value">{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+        <span className="time-value">
+          {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </span>
       </div>
       <div className="entry-marker" />
       <div className="entry-content">
@@ -106,12 +117,7 @@ function SessionStats({ stats, sessionStart }) {
         icon={MapPin}
         color="#22c55e"
       />
-      <StatCard
-        value={duration}
-        label="Duration (min)"
-        icon={Clock}
-        color="#8b5cf6"
-      />
+      <StatCard value={duration} label="Duration (min)" icon={Clock} color="#8b5cf6" />
     </div>
   );
 }
@@ -120,7 +126,7 @@ function HourlyChart({ history }) {
   // Group encounters by hour
   const hourlyData = useMemo(() => {
     const hours = Array(24).fill(0);
-    history.forEach(entry => {
+    history.forEach((entry) => {
       const hour = new Date(entry.first_seen || entry.timestamp).getHours();
       hours[hour]++;
     });
@@ -143,9 +149,7 @@ function HourlyChart({ history }) {
               style={{ height: `${(count / maxCount) * 100}%` }}
               title={`${hour}:00 - ${count} encounters`}
             />
-            {hour % 6 === 0 && (
-              <span className="hour-label">{hour}</span>
-            )}
+            {hour % 6 === 0 && <span className="hour-label">{hour}</span>}
           </div>
         ))}
       </div>
@@ -186,7 +190,9 @@ function EncounterDetail({ entry, onClose }) {
         </div>
         <div className="detail-row">
           <span className="label">Closest Approach</span>
-          <span className="value">{entry.closest_distance?.toFixed(2) || entry.distance_nm?.toFixed(2)} nm</span>
+          <span className="value">
+            {entry.closest_distance?.toFixed(2) || entry.distance_nm?.toFixed(2)} nm
+          </span>
         </div>
         {entry.altitude && (
           <div className="detail-row">
@@ -197,7 +203,9 @@ function EncounterDetail({ entry, onClose }) {
         {entry.lat && entry.lon && (
           <div className="detail-row">
             <span className="label">Position</span>
-            <span className="value mono">{entry.lat.toFixed(4)}, {entry.lon.toFixed(4)}</span>
+            <span className="value mono">
+              {entry.lat.toFixed(4)}, {entry.lon.toFixed(4)}
+            </span>
           </div>
         )}
         <div className="detail-row">
@@ -314,17 +322,11 @@ export function HistoryPanel({
 
       {/* View Toggle */}
       <div className="view-toggle">
-        <button
-          className={view === 'timeline' ? 'active' : ''}
-          onClick={() => setView('timeline')}
-        >
+        <button className={view === 'timeline' ? 'active' : ''} onClick={() => setView('timeline')}>
           <Clock size={14} />
           Timeline
         </button>
-        <button
-          className={view === 'chart' ? 'active' : ''}
-          onClick={() => setView('chart')}
-        >
+        <button className={view === 'chart' ? 'active' : ''} onClick={() => setView('chart')}>
           <BarChart2 size={14} />
           Charts
         </button>
@@ -341,11 +343,7 @@ export function HistoryPanel({
               </div>
             ) : (
               history.map((entry, index) => (
-                <TimelineEntry
-                  key={entry.id || index}
-                  entry={entry}
-                  onSelect={setSelectedEntry}
-                />
+                <TimelineEntry key={entry.id || index} entry={entry} onSelect={setSelectedEntry} />
               ))
             )}
           </div>
@@ -358,10 +356,7 @@ export function HistoryPanel({
 
       {/* Selected Entry Detail */}
       {selectedEntry && (
-        <EncounterDetail
-          entry={selectedEntry}
-          onClose={() => setSelectedEntry(null)}
-        />
+        <EncounterDetail entry={selectedEntry} onClose={() => setSelectedEntry(null)} />
       )}
     </div>
   );

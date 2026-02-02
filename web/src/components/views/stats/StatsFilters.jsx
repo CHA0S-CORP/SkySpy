@@ -10,7 +10,7 @@ export function TimeRangeSelector({ timeRange, onTimeRangeChange }) {
       <Clock size={14} />
       <span className="filter-label">Time Range</span>
       <div className="time-range-buttons">
-        {['1h', '6h', '24h', '48h', '7d'].map(range => (
+        {['1h', '6h', '24h', '48h', '7d'].map((range) => (
           <button
             key={range}
             className={`time-btn ${timeRange === range ? 'active' : ''}`}
@@ -29,10 +29,7 @@ export function TimeRangeSelector({ timeRange, onTimeRangeChange }) {
  */
 export function MilitaryToggle({ showMilitaryOnly, onToggle }) {
   return (
-    <div
-      className={`filter-toggle ${showMilitaryOnly ? 'active' : ''}`}
-      onClick={onToggle}
-    >
+    <div className={`filter-toggle ${showMilitaryOnly ? 'active' : ''}`} onClick={onToggle}>
       <span className="toggle-indicator" />
       <span>Military Only</span>
     </div>
@@ -71,7 +68,7 @@ export function AdvancedFiltersPanel({
   setMinDistance,
   maxDistance,
   setMaxDistance,
-  onClearFilters
+  onClearFilters,
 }) {
   return (
     <div className="advanced-filters-panel">
@@ -103,19 +100,39 @@ export function AdvancedFiltersPanel({
       <div className="filter-row">
         <div className="filter-field">
           <label>Min Altitude (ft)</label>
-          <input type="number" placeholder="0" value={minAltitude} onChange={(e) => setMinAltitude(e.target.value)} />
+          <input
+            type="number"
+            placeholder="0"
+            value={minAltitude}
+            onChange={(e) => setMinAltitude(e.target.value)}
+          />
         </div>
         <div className="filter-field">
           <label>Max Altitude (ft)</label>
-          <input type="number" placeholder="60000" value={maxAltitude} onChange={(e) => setMaxAltitude(e.target.value)} />
+          <input
+            type="number"
+            placeholder="60000"
+            value={maxAltitude}
+            onChange={(e) => setMaxAltitude(e.target.value)}
+          />
         </div>
         <div className="filter-field">
           <label>Min Distance (nm)</label>
-          <input type="number" placeholder="0" value={minDistance} onChange={(e) => setMinDistance(e.target.value)} />
+          <input
+            type="number"
+            placeholder="0"
+            value={minDistance}
+            onChange={(e) => setMinDistance(e.target.value)}
+          />
         </div>
         <div className="filter-field">
           <label>Max Distance (nm)</label>
-          <input type="number" placeholder="250" value={maxDistance} onChange={(e) => setMaxDistance(e.target.value)} />
+          <input
+            type="number"
+            placeholder="250"
+            value={maxDistance}
+            onChange={(e) => setMaxDistance(e.target.value)}
+          />
         </div>
       </div>
       <div className="filter-actions">
@@ -148,7 +165,7 @@ export function StatsFilterBar({
   minDistance,
   setMinDistance,
   maxDistance,
-  setMaxDistance
+  setMaxDistance,
 }) {
   const handleClearFilters = () => {
     setCategoryFilter('');
@@ -162,10 +179,7 @@ export function StatsFilterBar({
   return (
     <>
       <div className="stats-filters">
-        <TimeRangeSelector
-          timeRange={timeRange}
-          onTimeRangeChange={setTimeRange}
-        />
+        <TimeRangeSelector timeRange={timeRange} onTimeRangeChange={setTimeRange} />
         <div className="filter-divider" />
         <MilitaryToggle
           showMilitaryOnly={showMilitaryOnly}

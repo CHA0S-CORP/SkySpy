@@ -6,9 +6,12 @@ import { AlertTriangle, Check, History, X } from 'lucide-react';
  */
 export const getSeverityClass = (severity) => {
   switch (severity) {
-    case 'critical': return 'severity-critical';
-    case 'warning': return 'severity-warning';
-    default: return 'severity-low';
+    case 'critical':
+      return 'severity-critical';
+    case 'warning':
+      return 'severity-warning';
+    default:
+      return 'severity-low';
   }
 };
 
@@ -17,15 +20,15 @@ export const getSeverityClass = (severity) => {
  */
 export const getEventTypeName = (eventType) => {
   const names = {
-    'tcas_ra': 'TCAS RA',
-    'extreme_vs': 'EXTREME V/S',
-    'vs_reversal': 'V/S REVERSAL',
-    'proximity_conflict': 'PROXIMITY',
-    'rapid_descent': 'RAPID DESCENT',
-    'rapid_climb': 'RAPID CLIMB',
-    'squawk_hijack': 'SQUAWK 7500',
-    'squawk_radio_failure': 'SQUAWK 7600',
-    'squawk_emergency': 'SQUAWK 7700',
+    tcas_ra: 'TCAS RA',
+    extreme_vs: 'EXTREME V/S',
+    vs_reversal: 'V/S REVERSAL',
+    proximity_conflict: 'PROXIMITY',
+    rapid_descent: 'RAPID DESCENT',
+    rapid_climb: 'RAPID CLIMB',
+    squawk_hijack: 'SQUAWK 7500',
+    squawk_radio_failure: 'SQUAWK 7600',
+    squawk_emergency: 'SQUAWK 7700',
   };
   return names[eventType] || eventType?.replace(/_/g, ' ').toUpperCase() || 'ALERT';
 };
@@ -40,9 +43,9 @@ export const renderEventBannerContent = (event) => {
   // Emergency squawks - show squawk code prominently
   if (eventType?.startsWith('squawk_')) {
     const squawkMeanings = {
-      'squawk_hijack': 'HIJACK',
-      'squawk_radio_failure': 'RADIO FAILURE',
-      'squawk_emergency': 'EMERGENCY'
+      squawk_hijack: 'HIJACK',
+      squawk_radio_failure: 'RADIO FAILURE',
+      squawk_emergency: 'EMERGENCY',
     };
     return (
       <>
@@ -52,7 +55,9 @@ export const renderEventBannerContent = (event) => {
         </div>
         <div className="banner-aircraft">
           <span className="banner-callsign">{event.callsign || event.icao}</span>
-          {details.altitude && <span className="banner-altitude">{details.altitude.toLocaleString()}ft</span>}
+          {details.altitude && (
+            <span className="banner-altitude">{details.altitude.toLocaleString()}ft</span>
+          )}
         </div>
       </>
     );
@@ -63,9 +68,13 @@ export const renderEventBannerContent = (event) => {
     return (
       <>
         <div className="banner-main-info">
-          <span className="banner-separation-horiz">{details.horizontal_nm || details.distance_nm}nm</span>
+          <span className="banner-separation-horiz">
+            {details.horizontal_nm || details.distance_nm}nm
+          </span>
           <span className="banner-separation-divider">/</span>
-          <span className="banner-separation-vert">{details.vertical_ft || details.altitude_diff_ft}ft</span>
+          <span className="banner-separation-vert">
+            {details.vertical_ft || details.altitude_diff_ft}ft
+          </span>
         </div>
         <div className="banner-aircraft">
           <span className="banner-callsign">{event.callsign || event.icao}</span>
@@ -82,13 +91,17 @@ export const renderEventBannerContent = (event) => {
       <>
         <div className="banner-main-info">
           <span className="banner-vs-change">
-            {details.previous_vs > 0 ? '+' : ''}{details.previous_vs} - {details.current_vs > 0 ? '+' : ''}{details.current_vs}
+            {details.previous_vs > 0 ? '+' : ''}
+            {details.previous_vs} - {details.current_vs > 0 ? '+' : ''}
+            {details.current_vs}
           </span>
           <span className="banner-vs-unit">fpm</span>
         </div>
         <div className="banner-aircraft">
           <span className="banner-callsign">{event.callsign || event.icao}</span>
-          {details.altitude && <span className="banner-altitude">{details.altitude.toLocaleString()}ft</span>}
+          {details.altitude && (
+            <span className="banner-altitude">{details.altitude.toLocaleString()}ft</span>
+          )}
         </div>
       </>
     );
@@ -100,13 +113,17 @@ export const renderEventBannerContent = (event) => {
       <>
         <div className="banner-main-info">
           <span className="banner-vs-change">
-            {details.previous_vs > 0 ? '+' : ''}{details.previous_vs} - {details.current_vs > 0 ? '+' : ''}{details.current_vs}
+            {details.previous_vs > 0 ? '+' : ''}
+            {details.previous_vs} - {details.current_vs > 0 ? '+' : ''}
+            {details.current_vs}
           </span>
           <span className="banner-vs-unit">fpm</span>
         </div>
         <div className="banner-aircraft">
           <span className="banner-callsign">{event.callsign || event.icao}</span>
-          {details.altitude && <span className="banner-altitude">{details.altitude.toLocaleString()}ft</span>}
+          {details.altitude && (
+            <span className="banner-altitude">{details.altitude.toLocaleString()}ft</span>
+          )}
         </div>
       </>
     );
@@ -118,12 +135,17 @@ export const renderEventBannerContent = (event) => {
     return (
       <>
         <div className="banner-main-info">
-          <span className="banner-vs-value">{vs > 0 ? '+' : ''}{vs}</span>
+          <span className="banner-vs-value">
+            {vs > 0 ? '+' : ''}
+            {vs}
+          </span>
           <span className="banner-vs-unit">fpm</span>
         </div>
         <div className="banner-aircraft">
           <span className="banner-callsign">{event.callsign || event.icao}</span>
-          {details.altitude && <span className="banner-altitude">{details.altitude.toLocaleString()}ft</span>}
+          {details.altitude && (
+            <span className="banner-altitude">{details.altitude.toLocaleString()}ft</span>
+          )}
         </div>
       </>
     );
@@ -154,7 +176,7 @@ export function ConflictBanner({
 }) {
   // Filter out acknowledged events and take just the first one
   const visibleEvents = activeConflicts
-    .filter(event => !acknowledgedEvents.has(event.id))
+    .filter((event) => !acknowledgedEvents.has(event.id))
     .slice(0, 1);
 
   if (visibleEvents.length === 0) return null;
@@ -167,7 +189,7 @@ export function ConflictBanner({
           className={`conflict-banner ${getSeverityClass(event.severity)} event-type-${event.event_type}`}
           onClick={() => {
             // Find and select the aircraft
-            const ac = aircraft.find(a => a.hex?.toUpperCase() === event.icao?.toUpperCase());
+            const ac = aircraft.find((a) => a.hex?.toUpperCase() === event.icao?.toUpperCase());
             if (ac) {
               selectAircraft(ac);
             }
@@ -176,12 +198,8 @@ export function ConflictBanner({
           <div className="banner-icon">
             <AlertTriangle size={20} />
           </div>
-          <div className="banner-type">
-            {getEventTypeName(event.event_type)}
-          </div>
-          <div className="banner-content">
-            {renderEventBannerContent(event)}
-          </div>
+          <div className="banner-type">{getEventTypeName(event.event_type)}</div>
+          <div className="banner-content">{renderEventBannerContent(event)}</div>
           <div className="banner-actions">
             <button
               className="banner-action-btn history"

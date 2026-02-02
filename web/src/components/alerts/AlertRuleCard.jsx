@@ -1,18 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Settings, Trash2, Download, Copy, Clock, Zap, Activity, TestTube2, FileJson
+  Settings,
+  Trash2,
+  Download,
+  Copy,
+  Clock,
+  Zap,
+  Activity,
+  TestTube2,
+  FileJson,
 } from 'lucide-react';
-import { PRIORITY_CONFIG, formatCondition, formatCooldown, formatRelativeTime } from './alertConstants';
+import {
+  PRIORITY_CONFIG,
+  formatCondition,
+  formatCooldown,
+  formatRelativeTime,
+} from './alertConstants';
 
-export function AlertRuleCard({
-  rule,
-  onToggle,
-  onEdit,
-  onDuplicate,
-  onDelete,
-  onTest,
-  onExport
-}) {
+export function AlertRuleCard({ rule, onToggle, onEdit, onDuplicate, onDelete, onTest, onExport }) {
   const [exportDropdown, setExportDropdown] = useState(false);
 
   const priorityConfig = PRIORITY_CONFIG[rule.priority] || PRIORITY_CONFIG.info;
@@ -37,7 +42,7 @@ export function AlertRuleCard({
           className={`rule-priority-badge ${rule.priority}`}
           style={{
             backgroundColor: priorityConfig.bgColor,
-            color: priorityConfig.color
+            color: priorityConfig.color,
           }}
         >
           <PriorityIcon size={12} aria-hidden="true" />
@@ -66,7 +71,9 @@ export function AlertRuleCard({
         {rule.conditions?.groups ? (
           rule.conditions.groups.map((group, gi) => (
             <span key={gi} className="condition-group">
-              {gi > 0 && <strong className="logic-operator">{rule.conditions.logic || 'AND'}</strong>}
+              {gi > 0 && (
+                <strong className="logic-operator">{rule.conditions.logic || 'AND'}</strong>
+              )}
               <span className="condition-group-inner">
                 {group.conditions?.map((c, ci) => (
                   <span key={ci} className="condition-item">
@@ -84,9 +91,7 @@ export function AlertRuleCard({
         ) : null}
       </div>
 
-      {rule.description && (
-        <div className="rule-card-description">{rule.description}</div>
-      )}
+      {rule.description && <div className="rule-card-description">{rule.description}</div>}
 
       {/* Stats Row */}
       <div className="rule-card-stats">
@@ -158,7 +163,13 @@ export function AlertRuleCard({
           </button>
           {exportDropdown && (
             <div className="export-dropdown-menu" role="menu">
-              <button onClick={() => { onExport(rule); setExportDropdown(false); }} role="menuitem">
+              <button
+                onClick={() => {
+                  onExport(rule);
+                  setExportDropdown(false);
+                }}
+                role="menuitem"
+              >
                 <FileJson size={14} aria-hidden="true" /> Export as JSON
               </button>
             </div>

@@ -8,8 +8,16 @@
  */
 import React, { memo } from 'react';
 import {
-  MapPin, MapPinOff, Navigation, Shield, AlertTriangle,
-  RefreshCw, X, Smartphone, Settings, ExternalLink
+  MapPin,
+  MapPinOff,
+  Navigation,
+  Shield,
+  AlertTriangle,
+  RefreshCw,
+  X,
+  Smartphone,
+  Settings,
+  ExternalLink,
 } from 'lucide-react';
 import { GPS_PERMISSION_STATES } from '../../hooks/useDeviceGPS';
 
@@ -28,9 +36,9 @@ function getRecoveryInstructions() {
         'Scroll down and tap Safari (or your browser)',
         'Tap "Location"',
         'Select "Allow" or "Ask"',
-        'Return here and tap "Retry"'
+        'Return here and tap "Retry"',
       ],
-      note: 'You may also need to enable Location Services in Settings > Privacy > Location Services'
+      note: 'You may also need to enable Location Services in Settings > Privacy > Location Services',
     };
   }
 
@@ -41,9 +49,9 @@ function getRecoveryInstructions() {
         'Tap the lock icon in the address bar',
         'Tap "Permissions" or "Site settings"',
         'Find "Location" and set to "Allow"',
-        'Return here and tap "Retry"'
+        'Return here and tap "Retry"',
       ],
-      note: 'You can also go to Settings > Apps > [Your Browser] > Permissions > Location'
+      note: 'You can also go to Settings > Apps > [Your Browser] > Permissions > Location',
     };
   }
 
@@ -53,9 +61,9 @@ function getRecoveryInstructions() {
       'Click the lock/info icon in the address bar',
       'Find "Location" in site permissions',
       'Change to "Allow"',
-      'Refresh the page'
+      'Refresh the page',
     ],
-    note: 'Location permissions vary by browser. Check your browser settings if needed.'
+    note: 'Location permissions vary by browser. Check your browser settings if needed.',
   };
 }
 
@@ -95,17 +103,11 @@ function PermissionRequestContent({ onRequestPermission, onContinueWithout }) {
       </div>
 
       <div className="gps-modal-actions">
-        <button
-          className="gps-modal-btn gps-modal-btn-primary"
-          onClick={onRequestPermission}
-        >
+        <button className="gps-modal-btn gps-modal-btn-primary" onClick={onRequestPermission}>
           <MapPin size={20} />
           Enable Location
         </button>
-        <button
-          className="gps-modal-btn gps-modal-btn-secondary"
-          onClick={onContinueWithout}
-        >
+        <button className="gps-modal-btn gps-modal-btn-secondary" onClick={onContinueWithout}>
           Continue Without GPS
         </button>
       </div>
@@ -128,7 +130,8 @@ function PermissionDeniedContent({ onRetry, onContinueWithout }) {
       <h2 className="gps-modal-title">Location Blocked</h2>
 
       <p className="gps-modal-description">
-        Location access was denied. You can still use Cannonball Mode, but distance and direction features will be unavailable.
+        Location access was denied. You can still use Cannonball Mode, but distance and direction
+        features will be unavailable.
       </p>
 
       <div className="gps-modal-instructions">
@@ -141,23 +144,15 @@ function PermissionDeniedContent({ onRetry, onContinueWithout }) {
             <li key={index}>{step}</li>
           ))}
         </ol>
-        {instructions.note && (
-          <p className="gps-instructions-note">{instructions.note}</p>
-        )}
+        {instructions.note && <p className="gps-instructions-note">{instructions.note}</p>}
       </div>
 
       <div className="gps-modal-actions">
-        <button
-          className="gps-modal-btn gps-modal-btn-primary"
-          onClick={onRetry}
-        >
+        <button className="gps-modal-btn gps-modal-btn-primary" onClick={onRetry}>
           <RefreshCw size={20} />
           Retry
         </button>
-        <button
-          className="gps-modal-btn gps-modal-btn-secondary"
-          onClick={onContinueWithout}
-        >
+        <button className="gps-modal-btn gps-modal-btn-secondary" onClick={onContinueWithout}>
           Continue Without GPS
         </button>
       </div>
@@ -177,9 +172,7 @@ function PermissionRequestingContent() {
 
       <h2 className="gps-modal-title">Requesting Location Access</h2>
 
-      <p className="gps-modal-description">
-        Please respond to the browser permission prompt.
-      </p>
+      <p className="gps-modal-description">Please respond to the browser permission prompt.</p>
 
       <div className="gps-modal-hint">
         <Smartphone size={16} />
@@ -202,14 +195,12 @@ function PermissionUnavailableContent({ onContinueWithout }) {
       <h2 className="gps-modal-title">Location Not Available</h2>
 
       <p className="gps-modal-description">
-        Your browser or device doesn't support location services. Cannonball Mode will work without GPS, but distance and direction features will be unavailable.
+        Your browser or device doesn't support location services. Cannonball Mode will work without
+        GPS, but distance and direction features will be unavailable.
       </p>
 
       <div className="gps-modal-actions">
-        <button
-          className="gps-modal-btn gps-modal-btn-primary"
-          onClick={onContinueWithout}
-        >
+        <button className="gps-modal-btn gps-modal-btn-primary" onClick={onContinueWithout}>
           Continue Without GPS
         </button>
       </div>
@@ -228,18 +219,18 @@ export const GPSPermissionModal = memo(function GPSPermissionModal({
   onClose,
 }) {
   // Don't show modal if permission is granted or checking
-  if (permissionState === GPS_PERMISSION_STATES.GRANTED ||
-      permissionState === GPS_PERMISSION_STATES.CHECKING ||
-      permissionState === GPS_PERMISSION_STATES.UNKNOWN) {
+  if (
+    permissionState === GPS_PERMISSION_STATES.GRANTED ||
+    permissionState === GPS_PERMISSION_STATES.CHECKING ||
+    permissionState === GPS_PERMISSION_STATES.UNKNOWN
+  ) {
     return null;
   }
 
   return (
     <div className="gps-modal-overlay" onClick={onClose}>
       <div className="gps-modal" onClick={(e) => e.stopPropagation()}>
-        {permissionState === GPS_PERMISSION_STATES.REQUESTING && (
-          <PermissionRequestingContent />
-        )}
+        {permissionState === GPS_PERMISSION_STATES.REQUESTING && <PermissionRequestingContent />}
 
         {permissionState === GPS_PERMISSION_STATES.PROMPT && (
           <PermissionRequestContent
@@ -249,16 +240,11 @@ export const GPSPermissionModal = memo(function GPSPermissionModal({
         )}
 
         {permissionState === GPS_PERMISSION_STATES.DENIED && (
-          <PermissionDeniedContent
-            onRetry={onRetry}
-            onContinueWithout={onContinueWithout}
-          />
+          <PermissionDeniedContent onRetry={onRetry} onContinueWithout={onContinueWithout} />
         )}
 
         {permissionState === GPS_PERMISSION_STATES.UNAVAILABLE && (
-          <PermissionUnavailableContent
-            onContinueWithout={onContinueWithout}
-          />
+          <PermissionUnavailableContent onContinueWithout={onContinueWithout} />
         )}
       </div>
     </div>

@@ -123,11 +123,7 @@ export function ConfirmModal({
   if (!isOpen) return null;
 
   return (
-    <div
-      className="modal-overlay confirm-modal-overlay"
-      onClick={handleClose}
-      role="presentation"
-    >
+    <div className="modal-overlay confirm-modal-overlay" onClick={handleClose} role="presentation">
       <div
         className="modal confirm-modal"
         ref={modalRef}
@@ -159,12 +155,7 @@ export function ConfirmModal({
         </div>
 
         <div className="confirm-modal-actions">
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={handleClose}
-            disabled={loading}
-          >
+          <button type="button" className="btn-secondary" onClick={handleClose} disabled={loading}>
             {cancelText}
           </button>
           <button

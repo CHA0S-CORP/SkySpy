@@ -5,14 +5,7 @@ import { decodeMetar, windDirToCardinal } from '../../../../utils';
 /**
  * METAR weather popup component
  */
-export function MetarPopup({
-  metar,
-  config,
-  popupPosition,
-  isDragging,
-  onClose,
-  onMouseDown,
-}) {
+export function MetarPopup({ metar, config, popupPosition, isDragging, onClose, onMouseDown }) {
   if (!metar) return null;
 
   const decoded = decodeMetar(metar);
@@ -35,7 +28,10 @@ export function MetarPopup({
       </div>
       <div className="popup-details">
         {metar.name && (
-          <div className="detail-row"><span>Name</span><span>{metar.name}</span></div>
+          <div className="detail-row">
+            <span>Name</span>
+            <span>{metar.name}</span>
+          </div>
         )}
 
         {/* Flight Category with explanation */}
@@ -52,7 +48,9 @@ export function MetarPopup({
           <div className="detail-row decoded-section">
             <span>Temperature</span>
             <div className="decoded-value">
-              <strong>{decoded.temperature.celsius}°C / {decoded.temperature.fahrenheit}°F</strong>
+              <strong>
+                {decoded.temperature.celsius}°C / {decoded.temperature.fahrenheit}°F
+              </strong>
               <span className="decoded-desc">{decoded.temperature.description}</span>
             </div>
           </div>
@@ -76,9 +74,13 @@ export function MetarPopup({
         {/* Wind with description */}
         {decoded?.wind && (
           <div className="detail-row decoded-section">
-            <span className="section-icon"><Navigation size={14} /> Wind</span>
+            <span className="section-icon">
+              <Navigation size={14} /> Wind
+            </span>
             <div className="decoded-value">
-              <strong>{windDirToCardinal(decoded.wind.direction)} {decoded.wind.text}</strong>
+              <strong>
+                {windDirToCardinal(decoded.wind.direction)} {decoded.wind.text}
+              </strong>
               <span className="decoded-desc">{decoded.wind.description}</span>
             </div>
           </div>
@@ -89,7 +91,9 @@ export function MetarPopup({
           <div className="detail-row decoded-section">
             <span>Visibility</span>
             <div className="decoded-value">
-              <strong>{decoded.visibility.value} {decoded.visibility.unit}</strong>
+              <strong>
+                {decoded.visibility.value} {decoded.visibility.unit}
+              </strong>
               <span className="decoded-desc">{decoded.visibility.description}</span>
             </div>
           </div>
@@ -113,7 +117,9 @@ export function MetarPopup({
             <div className="decoded-value cloud-layers">
               {decoded.clouds.map((c, i) => (
                 <div key={i} className="cloud-layer">
-                  <strong>{c.cover} @ {c.baseDesc}</strong>
+                  <strong>
+                    {c.cover} @ {c.baseDesc}
+                  </strong>
                   <span className="decoded-desc">{c.coverDesc}</span>
                 </div>
               ))}

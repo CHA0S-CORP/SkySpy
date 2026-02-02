@@ -17,7 +17,7 @@ export function createAircraftIcon(track, color) {
       </svg>
     `,
     iconSize: [24, 24],
-    iconAnchor: [12, 12]
+    iconAnchor: [12, 12],
   });
 }
 
@@ -50,7 +50,7 @@ export function getInterpolatedPosition(positions, percentage) {
     let diff = a2 - a1;
     if (diff > 180) diff -= 360;
     if (diff < -180) diff += 360;
-    return ((a1 + diff * t) + 360) % 360;
+    return (a1 + diff * t + 360) % 360;
   };
 
   return {
@@ -71,5 +71,9 @@ export async function safeJson(res) {
   if (!res.ok) return null;
   const ct = res.headers.get('content-type');
   if (!ct || !ct.includes('application/json')) return null;
-  try { return await res.json(); } catch { return null; }
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
 }

@@ -9,47 +9,47 @@ export const PRIORITY_CONFIG = {
     label: 'Info',
     color: 'var(--accent-cyan)',
     bgColor: 'rgba(0, 200, 255, 0.15)',
-    Icon: Info
+    Icon: Info,
   },
   warning: {
     label: 'Warning',
     color: 'var(--accent-yellow)',
     bgColor: 'rgba(210, 153, 34, 0.15)',
-    Icon: AlertTriangle
+    Icon: AlertTriangle,
   },
   critical: {
     label: 'Critical',
     color: 'var(--accent-red)',
     bgColor: 'rgba(248, 81, 73, 0.15)',
-    Icon: AlertCircle
+    Icon: AlertCircle,
   },
   emergency: {
     label: 'Emergency',
     color: '#dc2626',
     bgColor: 'rgba(220, 38, 38, 0.15)',
-    Icon: AlertCircle
-  }
+    Icon: AlertCircle,
+  },
 };
 
 // Format condition for readable display
 export function formatCondition(condition) {
   const { type, operator, value } = condition;
   const operatorMap = {
-    'eq': '=',
-    'ne': '!=',
-    'neq': '!=',
-    'gt': '>',
-    'lt': '<',
-    'gte': '>=',
-    'lte': '<=',
-    'contains': 'contains',
-    'starts_with': 'starts with',
-    'startswith': 'starts with',
-    'ends_with': 'ends with',
-    'endswith': 'ends with',
-    'in': 'in',
-    'not_in': 'not in',
-    'regex': 'matches'
+    eq: '=',
+    ne: '!=',
+    neq: '!=',
+    gt: '>',
+    lt: '<',
+    gte: '>=',
+    lte: '<=',
+    contains: 'contains',
+    starts_with: 'starts with',
+    startswith: 'starts with',
+    ends_with: 'ends with',
+    endswith: 'ends with',
+    in: 'in',
+    not_in: 'not in',
+    regex: 'matches',
   };
   const readableOp = operatorMap[operator] || operator;
   return `${type} ${readableOp} ${value}`;

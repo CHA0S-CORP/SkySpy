@@ -14,9 +14,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 // Speech recognition API (cross-browser)
-const SpeechRecognition = typeof window !== 'undefined'
-  ? window.SpeechRecognition || window.webkitSpeechRecognition
-  : null;
+const SpeechRecognition =
+  typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
 
 // Command patterns and their actions
 const COMMANDS = [
@@ -28,7 +27,7 @@ const COMMANDS = [
   { patterns: ['heads up', 'hud', 'hud view', 'heads-up'], action: 'mode_headsUp' },
   { patterns: ['settings', 'open settings'], action: 'settings' },
   { patterns: ['exit', 'close', 'quit', 'back'], action: 'exit' },
-  { patterns: ['report', 'status', 'what\'s up', 'situation'], action: 'report' },
+  { patterns: ['report', 'status', "what's up", 'situation'], action: 'report' },
   { patterns: ['next', 'next threat'], action: 'next' },
   { patterns: ['previous', 'prev', 'previous threat'], action: 'previous' },
   { patterns: ['dismiss', 'clear', 'deselect'], action: 'dismiss' },
@@ -54,11 +53,7 @@ function matchCommand(transcript) {
 /**
  * Voice control hook
  */
-export function useVoiceControl({
-  enabled = false,
-  onCommand,
-  continuous = true,
-} = {}) {
+export function useVoiceControl({ enabled = false, onCommand, continuous = true } = {}) {
   const [isSupported, setIsSupported] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState(null);

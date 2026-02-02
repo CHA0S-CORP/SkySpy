@@ -20,7 +20,7 @@ const CardSignalIndicator = memo(({ rssi }) => {
     <span className={`al-card-signal ${strengthClass}`} title={`${rssi.toFixed(1)} dB`}>
       <Radio size={12} />
       <span className="signal-bars">
-        {[1, 2, 3, 4].map(i => (
+        {[1, 2, 3, 4].map((i) => (
           <span key={i} className={`bar ${i <= strength ? 'active' : ''}`} />
         ))}
       </span>
@@ -33,11 +33,7 @@ CardSignalIndicator.displayName = 'CardSignalIndicator';
 /**
  * Aircraft card component for grid view
  */
-export const AircraftCard = memo(function AircraftCard({
-  aircraft,
-  onSelect,
-  compact = false,
-}) {
+export const AircraftCard = memo(function AircraftCard({ aircraft, onSelect, compact = false }) {
   // Defensive null check - return null if aircraft is undefined
   if (!aircraft) {
     return null;
@@ -57,7 +53,9 @@ export const AircraftCard = memo(function AircraftCard({
     isDescending ? 'descending' : '',
     onSelect ? 'clickable' : '',
     compact ? 'compact' : '',
-  ].filter(Boolean).join(' ');
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div
@@ -75,12 +73,8 @@ export const AircraftCard = memo(function AircraftCard({
       {/* Card Header */}
       <div className="al-card-header">
         <div className="al-card-identity">
-          <span className="al-card-callsign">
-            {ac.flight || ac.hex}
-          </span>
-          {ac.flight && (
-            <span className="al-card-icao">{ac.hex}</span>
-          )}
+          <span className="al-card-callsign">{ac.flight || ac.hex}</span>
+          {ac.flight && <span className="al-card-icao">{ac.hex}</span>}
         </div>
         <div className="al-card-badges">
           {ac.military && (
@@ -127,13 +121,18 @@ export const AircraftCard = memo(function AircraftCard({
         </div>
         <div className="al-card-telem-item">
           <span className="al-card-telem-label">V/S</span>
-          <span className={`al-card-telem-value ${isClimbing ? 'climbing' : ''} ${isDescending ? 'descending' : ''}`}>
+          <span
+            className={`al-card-telem-value ${isClimbing ? 'climbing' : ''} ${isDescending ? 'descending' : ''}`}
+          >
             {ac.vr ? (
               <>
-                {ac.vr > 0 ? '+' : ''}{ac.vr}
+                {ac.vr > 0 ? '+' : ''}
+                {ac.vr}
                 <span className="al-card-telem-unit">fpm</span>
               </>
-            ) : '--'}
+            ) : (
+              '--'
+            )}
           </span>
         </div>
         {!compact && (
@@ -146,7 +145,9 @@ export const AircraftCard = memo(function AircraftCard({
                     {Math.round(ac.track)}°
                     {cardinal && <span className="al-card-cardinal">{cardinal}</span>}
                   </>
-                ) : '--'}
+                ) : (
+                  '--'
+                )}
               </span>
             </div>
             <div className="al-card-telem-item">
@@ -158,9 +159,7 @@ export const AircraftCard = memo(function AircraftCard({
             </div>
             <div className="al-card-telem-item">
               <span className="al-card-telem-label">TYPE</span>
-              <span className="al-card-telem-value type">
-                {ac.type || '--'}
-              </span>
+              <span className="al-card-telem-value type">{ac.type || '--'}</span>
             </div>
           </>
         )}

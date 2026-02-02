@@ -25,7 +25,7 @@ export function Skeleton({
   className = '',
   style = {},
   count = 1,
-  gap = 8
+  gap = 8,
 }) {
   // Default dimensions based on variant
   const getDefaultDimensions = () => {
@@ -33,25 +33,25 @@ export function Skeleton({
       case 'text':
         return {
           width: width || '100%',
-          height: height || 16
+          height: height || 16,
         };
       case 'card':
         return {
           width: width || '100%',
-          height: height || 100
+          height: height || 100,
         };
       case 'circle': {
         const size = width || height || 40;
         return {
           width: size,
-          height: size
+          height: size,
         };
       }
       case 'rect':
       default:
         return {
           width: width || '100%',
-          height: height || 40
+          height: height || 40,
         };
     }
   };
@@ -61,7 +61,7 @@ export function Skeleton({
   const baseStyle = {
     width: typeof dimensions.width === 'number' ? `${dimensions.width}px` : dimensions.width,
     height: typeof dimensions.height === 'number' ? `${dimensions.height}px` : dimensions.height,
-    ...style
+    ...style,
   };
 
   const variantClass = `skeleton-${variant}`;
@@ -69,24 +69,18 @@ export function Skeleton({
 
   if (count > 1) {
     return (
-      <div className="skeleton-group" style={{ display: 'flex', flexDirection: 'column', gap: `${gap}px` }}>
+      <div
+        className="skeleton-group"
+        style={{ display: 'flex', flexDirection: 'column', gap: `${gap}px` }}
+      >
         {Array.from({ length: count }).map((_, index) => (
-          <div
-            key={index}
-            className={combinedClassName}
-            style={baseStyle}
-          />
+          <div key={index} className={combinedClassName} style={baseStyle} />
         ))}
       </div>
     );
   }
 
-  return (
-    <div
-      className={combinedClassName}
-      style={baseStyle}
-    />
-  );
+  return <div className={combinedClassName} style={baseStyle} />;
 }
 
 /**

@@ -27,16 +27,36 @@ const LAW_ENFORCEMENT_PATTERNS = [
   { pattern: /^[A-Z]CSO\d*/i, category: 'Police Aviation', description: 'County Sheriff Office' },
 
   // Federal agencies
-  { pattern: /^CBP\d*/i, category: 'Federal Law Enforcement', description: 'Customs & Border Protection' },
+  {
+    pattern: /^CBP\d*/i,
+    category: 'Federal Law Enforcement',
+    description: 'Customs & Border Protection',
+  },
   { pattern: /^OMAHA\d*/i, category: 'Federal Law Enforcement', description: 'CBP Air & Marine' },
   { pattern: /^BORDER\d*/i, category: 'Federal Law Enforcement', description: 'Border Patrol' },
   { pattern: /^USMS\d*/i, category: 'Federal Law Enforcement', description: 'US Marshals Service' },
-  { pattern: /^JPATS\d*/i, category: 'Federal Law Enforcement', description: 'Justice Prisoner Transport' },
-  { pattern: /^ICE\d*/i, category: 'Federal Law Enforcement', description: 'Immigration & Customs Enforcement' },
-  { pattern: /^DEA\d*/i, category: 'Federal Law Enforcement', description: 'Drug Enforcement Admin' },
+  {
+    pattern: /^JPATS\d*/i,
+    category: 'Federal Law Enforcement',
+    description: 'Justice Prisoner Transport',
+  },
+  {
+    pattern: /^ICE\d*/i,
+    category: 'Federal Law Enforcement',
+    description: 'Immigration & Customs Enforcement',
+  },
+  {
+    pattern: /^DEA\d*/i,
+    category: 'Federal Law Enforcement',
+    description: 'Drug Enforcement Admin',
+  },
   { pattern: /^ATF\d*/i, category: 'Federal Law Enforcement', description: 'ATF' },
   { pattern: /^FBI\d*/i, category: 'Federal Law Enforcement', description: 'FBI' },
-  { pattern: /^DHS\d*/i, category: 'Federal Law Enforcement', description: 'Dept of Homeland Security' },
+  {
+    pattern: /^DHS\d*/i,
+    category: 'Federal Law Enforcement',
+    description: 'Dept of Homeland Security',
+  },
 
   // State patrol patterns
   { pattern: /^TROOPER\d*/i, category: 'State Police', description: 'State Trooper' },
@@ -49,8 +69,18 @@ const LAW_ENFORCEMENT_PATTERNS = [
   { pattern: /^NEWS\d+/i, category: 'News Media', description: 'News Helicopter', isNews: true },
   { pattern: /^CHOPPER\d+/i, category: 'News Media', description: 'News Helicopter', isNews: true },
   { pattern: /^SKY\d+/i, category: 'News Media', description: 'Sky News', isNews: true },
-  { pattern: /^K[A-Z]{3}\d*/i, category: 'News Media', description: 'TV Station Helicopter', isNews: true },
-  { pattern: /^W[A-Z]{3}\d*/i, category: 'News Media', description: 'TV Station Helicopter', isNews: true },
+  {
+    pattern: /^K[A-Z]{3}\d*/i,
+    category: 'News Media',
+    description: 'TV Station Helicopter',
+    isNews: true,
+  },
+  {
+    pattern: /^W[A-Z]{3}\d*/i,
+    category: 'News Media',
+    description: 'TV Station Helicopter',
+    isNews: true,
+  },
 ];
 
 // Helicopter category codes
@@ -58,14 +88,31 @@ const HELICOPTER_CATEGORIES = ['A7'];
 
 // Surveillance-capable aircraft types
 const SURVEILLANCE_TYPES = [
-  'C208', 'C206', 'C182', 'C172', // Cessna surveillance platforms
-  'PC12', 'BE20', 'BE30', 'BE35', // King Air variants
+  'C208',
+  'C206',
+  'C182',
+  'C172', // Cessna surveillance platforms
+  'PC12',
+  'BE20',
+  'BE30',
+  'BE35', // King Air variants
   'PA31', // Piper Navajo
-  'EC35', 'EC45', 'EC30', 'AS50', // Eurocopter
-  'H125', 'H130', 'H135', 'H145', // Airbus Helicopters
-  'A119', 'A139', // AgustaWestland
-  'B06', 'B407', 'B429', // Bell helicopters
-  'S76', 'R44', 'R66', // Other helicopters
+  'EC35',
+  'EC45',
+  'EC30',
+  'AS50', // Eurocopter
+  'H125',
+  'H130',
+  'H135',
+  'H145', // Airbus Helicopters
+  'A119',
+  'A139', // AgustaWestland
+  'B06',
+  'B407',
+  'B429', // Bell helicopters
+  'S76',
+  'R44',
+  'R66', // Other helicopters
 ];
 
 /**
@@ -218,8 +265,7 @@ export function calculateDistanceNm(lat1, lon1, lat2, lon2) {
   const dLon = toRad(lon2 - lon1);
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -238,8 +284,8 @@ export function calculateBearing(lat1, lon1, lat2, lon2) {
   const lat2Rad = toRad(lat2);
 
   const x = Math.sin(dLon) * Math.cos(lat2Rad);
-  const y = Math.cos(lat1Rad) * Math.sin(lat2Rad) -
-    Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+  const y =
+    Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
 
   let bearing = Math.atan2(x, y);
   bearing = toDeg(bearing);
@@ -252,8 +298,24 @@ export function calculateBearing(lat1, lon1, lat2, lon2) {
  * @returns {string} Direction name (N, NE, E, etc.)
  */
 export function getDirectionName(bearing) {
-  const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
-    'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+  const directions = [
+    'N',
+    'NNE',
+    'NE',
+    'ENE',
+    'E',
+    'ESE',
+    'SE',
+    'SSE',
+    'S',
+    'SSW',
+    'SW',
+    'WSW',
+    'W',
+    'WNW',
+    'NW',
+    'NNW',
+  ];
   const index = Math.round(bearing / 22.5) % 16;
   return directions[index];
 }

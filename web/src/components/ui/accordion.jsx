@@ -6,17 +6,11 @@ import { cn } from './cn';
 
 const Accordion = AccordionPrimitive.Root;
 
-const AccordionItem = forwardRef(function AccordionItem(
-  { className, ...props },
-  ref
-) {
+const AccordionItem = forwardRef(function AccordionItem({ className, ...props }, ref) {
   return (
     <AccordionPrimitive.Item
       ref={ref}
-      className={cn(
-        'border-b border-white/[0.05] last:border-b-0',
-        className
-      )}
+      className={cn('border-b border-white/[0.05] last:border-b-0', className)}
       {...props}
     />
   );
@@ -102,10 +96,4 @@ function AnimatedAccordionContent({ children, isOpen, className }) {
   );
 }
 
-export {
-  Accordion,
-  AccordionItem,
-  AccordionTrigger,
-  AccordionContent,
-  AnimatedAccordionContent,
-};
+export { Accordion, AccordionItem, AccordionTrigger, AccordionContent, AnimatedAccordionContent };

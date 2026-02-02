@@ -9,7 +9,7 @@ export const OverlayMenu = memo(function OverlayMenu({
   show,
   overlays,
   onOverlaysChange,
-  onClose
+  onClose,
 }) {
   const menuRef = useRef(null);
 
@@ -63,13 +63,13 @@ export const OverlayMenu = memo(function OverlayMenu({
           <X size={16} />
         </button>
       </div>
-      
+
       <div className="overlay-menu-content">
         <div className="overlay-section">
           <div className="overlay-section-title">Navigation</div>
-          
+
           <label className="overlay-toggle">
-            <input 
+            <input
               type="checkbox"
               checked={overlays.navaids}
               onChange={() => handleToggle('navaids')}
@@ -77,9 +77,9 @@ export const OverlayMenu = memo(function OverlayMenu({
             <Radio size={14} />
             <span>NAVAIDs (VOR/NDB)</span>
           </label>
-          
+
           <label className="overlay-toggle">
-            <input 
+            <input
               type="checkbox"
               checked={overlays.airports}
               onChange={() => handleToggle('airports')}
@@ -87,9 +87,9 @@ export const OverlayMenu = memo(function OverlayMenu({
             <Plane size={14} />
             <span>Airports</span>
           </label>
-          
+
           <label className="overlay-toggle">
-            <input 
+            <input
               type="checkbox"
               checked={overlays.waypoints}
               onChange={() => handleToggle('waypoints')}
@@ -98,35 +98,31 @@ export const OverlayMenu = memo(function OverlayMenu({
             <span>Waypoints</span>
           </label>
         </div>
-        
+
         <div className="overlay-section">
           <div className="overlay-section-title">Airspace</div>
-          
+
           <label className="overlay-toggle">
-            <input 
+            <input
               type="checkbox"
               checked={overlays.airspace}
               onChange={() => handleToggle('airspace')}
             />
             <span>Controlled Airspace</span>
           </label>
-          
+
           <label className="overlay-toggle">
-            <input 
-              type="checkbox"
-              checked={overlays.tfrs}
-              onChange={() => handleToggle('tfrs')}
-            />
+            <input type="checkbox" checked={overlays.tfrs} onChange={() => handleToggle('tfrs')} />
             <AlertTriangle size={14} />
             <span>TFRs</span>
           </label>
         </div>
-        
+
         <div className="overlay-section">
           <div className="overlay-section-title">Weather</div>
-          
+
           <label className="overlay-toggle">
-            <input 
+            <input
               type="checkbox"
               checked={overlays.metars}
               onChange={() => handleToggle('metars')}
@@ -134,9 +130,9 @@ export const OverlayMenu = memo(function OverlayMenu({
             <Cloud size={14} />
             <span>METARs</span>
           </label>
-          
+
           <label className="overlay-toggle">
-            <input 
+            <input
               type="checkbox"
               checked={overlays.pireps}
               onChange={() => handleToggle('pireps')}
@@ -144,9 +140,9 @@ export const OverlayMenu = memo(function OverlayMenu({
             <AlertTriangle size={14} />
             <span>PIREPs</span>
           </label>
-          
+
           <label className="overlay-toggle">
-            <input 
+            <input
               type="checkbox"
               checked={overlays.radar}
               onChange={() => handleToggle('radar')}
@@ -154,30 +150,30 @@ export const OverlayMenu = memo(function OverlayMenu({
             <span>Weather Radar</span>
           </label>
         </div>
-        
+
         <div className="overlay-section">
           <div className="overlay-section-title">Display</div>
-          
+
           <label className="overlay-toggle">
-            <input 
+            <input
               type="checkbox"
               checked={overlays.rangeRings}
               onChange={() => handleToggle('rangeRings')}
             />
             <span>Range Rings</span>
           </label>
-          
+
           <label className="overlay-toggle">
-            <input 
+            <input
               type="checkbox"
               checked={overlays.trails}
               onChange={() => handleToggle('trails')}
             />
             <span>Aircraft Trails</span>
           </label>
-          
+
           <label className="overlay-toggle">
-            <input 
+            <input
               type="checkbox"
               checked={overlays.labels}
               onChange={() => handleToggle('labels')}

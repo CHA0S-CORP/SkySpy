@@ -3,11 +3,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 /**
  * Custom hook for handling map alarms, notifications, and audio alerts
  */
-export function useMapAlarms({
-  config,
-  soundMuted,
-  setSoundMuted,
-}) {
+export function useMapAlarms({ config, soundMuted, setSoundMuted }) {
   const [acknowledgedEvents, setAcknowledgedEvents] = useState(new Set());
 
   // Refs for audio state
@@ -28,42 +24,45 @@ export function useMapAlarms({
   }, []);
 
   // Send browser notification helper
-  const sendNotification = useCallback((title, body, tag, urgent = false) => {
-    // Always log to console for debugging/testing
-    console.log(`[SkySpy Notification] ${title}: ${body}`);
+  const sendNotification = useCallback(
+    (title, body, tag, urgent = false) => {
+      // Always log to console for debugging/testing
+      console.log(`[SkySpy Notification] ${title}: ${body}`);
 
-    if (typeof Notification === 'undefined') {
-      console.warn('Notifications not supported in this browser');
-      return;
-    }
-
-    if (Notification.permission !== 'granted') {
-      console.warn('Notification permission not granted');
-      return;
-    }
-
-    if (!config.browserNotifications) {
-      console.log('Browser notifications disabled in settings');
-      return;
-    }
-
-    try {
-      const notif = new Notification(title, {
-        body,
-        icon: '/static/favicon.svg',
-        tag,
-        requireInteraction: urgent,
-        silent: false
-      });
-
-      // Auto-close non-urgent notifications after 10 seconds
-      if (!urgent) {
-        setTimeout(() => notif.close(), 10000);
+      if (typeof Notification === 'undefined') {
+        console.warn('Notifications not supported in this browser');
+        return;
       }
-    } catch (e) {
-      console.warn('Notification failed:', e);
-    }
-  }, [config.browserNotifications]);
+
+      if (Notification.permission !== 'granted') {
+        console.warn('Notification permission not granted');
+        return;
+      }
+
+      if (!config.browserNotifications) {
+        console.log('Browser notifications disabled in settings');
+        return;
+      }
+
+      try {
+        const notif = new Notification(title, {
+          body,
+          icon: '/static/favicon.svg',
+          tag,
+          requireInteraction: urgent,
+          silent: false,
+        });
+
+        // Auto-close non-urgent notifications after 10 seconds
+        if (!urgent) {
+          setTimeout(() => notif.close(), 10000);
+        }
+      } catch (e) {
+        console.warn('Notification failed:', e);
+      }
+    },
+    [config.browserNotifications]
+  );
 
   // Play Stage 1 alarm - double ding (low severity) - yellow
   const playAlarmStage1 = useCallback(() => {
@@ -247,9 +246,9 @@ export function useMapAlarms({
       };
 
       // High-low-high-low pattern
-      playTone(now, 1800, 0.25);        // High
+      playTone(now, 1800, 0.25); // High
       playTone(now + 0.25, 1200, 0.25); // Low
-      playTone(now + 0.5, 1800, 0.25);  // High
+      playTone(now + 0.5, 1800, 0.25); // High
       playTone(now + 0.75, 1200, 0.25); // Low
 
       alarmPlayingRef.current = true;
@@ -262,23 +261,26 @@ export function useMapAlarms({
   }, [soundMuted, initAudioContext]);
 
   // Play alarm based on severity
-  const playConflictAlarm = useCallback((severity = 'low') => {
-    switch (severity) {
-      case 'critical':
-        playAlarmStage3();
-        break;
-      case 'warning':
-        playAlarmStage2();
-        break;
-      default:
-        playAlarmStage1();
-    }
-  }, [playAlarmStage1, playAlarmStage2, playAlarmStage3]);
+  const playConflictAlarm = useCallback(
+    (severity = 'low') => {
+      switch (severity) {
+        case 'critical':
+          playAlarmStage3();
+          break;
+        case 'warning':
+          playAlarmStage2();
+          break;
+        default:
+          playAlarmStage1();
+      }
+    },
+    [playAlarmStage1, playAlarmStage2, playAlarmStage3]
+  );
 
   // Get highest severity from active events
   const getHighestSeverity = useCallback((events) => {
-    if (events.some(e => e.severity === 'critical')) return 'critical';
-    if (events.some(e => e.severity === 'warning')) return 'warning';
+    if (events.some((e) => e.severity === 'critical')) return 'critical';
+    if (events.some((e) => e.severity === 'warning')) return 'warning';
     return 'low';
   }, []);
 
@@ -291,39 +293,45 @@ export function useMapAlarms({
   }, []);
 
   // Start looping alarm for unacknowledged events
-  const startAlarmLoop = useCallback((severity = 'low') => {
-    if (alarmIntervalRef.current || soundMuted) return;
+  const startAlarmLoop = useCallback(
+    (severity = 'low') => {
+      if (alarmIntervalRef.current || soundMuted) return;
 
-    playConflictAlarm(severity);
-
-    // Determine loop interval based on severity
-    const interval = severity === 'critical' ? 1500 : severity === 'warning' ? 2500 : 3000;
-
-    alarmIntervalRef.current = setInterval(() => {
       playConflictAlarm(severity);
-    }, interval);
-  }, [playConflictAlarm, soundMuted]);
+
+      // Determine loop interval based on severity
+      const interval = severity === 'critical' ? 1500 : severity === 'warning' ? 2500 : 3000;
+
+      alarmIntervalRef.current = setInterval(() => {
+        playConflictAlarm(severity);
+      }, interval);
+    },
+    [playConflictAlarm, soundMuted]
+  );
 
   // Acknowledge a safety event via API and update local state
-  const acknowledgeEvent = useCallback(async (eventId) => {
-    const baseUrl = config.apiBaseUrl || '';
+  const acknowledgeEvent = useCallback(
+    async (eventId) => {
+      const baseUrl = config.apiBaseUrl || '';
 
-    // Stop audio immediately regardless of API result
-    stopAlarmLoop();
+      // Stop audio immediately regardless of API result
+      stopAlarmLoop();
 
-    // Update local state immediately for UI feedback
-    setAcknowledgedEvents(prev => new Set([...prev, eventId]));
+      // Update local state immediately for UI feedback
+      setAcknowledgedEvents((prev) => new Set([...prev, eventId]));
 
-    // Try to persist to API (fire-and-forget, don't block on failure)
-    try {
-      await fetch(`${baseUrl}/api/v1/safety/active/${encodeURIComponent(eventId)}/acknowledge`, {
-        method: 'POST'
-      });
-    } catch (err) {
-      console.error('Failed to acknowledge event via API:', err);
-      // Audio is already stopped and UI is updated, so this is just a log
-    }
-  }, [config.apiBaseUrl, stopAlarmLoop]);
+      // Try to persist to API (fire-and-forget, don't block on failure)
+      try {
+        await fetch(`${baseUrl}/api/v1/safety/active/${encodeURIComponent(eventId)}/acknowledge`, {
+          method: 'POST',
+        });
+      } catch (err) {
+        console.error('Failed to acknowledge event via API:', err);
+        // Audio is already stopped and UI is updated, so this is just a log
+      }
+    },
+    [config.apiBaseUrl, stopAlarmLoop]
+  );
 
   // Save sound muted preference and stop alarm if muted
   useEffect(() => {

@@ -14,14 +14,16 @@ export function handleAlertTriggered(alertData) {
   history.unshift({
     ...alertData,
     id: Date.now(),
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
   localStorage.setItem(ALERT_HISTORY_KEY, JSON.stringify(history.slice(0, MAX_ALERT_HISTORY)));
 
   // Emit custom event for useAlertNotifications to handle toasts and sounds
-  window.dispatchEvent(new CustomEvent('skyspy:alert:triggered', {
-    detail: alertData
-  }));
+  window.dispatchEvent(
+    new CustomEvent('skyspy:alert:triggered', {
+      detail: alertData,
+    })
+  );
 }
 
 /**

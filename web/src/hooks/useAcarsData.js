@@ -2,19 +2,13 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   ACARS_QUICK_FILTER_CATEGORIES,
   getAcarsLabelDescription,
-  safeJson
+  safeJson,
 } from '../components/history/historyConstants';
 
 /**
  * Hook for managing ACARS data fetching, filtering, and state
  */
-export function useAcarsData({
-  apiBase,
-  timeRange,
-  wsRequest,
-  wsConnected,
-  viewType
-}) {
+export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewType }) {
   // ACARS filters
   const [acarsSearch, setAcarsSearch] = useState('');
   const [acarsSource, setAcarsSource] = useState('all');
@@ -144,28 +138,34 @@ export function useAcarsData({
         try {
           let data;
           if (wsRequest && wsConnected) {
-            const result = await wsRequest('sightings', { callsign: callsign, hours: 24, limit: 1 });
+            const result = await wsRequest('sightings', {
+              callsign: callsign,
+              hours: 24,
+              limit: 1,
+            });
             if (result && (result.sightings || result.results)) {
               data = result;
             } else {
               throw new Error('Invalid sightings response');
             }
           } else {
-            const res = await fetch(`${apiBase}/api/v1/sightings?callsign=${encodeURIComponent(callsign)}&hours=24&limit=1`);
+            const res = await fetch(
+              `${apiBase}/api/v1/sightings?callsign=${encodeURIComponent(callsign)}&hours=24&limit=1`
+            );
             data = await safeJson(res);
             if (!data) throw new Error('HTTP request failed');
           }
           const sightings = data?.sightings || data?.results || [];
           if (sightings.length > 0 && sightings[0].icao_hex) {
-            setCallsignHexCache(prev => ({
+            setCallsignHexCache((prev) => ({
               ...prev,
-              [callsign]: sightings[0].icao_hex
+              [callsign]: sightings[0].icao_hex,
             }));
           } else {
-            setCallsignHexCache(prev => ({ ...prev, [callsign]: null }));
+            setCallsignHexCache((prev) => ({ ...prev, [callsign]: null }));
           }
         } catch (err) {
-          setCallsignHexCache(prev => ({ ...prev, [callsign]: null }));
+          setCallsignHexCache((prev) => ({ ...prev, [callsign]: null }));
         }
       }
     };
@@ -196,28 +196,34 @@ export function useAcarsData({
         try {
           let data;
           if (wsRequest && wsConnected) {
-            const result = await wsRequest('sightings', { registration: reg, hours: 168, limit: 1 });
+            const result = await wsRequest('sightings', {
+              registration: reg,
+              hours: 168,
+              limit: 1,
+            });
             if (result && (result.sightings || result.results)) {
               data = result;
             } else {
               throw new Error('Invalid sightings response');
             }
           } else {
-            const res = await fetch(`${apiBase}/api/v1/sightings?registration=${encodeURIComponent(reg)}&hours=168&limit=1`);
+            const res = await fetch(
+              `${apiBase}/api/v1/sightings?registration=${encodeURIComponent(reg)}&hours=168&limit=1`
+            );
             data = await safeJson(res);
             if (!data) throw new Error('HTTP request failed');
           }
           const sightings = data?.sightings || data?.results || [];
           if (sightings.length > 0 && sightings[0].icao_hex) {
-            setRegHexCache(prev => ({
+            setRegHexCache((prev) => ({
               ...prev,
-              [reg]: sightings[0].icao_hex
+              [reg]: sightings[0].icao_hex,
             }));
           } else {
-            setRegHexCache(prev => ({ ...prev, [reg]: null }));
+            setRegHexCache((prev) => ({ ...prev, [reg]: null }));
           }
         } catch (err) {
-          setRegHexCache(prev => ({ ...prev, [reg]: null }));
+          setRegHexCache((prev) => ({ ...prev, [reg]: null }));
         }
       }
     };
@@ -251,10 +257,8 @@ export function useAcarsData({
 
   // Toggle quick filter
   const toggleQuickFilter = useCallback((category) => {
-    setAcarsQuickFilters(prev =>
-      prev.includes(category)
-        ? prev.filter(c => c !== category)
-        : [...prev, category]
+    setAcarsQuickFilters((prev) =>
+      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]
     );
   }, []);
 
@@ -265,28 +269,35 @@ export function useAcarsData({
 
   // Toggle message expansion
   const toggleMessageExpansion = useCallback((msgId) => {
-    setExpandedMessages(prev => ({
+    setExpandedMessages((prev) => ({
       ...prev,
-      [msgId]: !prev[msgId]
+      [msgId]: !prev[msgId],
     }));
   }, []);
 
   // Toggle all messages expansion
   const toggleAllMessages = useCallback(() => {
-    setAllMessagesExpanded(prev => !prev);
+    setAllMessagesExpanded((prev) => !prev);
     setExpandedMessages({});
   }, []);
 
   // Reset visible count when filters change
   useEffect(() => {
     setVisibleAcarsCount(50);
-  }, [acarsSearch, acarsQuickFilters, acarsHideEmpty, acarsSelectedLabels, acarsAirlineFilter, acarsSource]);
+  }, [
+    acarsSearch,
+    acarsQuickFilters,
+    acarsHideEmpty,
+    acarsSelectedLabels,
+    acarsAirlineFilter,
+    acarsSource,
+  ]);
 
   // Lazy load more messages on scroll
   const handleAcarsScroll = useCallback((e) => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
     if (scrollHeight - scrollTop - clientHeight < 200) {
-      setVisibleAcarsCount(prev => prev + 50);
+      setVisibleAcarsCount((prev) => prev + 50);
     }
   }, []);
 
@@ -295,7 +306,7 @@ export function useAcarsData({
     if (!acarsMessages.length) return [];
 
     const labelCounts = {};
-    acarsMessages.forEach(msg => {
+    acarsMessages.forEach((msg) => {
       if (msg.label) {
         const label = msg.label.toUpperCase();
         labelCounts[label] = (labelCounts[label] || 0) + 1;
@@ -307,7 +318,7 @@ export function useAcarsData({
       .map(([label, count]) => ({
         label,
         count,
-        description: getAcarsLabelDescription(label, null, labelReference)
+        description: getAcarsLabelDescription(label, null, labelReference),
       }));
   }, [acarsMessages, labelReference]);
 
@@ -319,19 +330,19 @@ export function useAcarsData({
 
     // Filter out empty messages if hideEmpty is enabled
     if (acarsHideEmpty) {
-      filtered = filtered.filter(msg => msg.text && msg.text.trim().length > 0);
+      filtered = filtered.filter((msg) => msg.text && msg.text.trim().length > 0);
     }
 
     // Apply quick filter chips
     if (acarsQuickFilters.length > 0) {
       const allowedLabels = new Set();
-      acarsQuickFilters.forEach(category => {
+      acarsQuickFilters.forEach((category) => {
         const catData = ACARS_QUICK_FILTER_CATEGORIES[category];
         if (catData) {
-          catData.labels.forEach(l => allowedLabels.add(l));
+          catData.labels.forEach((l) => allowedLabels.add(l));
         }
       });
-      filtered = filtered.filter(msg => {
+      filtered = filtered.filter((msg) => {
         const label = msg.label?.toUpperCase();
         return label && allowedLabels.has(label);
       });
@@ -340,14 +351,15 @@ export function useAcarsData({
     // Apply search filter (includes airline name search)
     if (acarsSearch) {
       const search = acarsSearch.toLowerCase();
-      filtered = filtered.filter(msg =>
-        msg.icao_hex?.toLowerCase().includes(search) ||
-        msg.callsign?.toLowerCase().includes(search) ||
-        msg.text?.toLowerCase().includes(search) ||
-        msg.label?.toLowerCase().includes(search) ||
-        msg.airline?.name?.toLowerCase().includes(search) ||
-        msg.airline?.icao?.toLowerCase().includes(search) ||
-        msg.airline?.iata?.toLowerCase().includes(search)
+      filtered = filtered.filter(
+        (msg) =>
+          msg.icao_hex?.toLowerCase().includes(search) ||
+          msg.callsign?.toLowerCase().includes(search) ||
+          msg.text?.toLowerCase().includes(search) ||
+          msg.label?.toLowerCase().includes(search) ||
+          msg.airline?.name?.toLowerCase().includes(search) ||
+          msg.airline?.icao?.toLowerCase().includes(search) ||
+          msg.airline?.iata?.toLowerCase().includes(search)
       );
     }
 

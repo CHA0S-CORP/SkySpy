@@ -13,20 +13,22 @@ export function PolarPlot({ data, loading }) {
   const svgRef = useRef(null);
 
   // Chart dimensions
-  const width = 240, height = 240;
-  const cx = width / 2, cy = height / 2;
+  const width = 240,
+    height = 240;
+  const cx = width / 2,
+    cy = height / 2;
   const maxR = 95; // Maximum radius for data
 
   // Find max values for normalization
-  const maxCount = Math.max(...bearingData.map(d => d.count || 0), 1);
-  const maxDistance = Math.max(...bearingData.map(d => d.max_distance_nm || 0), 1);
+  const maxCount = Math.max(...bearingData.map((d) => d.count || 0), 1);
+  const maxDistance = Math.max(...bearingData.map((d) => d.max_distance_nm || 0), 1);
 
   // Convert polar to cartesian
   const polarToCartesian = (angle, radius) => {
     const rad = (angle - 90) * (Math.PI / 180); // -90 to start at N
     return {
       x: cx + radius * Math.cos(rad),
-      y: cy + radius * Math.sin(rad)
+      y: cy + radius * Math.sin(rad),
     };
   };
 
@@ -34,7 +36,7 @@ export function PolarPlot({ data, loading }) {
   const generatePolarPath = (valueKey, maxValue) => {
     if (!bearingData.length) return '';
 
-    const points = bearingData.map(sector => {
+    const points = bearingData.map((sector) => {
       const value = sector[valueKey] || 0;
       const normalizedR = (value / maxValue) * maxR;
       const angle = sector.bearing_start + 5; // Center of 10-degree sector
@@ -42,7 +44,10 @@ export function PolarPlot({ data, loading }) {
       return `${x},${y}`;
     });
 
-    return `M${points[0]} ${points.slice(1).map(p => `L${p}`).join(' ')} Z`;
+    return `M${points[0]} ${points
+      .slice(1)
+      .map((p) => `L${p}`)
+      .join(' ')} Z`;
   };
 
   const countPath = generatePolarPath('count', maxCount);
@@ -73,13 +78,14 @@ export function PolarPlot({ data, loading }) {
 
       // Find the sector for this angle
       const sectorIndex = Math.floor(angle / 10);
-      const sector = bearingData.find(s => Math.floor(s.bearing_start / 10) === sectorIndex);
+      const sector = bearingData.find((s) => Math.floor(s.bearing_start / 10) === sectorIndex);
 
       setCursor({
-        x, y,
+        x,
+        y,
         bearing: Math.round(angle),
         sector,
-        distance
+        distance,
       });
     } else {
       setCursor(null);
@@ -106,7 +112,7 @@ export function PolarPlot({ data, loading }) {
           onMouseLeave={handleMouseLeave}
         >
           {/* Concentric circles */}
-          {rings.map(r => (
+          {rings.map((r) => (
             <circle key={r} cx={cx} cy={cy} r={r} className="polar-ring" />
           ))}
           {/* Cardinal directions */}
@@ -116,44 +122,55 @@ export function PolarPlot({ data, loading }) {
           <line x1={cx - 70} y1={cy - 70} x2={cx + 70} y2={cy + 70} className="polar-axis-minor" />
           <line x1={cx + 70} y1={cy - 70} x2={cx - 70} y2={cy + 70} className="polar-axis-minor" />
           {/* Labels */}
-          <text x={cx} y={18} className="polar-label">N</text>
-          <text x={cx} y={height - 8} className="polar-label">S</text>
-          <text x={12} y={cy + 4} className="polar-label">W</text>
-          <text x={width - 12} y={cy + 4} className="polar-label">E</text>
+          <text x={cx} y={18} className="polar-label">
+            N
+          </text>
+          <text x={cx} y={height - 8} className="polar-label">
+            S
+          </text>
+          <text x={12} y={cy + 4} className="polar-label">
+            W
+          </text>
+          <text x={width - 12} y={cy + 4} className="polar-label">
+            E
+          </text>
           {/* Distance pattern (outer) */}
-          {distancePath && (
-            <path d={distancePath} className="polar-pattern-distance" />
-          )}
+          {distancePath && <path d={distancePath} className="polar-pattern-distance" />}
           {/* Count pattern (inner) */}
-          {countPath && (
-            <path d={countPath} className="polar-pattern-count" />
-          )}
+          {countPath && <path d={countPath} className="polar-pattern-count" />}
           {/* Interactive cursor */}
           {cursor && (
             <g className="polar-cursor">
               {/* Bearing line from center */}
-              <line
-                x1={cx}
-                y1={cy}
-                x2={cursor.x}
-                y2={cursor.y}
-                className="cursor-line"
-              />
+              <line x1={cx} y1={cy} x2={cursor.x} y2={cursor.y} className="cursor-line" />
               {/* Highlight the hovered sector */}
-              {cursor.sector && (() => {
-                const startAngle = cursor.sector.bearing_start;
-                const endAngle = startAngle + 10;
-                const countR = (cursor.sector.count / maxCount) * maxR;
-                const distR = (cursor.sector.max_distance_nm / maxDistance) * maxR;
-                const start1 = polarToCartesian(startAngle, Math.max(countR, distR));
-                const end1 = polarToCartesian(endAngle, Math.max(countR, distR));
-                return (
-                  <>
-                    <line x1={cx} y1={cy} x2={start1.x} y2={start1.y} className="cursor-sector-line" />
-                    <line x1={cx} y1={cy} x2={end1.x} y2={end1.y} className="cursor-sector-line" />
-                  </>
-                );
-              })()}
+              {cursor.sector &&
+                (() => {
+                  const startAngle = cursor.sector.bearing_start;
+                  const endAngle = startAngle + 10;
+                  const countR = (cursor.sector.count / maxCount) * maxR;
+                  const distR = (cursor.sector.max_distance_nm / maxDistance) * maxR;
+                  const start1 = polarToCartesian(startAngle, Math.max(countR, distR));
+                  const end1 = polarToCartesian(endAngle, Math.max(countR, distR));
+                  return (
+                    <>
+                      <line
+                        x1={cx}
+                        y1={cy}
+                        x2={start1.x}
+                        y2={start1.y}
+                        className="cursor-sector-line"
+                      />
+                      <line
+                        x1={cx}
+                        y1={cy}
+                        x2={end1.x}
+                        y2={end1.y}
+                        className="cursor-sector-line"
+                      />
+                    </>
+                  );
+                })()}
               {/* Center point */}
               <circle cx={cursor.x} cy={cursor.y} r="4" className="cursor-highlight" />
             </g>
@@ -202,14 +219,15 @@ export function RSSIScatter({ data, loading }) {
   const svgRef = useRef(null);
 
   // Chart dimensions - increased for better label visibility
-  const width = 240, height = 160;
+  const width = 240,
+    height = 160;
   const margin = { top: 10, right: 15, bottom: 28, left: 38 };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
 
   // Calculate scales from data
-  const distances = scatterData.map(d => d.distance_nm);
-  const rssis = scatterData.map(d => d.rssi);
+  const distances = scatterData.map((d) => d.distance_nm);
+  const rssis = scatterData.map((d) => d.rssi);
 
   const minDist = Math.min(...distances, 0);
   const maxDist = Math.max(...distances, 200);
@@ -218,7 +236,8 @@ export function RSSIScatter({ data, loading }) {
 
   // Scale functions
   const xScale = (d) => margin.left + ((d - minDist) / (maxDist - minDist || 1)) * plotWidth;
-  const yScale = (r) => margin.top + plotHeight - ((r - minRssi) / (maxRssi - minRssi || 1)) * plotHeight;
+  const yScale = (r) =>
+    margin.top + plotHeight - ((r - minRssi) / (maxRssi - minRssi || 1)) * plotHeight;
 
   // Inverse scale functions for cursor
   const xScaleInverse = (px) => minDist + ((px - margin.left) / plotWidth) * (maxDist - minDist);
@@ -259,7 +278,7 @@ export function RSSIScatter({ data, loading }) {
       x1: xScale(x1),
       y1: yScale(y1),
       x2: xScale(x2),
-      y2: yScale(y2)
+      y2: yScale(y2),
     };
   }
 
@@ -277,15 +296,19 @@ export function RSSIScatter({ data, loading }) {
     const y = (e.clientY - rect.top) * scaleY;
 
     // Check if within plot area
-    if (x >= margin.left && x <= margin.left + plotWidth &&
-        y >= margin.top && y <= margin.top + plotHeight) {
+    if (
+      x >= margin.left &&
+      x <= margin.left + plotWidth &&
+      y >= margin.top &&
+      y <= margin.top + plotHeight
+    ) {
       const distValue = xScaleInverse(x);
       const rssiValue = yScaleInverse(y);
 
       // Find nearest point
       let nearestPoint = null;
       let nearestDist = Infinity;
-      scatterData.forEach(point => {
+      scatterData.forEach((point) => {
         const px = xScale(point.distance_nm);
         const py = yScale(point.rssi);
         const d = Math.sqrt((px - x) ** 2 + (py - y) ** 2);
@@ -296,10 +319,11 @@ export function RSSIScatter({ data, loading }) {
       });
 
       setCursor({
-        x, y,
+        x,
+        y,
         distValue: distValue.toFixed(1),
         rssiValue: rssiValue.toFixed(1),
-        nearestPoint
+        nearestPoint,
       });
     } else {
       setCursor(null);
@@ -346,7 +370,7 @@ export function RSSIScatter({ data, loading }) {
             className="scatter-axis"
           />
           {/* X-axis ticks and labels */}
-          {xTicks.map(tick => (
+          {xTicks.map((tick) => (
             <g key={`x-${tick}`}>
               <line
                 x1={xScale(tick)}
@@ -366,7 +390,7 @@ export function RSSIScatter({ data, loading }) {
             </g>
           ))}
           {/* Y-axis ticks and labels */}
-          {yTicks.map(tick => (
+          {yTicks.map((tick) => (
             <g key={`y-${tick}`}>
               <line
                 x1={margin.left - 4}
@@ -387,13 +411,22 @@ export function RSSIScatter({ data, loading }) {
             </g>
           ))}
           {/* X-axis label */}
-          <text x={margin.left + plotWidth / 2} y={height - 2} className="scatter-label" textAnchor="middle">Distance (nm)</text>
+          <text
+            x={margin.left + plotWidth / 2}
+            y={height - 2}
+            className="scatter-label"
+            textAnchor="middle"
+          >
+            Distance (nm)
+          </text>
           {/* Y-axis label - use g transform for reliable rotation */}
           <g transform={`translate(8, ${margin.top + plotHeight / 2}) rotate(-90)`}>
-            <text className="scatter-label-y" textAnchor="middle" dominantBaseline="middle">RSSI (dB)</text>
+            <text className="scatter-label-y" textAnchor="middle" dominantBaseline="middle">
+              RSSI (dB)
+            </text>
           </g>
           {/* Grid lines */}
-          {yTicks.map(tick => (
+          {yTicks.map((tick) => (
             <line
               key={`grid-${tick}`}
               x1={margin.left}
@@ -469,9 +502,7 @@ export function RSSIScatter({ data, loading }) {
           )}
           <div className="scatter-stats">
             <span>{scatterData.length} samples</span>
-            {bandStats.length > 0 && (
-              <span>Best: {bandStats[0]?.band}</span>
-            )}
+            {bandStats.length > 0 && <span>Best: {bandStats[0]?.band}</span>}
           </div>
         </div>
       </div>

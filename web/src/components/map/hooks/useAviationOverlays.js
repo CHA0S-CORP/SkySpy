@@ -5,7 +5,11 @@ const safeJson = async (res) => {
   if (!res.ok) return null;
   const ct = res.headers.get('content-type');
   if (!ct || !ct.includes('application/json')) return null;
-  try { return await res.json(); } catch { return null; }
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
 };
 
 /**
@@ -26,8 +30,8 @@ export function useAviationOverlays({
   const [aviationData, setAviationData] = useState({
     navaids: [],
     airports: [],
-    airspaces: [],      // G-AIRMET advisories from /api/v1/aviation/airspaces
-    boundaries: [],     // Static airspace boundaries from /api/v1/aviation/airspace-boundaries
+    airspaces: [], // G-AIRMET advisories from /api/v1/aviation/airspaces
+    boundaries: [], // Static airspace boundaries from /api/v1/aviation/airspace-boundaries
     metars: [],
     pireps: [],
   });
@@ -44,9 +48,9 @@ export function useAviationOverlays({
   const [aviationOverlayData, setAviationOverlayData] = useState({
     usArtcc: null,
     usRefueling: null,
-    ukMilZones: null,  // Combined: uk_mil_awacs, uk_mil_aar, uk_mil_rc
-    euMilAwacs: null,  // Combined: de_mil_awacs, nl_mil_awacs, pl_mil_awacs
-    trainingAreas: null,  // Combined: ift_nav_routes, ift_training_areas, usafa_training_areas
+    ukMilZones: null, // Combined: uk_mil_awacs, uk_mil_aar, uk_mil_rc
+    euMilAwacs: null, // Combined: de_mil_awacs, nl_mil_awacs, pl_mil_awacs
+    trainingAreas: null, // Combined: ift_nav_routes, ift_training_areas, usafa_training_areas
   });
 
   // Fetch aviation data via WebSocket with HTTP fallback - uses viewport center for dynamic loading
@@ -64,10 +68,10 @@ export function useAviationOverlays({
       if (Array.isArray(response)) return response;
       if (response.data && Array.isArray(response.data)) return response.data;
       if (response.features) {
-        return response.features.map(f => ({
+        return response.features.map((f) => ({
           ...f.properties,
           lat: f.geometry?.coordinates?.[1],
-          lon: f.geometry?.coordinates?.[0]
+          lon: f.geometry?.coordinates?.[0],
         }));
       }
       return [];
@@ -106,18 +110,26 @@ export function useAviationOverlays({
             ? wsRequest('navaids', { ...baseParams, radius: Math.round(radarRange * 1.5) })
             : fetchHttp('navaids', { ...baseParams, radius: Math.round(radarRange * 1.5) })
           )
-            .then(data => ({ type: 'navaids', data: extractData(data) }))
-            .catch(err => ({ type: 'navaids', error: err.message }))
+            .then((data) => ({ type: 'navaids', data: extractData(data) }))
+            .catch((err) => ({ type: 'navaids', error: err.message }))
         );
 
         // Airports
         promises.push(
           (wsRequest && wsConnected
-            ? wsRequest('airports', { ...baseParams, radius: Math.round(radarRange * 1.2), limit: 50 })
-            : fetchHttp('airports', { ...baseParams, radius: Math.round(radarRange * 1.2), limit: 50 })
+            ? wsRequest('airports', {
+                ...baseParams,
+                radius: Math.round(radarRange * 1.2),
+                limit: 50,
+              })
+            : fetchHttp('airports', {
+                ...baseParams,
+                radius: Math.round(radarRange * 1.2),
+                limit: 50,
+              })
           )
-            .then(data => ({ type: 'airports', data: extractData(data).map(normalizeAirport) }))
-            .catch(err => ({ type: 'airports', error: err.message }))
+            .then((data) => ({ type: 'airports', data: extractData(data).map(normalizeAirport) }))
+            .catch((err) => ({ type: 'airports', error: err.message }))
         );
 
         // Airspace (if enabled)
@@ -128,34 +140,40 @@ export function useAviationOverlays({
               ? wsRequest('airspaces', baseParams)
               : fetchHttp('airspace/advisories', baseParams)
             )
-              .then(data => {
-                const advisories = (data?.advisories || extractData(data)).map(adv => ({
+              .then((data) => {
+                const advisories = (data?.advisories || extractData(data)).map((adv) => ({
                   ...adv,
                   isAdvisory: true,
                   type: adv.type || 'GAIRMET',
                 }));
                 return { type: 'airspaces', data: advisories };
               })
-              .catch(err => ({ type: 'airspaces', error: err.message }))
+              .catch((err) => ({ type: 'airspaces', error: err.message }))
           );
 
           // Static boundaries
           promises.push(
             (wsRequest && wsConnected
-              ? wsRequest('airspace-boundaries', { ...baseParams, radius: Math.round(radarRange * 1.5) })
-              : fetchHttp('airspace/boundaries', { ...baseParams, radius: Math.round(radarRange * 1.5) })
+              ? wsRequest('airspace-boundaries', {
+                  ...baseParams,
+                  radius: Math.round(radarRange * 1.5),
+                })
+              : fetchHttp('airspace/boundaries', {
+                  ...baseParams,
+                  radius: Math.round(radarRange * 1.5),
+                })
             )
-              .then(data => {
+              .then((data) => {
                 // Response has { boundaries: [...], count, source, ... }
                 const rawBoundaries = data?.boundaries || extractData(data);
-                const boundaries = rawBoundaries.map(b => ({
+                const boundaries = rawBoundaries.map((b) => ({
                   ...b,
                   isBoundary: true,
                   type: b.class ? `CLASS_${b.class}` : b.type,
                 }));
                 return { type: 'boundaries', data: boundaries };
               })
-              .catch(err => ({ type: 'boundaries', error: err.message }))
+              .catch((err) => ({ type: 'boundaries', error: err.message }))
           );
         }
 
@@ -166,8 +184,8 @@ export function useAviationOverlays({
               ? wsRequest('metars', { ...baseParams, radius: Math.round(radarRange) })
               : fetchHttp('metars', { ...baseParams, radius: Math.round(radarRange) })
             )
-              .then(data => ({ type: 'metars', data: extractData(data) }))
-              .catch(err => ({ type: 'metars', error: err.message }))
+              .then((data) => ({ type: 'metars', data: extractData(data) }))
+              .catch((err) => ({ type: 'metars', error: err.message }))
           );
         }
 
@@ -175,20 +193,28 @@ export function useAviationOverlays({
         if (overlays.pireps) {
           promises.push(
             (wsRequest && wsConnected
-              ? wsRequest('pireps', { ...baseParams, radius: Math.round(radarRange * 1.5), hours: 3 })
-              : fetchHttp('pireps', { ...baseParams, radius: Math.round(radarRange * 1.5), hours: 3 })
+              ? wsRequest('pireps', {
+                  ...baseParams,
+                  radius: Math.round(radarRange * 1.5),
+                  hours: 3,
+                })
+              : fetchHttp('pireps', {
+                  ...baseParams,
+                  radius: Math.round(radarRange * 1.5),
+                  hours: 3,
+                })
             )
-              .then(data => ({ type: 'pireps', data: extractData(data) }))
-              .catch(err => ({ type: 'pireps', error: err.message }))
+              .then((data) => ({ type: 'pireps', data: extractData(data) }))
+              .catch((err) => ({ type: 'pireps', error: err.message }))
           );
         }
 
         const results = await Promise.all(promises);
 
         // Update state with results
-        setAviationData(prev => {
+        setAviationData((prev) => {
           const updated = { ...prev };
-          results.forEach(result => {
+          results.forEach((result) => {
             if (!result.error && result.data) {
               updated[result.type] = result.data;
             }
@@ -196,7 +222,7 @@ export function useAviationOverlays({
           return updated;
         });
 
-        const errors = results.filter(r => r.error);
+        const errors = results.filter((r) => r.error);
         if (errors.length > 0) {
           console.warn('Some aviation data requests failed:', errors);
         }
@@ -217,7 +243,20 @@ export function useAviationOverlays({
       clearTimeout(debounceTimeout);
       clearInterval(interval);
     };
-  }, [wsRequest, wsConnected, config.apiBaseUrl, viewportCenter.lat, viewportCenter.lon, feederLat, feederLon, radarRange, overlays.metars, overlays.pireps, overlays.airspace, isProPanning]);
+  }, [
+    wsRequest,
+    wsConnected,
+    config.apiBaseUrl,
+    viewportCenter.lat,
+    viewportCenter.lon,
+    feederLat,
+    feederLon,
+    radarRange,
+    overlays.metars,
+    overlays.pireps,
+    overlays.airspace,
+    isProPanning,
+  ]);
 
   // Fetch terrain overlay data (pro mode only) - simplified GeoJSON boundaries
   useEffect(() => {
@@ -232,35 +271,35 @@ export function useAviationOverlays({
       const { minLat, maxLat, minLon, maxLon } = filterBounds;
 
       const processCoords = (coords, type) => {
-        const isNearViewport = coords.some(([lon, lat]) =>
-          lat >= minLat - 2 && lat <= maxLat + 2 &&
-          lon >= minLon - 2 && lon <= maxLon + 2
+        const isNearViewport = coords.some(
+          ([lon, lat]) =>
+            lat >= minLat - 2 && lat <= maxLat + 2 && lon >= minLon - 2 && lon <= maxLon + 2
         );
         if (isNearViewport) {
           features.push({ type, coords });
         }
       };
 
-      geojson.features?.forEach(feature => {
+      geojson.features?.forEach((feature) => {
         const geomType = feature.geometry?.type;
         const coords = feature.geometry?.coordinates;
         if (!coords) return;
 
         if (geomType === 'Polygon') {
-          coords.forEach(ring => processCoords(ring, 'polygon'));
+          coords.forEach((ring) => processCoords(ring, 'polygon'));
         } else if (geomType === 'MultiPolygon') {
-          coords.forEach(poly => poly.forEach(ring => processCoords(ring, 'polygon')));
+          coords.forEach((poly) => poly.forEach((ring) => processCoords(ring, 'polygon')));
         } else if (geomType === 'LineString') {
           processCoords(coords, 'line');
         } else if (geomType === 'MultiLineString') {
-          coords.forEach(line => processCoords(line, 'line'));
+          coords.forEach((line) => processCoords(line, 'line'));
         }
       });
       return features;
     };
 
-    const degPerNm = 1/60;
-    const lonScale = Math.cos(feederLat * Math.PI / 180);
+    const degPerNm = 1 / 60;
+    const lonScale = Math.cos((feederLat * Math.PI) / 180);
     const filterBounds = {
       minLat: feederLat - radarRange * degPerNm * 2,
       maxLat: feederLat + radarRange * degPerNm * 2,
@@ -269,11 +308,16 @@ export function useAviationOverlays({
     };
 
     const dataUrls = {
-      countries: 'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson',
-      states: 'https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json',
-      counties: 'https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json',
-      lakes: 'https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/50m/physical/ne_50m_lakes.json',
-      rivers: 'https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/50m/physical/ne_50m_rivers_lake_centerlines.json',
+      countries:
+        'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson',
+      states:
+        'https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json',
+      counties:
+        'https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json',
+      lakes:
+        'https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/50m/physical/ne_50m_lakes.json',
+      rivers:
+        'https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/50m/physical/ne_50m_rivers_lake_centerlines.json',
     };
 
     const fetchTerrain = async (type, url) => {
@@ -321,18 +365,36 @@ export function useAviationOverlays({
       }
       if (Object.keys(updates).length > 0) {
         console.log('Updating terrain data:', Object.keys(updates));
-        setTerrainData(prev => ({ ...prev, ...updates }));
+        setTerrainData((prev) => ({ ...prev, ...updates }));
       }
     };
 
     loadTerrainData();
-  }, [config.mapMode, overlays.water, overlays.counties, overlays.states, overlays.countries, feederLat, feederLon, radarRange, terrainData.countries, terrainData.states, terrainData.water, terrainData.counties]);
+  }, [
+    config.mapMode,
+    overlays.water,
+    overlays.counties,
+    overlays.states,
+    overlays.countries,
+    feederLat,
+    feederLon,
+    radarRange,
+    terrainData.countries,
+    terrainData.states,
+    terrainData.water,
+    terrainData.counties,
+  ]);
 
   // Fetch aviation overlay data (pro mode only) - tar1090 GeoJSON from API with browser caching
   useEffect(() => {
     if (config.mapMode !== 'pro') return;
 
-    const needsAny = overlays.usArtcc || overlays.usRefueling || overlays.ukMilZones || overlays.euMilAwacs || overlays.trainingAreas;
+    const needsAny =
+      overlays.usArtcc ||
+      overlays.usRefueling ||
+      overlays.ukMilZones ||
+      overlays.euMilAwacs ||
+      overlays.trainingAreas;
     if (!needsAny) return;
 
     const apiBase = config.apiBaseUrl || '';
@@ -349,7 +411,7 @@ export function useAviationOverlays({
             continue;
           }
           if (data.features) {
-            data.features.forEach(f => {
+            data.features.forEach((f) => {
               f.properties = f.properties || {};
               f.properties._sourceType = dataType;
             });
@@ -367,15 +429,15 @@ export function useAviationOverlays({
       const result = [];
       const { minLat, maxLat, minLon, maxLon } = filterBounds;
 
-      features.forEach(feature => {
+      features.forEach((feature) => {
         const geomType = feature.geometry?.type;
         const coords = feature.geometry?.coordinates;
         if (!coords) return;
 
         const processCoords = (coordArray, type) => {
-          const isNearViewport = coordArray.some(([lon, lat]) =>
-            lat >= minLat - 5 && lat <= maxLat + 5 &&
-            lon >= minLon - 5 && lon <= maxLon + 5
+          const isNearViewport = coordArray.some(
+            ([lon, lat]) =>
+              lat >= minLat - 5 && lat <= maxLat + 5 && lon >= minLon - 5 && lon <= maxLon + 5
           );
           if (isNearViewport) {
             result.push({
@@ -388,13 +450,13 @@ export function useAviationOverlays({
         };
 
         if (geomType === 'Polygon') {
-          coords.forEach(ring => processCoords(ring, 'polygon'));
+          coords.forEach((ring) => processCoords(ring, 'polygon'));
         } else if (geomType === 'MultiPolygon') {
-          coords.forEach(poly => poly.forEach(ring => processCoords(ring, 'polygon')));
+          coords.forEach((poly) => poly.forEach((ring) => processCoords(ring, 'polygon')));
         } else if (geomType === 'LineString') {
           processCoords(coords, 'line');
         } else if (geomType === 'MultiLineString') {
-          coords.forEach(line => processCoords(line, 'line'));
+          coords.forEach((line) => processCoords(line, 'line'));
         } else if (geomType === 'Point') {
           result.push({
             type: 'point',
@@ -407,8 +469,8 @@ export function useAviationOverlays({
       return result;
     };
 
-    const degPerNm = 1/60;
-    const lonScale = Math.cos(feederLat * Math.PI / 180);
+    const degPerNm = 1 / 60;
+    const lonScale = Math.cos((feederLat * Math.PI) / 180);
     const filterBounds = {
       minLat: feederLat - radarRange * degPerNm * 2,
       maxLat: feederLat + radarRange * degPerNm * 2,
@@ -438,25 +500,49 @@ export function useAviationOverlays({
       }
 
       if (overlays.euMilAwacs && !aviationOverlayData.euMilAwacs) {
-        const features = await fetchAviationGeoJSON(['de_mil_awacs', 'nl_mil_awacs', 'pl_mil_awacs']);
+        const features = await fetchAviationGeoJSON([
+          'de_mil_awacs',
+          'nl_mil_awacs',
+          'pl_mil_awacs',
+        ]);
         updates.euMilAwacs = processFeatures(features, filterBounds);
         console.log(`Loaded EU AWACS: ${updates.euMilAwacs.length} features`);
       }
 
       if (overlays.trainingAreas && !aviationOverlayData.trainingAreas) {
-        const features = await fetchAviationGeoJSON(['ift_nav_routes', 'ift_training_areas', 'usafa_training_areas']);
+        const features = await fetchAviationGeoJSON([
+          'ift_nav_routes',
+          'ift_training_areas',
+          'usafa_training_areas',
+        ]);
         updates.trainingAreas = processFeatures(features, filterBounds);
         console.log(`Loaded Training Areas: ${updates.trainingAreas.length} features`);
       }
 
       if (Object.keys(updates).length > 0) {
         console.log('Updating aviation overlay data:', Object.keys(updates));
-        setAviationOverlayData(prev => ({ ...prev, ...updates }));
+        setAviationOverlayData((prev) => ({ ...prev, ...updates }));
       }
     };
 
     loadAviationData();
-  }, [config.mapMode, config.apiBaseUrl, overlays.usArtcc, overlays.usRefueling, overlays.ukMilZones, overlays.euMilAwacs, overlays.trainingAreas, feederLat, feederLon, radarRange, aviationOverlayData.usArtcc, aviationOverlayData.usRefueling, aviationOverlayData.ukMilZones, aviationOverlayData.euMilAwacs, aviationOverlayData.trainingAreas]);
+  }, [
+    config.mapMode,
+    config.apiBaseUrl,
+    overlays.usArtcc,
+    overlays.usRefueling,
+    overlays.ukMilZones,
+    overlays.euMilAwacs,
+    overlays.trainingAreas,
+    feederLat,
+    feederLon,
+    radarRange,
+    aviationOverlayData.usArtcc,
+    aviationOverlayData.usRefueling,
+    aviationOverlayData.ukMilZones,
+    aviationOverlayData.euMilAwacs,
+    aviationOverlayData.trainingAreas,
+  ]);
 
   return {
     aviationData,

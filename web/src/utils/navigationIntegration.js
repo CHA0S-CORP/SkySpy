@@ -197,9 +197,13 @@ export async function shareSessionSummary(stats, history = []) {
 • Closest approach: ${stats.closestApproach?.distance?.toFixed(1) || '--'} nm
 
 Top encounters:
-${history.slice(0, 5).map(e =>
-  `- ${e.category || 'Aircraft'}${e.callsign ? ` (${e.callsign})` : ''}: ${e.closest_distance?.toFixed(1) || e.distance_nm?.toFixed(1)} nm`
-).join('\n')}`;
+${history
+  .slice(0, 5)
+  .map(
+    (e) =>
+      `- ${e.category || 'Aircraft'}${e.callsign ? ` (${e.callsign})` : ''}: ${e.closest_distance?.toFixed(1) || e.distance_nm?.toFixed(1)} nm`
+  )
+  .join('\n')}`;
 
   if (navigator.share) {
     try {
@@ -224,8 +228,8 @@ ${history.slice(0, 5).map(e =>
  */
 export function exportToGPX(history, sessionName = 'Cannonball Session') {
   const waypoints = history
-    .filter(e => e.lat && e.lon)
-    .map(e => {
+    .filter((e) => e.lat && e.lon)
+    .map((e) => {
       const time = new Date(e.first_seen || e.timestamp).toISOString();
       const name = escapeXml(e.callsign || e.hex || 'Unknown');
       const category = escapeXml(e.category || 'Aircraft');
@@ -264,10 +268,14 @@ ${waypoints}
  */
 export function exportToKML(history, sessionName = 'Cannonball Session') {
   const placemarks = history
-    .filter(e => e.lat && e.lon)
-    .map(e => {
-      const color = e.threat_level === 'critical' ? 'ff0000ff' :
-                    e.threat_level === 'warning' ? 'ff00a5ff' : 'ff00ff00';
+    .filter((e) => e.lat && e.lon)
+    .map((e) => {
+      const color =
+        e.threat_level === 'critical'
+          ? 'ff0000ff'
+          : e.threat_level === 'warning'
+            ? 'ff00a5ff'
+            : 'ff00ff00';
       const name = escapeXml(e.callsign || e.hex || 'Unknown');
       const category = escapeXml(e.category || 'Aircraft');
       const distance = e.closest_distance?.toFixed(1) || e.distance_nm?.toFixed(1) || 'N/A';

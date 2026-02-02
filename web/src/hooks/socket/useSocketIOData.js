@@ -99,7 +99,12 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
 
     // Debug: Log all incoming messages (dev only - removed for production performance)
     if (import.meta.env.DEV) {
-      console.log('[useSocketIOData] Message received:', type, data?.aircraft?.length ?? data?.count ?? '', data);
+      console.log(
+        '[useSocketIOData] Message received:',
+        type,
+        data?.aircraft?.length ?? data?.count ?? '',
+        data
+      );
     }
 
     try {
@@ -108,7 +113,7 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
         if (import.meta.env.DEV) {
           console.log('[useSocketIOData] Processing batch with', data.messages.length, 'messages');
         }
-        data.messages.forEach(msg => {
+        data.messages.forEach((msg) => {
           if (msg && msg.type) {
             handleMessage(msg.type, msg.data || msg);
           }
@@ -129,7 +134,7 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
       } else if (type === 'aircraft:remove') {
         processAircraftRemove(wrappedData, setAircraft);
       } else if (type === 'aircraft:heartbeat') {
-        setStats(prev => ({
+        setStats((prev) => ({
           ...prev,
           count: data?.count ?? data?.aircraft_count ?? prev.count,
           timestamp: data?.timestamp,
@@ -189,11 +194,11 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
         processAirspaceData(wrappedData, setAirspaceData);
       } else if (type === 'airspace:advisory') {
         if (data?.advisories) {
-          setAirspaceData(prev => ({ ...prev, advisories: data.advisories }));
+          setAirspaceData((prev) => ({ ...prev, advisories: data.advisories }));
         }
       } else if (type === 'airspace:boundary') {
         if (data?.boundaries) {
-          setAirspaceData(prev => ({ ...prev, boundaries: data.boundaries }));
+          setAirspaceData((prev) => ({ ...prev, boundaries: data.boundaries }));
         }
       }
 
@@ -209,14 +214,14 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
         if (data) {
           const { stats_type, data: statsData } = data;
           if (stats_type && statsData) {
-            setExtendedStats(prev => {
+            setExtendedStats((prev) => {
               const key = {
-                'flight_patterns': 'flightPatterns',
-                'geographic': 'geographic',
-                'tracking_quality': 'trackingQuality',
-                'engagement': 'engagement',
-                'time_comparison': 'timeComparison',
-                'antenna': 'antenna',
+                flight_patterns: 'flightPatterns',
+                geographic: 'geographic',
+                tracking_quality: 'trackingQuality',
+                engagement: 'engagement',
+                time_comparison: 'timeComparison',
+                antenna: 'antenna',
               }[stats_type];
               if (key) {
                 return { ...prev, [key]: statsData };
@@ -238,31 +243,34 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
         if (data?.stats) setNotamStats(data.stats);
       } else if (type === 'notam:new' || type === 'notam:tfr_new') {
         if (data) {
-          setNotams(prev => [data, ...prev]);
-          if (data.type === 'TFR') setTfrs(prev => [data, ...prev]);
+          setNotams((prev) => [data, ...prev]);
+          if (data.type === 'TFR') setTfrs((prev) => [data, ...prev]);
         }
       } else if (type === 'notam:update') {
         if (data?.notam_id) {
-          setNotams(prev => prev.map(n =>
-            n.notam_id === data.notam_id ? { ...n, ...data } : n
-          ));
+          setNotams((prev) =>
+            prev.map((n) => (n.notam_id === data.notam_id ? { ...n, ...data } : n))
+          );
           if (data.type === 'TFR') {
-            setTfrs(prev => prev.map(t =>
-              t.notam_id === data.notam_id ? { ...t, ...data } : t
-            ));
+            setTfrs((prev) =>
+              prev.map((t) => (t.notam_id === data.notam_id ? { ...t, ...data } : t))
+            );
           }
         }
       } else if (type === 'notam:expired' || type === 'notam:tfr_expired') {
         if (data?.notam_id) {
-          setNotams(prev => prev.filter(n => n.notam_id !== data.notam_id));
-          setTfrs(prev => prev.filter(t => t.notam_id !== data.notam_id));
+          setNotams((prev) => prev.filter((n) => n.notam_id !== data.notam_id));
+          setTfrs((prev) => prev.filter((t) => t.notam_id !== data.notam_id));
         }
       } else if (type === 'notam:stats') {
         if (data) setNotamStats(data);
       } else if (type === 'notam:refresh') {
         // Refresh triggered by backend - request new snapshot
         if (socketEmitRef.current) {
-          socketEmitRef.current('request', { type: 'notam-snapshot', request_id: `notam-refresh-${Date.now()}` });
+          socketEmitRef.current('request', {
+            type: 'notam-snapshot',
+            request_id: `notam-refresh-${Date.now()}`,
+          });
         }
       }
 
@@ -274,7 +282,11 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
         // Handle aircraft-snapshot response specially - process as aircraft:snapshot event
         if (data?.request_type === 'aircraft-snapshot' && data?.data?.aircraft) {
           if (import.meta.env.DEV) {
-            console.log('[useSocketIOData] Processing aircraft-snapshot response with', data.data.aircraft.length, 'aircraft');
+            console.log(
+              '[useSocketIOData] Processing aircraft-snapshot response with',
+              data.data.aircraft.length,
+              'aircraft'
+            );
           }
           const wrappedData = { type: 'aircraft:snapshot', data: data.data };
           processAircraftSnapshot(wrappedData, setAircraft, setStats);
@@ -387,7 +399,7 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
 
     // Re-subscribe if topics changed while connected
     if (isReady && socketEmitRef.current && prevTopics !== topics) {
-      const topicsList = topics.split(',').map(t => t.trim());
+      const topicsList = topics.split(',').map((t) => t.trim());
       if (import.meta.env.DEV) {
         console.log('[useSocketIOData] Topics changed, re-subscribing:', topicsList);
       }
@@ -403,40 +415,64 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
     // Define all event handlers
     const eventTypes = [
       // Aircraft
-      'aircraft:snapshot', 'aircraft:update', 'aircraft:new', 'aircraft:remove', 'aircraft:heartbeat',
+      'aircraft:snapshot',
+      'aircraft:update',
+      'aircraft:new',
+      'aircraft:remove',
+      'aircraft:heartbeat',
       // Safety
-      'safety:snapshot', 'safety:event', 'safety:event_updated', 'safety:event_resolved',
+      'safety:snapshot',
+      'safety:event',
+      'safety:event_updated',
+      'safety:event_resolved',
       // Alerts
-      'alert:triggered', 'alert:snapshot',
+      'alert:triggered',
+      'alert:snapshot',
       // ACARS
-      'acars:message', 'acars:snapshot',
+      'acars:message',
+      'acars:snapshot',
       // Audio
       'audio:transmission',
       // Airspace
-      'airspace:snapshot', 'airspace:update', 'airspace:advisory', 'airspace:boundary',
+      'airspace:snapshot',
+      'airspace:update',
+      'airspace:advisory',
+      'airspace:boundary',
       // Antenna
       'antenna:analytics_update',
       // Airframe
       'airframe:error',
       // NOTAM (backend sends notam:* singular)
-      'notam:snapshot', 'notam:new', 'notam:update', 'notam:expired',
-      'notam:tfr_new', 'notam:tfr_expired', 'notam:stats', 'notam:refresh',
+      'notam:snapshot',
+      'notam:new',
+      'notam:update',
+      'notam:expired',
+      'notam:tfr_new',
+      'notam:tfr_expired',
+      'notam:stats',
+      'notam:refresh',
       // Stats
       'stats:update',
       // Request/Response
-      'response', 'error',
+      'response',
+      'error',
       // Subscription
-      'subscribed', 'unsubscribed',
+      'subscribed',
+      'unsubscribed',
       // Batch
       'batch',
     ];
 
     if (import.meta.env.DEV) {
-      console.log('[useSocketIOData] Setting up event listeners for', eventTypes.length, 'event types');
+      console.log(
+        '[useSocketIOData] Setting up event listeners for',
+        eventTypes.length,
+        'event types'
+      );
     }
 
     // Use a wrapper that calls the ref to avoid recreating listeners
-    const unsubscribers = eventTypes.map(eventType => {
+    const unsubscribers = eventTypes.map((eventType) => {
       return on(eventType, (data) => {
         if (handleMessageRef.current) {
           handleMessageRef.current(eventType, data);
@@ -445,7 +481,7 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
     });
 
     return () => {
-      unsubscribers.forEach(unsub => unsub && unsub());
+      unsubscribers.forEach((unsub) => unsub && unsub());
     };
   }, [enabled, isReady, on]); // Re-run when socket becomes ready
 
@@ -453,7 +489,7 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
   useEffect(() => {
     if (!enabled || !isReady) return;
 
-    const topicsList = topicsRef.current.split(',').map(t => t.trim());
+    const topicsList = topicsRef.current.split(',').map((t) => t.trim());
     if (import.meta.env.DEV) {
       console.log('[useSocketIOData] Socket ready, subscribing to topics:', topicsList);
     }
@@ -519,7 +555,7 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
       // Initialize with demo aircraft
       const initialData = generateDemoAircraft(DEMO_AIRCRAFT, 0);
       const initialAircraft = {};
-      initialData.forEach(ac => {
+      initialData.forEach((ac) => {
         const n = normalizeAircraft(ac);
         if (n.hex) initialAircraft[n.hex] = n;
       });
@@ -538,7 +574,7 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
         demoTickRef.current += 1;
         const demoData = generateDemoAircraft(DEMO_AIRCRAFT, demoTickRef.current);
         const newAircraft = {};
-        demoData.forEach(ac => {
+        demoData.forEach((ac) => {
           const n = normalizeAircraft(ac);
           if (n.hex) newAircraft[n.hex] = n;
         });
@@ -558,68 +594,77 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
    * @param {number} timeoutMs - Timeout in milliseconds (default: 10000)
    * @returns {Promise<any>} Response data
    */
-  const request = useCallback((type, params = {}, timeoutMs = 10000) => {
-    return new Promise((resolve, reject) => {
-      // Use isReady to ensure socket is fully ready, not just connected state
-      if (!isReady) {
-        reject(new Error('Socket.IO not connected'));
-        return;
-      }
-
-      const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-      const timeoutId = setTimeout(() => {
-        if (pendingRequests.current.has(requestId)) {
-          pendingRequests.current.delete(requestId);
-          if (mountedRef.current) {
-            reject(new Error(`Request timeout: ${type}`));
-          }
+  const request = useCallback(
+    (type, params = {}, timeoutMs = 10000) => {
+      return new Promise((resolve, reject) => {
+        // Use isReady to ensure socket is fully ready, not just connected state
+        if (!isReady) {
+          reject(new Error('Socket.IO not connected'));
+          return;
         }
-      }, timeoutMs);
 
-      pendingRequests.current.set(requestId, { resolve, reject, timeoutId });
+        const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      // Check if emit actually succeeded
-      const emitted = emit('request', {
-        type,
-        request_id: requestId,
-        params,
+        const timeoutId = setTimeout(() => {
+          if (pendingRequests.current.has(requestId)) {
+            pendingRequests.current.delete(requestId);
+            if (mountedRef.current) {
+              reject(new Error(`Request timeout: ${type}`));
+            }
+          }
+        }, timeoutMs);
+
+        pendingRequests.current.set(requestId, { resolve, reject, timeoutId });
+
+        // Check if emit actually succeeded
+        const emitted = emit('request', {
+          type,
+          request_id: requestId,
+          params,
+        });
+
+        if (!emitted) {
+          // Emit failed - socket not actually connected
+          clearTimeout(timeoutId);
+          pendingRequests.current.delete(requestId);
+          reject(new Error('Socket.IO emit failed - not connected'));
+        }
       });
-
-      if (!emitted) {
-        // Emit failed - socket not actually connected
-        clearTimeout(timeoutId);
-        pendingRequests.current.delete(requestId);
-        reject(new Error('Socket.IO emit failed - not connected'));
-      }
-    });
-  }, [isReady, emit]);
+    },
+    [isReady, emit]
+  );
 
   /**
    * Subscribe to additional topics
    *
    * @param {string|string[]} newTopics - Topics to subscribe to
    */
-  const subscribe = useCallback((newTopics) => {
-    if (connected) {
-      emit('subscribe', {
-        topics: Array.isArray(newTopics) ? newTopics : [newTopics],
-      });
-    }
-  }, [connected, emit]);
+  const subscribe = useCallback(
+    (newTopics) => {
+      if (connected) {
+        emit('subscribe', {
+          topics: Array.isArray(newTopics) ? newTopics : [newTopics],
+        });
+      }
+    },
+    [connected, emit]
+  );
 
   /**
    * Unsubscribe from topics
    *
    * @param {string|string[]} removeTopics - Topics to unsubscribe from
    */
-  const unsubscribe = useCallback((removeTopics) => {
-    if (connected) {
-      emit('unsubscribe', {
-        topics: Array.isArray(removeTopics) ? removeTopics : [removeTopics],
-      });
-    }
-  }, [connected, emit]);
+  const unsubscribe = useCallback(
+    (removeTopics) => {
+      if (connected) {
+        emit('unsubscribe', {
+          topics: Array.isArray(removeTopics) ? removeTopics : [removeTopics],
+        });
+      }
+    },
+    [connected, emit]
+  );
 
   /**
    * Get airframe error by ICAO hex
@@ -650,11 +695,14 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
    * @param {string} event - Event name
    * @param {any} data - Data to send
    */
-  const send = useCallback((event, data) => {
-    if (connected) {
-      emit(event, data);
-    }
-  }, [connected, emit]);
+  const send = useCallback(
+    (event, data) => {
+      if (connected) {
+        emit(event, data);
+      }
+    },
+    [connected, emit]
+  );
 
   // Memoize aircraft array to prevent new array on every render
   const aircraftArray = useMemo(() => Object.values(aircraft), [aircraft]);

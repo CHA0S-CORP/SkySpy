@@ -35,43 +35,52 @@ export function useAudioHistory() {
   }, []);
 
   // Add a transmission to history (called when playback starts)
-  const addToHistory = useCallback((transmission) => {
-    if (!transmission || !transmission.id) return;
+  const addToHistory = useCallback(
+    (transmission) => {
+      if (!transmission || !transmission.id) return;
 
-    // Remove existing entry if present (will be moved to top)
-    const filtered = history.filter(item => item.id !== transmission.id);
+      // Remove existing entry if present (will be moved to top)
+      const filtered = history.filter((item) => item.id !== transmission.id);
 
-    // Extract relevant fields to store
-    const historyItem = {
-      id: transmission.id,
-      callsign: transmission.identified_airframes?.[0]?.callsign || null,
-      timestamp: transmission.created_at || new Date().toISOString(),
-      channel: transmission.channel_name || 'Unknown Channel',
-      frequency_mhz: transmission.frequency_mhz || null,
-      transcript: transmission.transcript || null,
-      s3_url: transmission.s3_url || null,
-      duration_seconds: transmission.duration_seconds || null,
-      identified_airframes: transmission.identified_airframes || [],
-      playedAt: new Date().toISOString(),
-    };
+      // Extract relevant fields to store
+      const historyItem = {
+        id: transmission.id,
+        callsign: transmission.identified_airframes?.[0]?.callsign || null,
+        timestamp: transmission.created_at || new Date().toISOString(),
+        channel: transmission.channel_name || 'Unknown Channel',
+        frequency_mhz: transmission.frequency_mhz || null,
+        transcript: transmission.transcript || null,
+        s3_url: transmission.s3_url || null,
+        duration_seconds: transmission.duration_seconds || null,
+        identified_airframes: transmission.identified_airframes || [],
+        playedAt: new Date().toISOString(),
+      };
 
-    // Add to beginning, limit to MAX_HISTORY
-    const newHistory = [historyItem, ...filtered].slice(0, MAX_HISTORY);
-    setHistory(newHistory);
-    saveHistory(newHistory);
-  }, [history, saveHistory]);
+      // Add to beginning, limit to MAX_HISTORY
+      const newHistory = [historyItem, ...filtered].slice(0, MAX_HISTORY);
+      setHistory(newHistory);
+      saveHistory(newHistory);
+    },
+    [history, saveHistory]
+  );
 
   // Check if a transmission is in history
-  const isInHistory = useCallback((transmissionId) => {
-    return history.some(item => item.id === transmissionId);
-  }, [history]);
+  const isInHistory = useCallback(
+    (transmissionId) => {
+      return history.some((item) => item.id === transmissionId);
+    },
+    [history]
+  );
 
   // Remove a transmission from history
-  const removeFromHistory = useCallback((transmissionId) => {
-    const newHistory = history.filter(item => item.id !== transmissionId);
-    setHistory(newHistory);
-    saveHistory(newHistory);
-  }, [history, saveHistory]);
+  const removeFromHistory = useCallback(
+    (transmissionId) => {
+      const newHistory = history.filter((item) => item.id !== transmissionId);
+      setHistory(newHistory);
+      saveHistory(newHistory);
+    },
+    [history, saveHistory]
+  );
 
   // Clear all history
   const clearHistory = useCallback(() => {
@@ -80,9 +89,12 @@ export function useAudioHistory() {
   }, [saveHistory]);
 
   // Get a history item by ID
-  const getHistoryItem = useCallback((transmissionId) => {
-    return history.find(item => item.id === transmissionId) || null;
-  }, [history]);
+  const getHistoryItem = useCallback(
+    (transmissionId) => {
+      return history.find((item) => item.id === transmissionId) || null;
+    },
+    [history]
+  );
 
   return {
     history,

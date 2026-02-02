@@ -53,33 +53,39 @@ export function useHapticFeedback({ enabled = true, intensity = 'normal' }) {
   const minInterval = 300; // Minimum ms between vibrations to avoid spam
 
   // Scale pattern based on intensity
-  const scalePattern = useCallback((pattern) => {
-    if (intensity === 'strong') {
-      return pattern.map(d => Math.round(d * 1.5));
-    } else if (intensity === 'gentle') {
-      return pattern.map(d => Math.round(d * 0.6));
-    }
-    return pattern;
-  }, [intensity]);
+  const scalePattern = useCallback(
+    (pattern) => {
+      if (intensity === 'strong') {
+        return pattern.map((d) => Math.round(d * 1.5));
+      } else if (intensity === 'gentle') {
+        return pattern.map((d) => Math.round(d * 0.6));
+      }
+      return pattern;
+    },
+    [intensity]
+  );
 
   // Core vibrate function with throttling
-  const vibrate = useCallback((pattern) => {
-    if (!enabled || !supportsVibration()) return false;
+  const vibrate = useCallback(
+    (pattern) => {
+      if (!enabled || !supportsVibration()) return false;
 
-    const now = Date.now();
-    if (now - lastVibrationRef.current < minInterval) {
-      return false;
-    }
-    lastVibrationRef.current = now;
+      const now = Date.now();
+      if (now - lastVibrationRef.current < minInterval) {
+        return false;
+      }
+      lastVibrationRef.current = now;
 
-    try {
-      const scaledPattern = scalePattern(pattern);
-      return navigator.vibrate(scaledPattern);
-    } catch (err) {
-      console.warn('Vibration failed:', err);
-      return false;
-    }
-  }, [enabled, scalePattern]);
+      try {
+        const scaledPattern = scalePattern(pattern);
+        return navigator.vibrate(scaledPattern);
+      } catch (err) {
+        console.warn('Vibration failed:', err);
+        return false;
+      }
+    },
+    [enabled, scalePattern]
+  );
 
   // Stop vibration
   const stop = useCallback(() => {
@@ -89,19 +95,25 @@ export function useHapticFeedback({ enabled = true, intensity = 'normal' }) {
   }, []);
 
   // Threat level feedback
-  const vibrateForThreatLevel = useCallback((level) => {
-    const pattern = PATTERNS[level] || PATTERNS.info;
-    return vibrate(pattern);
-  }, [vibrate]);
+  const vibrateForThreatLevel = useCallback(
+    (level) => {
+      const pattern = PATTERNS[level] || PATTERNS.info;
+      return vibrate(pattern);
+    },
+    [vibrate]
+  );
 
   // New threat detected
-  const vibrateNewThreat = useCallback((threatLevel = 'info') => {
-    // Combine new threat pattern with threat level
-    if (threatLevel === 'critical') {
-      return vibrate([...PATTERNS.newThreat, 200, ...PATTERNS.critical]);
-    }
-    return vibrate(PATTERNS.newThreat);
-  }, [vibrate]);
+  const vibrateNewThreat = useCallback(
+    (threatLevel = 'info') => {
+      // Combine new threat pattern with threat level
+      if (threatLevel === 'critical') {
+        return vibrate([...PATTERNS.newThreat, 200, ...PATTERNS.critical]);
+      }
+      return vibrate(PATTERNS.newThreat);
+    },
+    [vibrate]
+  );
 
   // Threat approaching
   const vibrateApproaching = useCallback(() => {
@@ -140,22 +152,28 @@ export function useHapticFeedback({ enabled = true, intensity = 'normal' }) {
   }, [vibrate]);
 
   // Continuous vibration for critical threats
-  const startContinuousVibration = useCallback((intervalMs = 2000) => {
-    if (!enabled || !supportsVibration()) return null;
+  const startContinuousVibration = useCallback(
+    (intervalMs = 2000) => {
+      if (!enabled || !supportsVibration()) return null;
 
-    const intervalId = setInterval(() => {
-      vibrate(PATTERNS.critical);
-    }, intervalMs);
+      const intervalId = setInterval(() => {
+        vibrate(PATTERNS.critical);
+      }, intervalMs);
 
-    return intervalId;
-  }, [enabled, vibrate]);
+      return intervalId;
+    },
+    [enabled, vibrate]
+  );
 
-  const stopContinuousVibration = useCallback((intervalId) => {
-    if (intervalId) {
-      clearInterval(intervalId);
-    }
-    stop();
-  }, [stop]);
+  const stopContinuousVibration = useCallback(
+    (intervalId) => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+      stop();
+    },
+    [stop]
+  );
 
   // Cleanup on unmount
   useEffect(() => {

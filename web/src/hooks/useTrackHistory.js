@@ -11,23 +11,26 @@ export function useTrackHistory(aircraft, feederLat, feederLon, maxAge = 5 * 60 
   const [trackHistory, setTrackHistory] = useState({});
 
   // Calculate distance from feeder
-  const getDistanceNm = useCallback((lat, lon) => {
-    const dLat = lat - feederLat;
-    const dLon = lon - feederLon;
-    const latNm = dLat * 60;
-    const lonNm = dLon * 60 * Math.cos(feederLat * Math.PI / 180);
-    return Math.sqrt(latNm * latNm + lonNm * lonNm);
-  }, [feederLat, feederLon]);
+  const getDistanceNm = useCallback(
+    (lat, lon) => {
+      const dLat = lat - feederLat;
+      const dLon = lon - feederLon;
+      const latNm = dLat * 60;
+      const lonNm = dLon * 60 * Math.cos((feederLat * Math.PI) / 180);
+      return Math.sqrt(latNm * latNm + lonNm * lonNm);
+    },
+    [feederLat, feederLon]
+  );
 
   // Update track history when aircraft positions change
   useEffect(() => {
     const now = Date.now();
 
-    setTrackHistory(prev => {
+    setTrackHistory((prev) => {
       const updated = { ...prev };
 
       // Add new positions for each aircraft
-      aircraft.forEach(ac => {
+      aircraft.forEach((ac) => {
         if (ac.lat && ac.lon && ac.hex) {
           if (!updated[ac.hex]) {
             updated[ac.hex] = [];
@@ -38,10 +41,12 @@ export function useTrackHistory(aircraft, feederLat, feederLon, maxAge = 5 * 60 
 
           // Only add if position has changed or enough time has passed
           const lastPos = updated[ac.hex][updated[ac.hex].length - 1];
-          if (!lastPos ||
-              now - lastPos.time > 3000 || // At least 3 seconds between points
-              Math.abs(lastPos.lat - ac.lat) > 0.001 ||
-              Math.abs(lastPos.lon - ac.lon) > 0.001) {
+          if (
+            !lastPos ||
+            now - lastPos.time > 3000 || // At least 3 seconds between points
+            Math.abs(lastPos.lat - ac.lat) > 0.001 ||
+            Math.abs(lastPos.lon - ac.lon) > 0.001
+          ) {
             updated[ac.hex].push({
               lat: ac.lat,
               lon: ac.lon,
@@ -50,18 +55,18 @@ export function useTrackHistory(aircraft, feederLat, feederLon, maxAge = 5 * 60 
               vs: ac.baro_rate || ac.geom_rate || 0,
               trk: ac.track || ac.true_heading || ac.mag_heading,
               dist: dist,
-              time: now
+              time: now,
             });
           }
 
           // Remove old positions
-          updated[ac.hex] = updated[ac.hex].filter(p => now - p.time < maxAge);
+          updated[ac.hex] = updated[ac.hex].filter((p) => now - p.time < maxAge);
         }
       });
 
       // Clean up aircraft that are no longer present
-      const activeHexes = new Set(aircraft.map(ac => ac.hex));
-      Object.keys(updated).forEach(hex => {
+      const activeHexes = new Set(aircraft.map((ac) => ac.hex));
+      Object.keys(updated).forEach((hex) => {
         if (!activeHexes.has(hex)) {
           // Keep for a bit after aircraft disappears, then remove
           if (updated[hex].length > 0 && now - updated[hex][updated[hex].length - 1].time > 60000) {
@@ -75,9 +80,12 @@ export function useTrackHistory(aircraft, feederLat, feederLon, maxAge = 5 * 60 
   }, [aircraft, getDistanceNm, maxAge]);
 
   // Get history for a specific aircraft
-  const getHistory = useCallback((hex) => {
-    return trackHistory[hex] || [];
-  }, [trackHistory]);
+  const getHistory = useCallback(
+    (hex) => {
+      return trackHistory[hex] || [];
+    },
+    [trackHistory]
+  );
 
   // Get all track histories
   const getAllHistory = useCallback(() => {
@@ -86,7 +94,7 @@ export function useTrackHistory(aircraft, feederLat, feederLon, maxAge = 5 * 60 
 
   // Clear history for a specific aircraft
   const clearHistory = useCallback((hex) => {
-    setTrackHistory(prev => {
+    setTrackHistory((prev) => {
       const updated = { ...prev };
       delete updated[hex];
       return updated;

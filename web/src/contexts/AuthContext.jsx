@@ -8,7 +8,15 @@
  * - Permission checking
  * - OIDC integration
  */
-import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from 'react';
 import { getConfig } from '../utils/config';
 import {
   getStoredTokens,
@@ -193,32 +201,35 @@ export function AuthProvider({ children }) {
   /**
    * Login with username and password
    */
-  const login = useCallback(async (username, password) => {
-    setError(null);
-    try {
-      const response = await fetch(`${apiBaseUrl}/api/v1/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
+  const login = useCallback(
+    async (username, password) => {
+      setError(null);
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/v1/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
 
-      const data = await safeJson(response);
-      if (!response.ok) throw new Error(data?.error || 'Login failed');
-      if (!data) throw new Error('Invalid response');
+        const data = await safeJson(response);
+        if (!response.ok) throw new Error(data?.error || 'Login failed');
+        if (!data) throw new Error('Invalid response');
 
-      storeTokens(data.access, data.refresh);
-      const userData = createUserData(data.user);
-      setUser(userData);
-      storeUser(userData);
-      setStatus('authenticated');
-      scheduleTokenRefresh(data.access);
+        storeTokens(data.access, data.refresh);
+        const userData = createUserData(data.user);
+        setUser(userData);
+        storeUser(userData);
+        setStatus('authenticated');
+        scheduleTokenRefresh(data.access);
 
-      return { success: true };
-    } catch (err) {
-      setError(err.message);
-      return { success: false, error: err.message };
-    }
-  }, [apiBaseUrl, scheduleTokenRefresh]);
+        return { success: true };
+      } catch (err) {
+        setError(err.message);
+        return { success: false, error: err.message };
+      }
+    },
+    [apiBaseUrl, scheduleTokenRefresh]
+  );
 
   /**
    * Logout
@@ -323,47 +334,60 @@ export function AuthProvider({ children }) {
   /**
    * Check if user has a specific permission
    */
-  const hasPermission = useCallback((permission) => {
-    if (!config.authEnabled || config.publicMode) return true;
-    if (!user) return false;
-    return user.permissions.includes(permission);
-  }, [config.authEnabled, config.publicMode, user]);
+  const hasPermission = useCallback(
+    (permission) => {
+      if (!config.authEnabled || config.publicMode) return true;
+      if (!user) return false;
+      return user.permissions.includes(permission);
+    },
+    [config.authEnabled, config.publicMode, user]
+  );
 
   /**
    * Check if user has any of the specified permissions
    */
-  const hasAnyPermission = useCallback((permissions) => {
-    if (!config.authEnabled || config.publicMode) return true;
-    if (!user) return false;
-    return permissions.some(p => user.permissions.includes(p));
-  }, [config.authEnabled, config.publicMode, user]);
+  const hasAnyPermission = useCallback(
+    (permissions) => {
+      if (!config.authEnabled || config.publicMode) return true;
+      if (!user) return false;
+      return permissions.some((p) => user.permissions.includes(p));
+    },
+    [config.authEnabled, config.publicMode, user]
+  );
 
   /**
    * Check if user has all specified permissions
    */
-  const hasAllPermissions = useCallback((permissions) => {
-    if (!config.authEnabled || config.publicMode) return true;
-    if (!user) return false;
-    return permissions.every(p => user.permissions.includes(p));
-  }, [config.authEnabled, config.publicMode, user]);
+  const hasAllPermissions = useCallback(
+    (permissions) => {
+      if (!config.authEnabled || config.publicMode) return true;
+      if (!user) return false;
+      return permissions.every((p) => user.permissions.includes(p));
+    },
+    [config.authEnabled, config.publicMode, user]
+  );
 
   /**
    * Check if a feature is accessible
    */
-  const canAccessFeature = useCallback((feature, action = 'read') => {
-    if (!config.authEnabled || config.publicMode) return true;
+  const canAccessFeature = useCallback(
+    (feature, action = 'read') => {
+      if (!config.authEnabled || config.publicMode) return true;
 
-    const featureConfig = config.features[feature];
-    if (!featureConfig) return status === 'authenticated';
-    if (!featureConfig.is_enabled) return false;
+      const featureConfig = config.features[feature];
+      if (!featureConfig) return status === 'authenticated';
+      if (!featureConfig.is_enabled) return false;
 
-    const accessLevel = action === 'write' ? featureConfig.write_access : featureConfig.read_access;
-    if (accessLevel === 'public') return true;
-    if (accessLevel === 'authenticated') return status === 'authenticated';
+      const accessLevel =
+        action === 'write' ? featureConfig.write_access : featureConfig.read_access;
+      if (accessLevel === 'public') return true;
+      if (accessLevel === 'authenticated') return status === 'authenticated';
 
-    const permissionSuffix = action === 'write' ? 'edit' : 'view';
-    return hasPermission(`${feature}.${permissionSuffix}`);
-  }, [config, status, hasPermission]);
+      const permissionSuffix = action === 'write' ? 'edit' : 'view';
+      return hasPermission(`${feature}.${permissionSuffix}`);
+    },
+    [config, status, hasPermission]
+  );
 
   /**
    * Get access token for WebSocket connections
@@ -434,36 +458,47 @@ export function AuthProvider({ children }) {
 
   const clearError = useCallback(() => setError(null), []);
 
-  const value = useMemo(() => ({
-    status,
-    user,
-    config,
-    error,
-    isLoading: status === 'loading',
-    isAuthenticated: status === 'authenticated',
-    isAnonymous: status === 'anonymous',
-    login,
-    logout,
-    loginWithOIDC,
-    refreshAccessToken,
-    authFetch,
-    hasPermission,
-    hasAnyPermission,
-    hasAllPermissions,
-    canAccessFeature,
-    getAccessToken,
-    clearError,
-  }), [
-    status, user, config, error, login, logout, loginWithOIDC,
-    refreshAccessToken, authFetch, hasPermission, hasAnyPermission,
-    hasAllPermissions, canAccessFeature, getAccessToken, clearError,
-  ]);
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      status,
+      user,
+      config,
+      error,
+      isLoading: status === 'loading',
+      isAuthenticated: status === 'authenticated',
+      isAnonymous: status === 'anonymous',
+      login,
+      logout,
+      loginWithOIDC,
+      refreshAccessToken,
+      authFetch,
+      hasPermission,
+      hasAnyPermission,
+      hasAllPermissions,
+      canAccessFeature,
+      getAccessToken,
+      clearError,
+    }),
+    [
+      status,
+      user,
+      config,
+      error,
+      login,
+      logout,
+      loginWithOIDC,
+      refreshAccessToken,
+      authFetch,
+      hasPermission,
+      hasAnyPermission,
+      hasAllPermissions,
+      canAccessFeature,
+      getAccessToken,
+      clearError,
+    ]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 /**

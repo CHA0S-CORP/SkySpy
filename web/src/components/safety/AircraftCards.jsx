@@ -5,12 +5,7 @@ import { Plane, Navigation } from 'lucide-react';
  * Aircraft Cards Component
  * Displays involved aircraft with their telemetry data and separation info
  */
-export function AircraftCards({
-  event,
-  telem1,
-  telem2,
-  onSelectAircraft
-}) {
+export function AircraftCards({ event, telem1, telem2, onSelectAircraft }) {
   return (
     <div className="sep-aircraft-section">
       <div className="sep-section-header">
@@ -29,9 +24,7 @@ export function AircraftCards({
         />
 
         {/* Separation indicator */}
-        {event.icao_2 && (
-          <SeparationIndicator details={event.details} />
-        )}
+        {event.icao_2 && <SeparationIndicator details={event.details} />}
 
         {/* Aircraft 2 */}
         {event.icao_2 && (
@@ -70,11 +63,7 @@ function AircraftCard({ icao, callsign, telemetry, color, onSelect }) {
             value={telemetry.altitude?.toLocaleString() || '--'}
             unit="ft"
           />
-          <TelemetryItem
-            label="GS"
-            value={telemetry.gs?.toFixed(0) || '--'}
-            unit="kts"
-          />
+          <TelemetryItem label="GS" value={telemetry.gs?.toFixed(0) || '--'} unit="kts" />
           <TelemetryItem
             label="VS"
             value={`${telemetry.vr > 0 ? '+' : ''}${telemetry.vr || 0}`}

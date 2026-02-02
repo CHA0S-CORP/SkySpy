@@ -21,7 +21,7 @@ export {
   SafetyAlertsSummary,
   ConnectionStatusCard,
   AcarsServiceCard,
-  SafetyMonitorCard
+  SafetyMonitorCard,
 } from './SystemCards';
 
 // Filter Components
@@ -30,7 +30,7 @@ export {
   MilitaryToggle,
   AdvancedFiltersButton,
   AdvancedFiltersPanel,
-  StatsFilterBar
+  StatsFilterBar,
 } from './StatsFilters';
 
 // Analytics Section Components
@@ -42,7 +42,7 @@ export {
   PatternsTab,
   HistoricalAnalyticsSection,
   ExtendedStatsSection,
-  AcarsSection
+  AcarsSection,
 } from './AnalyticsSections';
 
 // Helper Functions

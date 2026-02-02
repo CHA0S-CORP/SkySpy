@@ -62,9 +62,7 @@ export function ConfigAuditLog({
       {loading ? (
         <div className="config-audit-loading">Loading audit log...</div>
       ) : auditLog.length === 0 ? (
-        <div className="config-audit-empty">
-          No changes recorded in the selected time period.
-        </div>
+        <div className="config-audit-empty">No changes recorded in the selected time period.</div>
       ) : (
         <div className="config-audit-list">
           {auditLog.map((entry, index) => (
@@ -91,9 +89,7 @@ export function ConfigAuditLog({
                   {entry.changed_by_username || 'System'}
                 </span>
                 {entry.ip_address && (
-                  <span className="config-audit-ip">
-                    IP: {entry.ip_address}
-                  </span>
+                  <span className="config-audit-ip">IP: {entry.ip_address}</span>
                 )}
               </div>
             </div>

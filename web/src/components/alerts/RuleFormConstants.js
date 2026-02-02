@@ -15,13 +15,38 @@ export const CONDITION_TYPES = [
   { value: 'icao', label: 'ICAO Hex', placeholder: 'e.g., A12345' },
   { value: 'callsign', label: 'Callsign', placeholder: 'e.g., UAL123' },
   { value: 'squawk', label: 'Squawk Code', placeholder: 'e.g., 7700', validation: /^\d{4}$/ },
-  { value: 'altitude_above', label: 'Altitude Above (ft)', placeholder: 'e.g., 10000', type: 'number' },
-  { value: 'altitude_below', label: 'Altitude Below (ft)', placeholder: 'e.g., 5000', type: 'number' },
+  {
+    value: 'altitude_above',
+    label: 'Altitude Above (ft)',
+    placeholder: 'e.g., 10000',
+    type: 'number',
+  },
+  {
+    value: 'altitude_below',
+    label: 'Altitude Below (ft)',
+    placeholder: 'e.g., 5000',
+    type: 'number',
+  },
   { value: 'speed_above', label: 'Speed Above (kts)', placeholder: 'e.g., 300', type: 'number' },
   { value: 'speed_below', label: 'Speed Below (kts)', placeholder: 'e.g., 100', type: 'number' },
-  { value: 'vertical_rate', label: 'Vertical Rate (ft/min)', placeholder: 'e.g., -2000', type: 'number' },
-  { value: 'distance_within', label: 'Distance Within (nm)', placeholder: 'e.g., 10', type: 'number' },
-  { value: 'distance_from_mobile', label: 'Distance From Mobile (nm)', placeholder: 'e.g., 5', type: 'number' },
+  {
+    value: 'vertical_rate',
+    label: 'Vertical Rate (ft/min)',
+    placeholder: 'e.g., -2000',
+    type: 'number',
+  },
+  {
+    value: 'distance_within',
+    label: 'Distance Within (nm)',
+    placeholder: 'e.g., 10',
+    type: 'number',
+  },
+  {
+    value: 'distance_from_mobile',
+    label: 'Distance From Mobile (nm)',
+    placeholder: 'e.g., 5',
+    type: 'number',
+  },
   { value: 'military', label: 'Military Aircraft', isBoolean: true },
   { value: 'emergency', label: 'Emergency', isBoolean: true },
   { value: 'law_enforcement', label: 'Law Enforcement', isBoolean: true },
@@ -59,7 +84,12 @@ export const RULE_TEMPLATES = [
     rule: {
       name: 'Military Aircraft Alert',
       priority: 'warning',
-      conditions: { logic: 'AND', groups: [{ logic: 'AND', conditions: [{ type: 'military', operator: 'eq', value: 'true' }] }] },
+      conditions: {
+        logic: 'AND',
+        groups: [
+          { logic: 'AND', conditions: [{ type: 'military', operator: 'eq', value: 'true' }] },
+        ],
+      },
       cooldown: 300,
     },
   },
@@ -71,7 +101,12 @@ export const RULE_TEMPLATES = [
     rule: {
       name: 'Emergency Alert',
       priority: 'critical',
-      conditions: { logic: 'AND', groups: [{ logic: 'AND', conditions: [{ type: 'emergency', operator: 'eq', value: 'true' }] }] },
+      conditions: {
+        logic: 'AND',
+        groups: [
+          { logic: 'AND', conditions: [{ type: 'emergency', operator: 'eq', value: 'true' }] },
+        ],
+      },
       cooldown: 60,
     },
   },
@@ -83,7 +118,12 @@ export const RULE_TEMPLATES = [
     rule: {
       name: 'Low Flying Aircraft',
       priority: 'info',
-      conditions: { logic: 'AND', groups: [{ logic: 'AND', conditions: [{ type: 'altitude_below', operator: 'lt', value: '2000' }] }] },
+      conditions: {
+        logic: 'AND',
+        groups: [
+          { logic: 'AND', conditions: [{ type: 'altitude_below', operator: 'lt', value: '2000' }] },
+        ],
+      },
       cooldown: 300,
     },
   },
@@ -95,7 +135,12 @@ export const RULE_TEMPLATES = [
     rule: {
       name: 'Nearby Aircraft Alert',
       priority: 'info',
-      conditions: { logic: 'AND', groups: [{ logic: 'AND', conditions: [{ type: 'distance_within', operator: 'lte', value: '5' }] }] },
+      conditions: {
+        logic: 'AND',
+        groups: [
+          { logic: 'AND', conditions: [{ type: 'distance_within', operator: 'lte', value: '5' }] },
+        ],
+      },
       cooldown: 300,
     },
   },
@@ -107,7 +152,12 @@ export const RULE_TEMPLATES = [
     rule: {
       name: 'Helicopter Alert',
       priority: 'info',
-      conditions: { logic: 'AND', groups: [{ logic: 'AND', conditions: [{ type: 'helicopter', operator: 'eq', value: 'true' }] }] },
+      conditions: {
+        logic: 'AND',
+        groups: [
+          { logic: 'AND', conditions: [{ type: 'helicopter', operator: 'eq', value: 'true' }] },
+        ],
+      },
       cooldown: 300,
     },
   },
@@ -119,7 +169,15 @@ export const RULE_TEMPLATES = [
     rule: {
       name: 'Law Enforcement Alert',
       priority: 'warning',
-      conditions: { logic: 'AND', groups: [{ logic: 'AND', conditions: [{ type: 'law_enforcement', operator: 'eq', value: 'true' }] }] },
+      conditions: {
+        logic: 'AND',
+        groups: [
+          {
+            logic: 'AND',
+            conditions: [{ type: 'law_enforcement', operator: 'eq', value: 'true' }],
+          },
+        ],
+      },
       cooldown: 300,
     },
   },
@@ -150,7 +208,7 @@ export const DEFAULT_GROUP = { logic: 'AND', conditions: [{ ...DEFAULT_CONDITION
  * @returns {Array} - Array of operator options
  */
 export function getOperatorsForType(type) {
-  const condType = CONDITION_TYPES.find(t => t.value === type);
+  const condType = CONDITION_TYPES.find((t) => t.value === type);
   if (condType?.isBoolean) {
     return [{ value: 'eq', label: 'is' }];
   }
@@ -173,10 +231,18 @@ export function initializeForm(ruleToEdit, prefillAircraft, defaultGroup) {
     if (!conditions || (typeof conditions === 'object' && !conditions.groups)) {
       conditions = {
         logic: 'AND',
-        groups: [{
-          logic: 'AND',
-          conditions: [{ type: ruleToEdit.type || 'icao', operator: ruleToEdit.operator || 'eq', value: ruleToEdit.value || '' }]
-        }]
+        groups: [
+          {
+            logic: 'AND',
+            conditions: [
+              {
+                type: ruleToEdit.type || 'icao',
+                operator: ruleToEdit.operator || 'eq',
+                value: ruleToEdit.value || '',
+              },
+            ],
+          },
+        ],
       };
     }
     return { ...ruleToEdit, conditions };
@@ -194,14 +260,18 @@ export function initializeForm(ruleToEdit, prefillAircraft, defaultGroup) {
       cooldown: 300,
       conditions: {
         logic: 'AND',
-        groups: [{
-          logic: 'OR',
-          conditions: [
-            { type: 'icao', operator: 'eq', value: prefillAircraft.hex },
-            ...(prefillAircraft.flight ? [{ type: 'callsign', operator: 'contains', value: prefillAircraft.flight.trim() }] : [])
-          ]
-        }]
-      }
+        groups: [
+          {
+            logic: 'OR',
+            conditions: [
+              { type: 'icao', operator: 'eq', value: prefillAircraft.hex },
+              ...(prefillAircraft.flight
+                ? [{ type: 'callsign', operator: 'contains', value: prefillAircraft.flight.trim() }]
+                : []),
+            ],
+          },
+        ],
+      },
     };
   }
 
@@ -213,7 +283,7 @@ export function initializeForm(ruleToEdit, prefillAircraft, defaultGroup) {
     starts_at: '',
     expires_at: '',
     cooldown: 300,
-    conditions: { logic: 'AND', groups: [{ ...defaultGroup }] }
+    conditions: { logic: 'AND', groups: [{ ...defaultGroup }] },
   };
 }
 
@@ -236,7 +306,7 @@ export function validateForm(form) {
   } else {
     groups.forEach((group, gi) => {
       group.conditions?.forEach((cond, ci) => {
-        const condType = CONDITION_TYPES.find(t => t.value === cond.type);
+        const condType = CONDITION_TYPES.find((t) => t.value === cond.type);
         if (condType && !condType.isBoolean && !cond.value?.trim()) {
           errors[`cond_${gi}_${ci}`] = 'Value is required';
         }

@@ -19,7 +19,7 @@ export function ConfigCategory({
   const { category: categoryKey, category_display, configs = [], has_changes } = category;
 
   // Count pending changes in this category
-  const changedCount = configs.filter(c => hasChange(c.key)).length;
+  const changedCount = configs.filter((c) => hasChange(c.key)).length;
 
   return (
     <div className={`config-category ${expanded ? 'config-category-expanded' : ''}`}>
@@ -39,7 +39,10 @@ export function ConfigCategory({
           </span>
         )}
         {has_changes && (
-          <span className="config-category-badge config-category-badge-restart" title="Contains settings that require restart">
+          <span
+            className="config-category-badge config-category-badge-restart"
+            title="Contains settings that require restart"
+          >
             <AlertTriangle size={12} />
           </span>
         )}

@@ -13,7 +13,7 @@ export function DataFreshnessIndicator({
   freshThreshold = 30,
   staleThreshold = 120,
   showLabel = true,
-  size = 'md'
+  size = 'md',
 }) {
   const [age, setAge] = useState(0);
 

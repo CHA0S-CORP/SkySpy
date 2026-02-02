@@ -91,7 +91,7 @@ const handleNewTransmission = (transmission) => {
 
   // Add to recent transmissions or update existing one
   const existingIndex = globalAudioState.recentTransmissions.findIndex(
-    t => t.id === transmission.id
+    (t) => t.id === transmission.id
   );
 
   if (existingIndex !== -1) {
@@ -145,9 +145,10 @@ const handleNewTransmission = (transmission) => {
     if (filter) {
       // Check if any identified airframe matches the filter
       const airframes = enrichedTransmission.identified_airframes || [];
-      matchesFilter = airframes.some(af => {
+      matchesFilter = airframes.some((af) => {
         if (filter.hex && af.icao_hex?.toUpperCase() === filter.hex.toUpperCase()) return true;
-        if (filter.callsign && af.callsign?.toUpperCase() === filter.callsign.toUpperCase()) return true;
+        if (filter.callsign && af.callsign?.toUpperCase() === filter.callsign.toUpperCase())
+          return true;
         return false;
       });
     }
@@ -242,13 +243,9 @@ export function useSocketIOAudio(apiBase) {
   useEffect(() => {
     // Listen for audio transmission events
     // Django sends: { type: 'audio.transmission' or 'transmission', ... }
-    const audioEvents = [
-      'audio.transmission',
-      'transmission',
-      'audio:transmission',
-    ];
+    const audioEvents = ['audio.transmission', 'transmission', 'audio:transmission'];
 
-    const unsubscribers = audioEvents.map(eventType => {
+    const unsubscribers = audioEvents.map((eventType) => {
       return on(eventType, (data) => {
         console.log('[useSocketIOAudio] New audio transmission via Socket.IO:', data);
         handleNewTransmission(data);
@@ -260,19 +257,16 @@ export function useSocketIOAudio(apiBase) {
       console.log('[useSocketIOAudio] Audio snapshot received:', data);
       if (data?.transmissions && Array.isArray(data.transmissions)) {
         // Process each transmission from the snapshot
-        data.transmissions.forEach(transmission => {
+        data.transmissions.forEach((transmission) => {
           handleNewTransmission(transmission);
         });
       }
     });
 
     // Handle transcript updates (legacy events)
-    const transcriptEvents = [
-      'audio.transcript_update',
-      'transcript_update',
-    ];
+    const transcriptEvents = ['audio.transcript_update', 'transcript_update'];
 
-    const transcriptUnsubscribers = transcriptEvents.map(eventType => {
+    const transcriptUnsubscribers = transcriptEvents.map((eventType) => {
       return on(eventType, (data) => {
         console.log('[useSocketIOAudio] Transcript update via Socket.IO:', data);
         handleNewTransmission(data);
@@ -286,7 +280,7 @@ export function useSocketIOAudio(apiBase) {
       if (data?.id) {
         // Update existing transmission with 'transcribing' status
         const existingIndex = globalAudioState.recentTransmissions.findIndex(
-          t => t.id === data.id
+          (t) => t.id === data.id
         );
         if (existingIndex !== -1) {
           globalAudioState.recentTransmissions[existingIndex] = {
@@ -294,7 +288,9 @@ export function useSocketIOAudio(apiBase) {
             transcription_status: 'transcribing',
           };
           globalAudioState.recentTransmissions = [...globalAudioState.recentTransmissions];
-          notifySubscribers({ updatedTransmission: globalAudioState.recentTransmissions[existingIndex] });
+          notifySubscribers({
+            updatedTransmission: globalAudioState.recentTransmissions[existingIndex],
+          });
         }
       }
     });
@@ -304,19 +300,32 @@ export function useSocketIOAudio(apiBase) {
       if (data?.id) {
         // Update existing transmission with completed transcription
         const existingIndex = globalAudioState.recentTransmissions.findIndex(
-          t => t.id === data.id
+          (t) => t.id === data.id
         );
         if (existingIndex !== -1) {
           globalAudioState.recentTransmissions[existingIndex] = {
             ...globalAudioState.recentTransmissions[existingIndex],
             transcription_status: 'completed',
-            transcript: data.transcript || data.text || globalAudioState.recentTransmissions[existingIndex].transcript,
-            transcript_confidence: data.confidence ?? data.transcript_confidence ?? globalAudioState.recentTransmissions[existingIndex].transcript_confidence,
-            transcript_language: data.language ?? data.transcript_language ?? globalAudioState.recentTransmissions[existingIndex].transcript_language,
-            identified_airframes: data.identified_airframes ?? globalAudioState.recentTransmissions[existingIndex].identified_airframes,
+            transcript:
+              data.transcript ||
+              data.text ||
+              globalAudioState.recentTransmissions[existingIndex].transcript,
+            transcript_confidence:
+              data.confidence ??
+              data.transcript_confidence ??
+              globalAudioState.recentTransmissions[existingIndex].transcript_confidence,
+            transcript_language:
+              data.language ??
+              data.transcript_language ??
+              globalAudioState.recentTransmissions[existingIndex].transcript_language,
+            identified_airframes:
+              data.identified_airframes ??
+              globalAudioState.recentTransmissions[existingIndex].identified_airframes,
           };
           globalAudioState.recentTransmissions = [...globalAudioState.recentTransmissions];
-          notifySubscribers({ updatedTransmission: globalAudioState.recentTransmissions[existingIndex] });
+          notifySubscribers({
+            updatedTransmission: globalAudioState.recentTransmissions[existingIndex],
+          });
         } else {
           // Transmission not in list yet, add it
           handleNewTransmission(data);
@@ -329,7 +338,7 @@ export function useSocketIOAudio(apiBase) {
       if (data?.id) {
         // Update existing transmission with failed status
         const existingIndex = globalAudioState.recentTransmissions.findIndex(
-          t => t.id === data.id
+          (t) => t.id === data.id
         );
         if (existingIndex !== -1) {
           globalAudioState.recentTransmissions[existingIndex] = {
@@ -338,14 +347,16 @@ export function useSocketIOAudio(apiBase) {
             transcription_error: data.error || data.message || 'Transcription failed',
           };
           globalAudioState.recentTransmissions = [...globalAudioState.recentTransmissions];
-          notifySubscribers({ updatedTransmission: globalAudioState.recentTransmissions[existingIndex] });
+          notifySubscribers({
+            updatedTransmission: globalAudioState.recentTransmissions[existingIndex],
+          });
         }
       }
     });
 
     return () => {
-      unsubscribers.forEach(unsub => unsub && unsub());
-      transcriptUnsubscribers.forEach(unsub => unsub && unsub());
+      unsubscribers.forEach((unsub) => unsub && unsub());
+      transcriptUnsubscribers.forEach((unsub) => unsub && unsub());
       snapshotUnsub && snapshotUnsub();
       transcriptionStartedUnsub && transcriptionStartedUnsub();
       transcriptionCompletedUnsub && transcriptionCompletedUnsub();
@@ -369,16 +380,16 @@ export function useSocketIOAudio(apiBase) {
         }
         if ('newTransmission' in updates && updates.newTransmission) {
           // Add to local realtime list for this view
-          setRealtimeTransmissions(prev => {
-            const exists = prev.some(t => t.id === updates.newTransmission.id);
+          setRealtimeTransmissions((prev) => {
+            const exists = prev.some((t) => t.id === updates.newTransmission.id);
             if (exists) return prev;
             return [updates.newTransmission, ...prev].slice(0, 50);
           });
         }
         if ('updatedTransmission' in updates && updates.updatedTransmission) {
           // Update existing transmission in local realtime list
-          setRealtimeTransmissions(prev => {
-            const index = prev.findIndex(t => t.id === updates.updatedTransmission.id);
+          setRealtimeTransmissions((prev) => {
+            const index = prev.findIndex((t) => t.id === updates.updatedTransmission.id);
             if (index !== -1) {
               const updated = [...prev];
               updated[index] = updates.updatedTransmission;
@@ -402,7 +413,7 @@ export function useSocketIOAudio(apiBase) {
         if (Array.isArray(globalAudioState.subscribers)) {
           // Create new array to avoid mutation during iteration
           globalAudioState.subscribers = globalAudioState.subscribers.filter(
-            cb => cb !== callback
+            (cb) => cb !== callback
           );
         } else {
           globalAudioState.subscribers.delete(callback);

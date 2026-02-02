@@ -12,7 +12,7 @@ export function EventHeader({
   acknowledging,
   onAcknowledge,
   onClose,
-  severityColor
+  severityColor,
 }) {
   const [copied, setCopied] = useState(false);
 

@@ -61,7 +61,9 @@ export function AirportPopup({
 
         <div className="detail-row">
           <span>Position</span>
-          <span>{airport.lat?.toFixed(4)}°, {airport.lon?.toFixed(4)}°</span>
+          <span>
+            {airport.lat?.toFixed(4)}°, {airport.lon?.toFixed(4)}°
+          </span>
         </div>
 
         {(airport.elev !== undefined && airport.elev !== null) || airport.elev_ft ? (
@@ -92,10 +94,18 @@ export function AirportPopup({
         <div className="detail-row lookup-section">
           <span>LOOKUP:</span>
           <div className="lookup-links">
-            <a href={`https://www.airnav.com/airport/${airportCode}`} target="_blank" rel="noopener noreferrer">
+            <a
+              href={`https://www.airnav.com/airport/${airportCode}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <ExternalLink size={12} /> AirNav
             </a>
-            <a href={`https://skyvector.com/airport/${airportCode}`} target="_blank" rel="noopener noreferrer">
+            <a
+              href={`https://skyvector.com/airport/${airportCode}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <ExternalLink size={12} /> SkyVector
             </a>
           </div>

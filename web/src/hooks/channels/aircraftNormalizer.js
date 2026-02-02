@@ -16,7 +16,8 @@ export function normalizeAircraft(data) {
     registration: data.r || data.registration || data.tail || null,
     // Aircraft type - handle multiple formats
     t: data.t || data.aircraft_type || (data.type && !data.type.includes('_') ? data.type : null),
-    type: data.t || data.aircraft_type || (data.type && !data.type.includes('_') ? data.type : null),
+    type:
+      data.t || data.aircraft_type || (data.type && !data.type.includes('_') ? data.type : null),
     aircraft_type: data.aircraft_type || data.t || null,
     // Database flags for aircraft characteristics (military, etc.)
     dbFlags: data.dbFlags || data.db_flags || data.flags || 0,
@@ -49,7 +50,9 @@ export function normalizeAircraft(data) {
     bearing: data.bearing || null,
     // Status flags
     military: data.military || ((data.dbFlags || data.db_flags || 0) & 1) !== 0,
-    emergency: data.emergency === true || (typeof data.emergency === 'string' && data.emergency !== 'none' && data.emergency !== ''),
+    emergency:
+      data.emergency === true ||
+      (typeof data.emergency === 'string' && data.emergency !== 'none' && data.emergency !== ''),
     category: data.category || null,
     on_ground: data.on_ground || false,
     // Signal strength
@@ -68,7 +71,7 @@ export function normalizeAircraftBatch(aircraftList) {
   const result = {};
   if (!Array.isArray(aircraftList)) return result;
 
-  aircraftList.forEach(ac => {
+  aircraftList.forEach((ac) => {
     if (ac && typeof ac === 'object') {
       const normalized = normalizeAircraft(ac);
       if (normalized.hex) {

@@ -1,6 +1,10 @@
 import React from 'react';
 import { MessageCircle, LayoutGrid, List, ChevronDown, ChevronUp, X, Plane } from 'lucide-react';
-import { getAcarsLabelDescription, getLabelCategory, quickFilterCategories } from '../hooks/useAircraftDetail';
+import {
+  getAcarsLabelDescription,
+  getLabelCategory,
+  quickFilterCategories,
+} from '../hooks/useAircraftDetail';
 
 export function AcarsTab({
   acarsMessages,
@@ -13,26 +17,22 @@ export function AcarsTab({
   expandedMessages,
   setExpandedMessages,
   allMessagesExpanded,
-  setAllMessagesExpanded
+  setAllMessagesExpanded,
 }) {
   // Filter messages based on quick filters
-  const filteredMessages = acarsQuickFilters.length > 0
-    ? acarsMessages.filter(msg => {
-        const label = msg.label?.toUpperCase();
-        if (!label) return false;
-        return acarsQuickFilters.some(category =>
-          quickFilterCategories[category]?.labels.includes(label)
-        );
-      })
-    : acarsMessages;
+  const filteredMessages =
+    acarsQuickFilters.length > 0
+      ? acarsMessages.filter((msg) => {
+          const label = msg.label?.toUpperCase();
+          if (!label) return false;
+          return acarsQuickFilters.some((category) =>
+            quickFilterCategories[category]?.labels.includes(label)
+          );
+        })
+      : acarsMessages;
 
   return (
-    <div
-      className="detail-acars"
-      id="panel-acars"
-      role="tabpanel"
-      aria-labelledby="tab-acars"
-    >
+    <div className="detail-acars" id="panel-acars" role="tabpanel" aria-labelledby="tab-acars">
       {/* Filter Toolbar */}
       <div className="acars-filter">
         <label htmlFor="acars-time-range">Time Range:</label>
@@ -74,7 +74,7 @@ export function AcarsTab({
         <button
           className="acars-expand-all-btn"
           onClick={() => {
-            setAllMessagesExpanded(prev => !prev);
+            setAllMessagesExpanded((prev) => !prev);
             setExpandedMessages({});
           }}
           title={allMessagesExpanded ? 'Collapse all messages' : 'Expand all messages'}
@@ -101,9 +101,11 @@ export function AcarsTab({
           <button
             key={key}
             className={`acars-filter-chip chip-${key} ${acarsQuickFilters.includes(key) ? 'active' : ''}`}
-            onClick={() => setAcarsQuickFilters(prev =>
-              prev.includes(key) ? prev.filter(c => c !== key) : [...prev, key]
-            )}
+            onClick={() =>
+              setAcarsQuickFilters((prev) =>
+                prev.includes(key) ? prev.filter((c) => c !== key) : [...prev, key]
+              )
+            }
             aria-pressed={acarsQuickFilters.includes(key)}
           >
             <span className="chip-dot" aria-hidden="true" />
@@ -139,9 +141,10 @@ export function AcarsTab({
           aria-label="ACARS messages"
         >
           {filteredMessages.map((msg, i) => {
-            const timestamp = typeof msg.timestamp === 'number'
-              ? new Date(msg.timestamp * 1000)
-              : new Date(msg.timestamp);
+            const timestamp =
+              typeof msg.timestamp === 'number'
+                ? new Date(msg.timestamp * 1000)
+                : new Date(msg.timestamp);
             const labelDesc = getAcarsLabelDescription(msg.label, msg.label_info);
             const labelCategory = getLabelCategory(msg.label);
             const msgId = `${msg.timestamp}-${i}`;
@@ -155,9 +158,7 @@ export function AcarsTab({
                 className={`acars-item${labelCategory ? ` category-${labelCategory}` : ''}`}
               >
                 <div className="acars-item-header">
-                  {msg.callsign && (
-                    <span className="acars-item-callsign">{msg.callsign}</span>
-                  )}
+                  {msg.callsign && <span className="acars-item-callsign">{msg.callsign}</span>}
                   {msg.airline?.name && (
                     <span
                       className="acars-item-airline"
@@ -168,25 +169,20 @@ export function AcarsTab({
                     </span>
                   )}
                   <span className="acars-item-time">
-                    <time dateTime={timestamp.toISOString()}>
-                      {timestamp.toLocaleString()}
-                    </time>
+                    <time dateTime={timestamp.toISOString()}>{timestamp.toLocaleString()}</time>
                   </span>
                   <span
                     className={`acars-item-label${labelCategory ? ` category-${labelCategory}` : ''}`}
                     title={msg.label_info?.description || labelDesc || msg.label}
                   >
                     {msg.label || '--'}
-                    {labelDesc && (
-                      <span className="acars-label-desc">{labelDesc}</span>
-                    )}
+                    {labelDesc && <span className="acars-label-desc">{labelDesc}</span>}
                   </span>
                   <span className="acars-item-source">{msg.source}</span>
-                  {msg.frequency && (
-                    <span className="acars-item-freq">{msg.frequency} MHz</span>
-                  )}
+                  {msg.frequency && <span className="acars-item-freq">{msg.frequency} MHz</span>}
                   <span className="acars-compact-preview">
-                    {textContent.slice(0, 60)}{textContent.length > 60 ? '...' : ''}
+                    {textContent.slice(0, 60)}
+                    {textContent.length > 60 ? '...' : ''}
                   </span>
                 </div>
 
@@ -200,16 +196,20 @@ export function AcarsTab({
                 {msg.formatted_text ? (
                   <div className="acars-formatted-text">
                     <div className="acars-formatted-header">Decoded:</div>
-                    <pre className={`acars-item-text ${!isExpanded && isLongText ? 'collapsed' : ''}`}>
+                    <pre
+                      className={`acars-item-text ${!isExpanded && isLongText ? 'collapsed' : ''}`}
+                    >
                       {msg.formatted_text}
                     </pre>
                     {isLongText && (
                       <button
                         className="acars-text-toggle"
-                        onClick={() => setExpandedMessages(prev => ({
-                          ...prev,
-                          [msgId]: !prev[msgId]
-                        }))}
+                        onClick={() =>
+                          setExpandedMessages((prev) => ({
+                            ...prev,
+                            [msgId]: !prev[msgId],
+                          }))
+                        }
                         aria-expanded={isExpanded}
                       >
                         {isExpanded ? (
@@ -230,16 +230,20 @@ export function AcarsTab({
                 ) : (
                   msg.text && (
                     <>
-                      <pre className={`acars-item-text ${!isExpanded && isLongText ? 'collapsed' : ''}`}>
+                      <pre
+                        className={`acars-item-text ${!isExpanded && isLongText ? 'collapsed' : ''}`}
+                      >
                         {msg.text}
                       </pre>
                       {isLongText && (
                         <button
                           className="acars-text-toggle"
-                          onClick={() => setExpandedMessages(prev => ({
-                            ...prev,
-                            [msgId]: !prev[msgId]
-                          }))}
+                          onClick={() =>
+                            setExpandedMessages((prev) => ({
+                              ...prev,
+                              [msgId]: !prev[msgId],
+                            }))
+                          }
                           aria-expanded={isExpanded}
                         >
                           {isExpanded ? (
@@ -255,20 +259,22 @@ export function AcarsTab({
                 )}
 
                 {/* Decoded data tags */}
-                {msg.decoded_text && Object.keys(msg.decoded_text).length > 0 && !msg.formatted_text && (
-                  <div className="acars-item-decoded">
-                    {msg.decoded_text.airports_mentioned && (
-                      <span className="decoded-tag" title="Airports mentioned">
-                        ✈ {msg.decoded_text.airports_mentioned.join(', ')}
-                      </span>
-                    )}
-                    {msg.decoded_text.flight_levels && (
-                      <span className="decoded-tag" title="Flight levels">
-                        ⬆ FL{msg.decoded_text.flight_levels.join(', FL')}
-                      </span>
-                    )}
-                  </div>
-                )}
+                {msg.decoded_text &&
+                  Object.keys(msg.decoded_text).length > 0 &&
+                  !msg.formatted_text && (
+                    <div className="acars-item-decoded">
+                      {msg.decoded_text.airports_mentioned && (
+                        <span className="decoded-tag" title="Airports mentioned">
+                          ✈ {msg.decoded_text.airports_mentioned.join(', ')}
+                        </span>
+                      )}
+                      {msg.decoded_text.flight_levels && (
+                        <span className="decoded-tag" title="Flight levels">
+                          ⬆ FL{msg.decoded_text.flight_levels.join(', FL')}
+                        </span>
+                      )}
+                    </div>
+                  )}
               </li>
             );
           })}

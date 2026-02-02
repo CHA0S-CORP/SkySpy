@@ -51,14 +51,17 @@ function normalizeAircraftInfo(info) {
     model: info.model || info.modelName,
     serial_number: info.serial_number || info.serialNumber || info.manufacturerSerial,
     year_built: info.year_built || info.yearBuilt || info.built,
-    age_years: info.age_years ?? info.ageYears ?? (() => {
-      const year = info.year_built || info.yearBuilt || info.built;
-      const yearNum = Number(year);
-      if (!year || isNaN(yearNum) || yearNum < 1900 || yearNum > new Date().getFullYear()) {
-        return null;
-      }
-      return new Date().getFullYear() - yearNum;
-    })(),
+    age_years:
+      info.age_years ??
+      info.ageYears ??
+      (() => {
+        const year = info.year_built || info.yearBuilt || info.built;
+        const yearNum = Number(year);
+        if (!year || isNaN(yearNum) || yearNum < 1900 || yearNum > new Date().getFullYear()) {
+          return null;
+        }
+        return new Date().getFullYear() - yearNum;
+      })(),
     operator: info.operator || info.operatorName || info.owner_operator,
     operator_icao: info.operator_icao || info.operatorIcao || info.airline_icao,
     owner: info.owner || info.ownerName || info.registered_owner,
@@ -91,9 +94,10 @@ function LiveTelemetrySection({ aircraft, trackHistory, calculateDistance }) {
   const isExtremeVS = verticalRate !== null && Math.abs(verticalRate) > 3000;
   const vsClass = verticalRate > 0 ? 'climbing' : verticalRate < 0 ? 'descending' : '';
 
-  const altitude = aircraft.alt_baro !== 'ground' && aircraft.alt_baro
-    ? aircraft.alt_baro
-    : aircraft.alt_geom ?? aircraft.alt;
+  const altitude =
+    aircraft.alt_baro !== 'ground' && aircraft.alt_baro
+      ? aircraft.alt_baro
+      : (aircraft.alt_geom ?? aircraft.alt);
 
   const speed = aircraft.gs ?? aircraft.tas ?? aircraft.ias;
   const track = aircraft.track ?? aircraft.true_heading ?? aircraft.mag_heading;
@@ -106,23 +110,18 @@ function LiveTelemetrySection({ aircraft, trackHistory, calculateDistance }) {
     if (vs === null) return '--';
     return vs > 0 ? `+${vs}` : `${vs}`;
   };
-  const formatTrack = (t) => t != null ? `${t.toFixed(0)}°` : '--';
+  const formatTrack = (t) => (t != null ? `${t.toFixed(0)}°` : '--');
 
   return (
-    <div className="live-telemetry-section" role="region" aria-label="Live telemetry" aria-live="polite">
+    <div
+      className="live-telemetry-section"
+      role="region"
+      aria-label="Live telemetry"
+      aria-live="polite"
+    >
       <MetricsGrid columns={3} gap={3}>
-        <MetricCard
-          label="Altitude"
-          value={formatAlt(altitude)}
-          unit="ft"
-          icon={Crosshair}
-        />
-        <MetricCard
-          label="Ground Speed"
-          value={formatSpeed(speed)}
-          unit="kts"
-          icon={Navigation}
-        />
+        <MetricCard label="Altitude" value={formatAlt(altitude)} unit="ft" icon={Crosshair} />
+        <MetricCard label="Ground Speed" value={formatSpeed(speed)} unit="kts" icon={Navigation} />
         <MetricCard
           label="Vertical Rate"
           value={formatVS(verticalRate)}
@@ -130,17 +129,8 @@ function LiveTelemetrySection({ aircraft, trackHistory, calculateDistance }) {
           icon={TrendingUp}
           valueClassName={`${vsClass} ${isExtremeVS ? 'extreme-vs' : ''}`}
         />
-        <MetricCard
-          label="Track"
-          value={formatTrack(track)}
-          unit={getCardinalDirection(track)}
-        />
-        <MetricCard
-          label="Distance"
-          value={distance?.toFixed(1) ?? '--'}
-          unit="nm"
-          icon={MapPin}
-        />
+        <MetricCard label="Track" value={formatTrack(track)} unit={getCardinalDirection(track)} />
+        <MetricCard label="Distance" value={distance?.toFixed(1) ?? '--'} unit="nm" icon={MapPin} />
         <MetricCard
           label="Squawk"
           value={aircraft.squawk || '----'}
@@ -170,14 +160,7 @@ function LiveTelemetrySection({ aircraft, trackHistory, calculateDistance }) {
  * - Photo card (if available)
  * - Data sources accordion (if available)
  */
-export function OverviewTab({
-  info,
-  hex,
-  photoInfo,
-  aircraft,
-  trackHistory,
-  calculateDistance,
-}) {
+export function OverviewTab({ info, hex, photoInfo, aircraft, trackHistory, calculateDistance }) {
   // Normalize info data
   const normalized = info ? normalizeAircraftInfo(info) : null;
   const sourceData = info?.source_data || [];

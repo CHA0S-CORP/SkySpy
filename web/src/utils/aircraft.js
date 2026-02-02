@@ -7,34 +7,34 @@ import { COUNTRY_RANGES, CATEGORY_NAMES } from './constants';
 // US N-number conversion (ICAO range: A00001 - AFFFFF)
 export const icaoToNNumber = (hex) => {
   const icao = parseInt(hex, 16);
-  const base = 0xA00001;
-  const end = 0xAFFFFF;
-  
+  const base = 0xa00001;
+  const end = 0xafffff;
+
   if (icao < base || icao > end) return null;
-  
+
   const offset = icao - base;
-  
+
   if (offset < 0) return null;
-  
+
   // Simplified decode - returns approximate N-number
   const n1 = Math.floor(offset / 101711);
   const rem1 = offset % 101711;
   const n2 = Math.floor(rem1 / 10111);
-  
+
   if (n1 > 9) return `N${n1}${n2}...`;
-  
+
   let result = 'N' + (n1 + 1);
   if (n2 <= 9) {
     result += n2;
   }
-  
+
   return result.length >= 2 ? result : null;
 };
 
 // Get country from ICAO hex
 export const getCountryFromIcao = (hex) => {
   const icao = parseInt(hex, 16);
-  
+
   for (const range of COUNTRY_RANGES) {
     if (icao >= range.start && icao <= range.end) {
       return range;
@@ -46,25 +46,23 @@ export const getCountryFromIcao = (hex) => {
 // Get registration/tail number from ICAO
 export const getTailNumber = (hex, flight) => {
   if (!hex) return null;
-  
+
   const country = getCountryFromIcao(hex);
-  
+
   // For US aircraft, try to decode N-number
   if (country.country === 'US') {
     const nNumber = icaoToNNumber(hex);
     if (nNumber) return nNumber;
   }
-  
+
   // For other countries, if flight looks like a registration, use it
   if (flight && flight.trim()) {
     const f = flight.trim();
-    if (/^[A-Z]-[A-Z]{3,4}$/.test(f) || 
-        /^[A-Z]{2}-[A-Z]{3}$/.test(f) || 
-        /^N\d+[A-Z]*$/.test(f)) {
+    if (/^[A-Z]-[A-Z]{3,4}$/.test(f) || /^[A-Z]{2}-[A-Z]{3}$/.test(f) || /^N\d+[A-Z]*$/.test(f)) {
       return f;
     }
   }
-  
+
   return null;
 };
 
@@ -72,7 +70,7 @@ export const getTailNumber = (hex, flight) => {
 // Can accept either (hex, flight) or (aircraft) object
 export const getTailInfo = (hexOrAircraft, flight) => {
   let hex, flightId;
-  
+
   if (typeof hexOrAircraft === 'object' && hexOrAircraft !== null) {
     // Aircraft object passed
     hex = hexOrAircraft.hex;
@@ -82,17 +80,17 @@ export const getTailInfo = (hexOrAircraft, flight) => {
     hex = hexOrAircraft;
     flightId = flight;
   }
-  
+
   const country = getCountryFromIcao(hex);
   const tailNumber = getTailNumber(hex, flightId);
   const callsign = flightId?.trim() || hex?.toUpperCase() || '--';
-  
+
   return {
     tailNumber,
     callsign,
     country: `${country.flag} ${country.country}`,
     countryCode: country.country,
-    flag: country.flag
+    flag: country.flag,
   };
 };
 
@@ -104,7 +102,24 @@ export const getCategoryName = (category) => {
 // Wind direction to cardinal
 export const windDirToCardinal = (deg) => {
   if (deg === null || deg === undefined || isNaN(deg)) return '';
-  const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+  const dirs = [
+    'N',
+    'NNE',
+    'NE',
+    'ENE',
+    'E',
+    'ESE',
+    'SE',
+    'SSE',
+    'S',
+    'SSW',
+    'SW',
+    'WSW',
+    'W',
+    'WNW',
+    'NW',
+    'NNW',
+  ];
   const index = Math.round(deg / 22.5) % 16;
   return dirs[index];
 };
@@ -112,72 +127,72 @@ export const windDirToCardinal = (deg) => {
 // Common IATA to ICAO airline code mapping for ACARS matching
 // ACARS typically uses IATA codes (2-letter), ADS-B uses ICAO codes (3-letter)
 const IATA_TO_ICAO = {
-  'AA': 'AAL', // American Airlines
-  'AS': 'ASA', // Alaska Airlines
-  'B6': 'JBU', // JetBlue
-  'DL': 'DAL', // Delta
-  'F9': 'FFT', // Frontier
-  'G4': 'AAY', // Allegiant
-  'HA': 'HAL', // Hawaiian
-  'NK': 'NKS', // Spirit
-  'UA': 'UAL', // United
-  'WN': 'SWA', // Southwest
-  'AC': 'ACA', // Air Canada
-  'AM': 'AMX', // AeroMexico
-  'BA': 'BAW', // British Airways
-  'AF': 'AFR', // Air France
-  'LH': 'DLH', // Lufthansa
-  'QF': 'QFA', // Qantas
-  'EK': 'UAE', // Emirates
-  'SQ': 'SIA', // Singapore Airlines
-  'CX': 'CPA', // Cathay Pacific
-  'JL': 'JAL', // Japan Airlines
-  'NH': 'ANA', // All Nippon Airways
-  'KE': 'KAL', // Korean Air
-  'OZ': 'AAR', // Asiana
-  'CA': 'CCA', // Air China
-  'MU': 'CES', // China Eastern
-  'CZ': 'CSN', // China Southern
-  'TK': 'THY', // Turkish Airlines
-  'QR': 'QTR', // Qatar Airways
-  'EY': 'ETD', // Etihad
-  'VS': 'VIR', // Virgin Atlantic
-  'AZ': 'ITY', // ITA Airways (formerly Alitalia)
-  'IB': 'IBE', // Iberia
-  'KL': 'KLM', // KLM
-  'SK': 'SAS', // SAS
-  'AY': 'FIN', // Finnair
-  'OS': 'AUA', // Austrian
-  'LX': 'SWR', // Swiss
-  'TP': 'TAP', // TAP Portugal
-  'WS': 'WJA', // WestJet
-  'FI': 'ICE', // Icelandair
-  'EI': 'EIN', // Aer Lingus
-  'SU': 'AFL', // Aeroflot
-  'VY': 'VLG', // Vueling
-  'FR': 'RYR', // Ryanair
-  'U2': 'EZY', // easyJet
-  'W6': 'WZZ', // Wizz Air
-  'MX': 'MXA', // Mexicana (some legacy)
-  'Y4': 'VOI', // Volaris
+  AA: 'AAL', // American Airlines
+  AS: 'ASA', // Alaska Airlines
+  B6: 'JBU', // JetBlue
+  DL: 'DAL', // Delta
+  F9: 'FFT', // Frontier
+  G4: 'AAY', // Allegiant
+  HA: 'HAL', // Hawaiian
+  NK: 'NKS', // Spirit
+  UA: 'UAL', // United
+  WN: 'SWA', // Southwest
+  AC: 'ACA', // Air Canada
+  AM: 'AMX', // AeroMexico
+  BA: 'BAW', // British Airways
+  AF: 'AFR', // Air France
+  LH: 'DLH', // Lufthansa
+  QF: 'QFA', // Qantas
+  EK: 'UAE', // Emirates
+  SQ: 'SIA', // Singapore Airlines
+  CX: 'CPA', // Cathay Pacific
+  JL: 'JAL', // Japan Airlines
+  NH: 'ANA', // All Nippon Airways
+  KE: 'KAL', // Korean Air
+  OZ: 'AAR', // Asiana
+  CA: 'CCA', // Air China
+  MU: 'CES', // China Eastern
+  CZ: 'CSN', // China Southern
+  TK: 'THY', // Turkish Airlines
+  QR: 'QTR', // Qatar Airways
+  EY: 'ETD', // Etihad
+  VS: 'VIR', // Virgin Atlantic
+  AZ: 'ITY', // ITA Airways (formerly Alitalia)
+  IB: 'IBE', // Iberia
+  KL: 'KLM', // KLM
+  SK: 'SAS', // SAS
+  AY: 'FIN', // Finnair
+  OS: 'AUA', // Austrian
+  LX: 'SWR', // Swiss
+  TP: 'TAP', // TAP Portugal
+  WS: 'WJA', // WestJet
+  FI: 'ICE', // Icelandair
+  EI: 'EIN', // Aer Lingus
+  SU: 'AFL', // Aeroflot
+  VY: 'VLG', // Vueling
+  FR: 'RYR', // Ryanair
+  U2: 'EZY', // easyJet
+  W6: 'WZZ', // Wizz Air
+  MX: 'MXA', // Mexicana (some legacy)
+  Y4: 'VOI', // Volaris
   '5D': 'SLI', // Aerolitoral
-  'VX': 'VRD', // Virgin America (merged into AS)
-  'QX': 'QXE', // Horizon Air
-  'OH': 'COM', // Comair
-  'OO': 'SKW', // SkyWest
-  'YX': 'RPA', // Republic Airways
-  'YV': 'ASQ', // Mesa Airlines
-  'MQ': 'EGF', // Envoy Air
+  VX: 'VRD', // Virgin America (merged into AS)
+  QX: 'QXE', // Horizon Air
+  OH: 'COM', // Comair
+  OO: 'SKW', // SkyWest
+  YX: 'RPA', // Republic Airways
+  YV: 'ASQ', // Mesa Airlines
+  MQ: 'EGF', // Envoy Air
   '9E': 'EDV', // Endeavor Air
-  'PT': 'PDT', // Piedmont Airlines
-  'ZW': 'AWI', // Air Wisconsin
-  'G7': 'GJS', // GoJet
-  'AX': 'AAX', // Trans States (now part of AAL)
-  'CP': 'CDN', // Canadian Airlines (legacy)
-  'NW': 'NWA', // Northwest (merged into DAL)
-  'CO': 'COA', // Continental (merged into UAL)
-  'US': 'USA', // US Airways (merged into AAL)
-  'HP': 'AWE', // America West (merged)
+  PT: 'PDT', // Piedmont Airlines
+  ZW: 'AWI', // Air Wisconsin
+  G7: 'GJS', // GoJet
+  AX: 'AAX', // Trans States (now part of AAL)
+  CP: 'CDN', // Canadian Airlines (legacy)
+  NW: 'NWA', // Northwest (merged into DAL)
+  CO: 'COA', // Continental (merged into UAL)
+  US: 'USA', // US Airways (merged into AAL)
+  HP: 'AWE', // America West (merged)
 };
 
 // Build reverse mapping (ICAO to IATA)
@@ -265,7 +280,8 @@ export const getPirepType = (pirep) => {
   const hasTurb = !!(pirep.turbulence_type || pirep.turbulence || rawText.includes('/TB'));
   const hasIce = !!(pirep.icing_type || pirep.icing || rawText.includes('/IC'));
   const hasWS = !!(rawText.includes('/WS') || rawText.includes('LLWS'));
-  const isUrgent = pirep.report_type === 'UUA' || pirep.pirepType === 'UUA' || rawText.includes(' UUA ');
+  const isUrgent =
+    pirep.report_type === 'UUA' || pirep.pirepType === 'UUA' || rawText.includes(' UUA ');
 
   if (isUrgent) return 'urgent';
   if (hasWS) return 'windshear';

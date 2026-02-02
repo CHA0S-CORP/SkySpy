@@ -5,44 +5,67 @@
 
 // ACARS label descriptions for display
 export const ACARS_LABEL_DESCRIPTIONS = {
-  '_d': 'Command',
-  'H1': 'Departure',
-  'H2': 'Arrival',
-  '10': 'OUT Gate',
-  '11': 'OFF Takeoff',
-  '12': 'ON Landing',
-  '13': 'IN Gate',
-  '44': 'Position',
+  _d: 'Command',
+  H1: 'Departure',
+  H2: 'Arrival',
+  10: 'OUT Gate',
+  11: 'OFF Takeoff',
+  12: 'ON Landing',
+  13: 'IN Gate',
+  44: 'Position',
   '5Z': 'Airline Op',
-  'AA': 'Free Text',
-  'SA': 'System',
-  'CA': 'CPDLC'
+  AA: 'Free Text',
+  SA: 'System',
+  CA: 'CPDLC',
 };
 
 // Type to category mappings
 export const TYPE_TO_CATEGORY = {
-  'B737': 'Commercial', 'B738': 'Commercial', 'B739': 'Commercial', 'A319': 'Commercial',
-  'A320': 'Commercial', 'A321': 'Commercial', 'E170': 'Regional', 'E175': 'Regional',
-  'CRJ2': 'Regional', 'CRJ7': 'Regional', 'C172': 'GA', 'C182': 'GA', 'PA28': 'GA',
-  'EC35': 'Helicopter', 'R44': 'Helicopter', 'B407': 'Helicopter'
+  B737: 'Commercial',
+  B738: 'Commercial',
+  B739: 'Commercial',
+  A319: 'Commercial',
+  A320: 'Commercial',
+  A321: 'Commercial',
+  E170: 'Regional',
+  E175: 'Regional',
+  CRJ2: 'Regional',
+  CRJ7: 'Regional',
+  C172: 'GA',
+  C182: 'GA',
+  PA28: 'GA',
+  EC35: 'Helicopter',
+  R44: 'Helicopter',
+  B407: 'Helicopter',
 };
 
 // Type to manufacturer mappings
 export const TYPE_TO_MANUFACTURER = {
-  'B737': 'Boeing', 'B738': 'Boeing', 'B739': 'Boeing', 'B77W': 'Boeing',
-  'A319': 'Airbus', 'A320': 'Airbus', 'A321': 'Airbus', 'A380': 'Airbus',
-  'E170': 'Embraer', 'E175': 'Embraer', 'CRJ2': 'Bombardier', 'CRJ7': 'Bombardier',
-  'C172': 'Cessna', 'C182': 'Cessna', 'PA28': 'Piper'
+  B737: 'Boeing',
+  B738: 'Boeing',
+  B739: 'Boeing',
+  B77W: 'Boeing',
+  A319: 'Airbus',
+  A320: 'Airbus',
+  A321: 'Airbus',
+  A380: 'Airbus',
+  E170: 'Embraer',
+  E175: 'Embraer',
+  CRJ2: 'Bombardier',
+  CRJ7: 'Bombardier',
+  C172: 'Cessna',
+  C182: 'Cessna',
+  PA28: 'Piper',
 };
 
 // Category colors for charts
 export const CATEGORY_COLORS = {
-  'Commercial': '#00c8ff',
-  'Regional': '#a371f7',
-  'GA': '#00ff88',
-  'Helicopter': '#ff9f43',
-  'Military': '#ff4757',
-  'Other': '#6b7280'
+  Commercial: '#00c8ff',
+  Regional: '#a371f7',
+  GA: '#00ff88',
+  Helicopter: '#ff9f43',
+  Military: '#ff4757',
+  Other: '#6b7280',
 };
 
 // Safety event type labels
@@ -54,7 +77,7 @@ export const SAFETY_TYPE_LABELS = {
   proximity_conflict: 'Proximity',
   squawk_emergency: 'Emergency',
   squawk_hijack: 'Hijack',
-  squawk_radio_failure: 'Radio Fail'
+  squawk_radio_failure: 'Radio Fail',
 };
 
 // Safety event type colors
@@ -66,7 +89,7 @@ export const SAFETY_TYPE_COLORS = {
   proximity_conflict: '#a371f7',
   squawk_emergency: '#ff4757',
   squawk_hijack: '#ff4757',
-  squawk_radio_failure: '#ff9f43'
+  squawk_radio_failure: '#ff9f43',
 };
 
 // Time range to hours conversion
@@ -75,7 +98,7 @@ export const TIME_RANGE_HOURS = {
   '6h': 6,
   '24h': 24,
   '48h': 48,
-  '7d': 168
+  '7d': 168,
 };
 
 /**
@@ -90,7 +113,7 @@ export function buildFilterParams(filters) {
     maxAltitude,
     minDistance,
     maxDistance,
-    aircraftType
+    aircraftType,
   } = filters;
 
   const params = new URLSearchParams();
@@ -116,7 +139,7 @@ export function computeStatsFromAircraft(wsAircraft, wsStats) {
   let military = 0;
   const emergencySquawks = [];
 
-  wsAircraft.forEach(ac => {
+  wsAircraft.forEach((ac) => {
     // Count aircraft with position
     if (ac.lat != null && ac.lon != null) withPosition++;
 
@@ -147,7 +170,7 @@ export function computeStatsFromAircraft(wsAircraft, wsStats) {
     military,
     emergency_squawks: emergencySquawks,
     altitude: altDist,
-    messages: wsStats?.count || 0
+    messages: wsStats?.count || 0,
   };
 }
 
@@ -157,14 +180,14 @@ export function computeStatsFromAircraft(wsAircraft, wsStats) {
 export function computeTopAircraft(wsAircraft) {
   if (!wsAircraft?.length) return null;
 
-  const withDistance = wsAircraft.filter(ac => ac.distance_nm != null);
-  const withSpeed = wsAircraft.filter(ac => ac.gs != null);
-  const withAlt = wsAircraft.filter(ac => ac.alt != null);
+  const withDistance = wsAircraft.filter((ac) => ac.distance_nm != null);
+  const withSpeed = wsAircraft.filter((ac) => ac.gs != null);
+  const withAlt = wsAircraft.filter((ac) => ac.alt != null);
 
   return {
     closest: [...withDistance].sort((a, b) => a.distance_nm - b.distance_nm).slice(0, 5),
     fastest: [...withSpeed].sort((a, b) => b.gs - a.gs).slice(0, 5),
-    highest: [...withAlt].sort((a, b) => b.alt - a.alt).slice(0, 5)
+    highest: [...withAlt].sort((a, b) => b.alt - a.alt).slice(0, 5),
   };
 }
 
@@ -176,10 +199,30 @@ export function computeAltitudeData(stats) {
   if (!dist) return [];
   const total = Object.values(dist).reduce((a, b) => a + (b || 0), 0) || 1;
   return [
-    { label: 'Ground', count: dist.ground || 0, pct: ((dist.ground || 0) / total) * 100, color: '#6b7280' },
-    { label: '< 10k ft', count: dist.low || 0, pct: ((dist.low || 0) / total) * 100, color: '#00ff88' },
-    { label: '10-30k ft', count: dist.medium || 0, pct: ((dist.medium || 0) / total) * 100, color: '#00c8ff' },
-    { label: '> 30k ft', count: dist.high || 0, pct: ((dist.high || 0) / total) * 100, color: '#a371f7' }
+    {
+      label: 'Ground',
+      count: dist.ground || 0,
+      pct: ((dist.ground || 0) / total) * 100,
+      color: '#6b7280',
+    },
+    {
+      label: '< 10k ft',
+      count: dist.low || 0,
+      pct: ((dist.low || 0) / total) * 100,
+      color: '#00ff88',
+    },
+    {
+      label: '10-30k ft',
+      count: dist.medium || 0,
+      pct: ((dist.medium || 0) / total) * 100,
+      color: '#00c8ff',
+    },
+    {
+      label: '> 30k ft',
+      count: dist.high || 0,
+      pct: ((dist.high || 0) / total) * 100,
+      color: '#a371f7',
+    },
   ];
 }
 
@@ -191,7 +234,7 @@ export function computeFleetBreakdown(sessionsData, showMilitaryOnly) {
   if (!sessions?.length) return null;
 
   if (showMilitaryOnly) {
-    sessions = sessions.filter(s => s.is_military);
+    sessions = sessions.filter((s) => s.is_military);
   }
 
   const seenHex = new Set();
@@ -199,7 +242,7 @@ export function computeFleetBreakdown(sessionsData, showMilitaryOnly) {
   const manufacturerCount = {};
   const typeCount = {};
 
-  sessions.forEach(session => {
+  sessions.forEach((session) => {
     const hex = session.icao_hex;
     if (!hex || seenHex.has(hex)) return;
     seenHex.add(hex);
@@ -208,7 +251,7 @@ export function computeFleetBreakdown(sessionsData, showMilitaryOnly) {
     if (type) {
       typeCount[type] = (typeCount[type] || 0) + 1;
 
-      const category = session.is_military ? 'Military' : (TYPE_TO_CATEGORY[type] || 'Other');
+      const category = session.is_military ? 'Military' : TYPE_TO_CATEGORY[type] || 'Other';
       categoryCount[category] = (categoryCount[category] || 0) + 1;
 
       const manufacturer = TYPE_TO_MANUFACTURER[type] || 'Other';
@@ -222,8 +265,10 @@ export function computeFleetBreakdown(sessionsData, showMilitaryOnly) {
     categories: Object.entries(categoryCount)
       .sort((a, b) => b[1] - a[1])
       .map(([name, count]) => ({
-        name, count, pct: (count / total) * 100,
-        color: CATEGORY_COLORS[name] || '#6b7280'
+        name,
+        count,
+        pct: (count / total) * 100,
+        color: CATEGORY_COLORS[name] || '#6b7280',
       })),
     manufacturers: Object.entries(manufacturerCount)
       .sort((a, b) => b[1] - a[1])
@@ -233,7 +278,7 @@ export function computeFleetBreakdown(sessionsData, showMilitaryOnly) {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 8)
       .map(([type, count]) => ({ type, count, pct: (count / total) * 100 })),
-    total: seenHex.size
+    total: seenHex.size,
   };
 }
 
@@ -247,7 +292,7 @@ export function computeSafetyEventsByType(safetyStats) {
     .map(([type, count]) => ({
       label: SAFETY_TYPE_LABELS[type] || type,
       count,
-      color: SAFETY_TYPE_COLORS[type] || '#00c8ff'
+      color: SAFETY_TYPE_COLORS[type] || '#00c8ff',
     }))
     .sort((a, b) => b.count - a.count);
 }

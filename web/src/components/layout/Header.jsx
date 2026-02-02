@@ -54,16 +54,24 @@ export function Header({ stats, location, onlineUsers, config, setConfig, setSho
           <span className="stat-label">Online</span>
         </div>
       </div>
-      
+
       <AudioPlaybackControl />
-      
+
       <div className="header-actions">
         <button
           className={`header-btn ${notifPermission === 'granted' && config.browserNotifications ? 'notifications-granted' : ''}`}
           onClick={handleNotifToggle}
-          title={notifPermission === 'granted' ? 'Browser notifications enabled' : 'Enable browser notifications'}
+          title={
+            notifPermission === 'granted'
+              ? 'Browser notifications enabled'
+              : 'Enable browser notifications'
+          }
         >
-          {notifPermission === 'granted' && config.browserNotifications ? <BellRing size={16} /> : <BellOff size={16} />}
+          {notifPermission === 'granted' && config.browserNotifications ? (
+            <BellRing size={16} />
+          ) : (
+            <BellOff size={16} />
+          )}
         </button>
         <button className="header-btn" onClick={() => setShowSettings(true)}>
           <Settings size={16} />

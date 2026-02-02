@@ -37,7 +37,7 @@ export function HistoryView({
   hashParams = {},
   setHashParams,
   wsRequest,
-  wsConnected
+  wsConnected,
 }) {
   // Sync viewType with URL hash params
   const [viewType, setViewTypeState] = useState(() => {
@@ -57,7 +57,11 @@ export function HistoryView({
 
   // Sync with hash params changes (back/forward navigation)
   useEffect(() => {
-    if (hashParams.data && VALID_DATA_TYPES.includes(hashParams.data) && hashParams.data !== viewType) {
+    if (
+      hashParams.data &&
+      VALID_DATA_TYPES.includes(hashParams.data) &&
+      hashParams.data !== viewType
+    ) {
       setViewTypeState(hashParams.data);
     }
   }, [hashParams.data, viewType]);
@@ -74,7 +78,7 @@ export function HistoryView({
   const replay = useReplayState({
     apiBase,
     wsRequest,
-    wsConnected
+    wsConnected,
   });
 
   // Use ACARS data hook
@@ -83,25 +87,26 @@ export function HistoryView({
     timeRange,
     wsRequest,
     wsConnected,
-    viewType
+    viewType,
   });
 
   // Toggle snapshot expansion
   const toggleSnapshot = (eventId) => {
-    setExpandedSnapshots(prev => ({
+    setExpandedSnapshots((prev) => ({
       ...prev,
-      [eventId]: !prev[eventId]
+      [eventId]: !prev[eventId],
     }));
   };
 
   // Build API endpoint based on view type
-  const endpoint = viewType === 'sessions'
-    ? `/api/v1/sessions?hours=${TIME_RANGE_HOURS[timeRange]}`
-    : viewType === 'sightings'
-    ? `/api/v1/sightings?hours=${TIME_RANGE_HOURS[timeRange]}&limit=100`
-    : viewType === 'acars'
-    ? `/api/v1/acars?hours=${TIME_RANGE_HOURS[timeRange]}&limit=200`
-    : `/api/v1/safety/events?hours=${TIME_RANGE_HOURS[timeRange]}&limit=100`;
+  const endpoint =
+    viewType === 'sessions'
+      ? `/api/v1/sessions?hours=${TIME_RANGE_HOURS[timeRange]}`
+      : viewType === 'sightings'
+        ? `/api/v1/sightings?hours=${TIME_RANGE_HOURS[timeRange]}&limit=100`
+        : viewType === 'acars'
+          ? `/api/v1/acars?hours=${TIME_RANGE_HOURS[timeRange]}&limit=200`
+          : `/api/v1/safety/events?hours=${TIME_RANGE_HOURS[timeRange]}&limit=100`;
 
   const { data } = useSocketApi(endpoint, null, apiBase, { wsRequest, wsConnected });
 
@@ -111,7 +116,9 @@ export function HistoryView({
 
     setViewType('safety');
 
-    const eventIndex = data.events.findIndex(e => e.id === targetEventId || e.id === String(targetEventId));
+    const eventIndex = data.events.findIndex(
+      (e) => e.id === targetEventId || e.id === String(targetEventId)
+    );
     if (eventIndex === -1) return;
 
     const event = data.events[eventIndex];
@@ -141,15 +148,16 @@ export function HistoryView({
 
     if (sessionSearch) {
       const search = sessionSearch.toLowerCase();
-      filtered = filtered.filter(s =>
-        s.icao_hex?.toLowerCase().includes(search) ||
-        s.callsign?.toLowerCase().includes(search) ||
-        s.type?.toLowerCase().includes(search)
+      filtered = filtered.filter(
+        (s) =>
+          s.icao_hex?.toLowerCase().includes(search) ||
+          s.callsign?.toLowerCase().includes(search) ||
+          s.type?.toLowerCase().includes(search)
       );
     }
 
     if (showMilitaryOnly) {
-      filtered = filtered.filter(s => s.is_military);
+      filtered = filtered.filter((s) => s.is_military);
     }
 
     return filtered;
@@ -160,13 +168,13 @@ export function HistoryView({
     sortField: sessionSortField,
     sortDirection: sessionSortDirection,
     handleSort: handleSessionSort,
-    sortedData: filteredSessions
+    sortedData: filteredSessions,
   } = useSortState({
     viewKey: 'history-sessions',
     defaultField: 'last_seen',
     defaultDirection: 'desc',
     data: filteredSessionsUnsorted,
-    sortConfig: SESSION_SORT_CONFIG
+    sortConfig: SESSION_SORT_CONFIG,
   });
 
   // Sort sightings
@@ -174,13 +182,13 @@ export function HistoryView({
     sortField: sightingsSortField,
     sortDirection: sightingsSortDirection,
     handleSort: handleSightingsSort,
-    sortedData: sortedSightings
+    sortedData: sortedSightings,
   } = useSortState({
     viewKey: 'history-sightings',
     defaultField: 'timestamp',
     defaultDirection: 'desc',
     data: data?.sightings || [],
-    sortConfig: SIGHTINGS_SORT_CONFIG
+    sortConfig: SIGHTINGS_SORT_CONFIG,
   });
 
   // Sort safety events
@@ -188,13 +196,13 @@ export function HistoryView({
     sortField: safetySortField,
     sortDirection: safetySortDirection,
     handleSort: handleSafetySort,
-    sortedData: sortedSafetyEvents
+    sortedData: sortedSafetyEvents,
   } = useSortState({
     viewKey: 'history-safety',
     defaultField: 'timestamp',
     defaultDirection: 'desc',
     data: data?.events || [],
-    sortConfig: SAFETY_SORT_CONFIG
+    sortConfig: SAFETY_SORT_CONFIG,
   });
 
   // Sort ACARS
@@ -202,27 +210,40 @@ export function HistoryView({
     sortField: acarsSortField,
     sortDirection: acarsSortDirection,
     handleSort: handleAcarsSort,
-    sortedData: sortedAcarsMessages
+    sortedData: sortedAcarsMessages,
   } = useSortState({
     viewKey: 'history-acars',
     defaultField: 'timestamp',
     defaultDirection: 'desc',
     data: acars.filteredAcarsMessages,
-    sortConfig: ACARS_SORT_CONFIG
+    sortConfig: ACARS_SORT_CONFIG,
   });
 
   // Calculate counts for tab badges
   const sessionCount = data?.sessions?.length || 0;
   const acarsCount = acars.acarsMessages?.length || 0;
   const safetyCount = data?.events?.length || 0;
-  const hasCriticalSafety = data?.events?.some(e => e.severity === 'critical');
+  const hasCriticalSafety = data?.events?.some((e) => e.severity === 'critical');
 
   // Tab configuration
   const tabs = [
     { id: 'sessions', label: 'Sessions', count: sessionCount > 0 ? sessionCount : null },
     { id: 'sightings', label: 'Sightings' },
-    { id: 'acars', label: 'ACARS', icon: <MessageCircle size={14} />, count: acarsCount > 0 ? acarsCount : null, badgeVariant: 'info' },
-    { id: 'safety', label: 'Safety', icon: <AlertTriangle size={14} />, count: safetyCount > 0 ? safetyCount : null, badgeVariant: safetyCount > 0 ? 'warning' : 'default', alertDot: hasCriticalSafety }
+    {
+      id: 'acars',
+      label: 'ACARS',
+      icon: <MessageCircle size={14} />,
+      count: acarsCount > 0 ? acarsCount : null,
+      badgeVariant: 'info',
+    },
+    {
+      id: 'safety',
+      label: 'Safety',
+      icon: <AlertTriangle size={14} />,
+      count: safetyCount > 0 ? safetyCount : null,
+      badgeVariant: safetyCount > 0 ? 'warning' : 'default',
+      alertDot: hasCriticalSafety,
+    },
   ];
 
   return (
@@ -251,11 +272,7 @@ export function HistoryView({
           />
           <div className="sessions-grid">
             {filteredSessions.map((session, i) => (
-              <SessionCard
-                key={i}
-                session={session}
-                onSelectAircraft={onSelectAircraft}
-              />
+              <SessionCard key={i} session={session} onSelectAircraft={onSelectAircraft} />
             ))}
           </div>
         </>
@@ -300,7 +317,7 @@ export function HistoryView({
               return (
                 <div
                   key={eventKey}
-                  ref={el => eventRefs.current[eventKey] = el}
+                  ref={(el) => (eventRefs.current[eventKey] = el)}
                   className="safety-event-wrapper"
                 >
                   <SafetyEventCard
@@ -311,10 +328,7 @@ export function HistoryView({
 
                   <div className="safety-event-expand-actions">
                     {hasSnapshot && (
-                      <button
-                        className="snapshot-toggle"
-                        onClick={() => toggleSnapshot(eventKey)}
-                      >
+                      <button className="snapshot-toggle" onClick={() => toggleSnapshot(eventKey)}>
                         {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         {isExpanded ? 'Hide' : 'Show'} Telemetry
                       </button>
@@ -332,10 +346,7 @@ export function HistoryView({
                   </div>
 
                   {isExpanded && (
-                    <SnapshotContainer
-                      event={event}
-                      onSelectAircraft={onSelectAircraft}
-                    />
+                    <SnapshotContainer event={event} onSelectAircraft={onSelectAircraft} />
                   )}
 
                   {replay.expandedMaps[eventKey] && (
@@ -411,21 +422,23 @@ export function HistoryView({
                 <p>No ACARS messages in the selected time range</p>
               </div>
             ) : (
-              sortedAcarsMessages.slice(0, acars.visibleAcarsCount).map((msg, i) => (
-                <AcarsMessageItem
-                  key={i}
-                  msg={msg}
-                  index={i}
-                  callsignHexCache={acars.callsignHexCache}
-                  regHexCache={acars.regHexCache}
-                  labelReference={acars.labelReference}
-                  allMessagesExpanded={acars.allMessagesExpanded}
-                  expandedMessages={acars.expandedMessages}
-                  toggleMessageExpansion={acars.toggleMessageExpansion}
-                  onSelectAircraft={onSelectAircraft}
-                  onSelectByTail={onSelectByTail}
-                />
-              ))
+              sortedAcarsMessages
+                .slice(0, acars.visibleAcarsCount)
+                .map((msg, i) => (
+                  <AcarsMessageItem
+                    key={i}
+                    msg={msg}
+                    index={i}
+                    callsignHexCache={acars.callsignHexCache}
+                    regHexCache={acars.regHexCache}
+                    labelReference={acars.labelReference}
+                    allMessagesExpanded={acars.allMessagesExpanded}
+                    expandedMessages={acars.expandedMessages}
+                    toggleMessageExpansion={acars.toggleMessageExpansion}
+                    onSelectAircraft={onSelectAircraft}
+                    onSelectByTail={onSelectByTail}
+                  />
+                ))
             )}
             {acars.visibleAcarsCount < sortedAcarsMessages.length && (
               <div className="acars-load-more">

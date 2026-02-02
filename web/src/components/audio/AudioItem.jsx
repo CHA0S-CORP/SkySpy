@@ -19,7 +19,7 @@ import {
   Clock,
   Loader2,
   Mic,
-  Plane
+  Plane,
 } from 'lucide-react';
 import { hasEmergencyKeyword } from '../../hooks/useAudioState';
 
@@ -73,7 +73,7 @@ const AudioItem = memo(function AudioItem({
   onPlay,
   onSeek,
   onToggleExpand,
-  onSelectAircraft
+  onSelectAircraft,
 }) {
   const id = transmission.id;
   const statusInfo = getStatusInfo(transmission.transcription_status);
@@ -106,18 +106,13 @@ const AudioItem = memo(function AudioItem({
             {transmission.frequency_mhz && (
               <span className="audio-frequency">{transmission.frequency_mhz.toFixed(3)} MHz</span>
             )}
-            <span className="audio-time">
-              {new Date(transmission.created_at).toLocaleString()}
-            </span>
+            <span className="audio-time">{new Date(transmission.created_at).toLocaleString()}</span>
           </div>
 
           {/* Progress Bar */}
           <div className="audio-progress-container" onClick={(e) => onSeek(id, e)}>
             <div className="audio-progress-bar">
-              <div
-                className="audio-progress-fill"
-                style={{ width: `${progress}%` }}
-              />
+              <div className="audio-progress-fill" style={{ width: `${progress}%` }} />
             </div>
             <div className="audio-duration">
               <span>{formatDuration((progress / 100) * duration)}</span>
@@ -168,12 +163,15 @@ const AudioItem = memo(function AudioItem({
               <span>{transmission.transcription_error}</span>
             </div>
           )}
-          {!transmission.transcript && !transmission.transcription_error && transmission.transcription_status !== 'processing' && transmission.transcription_status !== 'queued' && (
-            <div className="audio-transcript-empty">
-              <Mic size={12} />
-              <span>No transcript available</span>
-            </div>
-          )}
+          {!transmission.transcript &&
+            !transmission.transcription_error &&
+            transmission.transcription_status !== 'processing' &&
+            transmission.transcription_status !== 'queued' && (
+              <div className="audio-transcript-empty">
+                <Mic size={12} />
+                <span>No transcript available</span>
+              </div>
+            )}
         </div>
 
         {/* Status Badge */}
@@ -210,7 +208,9 @@ const AudioItem = memo(function AudioItem({
               <div className="transcript-header">
                 <span className="transcript-label">Full Transcript</span>
                 {transmission.transcript_language && (
-                  <span className="transcript-language">{transmission.transcript_language.toUpperCase()}</span>
+                  <span className="transcript-language">
+                    {transmission.transcript_language.toUpperCase()}
+                  </span>
                 )}
               </div>
               <p className="transcript-text">{transmission.transcript}</p>

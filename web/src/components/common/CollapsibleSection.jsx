@@ -18,7 +18,7 @@ export function CollapsibleSection({
   defaultExpanded = false,
   className = '',
   headerClassName = '',
-  contentClassName = ''
+  contentClassName = '',
 }) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
@@ -35,11 +35,7 @@ export function CollapsibleSection({
           {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
         </span>
       </button>
-      {isExpanded && (
-        <div className={`collapsible-content ${contentClassName}`}>
-          {children}
-        </div>
-      )}
+      {isExpanded && <div className={`collapsible-content ${contentClassName}`}>{children}</div>}
     </div>
   );
 }

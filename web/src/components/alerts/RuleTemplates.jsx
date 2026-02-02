@@ -1,14 +1,23 @@
 import React from 'react';
-import { X, FileText, Shield, AlertTriangle, ArrowDown, MapPin, Zap, ShieldAlert } from 'lucide-react';
+import {
+  X,
+  FileText,
+  Shield,
+  AlertTriangle,
+  ArrowDown,
+  MapPin,
+  Zap,
+  ShieldAlert,
+} from 'lucide-react';
 import { RULE_TEMPLATES } from './RuleFormConstants';
 
 // Map icon names to Lucide components
 const ICON_MAP = {
-  'shield': Shield,
-  'alert': AlertTriangle,
+  shield: Shield,
+  alert: AlertTriangle,
   'arrow-down': ArrowDown,
   'map-pin': MapPin,
-  'helicopter': Zap, // Using Zap as a placeholder, could be replaced with custom icon
+  helicopter: Zap, // Using Zap as a placeholder, could be replaced with custom icon
   'shield-alert': ShieldAlert,
 };
 
@@ -19,11 +28,7 @@ function TemplateCard({ template, onSelect }) {
   const IconComponent = ICON_MAP[template.icon] || Shield;
 
   return (
-    <button
-      type="button"
-      className="template-card"
-      onClick={() => onSelect(template)}
-    >
+    <button type="button" className="template-card" onClick={() => onSelect(template)}>
       <span className="template-icon">
         <IconComponent size={20} />
       </span>
@@ -49,21 +54,13 @@ export function RuleTemplates({ onApply, onSkip }) {
       <div className="templates-header">
         <FileText size={16} />
         <span>Quick Start Templates</span>
-        <button
-          type="button"
-          className="templates-toggle"
-          onClick={onSkip}
-        >
+        <button type="button" className="templates-toggle" onClick={onSkip}>
           <X size={14} /> Skip
         </button>
       </div>
       <div className="templates-grid">
-        {RULE_TEMPLATES.map(template => (
-          <TemplateCard
-            key={template.id}
-            template={template}
-            onSelect={handleApply}
-          />
+        {RULE_TEMPLATES.map((template) => (
+          <TemplateCard key={template.id} template={template} onSelect={handleApply} />
         ))}
       </div>
     </div>

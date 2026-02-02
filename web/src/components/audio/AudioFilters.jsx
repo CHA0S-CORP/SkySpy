@@ -43,15 +43,14 @@ function AudioFilters({
   emergencyFilter,
   onEmergencyFilterChange,
   // Clear all filters
-  onClearFilters
+  onClearFilters,
 }) {
-  const hasActiveFilters = (
+  const hasActiveFilters =
     flightMatchFilter !== 'all' ||
     airlineFilter !== 'all' ||
     flightTypeFilter !== 'all' ||
     callsignFilter ||
-    emergencyFilter
-  );
+    emergencyFilter;
 
   return (
     <div className="audio-filters">
@@ -87,8 +86,10 @@ function AudioFilters({
         onChange={(e) => onChannelFilterChange(e.target.value)}
       >
         <option value="all">All Channels</option>
-        {availableChannels.map(channel => (
-          <option key={channel} value={channel}>{channel}</option>
+        {availableChannels.map((channel) => (
+          <option key={channel} value={channel}>
+            {channel}
+          </option>
         ))}
       </select>
 
@@ -111,7 +112,7 @@ function AudioFilters({
         disabled={availableAirlines.length === 0}
       >
         <option value="all">All Airlines</option>
-        {availableAirlines.map(airline => (
+        {availableAirlines.map((airline) => (
           <option key={airline.icao} value={airline.icao}>
             {airline.name} ({airline.icao})
           </option>
@@ -154,7 +155,11 @@ function AudioFilters({
       <button
         className={`emergency-filter-btn ${emergencyFilter ? 'active' : ''}`}
         onClick={() => onEmergencyFilterChange(!emergencyFilter)}
-        title={emergencyFilter ? 'Show all transmissions' : 'Show only emergency transmissions (mayday, pan pan, etc.)'}
+        title={
+          emergencyFilter
+            ? 'Show all transmissions'
+            : 'Show only emergency transmissions (mayday, pan pan, etc.)'
+        }
       >
         <AlertCircle size={14} />
         <span>Emergency</span>

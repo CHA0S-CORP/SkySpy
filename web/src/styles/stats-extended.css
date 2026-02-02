@@ -1981,8 +1981,12 @@
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Stats Filters Bar */
@@ -2199,8 +2203,12 @@
   color: var(--accent-cyan);
 }
 
-.summary-icon.up { color: var(--accent-green); }
-.summary-icon.down { color: var(--accent-red); }
+.summary-icon.up {
+  color: var(--accent-green);
+}
+.summary-icon.down {
+  color: var(--accent-red);
+}
 
 .summary-content {
   display: flex;
@@ -2215,9 +2223,15 @@
   line-height: 1.1;
 }
 
-.summary-value.positive { color: var(--accent-green); }
-.summary-value.negative { color: var(--accent-red); }
-.summary-value.neutral { color: var(--text-secondary); }
+.summary-value.positive {
+  color: var(--accent-green);
+}
+.summary-value.negative {
+  color: var(--accent-red);
+}
+.summary-value.neutral {
+  color: var(--text-secondary);
+}
 
 .summary-label {
   font-size: 12px;

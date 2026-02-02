@@ -1,7 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Plus, X, Save, Trash2, Settings, Bell, BellOff, Send, CheckCircle,
-  AlertCircle, Globe, Lock, ChevronDown, ExternalLink, RefreshCw
+  Plus,
+  X,
+  Save,
+  Trash2,
+  Settings,
+  Bell,
+  BellOff,
+  Send,
+  CheckCircle,
+  AlertCircle,
+  Globe,
+  Lock,
+  ChevronDown,
+  ExternalLink,
+  RefreshCw,
 } from 'lucide-react';
 import { useNotificationChannels } from '../../hooks/useNotificationChannels';
 
@@ -79,7 +92,7 @@ function ChannelFormModal({ channel, channelTypes, onClose, onSave }) {
       <div
         className="modal channel-form-modal"
         ref={modalRef}
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="channel-form-title"
@@ -152,9 +165,7 @@ function ChannelFormModal({ channel, channelTypes, onClose, onSave }) {
               placeholder={getUrlPlaceholder(channelType)}
               required
             />
-            <span className="form-hint">
-              {getUrlHint(channelType)}
-            </span>
+            <span className="form-hint">{getUrlHint(channelType)}</span>
           </div>
 
           <div className="form-group">
@@ -325,7 +336,10 @@ export function NotificationChannelsManager({ apiBase, wsRequest, wsConnected })
         </p>
         <button
           className="btn-primary"
-          onClick={() => { setEditChannel(null); setShowForm(true); }}
+          onClick={() => {
+            setEditChannel(null);
+            setShowForm(true);
+          }}
         >
           <Plus size={16} /> Add Channel
         </button>
@@ -348,13 +362,16 @@ export function NotificationChannelsManager({ apiBase, wsRequest, wsConnected })
             <p>No notification channels configured</p>
             <button
               className="btn-primary"
-              onClick={() => { setEditChannel(null); setShowForm(true); }}
+              onClick={() => {
+                setEditChannel(null);
+                setShowForm(true);
+              }}
             >
               <Plus size={16} /> Add Your First Channel
             </button>
           </div>
         ) : (
-          channels.map(channel => {
+          channels.map((channel) => {
             const typeInfo = CHANNEL_TYPE_INFO[channel.channel_type] || CHANNEL_TYPE_INFO.custom;
             const isBeingTested = testingId === channel.id;
             const result = testResult?.id === channel.id ? testResult : null;
@@ -366,10 +383,7 @@ export function NotificationChannelsManager({ apiBase, wsRequest, wsConnected })
                 role="listitem"
               >
                 <div className="channel-card-header">
-                  <div
-                    className="channel-type-badge"
-                    style={{ backgroundColor: typeInfo.color }}
-                  >
+                  <div className="channel-type-badge" style={{ backgroundColor: typeInfo.color }}>
                     <span className="channel-type-icon">{typeInfo.icon}</span>
                     <span>{typeInfo.label}</span>
                   </div>
@@ -411,7 +425,8 @@ export function NotificationChannelsManager({ apiBase, wsRequest, wsConnected })
                   )}
                   {channel.alert_rule_count > 0 && (
                     <span className="channel-rule-count">
-                      Used by {channel.alert_rule_count} rule{channel.alert_rule_count !== 1 ? 's' : ''}
+                      Used by {channel.alert_rule_count} rule
+                      {channel.alert_rule_count !== 1 ? 's' : ''}
                     </span>
                   )}
                 </div>
@@ -430,16 +445,15 @@ export function NotificationChannelsManager({ apiBase, wsRequest, wsConnected })
                     disabled={isBeingTested || !channel.enabled}
                     title="Send test notification"
                   >
-                    {isBeingTested ? (
-                      <RefreshCw size={14} className="spin" />
-                    ) : (
-                      <Send size={14} />
-                    )}
+                    {isBeingTested ? <RefreshCw size={14} className="spin" /> : <Send size={14} />}
                     <span>{isBeingTested ? 'Testing...' : 'Test'}</span>
                   </button>
                   <button
                     className="action-btn edit"
-                    onClick={() => { setEditChannel(channel); setShowForm(true); }}
+                    onClick={() => {
+                      setEditChannel(channel);
+                      setShowForm(true);
+                    }}
                     title="Edit channel"
                   >
                     <Settings size={14} />
@@ -464,7 +478,10 @@ export function NotificationChannelsManager({ apiBase, wsRequest, wsConnected })
         <ChannelFormModal
           channel={editChannel}
           channelTypes={channelTypes}
-          onClose={() => { setShowForm(false); setEditChannel(null); }}
+          onClose={() => {
+            setShowForm(false);
+            setEditChannel(null);
+          }}
           onSave={handleSave}
         />
       )}

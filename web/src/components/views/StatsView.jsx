@@ -1,6 +1,15 @@
 import React, { useState } from 'react';
 import {
-  AlertTriangle, Plane, Radio, Activity, Eye, Shield, Target, Zap, ArrowUpCircle, BarChart3
+  AlertTriangle,
+  Plane,
+  Radio,
+  Activity,
+  Eye,
+  Shield,
+  Target,
+  Zap,
+  ArrowUpCircle,
+  BarChart3,
 } from 'lucide-react';
 import { useStatsData } from '../../hooks';
 import {
@@ -32,14 +41,23 @@ import {
   // Analytics sections
   HistoricalAnalyticsSection,
   ExtendedStatsSection,
-  AcarsSection
+  AcarsSection,
 } from './stats';
 
 // ============================================================================
 // Main StatsView Component - Bento Grid Layout
 // ============================================================================
 
-export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, aircraft: wsAircraft, stats: wsStats, antennaAnalytics: antennaAnalyticsProp, extendedStats: extendedStatsProp }) {
+export function StatsView({
+  apiBase,
+  onSelectAircraft,
+  wsRequest,
+  wsConnected,
+  aircraft: wsAircraft,
+  stats: wsStats,
+  antennaAnalytics: antennaAnalyticsProp,
+  extendedStats: extendedStatsProp,
+}) {
   // Filter state
   const [timeRange, setTimeRange] = useState('24h');
   const [showMilitaryOnly, setShowMilitaryOnly] = useState(false);
@@ -68,8 +86,8 @@ export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, a
       maxAltitude,
       minDistance,
       maxDistance,
-      aircraftType
-    }
+      aircraftType,
+    },
   });
 
   const {
@@ -103,7 +121,7 @@ export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, a
     fleetBreakdown,
     safetyEventsByType,
     throughputHistory,
-    aircraftHistory
+    aircraftHistory,
   } = data;
 
   return (
@@ -118,7 +136,10 @@ export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, a
               {emergencyAircraft.map((a, i) => (
                 <span key={a.hex}>
                   {i > 0 && ', '}
-                  <button className="emergency-aircraft-link" onClick={() => onSelectAircraft?.(a.hex)}>
+                  <button
+                    className="emergency-aircraft-link"
+                    onClick={() => onSelectAircraft?.(a.hex)}
+                  >
                     {a.hex} ({a.squawk})
                   </button>
                 </span>
@@ -154,7 +175,6 @@ export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, a
           BENTO GRID - 3 Column Layout
           ==================================================================== */}
       <div className="bento-grid">
-
         {/* ----------------------------------------------------------------
             LEFT COLUMN - Live Feed (20%)
             ---------------------------------------------------------------- */}
@@ -193,17 +213,13 @@ export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, a
           />
 
           {/* Squawk Watchlist */}
-          <SquawkWatchlist
-            aircraftData={aircraftData}
-            onSelect={onSelectAircraft}
-          />
+          <SquawkWatchlist aircraftData={aircraftData} onSelect={onSelectAircraft} />
         </div>
 
         {/* ----------------------------------------------------------------
             CENTER COLUMN - Primary Visuals (60%)
             ---------------------------------------------------------------- */}
         <div className="bento-column bento-center">
-
           {/* KPI Grid - 3 consolidated groups */}
           <div className="kpi-grid">
             <KPICard
@@ -212,7 +228,7 @@ export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, a
               accentColor="cyan"
               metrics={[
                 { label: 'Current', value: stats?.total || 0 },
-                { label: 'Msg/s', value: messageRate > 0 ? messageRate.toFixed(0) : '--' }
+                { label: 'Msg/s', value: messageRate > 0 ? messageRate.toFixed(0) : '--' },
               ]}
             />
             <KPICard
@@ -221,7 +237,12 @@ export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, a
               accentColor="green"
               metrics={[
                 { label: 'With Pos', value: stats?.with_position || 0 },
-                { label: 'Max Dist', value: distanceAnalytics?.statistics?.max_nm ? `${distanceAnalytics.statistics.max_nm.toFixed(0)}nm` : '--' }
+                {
+                  label: 'Max Dist',
+                  value: distanceAnalytics?.statistics?.max_nm
+                    ? `${distanceAnalytics.statistics.max_nm.toFixed(0)}nm`
+                    : '--',
+                },
               ]}
             />
             <KPICard
@@ -230,7 +251,7 @@ export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, a
               accentColor="purple"
               metrics={[
                 { label: '24h Unique', value: histStats?.unique_aircraft || '--' },
-                { label: 'Military', value: stats?.military || 0 }
+                { label: 'Military', value: stats?.military || 0 },
               ]}
             />
           </div>
@@ -285,11 +306,11 @@ export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, a
               <div className="distribution-card">
                 <HorizontalBarChart
                   title="Flight Categories"
-                  data={fleetBreakdown.categories.map(c => ({
+                  data={fleetBreakdown.categories.map((c) => ({
                     label: c.name,
                     count: c.count,
                     pct: c.pct,
-                    color: c.color
+                    color: c.color,
                   }))}
                   maxItems={6}
                   showPercentage={true}
@@ -306,11 +327,7 @@ export function StatsView({ apiBase, onSelectAircraft, wsRequest, wsConnected, a
                 <span>Safety Events ({timeRange})</span>
                 <span className="section-badge">{safetyStats.total_events} total</span>
               </div>
-              <HorizontalBarChart
-                data={safetyEventsByType}
-                maxItems={6}
-                showPercentage={false}
-              />
+              <HorizontalBarChart data={safetyEventsByType} maxItems={6} showPercentage={false} />
             </div>
           )}
 

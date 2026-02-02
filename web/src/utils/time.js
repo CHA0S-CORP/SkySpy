@@ -5,10 +5,10 @@
 // Convert UTC/Zulu time to local browser time
 export const utcToLocal = (utcTime) => {
   if (!utcTime) return null;
-  
+
   try {
     let date;
-    
+
     if (typeof utcTime === 'number') {
       date = new Date(utcTime > 1e12 ? utcTime : utcTime * 1000);
     } else if (typeof utcTime === 'string') {
@@ -28,17 +28,17 @@ export const utcToLocal = (utcTime) => {
     } else {
       return null;
     }
-    
+
     if (isNaN(date.getTime()) || date.getTime() < 946684800000) {
       return null;
     }
-    
+
     return date.toLocaleString(undefined, {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
-      hour12: true
+      hour12: true,
     });
   } catch (e) {
     return null;
@@ -48,10 +48,10 @@ export const utcToLocal = (utcTime) => {
 // Format just the time portion in local timezone
 export const utcToLocalTime = (utcTime) => {
   if (!utcTime) return null;
-  
+
   try {
     let date;
-    
+
     if (typeof utcTime === 'number') {
       date = new Date(utcTime > 1e12 ? utcTime : utcTime * 1000);
     } else if (typeof utcTime === 'string') {
@@ -69,13 +69,13 @@ export const utcToLocalTime = (utcTime) => {
     } else {
       return null;
     }
-    
+
     if (isNaN(date.getTime())) return null;
-    
+
     return date.toLocaleTimeString(undefined, {
       hour: '2-digit',
       minute: '2-digit',
-      hour12: true
+      hour12: true,
     });
   } catch (e) {
     return null;

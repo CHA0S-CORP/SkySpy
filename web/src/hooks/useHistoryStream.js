@@ -43,31 +43,34 @@ export function useHistoryStream({
   }, [isLive]);
 
   // Add new item to stream
-  const addItem = useCallback((item, streamType) => {
-    if (!isLiveRef.current) return;
+  const addItem = useCallback(
+    (item, streamType) => {
+      if (!isLiveRef.current) return;
 
-    const newItem = {
-      ...item,
-      _streamType: streamType,
-      _receivedAt: Date.now(),
-    };
+      const newItem = {
+        ...item,
+        _streamType: streamType,
+        _receivedAt: Date.now(),
+      };
 
-    setItems(prev => {
-      const updated = [newItem, ...prev];
-      // Trim to max items
-      if (updated.length > maxItems) {
-        return updated.slice(0, maxItems);
+      setItems((prev) => {
+        const updated = [newItem, ...prev];
+        // Trim to max items
+        if (updated.length > maxItems) {
+          return updated.slice(0, maxItems);
+        }
+        return updated;
+      });
+
+      setNewItemCount((prev) => prev + 1);
+      setLastUpdate(Date.now());
+
+      if (onNewItem) {
+        onNewItem(newItem, streamType);
       }
-      return updated;
-    });
-
-    setNewItemCount(prev => prev + 1);
-    setLastUpdate(Date.now());
-
-    if (onNewItem) {
-      onNewItem(newItem, streamType);
-    }
-  }, [maxItems, onNewItem]);
+    },
+    [maxItems, onNewItem]
+  );
 
   // Set up native WebSocket message handler
   useEffect(() => {
@@ -80,22 +83,28 @@ export function useHistoryStream({
 
       // ACARS message - Django Channels uses 'acars.message' or 'message' type
       // Support both old format (acars:message) and new Django format (acars.message)
-      if ((type === 'acars' || type === 'all') &&
-          (msgType === 'acars:message' || msgType === 'acars.message' || msgType === 'message')) {
+      if (
+        (type === 'acars' || type === 'all') &&
+        (msgType === 'acars:message' || msgType === 'acars.message' || msgType === 'message')
+      ) {
         const message = data.data || data;
         addItem(message, 'acars');
       }
 
       // Safety event - Django Channels uses 'safety.event' or 'event' type
-      if ((type === 'safety' || type === 'all') &&
-          (msgType === 'safety:event' || msgType === 'safety.event' || msgType === 'event')) {
+      if (
+        (type === 'safety' || type === 'all') &&
+        (msgType === 'safety:event' || msgType === 'safety.event' || msgType === 'event')
+      ) {
         const event = data.data || data;
         addItem(event, 'safety');
       }
 
       // Sighting - Django Channels uses 'sighting.new' or 'position' type
-      if ((type === 'sightings' || type === 'all') &&
-          (msgType === 'sighting:new' || msgType === 'sighting.new' || msgType === 'position')) {
+      if (
+        (type === 'sightings' || type === 'all') &&
+        (msgType === 'sighting:new' || msgType === 'sighting.new' || msgType === 'position')
+      ) {
         const sighting = data.data || data;
         addItem(sighting, 'sighting');
       }
@@ -113,7 +122,7 @@ export function useHistoryStream({
 
   // Toggle live mode
   const toggleLive = useCallback(() => {
-    setIsLive(prev => !prev);
+    setIsLive((prev) => !prev);
     if (!isLive) {
       // Resuming live mode - clear new item count
       setNewItemCount(0);
@@ -149,15 +158,21 @@ export function useHistoryStream({
   }, []);
 
   // Get items by type
-  const getItemsByType = useCallback((streamType) => {
-    return items.filter(item => item._streamType === streamType);
-  }, [items]);
+  const getItemsByType = useCallback(
+    (streamType) => {
+      return items.filter((item) => item._streamType === streamType);
+    },
+    [items]
+  );
 
   // Get recent items (last N seconds)
-  const getRecentItems = useCallback((seconds) => {
-    const cutoff = Date.now() - seconds * 1000;
-    return items.filter(item => item._receivedAt >= cutoff);
-  }, [items]);
+  const getRecentItems = useCallback(
+    (seconds) => {
+      const cutoff = Date.now() - seconds * 1000;
+      return items.filter((item) => item._receivedAt >= cutoff);
+    },
+    [items]
+  );
 
   return {
     items,

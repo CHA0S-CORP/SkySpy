@@ -80,7 +80,8 @@ export function AudioView({ apiBase, onSelectAircraft }) {
 
   // Build endpoint with filters
   const statusParam = statusFilter !== 'all' ? `&status=${statusFilter}` : '';
-  const channelParam = channelFilter !== 'all' ? `&channel=${encodeURIComponent(channelFilter)}` : '';
+  const channelParam =
+    channelFilter !== 'all' ? `&channel=${encodeURIComponent(channelFilter)}` : '';
   const endpoint = `/api/v1/audio?hours=${hours[timeRange]}&limit=100${statusParam}${channelParam}`;
 
   // Data fetching
@@ -96,22 +97,24 @@ export function AudioView({ apiBase, onSelectAircraft }) {
   }, [statsData]);
 
   // Refetch on filter change
-  useEffect(() => { refetch(); }, [timeRange, statusFilter, channelFilter, refetch]);
+  useEffect(() => {
+    refetch();
+  }, [timeRange, statusFilter, channelFilter, refetch]);
 
   // Merge realtime transmissions with API data
   const mergedTransmissions = useMemo(() => {
     const apiTransmissions = data?.transmissions || [];
-    const apiIds = new Set(apiTransmissions.map(t => t.id));
-    const newFromSocket = realtimeTransmissions.filter(t => !apiIds.has(t.id));
+    const apiIds = new Set(apiTransmissions.map((t) => t.id));
+    const newFromSocket = realtimeTransmissions.filter((t) => !apiIds.has(t.id));
     return [...newFromSocket, ...apiTransmissions];
   }, [data?.transmissions, realtimeTransmissions]);
 
   // Extract unique airlines
   const availableAirlines = useMemo(() => {
     const airlines = new Map();
-    mergedTransmissions.forEach(t => {
+    mergedTransmissions.forEach((t) => {
       if (t.identified_airframes) {
-        t.identified_airframes.forEach(af => {
+        t.identified_airframes.forEach((af) => {
           if (af.airline_icao && af.airline_name) {
             airlines.set(af.airline_icao, af.airline_name);
           }
@@ -127,7 +130,7 @@ export function AudioView({ apiBase, onSelectAircraft }) {
   const filteredTransmissions = useMemo(() => {
     if (!mergedTransmissions.length) return [];
 
-    return mergedTransmissions.filter(t => {
+    return mergedTransmissions.filter((t) => {
       // Text search filter
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
@@ -136,9 +139,10 @@ export function AudioView({ apiBase, onSelectAircraft }) {
           t.transcript?.toLowerCase().includes(query) ||
           t.filename?.toLowerCase().includes(query) ||
           t.frequency_mhz?.toString().includes(query) ||
-          t.identified_airframes?.some(af =>
-            af.callsign?.toLowerCase().includes(query) ||
-            af.airline_name?.toLowerCase().includes(query)
+          t.identified_airframes?.some(
+            (af) =>
+              af.callsign?.toLowerCase().includes(query) ||
+              af.airline_name?.toLowerCase().includes(query)
           );
         if (!matchesSearch) return false;
       }
@@ -151,7 +155,7 @@ export function AudioView({ apiBase, onSelectAircraft }) {
       // Callsign filter
       if (callsignFilter) {
         const callsignQuery = callsignFilter.toUpperCase();
-        const matchesCallsign = t.identified_airframes?.some(af =>
+        const matchesCallsign = t.identified_airframes?.some((af) =>
           af.callsign?.toUpperCase().includes(callsignQuery)
         );
         if (!matchesCallsign) return false;
@@ -159,17 +163,15 @@ export function AudioView({ apiBase, onSelectAircraft }) {
 
       // Airline filter
       if (airlineFilter !== 'all') {
-        const matchesAirline = t.identified_airframes?.some(af =>
-          af.airline_icao === airlineFilter
+        const matchesAirline = t.identified_airframes?.some(
+          (af) => af.airline_icao === airlineFilter
         );
         if (!matchesAirline) return false;
       }
 
       // Flight type filter
       if (flightTypeFilter !== 'all') {
-        const matchesType = t.identified_airframes?.some(af =>
-          af.type === flightTypeFilter
-        );
+        const matchesType = t.identified_airframes?.some((af) => af.type === flightTypeFilter);
         if (!matchesType) return false;
       }
 
@@ -180,7 +182,15 @@ export function AudioView({ apiBase, onSelectAircraft }) {
 
       return true;
     });
-  }, [mergedTransmissions, searchQuery, flightMatchFilter, callsignFilter, airlineFilter, flightTypeFilter, emergencyFilter]);
+  }, [
+    mergedTransmissions,
+    searchQuery,
+    flightMatchFilter,
+    callsignFilter,
+    airlineFilter,
+    flightTypeFilter,
+    emergencyFilter,
+  ]);
 
   // Keep ref updated for use in event listeners
   useEffect(() => {
@@ -203,7 +213,7 @@ export function AudioView({ apiBase, onSelectAircraft }) {
 
   // Expand transcript handler
   const handleToggleExpand = useCallback((id) => {
-    setExpandedTranscript(prev => ({ ...prev, [id]: !prev[id] }));
+    setExpandedTranscript((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
 
   return (

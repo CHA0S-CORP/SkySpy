@@ -4,17 +4,17 @@ export const PRO_THEME_COLORS = {
   cyan: {
     name: 'Classic Cyan',
     background: '#0a0d12',
-    grid: { r: 40, g: 80, b: 120 },           // Grid lines
-    gridLabel: { r: 80, g: 140, b: 180 },     // Grid labels
-    primary: { r: 100, g: 200, b: 255 },      // Main UI elements (center marker, scale bar)
-    aircraft: { r: 0, g: 255, b: 150 },       // Civilian aircraft
+    grid: { r: 40, g: 80, b: 120 }, // Grid lines
+    gridLabel: { r: 80, g: 140, b: 180 }, // Grid labels
+    primary: { r: 100, g: 200, b: 255 }, // Main UI elements (center marker, scale bar)
+    aircraft: { r: 0, g: 255, b: 150 }, // Civilian aircraft
     aircraftText: { r: 150, g: 255, b: 200 }, // Aircraft data block text
-    vector: { r: 100, g: 200, b: 255 },       // Velocity vectors
-    rangeRing: { r: 60, g: 100, b: 140 },     // Range rings
-    rangeLabel: { r: 80, g: 130, b: 170 },    // Range labels
-    compass: { r: 80, g: 140, b: 200 },       // Compass rose
+    vector: { r: 100, g: 200, b: 255 }, // Velocity vectors
+    rangeRing: { r: 60, g: 100, b: 140 }, // Range rings
+    rangeLabel: { r: 80, g: 130, b: 170 }, // Range labels
+    compass: { r: 80, g: 140, b: 200 }, // Compass rose
     compassMajor: { r: 100, g: 180, b: 255 }, // Compass major labels (N/E/S/W)
-    dataBlockBg: { r: 10, g: 13, b: 18 },     // Data block background
+    dataBlockBg: { r: 10, g: 13, b: 18 }, // Data block background
     secondaryText: { r: 100, g: 200, b: 180 }, // Secondary info (speed/altitude)
   },
   // Amber/Gold - traditional ATC amber colors

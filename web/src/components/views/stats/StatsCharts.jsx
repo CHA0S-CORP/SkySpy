@@ -29,7 +29,7 @@ export function HorizontalBarChart({ title, data, maxItems = 5, showPercentage =
                 className="bar-item-fill"
                 style={{
                   width: `${(item.count / maxCount) * 100}%`,
-                  backgroundColor: item.color || 'var(--accent-cyan)'
+                  backgroundColor: item.color || 'var(--accent-cyan)',
                 }}
               />
             </div>
@@ -58,7 +58,7 @@ export function LiveSparkline({ data, valueKey, color, height = 60, label, curre
     );
   }
 
-  const values = data.map(d => d[valueKey] || 0);
+  const values = data.map((d) => d[valueKey] || 0);
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
@@ -76,18 +76,24 @@ export function LiveSparkline({ data, valueKey, color, height = 60, label, curre
             {unit && <span className="sparkline-unit">{unit}</span>}
           </span>
         </div>
-        <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="sparkline-svg">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          preserveAspectRatio="none"
+          className="sparkline-svg"
+        >
           <circle cx={width / 2} cy={lastY} r="4" fill={color} />
         </svg>
       </div>
     );
   }
 
-  const points = values.map((v, i) => {
-    const x = padding + (i / (values.length - 1)) * (width - padding * 2);
-    const y = height - padding - ((v - min) / range) * (height - padding * 2);
-    return `${x},${y}`;
-  }).join(' ');
+  const points = values
+    .map((v, i) => {
+      const x = padding + (i / (values.length - 1)) * (width - padding * 2);
+      const y = height - padding - ((v - min) / range) * (height - padding * 2);
+      return `${x},${y}`;
+    })
+    .join(' ');
 
   const areaPoints = `${padding},${height - padding} ${points} ${width - padding},${height - padding}`;
   const lastValue = values[values.length - 1];

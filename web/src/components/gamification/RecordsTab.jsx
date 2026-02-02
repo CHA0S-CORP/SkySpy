@@ -32,9 +32,7 @@ export function RecordsTab({ personal_records, onSelectAircraft }) {
                   <div className="record-content">
                     <span className="record-title">{record.title || record.type}</span>
                     <span className="record-value">{record.value}</span>
-                    {record.aircraft && (
-                      <span className="record-aircraft">{record.aircraft}</span>
-                    )}
+                    {record.aircraft && <span className="record-aircraft">{record.aircraft}</span>}
                     {record.date && (
                       <span className="record-date">
                         <Calendar size={10} /> {record.date}

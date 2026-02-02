@@ -121,75 +121,87 @@ export function useSocketIOCannonball({
     const unsubscribers = [];
 
     // Session started event
-    unsubscribers.push(on('session_started', (data) => {
-      if (!mountedRef.current) return;
-      console.log('[Cannonball Socket.IO] Session started:', data.session_id);
-      setSessionId(data.session_id);
-      setError(null);
-      onSessionStarted?.(data);
-    }));
+    unsubscribers.push(
+      on('session_started', (data) => {
+        if (!mountedRef.current) return;
+        console.log('[Cannonball Socket.IO] Session started:', data.session_id);
+        setSessionId(data.session_id);
+        setError(null);
+        onSessionStarted?.(data);
+      })
+    );
 
     // Threats update event
-    unsubscribers.push(on('threats', (data) => {
-      if (!mountedRef.current) return;
-      const threatList = data.data || data.threats || [];
-      setThreats(threatList);
-      setThreatCount(data.count || threatList.length);
-      setLastUpdate(data.timestamp || new Date().toISOString());
-      onThreatsUpdate?.(threatList, data);
-    }));
+    unsubscribers.push(
+      on('threats', (data) => {
+        if (!mountedRef.current) return;
+        const threatList = data.data || data.threats || [];
+        setThreats(threatList);
+        setThreatCount(data.count || threatList.length);
+        setLastUpdate(data.timestamp || new Date().toISOString());
+        onThreatsUpdate?.(threatList, data);
+      })
+    );
 
     // Radius updated confirmation
-    unsubscribers.push(on('radius_updated', (data) => {
-      console.log('[Cannonball Socket.IO] Radius updated:', data.radius_nm);
-    }));
+    unsubscribers.push(
+      on('radius_updated', (data) => {
+        console.log('[Cannonball Socket.IO] Radius updated:', data.radius_nm);
+      })
+    );
 
     // Threat refresh trigger
-    unsubscribers.push(on('threat_refresh', () => {
-      // Server is telling us to refresh - request current position-based threats
-      if (userPositionRef.current && socketEmitRef.current) {
-        socketEmitRef.current('get_threats');
-      }
-    }));
+    unsubscribers.push(
+      on('threat_refresh', () => {
+        // Server is telling us to refresh - request current position-based threats
+        if (userPositionRef.current && socketEmitRef.current) {
+          socketEmitRef.current('get_threats');
+        }
+      })
+    );
 
     // Response to request events
-    unsubscribers.push(on('response', (data) => {
-      if (!mountedRef.current) return;
-      const { request_id, request_type, data: responseData } = data;
+    unsubscribers.push(
+      on('response', (data) => {
+        if (!mountedRef.current) return;
+        const { request_id, request_type, data: responseData } = data;
 
-      if (request_id && pendingRequests.current.has(request_id)) {
-        const { resolve, timeoutId } = pendingRequests.current.get(request_id);
-        clearTimeout(timeoutId);
-        pendingRequests.current.delete(request_id);
-        resolve(responseData);
-      }
+        if (request_id && pendingRequests.current.has(request_id)) {
+          const { resolve, timeoutId } = pendingRequests.current.get(request_id);
+          clearTimeout(timeoutId);
+          pendingRequests.current.delete(request_id);
+          resolve(responseData);
+        }
 
-      // Handle threats response
-      if (request_type === 'threats' && responseData) {
-        const threatList = responseData.threats || [];
-        setThreats(threatList);
-        setThreatCount(responseData.count || threatList.length);
-      }
-    }));
+        // Handle threats response
+        if (request_type === 'threats' && responseData) {
+          const threatList = responseData.threats || [];
+          setThreats(threatList);
+          setThreatCount(responseData.count || threatList.length);
+        }
+      })
+    );
 
     // Error events
-    unsubscribers.push(on('error', (data) => {
-      console.error('[Cannonball Socket.IO] Error:', data.message);
-      if (mountedRef.current) {
-        setError(data.message);
-      }
+    unsubscribers.push(
+      on('error', (data) => {
+        console.error('[Cannonball Socket.IO] Error:', data.message);
+        if (mountedRef.current) {
+          setError(data.message);
+        }
 
-      // Reject pending request if applicable
-      if (data.request_id && pendingRequests.current.has(data.request_id)) {
-        const { reject, timeoutId } = pendingRequests.current.get(data.request_id);
-        clearTimeout(timeoutId);
-        pendingRequests.current.delete(data.request_id);
-        reject(new Error(data.message));
-      }
-    }));
+        // Reject pending request if applicable
+        if (data.request_id && pendingRequests.current.has(data.request_id)) {
+          const { reject, timeoutId } = pendingRequests.current.get(data.request_id);
+          clearTimeout(timeoutId);
+          pendingRequests.current.delete(data.request_id);
+          reject(new Error(data.message));
+        }
+      })
+    );
 
     return () => {
-      unsubscribers.forEach(unsub => unsub && unsub());
+      unsubscribers.forEach((unsub) => unsub && unsub());
     };
   }, [enabled, on, onThreatsUpdate, onSessionStarted]);
 
@@ -219,35 +231,41 @@ export function useSocketIOCannonball({
    * @param {number} speed - Speed (optional)
    * @returns {Object} Success status
    */
-  const updatePosition = useCallback((lat, lon, heading = null, speed = null) => {
-    userPositionRef.current = { lat, lon, heading };
+  const updatePosition = useCallback(
+    (lat, lon, heading = null, speed = null) => {
+      userPositionRef.current = { lat, lon, heading };
 
-    // Use ref for emit to avoid stale closures during connection transitions
-    if (connected && socketEmitRef.current) {
-      socketEmitRef.current('position_update', {
-        lat,
-        lon,
-        heading,
-        speed,
-      });
-      return { ok: true };
-    }
+      // Use ref for emit to avoid stale closures during connection transitions
+      if (connected && socketEmitRef.current) {
+        socketEmitRef.current('position_update', {
+          lat,
+          lon,
+          heading,
+          speed,
+        });
+        return { ok: true };
+      }
 
-    return { ok: false, error: 'Not connected' };
-  }, [connected]);
+      return { ok: false, error: 'Not connected' };
+    },
+    [connected]
+  );
 
   /**
    * Set threat detection radius
    *
    * @param {number} radiusNm - Radius in nautical miles
    */
-  const setThreatRadiusNm = useCallback((radiusNm) => {
-    threatRadiusRef.current = radiusNm;
+  const setThreatRadiusNm = useCallback(
+    (radiusNm) => {
+      threatRadiusRef.current = radiusNm;
 
-    if (connected && socketEmitRef.current) {
-      socketEmitRef.current('set_radius', { radius_nm: radiusNm });
-    }
-  }, [connected]);
+      if (connected && socketEmitRef.current) {
+        socketEmitRef.current('set_radius', { radius_nm: radiusNm });
+      }
+    },
+    [connected]
+  );
 
   /**
    * Request current threats
@@ -266,31 +284,34 @@ export function useSocketIOCannonball({
    * @param {number} timeoutMs - Timeout in milliseconds
    * @returns {Promise<any>} Response data
    */
-  const request = useCallback((type, params = {}, timeoutMs = 10000) => {
-    return new Promise((resolve, reject) => {
-      if (!connected || !socketEmitRef.current) {
-        reject(new Error('Not connected'));
-        return;
-      }
-
-      const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-      const timeoutId = setTimeout(() => {
-        if (pendingRequests.current.has(requestId)) {
-          pendingRequests.current.delete(requestId);
-          reject(new Error(`Request timeout: ${type}`));
+  const request = useCallback(
+    (type, params = {}, timeoutMs = 10000) => {
+      return new Promise((resolve, reject) => {
+        if (!connected || !socketEmitRef.current) {
+          reject(new Error('Not connected'));
+          return;
         }
-      }, timeoutMs);
 
-      pendingRequests.current.set(requestId, { resolve, reject, timeoutId });
+        const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      socketEmitRef.current('request', {
-        type,
-        request_id: requestId,
-        params,
+        const timeoutId = setTimeout(() => {
+          if (pendingRequests.current.has(requestId)) {
+            pendingRequests.current.delete(requestId);
+            reject(new Error(`Request timeout: ${type}`));
+          }
+        }, timeoutMs);
+
+        pendingRequests.current.set(requestId, { resolve, reject, timeoutId });
+
+        socketEmitRef.current('request', {
+          type,
+          request_id: requestId,
+          params,
+        });
       });
-    });
-  }, [connected]);
+    },
+    [connected]
+  );
 
   return {
     // State

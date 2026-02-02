@@ -95,7 +95,7 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
     try {
       // Handle batched messages
       if (type === 'batch' && Array.isArray(data?.messages)) {
-        data.messages.forEach(msg => {
+        data.messages.forEach((msg) => {
           if (msg && msg.type) {
             handleMessage(msg.type, msg.data || msg);
           }
@@ -140,8 +140,12 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
           // Legacy positions format
           for (const [rawIcao, pos] of Object.entries(positionsObj)) {
             const icao = rawIcao.toUpperCase();
-            if (pos && typeof pos === 'object' &&
-                Number.isFinite(pos.lat) && Number.isFinite(pos.lon)) {
+            if (
+              pos &&
+              typeof pos === 'object' &&
+              Number.isFinite(pos.lat) &&
+              Number.isFinite(pos.lon)
+            ) {
               targetPositionsRef.current[icao] = pos;
               prevPositionsRef.current[icao] = pos;
               lastUpdateRef.current[icao] = now;
@@ -157,7 +161,8 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
       else if (type === 'aircraft:update') {
         const now = performance.now();
         // aircraft:update may contain a single aircraft or array
-        const aircraftData = data?.data?.aircraft || data?.aircraft || (data?.data ? [data.data] : []);
+        const aircraftData =
+          data?.data?.aircraft || data?.aircraft || (data?.data ? [data.data] : []);
         const updates = Array.isArray(aircraftData) ? aircraftData : [aircraftData];
 
         for (const ac of updates) {
@@ -245,8 +250,12 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
         if (positionsMap) {
           for (const [rawIcao, pos] of Object.entries(positionsMap)) {
             const icao = rawIcao.toUpperCase();
-            if (!pos || typeof pos !== 'object' ||
-                !Number.isFinite(pos.lat) || !Number.isFinite(pos.lon)) {
+            if (
+              !pos ||
+              typeof pos !== 'object' ||
+              !Number.isFinite(pos.lat) ||
+              !Number.isFinite(pos.lon)
+            ) {
               continue;
             }
 
@@ -287,8 +296,8 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
       // Handle aircraft:remove events
       else if (type === 'aircraft:remove') {
         // Extract ICAO list from various possible formats
-        const icaoList = data?.icaos || data?.icao_list || data?.hex_list ||
-                        (data?.hex ? [data.hex] : []);
+        const icaoList =
+          data?.icaos || data?.icao_list || data?.hex_list || (data?.hex ? [data.hex] : []);
 
         if (Array.isArray(icaoList) && icaoList.length > 0) {
           for (const rawIcao of icaoList) {
@@ -383,12 +392,12 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
 
     console.log('[useSocketIOPositions] Setting up event listeners');
 
-    const unsubscribers = eventTypes.map(eventType => {
+    const unsubscribers = eventTypes.map((eventType) => {
       return on(eventType, (data) => handleMessage(eventType, data));
     });
 
     return () => {
-      unsubscribers.forEach(unsub => unsub && unsub());
+      unsubscribers.forEach((unsub) => unsub && unsub());
     };
   }, [enabled, socketReady, on, handleMessage]);
 

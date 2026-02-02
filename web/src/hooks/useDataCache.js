@@ -108,43 +108,52 @@ export function useDataCache(type = 'default', options = {}) {
   /**
    * Get cached data
    */
-  const get = useCallback((key) => {
-    const cacheKey = getCacheKey(key);
-    const entry = cache.current.get(cacheKey);
+  const get = useCallback(
+    (key) => {
+      const cacheKey = getCacheKey(key);
+      const entry = cache.current.get(cacheKey);
 
-    if (!entry) return null;
+      if (!entry) return null;
 
-    const now = Date.now();
-    const isExpired = now - entry.timestamp > ttl;
-    const isStale = isExpired;
+      const now = Date.now();
+      const isExpired = now - entry.timestamp > ttl;
+      const isStale = isExpired;
 
-    return {
-      data: entry.data,
-      isStale,
-      isExpired,
-      timestamp: entry.timestamp,
-      age: now - entry.timestamp,
-    };
-  }, [getCacheKey, ttl]);
+      return {
+        data: entry.data,
+        isStale,
+        isExpired,
+        timestamp: entry.timestamp,
+        age: now - entry.timestamp,
+      };
+    },
+    [getCacheKey, ttl]
+  );
 
   /**
    * Set cached data
    */
-  const set = useCallback((key, data) => {
-    const cacheKey = getCacheKey(key);
-    cache.current.set(cacheKey, {
-      data,
-      timestamp: Date.now(),
-    });
-  }, [getCacheKey]);
+  const set = useCallback(
+    (key, data) => {
+      const cacheKey = getCacheKey(key);
+      cache.current.set(cacheKey, {
+        data,
+        timestamp: Date.now(),
+      });
+    },
+    [getCacheKey]
+  );
 
   /**
    * Invalidate cache entry
    */
-  const invalidate = useCallback((key) => {
-    const cacheKey = getCacheKey(key);
-    cache.current.delete(cacheKey);
-  }, [getCacheKey]);
+  const invalidate = useCallback(
+    (key) => {
+      const cacheKey = getCacheKey(key);
+      cache.current.delete(cacheKey);
+    },
+    [getCacheKey]
+  );
 
   /**
    * Clear entire cache
@@ -161,60 +170,63 @@ export function useDataCache(type = 'default', options = {}) {
    * @param {Object} fetchOptions - Additional options
    * @returns {Promise<{ data, fromCache, isStale }>}
    */
-  const fetchWithCache = useCallback(async (key, fetcher, fetchOptions = {}) => {
-    const cacheKey = getCacheKey(key);
-    const forceRefresh = fetchOptions.forceRefresh === true;
+  const fetchWithCache = useCallback(
+    async (key, fetcher, fetchOptions = {}) => {
+      const cacheKey = getCacheKey(key);
+      const forceRefresh = fetchOptions.forceRefresh === true;
 
-    // Check cache first (unless forcing refresh)
-    if (!forceRefresh) {
-      const cached = get(key);
+      // Check cache first (unless forcing refresh)
+      if (!forceRefresh) {
+        const cached = get(key);
 
-      if (cached && !cached.isExpired) {
-        // Fresh data, return immediately
-        return { data: cached.data, fromCache: true, isStale: false };
-      }
-
-      if (cached && staleWhileRevalidate) {
-        // Stale data - return immediately but trigger background refresh
-        if (!pendingRequests.current.has(cacheKey)) {
-          // Background refresh
-          const refreshPromise = fetcher()
-            .then(newData => {
-              set(key, newData);
-              return newData;
-            })
-            .finally(() => {
-              pendingRequests.current.delete(cacheKey);
-            });
-
-          pendingRequests.current.set(cacheKey, refreshPromise);
+        if (cached && !cached.isExpired) {
+          // Fresh data, return immediately
+          return { data: cached.data, fromCache: true, isStale: false };
         }
 
-        return { data: cached.data, fromCache: true, isStale: true };
+        if (cached && staleWhileRevalidate) {
+          // Stale data - return immediately but trigger background refresh
+          if (!pendingRequests.current.has(cacheKey)) {
+            // Background refresh
+            const refreshPromise = fetcher()
+              .then((newData) => {
+                set(key, newData);
+                return newData;
+              })
+              .finally(() => {
+                pendingRequests.current.delete(cacheKey);
+              });
+
+            pendingRequests.current.set(cacheKey, refreshPromise);
+          }
+
+          return { data: cached.data, fromCache: true, isStale: true };
+        }
       }
-    }
 
-    // Check for pending request (dedupe)
-    if (pendingRequests.current.has(cacheKey)) {
-      const data = await pendingRequests.current.get(cacheKey);
+      // Check for pending request (dedupe)
+      if (pendingRequests.current.has(cacheKey)) {
+        const data = await pendingRequests.current.get(cacheKey);
+        return { data, fromCache: false, isStale: false };
+      }
+
+      // Fetch fresh data
+      const fetchPromise = fetcher()
+        .then((data) => {
+          set(key, data);
+          return data;
+        })
+        .finally(() => {
+          pendingRequests.current.delete(cacheKey);
+        });
+
+      pendingRequests.current.set(cacheKey, fetchPromise);
+
+      const data = await fetchPromise;
       return { data, fromCache: false, isStale: false };
-    }
-
-    // Fetch fresh data
-    const fetchPromise = fetcher()
-      .then(data => {
-        set(key, data);
-        return data;
-      })
-      .finally(() => {
-        pendingRequests.current.delete(cacheKey);
-      });
-
-    pendingRequests.current.set(cacheKey, fetchPromise);
-
-    const data = await fetchPromise;
-    return { data, fromCache: false, isStale: false };
-  }, [getCacheKey, get, set, staleWhileRevalidate]);
+    },
+    [getCacheKey, get, set, staleWhileRevalidate]
+  );
 
   /**
    * Get cache stats
@@ -252,11 +264,14 @@ export function useCacheManager() {
     analyticsCache.clear();
   }, [sessionCache, sightingsCache, analyticsCache]);
 
-  const getAllStats = useCallback(() => ({
-    sessions: sessionCache.getStats(),
-    sightings: sightingsCache.getStats(),
-    analytics: analyticsCache.getStats(),
-  }), [sessionCache, sightingsCache, analyticsCache]);
+  const getAllStats = useCallback(
+    () => ({
+      sessions: sessionCache.getStats(),
+      sightings: sightingsCache.getStats(),
+      analytics: analyticsCache.getStats(),
+    }),
+    [sessionCache, sightingsCache, analyticsCache]
+  );
 
   return {
     sessions: sessionCache,

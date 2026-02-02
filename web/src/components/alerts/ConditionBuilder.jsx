@@ -1,6 +1,11 @@
 import React from 'react';
 import { X, Plus } from 'lucide-react';
-import { CONDITION_TYPES, getOperatorsForType, DEFAULT_CONDITION, DEFAULT_GROUP } from './RuleFormConstants';
+import {
+  CONDITION_TYPES,
+  getOperatorsForType,
+  DEFAULT_CONDITION,
+  DEFAULT_GROUP,
+} from './RuleFormConstants';
 
 /**
  * ConditionRow component - renders a single condition with type, operator, and value selectors
@@ -14,28 +19,32 @@ function ConditionRow({
   onUpdate,
   onRemove,
 }) {
-  const condType = CONDITION_TYPES.find(t => t.value === condition.type);
+  const condType = CONDITION_TYPES.find((t) => t.value === condition.type);
   const operators = getOperatorsForType(condition.type);
 
   return (
     <div className={`condition-row ${hasError ? 'has-error' : ''}`}>
       <select
         value={condition.type}
-        onChange={e => onUpdate(groupIndex, condIndex, 'type', e.target.value)}
+        onChange={(e) => onUpdate(groupIndex, condIndex, 'type', e.target.value)}
         aria-label="Condition type"
       >
-        {CONDITION_TYPES.map(t => (
-          <option key={t.value} value={t.value}>{t.label}</option>
+        {CONDITION_TYPES.map((t) => (
+          <option key={t.value} value={t.value}>
+            {t.label}
+          </option>
         ))}
       </select>
 
       <select
         value={condition.operator}
-        onChange={e => onUpdate(groupIndex, condIndex, 'operator', e.target.value)}
+        onChange={(e) => onUpdate(groupIndex, condIndex, 'operator', e.target.value)}
         aria-label="Operator"
       >
-        {operators.map(o => (
-          <option key={o.value} value={o.value}>{o.label}</option>
+        {operators.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
         ))}
       </select>
 
@@ -43,7 +52,7 @@ function ConditionRow({
         <input
           type={condType?.type === 'number' ? 'number' : 'text'}
           value={condition.value || ''}
-          onChange={e => onUpdate(groupIndex, condIndex, 'value', e.target.value)}
+          onChange={(e) => onUpdate(groupIndex, condIndex, 'value', e.target.value)}
           placeholder={condType?.placeholder || 'Value'}
           aria-label="Value"
           aria-invalid={!!hasError}
@@ -59,9 +68,7 @@ function ConditionRow({
         <X size={16} />
       </button>
 
-      {hasError && (
-        <span className="condition-error">{errorMessage}</span>
-      )}
+      {hasError && <span className="condition-error">{errorMessage}</span>}
     </div>
   );
 }
@@ -87,7 +94,7 @@ function ConditionGroup({
           <select
             className="logic-select"
             value={topLevelLogic || 'AND'}
-            onChange={e => onUpdateTopLevelLogic(e.target.value)}
+            onChange={(e) => onUpdateTopLevelLogic(e.target.value)}
             aria-label="Logic between groups"
           >
             <option value="AND">AND</option>
@@ -99,7 +106,7 @@ function ConditionGroup({
           <select
             className="logic-select"
             value={group.logic}
-            onChange={e => onUpdateGroupLogic(groupIndex, e.target.value)}
+            onChange={(e) => onUpdateGroupLogic(groupIndex, e.target.value)}
             aria-label="Logic within group"
           >
             <option value="AND">Match ALL</option>
@@ -177,7 +184,7 @@ export function ConditionBuilder({
     const newGroups = [...groups];
     newGroups[groupIndex] = {
       ...newGroups[groupIndex],
-      conditions: [...newGroups[groupIndex].conditions, { ...DEFAULT_CONDITION }]
+      conditions: [...newGroups[groupIndex].conditions, { ...DEFAULT_CONDITION }],
     };
     onChange({ ...conditions, groups: newGroups });
   };
@@ -187,7 +194,7 @@ export function ConditionBuilder({
     let newGroups = [...groups];
     newGroups[groupIndex] = {
       ...newGroups[groupIndex],
-      conditions: newGroups[groupIndex].conditions.filter((_, i) => i !== condIndex)
+      conditions: newGroups[groupIndex].conditions.filter((_, i) => i !== condIndex),
     };
     // If group is now empty, remove it
     if (newGroups[groupIndex].conditions.length === 0) {
@@ -204,7 +211,7 @@ export function ConditionBuilder({
   const addGroup = () => {
     onChange({
       ...conditions,
-      groups: [...groups, { ...DEFAULT_GROUP }]
+      groups: [...groups, { ...DEFAULT_GROUP }],
     });
   };
 

@@ -24,7 +24,9 @@
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 10px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 2px 8px rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(8px);
   pointer-events: auto;
   min-width: 280px;
@@ -269,7 +271,9 @@
 
 .toast-clickable:hover {
   transform: translateX(-4px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .toast-clickable:active {
@@ -347,5 +351,7 @@
 
 .toast-alert.toast-clickable:hover {
   border-color: rgba(248, 81, 73, 0.7);
-  box-shadow: 0 8px 32px rgba(248, 81, 73, 0.2), 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 8px 32px rgba(248, 81, 73, 0.2),
+    0 4px 12px rgba(0, 0, 0, 0.3);
 }

@@ -57,16 +57,10 @@ export class ErrorBoundary extends Component {
               <details className="error-boundary-details">
                 <summary>Error details</summary>
                 <pre>{this.state.error.toString()}</pre>
-                {this.state.errorInfo && (
-                  <pre>{this.state.errorInfo.componentStack}</pre>
-                )}
+                {this.state.errorInfo && <pre>{this.state.errorInfo.componentStack}</pre>}
               </details>
             )}
-            <button
-              className="error-boundary-retry-btn"
-              onClick={this.handleRetry}
-              type="button"
-            >
+            <button className="error-boundary-retry-btn" onClick={this.handleRetry} type="button">
               <RefreshCw size={16} aria-hidden="true" />
               Try Again
             </button>

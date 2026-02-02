@@ -36,7 +36,7 @@ export function NotificationChannelSelector({
 }) {
   // Ensure channels is an array and filter to only enabled channels
   const channelList = Array.isArray(channels) ? channels : [];
-  const enabledChannels = channelList.filter(c => c.enabled);
+  const enabledChannels = channelList.filter((c) => c.enabled);
 
   return (
     <fieldset className="form-group notification-channels-fieldset">
@@ -62,7 +62,7 @@ export function NotificationChannelSelector({
           role="group"
           aria-label="Select notification channels"
         >
-          {enabledChannels.map(channel => (
+          {enabledChannels.map((channel) => (
             <ChannelButton
               key={channel.id}
               channel={channel}

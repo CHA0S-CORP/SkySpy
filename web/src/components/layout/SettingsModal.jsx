@@ -13,10 +13,12 @@ export function SettingsModal({ config, setConfig, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Settings</h3>
-          <button onClick={onClose}><X size={20} /></button>
+          <button onClick={onClose}>
+            <X size={20} />
+          </button>
         </div>
         <div className="modal-content">
           <div className="settings-grid">
@@ -27,7 +29,7 @@ export function SettingsModal({ config, setConfig, onClose }) {
                 <input
                   type="text"
                   value={form.apiBaseUrl}
-                  onChange={e => setForm({ ...form, apiBaseUrl: e.target.value })}
+                  onChange={(e) => setForm({ ...form, apiBaseUrl: e.target.value })}
                   placeholder="Leave empty for same origin"
                 />
               </div>
@@ -40,7 +42,7 @@ export function SettingsModal({ config, setConfig, onClose }) {
                   <label>Map Mode</label>
                   <select
                     value={form.mapMode}
-                    onChange={e => setForm({ ...form, mapMode: e.target.value })}
+                    onChange={(e) => setForm({ ...form, mapMode: e.target.value })}
                   >
                     <option value="pro">Pro View</option>
                     <option value="radar">Radar View</option>
@@ -52,7 +54,7 @@ export function SettingsModal({ config, setConfig, onClose }) {
                   <label>Map Theme</label>
                   <select
                     value={form.mapDarkMode ? 'dark' : 'light'}
-                    onChange={e => setForm({ ...form, mapDarkMode: e.target.value === 'dark' })}
+                    onChange={(e) => setForm({ ...form, mapDarkMode: e.target.value === 'dark' })}
                   >
                     <option value="dark">Dark Mode</option>
                     <option value="light">Light Mode</option>
@@ -63,8 +65,12 @@ export function SettingsModal({ config, setConfig, onClose }) {
           </div>
 
           <div className="form-actions">
-            <button className="btn-secondary" onClick={onClose}>Cancel</button>
-            <button className="btn-primary" onClick={handleSave}>Save Settings</button>
+            <button className="btn-secondary" onClick={onClose}>
+              Cancel
+            </button>
+            <button className="btn-primary" onClick={handleSave}>
+              Save Settings
+            </button>
           </div>
         </div>
       </div>

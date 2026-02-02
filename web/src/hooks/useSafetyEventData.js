@@ -73,7 +73,7 @@ export function useSafetyEventData({ eventId, apiBase, wsRequest, wsConnected })
             }
             const sightings = result?.sightings || result?.data?.sightings || result?.results || [];
             if (sightings.length > 0) {
-              setTrackData(prev => ({ ...prev, [icao]: sightings }));
+              setTrackData((prev) => ({ ...prev, [icao]: sightings }));
             }
           } catch (err) {
             console.error('Failed to fetch track data for', icao, err);
@@ -107,7 +107,7 @@ export function useSafetyEventData({ eventId, apiBase, wsRequest, wsConnected })
 
       const updatedEventId = data.id || data.event_id;
       if (updatedEventId === eventId || String(updatedEventId) === String(eventId)) {
-        setEvent(prev => prev ? { ...prev, ...data } : prev);
+        setEvent((prev) => (prev ? { ...prev, ...data } : prev));
         if (data.acknowledged || data.resolved) {
           setAcknowledged(true);
         }
@@ -140,7 +140,7 @@ export function useSafetyEventData({ eventId, apiBase, wsRequest, wsConnected })
       const result = await wsRequest('safety-acknowledge', { event_id: eventId, id: eventId });
       if (result && !result.error) {
         setAcknowledged(true);
-        setEvent(prev => prev ? { ...prev, acknowledged: true } : prev);
+        setEvent((prev) => (prev ? { ...prev, acknowledged: true } : prev));
       } else {
         console.error('Failed to acknowledge event:', result?.error);
       }

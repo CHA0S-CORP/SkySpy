@@ -19,7 +19,10 @@ export function SessionCard({ session, onSelectAircraft }) {
             {session.callsign || session.icao_hex}
             {session.is_military && <span className="military-badge">MIL</span>}
             {session.safety_event_count > 0 && (
-              <span className="safety-badge" title={`${session.safety_event_count} safety event${session.safety_event_count > 1 ? 's' : ''}`}>
+              <span
+                className="safety-badge"
+                title={`${session.safety_event_count} safety event${session.safety_event_count > 1 ? 's' : ''}`}
+              >
                 <AlertTriangle size={14} />
                 {session.safety_event_count}
               </span>
@@ -28,11 +31,16 @@ export function SessionCard({ session, onSelectAircraft }) {
           <div className="session-icao-row">
             <span
               className="icao-link"
-              onClick={(e) => { e.stopPropagation(); onSelectAircraft?.(session.icao_hex); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectAircraft?.(session.icao_hex);
+              }}
             >
               {session.icao_hex}
             </span>
-            {session.type && <span className={`session-type type-${typeCategory}`}>{session.type}</span>}
+            {session.type && (
+              <span className={`session-type type-${typeCategory}`}>{session.type}</span>
+            )}
             {session.registration && <span className="session-reg">{session.registration}</span>}
           </div>
         </div>
@@ -57,7 +65,9 @@ export function SessionCard({ session, onSelectAircraft }) {
         </div>
         <div className="session-signal-indicator">
           <div className="signal-label">Signal</div>
-          <div className={`signal-bars ${session.max_rssi >= -3 ? 'excellent' : session.max_rssi >= -10 ? 'good' : session.max_rssi >= -20 ? 'fair' : 'weak'}`}>
+          <div
+            className={`signal-bars ${session.max_rssi >= -3 ? 'excellent' : session.max_rssi >= -10 ? 'good' : session.max_rssi >= -20 ? 'fair' : 'weak'}`}
+          >
             <span className="bar bar-1"></span>
             <span className="bar bar-2"></span>
             <span className="bar bar-3"></span>
@@ -77,17 +87,24 @@ export function SessionCard({ session, onSelectAircraft }) {
         </div>
         <div className="session-stat">
           <span className="session-stat-label">Max V/S</span>
-          <span className={`session-stat-value ${session.max_vr > 0 ? 'climbing' : session.max_vr < 0 ? 'descending' : ''}`}>
-            {session.max_vr != null ? `${session.max_vr > 0 ? '+' : ''}${session.max_vr}` : '--'} fpm
+          <span
+            className={`session-stat-value ${session.max_vr > 0 ? 'climbing' : session.max_vr < 0 ? 'descending' : ''}`}
+          >
+            {session.max_vr != null ? `${session.max_vr > 0 ? '+' : ''}${session.max_vr}` : '--'}{' '}
+            fpm
           </span>
         </div>
         <div className="session-stat">
           <span className="session-stat-label">Messages</span>
-          <span className="session-stat-value">{session.message_count?.toLocaleString() || '--'}</span>
+          <span className="session-stat-value">
+            {session.message_count?.toLocaleString() || '--'}
+          </span>
         </div>
         <div className="session-stat">
           <span className="session-stat-label">Squawks</span>
-          <span className={`session-stat-value ${session.squawk === '7500' || session.squawk === '7600' || session.squawk === '7700' ? 'emergency-squawk' : ''}`}>
+          <span
+            className={`session-stat-value ${session.squawk === '7500' || session.squawk === '7600' || session.squawk === '7700' ? 'emergency-squawk' : ''}`}
+          >
             {session.squawk || '--'}
           </span>
         </div>
@@ -95,10 +112,12 @@ export function SessionCard({ session, onSelectAircraft }) {
 
       <div className="session-times">
         <span className="session-time">
-          <span className="time-label">First:</span> {new Date(session.first_seen).toLocaleTimeString()}
+          <span className="time-label">First:</span>{' '}
+          {new Date(session.first_seen).toLocaleTimeString()}
         </span>
         <span className="session-time">
-          <span className="time-label">Last:</span> {new Date(session.last_seen).toLocaleTimeString()}
+          <span className="time-label">Last:</span>{' '}
+          {new Date(session.last_seen).toLocaleTimeString()}
         </span>
       </div>
     </div>

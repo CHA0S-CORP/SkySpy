@@ -57,7 +57,7 @@ export function createRetryQueue(maxRetries = 3) {
       const delay = getRetryDelay(current.retryCount);
       queue.set(icao, {
         retryCount: current.retryCount + 1,
-        nextRetryAt: Date.now() + delay
+        nextRetryAt: Date.now() + delay,
       });
 
       scheduleProcessing();

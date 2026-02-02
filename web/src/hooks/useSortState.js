@@ -21,7 +21,7 @@ export function useSortState({
   defaultField,
   defaultDirection = 'desc',
   data = [],
-  sortConfig = {}
+  sortConfig = {},
 }) {
   // Load initial state from localStorage
   const [sortField, setSortField] = useState(() => {
@@ -55,18 +55,21 @@ export function useSortState({
   }, []);
 
   // Handle sort field change
-  const handleSort = useCallback((field) => {
-    if (field === sortField) {
-      // Toggle direction
-      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-    } else {
-      // New field - use its default direction or the global default
-      const fieldConfig = sortConfig[field] || {};
-      const newDirection = fieldConfig.defaultDirection || defaultDirection;
-      setSortField(field);
-      setSortDirection(newDirection);
-    }
-  }, [sortField, sortConfig, defaultDirection]);
+  const handleSort = useCallback(
+    (field) => {
+      if (field === sortField) {
+        // Toggle direction
+        setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      } else {
+        // New field - use its default direction or the global default
+        const fieldConfig = sortConfig[field] || {};
+        const newDirection = fieldConfig.defaultDirection || defaultDirection;
+        setSortField(field);
+        setSortDirection(newDirection);
+      }
+    },
+    [sortField, sortConfig, defaultDirection]
+  );
 
   // Sort the data
   const sortedData = useMemo(() => {
@@ -127,7 +130,7 @@ export function useSortState({
     resetSort,
     // Expose setters for advanced use cases
     setSortField,
-    setSortDirection
+    setSortDirection,
   };
 }
 

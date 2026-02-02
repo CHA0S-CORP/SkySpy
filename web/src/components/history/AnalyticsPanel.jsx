@@ -11,12 +11,7 @@ import { ChevronDown, ChevronUp, BarChart3, Compass, Signal, Ruler, Activity } f
  * @param {Function} props.wsRequest - WebSocket request function
  * @param {boolean} props.wsConnected - WebSocket connection status
  */
-export function AnalyticsPanel({
-  apiBase = '',
-  hours = 24,
-  wsRequest,
-  wsConnected,
-}) {
+export function AnalyticsPanel({ apiBase = '', hours = 24, wsRequest, wsConnected }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [loading, setLoading] = useState({});
   const [data, setData] = useState({
@@ -28,33 +23,36 @@ export function AnalyticsPanel({
   const [error, setError] = useState({});
 
   // Fetch analytics data when expanded
-  const fetchAnalytics = useCallback(async (endpoint, key) => {
-    if (data[key] !== null) return; // Already fetched
+  const fetchAnalytics = useCallback(
+    async (endpoint, key) => {
+      if (data[key] !== null) return; // Already fetched
 
-    setLoading(prev => ({ ...prev, [key]: true }));
-    setError(prev => ({ ...prev, [key]: null }));
+      setLoading((prev) => ({ ...prev, [key]: true }));
+      setError((prev) => ({ ...prev, [key]: null }));
 
-    try {
-      let result;
-      if (wsRequest && wsConnected) {
-        result = await wsRequest(`history-analytics-${key}`, { hours });
-        if (result?.error) throw new Error(result.error);
-      } else {
-        const res = await fetch(`${apiBase}${endpoint}?hours=${hours}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const contentType = res.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          throw new Error('Invalid response format');
+      try {
+        let result;
+        if (wsRequest && wsConnected) {
+          result = await wsRequest(`history-analytics-${key}`, { hours });
+          if (result?.error) throw new Error(result.error);
+        } else {
+          const res = await fetch(`${apiBase}${endpoint}?hours=${hours}`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const contentType = res.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Invalid response format');
+          }
+          result = await res.json();
         }
-        result = await res.json();
+        setData((prev) => ({ ...prev, [key]: result }));
+      } catch (err) {
+        setError((prev) => ({ ...prev, [key]: err.message }));
+      } finally {
+        setLoading((prev) => ({ ...prev, [key]: false }));
       }
-      setData(prev => ({ ...prev, [key]: result }));
-    } catch (err) {
-      setError(prev => ({ ...prev, [key]: err.message }));
-    } finally {
-      setLoading(prev => ({ ...prev, [key]: false }));
-    }
-  }, [apiBase, hours, wsRequest, wsConnected, data]);
+    },
+    [apiBase, hours, wsRequest, wsConnected, data]
+  );
 
   // Lazy load data when expanded
   useEffect(() => {
@@ -115,12 +113,12 @@ export function AnalyticsPanel({
     const maxRadius = center - 10;
 
     // Find max count for scaling
-    const maxCount = Math.max(...Object.values(polarData.bearings).map(b => b.count || 0), 1);
+    const maxCount = Math.max(...Object.values(polarData.bearings).map((b) => b.count || 0), 1);
 
     // Generate path for each bearing sector
     const sectors = Object.entries(polarData.bearings).map(([bearing, data]) => {
       const angle = (parseFloat(bearing) - 90) * (Math.PI / 180); // Rotate so 0 is up
-      const nextAngle = angle + (Math.PI / 18); // 10-degree sectors
+      const nextAngle = angle + Math.PI / 18; // 10-degree sectors
       const radius = (data.count / maxCount) * maxRadius;
 
       const x1 = center + Math.cos(angle) * radius;
@@ -144,14 +142,40 @@ export function AnalyticsPanel({
       <svg width={size} height={size} className="analytics-polar-plot">
         {/* Background circles */}
         <circle cx={center} cy={center} r={maxRadius} fill="none" stroke="rgba(255,255,255,0.1)" />
-        <circle cx={center} cy={center} r={maxRadius * 0.66} fill="none" stroke="rgba(255,255,255,0.05)" />
-        <circle cx={center} cy={center} r={maxRadius * 0.33} fill="none" stroke="rgba(255,255,255,0.05)" />
+        <circle
+          cx={center}
+          cy={center}
+          r={maxRadius * 0.66}
+          fill="none"
+          stroke="rgba(255,255,255,0.05)"
+        />
+        <circle
+          cx={center}
+          cy={center}
+          r={maxRadius * 0.33}
+          fill="none"
+          stroke="rgba(255,255,255,0.05)"
+        />
 
         {/* Cardinal directions */}
-        <text x={center} y="8" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="8">N</text>
-        <text x={size - 4} y={center + 3} textAnchor="end" fill="rgba(255,255,255,0.5)" fontSize="8">E</text>
-        <text x={center} y={size - 2} textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="8">S</text>
-        <text x="4" y={center + 3} textAnchor="start" fill="rgba(255,255,255,0.5)" fontSize="8">W</text>
+        <text x={center} y="8" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="8">
+          N
+        </text>
+        <text
+          x={size - 4}
+          y={center + 3}
+          textAnchor="end"
+          fill="rgba(255,255,255,0.5)"
+          fontSize="8"
+        >
+          E
+        </text>
+        <text x={center} y={size - 2} textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="8">
+          S
+        </text>
+        <text x="4" y={center + 3} textAnchor="start" fill="rgba(255,255,255,0.5)" fontSize="8">
+          W
+        </text>
 
         {/* Data sectors */}
         {sectors}
@@ -167,8 +191,8 @@ export function AnalyticsPanel({
     const height = 60;
     const padding = 5;
 
-    const distances = rssiData.curve.map(p => p.distance);
-    const rssiValues = rssiData.curve.map(p => p.avgRssi);
+    const distances = rssiData.curve.map((p) => p.distance);
+    const rssiValues = rssiData.curve.map((p) => p.avgRssi);
 
     const minDist = Math.min(...distances);
     const maxDist = Math.max(...distances);
@@ -178,25 +202,27 @@ export function AnalyticsPanel({
     const distRange = maxDist - minDist || 1;
     const rssiRange = maxRssi - minRssi || 1;
 
-    const points = rssiData.curve.map(p => {
-      const x = padding + ((p.distance - minDist) / distRange) * (width - padding * 2);
-      const y = height - padding - ((p.avgRssi - minRssi) / rssiRange) * (height - padding * 2);
-      return `${x},${y}`;
-    }).join(' ');
+    const points = rssiData.curve
+      .map((p) => {
+        const x = padding + ((p.distance - minDist) / distRange) * (width - padding * 2);
+        const y = height - padding - ((p.avgRssi - minRssi) / rssiRange) * (height - padding * 2);
+        return `${x},${y}`;
+      })
+      .join(' ');
 
     return (
       <svg width={width} height={height} className="analytics-rssi-curve">
-        <polyline
-          points={points}
-          fill="none"
-          stroke="#00ff88"
-          strokeWidth="2"
-          opacity="0.7"
-        />
+        <polyline points={points} fill="none" stroke="#00ff88" strokeWidth="2" opacity="0.7" />
         <text x={padding} y={height - 2} fill="rgba(255,255,255,0.4)" fontSize="8">
           {minDist.toFixed(0)} nm
         </text>
-        <text x={width - padding} y={height - 2} textAnchor="end" fill="rgba(255,255,255,0.4)" fontSize="8">
+        <text
+          x={width - padding}
+          y={height - 2}
+          textAnchor="end"
+          fill="rgba(255,255,255,0.4)"
+          fontSize="8"
+        >
           {maxDist.toFixed(0)} nm
         </text>
       </svg>
@@ -206,7 +232,7 @@ export function AnalyticsPanel({
   // Process distance distribution
   const distanceDistribution = useMemo(() => {
     if (!data.distance?.distribution) return [];
-    return data.distance.distribution.map(d => ({
+    return data.distance.distribution.map((d) => ({
       range: d.range,
       label: d.label,
       count: d.count,
@@ -216,22 +242,19 @@ export function AnalyticsPanel({
   // Process speed distribution
   const speedDistribution = useMemo(() => {
     if (!data.speed?.distribution) return [];
-    return data.speed.distribution.map(s => ({
+    return data.speed.distribution.map((s) => ({
       range: s.range,
       label: s.label,
       count: s.count,
     }));
   }, [data.speed]);
 
-  const maxDistCount = Math.max(...distanceDistribution.map(d => d.count), 1);
-  const maxSpeedCount = Math.max(...speedDistribution.map(s => s.count), 1);
+  const maxDistCount = Math.max(...distanceDistribution.map((d) => d.count), 1);
+  const maxSpeedCount = Math.max(...speedDistribution.map((s) => s.count), 1);
 
   return (
     <div className={`analytics-panel ${isExpanded ? 'expanded' : 'collapsed'}`}>
-      <button
-        className="analytics-panel-toggle"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
+      <button className="analytics-panel-toggle" onClick={() => setIsExpanded(!isExpanded)}>
         <BarChart3 size={16} />
         <span>Analytics</span>
         {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}

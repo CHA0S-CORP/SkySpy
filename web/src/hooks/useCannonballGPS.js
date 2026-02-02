@@ -33,9 +33,11 @@ export function useCannonballGPS() {
 
   // Show GPS permission modal when needed
   useEffect(() => {
-    if (permissionState === GPS_PERMISSION_STATES.PROMPT ||
-        permissionState === GPS_PERMISSION_STATES.DENIED ||
-        permissionState === GPS_PERMISSION_STATES.UNAVAILABLE) {
+    if (
+      permissionState === GPS_PERMISSION_STATES.PROMPT ||
+      permissionState === GPS_PERMISSION_STATES.DENIED ||
+      permissionState === GPS_PERMISSION_STATES.UNAVAILABLE
+    ) {
       if (!gpsDisabledByUser) {
         setShowGPSModal(true);
       }

@@ -5,20 +5,17 @@ const safeJson = async (res) => {
   if (!res.ok) return null;
   const ct = res.headers.get('content-type');
   if (!ct || !ct.includes('application/json')) return null;
-  try { return await res.json(); } catch { return null; }
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
 };
 
 /**
  * Hook for managing aircraft track/sightings data and replay controls
  */
-export function useAircraftTrack({
-  hex,
-  baseUrl,
-  activeTab,
-  wsRequest,
-  wsConnected,
-  onLoaded,
-}) {
+export function useAircraftTrack({ hex, baseUrl, activeTab, wsRequest, wsConnected, onLoaded }) {
   // History/sightings state
   const [sightings, setSightings] = useState([]);
   const [showTrackMap, setShowTrackMap] = useState(false);
@@ -74,9 +71,12 @@ export function useAircraftTrack({
         if (abortController.signal.aborted) return;
 
         if (!sightingsData) {
-          const sightingsRes = await fetch(`${baseUrl}/api/v1/sightings?icao_hex=${hex}&hours=24&limit=100`, {
-            signal: abortController.signal
-          });
+          const sightingsRes = await fetch(
+            `${baseUrl}/api/v1/sightings?icao_hex=${hex}&hours=24&limit=100`,
+            {
+              signal: abortController.signal,
+            }
+          );
           sightingsData = await safeJson(sightingsRes);
         }
 
@@ -112,9 +112,12 @@ export function useAircraftTrack({
           if (result && (result.sightings || result.results)) data = result;
           else throw new Error('Invalid sightings response');
         } else {
-          const res = await fetch(`${baseUrl}/api/v1/sightings?icao_hex=${hex}&hours=24&limit=100`, {
-            signal: abortController.signal
-          });
+          const res = await fetch(
+            `${baseUrl}/api/v1/sightings?icao_hex=${hex}&hours=24&limit=100`,
+            {
+              signal: abortController.signal,
+            }
+          );
           data = await safeJson(res);
           if (!data) throw new Error('HTTP request failed');
         }
@@ -140,7 +143,7 @@ export function useAircraftTrack({
   // Global cleanup for all intervals on unmount
   useEffect(() => {
     return () => {
-      intervalsRef.current.forEach(intervalId => {
+      intervalsRef.current.forEach((intervalId) => {
         clearInterval(intervalId);
       });
       intervalsRef.current.clear();

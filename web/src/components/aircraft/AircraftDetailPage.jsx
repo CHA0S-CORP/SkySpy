@@ -8,10 +8,14 @@ import { InfoTabSkeleton, LiveTabSkeleton, MapTabSkeleton } from './skeletons';
 import { ErrorBoundary } from '../common/ErrorBoundary';
 
 // Lazy load tab components for better performance
-const OverviewTab = lazy(() => import('./tabs/OverviewTab').then(m => ({ default: m.OverviewTab })));
-const CommunicationsTab = lazy(() => import('./tabs/CommunicationsTab').then(m => ({ default: m.CommunicationsTab })));
-const SafetyTab = lazy(() => import('./tabs/SafetyTab').then(m => ({ default: m.SafetyTab })));
-const TrackTab = lazy(() => import('./tabs/TrackTab').then(m => ({ default: m.TrackTab })));
+const OverviewTab = lazy(() =>
+  import('./tabs/OverviewTab').then((m) => ({ default: m.OverviewTab }))
+);
+const CommunicationsTab = lazy(() =>
+  import('./tabs/CommunicationsTab').then((m) => ({ default: m.CommunicationsTab }))
+);
+const SafetyTab = lazy(() => import('./tabs/SafetyTab').then((m) => ({ default: m.SafetyTab })));
+const TrackTab = lazy(() => import('./tabs/TrackTab').then((m) => ({ default: m.TrackTab })));
 
 // Loading fallback components
 function TabLoadingFallback({ type = 'default' }) {
@@ -43,7 +47,7 @@ export function AircraftDetailPage({
   wsRequest,
   wsConnected,
   initialTab,
-  onTabChange
+  onTabChange,
 }) {
   // Use consolidated state management hook
   const state = useAircraftDetail({
@@ -55,7 +59,7 @@ export function AircraftDetailPage({
     wsRequest,
     wsConnected,
     initialTab: initialTab || 'overview', // Default to new overview tab
-    onTabChange
+    onTabChange,
   });
 
   const {
@@ -162,7 +166,12 @@ export function AircraftDetailPage({
   // Render loading state
   if (loading) {
     return (
-      <div className="aircraft-detail-page" role="dialog" aria-label="Aircraft details" aria-busy="true">
+      <div
+        className="aircraft-detail-page"
+        role="dialog"
+        aria-label="Aircraft details"
+        aria-busy="true"
+      >
         <AircraftHeader
           hex={hex}
           aircraft={aircraft}
@@ -359,28 +368,19 @@ export function AircraftDetailPage({
               <AlertTriangle size={48} className="error-state-icon" aria-hidden="true" />
               <h2 className="error-state-title">Failed to Load</h2>
               <p className="error-state-message">{error.message}</p>
-              <button
-                className="error-state-retry-btn"
-                onClick={retry}
-                type="button"
-              >
+              <button className="error-state-retry-btn" onClick={retry} type="button">
                 <RefreshCw size={16} aria-hidden="true" />
                 Retry
               </button>
             </div>
           </div>
         ) : (
-          <ErrorBoundary onRetry={retry}>
-            {renderTabContent()}
-          </ErrorBoundary>
+          <ErrorBoundary onRetry={retry}>{renderTabContent()}</ErrorBoundary>
         )}
       </main>
 
       {/* External Links */}
-      <ExternalLinks
-        hex={hex}
-        callsign={aircraft?.flight?.trim()}
-      />
+      <ExternalLinks hex={hex} callsign={aircraft?.flight?.trim()} />
     </div>
   );
 }

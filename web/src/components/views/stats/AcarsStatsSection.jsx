@@ -1,7 +1,14 @@
 import React, { useMemo } from 'react';
 import {
-  Radio, MessageSquare, TrendingUp, Users,
-  FileText, Clock, Activity, BarChart2, Loader2
+  Radio,
+  MessageSquare,
+  TrendingUp,
+  Users,
+  FileText,
+  Clock,
+  Activity,
+  BarChart2,
+  Loader2,
 } from 'lucide-react';
 
 /**
@@ -18,16 +25,16 @@ export function AcarsStatsSection({ data, loading }) {
     total_messages = 0,
     last_24h = 0,
     last_hour = 0,
-    service_stats = {}
+    service_stats = {},
   } = data || {};
 
   // Normalize hourly trend - must be called before any conditional returns
   const trendData = useMemo(() => {
     if (!hourly_trend.length) return [];
-    const max = Math.max(...hourly_trend.map(h => h.count || 0), 1);
-    return hourly_trend.map(h => ({
+    const max = Math.max(...hourly_trend.map((h) => h.count || 0), 1);
+    return hourly_trend.map((h) => ({
       ...h,
-      normalized: ((h.count || 0) / max) * 100
+      normalized: ((h.count || 0) / max) * 100,
     }));
   }, [hourly_trend]);
 
@@ -51,39 +58,45 @@ export function AcarsStatsSection({ data, loading }) {
 
   // ACARS label descriptions
   const labelDescriptions = {
-    '_d': 'Command',
-    'H1': 'Departure',
-    'H2': 'Arrival',
-    '10': 'OUT Gate',
-    '11': 'OFF Takeoff',
-    '12': 'ON Landing',
-    '13': 'IN Gate',
-    '44': 'Position Report',
+    _d: 'Command',
+    H1: 'Departure',
+    H2: 'Arrival',
+    10: 'OUT Gate',
+    11: 'OFF Takeoff',
+    12: 'ON Landing',
+    13: 'IN Gate',
+    44: 'Position Report',
     '5Z': 'Airline Ops',
-    'AA': 'Free Text',
-    'SA': 'System',
-    'CA': 'CPDLC',
-    'Q0': 'Weather Request',
-    'QA': 'ATIS',
-    'QC': 'Clearance',
-    'QD': 'METAR',
-    'QE': 'TAF',
-    'QF': 'NOTAM',
-    'SQ': 'SELCAL',
-    'B0': 'Booking',
-    'B1': 'Passenger',
-    'B2': 'Load Info',
-    'B3': 'Cargo',
-    'M1': 'Maintenance'
+    AA: 'Free Text',
+    SA: 'System',
+    CA: 'CPDLC',
+    Q0: 'Weather Request',
+    QA: 'ATIS',
+    QC: 'Clearance',
+    QD: 'METAR',
+    QE: 'TAF',
+    QF: 'NOTAM',
+    SQ: 'SELCAL',
+    B0: 'Booking',
+    B1: 'Passenger',
+    B2: 'Load Info',
+    B3: 'Cargo',
+    M1: 'Maintenance',
   };
 
-  const maxTypeCount = Math.max(...message_types.map(t => t.count || 0), 1);
-  const maxAirlineCount = Math.max(...top_airlines.map(a => a.count || 0), 1);
+  const maxTypeCount = Math.max(...message_types.map((t) => t.count || 0), 1);
+  const maxAirlineCount = Math.max(...top_airlines.map((a) => a.count || 0), 1);
 
   // Message type colors
   const typeColors = [
-    '#00c8ff', '#00ff88', '#a371f7', '#ff9f43',
-    '#f85149', '#f7d794', '#4ecdc4', '#95e1d3'
+    '#00c8ff',
+    '#00ff88',
+    '#a371f7',
+    '#ff9f43',
+    '#f85149',
+    '#f7d794',
+    '#4ecdc4',
+    '#95e1d3',
   ];
 
   return (
@@ -149,7 +162,7 @@ export function AcarsStatsSection({ data, loading }) {
                         className="acars-type-bar-fill"
                         style={{
                           width: `${(type.count / maxTypeCount) * 100}%`,
-                          backgroundColor: color
+                          backgroundColor: color,
                         }}
                       />
                     </div>
@@ -175,9 +188,7 @@ export function AcarsStatsSection({ data, loading }) {
                   <span className="airline-rank">{i + 1}</span>
                   <div className="airline-info">
                     <span className="airline-code">{airline.code || '???'}</span>
-                    {airline.name && (
-                      <span className="airline-name">{airline.name}</span>
-                    )}
+                    {airline.name && <span className="airline-name">{airline.name}</span>}
                   </div>
                   <div className="airline-bar-container">
                     <div
@@ -254,7 +265,9 @@ export function AcarsStatsSection({ data, loading }) {
               {service_stats.avg_signal !== undefined && (
                 <div className="service-stat">
                   <span className="service-stat-label">Avg Signal</span>
-                  <span className="service-stat-value">{service_stats.avg_signal.toFixed(1)} dB</span>
+                  <span className="service-stat-value">
+                    {service_stats.avg_signal.toFixed(1)} dB
+                  </span>
                 </div>
               )}
             </div>

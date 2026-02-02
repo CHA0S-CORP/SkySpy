@@ -5,20 +5,17 @@ const safeJson = async (res) => {
   if (!res.ok) return null;
   const ct = res.headers.get('content-type');
   if (!ct || !ct.includes('application/json')) return null;
-  try { return await res.json(); } catch { return null; }
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
 };
 
 /**
  * Hook for managing aircraft safety events fetching and display
  */
-export function useAircraftSafety({
-  hex,
-  baseUrl,
-  activeTab,
-  wsRequest,
-  wsConnected,
-  onLoaded,
-}) {
+export function useAircraftSafety({ hex, baseUrl, activeTab, wsRequest, wsConnected, onLoaded }) {
   const [safetyEvents, setSafetyEvents] = useState([]);
   const [safetyHours, setSafetyHours] = useState(24);
   const [expandedSnapshots, setExpandedSnapshots] = useState({});
@@ -50,7 +47,11 @@ export function useAircraftSafety({
         let safetyData = null;
         if (wsRequest && wsConnected) {
           try {
-            safetyData = await wsRequest('safety-events', { icao_hex: hex, hours: safetyHours, limit: 100 });
+            safetyData = await wsRequest('safety-events', {
+              icao_hex: hex,
+              hours: safetyHours,
+              limit: 100,
+            });
             if (safetyData?.error) safetyData = null;
           } catch (err) {
             console.debug('Safety events WS request failed:', err.message);
@@ -60,9 +61,12 @@ export function useAircraftSafety({
         if (abortController.signal.aborted) return;
 
         if (!safetyData) {
-          const safetyRes = await fetch(`${baseUrl}/api/v1/safety/events?icao_hex=${hex}&hours=${safetyHours}&limit=100`, {
-            signal: abortController.signal
-          });
+          const safetyRes = await fetch(
+            `${baseUrl}/api/v1/safety/events?icao_hex=${hex}&hours=${safetyHours}&limit=100`,
+            {
+              signal: abortController.signal,
+            }
+          );
           safetyData = await safeJson(safetyRes);
         }
 
@@ -98,7 +102,11 @@ export function useAircraftSafety({
         let safetyData = null;
         if (wsRequest && wsConnected) {
           try {
-            safetyData = await wsRequest('safety-events', { icao_hex: hex, hours: safetyHours, limit: 100 });
+            safetyData = await wsRequest('safety-events', {
+              icao_hex: hex,
+              hours: safetyHours,
+              limit: 100,
+            });
             if (safetyData?.error) safetyData = null;
           } catch (err) {
             console.debug('Safety events WS request failed:', err.message);
@@ -108,9 +116,12 @@ export function useAircraftSafety({
         if (abortController.signal.aborted) return;
 
         if (!safetyData) {
-          const safetyRes = await fetch(`${baseUrl}/api/v1/safety/events?icao_hex=${hex}&hours=${safetyHours}&limit=100`, {
-            signal: abortController.signal
-          });
+          const safetyRes = await fetch(
+            `${baseUrl}/api/v1/safety/events?icao_hex=${hex}&hours=${safetyHours}&limit=100`,
+            {
+              signal: abortController.signal,
+            }
+          );
           safetyData = await safeJson(safetyRes);
         }
 

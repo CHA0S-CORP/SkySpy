@@ -6,7 +6,19 @@ import './styles/index.css';
 import { Sidebar, Header, SettingsModal } from './components/layout';
 
 // View components
-import { AircraftList, StatsView, HistoryView, AudioView, AlertsView, SystemView, SafetyEventPage, NotamsView, ArchiveView, CannonballMode, AdminConfigView } from './components/views';
+import {
+  AircraftList,
+  StatsView,
+  HistoryView,
+  AudioView,
+  AlertsView,
+  SystemView,
+  SafetyEventPage,
+  NotamsView,
+  ArchiveView,
+  CannonballMode,
+  AdminConfigView,
+} from './components/views';
 
 // Map components
 import { MapView } from './components/map';
@@ -32,14 +44,33 @@ const safeJson = async (res) => {
   if (!res.ok) return null;
   const ct = res.headers.get('content-type');
   if (!ct || !ct.includes('application/json')) return null;
-  try { return await res.json(); } catch { return null; }
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
 };
 
 // ============================================================================
 // Hash Routing Utilities
 // ============================================================================
 
-const VALID_TABS = ['map', 'aircraft', 'stats', 'history', 'audio', 'notams', 'archive', 'alerts', 'system', 'admin', 'airframe', 'event', 'login', 'cannonball'];
+const VALID_TABS = [
+  'map',
+  'aircraft',
+  'stats',
+  'history',
+  'audio',
+  'notams',
+  'archive',
+  'alerts',
+  'system',
+  'admin',
+  'airframe',
+  'event',
+  'login',
+  'cannonball',
+];
 
 function parseHash() {
   const hash = window.location.hash.slice(1); // Remove #
@@ -85,12 +116,7 @@ export default function App() {
   const [showCannonball, setShowCannonball] = useState(false);
 
   // Auth context
-  const {
-    status: authStatus,
-    isAuthenticated,
-    config: authConfig,
-    getAccessToken,
-  } = useAuth();
+  const { status: authStatus, isAuthenticated, config: authConfig, getAccessToken } = useAuth();
 
   const activeTab = hashState.tab;
   const hashParams = hashState.params;
@@ -109,10 +135,13 @@ export default function App() {
   }, []);
 
   // Update hash params without changing tab
-  const setHashParams = useCallback((params) => {
-    const newHash = buildHash(hashState.tab, { ...hashState.params, ...params });
-    window.location.hash = newHash;
-  }, [hashState]);
+  const setHashParams = useCallback(
+    (params) => {
+      const newHash = buildHash(hashState.tab, { ...hashState.params, ...params });
+      window.location.hash = newHash;
+    },
+    [hashState]
+  );
 
   // Listen for hash changes (back/forward navigation, manual URL changes)
   useEffect(() => {
@@ -153,10 +182,12 @@ export default function App() {
 
   // High-frequency position updates for smooth map rendering
   // Uses refs instead of state to avoid 60Hz re-renders
-  const {
-    positionsRef,
-    connected: positionSocketConnected,
-  } = useSocketIOPositions(activeTab === 'map', config.apiBaseUrl, true, 1000);
+  const { positionsRef, connected: positionSocketConnected } = useSocketIOPositions(
+    activeTab === 'map',
+    config.apiBaseUrl,
+    true,
+    1000
+  );
 
   // Fetch status via WebSocket or fallback to HTTP
   useEffect(() => {
@@ -222,14 +253,14 @@ export default function App() {
     const tail = hashParams.tail.trim().toUpperCase();
 
     // Check if already in cache or lookup in progress (use functional check to avoid stale closure)
-    setTailHexLookup(prev => {
+    setTailHexLookup((prev) => {
       if (tail in prev) return prev; // Already cached, no change needed
 
       // Check if lookup already in progress
       if (tailLookupInProgressRef.current.has(tail)) return prev;
 
       // Check if live aircraft has this tail
-      const liveAircraft = aircraft.find(a => a.r?.toUpperCase() === tail);
+      const liveAircraft = aircraft.find((a) => a.r?.toUpperCase() === tail);
       if (liveAircraft?.hex) {
         return { ...prev, [tail]: liveAircraft.hex };
       }
@@ -242,7 +273,11 @@ export default function App() {
         try {
           let data;
           if (wsRequest && connected) {
-            const result = await wsRequest('sightings', { registration: tail, hours: 168, limit: 1 });
+            const result = await wsRequest('sightings', {
+              registration: tail,
+              hours: 168,
+              limit: 1,
+            });
             if (result && (result.sightings || result.results)) {
               data = result;
             } else {
@@ -250,18 +285,20 @@ export default function App() {
             }
           } else {
             // Django API uses /api/v1/sightings (was /api/v1/history/sightings)
-            const res = await fetch(`${config.apiBaseUrl}/api/v1/sightings?registration=${encodeURIComponent(tail)}&hours=168&limit=1`);
+            const res = await fetch(
+              `${config.apiBaseUrl}/api/v1/sightings?registration=${encodeURIComponent(tail)}&hours=168&limit=1`
+            );
             data = await safeJson(res);
             if (!data) throw new Error('HTTP request failed');
           }
           const sightings = data?.sightings || data?.results || [];
           if (sightings.length > 0 && sightings[0].icao_hex) {
-            setTailHexLookup(p => ({ ...p, [tail]: sightings[0].icao_hex }));
+            setTailHexLookup((p) => ({ ...p, [tail]: sightings[0].icao_hex }));
           } else {
-            setTailHexLookup(p => ({ ...p, [tail]: null }));
+            setTailHexLookup((p) => ({ ...p, [tail]: null }));
           }
         } catch (err) {
-          setTailHexLookup(p => ({ ...p, [tail]: null }));
+          setTailHexLookup((p) => ({ ...p, [tail]: null }));
         } finally {
           tailLookupInProgressRef.current.delete(tail);
         }
@@ -295,10 +332,15 @@ export default function App() {
 
   // Wrap main content with ProtectedRoute for auth-required modes
   const mainContent = (
-    <div className={`app ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileMenuOpen ? 'mobile-menu-open' : ''} view-${activeTab}`}>
+    <div
+      className={`app ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileMenuOpen ? 'mobile-menu-open' : ''} view-${activeTab}`}
+    >
       <Sidebar
         activeTab={activeTab}
-        setActiveTab={(tab) => { setActiveTab(tab); setMobileMenuOpen(false); }}
+        setActiveTab={(tab) => {
+          setActiveTab(tab);
+          setMobileMenuOpen(false);
+        }}
         connected={connected}
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
@@ -353,8 +395,24 @@ export default function App() {
               positionSocketConnected={positionSocketConnected}
             />
           )}
-          {activeTab === 'aircraft' && <AircraftList aircraft={aircraft} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} />}
-          {activeTab === 'stats' && <StatsView apiBase={config.apiBaseUrl} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} wsRequest={wsRequest} wsConnected={isReady} aircraft={aircraft} stats={stats} antennaAnalytics={antennaAnalytics} extendedStats={extendedStats} />}
+          {activeTab === 'aircraft' && (
+            <AircraftList
+              aircraft={aircraft}
+              onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
+            />
+          )}
+          {activeTab === 'stats' && (
+            <StatsView
+              apiBase={config.apiBaseUrl}
+              onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
+              wsRequest={wsRequest}
+              wsConnected={isReady}
+              aircraft={aircraft}
+              stats={stats}
+              antennaAnalytics={antennaAnalytics}
+              extendedStats={extendedStats}
+            />
+          )}
           {activeTab === 'history' && (
             <HistoryView
               apiBase={config.apiBaseUrl}
@@ -369,11 +427,35 @@ export default function App() {
               wsConnected={isReady}
             />
           )}
-          {activeTab === 'audio' && <AudioView apiBase={config.apiBaseUrl} onSelectAircraft={(hex, callsign) => setActiveTab('airframe', { icao: hex, call: callsign })} />}
+          {activeTab === 'audio' && (
+            <AudioView
+              apiBase={config.apiBaseUrl}
+              onSelectAircraft={(hex, callsign) =>
+                setActiveTab('airframe', { icao: hex, call: callsign })
+              }
+            />
+          )}
           {activeTab === 'notams' && <NotamsView apiBase={config.apiBaseUrl} />}
-          {activeTab === 'archive' && <ArchiveView apiBase={config.apiBaseUrl} hashParams={hashParams} setHashParams={setHashParams} />}
-          {activeTab === 'alerts' && <AlertsView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={isReady} aircraft={aircraft} feederLocation={status?.location} onLaunchCannonball={() => setShowCannonball(true)} />}
-          {activeTab === 'system' && <SystemView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={isReady} />}
+          {activeTab === 'archive' && (
+            <ArchiveView
+              apiBase={config.apiBaseUrl}
+              hashParams={hashParams}
+              setHashParams={setHashParams}
+            />
+          )}
+          {activeTab === 'alerts' && (
+            <AlertsView
+              apiBase={config.apiBaseUrl}
+              wsRequest={wsRequest}
+              wsConnected={isReady}
+              aircraft={aircraft}
+              feederLocation={status?.location}
+              onLaunchCannonball={() => setShowCannonball(true)}
+            />
+          )}
+          {activeTab === 'system' && (
+            <SystemView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={isReady} />
+          )}
           {activeTab === 'admin' && <AdminConfigView apiBase={config.apiBaseUrl} />}
           {activeTab === 'cannonball' && (
             <CannonballMode
@@ -382,63 +464,80 @@ export default function App() {
               aircraft={aircraft}
             />
           )}
-          {activeTab === 'airframe' && (hashParams.icao || hashParams.call || hashParams.tail) && (() => {
-            // Find aircraft by icao, callsign, or tail number
-            const findAircraft = () => {
-              if (hashParams.icao) {
-                return aircraft.find(a => a.hex?.toLowerCase() === hashParams.icao.toLowerCase());
-              }
-              if (hashParams.call) {
-                return aircraft.find(a => a.flight?.trim().toLowerCase() === hashParams.call.toLowerCase());
-              }
-              if (hashParams.tail) {
-                return aircraft.find(a => a.r?.toLowerCase() === hashParams.tail.toLowerCase());
-              }
-              return null;
-            };
-            const foundAircraft = findAircraft();
+          {activeTab === 'airframe' &&
+            (hashParams.icao || hashParams.call || hashParams.tail) &&
+            (() => {
+              // Find aircraft by icao, callsign, or tail number
+              const findAircraft = () => {
+                if (hashParams.icao) {
+                  return aircraft.find(
+                    (a) => a.hex?.toLowerCase() === hashParams.icao.toLowerCase()
+                  );
+                }
+                if (hashParams.call) {
+                  return aircraft.find(
+                    (a) => a.flight?.trim().toLowerCase() === hashParams.call.toLowerCase()
+                  );
+                }
+                if (hashParams.tail) {
+                  return aircraft.find((a) => a.r?.toLowerCase() === hashParams.tail.toLowerCase());
+                }
+                return null;
+              };
+              const foundAircraft = findAircraft();
 
-            // Use the hex from found aircraft, or fall back to the icao param, or lookup from tail
-            const tailKey = hashParams.tail?.trim().toUpperCase();
-            const lookedUpHex = tailKey ? tailHexLookup[tailKey] : null;
-            const hex = foundAircraft?.hex || hashParams.icao || lookedUpHex;
+              // Use the hex from found aircraft, or fall back to the icao param, or lookup from tail
+              const tailKey = hashParams.tail?.trim().toUpperCase();
+              const lookedUpHex = tailKey ? tailHexLookup[tailKey] : null;
+              const hex = foundAircraft?.hex || hashParams.icao || lookedUpHex;
 
-            // Show loading state while looking up tail
-            if (hashParams.tail && !hashParams.icao && !foundAircraft && !(tailKey in tailHexLookup)) {
-              return (
+              // Show loading state while looking up tail
+              if (
+                hashParams.tail &&
+                !hashParams.icao &&
+                !foundAircraft &&
+                !(tailKey in tailHexLookup)
+              ) {
+                return (
+                  <div
+                    className="not-found-message"
+                    style={{ padding: '2rem', textAlign: 'center' }}
+                  >
+                    <p>Looking up aircraft: {hashParams.tail}...</p>
+                  </div>
+                );
+              }
+
+              return hex ? (
+                <AircraftDetailPage
+                  hex={hex}
+                  apiUrl={config.apiBaseUrl}
+                  onClose={() => setActiveTab('map')}
+                  onSelectAircraft={(h) => setActiveTab('airframe', { icao: h })}
+                  onViewHistoryEvent={(eventId) => {
+                    setTargetSafetyEventId(eventId);
+                    setActiveTab('history', { data: 'safety' });
+                  }}
+                  onViewEvent={(eventId) => setActiveTab('event', { id: eventId })}
+                  aircraft={foundAircraft}
+                  feederLocation={status?.location}
+                  wsRequest={wsRequest}
+                  wsConnected={isReady}
+                  initialTab={hashParams.tab}
+                  onTabChange={(tab) => setHashParams({ tab })}
+                />
+              ) : (
                 <div className="not-found-message" style={{ padding: '2rem', textAlign: 'center' }}>
-                  <p>Looking up aircraft: {hashParams.tail}...</p>
+                  <p>Aircraft not found: {hashParams.call || hashParams.tail || hashParams.icao}</p>
+                  <button
+                    onClick={() => setActiveTab('map')}
+                    style={{ marginTop: '1rem', padding: '0.5rem 1rem', cursor: 'pointer' }}
+                  >
+                    Return to Map
+                  </button>
                 </div>
               );
-            }
-
-            return hex ? (
-              <AircraftDetailPage
-                hex={hex}
-                apiUrl={config.apiBaseUrl}
-                onClose={() => setActiveTab('map')}
-                onSelectAircraft={(h) => setActiveTab('airframe', { icao: h })}
-                onViewHistoryEvent={(eventId) => {
-                  setTargetSafetyEventId(eventId);
-                  setActiveTab('history', { data: 'safety' });
-                }}
-                onViewEvent={(eventId) => setActiveTab('event', { id: eventId })}
-                aircraft={foundAircraft}
-                feederLocation={status?.location}
-                wsRequest={wsRequest}
-                wsConnected={isReady}
-                initialTab={hashParams.tab}
-                onTabChange={(tab) => setHashParams({ tab })}
-              />
-            ) : (
-              <div className="not-found-message" style={{ padding: '2rem', textAlign: 'center' }}>
-                <p>Aircraft not found: {hashParams.call || hashParams.tail || hashParams.icao}</p>
-                <button onClick={() => setActiveTab('map')} style={{ marginTop: '1rem', padding: '0.5rem 1rem', cursor: 'pointer' }}>
-                  Return to Map
-                </button>
-              </div>
-            );
-          })()}
+            })()}
           {activeTab === 'event' && hashParams.id && (
             <SafetyEventPage
               eventId={hashParams.id}
@@ -462,7 +561,7 @@ export default function App() {
 
       {selectedAircraftHex && (
         <div className="aircraft-detail-overlay" onClick={() => setSelectedAircraftHex(null)}>
-          <div className="aircraft-detail-modal" onClick={e => e.stopPropagation()}>
+          <div className="aircraft-detail-modal" onClick={(e) => e.stopPropagation()}>
             <AircraftDetailPage
               hex={selectedAircraftHex}
               apiUrl={config.apiBaseUrl}
@@ -480,7 +579,7 @@ export default function App() {
                 setSelectedAircraftHex(null);
                 setActiveTab('event', { id: eventId });
               }}
-              aircraft={aircraft.find(a => a.hex === selectedAircraftHex)}
+              aircraft={aircraft.find((a) => a.hex === selectedAircraftHex)}
               feederLocation={status?.location}
               wsRequest={wsRequest}
               wsConnected={isReady}

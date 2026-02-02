@@ -125,39 +125,42 @@ export function useSocketIOApi({
    * @param {number} options.timeout - Timeout in milliseconds
    * @returns {Promise<any>} Response data
    */
-  const request = useCallback(async (type, params = {}, options = {}) => {
-    const { timeout = defaultTimeout } = options;
+  const request = useCallback(
+    async (type, params = {}, options = {}) => {
+      const { timeout = defaultTimeout } = options;
 
-    // If not connected, reject with clear error
-    if (!connected) {
-      return Promise.reject(new Error('Socket.IO not connected'));
-    }
+      // If not connected, reject with clear error
+      if (!connected) {
+        return Promise.reject(new Error('Socket.IO not connected'));
+      }
 
-    return new Promise((resolve, reject) => {
-      // Generate unique request ID
-      const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      return new Promise((resolve, reject) => {
+        // Generate unique request ID
+        const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      // Setup timeout
-      const timeoutId = setTimeout(() => {
-        if (pendingRequests.current.has(requestId)) {
-          pendingRequests.current.delete(requestId);
-          if (mountedRef.current) {
-            reject(new Error(`Request timeout: ${type}`));
+        // Setup timeout
+        const timeoutId = setTimeout(() => {
+          if (pendingRequests.current.has(requestId)) {
+            pendingRequests.current.delete(requestId);
+            if (mountedRef.current) {
+              reject(new Error(`Request timeout: ${type}`));
+            }
           }
-        }
-      }, timeout);
+        }, timeout);
 
-      // Store pending request
-      pendingRequests.current.set(requestId, { resolve, reject, timeoutId });
+        // Store pending request
+        pendingRequests.current.set(requestId, { resolve, reject, timeoutId });
 
-      // Send request
-      emit('request', {
-        type,
-        request_id: requestId,
-        params,
+        // Send request
+        emit('request', {
+          type,
+          request_id: requestId,
+          params,
+        });
       });
-    });
-  }, [connected, defaultTimeout, emit]);
+    },
+    [connected, defaultTimeout, emit]
+  );
 
   /**
    * Cancel a pending request.

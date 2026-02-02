@@ -30,14 +30,13 @@ function ThreatCell({ threat, userHeading, onSelect, isSelected, showEta = false
   const color = THREAT_COLORS[threat.threat_level] || THREAT_COLORS.info;
 
   // Calculate relative bearing for arrow rotation
-  const rotation = userHeading !== null
-    ? (threat.bearing - userHeading + 360) % 360
-    : threat.bearing;
+  const rotation =
+    userHeading !== null ? (threat.bearing - userHeading + 360) % 360 : threat.bearing;
 
   // Format distance
   const formatDistance = (nm) => {
     if (nm < 0.5) {
-      return `${Math.round(nm * 6076 / 100) * 100}ft`;
+      return `${Math.round((nm * 6076) / 100) * 100}ft`;
     } else if (nm < 10) {
       return `${nm.toFixed(1)}nm`;
     }
@@ -45,9 +44,8 @@ function ThreatCell({ threat, userHeading, onSelect, isSelected, showEta = false
   };
 
   // Trend icon
-  const TrendIcon = threat.trend === 'approaching' ? ChevronDown
-    : threat.trend === 'departing' ? ChevronUp
-    : Minus;
+  const TrendIcon =
+    threat.trend === 'approaching' ? ChevronDown : threat.trend === 'departing' ? ChevronUp : Minus;
 
   return (
     <button
@@ -61,19 +59,13 @@ function ThreatCell({ threat, userHeading, onSelect, isSelected, showEta = false
       </div>
 
       {/* Distance */}
-      <div className="cell-distance">
-        {formatDistance(threat.distance_nm)}
-      </div>
+      <div className="cell-distance">{formatDistance(threat.distance_nm)}</div>
 
       {/* Category */}
-      <div className="cell-category">
-        {threat.category || 'Aircraft'}
-      </div>
+      <div className="cell-category">{threat.category || 'Aircraft'}</div>
 
       {/* Direction label */}
-      <div className="cell-direction">
-        {getDirectionName(threat.bearing)}
-      </div>
+      <div className="cell-direction">{getDirectionName(threat.bearing)}</div>
 
       {/* Trend indicator */}
       <div className={`cell-trend ${threat.trend}`}>
@@ -89,9 +81,7 @@ function ThreatCell({ threat, userHeading, onSelect, isSelected, showEta = false
       )}
 
       {/* Callsign if available */}
-      {threat.callsign && (
-        <div className="cell-callsign">{threat.callsign}</div>
-      )}
+      {threat.callsign && <div className="cell-callsign">{threat.callsign}</div>}
     </button>
   );
 }
@@ -113,21 +103,24 @@ export function ThreatGrid({
     if (!autoCycle || threats.length <= 1) return;
 
     const interval = setInterval(() => {
-      setCycleIndex(prev => (prev + 1) % threats.length);
+      setCycleIndex((prev) => (prev + 1) % threats.length);
     }, cycleInterval);
 
     return () => clearInterval(interval);
   }, [autoCycle, cycleInterval, threats.length]);
 
   // Handle threat selection
-  const handleSelect = useCallback((threat) => {
-    onSelectThreat?.(threat);
-  }, [onSelectThreat]);
+  const handleSelect = useCallback(
+    (threat) => {
+      onSelectThreat?.(threat);
+    },
+    [onSelectThreat]
+  );
 
   // Get threats to display (immutable - don't mutate the sliced array)
   const displayThreats = [
     ...threats.slice(0, maxDisplay),
-    ...Array(Math.max(0, maxDisplay - threats.length)).fill(null)
+    ...Array(Math.max(0, maxDisplay - threats.length)).fill(null),
   ];
 
   // Determine grid layout based on count
@@ -155,7 +148,9 @@ export function ThreatGrid({
       {/* Auto-cycle indicator */}
       {autoCycle && threats.length > maxDisplay && (
         <div className="cycle-indicator">
-          <span>{cycleIndex + 1} / {threats.length}</span>
+          <span>
+            {cycleIndex + 1} / {threats.length}
+          </span>
         </div>
       )}
     </div>

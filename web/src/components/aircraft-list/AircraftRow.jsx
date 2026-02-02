@@ -20,7 +20,7 @@ const SignalIndicator = memo(({ rssi }) => {
     <span className={`signal-indicator ${strengthClass}`} title={`${rssi.toFixed(1)} dB`}>
       <Radio size={12} />
       <span className="signal-bars">
-        {[1, 2, 3, 4].map(i => (
+        {[1, 2, 3, 4].map((i) => (
           <span key={i} className={`bar ${i <= strength ? 'active' : ''}`} />
         ))}
       </span>
@@ -39,10 +39,13 @@ const VerticalSpeedIndicator = memo(({ vr }) => {
   const isFast = Math.abs(vr) > 2000;
 
   return (
-    <span className={`vs-indicator ${isClimbing ? 'climbing' : ''} ${isDescending ? 'descending' : ''} ${isFast ? 'fast' : ''}`}>
+    <span
+      className={`vs-indicator ${isClimbing ? 'climbing' : ''} ${isDescending ? 'descending' : ''} ${isFast ? 'fast' : ''}`}
+    >
       {isClimbing && <ArrowUp size={12} />}
       {isDescending && <ArrowDown size={12} />}
-      {vr > 0 ? '+' : ''}{vr}
+      {vr > 0 ? '+' : ''}
+      {vr}
     </span>
   );
 });
@@ -79,7 +82,9 @@ export const AircraftRow = memo(function AircraftRow({
     isDescending ? 'descending' : '',
     onSelect ? 'clickable' : '',
     `density-${density}`,
-  ].filter(Boolean).join(' ');
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <tr
@@ -101,20 +106,12 @@ export const AircraftRow = memo(function AircraftRow({
           {ac.hex}
         </td>
       )}
-      {isVisible('flight') && (
-        <td className="callsign-cell">{ac.flight || '--'}</td>
-      )}
-      {isVisible('type') && (
-        <td className="mono type-cell">{ac.type || '--'}</td>
-      )}
+      {isVisible('flight') && <td className="callsign-cell">{ac.flight || '--'}</td>}
+      {isVisible('type') && <td className="mono type-cell">{ac.type || '--'}</td>}
       {isVisible('alt') && (
-        <td className="mono alt-cell">
-          {ac.alt != null ? ac.alt.toLocaleString() : '--'}
-        </td>
+        <td className="mono alt-cell">{ac.alt != null ? ac.alt.toLocaleString() : '--'}</td>
       )}
-      {isVisible('gs') && (
-        <td className="mono speed-cell">{ac.gs?.toFixed(0) || '--'}</td>
-      )}
+      {isVisible('gs') && <td className="mono speed-cell">{ac.gs?.toFixed(0) || '--'}</td>}
       {isVisible('vr') && (
         <td className="mono vs-cell">
           <VerticalSpeedIndicator vr={ac.vr} />
@@ -124,10 +121,11 @@ export const AircraftRow = memo(function AircraftRow({
         <td className="mono hdg-cell">
           {ac.track != null ? (
             <span className="heading-value">
-              {Math.round(ac.track)}°
-              {cardinal && <span className="cardinal">{cardinal}</span>}
+              {Math.round(ac.track)}°{cardinal && <span className="cardinal">{cardinal}</span>}
             </span>
-          ) : '--'}
+          ) : (
+            '--'
+          )}
         </td>
       )}
       {isVisible('distance_nm') && (
@@ -139,7 +137,9 @@ export const AircraftRow = memo(function AircraftRow({
         </td>
       )}
       {isVisible('squawk') && (
-        <td className={`mono squawk-cell ${ac.squawk?.match(/^7[567]00$/) ? 'emergency-squawk' : ''}`}>
+        <td
+          className={`mono squawk-cell ${ac.squawk?.match(/^7[567]00$/) ? 'emergency-squawk' : ''}`}
+        >
           {ac.squawk || '--'}
         </td>
       )}

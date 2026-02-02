@@ -17,20 +17,25 @@
  * @param {number} timeDeltaSeconds - Time between position updates
  * @returns {number} Closing speed in knots (positive = approaching)
  */
-export function calculateClosingSpeed(userPos, userPrevPos, threat, threatPrev, timeDeltaSeconds = 3) {
+export function calculateClosingSpeed(
+  userPos,
+  userPrevPos,
+  threat,
+  threatPrev,
+  timeDeltaSeconds = 3
+) {
   if (!userPrevPos || !threatPrev || timeDeltaSeconds === 0) {
     return null;
   }
 
   // Calculate previous and current distances
   const prevDistance = calculateDistanceNm(
-    userPrevPos.lat, userPrevPos.lon,
-    threatPrev.lat, threatPrev.lon
+    userPrevPos.lat,
+    userPrevPos.lon,
+    threatPrev.lat,
+    threatPrev.lon
   );
-  const currentDistance = calculateDistanceNm(
-    userPos.lat, userPos.lon,
-    threat.lat, threat.lon
-  );
+  const currentDistance = calculateDistanceNm(userPos.lat, userPos.lon, threat.lat, threat.lon);
 
   // Distance change per second, convert to per hour (knots)
   const distanceChange = prevDistance - currentDistance; // Positive if closing
@@ -71,7 +76,7 @@ export function calculateETA(threat, closingSpeed) {
 
   // Estimate closest point of approach
   // This is a simplified calculation - assumes linear motion
-  const cpaDistance = Math.max(0, threat.distance_nm - (closingSpeed * (etaSeconds / 3600)));
+  const cpaDistance = Math.max(0, threat.distance_nm - closingSpeed * (etaSeconds / 3600));
 
   return {
     eta: etaSeconds,
@@ -134,12 +139,7 @@ export function predictPosition(threat, secondsAhead) {
   const distanceNm = speedNmPerSec * secondsAhead;
 
   // Calculate new position
-  const newPos = calculateDestination(
-    threat.lat,
-    threat.lon,
-    aircraftTrack,
-    distanceNm
-  );
+  const newPos = calculateDestination(threat.lat, threat.lon, aircraftTrack, distanceNm);
 
   return newPos;
 }
@@ -155,23 +155,24 @@ export function predictPosition(threat, secondsAhead) {
 export function calculateDestination(lat, lon, bearing, distanceNm) {
   const R = 3440.065; // Earth radius in nm
   const d = distanceNm / R;
-  const brng = bearing * Math.PI / 180;
-  const lat1 = lat * Math.PI / 180;
-  const lon1 = lon * Math.PI / 180;
+  const brng = (bearing * Math.PI) / 180;
+  const lat1 = (lat * Math.PI) / 180;
+  const lon1 = (lon * Math.PI) / 180;
 
   const lat2 = Math.asin(
-    Math.sin(lat1) * Math.cos(d) +
-    Math.cos(lat1) * Math.sin(d) * Math.cos(brng)
+    Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(brng)
   );
 
-  const lon2 = lon1 + Math.atan2(
-    Math.sin(brng) * Math.sin(d) * Math.cos(lat1),
-    Math.cos(d) - Math.sin(lat1) * Math.sin(lat2)
-  );
+  const lon2 =
+    lon1 +
+    Math.atan2(
+      Math.sin(brng) * Math.sin(d) * Math.cos(lat1),
+      Math.cos(d) - Math.sin(lat1) * Math.sin(lat2)
+    );
 
   return {
-    lat: lat2 * 180 / Math.PI,
-    lon: lon2 * 180 / Math.PI,
+    lat: (lat2 * 180) / Math.PI,
+    lon: (lon2 * 180) / Math.PI,
   };
 }
 
@@ -196,13 +197,14 @@ export function detectCirclingBehavior(positionHistory, minPositions = 10) {
   };
 
   // Calculate distances from centroid
-  const distances = positions.map(p =>
+  const distances = positions.map((p) =>
     calculateDistanceNm(centroid.lat, centroid.lon, p.lat, p.lon)
   );
 
   // Calculate average and standard deviation
   const avgDistance = distances.reduce((a, b) => a + b, 0) / distances.length;
-  const variance = distances.reduce((sum, d) => sum + Math.pow(d - avgDistance, 2), 0) / distances.length;
+  const variance =
+    distances.reduce((sum, d) => sum + Math.pow(d - avgDistance, 2), 0) / distances.length;
   const stdDev = Math.sqrt(variance);
 
   // Low standard deviation relative to average distance indicates circular pattern
@@ -214,8 +216,18 @@ export function detectCirclingBehavior(positionHistory, minPositions = 10) {
   // Calculate heading changes to confirm circling
   let totalHeadingChange = 0;
   for (let i = 1; i < positions.length; i++) {
-    const bearing1 = calculateBearing(centroid.lat, centroid.lon, positions[i - 1].lat, positions[i - 1].lon);
-    const bearing2 = calculateBearing(centroid.lat, centroid.lon, positions[i].lat, positions[i].lon);
+    const bearing1 = calculateBearing(
+      centroid.lat,
+      centroid.lon,
+      positions[i - 1].lat,
+      positions[i - 1].lon
+    );
+    const bearing2 = calculateBearing(
+      centroid.lat,
+      centroid.lon,
+      positions[i].lat,
+      positions[i].lon
+    );
     let change = bearing2 - bearing1;
     if (change > 180) change -= 360;
     if (change < -180) change += 360;
@@ -252,8 +264,8 @@ export function detectLoitering(threat, firstSeen, loiterThresholdMinutes = 10) 
 
   // Consider loitering if aircraft has been nearby for threshold time
   // and hasn't moved significantly away
-  const isLoitering = durationMinutes >= loiterThresholdMinutes &&
-    threat.distance_nm < firstSeen.distance_nm * 1.5;
+  const isLoitering =
+    durationMinutes >= loiterThresholdMinutes && threat.distance_nm < firstSeen.distance_nm * 1.5;
 
   return {
     isLoitering,
@@ -309,23 +321,26 @@ export function calculateUrgencyScore(threat, prediction = {}, behavior = {}) {
 // Import from lawEnforcement.js or duplicate minimal versions
 function calculateDistanceNm(lat1, lon1, lat2, lon2) {
   const R = 3440.065;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
 
 function calculateBearing(lat1, lon1, lat2, lon2) {
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const lat1Rad = lat1 * Math.PI / 180;
-  const lat2Rad = lat2 * Math.PI / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const lat1Rad = (lat1 * Math.PI) / 180;
+  const lat2Rad = (lat2 * Math.PI) / 180;
   const y = Math.sin(dLon) * Math.cos(lat2Rad);
-  const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) -
-    Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
-  const bearing = Math.atan2(y, x) * 180 / Math.PI;
+  const x =
+    Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+  const bearing = (Math.atan2(y, x) * 180) / Math.PI;
   return (bearing + 360) % 360;
 }
 

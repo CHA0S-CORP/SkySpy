@@ -24,7 +24,7 @@ export function SafetyEventMap({
   onGraphDragEnd,
   onResetGraphZoom,
   getReplayTimestamp,
-  onSelectAircraft
+  onSelectAircraft,
 }) {
   const state = replayState[eventKey];
 
@@ -73,7 +73,7 @@ export function SafetyEventMap({
                   color={color}
                   label="Speed"
                   unit="kts"
-                  formatFn={v => v?.toFixed(0)}
+                  formatFn={(v) => v?.toFixed(0)}
                   positionPercent={position}
                   eventKey={eventKey}
                   graphZoomState={graphZoomState}
@@ -89,7 +89,7 @@ export function SafetyEventMap({
                   color={color}
                   label="V/S"
                   unit="fpm"
-                  formatFn={v => (v > 0 ? '+' : '') + v}
+                  formatFn={(v) => (v > 0 ? '+' : '') + v}
                   positionPercent={position}
                   eventKey={eventKey}
                   graphZoomState={graphZoomState}
@@ -158,9 +158,7 @@ export function SafetyEventMap({
             value={state?.position || 100}
             onChange={(e) => onReplayChange(eventKey, event, parseFloat(e.target.value))}
           />
-          <div className="replay-time">
-            {getReplayTimestamp(eventKey, event) || '--:--'}
-          </div>
+          <div className="replay-time">{getReplayTimestamp(eventKey, event) || '--:--'}</div>
         </div>
       </div>
 

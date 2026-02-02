@@ -17,29 +17,29 @@ export function SystemStatusCard({ systemData }) {
       label: 'CPU',
       value: systemData?.cpu_percent ?? '--',
       unit: '%',
-      status: getStatusColor(systemData?.cpu_percent || 0, { warning: 70, critical: 90 })
+      status: getStatusColor(systemData?.cpu_percent || 0, { warning: 70, critical: 90 }),
     },
     {
       icon: HardDrive,
       label: 'RAM',
       value: systemData?.memory_percent ?? '--',
       unit: '%',
-      status: getStatusColor(systemData?.memory_percent || 0, { warning: 80, critical: 95 })
+      status: getStatusColor(systemData?.memory_percent || 0, { warning: 80, critical: 95 }),
     },
     {
       icon: Thermometer,
       label: 'SDR Temp',
       value: systemData?.sdr_temp ?? '--',
       unit: 'C',
-      status: getStatusColor(systemData?.sdr_temp || 0, { warning: 55, critical: 70 })
+      status: getStatusColor(systemData?.sdr_temp || 0, { warning: 55, critical: 70 }),
     },
     {
       icon: Wifi,
       label: 'Gain',
       value: systemData?.sdr_gain ?? '--',
       unit: 'dB',
-      status: 'normal'
-    }
+      status: 'normal',
+    },
   ];
 
   return (
@@ -54,7 +54,8 @@ export function SystemStatusCard({ systemData }) {
             <metric.icon size={14} />
             <span className="system-metric-label">{metric.label}</span>
             <span className="system-metric-value">
-              {metric.value}{metric.value !== '--' ? metric.unit : ''}
+              {metric.value}
+              {metric.value !== '--' ? metric.unit : ''}
             </span>
           </div>
         ))}
@@ -137,7 +138,9 @@ export function AcarsServiceCard({ acarsStats }) {
         <Radio size={16} />
         <span>ACARS Service</span>
       </div>
-      <div className={`service-indicator ${acarsStats.service_stats?.running ? 'running' : 'stopped'}`}>
+      <div
+        className={`service-indicator ${acarsStats.service_stats?.running ? 'running' : 'stopped'}`}
+      >
         <span className="service-dot"></span>
         <span>{acarsStats.service_stats?.running ? 'Running' : 'Stopped'}</span>
       </div>
@@ -163,7 +166,9 @@ export function SafetyMonitorCard({ safetyStats }) {
         <Shield size={16} />
         <span>Safety Monitor</span>
       </div>
-      <div className={`monitor-indicator ${safetyStats.monitoring_enabled ? 'active' : 'inactive'}`}>
+      <div
+        className={`monitor-indicator ${safetyStats.monitoring_enabled ? 'active' : 'inactive'}`}
+      >
         <span className="monitor-dot"></span>
         <span>{safetyStats.monitoring_enabled ? 'Active' : 'Inactive'}</span>
       </div>

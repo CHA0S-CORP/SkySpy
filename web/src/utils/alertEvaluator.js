@@ -3,10 +3,7 @@
  * Mirrors the backend evaluation logic in adsb-api/app/services/alerts.py
  */
 
-import {
-  identifyLawEnforcement,
-  isHelicopter as checkIsHelicopter,
-} from './lawEnforcement';
+import { identifyLawEnforcement, isHelicopter as checkIsHelicopter } from './lawEnforcement';
 import {
   normalizeOperator,
   stringMatch,
@@ -44,14 +41,20 @@ export function evaluateCondition(condition, aircraft, distanceNm = null) {
 
     case 'altitude':
     case 'altitude_above': {
-      const alt = safeIntAltitude(aircraft.alt_baro) || safeIntAltitude(aircraft.alt_geom) || safeIntAltitude(aircraft.alt);
+      const alt =
+        safeIntAltitude(aircraft.alt_baro) ||
+        safeIntAltitude(aircraft.alt_geom) ||
+        safeIntAltitude(aircraft.alt);
       if (alt === null) return false;
       if (condType === 'altitude_above') return alt > parseFloat(value);
       return numericMatch(alt, value, op);
     }
 
     case 'altitude_below': {
-      const alt = safeIntAltitude(aircraft.alt_baro) || safeIntAltitude(aircraft.alt_geom) || safeIntAltitude(aircraft.alt);
+      const alt =
+        safeIntAltitude(aircraft.alt_baro) ||
+        safeIntAltitude(aircraft.alt_geom) ||
+        safeIntAltitude(aircraft.alt);
       if (alt === null) return false;
       return alt < parseFloat(value);
     }
@@ -149,8 +152,8 @@ export function evaluateConditionGroup(group, aircraft, distanceNm = null) {
   const conditions = group.conditions || [];
   const logic = (group.logic || 'AND').toUpperCase();
   if (conditions.length === 0) return false;
-  if (logic === 'OR') return conditions.some(c => evaluateCondition(c, aircraft, distanceNm));
-  return conditions.every(c => evaluateCondition(c, aircraft, distanceNm));
+  if (logic === 'OR') return conditions.some((c) => evaluateCondition(c, aircraft, distanceNm));
+  return conditions.every((c) => evaluateCondition(c, aircraft, distanceNm));
 }
 
 /**
@@ -165,23 +168,28 @@ export function evaluateRule(rule, aircraft, distanceNm = null) {
     const groups = conditions.groups || [];
     const logic = (conditions.logic || 'AND').toUpperCase();
     if (groups.length > 0) {
-      if (logic === 'OR') return groups.some(g => evaluateConditionGroup(g, aircraft, distanceNm));
-      return groups.every(g => evaluateConditionGroup(g, aircraft, distanceNm));
+      if (logic === 'OR')
+        return groups.some((g) => evaluateConditionGroup(g, aircraft, distanceNm));
+      return groups.every((g) => evaluateConditionGroup(g, aircraft, distanceNm));
     }
   }
 
   // Simple flat array of conditions (AND logic)
   if (Array.isArray(conditions) && conditions.length > 0) {
-    return conditions.every(c => evaluateCondition(c, aircraft, distanceNm));
+    return conditions.every((c) => evaluateCondition(c, aircraft, distanceNm));
   }
 
   // Legacy single condition format
   if (rule.rule_type || rule.type) {
-    return evaluateCondition({
-      type: rule.rule_type || rule.type,
-      operator: rule.operator,
-      value: rule.value,
-    }, aircraft, distanceNm);
+    return evaluateCondition(
+      {
+        type: rule.rule_type || rule.type,
+        operator: rule.operator,
+        value: rule.value,
+      },
+      aircraft,
+      distanceNm
+    );
   }
 
   return false;
@@ -197,7 +205,12 @@ export function findMatchingAircraft(rule, aircraftList, feederLocation = null) 
   for (const aircraft of aircraftList) {
     let distanceNm = aircraft.distance_nm;
     if (!distanceNm && feederLocation && aircraft.lat && aircraft.lon) {
-      distanceNm = calculateDistanceNm(feederLocation.lat, feederLocation.lon, aircraft.lat, aircraft.lon);
+      distanceNm = calculateDistanceNm(
+        feederLocation.lat,
+        feederLocation.lon,
+        aircraft.lat,
+        aircraft.lon
+      );
     }
     if (evaluateRule(rule, aircraft, distanceNm)) {
       const matchReasons = getMatchReasons(rule, aircraft, distanceNm);
@@ -221,36 +234,79 @@ export function getMatchReasons(rule, aircraft, distanceNm = null) {
     const operator = c.operator || 'equals';
 
     switch (type) {
-      case 'callsign': reasons.push(`Callsign ${operator} "${value}" (${aircraft.flight || 'N/A'})`); break;
+      case 'callsign':
+        reasons.push(`Callsign ${operator} "${value}" (${aircraft.flight || 'N/A'})`);
+        break;
       case 'hex':
-      case 'icao': reasons.push(`ICAO ${operator} "${value}" (${aircraft.hex || 'N/A'})`); break;
-      case 'squawk': reasons.push(`Squawk ${operator} "${value}" (${aircraft.squawk || 'N/A'})`); break;
-      case 'altitude_above': reasons.push(`Altitude above ${value}ft (${aircraft.alt_baro || aircraft.alt_geom || aircraft.alt || 'N/A'}ft)`); break;
-      case 'altitude_below': reasons.push(`Altitude below ${value}ft (${aircraft.alt_baro || aircraft.alt_geom || aircraft.alt || 'N/A'}ft)`); break;
-      case 'speed_above': reasons.push(`Speed above ${value}kts (${aircraft.gs || 'N/A'}kts)`); break;
-      case 'speed_below': reasons.push(`Speed below ${value}kts (${aircraft.gs || 'N/A'}kts)`); break;
-      case 'distance_within': reasons.push(`Within ${value}nm (${distanceNm?.toFixed(1) || aircraft.distance_nm?.toFixed(1) || 'N/A'}nm)`); break;
-      case 'military': reasons.push('Military aircraft'); break;
-      case 'emergency': reasons.push(`Emergency (squawk: ${aircraft.squawk || 'N/A'})`); break;
+      case 'icao':
+        reasons.push(`ICAO ${operator} "${value}" (${aircraft.hex || 'N/A'})`);
+        break;
+      case 'squawk':
+        reasons.push(`Squawk ${operator} "${value}" (${aircraft.squawk || 'N/A'})`);
+        break;
+      case 'altitude_above':
+        reasons.push(
+          `Altitude above ${value}ft (${aircraft.alt_baro || aircraft.alt_geom || aircraft.alt || 'N/A'}ft)`
+        );
+        break;
+      case 'altitude_below':
+        reasons.push(
+          `Altitude below ${value}ft (${aircraft.alt_baro || aircraft.alt_geom || aircraft.alt || 'N/A'}ft)`
+        );
+        break;
+      case 'speed_above':
+        reasons.push(`Speed above ${value}kts (${aircraft.gs || 'N/A'}kts)`);
+        break;
+      case 'speed_below':
+        reasons.push(`Speed below ${value}kts (${aircraft.gs || 'N/A'}kts)`);
+        break;
+      case 'distance_within':
+        reasons.push(
+          `Within ${value}nm (${distanceNm?.toFixed(1) || aircraft.distance_nm?.toFixed(1) || 'N/A'}nm)`
+        );
+        break;
+      case 'military':
+        reasons.push('Military aircraft');
+        break;
+      case 'emergency':
+        reasons.push(`Emergency (squawk: ${aircraft.squawk || 'N/A'})`);
+        break;
       case 'type':
-      case 'aircraft_type': reasons.push(`Aircraft type ${operator} "${value}" (${aircraft.t || aircraft.type || 'N/A'})`); break;
-      case 'law_enforcement': reasons.push('Law enforcement aircraft'); break;
-      case 'helicopter': reasons.push('Helicopter'); break;
-      case 'distance_from_mobile': reasons.push(`Within ${value}nm from mobile (${aircraft.mobileDistanceNm?.toFixed(1) || distanceNm?.toFixed(1) || 'N/A'}nm)`); break;
-      default: reasons.push(`${type} ${operator} "${value}"`);
+      case 'aircraft_type':
+        reasons.push(
+          `Aircraft type ${operator} "${value}" (${aircraft.t || aircraft.type || 'N/A'})`
+        );
+        break;
+      case 'law_enforcement':
+        reasons.push('Law enforcement aircraft');
+        break;
+      case 'helicopter':
+        reasons.push('Helicopter');
+        break;
+      case 'distance_from_mobile':
+        reasons.push(
+          `Within ${value}nm from mobile (${aircraft.mobileDistanceNm?.toFixed(1) || distanceNm?.toFixed(1) || 'N/A'}nm)`
+        );
+        break;
+      default:
+        reasons.push(`${type} ${operator} "${value}"`);
     }
   };
 
   if (conditions && typeof conditions === 'object' && !Array.isArray(conditions)) {
-    for (const group of (conditions.groups || [])) {
-      for (const c of (group.conditions || [])) checkCondition(c);
+    for (const group of conditions.groups || []) {
+      for (const c of group.conditions || []) checkCondition(c);
     }
   }
   if (Array.isArray(conditions)) {
     for (const c of conditions) checkCondition(c);
   }
   if (rule.rule_type || rule.type) {
-    checkCondition({ type: rule.rule_type || rule.type, operator: rule.operator, value: rule.value });
+    checkCondition({
+      type: rule.rule_type || rule.type,
+      operator: rule.operator,
+      value: rule.value,
+    });
   }
 
   return reasons.length > 0 ? reasons : ['Matches rule conditions'];
@@ -270,17 +326,31 @@ export function getRelevantValues(rule, aircraft) {
       switch (type) {
         case 'altitude_above':
         case 'altitude_below':
-        case 'altitude': values.altitude = aircraft.alt_baro || aircraft.alt_geom || aircraft.alt; break;
+        case 'altitude':
+          values.altitude = aircraft.alt_baro || aircraft.alt_geom || aircraft.alt;
+          break;
         case 'speed_above':
         case 'speed_below':
-        case 'speed': values.speed = aircraft.gs; break;
+        case 'speed':
+          values.speed = aircraft.gs;
+          break;
         case 'distance_within':
-        case 'proximity': values.distance = aircraft.distance_nm; break;
-        case 'squawk': values.squawk = aircraft.squawk; break;
+        case 'proximity':
+          values.distance = aircraft.distance_nm;
+          break;
+        case 'squawk':
+          values.squawk = aircraft.squawk;
+          break;
         case 'type':
-        case 'aircraft_type': values.type = aircraft.t || aircraft.type; break;
-        case 'military': values.military = isAircraftMilitary(aircraft); break;
-        case 'emergency': values.emergency = isAircraftEmergency(aircraft); break;
+        case 'aircraft_type':
+          values.type = aircraft.t || aircraft.type;
+          break;
+        case 'military':
+          values.military = isAircraftMilitary(aircraft);
+          break;
+        case 'emergency':
+          values.emergency = isAircraftEmergency(aircraft);
+          break;
         case 'law_enforcement': {
           const leInfo = identifyLawEnforcement(aircraft);
           values.lawEnforcement = leInfo.isLawEnforcement;
@@ -288,15 +358,20 @@ export function getRelevantValues(rule, aircraft) {
           break;
         }
         case 'helicopter':
-          values.helicopter = checkIsHelicopter(aircraft.category || '', aircraft.t || aircraft.type || '');
+          values.helicopter = checkIsHelicopter(
+            aircraft.category || '',
+            aircraft.t || aircraft.type || ''
+          );
           break;
-        case 'distance_from_mobile': values.mobileDistance = aircraft.mobileDistanceNm; break;
+        case 'distance_from_mobile':
+          values.mobileDistance = aircraft.mobileDistanceNm;
+          break;
       }
     }
   };
 
   if (conditions && typeof conditions === 'object' && !Array.isArray(conditions)) {
-    for (const group of (conditions.groups || [])) extractTypes(group.conditions || []);
+    for (const group of conditions.groups || []) extractTypes(group.conditions || []);
   }
   if (Array.isArray(conditions)) extractTypes(conditions);
 

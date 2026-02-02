@@ -5,28 +5,23 @@ import { cn } from '../../../ui/cn';
 /**
  * InfoRow - Reusable label-value row with hover effects
  */
-function InfoRow({
-  label,
-  value,
-  className,
-  valueClassName,
-  animate = true,
-  mono = false,
-}) {
+function InfoRow({ label, value, className, valueClassName, animate = true, mono = false }) {
   if (value === null || value === undefined || value === '') {
     return null;
   }
 
   const Row = animate ? motion.div : 'div';
-  const motionProps = animate ? {
-    whileHover: {
-      x: 2,
-      backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    },
-    transition: {
-      duration: 0.15,
-    },
-  } : {};
+  const motionProps = animate
+    ? {
+        whileHover: {
+          x: 2,
+          backgroundColor: 'rgba(255, 255, 255, 0.02)',
+        },
+        transition: {
+          duration: 0.15,
+        },
+      }
+    : {};
 
   return (
     <Row
@@ -38,9 +33,7 @@ function InfoRow({
       )}
       {...motionProps}
     >
-      <span className="text-sm text-text-dim flex-shrink-0">
-        {label}
-      </span>
+      <span className="text-sm text-text-dim flex-shrink-0">{label}</span>
       <span
         className={cn(
           'text-sm text-text-primary text-right',

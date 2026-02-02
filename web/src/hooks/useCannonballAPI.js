@@ -19,11 +19,7 @@ import { useSocketIOCannonball } from './socket';
  * @param {number} options.threatRadius - Maximum threat radius in NM (default: 25)
  * @returns {Object} API state and methods
  */
-export function useCannonballAPI({
-  apiBase = '',
-  enabled = true,
-  threatRadius = 25,
-} = {}) {
+export function useCannonballAPI({ apiBase = '', enabled = true, threatRadius = 25 } = {}) {
   // Pattern and session data (fetched on demand)
   const [sessions, setSessions] = useState([]);
   const [patterns, setPatterns] = useState([]);
@@ -54,22 +50,28 @@ export function useCannonballAPI({
   });
 
   // Send location update via Socket.IO
-  const updateLocation = useCallback((lat, lon, heading = null, speed = null) => {
-    userPositionRef.current = { lat, lon };
+  const updateLocation = useCallback(
+    (lat, lon, heading = null, speed = null) => {
+      userPositionRef.current = { lat, lon };
 
-    if (connected) {
-      return socketUpdatePosition(lat, lon, heading, speed);
-    }
+      if (connected) {
+        return socketUpdatePosition(lat, lon, heading, speed);
+      }
 
-    return { ok: false, error: 'Not connected' };
-  }, [connected, socketUpdatePosition]);
+      return { ok: false, error: 'Not connected' };
+    },
+    [connected, socketUpdatePosition]
+  );
 
   // Set threat radius via Socket.IO
-  const setThreatRadius = useCallback((radius) => {
-    if (connected) {
-      socketSetThreatRadius(radius);
-    }
-  }, [connected, socketSetThreatRadius]);
+  const setThreatRadius = useCallback(
+    (radius) => {
+      if (connected) {
+        socketSetThreatRadius(radius);
+      }
+    },
+    [connected, socketSetThreatRadius]
+  );
 
   // Request current threats via Socket.IO
   const requestThreats = useCallback(() => {
@@ -79,72 +81,84 @@ export function useCannonballAPI({
   }, [connected, socketRequestThreats]);
 
   // Fetch sessions via Socket.IO request
-  const fetchSessions = useCallback(async (activeOnly = true) => {
-    if (!connected) {
-      return { error: 'Not connected' };
-    }
+  const fetchSessions = useCallback(
+    async (activeOnly = true) => {
+      if (!connected) {
+        return { error: 'Not connected' };
+      }
 
-    try {
-      const data = await request('sessions', { active_only: activeOnly });
-      setSessions(data?.sessions || []);
-      return data;
-    } catch (err) {
-      console.error('Failed to fetch sessions:', err);
-      return { error: err.message };
-    }
-  }, [connected, request]);
+      try {
+        const data = await request('sessions', { active_only: activeOnly });
+        setSessions(data?.sessions || []);
+        return data;
+      } catch (err) {
+        console.error('Failed to fetch sessions:', err);
+        return { error: err.message };
+      }
+    },
+    [connected, request]
+  );
 
   // Fetch patterns via Socket.IO request
-  const fetchPatterns = useCallback(async (hours = 24) => {
-    if (!connected) {
-      return { error: 'Not connected' };
-    }
+  const fetchPatterns = useCallback(
+    async (hours = 24) => {
+      if (!connected) {
+        return { error: 'Not connected' };
+      }
 
-    try {
-      const data = await request('patterns', { hours });
-      setPatterns(data?.patterns || []);
-      return data;
-    } catch (err) {
-      console.error('Failed to fetch patterns:', err);
-      return { error: err.message };
-    }
-  }, [connected, request]);
+      try {
+        const data = await request('patterns', { hours });
+        setPatterns(data?.patterns || []);
+        return data;
+      } catch (err) {
+        console.error('Failed to fetch patterns:', err);
+        return { error: err.message };
+      }
+    },
+    [connected, request]
+  );
 
   // Fetch alerts via Socket.IO request
-  const fetchAlerts = useCallback(async (unacknowledgedOnly = false) => {
-    if (!connected) {
-      return { error: 'Not connected' };
-    }
+  const fetchAlerts = useCallback(
+    async (unacknowledgedOnly = false) => {
+      if (!connected) {
+        return { error: 'Not connected' };
+      }
 
-    try {
-      const data = await request('alerts', { unacknowledged: unacknowledgedOnly });
-      setAlerts(data?.alerts || []);
-      return data;
-    } catch (err) {
-      console.error('Failed to fetch alerts:', err);
-      return { error: err.message };
-    }
-  }, [connected, request]);
+      try {
+        const data = await request('alerts', { unacknowledged: unacknowledgedOnly });
+        setAlerts(data?.alerts || []);
+        return data;
+      } catch (err) {
+        console.error('Failed to fetch alerts:', err);
+        return { error: err.message };
+      }
+    },
+    [connected, request]
+  );
 
   // Acknowledge an alert via Socket.IO request
-  const acknowledgeAlert = useCallback(async (alertId) => {
-    if (!connected) {
-      return { ok: false, error: 'Not connected' };
-    }
-
-    try {
-      const data = await request('alert-acknowledge', { id: alertId });
-      if (data?.success) {
-        setAlerts(prev => prev.map(a =>
-          a.id === alertId ? { ...a, acknowledged: true } : a
-        ));
+  const acknowledgeAlert = useCallback(
+    async (alertId) => {
+      if (!connected) {
+        return { ok: false, error: 'Not connected' };
       }
-      return { ok: data?.success };
-    } catch (err) {
-      console.error('Failed to acknowledge alert:', err);
-      return { ok: false, error: err.message };
-    }
-  }, [connected, request]);
+
+      try {
+        const data = await request('alert-acknowledge', { id: alertId });
+        if (data?.success) {
+          setAlerts((prev) =>
+            prev.map((a) => (a.id === alertId ? { ...a, acknowledged: true } : a))
+          );
+        }
+        return { ok: data?.success };
+      } catch (err) {
+        console.error('Failed to acknowledge alert:', err);
+        return { ok: false, error: err.message };
+      }
+    },
+    [connected, request]
+  );
 
   // Acknowledge all alerts via Socket.IO request
   const acknowledgeAllAlerts = useCallback(async () => {
@@ -155,7 +169,7 @@ export function useCannonballAPI({
     try {
       const data = await request('alert-acknowledge-all', {});
       if (data?.success) {
-        setAlerts(prev => prev.map(a => ({ ...a, acknowledged: true })));
+        setAlerts((prev) => prev.map((a) => ({ ...a, acknowledged: true })));
       }
       return { ok: data?.success };
     } catch (err) {
@@ -181,19 +195,22 @@ export function useCannonballAPI({
   }, [connected, request]);
 
   // Check if ICAO is known LE aircraft via Socket.IO request
-  const checkKnownAircraft = useCallback(async (icaoHex) => {
-    if (!connected) {
-      return null;
-    }
+  const checkKnownAircraft = useCallback(
+    async (icaoHex) => {
+      if (!connected) {
+        return null;
+      }
 
-    try {
-      const data = await request('known-aircraft-check', { icao_hex: icaoHex });
-      return data;
-    } catch (err) {
-      console.error('Failed to check known aircraft:', err);
-      return null;
-    }
-  }, [connected, request]);
+      try {
+        const data = await request('known-aircraft-check', { icao_hex: icaoHex });
+        return data;
+      } catch (err) {
+        console.error('Failed to check known aircraft:', err);
+        return null;
+      }
+    },
+    [connected, request]
+  );
 
   // Activate session (handled by Socket.IO connection)
   const activate = useCallback(async () => {

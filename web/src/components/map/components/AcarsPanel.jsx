@@ -23,20 +23,21 @@ export function AcarsPanel({
 
   // Hide empty messages
   if (acarsFilters.hideEmpty) {
-    filtered = filtered.filter(msg => msg.text && msg.text.trim().length > 0);
+    filtered = filtered.filter((msg) => msg.text && msg.text.trim().length > 0);
   }
 
   // Source filter
   if (acarsFilters.sourceFilter !== 'all') {
-    filtered = filtered.filter(msg => msg.source === acarsFilters.sourceFilter);
+    filtered = filtered.filter((msg) => msg.source === acarsFilters.sourceFilter);
   }
 
   // Callsign filter
   if (acarsFilters.callsignFilter) {
     const cf = acarsFilters.callsignFilter.toLowerCase();
-    filtered = filtered.filter(msg =>
-      (msg.callsign && msg.callsign.toLowerCase().includes(cf)) ||
-      (msg.icao_hex && msg.icao_hex.toLowerCase().includes(cf))
+    filtered = filtered.filter(
+      (msg) =>
+        (msg.callsign && msg.callsign.toLowerCase().includes(cf)) ||
+        (msg.icao_hex && msg.icao_hex.toLowerCase().includes(cf))
     );
   }
 
@@ -78,14 +79,14 @@ export function AcarsPanel({
           <input
             type="checkbox"
             checked={acarsFilters.hideEmpty}
-            onChange={(e) => setAcarsFilters({...acarsFilters, hideEmpty: e.target.checked})}
+            onChange={(e) => setAcarsFilters({ ...acarsFilters, hideEmpty: e.target.checked })}
           />
           <span>Hide empty</span>
         </label>
         <select
           className="acars-source-filter"
           value={acarsFilters.sourceFilter}
-          onChange={(e) => setAcarsFilters({...acarsFilters, sourceFilter: e.target.value})}
+          onChange={(e) => setAcarsFilters({ ...acarsFilters, sourceFilter: e.target.value })}
         >
           <option value="all">All Sources</option>
           <option value="acars">ACARS Only</option>
@@ -96,7 +97,7 @@ export function AcarsPanel({
           className="acars-callsign-filter"
           placeholder="Callsign..."
           value={acarsFilters.callsignFilter}
-          onChange={(e) => setAcarsFilters({...acarsFilters, callsignFilter: e.target.value})}
+          onChange={(e) => setAcarsFilters({ ...acarsFilters, callsignFilter: e.target.value })}
         />
       </div>
 
@@ -106,13 +107,16 @@ export function AcarsPanel({
         ) : (
           filtered.slice(0, 50).map((msg, i) => {
             // Find matching aircraft by ICAO hex or callsign
-            const matchingAircraft = aircraft.find(ac =>
-              (msg.icao_hex && ac.hex?.toUpperCase() === msg.icao_hex.toUpperCase()) ||
-              callsignsMatch(msg.callsign, ac.flight)
+            const matchingAircraft = aircraft.find(
+              (ac) =>
+                (msg.icao_hex && ac.hex?.toUpperCase() === msg.icao_hex.toUpperCase()) ||
+                callsignsMatch(msg.callsign, ac.flight)
             );
 
             // Check cache for hex lookup by callsign
-            const cachedHex = msg.callsign ? callsignHexCache[msg.callsign.trim().toUpperCase()] : null;
+            const cachedHex = msg.callsign
+              ? callsignHexCache[msg.callsign.trim().toUpperCase()]
+              : null;
 
             // Get hex for linking
             const linkHex = matchingAircraft?.hex || msg.icao_hex || cachedHex;
@@ -129,10 +133,20 @@ export function AcarsPanel({
                     setAircraftDetailHex(linkHex);
                   }
                 }}
-                title={isMatched ? 'Click to view aircraft (in range)' : isFromHistory ? 'Click to view aircraft (from history)' : canLink ? 'Click to view aircraft details' : 'Aircraft not in range - no ICAO hex'}
+                title={
+                  isMatched
+                    ? 'Click to view aircraft (in range)'
+                    : isFromHistory
+                      ? 'Click to view aircraft (from history)'
+                      : canLink
+                        ? 'Click to view aircraft details'
+                        : 'Aircraft not in range - no ICAO hex'
+                }
               >
                 <div className="acars-msg-header">
-                  <span className={`acars-callsign ${canLink ? 'clickable' : ''}`}>{msg.callsign || msg.icao_hex || 'Unknown'}</span>
+                  <span className={`acars-callsign ${canLink ? 'clickable' : ''}`}>
+                    {msg.callsign || msg.icao_hex || 'Unknown'}
+                  </span>
                   <span className="acars-label">{msg.label || '--'}</span>
                   <span className={`acars-source-badge ${msg.source}`}>{msg.source}</span>
                   <span className="acars-time">

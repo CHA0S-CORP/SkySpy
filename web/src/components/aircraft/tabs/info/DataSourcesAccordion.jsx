@@ -40,9 +40,7 @@ const formatDate = (dateString, options = {}) => {
   try {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return 'Unknown';
-    return options.dateOnly
-      ? date.toLocaleDateString()
-      : date.toLocaleString();
+    return options.dateOnly ? date.toLocaleDateString() : date.toLocaleString();
   } catch {
     return 'Unknown';
   }
@@ -52,15 +50,19 @@ const formatDate = (dateString, options = {}) => {
 const safeJsonStringify = (obj, indent = 2) => {
   try {
     const seen = new WeakSet();
-    return JSON.stringify(obj, (key, value) => {
-      if (typeof value === 'object' && value !== null) {
-        if (seen.has(value)) {
-          return '[Circular Reference]';
+    return JSON.stringify(
+      obj,
+      (key, value) => {
+        if (typeof value === 'object' && value !== null) {
+          if (seen.has(value)) {
+            return '[Circular Reference]';
+          }
+          seen.add(value);
         }
-        seen.add(value);
-      }
-      return value;
-    }, indent);
+        return value;
+      },
+      indent
+    );
   } catch {
     return '[Unable to display data]';
   }
@@ -76,7 +78,7 @@ function DataSourcesAccordion({ sourceData = [] }) {
   if (!sourceData.length) return null;
 
   const toggleSource = (source) => {
-    setExpandedSources(prev => ({
+    setExpandedSources((prev) => ({
       ...prev,
       [source]: !prev[source],
     }));
@@ -147,10 +149,12 @@ function DataSourcesAccordion({ sourceData = [] }) {
                 </tr>
               </thead>
               <tbody>
-                {COMPARISON_FIELDS.map(field => {
-                  const values = sourceData.map(src => src[field.key] || src.raw_data?.[field.key]);
-                  const hasAnyValue = values.some(v => v != null && v !== '');
-                  const allSame = values.every(v => v === values[0]);
+                {COMPARISON_FIELDS.map((field) => {
+                  const values = sourceData.map(
+                    (src) => src[field.key] || src.raw_data?.[field.key]
+                  );
+                  const hasAnyValue = values.some((v) => v != null && v !== '');
+                  const allSame = values.every((v) => v === values[0]);
 
                   if (!hasAnyValue) return null;
 

@@ -17,27 +17,18 @@ export function LiveTab({ aircraft, trackHistory, calculateDistance }) {
   const isExtremeVS = verticalRate !== null && Math.abs(verticalRate) > 3000;
   const vsClass = verticalRate > 0 ? 'climbing' : verticalRate < 0 ? 'descending' : '';
 
-  const altitude = aircraft.alt_baro !== 'ground' && aircraft.alt_baro
-    ? aircraft.alt_baro
-    : aircraft.alt_geom ?? aircraft.alt;
+  const altitude =
+    aircraft.alt_baro !== 'ground' && aircraft.alt_baro
+      ? aircraft.alt_baro
+      : (aircraft.alt_geom ?? aircraft.alt);
 
   const speed = aircraft.gs ?? aircraft.tas ?? aircraft.ias;
   const track = aircraft.track ?? aircraft.true_heading ?? aircraft.mag_heading;
   const distance = calculateDistance(aircraft);
 
   return (
-    <div
-      className="detail-live"
-      id="panel-live"
-      role="tabpanel"
-      aria-labelledby="tab-live"
-    >
-      <div
-        className="live-stats-grid"
-        role="region"
-        aria-label="Live telemetry"
-        aria-live="polite"
-      >
+    <div className="detail-live" id="panel-live" role="tabpanel" aria-labelledby="tab-live">
+      <div className="live-stats-grid" role="region" aria-label="Live telemetry" aria-live="polite">
         <div className="live-stat">
           <span className="live-label">Altitude</span>
           <span className="live-value live-value-animated">
@@ -48,18 +39,16 @@ export function LiveTab({ aircraft, trackHistory, calculateDistance }) {
 
         <div className="live-stat">
           <span className="live-label">Ground Speed</span>
-          <span className="live-value live-value-animated">
-            {speed?.toFixed(0) || '--'}
-          </span>
+          <span className="live-value live-value-animated">{speed?.toFixed(0) || '--'}</span>
           <span className="live-unit">kts</span>
         </div>
 
         <div className="live-stat">
           <span className="live-label">Vertical Rate</span>
-          <span className={`live-value live-value-animated ${vsClass} ${isExtremeVS ? 'extreme-vs' : ''}`}>
-            {verticalRate !== null
-              ? `${verticalRate > 0 ? '+' : ''}${verticalRate}`
-              : '--'}
+          <span
+            className={`live-value live-value-animated ${vsClass} ${isExtremeVS ? 'extreme-vs' : ''}`}
+          >
+            {verticalRate !== null ? `${verticalRate > 0 ? '+' : ''}${verticalRate}` : '--'}
           </span>
           <span className="live-unit">ft/min</span>
         </div>
@@ -74,9 +63,7 @@ export function LiveTab({ aircraft, trackHistory, calculateDistance }) {
 
         <div className="live-stat">
           <span className="live-label">Distance</span>
-          <span className="live-value live-value-animated">
-            {distance?.toFixed(1) ?? '--'}
-          </span>
+          <span className="live-value live-value-animated">{distance?.toFixed(1) ?? '--'}</span>
           <span className="live-unit">nm</span>
         </div>
 
@@ -88,7 +75,9 @@ export function LiveTab({ aircraft, trackHistory, calculateDistance }) {
 
         <div className="live-stat">
           <span className="live-label">Squawk</span>
-          <span className={`live-value ${isEmergencySquawk(aircraft.squawk) ? 'squawk-emergency' : ''}`}>
+          <span
+            className={`live-value ${isEmergencySquawk(aircraft.squawk) ? 'squawk-emergency' : ''}`}
+          >
             {aircraft.squawk || '----'}
           </span>
           <span className="live-unit"></span>

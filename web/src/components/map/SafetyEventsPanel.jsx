@@ -5,12 +5,12 @@ import { AlertTriangle, Check, X } from 'lucide-react';
  * Panel showing safety events (emergencies, special squawks, etc.)
  * Memoized to prevent re-renders when other map state changes
  */
-export const SafetyEventsPanel = memo(function SafetyEventsPanel({ 
-  events, 
-  acknowledgedEvents, 
+export const SafetyEventsPanel = memo(function SafetyEventsPanel({
+  events,
+  acknowledgedEvents,
   onAcknowledge,
   onSelectAircraft,
-  onClose
+  onClose,
 }) {
   if (!events || events.length === 0) return null;
 
@@ -35,13 +35,13 @@ export const SafetyEventsPanel = memo(function SafetyEventsPanel({
           </button>
         )}
       </div>
-      
+
       <div className="safety-events-list">
         {sortedEvents.map((event, idx) => {
           const isAcknowledged = acknowledgedEvents?.has(event.id);
-          
+
           return (
-            <div 
+            <div
               key={event.id || idx}
               className={`safety-event severity-${event.severity} ${isAcknowledged ? 'acknowledged' : ''}`}
             >
@@ -56,31 +56,21 @@ export const SafetyEventsPanel = memo(function SafetyEventsPanel({
                   {event.event_type?.replace(/_/g, ' ').toUpperCase()}
                 </span>
               </div>
-              
+
               <div className="event-details">
-                {event.squawk && (
-                  <span className="event-squawk">
-                    Squawk: {event.squawk}
-                  </span>
-                )}
+                {event.squawk && <span className="event-squawk">Squawk: {event.squawk}</span>}
                 {event.altitude && (
-                  <span className="event-altitude">
-                    {event.altitude.toLocaleString()} ft
-                  </span>
+                  <span className="event-altitude">{event.altitude.toLocaleString()} ft</span>
                 )}
-                {event.message && (
-                  <span className="event-message">{event.message}</span>
-                )}
+                {event.message && <span className="event-message">{event.message}</span>}
               </div>
-              
+
               <div className="event-footer">
                 <span className="event-time">
-                  {event.timestamp 
-                    ? new Date(event.timestamp).toLocaleTimeString()
-                    : '--'}
+                  {event.timestamp ? new Date(event.timestamp).toLocaleTimeString() : '--'}
                 </span>
                 {!isAcknowledged && onAcknowledge && (
-                  <button 
+                  <button
                     className="event-ack-btn"
                     onClick={() => onAcknowledge(event.id)}
                     title="Acknowledge"

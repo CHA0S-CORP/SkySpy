@@ -60,7 +60,9 @@ function ScheduleFields({ startsAt, expiresAt, onChange }) {
           id="rule-starts-at"
           type="datetime-local"
           value={startsAt ? startsAt.slice(0, 16) : ''}
-          onChange={e => onChange('starts_at', e.target.value ? new Date(e.target.value).toISOString() : '')}
+          onChange={(e) =>
+            onChange('starts_at', e.target.value ? new Date(e.target.value).toISOString() : '')
+          }
         />
       </div>
       <div className="form-group">
@@ -69,7 +71,9 @@ function ScheduleFields({ startsAt, expiresAt, onChange }) {
           id="rule-expires-at"
           type="datetime-local"
           value={expiresAt ? expiresAt.slice(0, 16) : ''}
-          onChange={e => onChange('expires_at', e.target.value ? new Date(e.target.value).toISOString() : '')}
+          onChange={(e) =>
+            onChange('expires_at', e.target.value ? new Date(e.target.value).toISOString() : '')
+          }
         />
       </div>
     </div>
@@ -101,16 +105,26 @@ export function RuleForm({
   const ruleToEdit = editRule || rule;
 
   // Form state
-  const [form, setForm] = useState(() => initializeForm(ruleToEdit, prefillAircraft, DEFAULT_GROUP));
+  const [form, setForm] = useState(() =>
+    initializeForm(ruleToEdit, prefillAircraft, DEFAULT_GROUP)
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
   const [showTemplates, setShowTemplates] = useState(!ruleToEdit && !prefillAircraft);
 
   // Notification channels
-  const [selectedChannelIds, setSelectedChannelIds] = useState(ruleToEdit?.notification_channel_ids || []);
-  const [useGlobalNotifications, setUseGlobalNotifications] = useState(ruleToEdit?.use_global_notifications !== false);
-  const { channels, loading: channelsLoading } = useNotificationChannels({ apiBase, wsRequest, wsConnected });
+  const [selectedChannelIds, setSelectedChannelIds] = useState(
+    ruleToEdit?.notification_channel_ids || []
+  );
+  const [useGlobalNotifications, setUseGlobalNotifications] = useState(
+    ruleToEdit?.use_global_notifications !== false
+  );
+  const { channels, loading: channelsLoading } = useNotificationChannels({
+    apiBase,
+    wsRequest,
+    wsConnected,
+  });
 
   // Focus management
   const modalRef = useRef(null);
@@ -223,9 +237,12 @@ export function RuleForm({
         let errorMsg = `Failed to save rule (HTTP ${res.status})`;
         if (contentType && contentType.includes('application/json')) {
           const data = await res.json();
-          errorMsg = data.error || data.detail ||
-                     (data.non_field_errors && data.non_field_errors[0]) ||
-                     Object.values(data).flat()[0] || errorMsg;
+          errorMsg =
+            data.error ||
+            data.detail ||
+            (data.non_field_errors && data.non_field_errors[0]) ||
+            Object.values(data).flat()[0] ||
+            errorMsg;
         }
         throw new Error(errorMsg);
       }
@@ -251,13 +268,13 @@ export function RuleForm({
   const updateField = (field, value) => {
     setForm({ ...form, [field]: value });
     if (field === 'name') {
-      setValidationErrors(prev => ({ ...prev, name: undefined }));
+      setValidationErrors((prev) => ({ ...prev, name: undefined }));
     }
   };
 
   // Clear validation error
   const clearValidationError = (key) => {
-    setValidationErrors(prev => {
+    setValidationErrors((prev) => {
       const next = { ...prev };
       delete next[key];
       return next;
@@ -266,19 +283,13 @@ export function RuleForm({
 
   // Toggle channel selection
   const toggleChannelSelection = (channelId) => {
-    setSelectedChannelIds(prev =>
-      prev.includes(channelId)
-        ? prev.filter(id => id !== channelId)
-        : [...prev, channelId]
+    setSelectedChannelIds((prev) =>
+      prev.includes(channelId) ? prev.filter((id) => id !== channelId) : [...prev, channelId]
     );
   };
 
   return (
-    <div
-      className="modal-overlay rule-form-overlay"
-      onClick={handleClose}
-      role="presentation"
-    >
+    <div className="modal-overlay rule-form-overlay" onClick={handleClose} role="presentation">
       <div
         className="modal modal-large rule-form"
         ref={modalRef}
@@ -288,9 +299,7 @@ export function RuleForm({
         aria-labelledby="rule-form-title"
       >
         <div className="modal-header rule-form-header">
-          <h3 id="rule-form-title">
-            {ruleToEdit ? 'Edit Alert Rule' : 'Create Alert Rule'}
-          </h3>
+          <h3 id="rule-form-title">{ruleToEdit ? 'Edit Alert Rule' : 'Create Alert Rule'}</h3>
           <button
             className="close-btn"
             onClick={handleClose}
@@ -303,16 +312,17 @@ export function RuleForm({
 
         {/* Keyboard hints */}
         <div className="keyboard-hints" aria-hidden="true">
-          <span><kbd>Esc</kbd> Close</span>
-          <span><kbd>Tab</kbd> Next field</span>
+          <span>
+            <kbd>Esc</kbd> Close
+          </span>
+          <span>
+            <kbd>Tab</kbd> Next field
+          </span>
         </div>
 
         {/* Templates section */}
         {showTemplates && !ruleToEdit && (
-          <RuleTemplates
-            onApply={applyTemplate}
-            onSkip={() => setShowTemplates(false)}
-          />
+          <RuleTemplates onApply={applyTemplate} onSkip={() => setShowTemplates(false)} />
         )}
 
         <form onSubmit={handleSubmit} className="modal-content">
@@ -337,7 +347,7 @@ export function RuleForm({
               ref={firstInputRef}
               type="text"
               value={form.name || ''}
-              onChange={e => updateField('name', e.target.value)}
+              onChange={(e) => updateField('name', e.target.value)}
               placeholder="e.g., Military Aircraft Alert"
               required
               aria-required="true"
@@ -345,7 +355,9 @@ export function RuleForm({
               aria-describedby={validationErrors.name ? 'name-error' : undefined}
             />
             {validationErrors.name && (
-              <span id="name-error" className="field-error">{validationErrors.name}</span>
+              <span id="name-error" className="field-error">
+                {validationErrors.name}
+              </span>
             )}
           </div>
 
@@ -423,7 +435,7 @@ export function RuleForm({
             <textarea
               id="rule-description"
               value={form.description || ''}
-              onChange={e => updateField('description', e.target.value)}
+              onChange={(e) => updateField('description', e.target.value)}
               rows={2}
               placeholder="Optional description"
             />
@@ -434,12 +446,7 @@ export function RuleForm({
             <button type="button" className="btn-secondary" onClick={handleClose}>
               Cancel
             </button>
-            <button
-              type="submit"
-              className="btn-primary"
-              disabled={saving}
-              aria-busy={saving}
-            >
+            <button type="submit" className="btn-primary" disabled={saving} aria-busy={saving}>
               <Save size={16} aria-hidden="true" />
               {saving ? 'Saving...' : 'Save Rule'}
             </button>

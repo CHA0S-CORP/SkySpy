@@ -16,7 +16,7 @@ export function HistoryTab({
   graphZoom,
   setGraphZoom,
   graphScrollOffset,
-  setGraphScrollOffset
+  setGraphScrollOffset,
 }) {
   const mapRef = useRef(null);
   const replayMarkerRef = useRef(null);
@@ -27,7 +27,7 @@ export function HistoryTab({
     handleGraphDragStart,
     handleGraphDragMove,
     handleGraphDragEnd,
-    resetGraphZoom
+    resetGraphZoom,
   } = useGraphInteraction(graphZoom, setGraphZoom, graphScrollOffset, setGraphScrollOffset);
 
   // Create aircraft icon for map
@@ -42,7 +42,7 @@ export function HistoryTab({
         </svg>
       `,
       iconSize: [24, 24],
-      iconAnchor: [12, 12]
+      iconAnchor: [12, 12],
     });
   }, []);
 
@@ -67,7 +67,7 @@ export function HistoryTab({
       let diff = a2 - a1;
       if (diff > 180) diff -= 360;
       if (diff < -180) diff += 360;
-      return ((a1 + diff * t) + 360) % 360;
+      return (a1 + diff * t + 360) % 360;
     };
 
     const lerp = (v1, v2, t) => {
@@ -84,102 +84,117 @@ export function HistoryTab({
       gs: lerp(p1.gs, p2.gs, fraction),
       vr: Math.round(lerp(p1.vr, p2.vr, fraction)),
       track: lerpAngle(p1.track, p2.track, fraction),
-      timestamp: p1.timestamp
+      timestamp: p1.timestamp,
     };
   }, []);
 
   // Initialize map
-  const initializeMap = useCallback((containerEl) => {
-    if (!containerEl || mapRef.current) return;
-    if (!sightings || sightings.length === 0) return;
+  const initializeMap = useCallback(
+    (containerEl) => {
+      if (!containerEl || mapRef.current) return;
+      if (!sightings || sightings.length === 0) return;
 
-    const validSightings = sightings.filter(s => s.lat && s.lon);
-    if (validSightings.length === 0) return;
+      const validSightings = sightings.filter((s) => s.lat && s.lon);
+      if (validSightings.length === 0) return;
 
-    const latest = validSightings[0];
+      const latest = validSightings[0];
 
-    const map = L.map(containerEl, {
-      center: [latest.lat, latest.lon],
-      zoom: 10,
-      zoomControl: true,
-      attributionControl: false
-    });
+      const map = L.map(containerEl, {
+        center: [latest.lat, latest.lon],
+        zoom: 10,
+        zoomControl: true,
+        attributionControl: false,
+      });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19
-    }).addTo(map);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+      }).addTo(map);
 
-    const trackCoords = [...validSightings].reverse().map(s => [s.lat, s.lon]);
-    if (trackCoords.length > 1) {
-      L.polyline(trackCoords, { color: '#00ff88', weight: 3, opacity: 0.7 }).addTo(map);
-    }
+      const trackCoords = [...validSightings].reverse().map((s) => [s.lat, s.lon]);
+      if (trackCoords.length > 1) {
+        L.polyline(trackCoords, { color: '#00ff88', weight: 3, opacity: 0.7 }).addTo(map);
+      }
 
-    const step = Math.max(1, Math.floor(validSightings.length / 20));
-    validSightings.forEach((s, i) => {
-      if (i % step === 0 || i === 0 || i === validSightings.length - 1) {
-        const isFirst = i === validSightings.length - 1;
-        const isLast = i === 0;
+      const step = Math.max(1, Math.floor(validSightings.length / 20));
+      validSightings.forEach((s, i) => {
+        if (i % step === 0 || i === 0 || i === validSightings.length - 1) {
+          const isFirst = i === validSightings.length - 1;
+          const isLast = i === 0;
 
-        L.circleMarker([s.lat, s.lon], {
-          radius: isFirst || isLast ? 6 : 3,
-          color: isLast ? '#00ff88' : isFirst ? '#ff8844' : '#5a7a9a',
-          fillColor: isLast ? '#00ff88' : isFirst ? '#ff8844' : '#5a7a9a',
-          fillOpacity: 0.8,
-          weight: 1
-        }).addTo(map).bindPopup(`
+          L.circleMarker([s.lat, s.lon], {
+            radius: isFirst || isLast ? 6 : 3,
+            color: isLast ? '#00ff88' : isFirst ? '#ff8844' : '#5a7a9a',
+            fillColor: isLast ? '#00ff88' : isFirst ? '#ff8844' : '#5a7a9a',
+            fillOpacity: 0.8,
+            weight: 1,
+          }).addTo(map).bindPopup(`
           <b>${new Date(s.timestamp).toLocaleTimeString()}</b><br>
           Alt: ${s.altitude?.toLocaleString() || '--'} ft<br>
           Speed: ${s.gs?.toFixed(0) || '--'} kts<br>
           VS: ${s.vr > 0 ? '+' : ''}${s.vr || 0} fpm
         `);
+        }
+      });
+
+      if (feederLocation?.lat && feederLocation?.lon) {
+        L.circleMarker([feederLocation.lat, feederLocation.lon], {
+          radius: 8,
+          color: '#ff4444',
+          fillColor: '#ff4444',
+          fillOpacity: 0.3,
+          weight: 2,
+        })
+          .addTo(map)
+          .bindPopup('<b>Feeder Location</b>');
       }
-    });
 
-    if (feederLocation?.lat && feederLocation?.lon) {
-      L.circleMarker([feederLocation.lat, feederLocation.lon], {
-        radius: 8, color: '#ff4444', fillColor: '#ff4444', fillOpacity: 0.3, weight: 2
-      }).addTo(map).bindPopup('<b>Feeder Location</b>');
-    }
+      const pos = getInterpolatedPosition(validSightings, replayPosition);
+      if (pos) {
+        const icon = createAircraftIcon(pos.track, '#00ff88');
+        replayMarkerRef.current = L.marker([pos.lat, pos.lon], { icon }).addTo(map);
+      }
 
-    const pos = getInterpolatedPosition(validSightings, replayPosition);
-    if (pos) {
-      const icon = createAircraftIcon(pos.track, '#00ff88');
-      replayMarkerRef.current = L.marker([pos.lat, pos.lon], { icon }).addTo(map);
-    }
+      if (trackCoords.length > 1) {
+        const bounds = L.latLngBounds(trackCoords);
+        map.fitBounds(bounds.pad(0.1));
+      }
 
-    if (trackCoords.length > 1) {
-      const bounds = L.latLngBounds(trackCoords);
-      map.fitBounds(bounds.pad(0.1));
-    }
-
-    mapRef.current = map;
-  }, [sightings, feederLocation, replayPosition, getInterpolatedPosition, createAircraftIcon]);
+      mapRef.current = map;
+    },
+    [sightings, feederLocation, replayPosition, getInterpolatedPosition, createAircraftIcon]
+  );
 
   // Update replay marker position
-  const updateReplayMarker = useCallback((position) => {
-    if (!mapRef.current || !sightings || sightings.length === 0) return;
+  const updateReplayMarker = useCallback(
+    (position) => {
+      if (!mapRef.current || !sightings || sightings.length === 0) return;
 
-    const validSightings = sightings.filter(s => s.lat && s.lon);
-    const pos = getInterpolatedPosition(validSightings, position);
-    if (!pos) return;
+      const validSightings = sightings.filter((s) => s.lat && s.lon);
+      const pos = getInterpolatedPosition(validSightings, position);
+      if (!pos) return;
 
-    if (replayMarkerRef.current) {
-      mapRef.current.removeLayer(replayMarkerRef.current);
-    }
+      if (replayMarkerRef.current) {
+        mapRef.current.removeLayer(replayMarkerRef.current);
+      }
 
-    const icon = createAircraftIcon(pos.track, '#00ff88');
-    replayMarkerRef.current = L.marker([pos.lat, pos.lon], { icon }).addTo(mapRef.current);
-  }, [sightings, getInterpolatedPosition, createAircraftIcon]);
+      const icon = createAircraftIcon(pos.track, '#00ff88');
+      replayMarkerRef.current = L.marker([pos.lat, pos.lon], { icon }).addTo(mapRef.current);
+    },
+    [sightings, getInterpolatedPosition, createAircraftIcon]
+  );
 
   // Handle replay slider change
-  const handleReplayChange = useCallback((newPosition) => {
-    setReplayPosition(newPosition);
-    updateReplayMarker(newPosition);
-  }, [setReplayPosition, updateReplayMarker]);
+  const handleReplayChange = useCallback(
+    (newPosition) => {
+      setReplayPosition(newPosition);
+      updateReplayMarker(newPosition);
+    },
+    [setReplayPosition, updateReplayMarker]
+  );
 
   // Toggle play/pause
   const togglePlay = useCallback(() => {
-    setIsPlaying(prev => {
+    setIsPlaying((prev) => {
       if (!prev) {
         let pos = replayPosition <= 0 ? 0 : replayPosition;
         const animate = () => {
@@ -221,7 +236,7 @@ export function HistoryTab({
   // Get timestamp for replay position
   const getReplayTimestamp = useCallback(() => {
     if (!sightings || sightings.length === 0) return null;
-    const validSightings = sightings.filter(s => s.lat && s.lon);
+    const validSightings = sightings.filter((s) => s.lat && s.lon);
     const pos = getInterpolatedPosition(validSightings, replayPosition);
     if (!pos?.timestamp) return null;
     return new Date(pos.timestamp).toLocaleTimeString();
@@ -252,7 +267,12 @@ export function HistoryTab({
   // Empty state
   if (sightings.length === 0) {
     return (
-      <div className="detail-history" id="panel-history" role="tabpanel" aria-labelledby="tab-history">
+      <div
+        className="detail-history"
+        id="panel-history"
+        role="tabpanel"
+        aria-labelledby="tab-history"
+      >
         <div className="detail-empty" role="status">
           <History size={48} aria-hidden="true" />
           <p>No sighting history</p>
@@ -263,7 +283,12 @@ export function HistoryTab({
   }
 
   return (
-    <div className="detail-history" id="panel-history" role="tabpanel" aria-labelledby="tab-history">
+    <div
+      className="detail-history"
+      id="panel-history"
+      role="tabpanel"
+      aria-labelledby="tab-history"
+    >
       <div className="history-stats">
         <div className="history-header">
           <p aria-live="polite">{sightings.length} position reports in the last 24 hours</p>
@@ -277,7 +302,7 @@ export function HistoryTab({
           </button>
         </div>
 
-        {showTrackMap && sightings.some(s => s.lat && s.lon) && (
+        {showTrackMap && sightings.some((s) => s.lat && s.lon) && (
           <div className="history-map-container">
             <div
               className="history-map"
@@ -312,7 +337,7 @@ export function HistoryTab({
                   color="#44aaff"
                   label="Speed"
                   unit="kts"
-                  formatFn={v => v?.toFixed(0)}
+                  formatFn={(v) => v?.toFixed(0)}
                   graphZoom={graphZoom}
                   graphScrollOffset={graphScrollOffset}
                   onWheel={handleGraphWheel}
@@ -327,7 +352,7 @@ export function HistoryTab({
                   color="#ffaa44"
                   label="V/S"
                   unit="fpm"
-                  formatFn={v => (v > 0 ? '+' : '') + v}
+                  formatFn={(v) => (v > 0 ? '+' : '') + v}
                   graphZoom={graphZoom}
                   graphScrollOffset={graphScrollOffset}
                   onWheel={handleGraphWheel}
