@@ -1,6 +1,6 @@
 // Package spectrum provides signal spectrum analysis and visualization
 //
-//nolint:govet,goconst,revive // Shadow warnings for min/max params; repeated constants; Analyzer stuttering
+//nolint:gocritic,goconst,revive // assignOp style; repeated constants; Analyzer stuttering
 package spectrum
 
 import (

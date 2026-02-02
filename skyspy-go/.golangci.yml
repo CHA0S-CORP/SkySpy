@@ -232,9 +232,9 @@ issues:
       text: "shadow:|unusedwrite:"
       linters:
         - govet
-    # Exclude staticcheck SA4006 (unused value) from test files
+    # Exclude staticcheck SA4006 (unused value) and SA5011 (nil pointer) from test files
     - path: _test\.go
-      text: "SA4006:"
+      text: "SA4006:|SA5011"
       linters:
         - staticcheck
 

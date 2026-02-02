@@ -1,6 +1,6 @@
 // Package radio provides radio monitor display functionality for SkySpy
 //
-//nolint:gocyclo,goconst // Complex rendering functions; repeated UI string constants are intentional
+//nolint:gocyclo,goconst,gocritic // Complex rendering; repeated UI strings; ifElseChain style
 package radio
 
 import (

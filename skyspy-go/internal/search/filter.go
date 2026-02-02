@@ -1,6 +1,6 @@
 // Package search provides search and filter functionality for aircraft
 //
-//nolint:govet // Shadow warnings for min variable in local scope are intentional
+//nolint:gocritic,gocyclo,prealloc // builtinShadow for min/max; MatchesAircraft complexity; textParts
 package search
 
 import (
