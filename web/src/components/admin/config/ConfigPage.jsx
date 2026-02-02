@@ -163,8 +163,7 @@ export function ConfigPage({ apiBase = '', onToast }) {
     }
   };
 
-  // Handle reset to default
-  // eslint-disable-next-line no-unused-vars -- Planned feature for reset-to-default functionality
+  // Handle reset to default (planned feature)
   const _handleResetToDefault = async (key) => {
     const config = categories.flatMap((c) => c.configs).find((c) => c.key === key);
     if (config) {

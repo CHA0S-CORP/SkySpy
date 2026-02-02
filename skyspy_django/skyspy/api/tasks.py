@@ -55,7 +55,11 @@ class TaskResultViewSet(viewsets.ReadOnlyModelViewSet):
         summary="List task results",
         description="List all stored Celery task results with filtering and pagination",
         parameters=[
-            OpenApiParameter(name="status", type=str, description="Filter by status (PENDING, STARTED, SUCCESS, FAILURE, RETRY, REVOKED)"),
+            OpenApiParameter(
+                name="status",
+                type=str,
+                description="Filter by status (PENDING, STARTED, SUCCESS, FAILURE, RETRY, REVOKED)",
+            ),
             OpenApiParameter(name="task_name", type=str, description="Filter by task name"),
             OpenApiParameter(name="worker", type=str, description="Filter by worker hostname"),
             OpenApiParameter(name="search", type=str, description="Search by task_id or task_name"),
@@ -73,10 +77,12 @@ class TaskResultViewSet(viewsets.ReadOnlyModelViewSet):
                 queryset = queryset[: int(limit)]
 
         serializer = self.get_serializer(queryset, many=True)
-        return Response({
-            "tasks": serializer.data,
-            "count": len(serializer.data),
-        })
+        return Response(
+            {
+                "tasks": serializer.data,
+                "count": len(serializer.data),
+            }
+        )
 
     @extend_schema(
         summary="Get task result",
@@ -149,21 +155,25 @@ class TaskResultViewSet(viewsets.ReadOnlyModelViewSet):
             result = AsyncResult(task_id)
 
             if result.ready():
-                return Response({
-                    "success": False,
-                    "message": f"Task already completed with status: {result.status}",
-                    "task_id": task_id,
-                })
+                return Response(
+                    {
+                        "success": False,
+                        "message": f"Task already completed with status: {result.status}",
+                        "task_id": task_id,
+                    }
+                )
 
             # Revoke the task
             result.revoke(terminate=terminate)
 
-            return Response({
-                "success": True,
-                "message": "Task revocation signal sent",
-                "task_id": task_id,
-                "terminate": terminate,
-            })
+            return Response(
+                {
+                    "success": True,
+                    "message": "Task revocation signal sent",
+                    "task_id": task_id,
+                    "terminate": terminate,
+                }
+            )
 
         except Exception as e:
             logger.error(f"Failed to revoke task {task_id}: {e}")
@@ -196,27 +206,17 @@ class TaskResultViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(task_name=task_name)
 
         # Status counts
-        status_counts = dict(
-            queryset.values("status")
-            .annotate(count=Count("id"))
-            .values_list("status", "count")
-        )
+        status_counts = dict(queryset.values("status").annotate(count=Count("id")).values_list("status", "count"))
 
         # Tasks by name (top 10)
-        by_name = list(
-            queryset.values("task_name")
-            .annotate(count=Count("id"))
-            .order_by("-count")[:10]
-        )
+        by_name = list(queryset.values("task_name").annotate(count=Count("id")).order_by("-count")[:10])
 
         # Average duration for completed tasks
         completed = queryset.filter(
             status="SUCCESS",
             date_done__isnull=False,
         )
-        avg_duration = completed.annotate(
-            duration=F("date_done") - F("date_created")
-        ).aggregate(avg=Avg("duration"))
+        avg_duration = completed.annotate(duration=F("date_done") - F("date_created")).aggregate(avg=Avg("duration"))
 
         avg_duration_ms = None
         if avg_duration["avg"]:
@@ -238,15 +238,17 @@ class TaskResultViewSet(viewsets.ReadOnlyModelViewSet):
             .order_by("-count")
         )
 
-        return Response({
-            "period_hours": hours,
-            "total_tasks": queryset.count(),
-            "status_counts": status_counts,
-            "by_name": by_name,
-            "avg_duration_ms": avg_duration_ms,
-            "recent_failures": recent_failures,
-            "workers": workers,
-        })
+        return Response(
+            {
+                "period_hours": hours,
+                "total_tasks": queryset.count(),
+                "status_counts": status_counts,
+                "by_name": by_name,
+                "avg_duration_ms": avg_duration_ms,
+                "recent_failures": recent_failures,
+                "workers": workers,
+            }
+        )
 
     @extend_schema(
         summary="List registered tasks",
@@ -261,10 +263,12 @@ class TaskResultViewSet(viewsets.ReadOnlyModelViewSet):
             # Filter out internal celery tasks
             app_tasks = [t for t in tasks if not t.startswith("celery.")]
 
-            return Response({
-                "tasks": app_tasks,
-                "count": len(app_tasks),
-            })
+            return Response(
+                {
+                    "tasks": app_tasks,
+                    "count": len(app_tasks),
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to get registered tasks: {e}")
             return Response(
@@ -288,28 +292,34 @@ class TaskResultViewSet(viewsets.ReadOnlyModelViewSet):
             tasks = []
             for worker, worker_tasks in active.items():
                 for task in worker_tasks:
-                    tasks.append({
-                        "task_id": task.get("id"),
-                        "task_name": task.get("name"),
-                        "worker": worker,
-                        "args": task.get("args"),
-                        "kwargs": task.get("kwargs"),
-                        "time_start": task.get("time_start"),
-                    })
+                    tasks.append(
+                        {
+                            "task_id": task.get("id"),
+                            "task_name": task.get("name"),
+                            "worker": worker,
+                            "args": task.get("args"),
+                            "kwargs": task.get("kwargs"),
+                            "time_start": task.get("time_start"),
+                        }
+                    )
 
-            return Response({
-                "active_tasks": tasks,
-                "count": len(tasks),
-                "workers": list(active.keys()),
-            })
+            return Response(
+                {
+                    "active_tasks": tasks,
+                    "count": len(tasks),
+                    "workers": list(active.keys()),
+                }
+            )
         except Exception as e:
             logger.warning(f"Could not get active tasks (workers may be offline): {e}")
-            return Response({
-                "active_tasks": [],
-                "count": 0,
-                "workers": [],
-                "warning": "Could not reach workers - they may be offline",
-            })
+            return Response(
+                {
+                    "active_tasks": [],
+                    "count": 0,
+                    "workers": [],
+                    "warning": "Could not reach workers - they may be offline",
+                }
+            )
 
     @extend_schema(
         summary="Purge old task results",
@@ -338,8 +348,10 @@ class TaskResultViewSet(viewsets.ReadOnlyModelViewSet):
         if count > 0:
             TaskResult.objects.filter(date_created__lt=cutoff).delete()
 
-        return Response({
-            "deleted": count,
-            "cutoff_date": cutoff.isoformat(),
-            "days": days,
-        })
+        return Response(
+            {
+                "deleted": count,
+                "cutoff_date": cutoff.isoformat(),
+                "days": days,
+            }
+        )

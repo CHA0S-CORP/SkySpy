@@ -532,19 +532,45 @@ class AcarsService:
         """
         # Labels that benefit from libacars/custom decoding
         decodable_labels = {
-            "H1", "H2",  # FANS-1/A (ADS-C, CPDLC)
-            "SA", "S1", "S2",  # System address messages
-            "AA", "AB", "AC",  # ARINC 622 messages
-            "BA", "B1", "B2", "B3", "B4", "B5", "B6",  # Various airline formats
-            "_d", "2Z", "5Z",  # MIAM compressed messages
-            "10", "11", "12", "13", "80",  # OOOI events
-            "15", "16", "17",  # ETA/Departure/Arrival
-            "44", "QA", "QB", "QC", "QD", "QE", "QF",  # Weather
+            "H1",
+            "H2",  # FANS-1/A (ADS-C, CPDLC)
+            "SA",
+            "S1",
+            "S2",  # System address messages
+            "AA",
+            "AB",
+            "AC",  # ARINC 622 messages
+            "BA",
+            "B1",
+            "B2",
+            "B3",
+            "B4",
+            "B5",
+            "B6",  # Various airline formats
+            "_d",
+            "2Z",
+            "5Z",  # MIAM compressed messages
+            "10",
+            "11",
+            "12",
+            "13",
+            "80",  # OOOI events
+            "15",
+            "16",
+            "17",  # ETA/Departure/Arrival
+            "44",
+            "QA",
+            "QB",
+            "QC",
+            "QD",
+            "QE",
+            "QF",  # Weather
         }
 
         if label and label in decodable_labels:
             try:
                 from skyspy.tasks.acars import decode_acars_message
+
                 decode_acars_message.delay(message_id)
             except Exception as e:
                 logger.warning(f"Failed to queue decode task for message {message_id}: {e}")

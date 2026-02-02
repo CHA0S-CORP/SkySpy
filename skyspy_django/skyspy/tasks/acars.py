@@ -84,12 +84,29 @@ def process_acars_decode_queue():
     # Get messages without decoded content (limit batch size)
     # Only process messages with decodable labels
     decodable_labels = [
-        "H1", "H2",  # FANS-1/A
-        "SA", "S1", "S2",  # System
-        "AA", "AB", "AC",  # ARINC 622
-        "BA", "B1", "B2", "B3", "B4", "B5", "B6",  # Various
-        "_d", "2Z", "5Z",  # MIAM
-        "10", "11", "12", "13", "80",  # OOOI events
+        "H1",
+        "H2",  # FANS-1/A
+        "SA",
+        "S1",
+        "S2",  # System
+        "AA",
+        "AB",
+        "AC",  # ARINC 622
+        "BA",
+        "B1",
+        "B2",
+        "B3",
+        "B4",
+        "B5",
+        "B6",  # Various
+        "_d",
+        "2Z",
+        "5Z",  # MIAM
+        "10",
+        "11",
+        "12",
+        "13",
+        "80",  # OOOI events
     ]
 
     messages = AcarsMessage.objects.filter(

@@ -40,9 +40,7 @@ def consume_swim_notams(self, max_messages: int = 1000, timeout_seconds: int = 3
 
     try:
         # Use gevent-safe consumer that runs in subprocess if needed
-        stats = swim_fns.consume_with_gevent_workaround(
-            max_messages=max_messages, timeout_seconds=timeout_seconds
-        )
+        stats = swim_fns.consume_with_gevent_workaround(max_messages=max_messages, timeout_seconds=timeout_seconds)
 
         if stats.get("status") == "connection_failed":
             logger.error("Failed to connect to SWIM FNS")
