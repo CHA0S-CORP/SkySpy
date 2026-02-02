@@ -129,7 +129,7 @@ func (e *AlertEngine) CheckAircraft(state, prevState *AircraftState) []Triggered
 }
 
 // evaluateRule checks if a rule's conditions are met
-func (e *AlertEngine) evaluateRule(rule *AlertRule, state *AircraftState, prevState *AircraftState) bool {
+func (e *AlertEngine) evaluateRule(rule *AlertRule, state, prevState *AircraftState) bool {
 	// For rules with multiple conditions of the same type (like emergency squawk),
 	// we need OR logic for same-type conditions and AND logic between different types
 	conditionsByType := make(map[ConditionType][]Condition)
@@ -156,7 +156,9 @@ func (e *AlertEngine) evaluateRule(rule *AlertRule, state *AircraftState, prevSt
 }
 
 // evaluateCondition checks if a single condition is met
-func (e *AlertEngine) evaluateCondition(cond Condition, state *AircraftState, prevState *AircraftState) bool {
+//
+//nolint:gocyclo // Complex switch statement for multiple condition types is acceptable here
+func (e *AlertEngine) evaluateCondition(cond Condition, state, prevState *AircraftState) bool {
 	switch cond.Type {
 	case ConditionSquawk:
 		return MatchesWildcard(cond.Value, state.Squawk)
@@ -168,7 +170,7 @@ func (e *AlertEngine) evaluateCondition(cond Condition, state *AircraftState, pr
 		return MatchesWildcard(cond.Value, state.Hex)
 
 	case ConditionMilitary:
-		return strings.ToLower(cond.Value) == "true" && state.Military
+		return strings.EqualFold(cond.Value, "true") && state.Military
 
 	case ConditionAltitudeAbove:
 		if !state.HasAlt {

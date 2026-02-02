@@ -532,7 +532,7 @@ func TestEvaluateConditionMilitary(t *testing.T) {
 	rule2.AddAction(ActionNotify, "Not military")
 	engine.AddRule(rule2)
 
-	triggered = engine.CheckAircraft(state, nil)
+	_ = engine.CheckAircraft(state, nil)
 	// Rule "mil2" should not trigger for military aircraft
 }
 
@@ -592,7 +592,7 @@ func TestEvaluateConditionEnteringGeofenceEdgeCases(t *testing.T) {
 		HasLat: true,
 		HasLon: true,
 	}
-	triggered = engine.CheckAircraft(state2, prevState2)
+	_ = engine.CheckAircraft(state2, prevState2)
 	// Empty name should also trigger with any geofence
 
 	// Test with non-existent geofence
@@ -615,7 +615,7 @@ func TestEvaluateConditionEnteringGeofenceEdgeCases(t *testing.T) {
 		HasLat: true,
 		HasLon: true,
 	}
-	triggered = engine.CheckAircraft(state3, prevState3)
+	_ = engine.CheckAircraft(state3, prevState3)
 	// Nonexistent geofence should not trigger its own rule
 
 	// Test without lat/lon
@@ -624,7 +624,7 @@ func TestEvaluateConditionEnteringGeofenceEdgeCases(t *testing.T) {
 		HasLat: false,
 		HasLon: false,
 	}
-	triggered = engine.CheckAircraft(state4, nil)
+	_ = engine.CheckAircraft(state4, nil)
 	// Should not trigger without lat/lon
 
 	// Test with current state without lat/lon

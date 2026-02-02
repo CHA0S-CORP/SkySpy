@@ -193,6 +193,7 @@ function deriveSocketEvent(endpoint) {
     // Legacy aliases (point to system endpoints)
     '/api/v1/status': 'system-status',
     '/api/v1/health': 'system-health',
+    '/health': 'system-health',
 
     // Notifications endpoints
     '/api/v1/notifications/config': 'notifications-config',

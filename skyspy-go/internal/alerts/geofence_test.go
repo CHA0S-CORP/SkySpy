@@ -195,8 +195,8 @@ func TestLoadGeofencesFromFile(t *testing.T) {
 
 	// Test loading single geofence
 	singleFile := tmpDir + "/single.json"
-	singleJson := `{"id": "single", "name": "Single", "type": "circle", "center": {"lat": 45.0, "lon": -93.0}, "radius_nm": 5.0, "enabled": true}`
-	if err := os.WriteFile(singleFile, []byte(singleJson), 0644); err != nil {
+	singleJSON := `{"id": "single", "name": "Single", "type": "circle", "center": {"lat": 45.0, "lon": -93.0}, "radius_nm": 5.0, "enabled": true}`
+	if err := os.WriteFile(singleFile, []byte(singleJSON), 0644); err != nil {
 		t.Fatalf("Failed to write single test file: %v", err)
 	}
 
@@ -254,7 +254,7 @@ func TestLoadGeofenceFromGeoJSON(t *testing.T) {
 
 	// Test FeatureCollection
 	featureCollectionFile := tmpDir + "/feature_collection.geojson"
-	featureCollectionJson := `{
+	featureCollectionJSON := `{
 		"type": "FeatureCollection",
 		"features": [{
 			"type": "Feature",
@@ -265,7 +265,7 @@ func TestLoadGeofenceFromGeoJSON(t *testing.T) {
 			}
 		}]
 	}`
-	if err := os.WriteFile(featureCollectionFile, []byte(featureCollectionJson), 0644); err != nil {
+	if err := os.WriteFile(featureCollectionFile, []byte(featureCollectionJSON), 0644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -282,14 +282,14 @@ func TestLoadGeofenceFromGeoJSON(t *testing.T) {
 
 	// Test single Feature
 	featureFile := tmpDir + "/feature.geojson"
-	featureJson := `{
+	featureJSON := `{
 		"type": "Feature",
 		"geometry": {
 			"type": "Polygon",
 			"coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]
 		}
 	}`
-	if err := os.WriteFile(featureFile, []byte(featureJson), 0644); err != nil {
+	if err := os.WriteFile(featureFile, []byte(featureJSON), 0644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -303,11 +303,11 @@ func TestLoadGeofenceFromGeoJSON(t *testing.T) {
 
 	// Test Point geometry
 	pointFile := tmpDir + "/point.geojson"
-	pointJson := `{
+	pointJSON := `{
 		"type": "Point",
 		"coordinates": [-93.0, 45.0]
 	}`
-	if err := os.WriteFile(pointFile, []byte(pointJson), 0644); err != nil {
+	if err := os.WriteFile(pointFile, []byte(pointJSON), 0644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -640,7 +640,7 @@ func TestLoadGeofenceFromGeoJSONFeatureWithName(t *testing.T) {
 
 	// Test Feature with properties but no geometry name extraction
 	featureFile := tmpDir + "/feature_named.geojson"
-	featureJson := `{
+	featureJSON := `{
 		"type": "FeatureCollection",
 		"features": [{
 			"type": "Feature",
@@ -651,7 +651,7 @@ func TestLoadGeofenceFromGeoJSONFeatureWithName(t *testing.T) {
 			}
 		}]
 	}`
-	if err := os.WriteFile(featureFile, []byte(featureJson), 0644); err != nil {
+	if err := os.WriteFile(featureFile, []byte(featureJSON), 0644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
