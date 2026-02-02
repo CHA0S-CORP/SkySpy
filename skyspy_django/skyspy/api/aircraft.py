@@ -93,7 +93,11 @@ class AircraftViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"])
     def top(self, request):
         """Get top aircraft by various categories."""
-        limit = int(request.query_params.get("limit", 5))
+        try:
+            limit = int(request.query_params.get("limit", 5))
+            limit = min(limit, 100)  # Cap at 100
+        except (ValueError, TypeError):
+            limit = 5
         aircraft_list = cache.get("current_aircraft", [])
 
         # Filter aircraft with valid data

@@ -67,8 +67,15 @@ export const subscribeToAudioState = (callback) => {
 };
 
 // Notify all subscribers of state changes
+// Wrapped in try-catch to handle errors from subscriber callbacks
 export const notifySubscribers = (updates) => {
-  globalAudioState.subscribers.forEach(callback => callback(updates));
+  globalAudioState.subscribers.forEach(callback => {
+    try {
+      callback(updates);
+    } catch (err) {
+      console.error('Error in audio state subscriber callback:', err);
+    }
+  });
 };
 
 // Set autoplay state

@@ -1,6 +1,6 @@
 ---
-title: WebSocket API Reference
-slug: websocket-api
+title: Socket.IO API Reference
+slug: socketio-api
 category:
   uri: api-reference
 position: 2
@@ -8,146 +8,164 @@ privacy:
   view: public
 ---
 
-# WebSocket API Reference
+# Socket.IO API Reference
 
-> **Real-time aviation data at your fingertips.** SkySpy provides live streaming through Django Channels WebSocket connections with intelligent rate limiting, delta compression, and automatic reconnection.
+> **Real-time aviation data at your fingertips.** SkySpy provides live streaming through Socket.IO with namespaces, topic subscriptions, rate limiting, and optional Redis-backed scaling.
 
 ---
 
 ## Overview
 
-SkySpy's WebSocket API delivers real-time bidirectional communication for tracking aircraft, monitoring safety events, and streaming aviation data.
+SkySpy's Socket.IO API delivers real-time bidirectional communication for tracking aircraft, monitoring safety events, and streaming aviation data. The server uses **python-socketio** (ASGI) with optional Redis for multi-process support.
 
 ```mermaid
 graph LR
     subgraph Clients
         A[Web App]
         B[Mobile App]
-        C[Python Script]
+        C[Script]
     end
 
     subgraph SkySpy Server
-        D[WebSocket Gateway]
-        E[Django Channels]
+        D[Socket.IO Server]
+        E[ASGI / Uvicorn]
         F[Redis Pub/Sub]
     end
 
-    A -->|wss://| D
-    B -->|wss://| D
-    C -->|wss://| D
+    A -->|/socket.io| D
+    B -->|/socket.io| D
+    C -->|/socket.io| D
     D --> E
     E <--> F
 ```
 
 ### What You Can Stream
 
-| Channel | Description | Use Case |
-|:--------|:------------|:---------|
+| Topic / Namespace | Description | Use Case |
+|:------------------|:------------|:---------|
 | **Aircraft** | Live ADS-B position updates | Real-time tracking map |
 | **Safety** | TCAS alerts, emergency squawks, conflicts | Safety monitoring |
 | **Alerts** | Custom rule-based notifications | Personalized alerts |
-| **ACARS/VDL2** | Datalink messages | Message decoding |
-| **Statistics** | Live analytics and metrics | Dashboard widgets |
-| **Airspace** | Advisories, NOTAMs, TFRs | Airspace awareness |
+| **ACARS** | Datalink messages (namespace or topic) | Message decoding |
+| **Stats** | Live analytics and metrics | Dashboard widgets |
+| **Airspace** | Advisories, NOTAMs, boundaries | Airspace awareness |
+| **Audio** | Transcriptions, transmissions | Radio tab (/audio namespace) |
+| **Cannonball** | Mobile threat detection | Mobile app (/cannonball namespace) |
 
 ---
 
 ## Key Features
 
-> **Note:** SkySpy's WebSocket implementation is optimized for both high-performance servers and resource-constrained devices like Raspberry Pi.
-
 | Feature | Description |
 |:--------|:------------|
-| **Rate Limiting** | Per-topic rate limits optimize bandwidth |
-| **Message Batching** | High-frequency updates collected into efficient batches |
-| **Delta Updates** | Only changed fields sent for position updates |
-| **Heartbeat** | Ping/pong keepalive every 30 seconds |
-| **Auto-reconnect** | Exponential backoff with jitter |
-| **Topic Subscriptions** | Subscribe only to the data you need |
+| **Namespaces** | `/` (main), `/audio`, `/cannonball`; optional `/acars` for ACARS-only clients |
+| **Topic Subscriptions** | Subscribe only to aircraft, safety, alerts, etc. on the main namespace |
+| **Rate Limiting** | Per-topic rate limits to optimize bandwidth |
+| **Message Batching** | High-frequency updates can be batched (alert/safety/emergency bypass batching) |
+| **Delta Updates** | Only changed fields sent for position updates where supported |
+| **Built-in Heartbeat** | Engine.IO ping/pong; custom `ping` event supported |
+| **Auto-reconnect** | Socket.IO client exponential backoff with jitter |
+| **Request/Response** | `request` event with `request_id` for on-demand queries |
 
 ---
 
-## Connection URLs
+## Connection
 
-All WebSocket endpoints follow this pattern:
+### Base URL and Path
 
-```
-wss://{host}/ws/{endpoint}/
-```
+Socket.IO is served on the same host as the HTTP API. The default path is `/socket.io`.
 
-### Available Endpoints
+- **Base URL:** `https://{host}` or `http://{host}` (same as your API base)
+- **Path:** `/socket.io` (default; configurable on server)
+- **Namespaces:** Connect to `/` (default), `/audio`, or `/cannonball` depending on what you need.
 
-> **Tip:** Use the **Combined Feed** (`/ws/all/`) for most applications. It provides all data streams through a single connection.
+There are **no separate URLs per stream** (e.g. no `/ws/aircraft/`). Use a single connection to the default namespace and subscribe to topics, or connect to a dedicated namespace for audio or cannonball.
 
-| Endpoint | Path | Badge | Description |
-|:---------|:-----|:------|:------------|
-| Combined Feed | `/ws/all/` | ![All](https://img.shields.io/badge/all-blue) | All data streams in one connection |
-| Aircraft | `/ws/aircraft/` | ![Aircraft](https://img.shields.io/badge/aircraft-green) | Aircraft positions and updates |
-| Airspace | `/ws/airspace/` | ![Airspace](https://img.shields.io/badge/airspace-purple) | Advisories, boundaries, weather |
-| Safety | `/ws/safety/` | ![Safety](https://img.shields.io/badge/safety-red) | TCAS, emergencies, conflicts |
-| ACARS | `/ws/acars/` | ![ACARS](https://img.shields.io/badge/acars-orange) | ACARS/VDL2 messages |
-| Audio | `/ws/audio/` | ![Audio](https://img.shields.io/badge/audio-teal) | Radio transcription updates |
-| Alerts | `/ws/alerts/` | ![Alerts](https://img.shields.io/badge/alerts-yellow) | Custom alert triggers |
-| NOTAMs | `/ws/notams/` | ![NOTAMs](https://img.shields.io/badge/notams-pink) | NOTAMs and TFRs |
-| Stats | `/ws/stats/` | ![Stats](https://img.shields.io/badge/stats-cyan) | Statistics and analytics |
-| Cannonball | `/ws/cannonball/` | ![Mobile](https://img.shields.io/badge/mobile-gray) | Mobile threat detection |
+### Namespaces
+
+| Namespace | Path | Description |
+|:----------|:-----|:------------|
+| **Main** | `/` | Aircraft, safety, alerts, ACARS, airspace, NOTAMs, stats. Subscribe via `subscribe` event. |
+| **Audio** | `/audio` | Radio transmissions and transcription events. |
+| **Cannonball** | `/cannonball` | Mobile threat detection; position updates and threat list. |
+| **ACARS** (optional) | `/acars` | ACARS-only stream for clients that only want datalink messages. |
+
+For most apps, connect to the **main namespace** (`/`) and subscribe to `aircraft`, `safety`, `alerts`, etc. Use `/audio` or `/cannonball` only when you need those features.
 
 ---
 
 ## Authentication
 
-### Connection Handshake Flow
+### Connection Handshake
 
 ```mermaid
 sequenceDiagram
     participant C as Client
     participant S as Server
-    participant A as Auth Service
+    participant A as Auth
 
-    C->>S: WebSocket Connect (with token)
-    S->>A: Validate Token
-    A-->>S: Token Valid
-    S-->>C: Connection Accepted
-    S->>C: Initial Snapshot
-    C->>S: Subscribe to Topics
-    S-->>C: Subscription Confirmed
-
-    loop Real-time Updates
-        S->>C: Stream Data
+    C->>S: connect(auth: { token })
+    S->>A: Validate token
+    A-->>S: User or Anonymous
+    S-->>C: connect accepted
+    S->>C: aircraft:snapshot (main ns)
+    C->>S: subscribe({ topics })
+    S-->>C: subscribed({ topics })
+    loop Real-time
+        S->>C: events (aircraft:update, etc.)
     end
 ```
 
 ### Authentication Modes
 
-| Mode | Status | Behavior |
-|:-----|:------:|:---------|
-| `public` | Open | All connections allowed without authentication |
-| `hybrid` | Mixed | Anonymous access to public features, auth required for private |
-| `private` | Locked | All connections require valid authentication |
+| Mode | Behavior |
+|:-----|:---------|
+| `public` | All connections allowed without authentication |
+| `hybrid` | Anonymous allowed; auth required for some features; invalid token can be rejected if `WS_REJECT_INVALID_TOKENS` is True |
+| `private` | All connections require valid authentication |
 
-### Token Methods
+### Passing the Token
 
-> **Warning:** Query string tokens are logged by most web servers. Use the header method in production.
+Send credentials in the **auth** object when connecting. Do not put tokens in query strings (they are often logged).
 
-**Header (Recommended):**
+**JavaScript (socket.io-client):**
 
 ```javascript
-// Recommended: Sec-WebSocket-Protocol Header
-const ws = new WebSocket(url, ['Bearer', 'eyJhbGciOiJIUzI1NiIs...']);
+const io = require('socket.io-client');
+
+const socket = io('https://example.com', {
+  path: '/socket.io',
+  auth: {
+    token: 'eyJhbGciOiJIUzI1NiIs...'  // JWT or API key
+  },
+  transports: ['websocket']
+});
 ```
 
-**Query String (Discouraged):**
+**Python (python-socketio):**
 
-```javascript
-// Discouraged: Query String
-const ws = new WebSocket('wss://example.com/ws/all/?token=eyJhbGciOiJIUzI1NiIs...');
+```python
+import socketio
+
+sio = socketio.Client()
+
+@sio.event
+def connect():
+    print('connected')
+
+sio.connect(
+    'https://example.com',
+    socketio_path='/socket.io',
+    auth={'token': 'eyJhbGciOiJIUzI1NiIs...'},
+    transports=['websocket']
+)
 ```
 
 ### Supported Token Types
 
 | Token Type | Format | Example |
 |:-----------|:-------|:--------|
-| JWT Access Token | `eyJ...` | From `/api/auth/token/` endpoint |
+| JWT Access Token | `eyJ...` | From `/api/auth/token/` |
 | API Key (Live) | `sk_live_...` | Production API key |
 | API Key (Test) | `sk_test_...` | Development API key |
 
@@ -155,64 +173,60 @@ const ws = new WebSocket('wss://example.com/ws/all/?token=eyJhbGciOiJIUzI1NiIs..
 
 ## Message Protocol
 
-### Message Flow Diagram
+### Event-Based API
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant S as Server
+Socket.IO uses **events**. Client sends events (e.g. `subscribe`, `request`, `ping`); server sends events (e.g. `aircraft:snapshot`, `subscribed`, `response`). Each event has a **name** and a **payload** (usually an object).
 
-    Note over C,S: Client Actions
-    C->>S: {"action": "subscribe", "topics": ["aircraft"]}
-    S-->>C: {"type": "subscribed", "topics": ["aircraft"]}
+### Client → Server Events
 
-    Note over C,S: Server Events
-    S->>C: {"type": "aircraft:snapshot", "data": {...}}
-    S->>C: {"type": "aircraft:update", "data": {...}}
+| Event | Payload | Description |
+|:------|:--------|:------------|
+| `subscribe` | `{ topics: string[] }` | Subscribe to topics (e.g. `['aircraft','safety']`; use `'all'` for all). |
+| `unsubscribe` | `{ topics: string[] }` | Unsubscribe from topics. |
+| `request` | `{ type, request_id, params? }` | On-demand query; server replies with `response` or `error`. |
+| `ping` | optional data | Custom keepalive; server replies with `pong`. |
 
-    Note over C,S: Request/Response
-    C->>S: {"action": "request", "type": "aircraft-info", "request_id": "123"}
-    S-->>C: {"type": "response", "request_id": "123", "data": {...}}
+Example:
 
-    Note over C,S: Heartbeat
-    C->>S: {"action": "ping"}
-    S-->>C: {"type": "pong"}
+```javascript
+socket.emit('subscribe', { topics: ['aircraft', 'safety'] });
+socket.emit('request', {
+  type: 'aircraft-info',
+  request_id: 'req_abc123',
+  params: { icao: 'A1B2C3' }
+});
 ```
 
-### Client-to-Server Actions
+### Server → Client Events
 
-| Action | Description | Parameters |
-|:-------|:------------|:-----------|
-| `subscribe` | Subscribe to topics | `topics: string[]` |
-| `unsubscribe` | Unsubscribe from topics | `topics: string[]` |
-| `ping` | Heartbeat ping | None |
-| `request` | Request/response query | `type`, `request_id`, `params` |
+Server emits named events. The payload is typically a single object (e.g. snapshot data, list of topics).
 
-```json
-{
-  "action": "subscribe",
-  "topics": ["aircraft", "safety"]
-}
-```
+| Event | When | Payload |
+|:------|:-----|:--------|
+| `subscribed` | After subscribe | `{ topics, joined?, denied? }` |
+| `unsubscribed` | After unsubscribe | `{ topics, remaining }` |
+| `response` | Reply to request | `{ type, request_id, request_type, data }` |
+| `error` | Request failed or generic error | `{ type?, request_id?, message }` |
+| `pong` | Reply to ping | `{ timestamp }` |
+| `aircraft:snapshot` | On connect (main ns) / snapshot request | `{ aircraft, count, timestamp }` |
+| `aircraft:update` | Periodic / batched updates | aircraft list or delta |
+| `aircraft:new` | New aircraft in range | single aircraft |
+| `aircraft:remove` | Aircraft left / timeout | `{ hex, reason? }` |
+| `aircraft:heartbeat` | Heartbeat | count/timestamp |
+| `safety:snapshot` | Initial safety state | `{ events, count, timestamp }` |
+| `safety:event` | New safety event | event object |
+| `alert:triggered` | Alert rule fired | alert payload |
+| `acars:message` | New ACARS message | message object |
+| `batch` | Batched messages | `{ messages, count?, timestamp? }` |
 
-### Server-to-Client Events
-
-Server messages use a `type` field with namespace prefix:
-
-```json
-{
-  "type": "aircraft:update",
-  "data": { }
-}
-```
+Payloads match the formats described in the old WebSocket docs (aircraft, safety, alerts, etc.); only the transport is Socket.IO events instead of raw JSON messages.
 
 ### Batch Messages
 
-> **Info:** High-frequency updates are batched for efficiency. Critical messages like `alert`, `safety`, and `emergency` **bypass batching** for immediate delivery.
+High-frequency updates may be sent as a single `batch` event:
 
 ```json
 {
-  "type": "batch",
   "messages": [
     { "type": "aircraft:update", "data": {} },
     { "type": "aircraft:update", "data": {} }
@@ -222,44 +236,25 @@ Server messages use a `type` field with namespace prefix:
 }
 ```
 
+Critical types (e.g. alert, safety, emergency) bypass batching and are emitted immediately.
+
 ---
 
 ## Request/Response Pattern
 
-For on-demand queries, use the request/response pattern with a unique `request_id`.
+Use the `request` event with a unique `request_id`; listen for `response` and `error`.
 
-### Message Structure
-
-```mermaid
-graph LR
-    subgraph Request
-        A[action: request] --> B[type: aircraft-info]
-        B --> C[request_id: req_123]
-        C --> D[params: icao: A1B2C3]
-    end
-
-    subgraph Response
-        E[type: response] --> F[request_id: req_123]
-        F --> G[data: ...]
-    end
-
-    D -.->|Server Processing| E
-```
-
-**Request:**
+**Client send:**
 
 ```json
 {
-  "action": "request",
   "type": "aircraft-info",
   "request_id": "req_abc123",
-  "params": {
-    "icao": "A1B2C3"
-  }
+  "params": { "icao": "A1B2C3" }
 }
 ```
 
-**Success Response:**
+**Success:** server emits `response` with payload:
 
 ```json
 {
@@ -275,7 +270,7 @@ graph LR
 }
 ```
 
-**Error Response:**
+**Error:** server emits `error` with payload:
 
 ```json
 {
@@ -287,859 +282,366 @@ graph LR
 
 ---
 
-## Aircraft Consumer
+## Main Namespace (`/`)
 
-> **Endpoint:** `/ws/aircraft/`
->
-> Real-time aircraft position tracking with high-frequency updates, delta compression, and message batching.
+Default namespace. Connect here and use `subscribe` / `unsubscribe` to control which topics you receive.
 
 ### Topics
 
 | Topic | Badge | Description |
 |:------|:------|:------------|
-| `aircraft` | ![aircraft](https://img.shields.io/badge/topic-aircraft-green) | All aircraft updates |
-| `stats` | ![stats](https://img.shields.io/badge/topic-stats-blue) | Filtered statistics |
-| `all` | ![all](https://img.shields.io/badge/topic-all-purple) | Combined feed |
+| `aircraft` | aircraft | Position and state updates |
+| `safety` | safety | Safety events |
+| `stats` | stats | Statistics |
+| `alerts` | alerts | Alert triggers |
+| `acars` | acars | ACARS messages (if also broadcast to main) |
+| `airspace` | airspace | Advisories, boundaries |
+| `notams` | notams | NOTAMs and TFRs |
+| `all` | all | All of the above |
 
-### Event Types
+### Aircraft Events (main namespace)
 
-| Event | Trigger | Description |
-|:------|:--------|:------------|
-| `aircraft:snapshot` | On connect | Full state of all tracked aircraft |
-| `aircraft:update` | Periodic (rate-limited) | Full aircraft list update |
-| `aircraft:new` | New detection | New aircraft detected in range |
-| `aircraft:remove` | Timeout/out of range | Aircraft no longer tracked |
-| `aircraft:delta` | Position change | Only changed fields (RPi optimization) |
-| `aircraft:heartbeat` | Every 5 seconds | Count and timestamp only |
+| Event | Trigger | Payload |
+|:------|:--------|:--------|
+| `aircraft:snapshot` | On connect / request | `{ aircraft[], count, timestamp }` |
+| `aircraft:update` | Periodic (rate-limited) | Full or batched list |
+| `aircraft:new` | New detection | Single aircraft |
+| `aircraft:remove` | Timeout / out of range | `{ hex, reason? }` |
+| `aircraft:delta` | Position change (if used) | Delta object |
+| `aircraft:heartbeat` | Keepalive | Count/timestamp |
 
-#### `aircraft:snapshot`
+Aircraft payload fields match the previous API (e.g. `hex`, `flight`, `lat`, `lon`, `alt_baro`, `gs`, `track`, `squawk`, `category`, `distance_nm`).
 
-Sent immediately on connection with the current aircraft state.
+### Request Types (main namespace)
 
-```json
-{
-  "type": "aircraft:snapshot",
-  "data": {
-    "aircraft": [
-      {
-        "hex": "A1B2C3",
-        "flight": "SWA1234",
-        "lat": 33.9425,
-        "lon": -118.4081,
-        "alt_baro": 35000,
-        "gs": 450,
-        "track": 270,
-        "baro_rate": 0,
-        "squawk": "1200",
-        "category": "A3",
-        "is_military": false,
-        "distance_nm": 25.4
-      }
-    ],
-    "count": 42,
-    "timestamp": "2024-01-15T10:30:00.000Z"
-  }
-}
-```
-
-#### `aircraft:delta`
-
-> **Tip:** Delta updates significantly reduce bandwidth on constrained connections. Only changed fields are transmitted.
-
-```json
-{
-  "type": "aircraft:delta",
-  "data": {
-    "hex": "A1B2C3",
-    "changes": {
-      "lat": 33.9430,
-      "lon": -118.4090,
-      "alt": 35100
-    }
-  }
-}
-```
-
-#### `aircraft:new` and `aircraft:remove`
-
-**New Aircraft:**
-
-```json
-{
-  "type": "aircraft:new",
-  "data": {
-    "hex": "A1B2C3",
-    "flight": "UAL456",
-    "lat": 34.0522,
-    "lon": -118.2437,
-    "alt_baro": 5000
-  }
-}
-```
-
-**Remove Aircraft:**
-
-```json
-{
-  "type": "aircraft:remove",
-  "data": {
-    "hex": "A1B2C3",
-    "reason": "timeout"
-  }
-}
-```
-
-### Request Types
+Supported `request` types include (subset):
 
 | Request Type | Parameters | Description |
 |:-------------|:-----------|:------------|
-| `aircraft` | `icao` | Get single aircraft by ICAO |
-| `aircraft_list` | `military_only`, `category`, `min_altitude`, `max_altitude` | Get filtered aircraft list |
-| `aircraft-info` | `icao` | Get detailed aircraft info |
-| `aircraft-info-bulk` | `icaos: string[]` | Get info for multiple aircraft |
-| `aircraft-stats` | None | Get live statistics |
-| `photo` | `icao`, `thumbnail` | Get aircraft photo URL |
-| `sightings` | `hours`, `limit`, `offset`, `icao_hex`, `callsign` | Get historical sightings |
-| `antenna-polar` | `hours` | Get antenna polar coverage |
-| `antenna-rssi` | `hours`, `sample_size` | Get RSSI vs distance data |
+| `aircraft` | `icao` | Single aircraft by ICAO |
+| `aircraft_list` | `military_only`, `category`, `min_altitude`, `max_altitude` | Filtered list |
+| `aircraft-info` | `icao` | Detailed aircraft info |
+| `aircraft-info-bulk` | `icaos[]` | Bulk aircraft info |
+| `aircraft-stats` | — | Live statistics |
+| `aircraft-snapshot` | — | Current aircraft snapshot |
+| `photo` | `icao`, `thumbnail` | Aircraft photo URL |
+| `sightings` | `hours`, `limit`, `offset`, `icao_hex`, `callsign` | Historical sightings |
+| `antenna-polar` | `hours` | Antenna polar coverage |
+| `antenna-rssi` | `hours`, `sample_size` | RSSI vs distance |
+| `safety-events` | `event_type`, `severity`, etc. | Safety events |
+| `safety-event-detail` | `id` / `event_id` | Event detail |
+| `safety-acknowledge` | `id` / `event_id` | Acknowledge event |
+| `acars-stats` | — | ACARS statistics |
+| `alert-rules` | — | Alert rules |
+| `notification-channels` | — | Notification channels |
+| `metars` / `taf` / `pireps` | `lat`, `lon`, `radius_nm`, etc. | Weather / PIREPs |
+| `airports` / `navaids` | `lat`, `lon`, `radius_nm`, `limit` | Geodata |
+| `airspace-boundaries` / airspace advisories | — | Airspace |
+| `system-info` / `system-status` / `health` | — | System |
+| `stats-flight-patterns`, `stats-geographic`, etc. | — | Extended stats |
+
+(Full set is implemented in the main namespace handler; permission checks apply where configured.)
 
 ---
 
-## Safety Consumer
+## Safety Events (main namespace)
 
-> **Endpoint:** `/ws/safety/`
->
-> Real-time safety event monitoring including TCAS alerts, emergency squawks, and conflict detection.
-
-### Topics
-
-| Topic | Badge | Description |
-|:------|:------|:------------|
-| `events` | ![events](https://img.shields.io/badge/topic-events-red) | All safety events |
-| `tcas` | ![tcas](https://img.shields.io/badge/topic-tcas-orange) | TCAS-specific events |
-| `emergency` | ![emergency](https://img.shields.io/badge/topic-emergency-darkred) | Emergency squawk events |
-| `all` | ![all](https://img.shields.io/badge/topic-all-purple) | All safety data |
-
-### Event Severity Levels
-
-| Severity | Indicator | Description |
-|:---------|:---------:|:------------|
-| `critical` | Red | Immediate attention required (e.g., 7700 squawk) |
-| `high` | Orange | Significant event (e.g., TCAS RA) |
-| `medium` | Yellow | Notable event (e.g., TCAS TA) |
-| `low` | Green | Informational (e.g., unusual squawk) |
-
-### Event Types
-
-#### `safety:event`
-
-New safety event detected - **delivered immediately** (bypasses batching).
-
-```json
-{
-  "type": "safety:event",
-  "data": {
-    "id": 124,
-    "timestamp": "2024-01-15T10:31:00.000Z",
-    "event_type": "emergency_squawk",
-    "severity": "critical",
-    "icao_hex": "A1B2C3",
-    "callsign": "N12345",
-    "message": "Emergency squawk 7700 detected",
-    "details": {
-      "squawk": "7700",
-      "altitude": 10000,
-      "position": { "lat": 34.05, "lon": -118.25 }
-    }
-  }
-}
-```
-
-#### `safety:snapshot`
-
-Initial active events on connect.
-
-```json
-{
-  "type": "safety:snapshot",
-  "data": {
-    "events": [
-      {
-        "id": 123,
-        "timestamp": "2024-01-15T10:30:00.000Z",
-        "event_type": "TCAS_RA",
-        "severity": "high",
-        "icao_hex": "A1B2C3",
-        "icao_hex_2": "D4E5F6",
-        "callsign": "UAL123",
-        "callsign_2": "DAL456",
-        "message": "TCAS Resolution Advisory - Climb",
-        "acknowledged": false
-      }
-    ],
-    "count": 1,
-    "timestamp": "2024-01-15T10:30:00.000Z"
-  }
-}
-```
-
-### Request Types
-
-| Request Type | Parameters | Description |
-|:-------------|:-----------|:------------|
-| `active_events` | `event_type`, `severity` | Get active safety events |
-| `event_history` | `event_type`, `icao`, `limit` | Get event history |
-| `acknowledge` | `event_id` | Acknowledge a safety event |
-| `safety-event-detail` | `event_id` | Get detailed event info |
+- **Topics:** `safety`, or `all`.
+- **Events:** `safety:snapshot` (initial), `safety:event` (new event). Severity and payload shape match the previous API (e.g. `event_type`, `severity`, `icao_hex`, `callsign`, `message`, `details`).
+- **Requests:** `safety-events`, `safety-event-detail`, `safety-acknowledge`, `safety-stats`, etc.
 
 ---
 
-## Alerts Consumer
+## Alerts (main namespace)
 
-> **Endpoint:** `/ws/alerts/`
->
-> Custom alert rule triggers with user-specific channels for personalized notifications.
-
-### Topics
-
-| Topic | Badge | Description |
-|:------|:------|:------------|
-| `alerts` | ![alerts](https://img.shields.io/badge/topic-alerts-yellow) | All alert triggers (public) |
-| `triggers` | ![triggers](https://img.shields.io/badge/topic-triggers-gold) | Alert trigger events |
-| `all` | ![all](https://img.shields.io/badge/topic-all-purple) | All alert data |
-
-### User-Specific Channels
-
-Authenticated users receive alerts on private channels:
-
-```
-alerts_user_{user_id}      - User's private alerts
-alerts_session_{session_key} - Session-based alerts
-```
-
-### Event Types
-
-#### `alert:triggered`
-
-New alert triggered - **delivered immediately**.
-
-```json
-{
-  "type": "alert:triggered",
-  "data": {
-    "id": 457,
-    "rule_id": 12,
-    "rule_name": "Low Altitude Alert",
-    "icao_hex": "A1B2C3",
-    "callsign": "N12345",
-    "message": "Aircraft below 1000ft detected",
-    "priority": "medium",
-    "aircraft_data": {
-      "hex": "A1B2C3",
-      "alt_baro": 800,
-      "lat": 34.05,
-      "lon": -118.25
-    },
-    "triggered_at": "2024-01-15T10:31:00.000Z"
-  }
-}
-```
-
-### Request Types
-
-| Request Type | Parameters | Description |
-|:-------------|:-----------|:------------|
-| `alerts` | `hours`, `limit` | Get alert history |
-| `alert-rules` | None | Get active alert rules |
-| `acknowledge-alert` | `id` | Acknowledge single alert |
-| `acknowledge-all-alerts` | None | Acknowledge all alerts |
-| `my-subscriptions` | None | Get user's rule subscriptions |
+- **Topics:** `alerts`, or `all`. User-specific channels for authenticated users.
+- **Events:** `alert:triggered`, `alert:snapshot`. Payload includes rule and aircraft data.
+- **Requests:** `alert-rules`, `alert-rule-create`, `alert-rule-update`, `alert-rule-delete`, `alert-rule-toggle`, etc.
 
 ---
 
-## ACARS Consumer
+## ACARS
 
-> **Endpoint:** `/ws/acars/`
->
-> ACARS/VDL2 datalink message streaming with frequency and label filtering.
-
-### Topics
-
-| Topic | Badge | Description |
-|:------|:------|:------------|
-| `messages` | ![messages](https://img.shields.io/badge/topic-messages-orange) | All ACARS messages |
-| `vdlm2` | ![vdlm2](https://img.shields.io/badge/topic-vdlm2-darkorange) | VDL Mode 2 messages only |
-| `all` | ![all](https://img.shields.io/badge/topic-all-purple) | All ACARS data |
-
-### Event Types
-
-#### `acars:message`
-
-New ACARS message received.
-
-```json
-{
-  "type": "acars:message",
-  "data": {
-    "id": 790,
-    "timestamp": "2024-01-15T10:31:00.000Z",
-    "source": "ACARS",
-    "channel": 3,
-    "frequency": "131.550",
-    "icao_hex": "A1B2C3",
-    "registration": "N12345",
-    "callsign": "UAL123",
-    "label": "SQ",
-    "block_id": "A",
-    "msg_num": "001",
-    "text": "REQUEST OCEANIC CLEARANCE",
-    "decoded": {
-      "message_type": "clearance_request",
-      "route": "NATU TRACK A"
-    },
-    "signal_level": -42.5
-  }
-}
-```
-
-### Request Types
-
-| Request Type | Parameters | Description |
-|:-------------|:-----------|:------------|
-| `messages` | `icao`, `callsign`, `label`, `source`, `frequency`, `hours`, `limit` | Get filtered messages |
-| `stats` | None | Get ACARS statistics |
-| `labels` | None | Get label reference data |
+- **Main namespace:** Subscribe to topic `acars` to receive `acars:message` (if the server broadcasts to the main namespace).
+- **Dedicated namespace:** For ACARS-only clients, connect to namespace `/acars`; server broadcasts to room `acars_all` (and per-ICAO rooms). Event name: `acars:message`; payload format unchanged (e.g. `id`, `timestamp`, `source`, `icao_hex`, `callsign`, `label`, `text`, `decoded`, etc.).
+- **Requests:** On main namespace, `acars-stats` and related request types.
 
 ---
 
-## Stats Consumer
+## Stats (main namespace)
 
-> **Endpoint:** `/ws/stats/`
->
-> Real-time statistics and analytics streaming with subscription-based updates.
-
-### Message Format
-
-The stats consumer uses a different message format with `type` prefixes:
-
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant S as Stats Server
-
-    C->>S: {"type": "stats.subscribe", "stat_types": ["flight_patterns"]}
-    S-->>C: {"type": "stats.subscribed", "stat_types": ["flight_patterns"]}
-
-    loop Periodic Updates
-        S->>C: {"type": "stats.update", "stat_type": "flight_patterns", "data": {...}}
-    end
-
-    C->>S: {"type": "stats.request", "stat_type": "geographic", "request_id": "123"}
-    S-->>C: {"type": "stats.response", "request_id": "123", "data": {...}}
-```
-
-### Available Stat Types
-
-| Category | Stat Types |
-|:---------|:-----------|
-| **Flight Patterns** | `flight_patterns`, `geographic`, `busiest_hours`, `common_aircraft_types`, `countries`, `airlines`, `airports` |
-| **Session Analytics** | `tracking_quality`, `coverage_gaps`, `engagement` |
-| **Time Comparison** | `week_comparison`, `seasonal_trends`, `day_night`, `weekend_weekday`, `daily_totals`, `weekly_totals`, `monthly_totals` |
-| **ACARS** | `acars_stats`, `acars_trends`, `acars_airlines`, `acars_categories` |
-| **Gamification** | `personal_records`, `rare_sightings`, `collection_stats`, `spotted_by_type`, `spotted_by_operator`, `streaks`, `lifetime_stats` |
-| **General** | `history_stats`, `history_trends`, `history_top`, `safety_stats`, `aircraft_stats` |
+- **Topic:** `stats` or `all`.
+- **Events:** `stats:update` and/or stat-specific events with `stat_type` and `data`.
+- **Requests:** `stats-flight-patterns`, `stats-geographic`, `stats-tracking-quality`, `stats-engagement`, `stats-time-comparison`, `history-stats`, `history-trends`, etc.
 
 ---
 
-## Airspace Consumer
+## Airspace & NOTAMs (main namespace)
 
-> **Endpoint:** `/ws/airspace/`
->
-> Airspace advisories, boundaries, and aviation weather data.
-
-### Topics
-
-| Topic | Badge | Description |
-|:------|:------|:------------|
-| `advisories` | ![advisories](https://img.shields.io/badge/topic-advisories-purple) | G-AIRMETs, SIGMETs |
-| `boundaries` | ![boundaries](https://img.shields.io/badge/topic-boundaries-blue) | Class B/C/D, MOAs |
-| `all` | ![all](https://img.shields.io/badge/topic-all-purple) | All airspace data |
-
-### Request Types
-
-| Request Type | Parameters | Description |
-|:-------------|:-----------|:------------|
-| `advisories` | `hazard`, `advisory_type` | Get active advisories |
-| `boundaries` | `airspace_class`, `lat`, `lon`, `radius_nm` | Get airspace boundaries |
-| `metars` | `lat`, `lon`, `radius_nm`, `limit` | Get METAR observations |
-| `taf` | `station` | Get TAF forecast |
-| `pireps` | `lat`, `lon`, `radius_nm`, `hours` | Get PIREPs |
-| `sigmets` | `hazard` | Get SIGMETs |
-| `airports` | `lat`, `lon`, `radius_nm`, `limit` | Get nearby airports |
-| `navaids` | `lat`, `lon`, `radius_nm`, `type`, `limit` | Get navigation aids |
+- **Topics:** `airspace`, `notams`, or `all`.
+- **Events:** e.g. `airspace:update`, `notams:tfr_new`, `notams:stats`, etc.
+- **Requests:** `airspace-boundaries`, advisories, `metars`, `taf`, `pireps`, `airports`, `navaids`, NOTAM-related types as implemented.
 
 ---
 
-## NOTAMs Consumer
+## Audio Namespace (`/audio`)
 
-> **Endpoint:** `/ws/notams/`
->
-> NOTAMs and Temporary Flight Restrictions (TFRs).
+Connect to namespace `/audio` for radio and transcription streams.
 
-### Topics
+- **Events:** `audio:snapshot`, `audio:transmission`, `audio:transcription_started`, `audio:transcription_completed`, `audio:transcription_failed`.
+- **Requests:** e.g. `transmissions`, `transmission` (by ID), `stats`.
 
-| Topic | Badge | Description |
-|:------|:------|:------------|
-| `notams` | ![notams](https://img.shields.io/badge/topic-notams-pink) | All NOTAM types |
-| `tfrs` | ![tfrs](https://img.shields.io/badge/topic-tfrs-red) | Only Temporary Flight Restrictions |
-| `all` | ![all](https://img.shields.io/badge/topic-all-purple) | All NOTAM updates |
-
-### Event Types
-
-#### `notams:tfr_new`
-
-New TFR alert - critical for flight planning.
-
-```json
-{
-  "type": "notams:tfr_new",
-  "data": {
-    "id": 302,
-    "notam_id": "1/2346",
-    "type": "TFR",
-    "location": "KSFO",
-    "latitude": 37.6213,
-    "longitude": -122.3790,
-    "radius_nm": 10,
-    "floor_ft": 0,
-    "ceiling_ft": 18000,
-    "reason": "Stadium Event",
-    "effective_start": "2024-01-15T18:00:00.000Z",
-    "effective_end": "2024-01-15T23:00:00.000Z"
-  }
-}
-```
+Permission for the `audio` topic/feature is required.
 
 ---
 
-## Audio Consumer
+## Cannonball Namespace (`/cannonball`)
 
-> **Endpoint:** `/ws/audio/`
->
-> Radio transcription updates and audio transmission streaming.
+Connect to namespace `/cannonball` for mobile threat detection.
 
-### Topics
-
-| Topic | Badge | Description |
-|:------|:------|:------------|
-| `transmissions` | ![transmissions](https://img.shields.io/badge/topic-transmissions-teal) | All audio transmissions |
-| `transcriptions` | ![transcriptions](https://img.shields.io/badge/topic-transcriptions-cyan) | Transcription updates only |
-| `all` | ![all](https://img.shields.io/badge/topic-all-purple) | All audio data |
-
-### Event Types
-
-#### `audio:transcription_completed`
-
-Transcription finished with identified callsigns.
-
-```json
-{
-  "type": "audio:transcription_completed",
-  "data": {
-    "id": 501,
-    "transcript": "United four five six heavy, runway two five left, cleared for takeoff",
-    "transcript_confidence": 0.95,
-    "identified_airframes": ["UAL456"],
-    "transcription_completed_at": "2024-01-15T10:30:15.000Z"
-  }
-}
-```
-
----
-
-## Cannonball Consumer
-
-> **Endpoint:** `/ws/cannonball/`
->
-> Mobile threat detection mode for real-time overhead tracking. Optimized for battery efficiency and GPS integration.
-
-### Message Flow
-
-```mermaid
-sequenceDiagram
-    participant M as Mobile
-    participant S as Server
-
-    M->>S: Connect
-    S-->>M: {"type": "session_started", "session_id": "abc123"}
-
-    M->>S: {"type": "position_update", "lat": 34.05, "lon": -118.25}
-    S-->>M: {"type": "threats", "data": [...], "count": 3}
-
-    M->>S: {"type": "set_radius", "radius_nm": 15}
-    S-->>M: {"type": "radius_updated", "radius_nm": 15}
-
-    loop GPS Updates
-        M->>S: Position Update
-        S-->>M: Threats Response
-    end
-```
-
-### Threat Levels
-
-| Level | Indicator | Description |
-|:------|:---------:|:------------|
-| `critical` | Red | Immediate threat - very close, approaching |
-| `warning` | Orange | Nearby threat requiring attention |
-| `info` | Green | Distant or departing aircraft |
-
-### Trend Values
-
-| Trend | Indicator | Description |
-|:------|:---------:|:------------|
-| `approaching` | Up | Getting closer (\> 0.05nm/update) |
-| `holding` | Right | Maintaining distance |
-| `departing` | Down | Moving away (\> 0.05nm/update) |
-| `unknown` | Unknown | First observation |
-
-### Threat Response
-
-```json
-{
-  "type": "threats",
-  "data": [
-    {
-      "hex": "A1B2C3",
-      "callsign": "N12345",
-      "category": "Law Enforcement",
-      "description": "Police Helicopter",
-      "distance_nm": 2.5,
-      "bearing": 45,
-      "relative_bearing": 315,
-      "direction": "NE",
-      "altitude": 1500,
-      "ground_speed": 80,
-      "trend": "approaching",
-      "threat_level": "warning",
-      "is_law_enforcement": true,
-      "is_helicopter": true,
-      "confidence": "high",
-      "lat": 34.06,
-      "lon": -118.24
-    }
-  ],
-  "count": 1,
-  "position": { "lat": 34.05, "lon": -118.25 },
-  "timestamp": "2024-01-15T10:30:00.000Z"
-}
-```
+- **Flow:** Client sends `position_update` (lat, lon, optional heading); server emits `threats` with filtered list. Client can send `set_radius` (radius_nm); server confirms with `radius_updated`.
+- **Events (server → client):** `session_started` (session_id), `threats`, `radius_updated`, `error`.
+- **Events (client → server):** `position_update`, `set_radius`, `get_threats`, `request` (for other request types).
+- **Threat payload:** e.g. `hex`, `callsign`, `distance_nm`, `bearing`, `threat_level`, `trend`, `altitude`, etc.
 
 ---
 
 ## Connection Lifecycle
 
-### Heartbeat Protocol
+### Heartbeat
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant S as Server
+- Socket.IO’s Engine.IO layer provides built-in ping/pong.
+- The app also supports a custom `ping` event; server replies with `pong` and optional `timestamp`.
 
-    Note over C,S: Every 30 seconds
-    C->>S: {"action": "ping"}
-    S-->>C: {"type": "pong"}
+### Connection States (client)
 
-    Note over C,S: If no pong within 10s
-    C->>C: Trigger reconnect
-```
+| State | Description |
+|:------|:------------|
+| Connecting | Initial connection or reconnecting |
+| Connected | Connected and ready to emit/subscribe |
+| Disconnected | Disconnected (check reason) |
+| Connect error | Authentication or network error |
 
-### Connection States
+### Reconnection
 
-| State | Indicator | Description |
-|:------|:---------:|:------------|
-| `connecting` | Yellow | Establishing WebSocket connection |
-| `connected` | Green | Connection established, receiving data |
-| `reconnecting` | Orange | Connection lost, attempting to reconnect |
-| `disconnected` | Red | Connection closed |
-| `error` | Error | Authentication or protocol error |
+Socket.IO client reconnection (exponential backoff, jitter) is enabled by default. Typical config:
 
-### Reconnection Strategy
+- `reconnection: true`
+- `reconnectionDelay`: 1000 ms
+- `reconnectionDelayMax`: 30000 ms
+- `reconnectionAttempts`: Infinity
+- `randomizationFactor`: 0.3
 
-The client uses **exponential backoff with jitter** for resilient reconnection:
-
-```mermaid
-graph LR
-    A[Connection Lost] --> B{Attempt #1}
-    B -->|1s| C[Reconnect]
-    C -->|Fail| D{Attempt #2}
-    D -->|2s + jitter| E[Reconnect]
-    E -->|Fail| F{Attempt #3}
-    F -->|4s + jitter| G[Reconnect]
-    G -->|Fail| H{Attempt #N}
-    H -->|max 30s| I[Reconnect]
-```
-
-**Configuration:**
-
-| Setting | Value | Description |
-|:--------|:------|:------------|
-| `initialDelay` | 1000ms | Starting delay |
-| `maxDelay` | 30000ms | Maximum delay cap |
-| `multiplier` | 2x | Exponential factor |
-| `jitter` | 0-30% | Random variance |
-| `maxAttempts` | Infinity | Never give up |
-
-### Close Codes
-
-| Code | Status | Meaning | Action |
-|:-----|:------:|:--------|:-------|
-| `1000` | OK | Normal closure | No reconnect |
-| `1001` | Out | Going away (page unload) | No reconnect |
-| `4000` | Timeout | Heartbeat timeout | Reconnect |
-| `4001` | Locked | Unauthorized | No reconnect - check auth |
-| Other | Warning | Unexpected error | Reconnect with backoff |
+Disconnect reasons (e.g. `io server disconnect`, `io client disconnect`, `transport close`) indicate whether to reconnect or not (e.g. do not reconnect on auth failure if the server disconnects for that).
 
 ---
 
 ## Client Implementation
 
-### React Hook Example
+### JavaScript (socket.io-client)
 
 ```javascript
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { io } from 'socket.io-client';
 
-function useSkySpy(endpoint = 'all', topics = ['aircraft']) {
-  const [connected, setConnected] = useState(false);
-  const [aircraft, setAircraft] = useState([]);
-  const wsRef = useRef(null);
-  const reconnectAttempt = useRef(0);
+const socket = io('https://example.com', {
+  path: '/socket.io',
+  auth: { token: getAccessToken() },
+  transports: ['websocket'],
+  reconnection: true,
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 30000,
+  reconnectionAttempts: Infinity,
+  randomizationFactor: 0.3,
+});
 
-  const connect = useCallback(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${protocol}//${window.location.host}/ws/${endpoint}/`;
+socket.on('connect', () => {
+  socket.emit('subscribe', { topics: ['aircraft', 'safety'] });
+});
 
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
+socket.on('subscribed', (data) => {
+  console.log('Subscribed:', data.topics);
+});
 
-    ws.onopen = () => {
-      setConnected(true);
-      reconnectAttempt.current = 0;
+socket.on('aircraft:snapshot', (data) => {
+  console.log('Aircraft count:', data.count);
+});
 
-      // Subscribe to topics
-      ws.send(JSON.stringify({
-        action: 'subscribe',
-        topics: topics
-      }));
-    };
+socket.on('aircraft:update', (data) => {
+  // Merge or replace aircraft state
+});
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+socket.on('batch', (data) => {
+  data.messages.forEach(msg => {
+    socket.emit(msg.type, msg.data); // or handle by msg.type
+  });
+});
 
-      // Handle batch messages
-      if (data.type === 'batch') {
-        data.messages.forEach(handleMessage);
-        return;
-      }
+socket.on('response', (data) => {
+  console.log('Response:', data.request_id, data.data);
+});
 
-      handleMessage(data);
-    };
-
-    ws.onclose = (event) => {
-      setConnected(false);
-
-      // Reconnect unless normal close or auth failure
-      if (event.code !== 1000 && event.code !== 1001 && event.code !== 4001) {
-        const delay = Math.min(1000 * Math.pow(2, reconnectAttempt.current), 30000);
-        reconnectAttempt.current++;
-        setTimeout(connect, delay);
-      }
-    };
-  }, [endpoint, topics]);
-
-  const handleMessage = useCallback((data) => {
-    switch (data.type) {
-      case 'aircraft:snapshot':
-      case 'aircraft:update':
-        setAircraft(data.data.aircraft || []);
-        break;
-      case 'aircraft:new':
-        setAircraft(prev => [...prev, data.data]);
-        break;
-      case 'aircraft:remove':
-        setAircraft(prev => prev.filter(a => a.hex !== data.data.hex));
-        break;
-    }
-  }, []);
-
-  useEffect(() => {
-    connect();
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close(1000);
-      }
-    };
-  }, [connect]);
-
-  return { connected, aircraft };
-}
+socket.on('error', (data) => {
+  console.error('Error:', data.message);
+});
 ```
 
-### Python (asyncio) Example
+### Python (python-socketio)
 
 ```python
-import asyncio
-import json
-import websockets
+import socketio
 
-async def skyspy_client():
-    uri = "wss://example.com/ws/all/"
+sio = socketio.Client()
 
-    async with websockets.connect(uri) as websocket:
-        # Subscribe to topics
-        await websocket.send(json.dumps({
-            "action": "subscribe",
-            "topics": ["aircraft", "safety"]
-        }))
+@sio.event
+def connect():
+    sio.emit('subscribe', {'topics': ['aircraft', 'safety']})
 
-        # Listen for messages
-        async for message in websocket:
-            data = json.loads(message)
+@sio.event
+def subscribed(data):
+    print('Subscribed:', data.get('topics'))
 
-            if data["type"] == "batch":
-                for msg in data["messages"]:
-                    process_message(msg)
-            else:
-                process_message(data)
+@sio.event
+def aircraft_snapshot(data):
+    print('Aircraft count:', data.get('count'))
 
-def process_message(data):
-    msg_type = data.get("type", "")
+@sio.event
+def aircraft_update(data):
+    pass  # merge aircraft state
 
-    if msg_type == "aircraft:snapshot":
-        aircraft = data["data"]["aircraft"]
-        print(f"Received {len(aircraft)} aircraft")
+@sio.event
+def batch(data):
+    for msg in data.get('messages', []):
+        event = msg.get('type', '').replace(':', '_')
+        payload = msg.get('data', msg)
+        sio.emit(event, payload)
 
-    elif msg_type == "safety:event":
-        event = data["data"]
-        print(f"Safety event: {event['event_type']} - {event['message']}")
+@sio.event
+def response(data):
+    print('Response:', data.get('request_id'), data.get('data'))
 
-# Run the client
-asyncio.run(skyspy_client())
+@sio.event
+def error(data):
+    print('Error:', data.get('message'))
+
+sio.connect(
+    'https://example.com',
+    socketio_path='/socket.io',
+    auth={'token': 'eyJ...'},
+    transports=['websocket']
+)
+sio.wait()
 ```
 
-### CLI (websocat) Example
+(Note: python-socketio may use `aircraft_snapshot` for the event `aircraft:snapshot`; check client docs for colon handling.)
 
-```bash
-# Using websocat for testing
-websocat wss://example.com/ws/all/
+### Request with timeout (JavaScript)
 
-# Send subscription
-{"action": "subscribe", "topics": ["aircraft"]}
+```javascript
+function request(socket, type, params = {}, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const t = setTimeout(() => {
+      reject(new Error(`Timeout: ${type}`));
+    }, timeoutMs);
 
-# Send request
-{"action": "request", "type": "aircraft-stats", "request_id": "test1", "params": {}}
+    const onResponse = (data) => {
+      if (data.request_id !== requestId) return;
+      clearTimeout(t);
+      socket.off('response', onResponse);
+      socket.off('error', onError);
+      resolve(data.data ?? data);
+    };
+    const onError = (data) => {
+      if (data.request_id !== requestId) return;
+      clearTimeout(t);
+      socket.off('response', onResponse);
+      socket.off('error', onError);
+      reject(new Error(data.message || 'Request failed'));
+    };
+
+    socket.once('response', onResponse);
+    socket.once('error', onError);
+    socket.emit('request', { type, request_id: requestId, params });
+  });
+}
+
+// Usage
+const info = await request(socket, 'aircraft-info', { icao: 'A1B2C3' });
 ```
 
 ---
 
 ## Rate Limits
 
-### Default Rate Limits
+| Topic / Type | Max rate (typical) | Notes |
+|:-------------|:-------------------|:------|
+| `aircraft:update` | ~10 Hz | Full updates |
+| `aircraft:delta` | ~10 Hz | Delta updates |
+| `stats:update` | ~0.5 Hz | 2 s min interval |
+| Default | ~5 Hz | Other types |
 
-| Topic | Max Rate | Indicator | Description |
-|:------|:---------|:---------:|:------------|
-| `aircraft:update` | 10 Hz | Green | Full aircraft updates |
-| `aircraft:position` | 5 Hz | Green | Position-only updates |
-| `aircraft:delta` | 10 Hz | Green | Delta updates |
-| `stats:update` | 0.5 Hz | Yellow | Statistics updates (2s min) |
-| `default` | 5 Hz | Green | All other message types |
-
-### Batching Configuration
-
-| Setting | Default | Description |
-|:--------|:--------|:------------|
-| `window_ms` | 200 | Batch collection window |
-| `max_size` | 50 | Maximum messages per batch |
-| `max_bytes` | 1 MB | Maximum batch size |
-| `immediate_types` | `alert`, `safety`, `emergency` | Types that **bypass batching** |
-
-> **Warning:** Clients exceeding rate limits may be throttled. Design your application to handle reduced update frequencies gracefully.
+Batching: window ~200 ms, max batch size ~50 messages or ~1 MB; alert/safety/emergency types are not batched.
 
 ---
 
 ## Error Handling
 
-### Error Message Format
+**Error event payload:**
 
 ```json
 {
   "type": "error",
-  "message": "Description of the error",
-  "request_id": "abc123"
+  "request_id": "req_abc123",
+  "message": "Description of the error"
 }
 ```
 
-### Error Reference
-
-| Error | Cause | Resolution |
-|:------|:------|:-----------|
-| `Invalid JSON format` | Malformed JSON | Check JSON syntax |
-| `Unknown action` | Unsupported action type | Use valid action |
-| `Unknown request type` | Unsupported request | Check request type |
-| `Missing parameter` | Required param missing | Include required params |
-| `Permission denied` | Insufficient access | Check authentication |
-| `Message too large` | Exceeds 10MB limit | Reduce message size |
-| `Rate limited` | Too many requests | Slow down request rate |
-| `Invalid token` | Token expired/invalid | Refresh token |
+| Message / Cause | Resolution |
+|:----------------|:-----------|
+| Invalid JSON / malformed | Check payload format |
+| Unknown action / request type | Use supported events and request types |
+| Missing parameter | Include required params |
+| Permission denied | Check authentication and topic/request permissions |
+| Invalid token | Refresh or re-issue token |
 
 ---
 
-## Security Considerations
+## Security
 
-> **Caution:** Always follow these security best practices when implementing WebSocket clients.
-
-| Practice | Priority | Description |
-|:---------|:--------:|:------------|
-| **Use WSS** | Critical | Always use TLS in production |
-| **Token Expiry** | High | JWT tokens expire; implement token refresh |
-| **Avoid Query Tokens** | High | Use `Sec-WebSocket-Protocol` header instead |
-| **Topic Permissions** | Medium | Some topics require specific permissions |
-| **Rate Limiting** | Medium | Clients exceeding limits may be throttled |
-| **Connection Cleanup** | Low | Close connections properly on unmount |
+- Use **TLS** in production (https / wss).
+- Prefer **auth** object for token; avoid query-string tokens.
+- Respect **topic and request permissions** (some require auth or specific permissions).
+- Handle **token expiry** and refresh (e.g. JWT).
 
 ---
 
 ## Troubleshooting
 
-### Common Issues
+| Symptom | Possible cause | Action |
+|:--------|:---------------|:-------|
+| Connection rejected | Auth required or invalid token | Check token; try in hybrid/public if testing |
+| No events after connect | Not subscribed | Emit `subscribe` with `topics` after `connect` |
+| No `aircraft:snapshot` | Listeners attached after connect | Subscribe and request `aircraft-snapshot` if needed |
+| Delayed updates | Rate limiting / batching | Expected; critical events are not batched |
+| ACARS not received on main ns | Server may send only on `/acars` | Connect to namespace `/acars` for ACARS-only stream |
 
-| Symptom | Possible Cause | Solution |
-|:--------|:---------------|:---------|
-| `4001` close code | Authentication failed | Check token validity |
-| Frequent disconnects | Network instability | Check network; increase timeouts |
-| No messages received | Not subscribed | Send subscribe action |
-| Delayed updates | Rate limiting active | Expected behavior for RPi mode |
-| Connection refused | Server unavailable | Check server status |
-
-### Debug Logging
-
-**Browser Console:**
+**Debug (client):**
 
 ```javascript
-localStorage.setItem('ws_debug', 'true');
+localStorage.setItem('debug', 'socket.io-client:*');
 ```
 
-**Django Server:**
+**Server (Django):**
 
 ```python
 LOGGING = {
     'loggers': {
-        'skyspy.channels': {
-            'level': 'DEBUG',
-        },
+        'skyspy.socketio': {'level': 'DEBUG'},
+        'socketio': {'level': 'DEBUG'},
     },
 }
 ```
 
 ---
 
-> **Need help?** Check out our [examples repository](https://github.com/skyspy/examples) or [join our Discord](https://discord.gg/skyspy) for community support.
+> **Need help?** See the [REST API](05-rest-api.md), [testing guide](12-testing.md), or project README for more context.

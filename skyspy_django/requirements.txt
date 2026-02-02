@@ -26,12 +26,19 @@ celery[redis,gevent]>=5.3
 django-celery-beat>=2.5
 gevent>=24.2
 
+# HTTP client for SSE streaming
+requests>=2.31
+
 # Database
 psycopg[binary]>=3.1
 asyncpg>=0.29.0
 daphne>=4.0
 # HTTP Client
 httpx>=0.26.0
+tenacity>=8.2  # Retry logic for external API calls
+
+# FAA SWIM (Solace messaging for NOTAMs)
+solace-pubsubplus>=1.8.0
 
 # Notifications
 apprise>=1.6
@@ -66,3 +73,4 @@ factory-boy>=3.3
 
 # Analytics
 numpy>=1.26
+certifi>=2024.1

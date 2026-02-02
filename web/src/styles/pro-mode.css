@@ -1277,12 +1277,19 @@
   gap: 10px;
   margin-bottom: 12px;
   color: var(--accent-cyan);
+  flex-wrap: wrap;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .popup-callsign {
   font-size: 18px;
   font-weight: 600;
   font-family: 'JetBrains Mono', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
 }
 
 .model-tag {
@@ -1294,6 +1301,11 @@
   font-size: 10px;
   font-family: 'JetBrains Mono', monospace;
   margin-left: 6px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .model-tag.military {
@@ -1316,15 +1328,23 @@
   display: flex;
   justify-content: space-between;
   font-size: 13px;
+  gap: 12px;
+  min-width: 0;
 }
 
 .detail-row span:first-child {
   color: var(--text-dim);
+  flex-shrink: 0;
 }
 
 .detail-row span:last-child {
   font-family: 'JetBrains Mono', monospace;
   color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  text-align: right;
 }
 
 .emergency-squawk {
@@ -1336,6 +1356,15 @@
 .speed-value {
   display: inline-flex;
   align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+/* Altitude value with vs-indicator */
+.altitude-value {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
 }
 
@@ -1605,14 +1634,18 @@
 }
 
 /* Popup Action Buttons */
+.popup-actions,
 .popup-action-buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
 }
 
+.popup-actions .popup-action-btn,
 .popup-action-buttons .popup-action-btn {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 70px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1626,31 +1659,38 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  text-decoration: none;
+  white-space: nowrap;
 }
 
+.popup-actions .popup-action-btn:hover,
 .popup-action-buttons .popup-action-btn:hover {
   background: rgba(0, 180, 216, 0.25);
   border-color: var(--accent-cyan);
   color: #fff;
 }
 
+.aircraft-popup.crt-popup .popup-actions .popup-action-btn,
 .aircraft-popup.crt-popup .popup-action-buttons .popup-action-btn {
   background: rgba(0, 255, 150, 0.1);
   border-color: rgba(0, 255, 150, 0.3);
   color: rgba(0, 255, 150, 0.9);
 }
 
+.aircraft-popup.crt-popup .popup-actions .popup-action-btn:hover,
 .aircraft-popup.crt-popup .popup-action-buttons .popup-action-btn:hover {
   background: rgba(0, 255, 150, 0.2);
   border-color: rgba(0, 255, 150, 0.5);
 }
 
+.aircraft-popup.pro-popup .popup-actions .popup-action-btn,
 .aircraft-popup.pro-popup .popup-action-buttons .popup-action-btn {
   background: rgba(0, 180, 216, 0.15);
   border-color: rgba(0, 180, 216, 0.3);
   color: rgba(100, 200, 255, 0.9);
 }
 
+.aircraft-popup.pro-popup .popup-actions .popup-action-btn:hover,
 .aircraft-popup.pro-popup .popup-action-buttons .popup-action-btn:hover {
   background: rgba(0, 180, 216, 0.25);
   border-color: rgba(100, 200, 255, 0.5);
@@ -2077,6 +2117,8 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0; /* Allow grid items to shrink below content size */
+  overflow: hidden;
 }
 
 .pro-stat-label {
@@ -2098,6 +2140,9 @@
   font-weight: 600;
   color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pro-stat-value.small {
@@ -2109,6 +2154,16 @@
   font-weight: 400;
   color: rgba(138, 148, 158, 0.6);
   margin-left: 2px;
+}
+
+/* Primary Metrics Section - New 2x2 Grid */
+.pro-primary-metrics {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(90, 122, 154, 0.15);
+}
+
+.pro-primary-metrics .metrics-grid {
+  gap: 12px;
 }
 
 /* Graphs Container - flows within panel scroll */
@@ -2284,8 +2339,13 @@
   border: none;
   color: rgba(138, 148, 158, 0.6);
   cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
+  padding: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
   transition: all 0.2s ease;
 }
 
@@ -3328,10 +3388,11 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 12px 14px;
+  min-height: 44px;
   background: rgba(30, 40, 50, 0.8);
   border: 1px solid rgba(90, 122, 154, 0.3);
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--text-secondary);
   font-size: 12px;
   cursor: pointer;
@@ -3348,15 +3409,18 @@
   transform: scale(0.98);
 }
 
-/* Pro Panel Button */
+/* Pro Panel Button - 44px minimum touch targets for accessibility */
 .pro-panel-btn {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 10px;
+  min-width: 44px;
+  min-height: 44px;
   background: rgba(30, 40, 50, 0.6);
   border: 1px solid rgba(90, 122, 154, 0.2);
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--text-secondary);
   font-size: 12px;
   cursor: pointer;
@@ -3503,4 +3567,116 @@
 .emergency-aircraft-link:hover {
   color: #fff;
   text-decoration-thickness: 2px;
+}
+
+/* ============================================================================
+   Metric Card Styles
+   ============================================================================ */
+
+/* Value change animations - micro-interactions */
+.metric-value-increasing {
+  color: var(--accent-green) !important;
+  transform: translateY(-2px);
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.metric-value-decreasing {
+  color: var(--accent-yellow) !important;
+  transform: translateY(2px);
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+/* Trend classes */
+.metric-card-value.climbing {
+  color: var(--accent-green);
+}
+
+.metric-card-value.descending {
+  color: var(--accent-yellow);
+}
+
+.metric-card-value.extreme-vs {
+  color: #ff4444;
+  text-shadow: 0 0 8px rgba(255, 68, 68, 0.4);
+  animation: extreme-vs-flash 0.5s ease-in-out infinite;
+}
+
+/* Trend icon with color pairing for accessibility */
+.trend-indicator.climbing::before {
+  content: '\2191'; /* Up arrow */
+  margin-right: 4px;
+  color: var(--accent-green);
+}
+
+.trend-indicator.descending::before {
+  content: '\2193'; /* Down arrow */
+  margin-right: 4px;
+  color: var(--accent-yellow);
+}
+
+/* ============================================================================
+   Collapsible Section Styles
+   ============================================================================ */
+
+.collapsible-section {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.collapsible-section:last-child {
+  border-bottom: none;
+}
+
+.collapsible-trigger {
+  width: 100%;
+  text-align: left;
+}
+
+.collapsible-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.collapsible-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(0, 212, 255, 0.2);
+  color: var(--accent-cyan);
+}
+
+.collapsible-content {
+  padding: 0 12px;
+}
+
+/* ============================================================================
+   Accessibility - Reduced Motion
+   ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .metric-value-increasing,
+  .metric-value-decreasing {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .metric-card-value.extreme-vs {
+    animation: none !important;
+  }
+
+  .collapsible-section,
+  .collapsible-trigger,
+  .metric-card,
+  .pro-panel-btn,
+  .pro-alert-btn {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

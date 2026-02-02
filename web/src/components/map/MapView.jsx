@@ -135,22 +135,42 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const [safetyEvents, setSafetyEvents] = useState([]); // Safety events from API/WebSocket
   const [acknowledgedEvents, setAcknowledgedEvents] = useState(new Set()); // Acknowledged event IDs
   const [showAircraftList, setShowAircraftList] = useState(() => {
-    const saved = localStorage.getItem('adsb-show-aircraft-list');
-    return saved === null ? false : saved === 'true';
+    try {
+      const saved = localStorage.getItem('adsb-show-aircraft-list');
+      return saved === null ? false : saved === 'true';
+    } catch {
+      return false;
+    }
   });
   const [listExpanded, setListExpanded] = useState(() => {
-    const saved = localStorage.getItem('adsb-list-expanded');
-    return saved === null ? true : saved === 'true';
+    try {
+      const saved = localStorage.getItem('adsb-list-expanded');
+      return saved === null ? true : saved === 'true';
+    } catch {
+      return true;
+    }
   });
   const [showLegend, setShowLegend] = useState(false); // Legend panel visibility
   const [legendCollapsed, setLegendCollapsed] = useState(false); // Legend content collapsed
   const [listDisplayCount, setListDisplayCount] = useState(20); // Lazy load count for aircraft list
   const [showRangeControl, setShowRangeControl] = useState(false); // Show range control when cursor near
-  const [soundMuted, setSoundMuted] = useState(() => localStorage.getItem('adsb-sound-muted') === 'true');
+  const [soundMuted, setSoundMuted] = useState(() => {
+    try {
+      return localStorage.getItem('adsb-sound-muted') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [searchQuery, setSearchQuery] = useState(''); // Search filter
   const [trackHistory, setTrackHistory] = useState({}); // Per-aircraft position history for trails
   const [showSelectedTrack, setShowSelectedTrack] = useState(false); // Show track line for selected aircraft
-  const [showShortTracks, setShowShortTracks] = useState(() => localStorage.getItem('adsb-show-short-tracks') === 'true'); // Show short ~5nm trails for all aircraft (ATC style)
+  const [showShortTracks, setShowShortTracks] = useState(() => {
+    try {
+      return localStorage.getItem('adsb-show-short-tracks') === 'true';
+    } catch {
+      return false;
+    }
+  }); // Show short ~5nm trails for all aircraft (ATC style)
   const [shortTrackHistory, setShortTrackHistory] = useState({}); // Historical positions for short tracks (from API)
 
   // New feature states
@@ -290,19 +310,25 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   // Phase 5: Theme & Customization
   const [proTheme, setProTheme] = useState(() => localStorage.getItem('adsb-pro-theme') || 'cyan'); // cyan, amber, green, high-contrast
   const [dataBlockConfig, setDataBlockConfig] = useState(() => {
+    const defaults = {
+      showCallsign: true,
+      showAltitude: true,
+      showSpeed: true,
+      showHeading: false,
+      showVerticalSpeed: false,
+      showAircraftType: false,
+      compact: false,
+    };
     try {
       const saved = localStorage.getItem('adsb-pro-datablock-config');
-      return saved ? JSON.parse(saved) : {
-        showCallsign: true,
-        showAltitude: true,
-        showSpeed: true,
-        showHeading: false,
-        showVerticalSpeed: false,
-        showAircraftType: false,
-        compact: false,
-      };
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Merge with defaults to ensure all fields exist
+        return { ...defaults, ...parsed };
+      }
+      return defaults;
     } catch {
-      return { showCallsign: true, showAltitude: true, showSpeed: true, showHeading: false, showVerticalSpeed: false, showAircraftType: false, compact: false };
+      return defaults;
     }
   });
 
@@ -311,7 +337,11 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   const fpsRef = useRef({ frames: 0, lastTime: Date.now(), fps: 0 });
 
   // Phase 6: Labels toggle
-  const [showDataBlocks, setShowDataBlocks] = useState(() => localStorage.getItem('adsb-pro-show-datablocks') !== 'false'); // default on
+  const [showDataBlocks, setShowDataBlocks] = useState(() => {
+    const stored = localStorage.getItem('adsb-pro-show-datablocks');
+    // Default to true unless explicitly set to 'false'
+    return stored !== 'false';
+  });
 
   // Phase 6: Hover tooltip
   const [hoverInfo, setHoverInfo] = useState(null); // { aircraft, x, y }
@@ -2064,7 +2094,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
 
     const baseUrl = config.apiBaseUrl || '';
     const REFRESH_INTERVAL = 60000; // Refresh historical data every 60 seconds to fill gaps
-    const FETCH_INTERVAL = 5000; // Check for new aircraft to fetch every 5 seconds
+    const FETCH_INTERVAL = 2000; // Check for new aircraft to fetch every 2 seconds (reduced for lower latency)
 
     const fetchShortTracks = () => {
       const now = Date.now();
@@ -2106,12 +2136,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
           if (!lastFetch) return true; // Never fetched
           return (now - lastFetch) > REFRESH_INTERVAL; // Needs refresh
         })
-        .slice(0, 4); // Fetch up to 4 at a time to reduce load
+        .slice(0, 6); // Fetch up to 6 at a time for faster initial loading
 
       if (toFetch.length > 0) {
         toFetch.forEach(async (ac) => {
-          // Mark as fetching with current timestamp
-          shortTrackFetchedRef.current.set(ac.hex, now);
+          // Mark as "in progress" to prevent duplicate requests
+          // Use a temporary marker that will be replaced on success or cleared on failure
+          const inProgressMarker = now - REFRESH_INTERVAL + 5000; // Will retry in 5s on failure
+          shortTrackFetchedRef.current.set(ac.hex, inProgressMarker);
           try {
             let data;
             // Use WebSocket when connected
@@ -2120,17 +2152,26 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
               if (result && (result.sightings || result.results)) {
                 data = result;
               } else {
+                // No data returned - mark for quick retry
+                shortTrackFetchedRef.current.delete(ac.hex);
                 return;
               }
             } else {
               // Django API uses /api/v1/sightings with query params (was /api/v1/history/sightings/{hex})
               const res = await fetch(`${baseUrl}/api/v1/sightings?icao_hex=${ac.hex}&hours=1&limit=100`);
               data = await safeJson(res);
-              if (!data) return;
+              if (!data) {
+                // Failed to parse - mark for quick retry
+                shortTrackFetchedRef.current.delete(ac.hex);
+                return;
+              }
             }
 
             const sightings = data?.sightings || data?.results || [];
             if (sightings.length > 0) {
+              // Success - mark as fully fetched
+              shortTrackFetchedRef.current.set(ac.hex, Date.now());
+
               // Convert API data to our format
               const historicalPositions = sightings
                 .map(s => ({
@@ -2170,9 +2211,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   [ac.hex]: sorted
                 };
               });
+            } else {
+              // No sightings but successful response - still mark as fetched
+              // (aircraft may not have history yet)
+              shortTrackFetchedRef.current.set(ac.hex, Date.now());
             }
           } catch (e) {
-            // Silently fail - real-time data will still work
+            // Failed - allow retry sooner (clear the marker so it can be retried in 5s)
+            shortTrackFetchedRef.current.delete(ac.hex);
             console.debug('Short track fetch failed:', ac.hex, e.message);
           }
         });
@@ -3026,19 +3072,20 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
   // Leaflet marker update loop, NOT merged into React state. This prevents
   // 60Hz re-renders that were causing performance issues.
 
+  // Memoize safety hexes separately to avoid recalculating sortedAircraft on every safetyEvents change
+  const safetyHexes = useMemo(() => {
+    const hexes = new Set();
+    safetyEvents.forEach(event => {
+      if (event.icao) hexes.add(event.icao.toUpperCase());
+      if (event.icao_2) hexes.add(event.icao_2.toUpperCase());
+    });
+    return hexes;
+  }, [safetyEvents]);
+
   const sortedAircraft = useMemo(() => {
     // Debug: Log aircraft data received by MapView
     console.log('[MapView] sortedAircraft memo running, received', aircraft?.length ?? 0, 'aircraft');
     let filtered = [...aircraft].filter(a => a.lat && a.lon);
-
-    // Build set of aircraft with safety events for safetyEventsOnly filter
-    const safetyHexes = new Set();
-    if (trafficFilters.safetyEventsOnly) {
-      safetyEvents.forEach(event => {
-        if (event.icao) safetyHexes.add(event.icao.toUpperCase());
-        if (event.icao_2) safetyHexes.add(event.icao_2.toUpperCase());
-      });
-    }
 
     // Apply traffic filters
     filtered = filtered.filter(ac => {
@@ -3098,7 +3145,7 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
     }
     
     return filtered.sort((a, b) => (a.distance_nm || 999) - (b.distance_nm || 999));
-  }, [aircraft, searchQuery, trafficFilters, safetyEvents]);
+  }, [aircraft, searchQuery, trafficFilters, safetyHexes]);
 
   // Live aircraft data for selected aircraft (updates in real-time)
   const liveAircraft = useMemo(() => {
@@ -4527,10 +4574,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
       // Phase 5.3: Performance mode - adjust detail based on aircraft count
       const aircraftCount = sortedAircraft.length;
       const perfMode = {
-        skipTrails: aircraftCount > 150,
-        reduceTrailLength: aircraftCount > 100,
-        skipPredictionVectors: aircraftCount > 200,
-        skipDataBlocks: aircraftCount > 250,
+        skipTrails: aircraftCount > 200,
+        reduceTrailLength: aircraftCount > 150,
+        skipPredictionVectors: aircraftCount > 300,
+        skipDataBlocks: aircraftCount > 400,
       };
 
       // Draw short tracks for all aircraft (ATC-style history trails)
@@ -4999,6 +5046,10 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
         const blockY = y - 10;
 
         // Draw data block (callsign, speed, altitude, etc.) - respects showDataBlocks toggle, performance mode, and dataBlockConfig
+        // Debug: Log first aircraft's data block rendering (only once per draw cycle)
+        if (frameCount === 1 && ac === aircraftToDraw[0]) {
+          console.log('[MapView] Data block render check:', { showDataBlocks, skipDataBlocks: perfMode.skipDataBlocks, aircraftCount });
+        }
         if (showDataBlocks && !perfMode.skipDataBlocks) {
           const callsign = ac.flight?.trim() || ac.hex;
           const speed = ac.gs ? `${Math.round(ac.gs)}` : '---';
@@ -5102,6 +5153,43 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
             }
             ctx.fillText(line.text, blockX, blockY + (index * lineHeight));
           });
+
+          // Draw status badges (MIL, EMG) after callsign line
+          if (labelLines.length > 0 && (isMilitary || isEmergency)) {
+            ctx.save();
+            ctx.font = 'bold 9px "JetBrains Mono", monospace';
+            const callsignWidth = ctx.measureText(labelLines[0]?.text || '').width;
+            let badgeX = blockX + callsignWidth + 6;
+            const badgeY = blockY - 1;
+
+            // Military badge
+            if (isMilitary) {
+              const milText = 'MIL';
+              const milWidth = ctx.measureText(milText).width + 6;
+              ctx.fillStyle = 'rgba(168, 85, 247, 0.3)';
+              ctx.fillRect(badgeX, badgeY, milWidth, 12);
+              ctx.strokeStyle = 'rgba(168, 85, 247, 0.6)';
+              ctx.lineWidth = 1;
+              ctx.strokeRect(badgeX, badgeY, milWidth, 12);
+              ctx.fillStyle = 'rgba(192, 132, 252, 0.95)';
+              ctx.fillText(milText, badgeX + 3, badgeY + 9);
+              badgeX += milWidth + 4;
+            }
+
+            // Emergency badge
+            if (isEmergency) {
+              const emgText = 'EMG';
+              const emgWidth = ctx.measureText(emgText).width + 6;
+              ctx.fillStyle = 'rgba(248, 81, 73, 0.3)';
+              ctx.fillRect(badgeX, badgeY, emgWidth, 12);
+              ctx.strokeStyle = 'rgba(248, 81, 73, 0.6)';
+              ctx.lineWidth = 1;
+              ctx.strokeRect(badgeX, badgeY, emgWidth, 12);
+              ctx.fillStyle = 'rgba(255, 100, 100, 0.95)';
+              ctx.fillText(emgText, badgeX + 3, badgeY + 9);
+            }
+            ctx.restore();
+          }
         } // end showDataBlocks
 
         // Emergency squawk meaning label (Pro mode) - slow fade (always shown)
@@ -6433,7 +6521,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   min="5"
                   max="50"
                   value={config.shortTrackLength || 15}
-                  onChange={(e) => setConfig({ ...config, shortTrackLength: parseInt(e.target.value) })}
+                  onChange={(e) => {
+                    const newValue = parseInt(e.target.value);
+                    setConfig(prev => {
+                      const newConfig = { ...prev, shortTrackLength: newValue };
+                      saveConfig(newConfig);
+                      return newConfig;
+                    });
+                  }}
                   title={`Trail length: ${config.shortTrackLength || 15} positions`}
                 />
                 <span className="track-length-value">{config.shortTrackLength || 15}</span>
@@ -6472,7 +6567,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   min="5"
                   max="50"
                   value={config.shortTrackLength || 15}
-                  onChange={(e) => setConfig({ ...config, shortTrackLength: parseInt(e.target.value) })}
+                  onChange={(e) => {
+                    const newValue = parseInt(e.target.value);
+                    setConfig(prev => {
+                      const newConfig = { ...prev, shortTrackLength: newValue };
+                      saveConfig(newConfig);
+                      return newConfig;
+                    });
+                  }}
                   title={`Trail length: ${config.shortTrackLength || 15} positions`}
                 />
                 <span className="track-length-value">{config.shortTrackLength || 15}</span>
@@ -8175,7 +8277,14 @@ function MapView({ aircraft, config, setConfig, feederLocation, safetyEvents: ws
                   max="60"
                   step="5"
                   value={config.shortTrackLength || 15}
-                  onChange={(e) => setConfig({ ...config, shortTrackLength: parseInt(e.target.value) })}
+                  onChange={(e) => {
+                    const newValue = parseInt(e.target.value);
+                    setConfig(prev => {
+                      const newConfig = { ...prev, shortTrackLength: newValue };
+                      saveConfig(newConfig);
+                      return newConfig;
+                    });
+                  }}
                   title={`Trail length: ${config.shortTrackLength || 15} positions`}
                 />
                 <span className="track-length-value">{config.shortTrackLength || 15}</span>

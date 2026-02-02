@@ -1,16 +1,131 @@
 /**
  * WebSocket message processing utilities
+ *
+ * Includes batching mechanism to reduce React re-renders by accumulating
+ * aircraft updates and flushing them every 50ms (max 20 updates/sec).
+ * Safety and alert events remain immediate (no batching).
  */
 
 import { normalizeAircraft } from './aircraftNormalizer';
 import { handleAlertTriggered } from './alertHandler';
+
+// ========== AIRCRAFT UPDATE BATCHING ==========
+// Batching mechanism to reduce re-renders from high-frequency aircraft updates
+
+// Module-level batch state
+let pendingAircraftUpdates = {};
+let pendingAircraftRemovals = new Set();
+let batchTimeoutId = null;
+let batchSetAircraftRef = null;
+
+// Batch flush interval in ms (50ms = 20 flushes/sec max)
+const BATCH_FLUSH_INTERVAL = 50;
+
+/**
+ * Flush pending aircraft updates to state
+ */
+function flushAircraftBatch() {
+  if (!batchSetAircraftRef) {
+    batchTimeoutId = null;
+    return;
+  }
+
+  const hasUpdates = Object.keys(pendingAircraftUpdates).length > 0;
+  const hasRemovals = pendingAircraftRemovals.size > 0;
+
+  if (hasUpdates || hasRemovals) {
+    const updates = pendingAircraftUpdates;
+    const removals = pendingAircraftRemovals;
+
+    // Reset batch state before calling setAircraft to avoid race conditions
+    pendingAircraftUpdates = {};
+    pendingAircraftRemovals = new Set();
+
+    if (import.meta.env.DEV) {
+      console.log('[batchFlush] Flushing', Object.keys(updates).length, 'updates and', removals.size, 'removals');
+    }
+
+    batchSetAircraftRef(prev => {
+      const next = { ...prev, ...updates };
+      // Apply removals
+      removals.forEach(hex => {
+        delete next[hex];
+      });
+      return next;
+    });
+  }
+
+  batchTimeoutId = null;
+}
+
+/**
+ * Queue aircraft updates to be batched
+ * @param {Object} updates - Object of hex -> aircraft data to merge
+ * @param {Function} setAircraft - React setState function
+ */
+function queueAircraftUpdate(updates, setAircraft) {
+  // Store setAircraft reference for flush
+  batchSetAircraftRef = setAircraft;
+
+  // Merge updates into pending batch
+  Object.entries(updates).forEach(([hex, data]) => {
+    if (pendingAircraftUpdates[hex]) {
+      // Merge with existing pending update
+      pendingAircraftUpdates[hex] = { ...pendingAircraftUpdates[hex], ...data };
+    } else {
+      pendingAircraftUpdates[hex] = data;
+    }
+    // If this hex was pending removal, cancel it
+    pendingAircraftRemovals.delete(hex);
+  });
+
+  // Schedule flush if not already scheduled
+  if (!batchTimeoutId) {
+    batchTimeoutId = setTimeout(flushAircraftBatch, BATCH_FLUSH_INTERVAL);
+  }
+}
+
+/**
+ * Queue aircraft removal to be batched
+ * @param {string} hex - ICAO hex to remove
+ * @param {Function} setAircraft - React setState function
+ */
+function queueAircraftRemoval(hex, setAircraft) {
+  // Store setAircraft reference for flush
+  batchSetAircraftRef = setAircraft;
+
+  // Add to removal set
+  pendingAircraftRemovals.add(hex);
+  // Remove from pending updates if present
+  delete pendingAircraftUpdates[hex];
+
+  // Schedule flush if not already scheduled
+  if (!batchTimeoutId) {
+    batchTimeoutId = setTimeout(flushAircraftBatch, BATCH_FLUSH_INTERVAL);
+  }
+}
+
+/**
+ * Force immediate flush of pending batched updates
+ * Useful for cleanup or when immediate state sync is needed
+ */
+export function forceFlushAircraftBatch() {
+  if (batchTimeoutId) {
+    clearTimeout(batchTimeoutId);
+    flushAircraftBatch();
+  }
+}
+
+// ========== AIRCRAFT PROCESSING FUNCTIONS ==========
 
 /**
  * Process aircraft snapshot message
  */
 export function processAircraftSnapshot(data, setAircraft, setStats) {
   if (data?.data?.aircraft && Array.isArray(data.data.aircraft)) {
-    console.log('[processAircraftSnapshot] Processing', data.data.aircraft.length, 'aircraft');
+    if (import.meta.env.DEV) {
+      console.log('[processAircraftSnapshot] Processing', data.data.aircraft.length, 'aircraft');
+    }
     const newAircraft = {};
     let normalizedCount = 0;
     data.data.aircraft.forEach(ac => {
@@ -22,75 +137,75 @@ export function processAircraftSnapshot(data, setAircraft, setStats) {
         }
       }
     });
-    console.log('[processAircraftSnapshot] Normalized', normalizedCount, 'aircraft, calling setAircraft');
+    if (import.meta.env.DEV) {
+      console.log('[processAircraftSnapshot] Normalized', normalizedCount, 'aircraft, calling setAircraft');
+    }
     setAircraft(newAircraft);
     setStats(prev => ({ ...prev, count: Object.keys(newAircraft).length }));
-  } else {
+  } else if (import.meta.env.DEV) {
     console.warn('[processAircraftSnapshot] Invalid data format:', data);
   }
 }
 
 /**
- * Process aircraft update message
+ * Process aircraft update message (batched for performance)
+ * Updates are accumulated and flushed every 50ms to reduce re-renders
  */
 export function processAircraftUpdate(data, setAircraft) {
   const aircraftData = data?.data?.aircraft || (data?.data ? [data.data] : []);
-  console.log('[processAircraftUpdate] Received update with', aircraftData?.length ?? 0, 'aircraft');
+  if (import.meta.env.DEV) {
+    console.log('[processAircraftUpdate] Received update with', aircraftData?.length ?? 0, 'aircraft');
+  }
   if (Array.isArray(aircraftData) && aircraftData.length > 0) {
-    setAircraft(prev => {
-      const updated = { ...prev };
-      let updateCount = 0;
-      aircraftData.forEach(ac => {
-        if (ac && typeof ac === 'object') {
-          const normalized = normalizeAircraft(ac);
-          if (normalized.hex) {
-            updated[normalized.hex] = { ...updated[normalized.hex], ...normalized };
-            updateCount++;
-          }
+    const updates = {};
+    aircraftData.forEach(ac => {
+      if (ac && typeof ac === 'object') {
+        const normalized = normalizeAircraft(ac);
+        if (normalized.hex) {
+          updates[normalized.hex] = normalized;
         }
-      });
-      console.log('[processAircraftUpdate] Updated', updateCount, 'aircraft in state');
-      return updated;
+      }
     });
+    if (Object.keys(updates).length > 0) {
+      queueAircraftUpdate(updates, setAircraft);
+    }
   }
 }
 
 /**
- * Process aircraft new message
+ * Process aircraft new message (batched for performance)
+ * New aircraft are accumulated and flushed every 50ms to reduce re-renders
  */
 export function processAircraftNew(data, setAircraft) {
   const aircraftData = data?.data?.aircraft || (data?.data ? [data.data] : []);
   if (Array.isArray(aircraftData)) {
-    setAircraft(prev => {
-      const updated = { ...prev };
-      aircraftData.forEach(ac => {
-        if (ac && typeof ac === 'object') {
-          const normalized = normalizeAircraft(ac);
-          if (normalized.hex) {
-            updated[normalized.hex] = normalized;
-          }
+    const updates = {};
+    aircraftData.forEach(ac => {
+      if (ac && typeof ac === 'object') {
+        const normalized = normalizeAircraft(ac);
+        if (normalized.hex) {
+          updates[normalized.hex] = normalized;
         }
-      });
-      return updated;
+      }
     });
+    if (Object.keys(updates).length > 0) {
+      queueAircraftUpdate(updates, setAircraft);
+    }
   }
 }
 
 /**
- * Process aircraft remove message
+ * Process aircraft remove message (batched for performance)
+ * Removals are accumulated and flushed every 50ms to reduce re-renders
  */
 export function processAircraftRemove(data, setAircraft) {
   const hexList = data?.data?.icaos || data?.data?.icao_list || data?.data?.hex_list ||
                  (data?.data?.hex ? [data.data.hex] : []);
   if (Array.isArray(hexList) && hexList.length > 0) {
-    setAircraft(prev => {
-      const next = { ...prev };
-      hexList.forEach(hex => {
-        if (hex && typeof hex === 'string') {
-          delete next[hex.toUpperCase()];
-        }
-      });
-      return next;
+    hexList.forEach(hex => {
+      if (hex && typeof hex === 'string') {
+        queueAircraftRemoval(hex.toUpperCase(), setAircraft);
+      }
     });
   }
 }
@@ -100,7 +215,9 @@ export function processAircraftRemove(data, setAircraft) {
  */
 export function processSafetySnapshot(data, setSafetyEvents) {
   if (data?.data?.events && Array.isArray(data.data.events)) {
-    console.log('Safety snapshot received:', data.data.events.length, 'events');
+    if (import.meta.env.DEV) {
+      console.log('Safety snapshot received:', data.data.events.length, 'events');
+    }
     setSafetyEvents(data.data.events.slice(0, 100));
   }
 }
@@ -110,7 +227,9 @@ export function processSafetySnapshot(data, setSafetyEvents) {
  */
 export function processSafetyEvent(data, setSafetyEvents) {
   if (data?.data && typeof data.data === 'object') {
-    console.log('Safety event received:', data.data);
+    if (import.meta.env.DEV) {
+      console.log('Safety event received:', data.data);
+    }
     setSafetyEvents(prev => [data.data, ...prev].slice(0, 100));
   }
 }
@@ -120,7 +239,9 @@ export function processSafetyEvent(data, setSafetyEvents) {
  */
 export function processSafetyEventUpdated(data, setSafetyEvents) {
   if (data?.data && typeof data.data === 'object') {
-    console.log('Safety event updated:', data.data);
+    if (import.meta.env.DEV) {
+      console.log('Safety event updated:', data.data);
+    }
     setSafetyEvents(prev => {
       const eventId = data.data.id || data.data.event_id;
       if (!eventId) return prev;
@@ -141,7 +262,9 @@ export function processSafetyEventUpdated(data, setSafetyEvents) {
  */
 export function processSafetyEventResolved(data, setSafetyEvents) {
   if (data?.data && typeof data.data === 'object') {
-    console.log('Safety event resolved:', data.data);
+    if (import.meta.env.DEV) {
+      console.log('Safety event resolved:', data.data);
+    }
     const eventId = data.data.id || data.data.event_id;
     if (eventId) {
       setSafetyEvents(prev =>
@@ -163,7 +286,9 @@ export function processSafetyEventResolved(data, setSafetyEvents) {
  */
 export function processAlertTriggered(data, setAlerts) {
   if (data?.data) {
-    console.log('Alert triggered:', data.data);
+    if (import.meta.env.DEV) {
+      console.log('Alert triggered:', data.data);
+    }
     handleAlertTriggered(data.data);
     setAlerts(prev => [data.data, ...prev].slice(0, 100));
   }
@@ -174,7 +299,9 @@ export function processAlertTriggered(data, setAlerts) {
  */
 export function processAlertSnapshot(data, setAlerts) {
   if (data?.data?.alerts && Array.isArray(data.data.alerts)) {
-    console.log('Alert snapshot received:', data.data.alerts.length, 'alerts');
+    if (import.meta.env.DEV) {
+      console.log('Alert snapshot received:', data.data.alerts.length, 'alerts');
+    }
     setAlerts(data.data.alerts.slice(0, 100));
   }
 }
@@ -206,7 +333,9 @@ export function processAcarsSnapshot(data, setAcarsMessages) {
  */
 export function processAudioTransmission(data, setAudioTransmissions) {
   if (data?.data) {
-    console.log('Audio transmission received:', data.data);
+    if (import.meta.env.DEV) {
+      console.log('Audio transmission received:', data.data);
+    }
     const transmission = data.data;
     setAudioTransmissions(prev => [transmission, ...prev].slice(0, 50));
     window.dispatchEvent(new CustomEvent('skyspy:audio:transmission', {

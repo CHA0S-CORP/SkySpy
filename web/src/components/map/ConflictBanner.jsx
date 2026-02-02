@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { AlertTriangle, X, Volume2, VolumeX } from 'lucide-react';
 
 /**
  * TCAS-style conflict banner showing active proximity conflicts from API
+ * Memoized to prevent re-renders when other map state changes
  */
-export function ConflictBanner({
+export const ConflictBanner = memo(function ConflictBanner({
   safetyEvents,
   acknowledgedEvents,
   onAcknowledge,
@@ -100,6 +101,6 @@ export function ConflictBanner({
       </div>
     </div>
   );
-}
+});
 
 export default ConflictBanner;

@@ -6,7 +6,7 @@ from datetime import timedelta
 from collections import defaultdict
 
 from django.conf import settings
-from django.db.models import Count
+from django.db.models import Count, Max, Q
 from django.db.models.functions import TruncHour
 from django.utils import timezone
 from rest_framework import viewsets, status
@@ -100,7 +100,11 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """Get safety monitoring statistics."""
-        hours = int(request.query_params.get('hours', 24))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
         cutoff = timezone.now() - timedelta(hours=hours)
 
         events = SafetyEvent.objects.filter(timestamp__gte=cutoff)
@@ -181,7 +185,11 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def aircraft(self, request):
         """Get per-aircraft safety statistics."""
-        hours = int(request.query_params.get('hours', 24))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
         cutoff = timezone.now() - timedelta(hours=hours)
 
         # Get aircraft with events
@@ -192,32 +200,79 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
             .order_by('-total_events')[:50]
         )
 
+        # Get all ICAOs from aircraft_stats
+        icao_list = [ac['icao_hex'] for ac in aircraft_stats]
+
+        # Batch query: get event type counts per aircraft
+        type_counts = SafetyEvent.objects.filter(
+            timestamp__gte=cutoff,
+            icao_hex__in=icao_list
+        ).values('icao_hex', 'event_type').annotate(count=Count('id'))
+
+        # Batch query: get severity counts per aircraft
+        severity_counts = SafetyEvent.objects.filter(
+            timestamp__gte=cutoff,
+            icao_hex__in=icao_list
+        ).values('icao_hex', 'severity').annotate(count=Count('id'))
+
+        # Batch query: get last event info per aircraft
+        last_events = SafetyEvent.objects.filter(
+            timestamp__gte=cutoff,
+            icao_hex__in=icao_list
+        ).values('icao_hex').annotate(
+            last_timestamp=Max('timestamp')
+        )
+
+        # Build lookup dicts
+        type_by_icao = {}
+        for row in type_counts:
+            icao = row['icao_hex']
+            if icao not in type_by_icao:
+                type_by_icao[icao] = {}
+            type_by_icao[icao][row['event_type']] = row['count']
+
+        severity_by_icao = {}
+        for row in severity_counts:
+            icao = row['icao_hex']
+            if icao not in severity_by_icao:
+                severity_by_icao[icao] = {}
+            severity_by_icao[icao][row['severity']] = row['count']
+
+        last_event_times = {row['icao_hex']: row['last_timestamp'] for row in last_events}
+
+        # Batch fetch last event details (callsign, event_type) for each aircraft
+        last_event_details = {}
+        if last_event_times:
+            # Build Q objects to fetch specific events
+            q_objects = Q()
+            for icao, ts in last_event_times.items():
+                q_objects |= Q(icao_hex=icao, timestamp=ts)
+            last_events_qs = SafetyEvent.objects.filter(q_objects)
+            for event in last_events_qs:
+                last_event_details[event.icao_hex] = {
+                    'callsign': event.callsign,
+                    'event_type': event.event_type,
+                    'timestamp': event.timestamp,
+                }
+
         result = []
         for ac in aircraft_stats:
             icao = ac['icao_hex']
-            events = SafetyEvent.objects.filter(
-                timestamp__gte=cutoff,
-                icao_hex=icao
-            )
-
-            # Get event breakdown
-            by_type = dict(events.values_list('event_type').annotate(count=Count('id')))
-            by_severity = dict(events.values_list('severity').annotate(count=Count('id')))
-
-            # Get last event
-            last_event = events.order_by('-timestamp').first()
+            by_type = type_by_icao.get(icao, {})
+            by_severity = severity_by_icao.get(icao, {})
+            last_event = last_event_details.get(icao)
 
             result.append({
                 'icao_hex': icao,
-                'callsign': last_event.callsign if last_event else None,
+                'callsign': last_event['callsign'] if last_event else None,
                 'total_events': ac['total_events'],
                 'events_by_type': by_type,
                 'events_by_severity': by_severity,
                 'worst_severity': 'critical' if 'critical' in by_severity else (
                     'warning' if 'warning' in by_severity else 'info'
                 ),
-                'last_event_time': last_event.timestamp.isoformat() if last_event else None,
-                'last_event_type': last_event.event_type if last_event else None,
+                'last_event_time': last_event['timestamp'].isoformat() if last_event else None,
+                'last_event_type': last_event['event_type'] if last_event else None,
             })
 
         return Response({

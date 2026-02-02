@@ -805,7 +805,7 @@ if (canAccessFeature('alerts', 'write')) {
 | Document | Description |
 |:---------|:------------|
 | 📡 [Backend API Documentation](./07-api.md) | REST API reference |
-| 🔌 [WebSocket Protocol](./06-websocket.md) | Real-time messaging protocol |
+| 🔌 [Socket.IO API](./06-websocket-api.md) | Real-time streaming protocol |
 | 🚀 [Deployment Guide](./03-deployment.md) | Production deployment |
 | ⚙️ [Configuration Reference](./02-configuration.md) | Environment configuration |
 

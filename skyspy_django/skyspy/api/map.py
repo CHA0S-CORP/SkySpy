@@ -141,7 +141,11 @@ class MapViewSet(viewsets.ViewSet):
     def cluster(self, request):
         """Get clustered aircraft data."""
         aircraft_list = cache.get("current_aircraft", [])
-        zoom = int(request.query_params.get('zoom', 8))
+        try:
+            zoom = int(request.query_params.get('zoom', 8))
+            zoom = min(max(zoom, 1), 22)  # Clamp between 1 and 22
+        except (ValueError, TypeError):
+            zoom = 8
 
         # Simple clustering based on grid
         # Higher zoom = smaller clusters

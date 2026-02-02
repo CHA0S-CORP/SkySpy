@@ -10,6 +10,7 @@ Monitors aircraft for:
 """
 import logging
 import math
+import threading
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -143,6 +144,7 @@ class SafetyMonitor:
         self._event_cooldown: Dict[str, float] = {}
         self._active_events: Dict[str, dict] = {}  # event_id -> event data
         self._acknowledged_events: Set[str] = set()  # Set of acknowledged event IDs
+        self._events_lock = threading.Lock()  # Lock for _active_events and _acknowledged_events
         self._enabled = getattr(settings, 'SAFETY_MONITORING_ENABLED', True)
         self._last_cleanup = 0.0
 
@@ -228,15 +230,18 @@ class SafetyMonitor:
         for k in old_cooldowns:
             del self._event_cooldown[k]
 
-        # Clean up expired events
-        expired_events = [
-            (eid, event) for eid, event in self._active_events.items()
-            if event.get("last_seen", 0) < event_cutoff
-        ]
+        # Clean up expired events (with lock for thread safety)
+        with self._events_lock:
+            expired_events = [
+                (eid, event) for eid, event in self._active_events.items()
+                if event.get("last_seen", 0) < event_cutoff
+            ]
+            for eid, event in expired_events:
+                del self._active_events[eid]
+                self._acknowledged_events.discard(eid)
+
+        # Broadcast event resolution for expired events (outside lock to avoid deadlock)
         for eid, event in expired_events:
-            del self._active_events[eid]
-            self._acknowledged_events.discard(eid)
-            # Broadcast event resolution for expired events
             self.broadcast_event_resolved(event)
 
     def _generate_event_id(self, event_type: str, icao: str, icao_2: Optional[str] = None) -> str:
@@ -247,7 +252,7 @@ class SafetyMonitor:
         return f"{event_type}:{icao}"
 
     def _store_event(self, event: dict) -> dict:
-        """Store an event and return it with ID and metadata."""
+        """Store an event and return it with ID and metadata. Thread-safe."""
         event_id = self._generate_event_id(
             event["event_type"],
             event.get("icao") or event.get("icao_hex"),
@@ -255,111 +260,135 @@ class SafetyMonitor:
         )
         now = time.time()
 
-        # Check if event already exists
-        if event_id in self._active_events:
-            # Update existing event
-            existing = self._active_events[event_id]
-            existing.update(event)
-            existing["last_seen"] = now
-            existing["acknowledged"] = event_id in self._acknowledged_events
-            return existing
-        else:
-            # New event
-            event["id"] = event_id
-            event["created_at"] = now
-            event["last_seen"] = now
-            event["acknowledged"] = False
-            self._active_events[event_id] = event
-            return event
+        with self._events_lock:
+            # Check if event already exists
+            if event_id in self._active_events:
+                # Update existing event
+                existing = self._active_events[event_id]
+                existing.update(event)
+                existing["last_seen"] = now
+                existing["acknowledged"] = event_id in self._acknowledged_events
+                return existing.copy()  # Return copy to avoid race conditions
+            else:
+                # New event
+                event["id"] = event_id
+                event["created_at"] = now
+                event["last_seen"] = now
+                event["acknowledged"] = False
+                self._active_events[event_id] = event
+                return event.copy()  # Return copy to avoid race conditions
 
     def find_event_by_db_id(self, db_id: int) -> Optional[str]:
-        """Find an active event's string ID by its database ID."""
-        for event_id, event in self._active_events.items():
-            if event.get("db_id") == db_id:
-                return event_id
+        """Find an active event's string ID by its database ID. Thread-safe."""
+        with self._events_lock:
+            for event_id, event in self._active_events.items():
+                if event.get("db_id") == db_id:
+                    return event_id
         return None
 
     def acknowledge_event(self, event_id: str) -> bool:
-        """Acknowledge an event by ID. Returns True if successful."""
-        # Direct string ID match
-        if event_id in self._active_events:
-            self._acknowledged_events.add(event_id)
-            self._active_events[event_id]["acknowledged"] = True
-            self.broadcast_event_updated(self._active_events[event_id])
-            return True
+        """Acknowledge an event by ID. Returns True if successful. Thread-safe."""
+        event_to_broadcast = None
 
-        # Try numeric db_id lookup
-        try:
-            db_id = int(event_id)
-            for eid, event in self._active_events.items():
-                if event.get("db_id") == db_id:
-                    self._acknowledged_events.add(eid)
-                    event["acknowledged"] = True
-                    self.broadcast_event_updated(event)
-                    return True
-        except (ValueError, TypeError):
-            logger.debug(f"Event ID '{event_id}' is not a valid numeric ID")
+        with self._events_lock:
+            # Direct string ID match
+            if event_id in self._active_events:
+                self._acknowledged_events.add(event_id)
+                self._active_events[event_id]["acknowledged"] = True
+                event_to_broadcast = self._active_events[event_id].copy()
+            else:
+                # Try numeric db_id lookup
+                try:
+                    db_id = int(event_id)
+                    for eid, event in self._active_events.items():
+                        if event.get("db_id") == db_id:
+                            self._acknowledged_events.add(eid)
+                            event["acknowledged"] = True
+                            event_to_broadcast = event.copy()
+                            break
+                except (ValueError, TypeError):
+                    logger.debug(f"Event ID '{event_id}' is not a valid numeric ID")
+
+        # Broadcast outside lock to avoid deadlock
+        if event_to_broadcast:
+            self.broadcast_event_updated(event_to_broadcast)
+            return True
 
         return False
 
     def unacknowledge_event(self, event_id: str) -> bool:
-        """Remove acknowledgment from an event. Returns True if successful."""
-        # Direct string ID match
-        if event_id in self._active_events:
-            self._acknowledged_events.discard(event_id)
-            self._active_events[event_id]["acknowledged"] = False
-            self.broadcast_event_updated(self._active_events[event_id])
-            return True
+        """Remove acknowledgment from an event. Returns True if successful. Thread-safe."""
+        event_to_broadcast = None
 
-        # Try numeric db_id lookup
-        try:
-            db_id = int(event_id)
-            for eid, event in self._active_events.items():
-                if event.get("db_id") == db_id:
-                    self._acknowledged_events.discard(eid)
-                    event["acknowledged"] = False
-                    self.broadcast_event_updated(event)
-                    return True
-        except (ValueError, TypeError):
-            logger.debug(f"Event ID '{event_id}' is not a valid numeric ID for unacknowledge")
+        with self._events_lock:
+            # Direct string ID match
+            if event_id in self._active_events:
+                self._acknowledged_events.discard(event_id)
+                self._active_events[event_id]["acknowledged"] = False
+                event_to_broadcast = self._active_events[event_id].copy()
+            else:
+                # Try numeric db_id lookup
+                try:
+                    db_id = int(event_id)
+                    for eid, event in self._active_events.items():
+                        if event.get("db_id") == db_id:
+                            self._acknowledged_events.discard(eid)
+                            event["acknowledged"] = False
+                            event_to_broadcast = event.copy()
+                            break
+                except (ValueError, TypeError):
+                    logger.debug(f"Event ID '{event_id}' is not a valid numeric ID for unacknowledge")
+
+        # Broadcast outside lock to avoid deadlock
+        if event_to_broadcast:
+            self.broadcast_event_updated(event_to_broadcast)
+            return True
 
         return False
 
     def get_active_events(self, include_acknowledged: bool = True) -> List[dict]:
-        """Get all active safety events."""
-        events = list(self._active_events.values())
+        """Get all active safety events. Thread-safe."""
+        with self._events_lock:
+            events = [e.copy() for e in self._active_events.values()]
         if not include_acknowledged:
             events = [e for e in events if not e.get("acknowledged", False)]
         return events
 
     def clear_event(self, event_id: str) -> bool:
-        """Remove an event entirely. Returns True if successful."""
-        # Direct string ID match
-        if event_id in self._active_events:
-            event = self._active_events[event_id]
-            del self._active_events[event_id]
-            self._acknowledged_events.discard(event_id)
-            self.broadcast_event_resolved(event)
-            return True
+        """Remove an event entirely. Returns True if successful. Thread-safe."""
+        event_to_broadcast = None
 
-        # Try numeric db_id lookup
-        try:
-            db_id = int(event_id)
-            for eid, event in list(self._active_events.items()):
-                if event.get("db_id") == db_id:
-                    del self._active_events[eid]
-                    self._acknowledged_events.discard(eid)
-                    self.broadcast_event_resolved(event)
-                    return True
-        except (ValueError, TypeError):
-            logger.debug(f"Event ID '{event_id}' is not a valid numeric ID for clear")
+        with self._events_lock:
+            # Direct string ID match
+            if event_id in self._active_events:
+                event_to_broadcast = self._active_events[event_id].copy()
+                del self._active_events[event_id]
+                self._acknowledged_events.discard(event_id)
+            else:
+                # Try numeric db_id lookup
+                try:
+                    db_id = int(event_id)
+                    for eid, event in list(self._active_events.items()):
+                        if event.get("db_id") == db_id:
+                            event_to_broadcast = event.copy()
+                            del self._active_events[eid]
+                            self._acknowledged_events.discard(eid)
+                            break
+                except (ValueError, TypeError):
+                    logger.debug(f"Event ID '{event_id}' is not a valid numeric ID for clear")
+
+        # Broadcast outside lock to avoid deadlock
+        if event_to_broadcast:
+            self.broadcast_event_resolved(event_to_broadcast)
+            return True
 
         return False
 
     def clear_all_events(self):
-        """Clear all active events and acknowledgments."""
-        self._active_events.clear()
-        self._acknowledged_events.clear()
+        """Clear all active events and acknowledgments. Thread-safe."""
+        with self._events_lock:
+            self._active_events.clear()
+            self._acknowledged_events.clear()
 
     def _is_near_major_airport(self, lat: float, lon: float, radius_nm: float = 5.0) -> bool:
         """Check if a position is within radius of a major airport."""
@@ -826,7 +855,7 @@ class SafetyMonitor:
             logger.warning(f"Failed to broadcast {event_type}: {e}")
 
     def _store_and_broadcast_event(self, event: dict):
-        """Store event in database and broadcast to clients."""
+        """Store event in database and broadcast to clients. Thread-safe."""
         # Store in database
         try:
             db_event = SafetyEvent.objects.create(
@@ -841,10 +870,12 @@ class SafetyMonitor:
                 aircraft_snapshot=event.get('aircraft_snapshot'),
                 aircraft_snapshot_2=event.get('aircraft_snapshot_2'),
             )
-            # Store DB ID back in active event
+            # Store DB ID back in active event (with lock)
             event_id = event.get('id')
-            if event_id and event_id in self._active_events:
-                self._active_events[event_id]['db_id'] = db_event.id
+            if event_id:
+                with self._events_lock:
+                    if event_id in self._active_events:
+                        self._active_events[event_id]['db_id'] = db_event.id
         except Exception as e:
             logger.error(f"Failed to store safety event: {e}")
 
@@ -860,17 +891,18 @@ class SafetyMonitor:
         self._broadcast_event('safety_event_resolved', event)
 
     def get_stats(self) -> dict:
-        """Get safety monitor statistics."""
-        active_count = len(self._active_events)
-        acked_count = len(self._acknowledged_events)
-        unacked_count = active_count - acked_count
+        """Get safety monitor statistics. Thread-safe."""
+        with self._events_lock:
+            active_count = len(self._active_events)
+            acked_count = len(self._acknowledged_events)
+            unacked_count = active_count - acked_count
 
-        # Count by severity
-        severity_counts = {"critical": 0, "warning": 0, "low": 0}
-        for event in self._active_events.values():
-            sev = event.get("severity", "low")
-            if sev in severity_counts:
-                severity_counts[sev] += 1
+            # Count by severity
+            severity_counts = {"critical": 0, "warning": 0, "low": 0}
+            for event in self._active_events.values():
+                sev = event.get("severity", "low")
+                if sev in severity_counts:
+                    severity_counts[sev] += 1
 
         return {
             "tracked_aircraft": len(self._aircraft_state),
@@ -895,11 +927,14 @@ class SafetyMonitor:
         }
 
     def get_state(self) -> dict:
-        """Get current monitor state."""
+        """Get current monitor state. Thread-safe."""
+        with self._events_lock:
+            active_events_count = len(self._active_events)
+
         return {
             "tracked_aircraft": len(self._aircraft_state),
             "active_cooldowns": len(self._event_cooldown),
-            "active_events": len(self._active_events),
+            "active_events": active_events_count,
         }
 
     def generate_test_events(self) -> List[dict]:
@@ -1088,15 +1123,16 @@ class SafetyMonitor:
             },
         })
 
-        # Add all test events to active events
-        for event in test_events:
-            event_id = f"test_{event['event_type']}:{event['icao']}:{uuid.uuid4().hex[:8]}"
-            event["id"] = event_id
-            event["created_at"] = now
-            event["last_seen"] = now
-            event["acknowledged"] = False
-            event["is_test"] = True
-            self._active_events[event_id] = event
+        # Add all test events to active events (with lock for thread safety)
+        with self._events_lock:
+            for event in test_events:
+                event_id = f"test_{event['event_type']}:{event['icao']}:{uuid.uuid4().hex[:8]}"
+                event["id"] = event_id
+                event["created_at"] = now
+                event["last_seen"] = now
+                event["acknowledged"] = False
+                event["is_test"] = True
+                self._active_events[event_id] = event
 
         logger.info(f"Generated {len(test_events)} test safety events")
         return test_events

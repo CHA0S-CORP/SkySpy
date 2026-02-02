@@ -275,7 +275,7 @@ services:
       celery -A skyspy worker
       --loglevel=info
       --concurrency=100
-      --queues=polling,default,database,transcription,notifications
+      --queues=polling,default,database,transcription,notifications,low_priority
       --pool=gevent
 
   # ---------------------------------------------------------------------------

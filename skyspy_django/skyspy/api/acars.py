@@ -236,7 +236,11 @@ class AcarsViewSet(viewsets.ReadOnlyModelViewSet):
         - Messages grouped by category (OOOI, weather, position, etc.)
         - Top frequencies
         """
-        hours = int(request.query_params.get('hours', 24))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
         use_cache = request.query_params.get('use_cache', 'true').lower() == 'true'
 
         # Try cached stats for default time range
@@ -278,8 +282,16 @@ class AcarsViewSet(viewsets.ReadOnlyModelViewSet):
         - Total message count
         - Unique flight callsigns
         """
-        hours = int(request.query_params.get('hours', 24))
-        limit = int(request.query_params.get('limit', 20))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
+        try:
+            limit = int(request.query_params.get('limit', 20))
+            limit = min(limit, 1000)  # Cap at 1000
+        except (ValueError, TypeError):
+            limit = 20
         use_cache = request.query_params.get('use_cache', 'true').lower() == 'true'
 
         # Try cached stats for default parameters
@@ -310,7 +322,11 @@ class AcarsViewSet(viewsets.ReadOnlyModelViewSet):
 
         Quick overview with key metrics for dashboard display.
         """
-        hours = int(request.query_params.get('hours', 24))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
         stats = get_acars_summary_stats(hours=hours)
         return Response(stats)
 
@@ -349,7 +365,11 @@ class AcarsViewSet(viewsets.ReadOnlyModelViewSet):
         - Peak activity times
         - Hourly distribution across all days
         """
-        hours = int(request.query_params.get('hours', 24))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
         interval = request.query_params.get('interval', 'hour')
         use_cache = request.query_params.get('use_cache', 'true').lower() == 'true'
 
@@ -382,7 +402,11 @@ class AcarsViewSet(viewsets.ReadOnlyModelViewSet):
         Shows how different message types (OOOI, weather, position reports, etc.)
         are distributed throughout the day.
         """
-        hours = int(request.query_params.get('hours', 24))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
         trends = calculate_acars_category_trends(hours=hours)
         return Response(trends)
 
@@ -415,7 +439,15 @@ class AcarsViewSet(viewsets.ReadOnlyModelViewSet):
         - Weather content breakdown (METAR, TAF, PIREP, etc.)
         - Detected message patterns (position reports, flight plans, fuel data, etc.)
         """
-        hours = int(request.query_params.get('hours', 24))
-        limit = int(request.query_params.get('limit', 20))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
+        try:
+            limit = int(request.query_params.get('limit', 20))
+            limit = min(limit, 1000)  # Cap at 1000
+        except (ValueError, TypeError):
+            limit = 20
         analysis = calculate_free_text_analysis(hours=hours, limit=limit)
         return Response(analysis)

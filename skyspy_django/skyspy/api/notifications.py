@@ -171,7 +171,7 @@ class NotificationChannelViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Filter channels by ownership and global status."""
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related('owner')
         user = self.request.user
 
         if user.is_authenticated:

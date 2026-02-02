@@ -184,10 +184,10 @@ def fetch_aircraft_info(icao_hex: str):
             return
 
         # Try HexDB API
-        import requests
+        import httpx
         try:
             url = f"https://hexdb.io/api/v1/aircraft/{icao}"
-            response = requests.get(url, timeout=10.0)
+            response = httpx.get(url, timeout=10.0)
 
             if response.status_code == 200:
                 hexdb_data = response.json()

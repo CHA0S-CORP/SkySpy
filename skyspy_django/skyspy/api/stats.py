@@ -65,7 +65,11 @@ class TrackingQualityViewSet(viewsets.ViewSet):
     )
     def list(self, request):
         """Get tracking quality statistics."""
-        hours = int(request.query_params.get('hours', 24))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
         refresh = request.query_params.get('refresh', 'false').lower() == 'true'
 
         if refresh or hours != 24:
@@ -101,8 +105,16 @@ class TrackingQualityViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='gaps')
     def coverage_gaps(self, request):
         """Get detailed coverage gaps analysis."""
-        hours = int(request.query_params.get('hours', 24))
-        limit = int(request.query_params.get('limit', 100))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
+        try:
+            limit = int(request.query_params.get('limit', 100))
+            limit = min(limit, 1000)  # Cap at 1000
+        except (ValueError, TypeError):
+            limit = 100
 
         try:
             gaps = get_coverage_gaps_analysis(hours=hours)
@@ -141,7 +153,8 @@ class TrackingQualityViewSet(viewsets.ViewSet):
                 "error": f"No recent session found for {icao_hex}"
             }, status=status.HTTP_404_NOT_FOUND)
 
-        # Get all sightings for this session
+        # Get all sightings for this session (limit to prevent memory issues)
+        MAX_SIGHTINGS_FOR_GAP_ANALYSIS = 10000
         sightings = AircraftSighting.objects.filter(
             icao_hex__iexact=icao_hex,
             timestamp__gte=session.first_seen,
@@ -156,17 +169,23 @@ class TrackingQualityViewSet(viewsets.ViewSet):
         expected_positions = duration_seconds / DEFAULT_EXPECTED_UPDATE_INTERVAL
         completeness = min(100, (session.total_positions / expected_positions) * 100) if expected_positions > 0 else 0
 
-        # Analyze gaps
-        sighting_times = list(sightings.values_list('timestamp', flat=True))
+        # Analyze gaps using iterator to avoid loading all into memory at once
         gaps = []
-        for i in range(1, len(sighting_times)):
-            gap_seconds = (sighting_times[i] - sighting_times[i-1]).total_seconds()
-            if gap_seconds > COVERAGE_GAP_THRESHOLD:
-                gaps.append({
-                    'start': sighting_times[i-1].isoformat() + "Z",
-                    'end': sighting_times[i].isoformat() + "Z",
-                    'duration_seconds': int(gap_seconds),
-                })
+        prev_time = None
+        sighting_count = 0
+        for timestamp in sightings.values_list('timestamp', flat=True).iterator(chunk_size=1000):
+            sighting_count += 1
+            if sighting_count > MAX_SIGHTINGS_FOR_GAP_ANALYSIS:
+                break
+            if prev_time is not None:
+                gap_seconds = (timestamp - prev_time).total_seconds()
+                if gap_seconds > COVERAGE_GAP_THRESHOLD:
+                    gaps.append({
+                        'start': prev_time.isoformat() + "Z",
+                        'end': timestamp.isoformat() + "Z",
+                        'duration_seconds': int(gap_seconds),
+                    })
+            prev_time = timestamp
 
         total_gap_time = sum(g['duration_seconds'] for g in gaps)
         gap_percentage = (total_gap_time / duration_seconds * 100) if duration_seconds > 0 else 0
@@ -245,7 +264,11 @@ class EngagementViewSet(viewsets.ViewSet):
     )
     def list(self, request):
         """Get engagement statistics."""
-        hours = int(request.query_params.get('hours', 24))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
         refresh = request.query_params.get('refresh', 'false').lower() == 'true'
 
         if refresh or hours != 24:
@@ -272,7 +295,11 @@ class EngagementViewSet(viewsets.ViewSet):
         """Get most watched aircraft."""
         from django.db.models import Count, Sum
 
-        limit = int(request.query_params.get('limit', 20))
+        try:
+            limit = int(request.query_params.get('limit', 20))
+            limit = min(limit, 1000)  # Cap at 1000
+        except (ValueError, TypeError):
+            limit = 20
 
         most_favorited = list(
             AircraftFavorite.objects.values('icao_hex', 'registration')
@@ -326,9 +353,21 @@ class EngagementViewSet(viewsets.ViewSet):
         """Get aircraft that have returned multiple times."""
         from django.db.models import Count, Sum, Min, Max
 
-        hours = int(request.query_params.get('hours', 24))
-        min_sessions = int(request.query_params.get('min_sessions', 2))
-        limit = int(request.query_params.get('limit', 30))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
+        try:
+            min_sessions = int(request.query_params.get('min_sessions', 2))
+            min_sessions = min(min_sessions, 100)  # Cap at 100
+        except (ValueError, TypeError):
+            min_sessions = 2
+        try:
+            limit = int(request.query_params.get('limit', 30))
+            limit = min(limit, 1000)  # Cap at 1000
+        except (ValueError, TypeError):
+            limit = 30
 
         cutoff = timezone.now() - timedelta(hours=hours)
 
@@ -396,8 +435,16 @@ class EngagementViewSet(viewsets.ViewSet):
         from django.db.models.functions import TruncHour
         from skyspy.models import AircraftSighting
 
-        hours = int(request.query_params.get('hours', 24))
-        limit = int(request.query_params.get('limit', 10))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
+        try:
+            limit = int(request.query_params.get('limit', 10))
+            limit = min(limit, 1000)  # Cap at 1000
+        except (ValueError, TypeError):
+            limit = 10
 
         cutoff = timezone.now() - timedelta(hours=hours)
 
@@ -636,7 +683,11 @@ class FlightPatternsViewSet(viewsets.ViewSet):
     )
     def list(self, request):
         """Get flight patterns statistics."""
-        hours = int(request.query_params.get('hours', 24))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
         refresh = request.query_params.get('refresh', 'false').lower() == 'true'
 
         if refresh:
@@ -671,7 +722,11 @@ class FlightPatternsViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='busiest-hours')
     def busiest_hours(self, request):
         """Get busiest hours data for heatmap."""
-        hours = int(request.query_params.get('hours', 24))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
         stats = get_flight_patterns_stats()
 
         if stats is None or stats.get('time_range_hours') != hours:
@@ -711,8 +766,16 @@ class FlightPatternsViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='aircraft-types')
     def aircraft_types(self, request):
         """Get aircraft types breakdown."""
-        hours = int(request.query_params.get('hours', 24))
-        limit = int(request.query_params.get('limit', 25))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
+        try:
+            limit = int(request.query_params.get('limit', 25))
+            limit = min(limit, 1000)  # Cap at 1000
+        except (ValueError, TypeError):
+            limit = 25
         stats = get_flight_patterns_stats()
 
         if stats is None or stats.get('time_range_hours') != hours:
@@ -777,7 +840,11 @@ class FlightPatternsViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='routes')
     def routes(self, request):
         """Get frequent routes/airlines."""
-        hours = int(request.query_params.get('hours', 24))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
         stats = get_flight_patterns_stats()
 
         if stats is None or stats.get('time_range_hours') != hours:
@@ -832,7 +899,11 @@ class GeographicStatsViewSet(viewsets.ViewSet):
     )
     def list(self, request):
         """Get geographic statistics."""
-        hours = int(request.query_params.get('hours', 24))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
         refresh = request.query_params.get('refresh', 'false').lower() == 'true'
 
         if refresh:

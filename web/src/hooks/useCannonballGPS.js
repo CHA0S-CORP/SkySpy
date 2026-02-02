@@ -46,11 +46,11 @@ export function useCannonballGPS() {
 
   // GPS Permission handlers
   const handleRequestGPSPermission = useCallback(async () => {
-    await requestPermission();
-    if (permissionState === GPS_PERMISSION_STATES.GRANTED) {
+    const granted = await requestPermission();
+    if (granted) {
       startTracking();
     }
-  }, [requestPermission, startTracking, permissionState]);
+  }, [requestPermission, startTracking]);
 
   const handleRetryGPS = useCallback(async () => {
     setGpsDisabledByUser(false);

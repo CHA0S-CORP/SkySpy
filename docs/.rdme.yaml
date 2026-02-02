@@ -35,7 +35,7 @@ categories:
 
   api-reference:
     title: "API Reference"
-    description: "REST and WebSocket API documentation"
+    description: "REST and Socket.IO API documentation"
 
   components:
     title: "Components"

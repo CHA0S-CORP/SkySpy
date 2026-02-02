@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, memo } from 'react';
 import { MessageCircle, X, Filter, Plane } from 'lucide-react';
 
 // Helper to safely parse JSON from fetch response
@@ -11,10 +11,11 @@ const safeJson = async (res) => {
 
 /**
  * Panel for displaying ACARS/VDL2 messages with decoded airline and label info
+ * Memoized to prevent re-renders when other map state changes
  *
  * @param {Array} acarsMessages - Real-time ACARS messages from WebSocket (optional)
  */
-export function AcarsPanel({
+export const AcarsPanel = memo(function AcarsPanel({
   apiUrl,
   onClose,
   onSelectAircraft,
@@ -380,6 +381,6 @@ export function AcarsPanel({
       </div>
     </div>
   );
-}
+});
 
 export default AcarsPanel;

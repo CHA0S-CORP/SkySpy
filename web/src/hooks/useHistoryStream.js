@@ -74,6 +74,8 @@ export function useHistoryStream({
     if (!subscribeMessages || !enabled) return;
 
     const handleMessage = (data) => {
+      if (!data) return;
+
       const { type: msgType } = data;
 
       // ACARS message - Django Channels uses 'acars.message' or 'message' type

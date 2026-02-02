@@ -1,10 +1,11 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, memo } from 'react';
 import { Filter, X } from 'lucide-react';
 
 /**
  * Traffic filter menu for filtering displayed aircraft
+ * Memoized to prevent re-renders when other map state changes
  */
-export function FilterMenu({
+export const FilterMenu = memo(function FilterMenu({
   show,
   filters,
   onFiltersChange,
@@ -182,6 +183,6 @@ export function FilterMenu({
       </div>
     </div>
   );
-}
+});
 
 export default FilterMenu;

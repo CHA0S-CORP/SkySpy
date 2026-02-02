@@ -16,7 +16,10 @@ import time
 from datetime import datetime
 from typing import Optional, List
 
+import httpx
+from django.db import transaction
 from django.utils import timezone
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # Maximum allowed regex pattern length to prevent ReDoS attacks
 MAX_REGEX_PATTERN_LENGTH = 500
@@ -311,6 +314,11 @@ class AlertService:
         start_time = time.perf_counter()
         icao = aircraft.get('hex', '').upper()
 
+        # Validate ICAO to prevent empty string cooldown keys
+        if not icao:
+            logger.debug("Skipping alert trigger: missing ICAO hex")
+            return None
+
         # Check suppression windows (if rule has them)
         if self._is_suppressed(rule):
             return None
@@ -328,19 +336,20 @@ class AlertService:
         callsign = aircraft.get('flight') or icao
         message = f"Alert '{rule.name}' triggered for {callsign}"
 
-        # Store in history
-        AlertHistory.objects.create(
-            rule_id=rule.id,
-            rule_name=rule.name,
-            icao_hex=icao,
-            callsign=aircraft.get('flight'),
-            message=message,
-            priority=rule.priority,
-            aircraft_data=aircraft,
-        )
+        # Store in history and update rule atomically
+        with transaction.atomic():
+            AlertHistory.objects.create(
+                rule_id=rule.id,
+                rule_name=rule.name,
+                icao_hex=icao,
+                callsign=aircraft.get('flight'),
+                message=message,
+                priority=rule.priority,
+                aircraft_data=aircraft,
+            )
 
-        # Update rule's last_triggered timestamp
-        AlertRule.objects.filter(id=rule.id).update(last_triggered=timezone.now())
+            # Update rule's last_triggered timestamp
+            AlertRule.objects.filter(id=rule.id).update(last_triggered=timezone.now())
 
         alert_data = {
             'rule_id': rule.id,
@@ -411,15 +420,16 @@ class AlertService:
             elif alert_data['priority'] == 'critical':
                 notify_type = apprise.NotifyType.FAILURE
 
-            urls_to_notify = []
-            channel_ids = []
+            # Use list of tuples (url, channel_id) to keep them aligned
+            url_channel_pairs = []
+            seen_urls = set()
 
             # 1. Get rule-specific notification channels
             if rule and hasattr(rule, 'notification_channels'):
                 for channel in rule.notification_channels.filter(enabled=True):
-                    if channel.apprise_url and channel.apprise_url not in urls_to_notify:
-                        urls_to_notify.append(channel.apprise_url)
-                        channel_ids.append(channel.id)
+                    if channel.apprise_url and channel.apprise_url not in seen_urls:
+                        url_channel_pairs.append((channel.apprise_url, channel.id))
+                        seen_urls.add(channel.apprise_url)
 
             # 2. Get global config if enabled for this rule (or if no rule provided)
             use_global = True
@@ -431,17 +441,19 @@ class AlertService:
                 if config.enabled and config.apprise_urls:
                     for url in config.apprise_urls.split(';'):
                         url = url.strip()
-                        if url and url not in urls_to_notify:
-                            urls_to_notify.append(url)
+                        if url and url not in seen_urls:
+                            # Global URLs have no associated channel_id
+                            url_channel_pairs.append((url, None))
+                            seen_urls.add(url)
 
             # If no URLs to notify, skip
-            if not urls_to_notify:
+            if not url_channel_pairs:
                 logger.debug("No notification URLs configured, skipping notification")
                 return
 
             # Create Apprise object and add all URLs
             apobj = apprise.Apprise()
-            for url in urls_to_notify:
+            for url, _ in url_channel_pairs:
                 apobj.add(url)
 
             # Send notification
@@ -452,8 +464,7 @@ class AlertService:
             )
 
             # Log notification for each channel
-            for i, url in enumerate(urls_to_notify):
-                channel_id = channel_ids[i] if i < len(channel_ids) else None
+            for url, channel_id in url_channel_pairs:
                 NotificationLog.objects.create(
                     notification_type='alert',
                     icao_hex=alert_data['icao'],
@@ -473,13 +484,26 @@ class AlertService:
     def _call_webhook(self, url: str, data: dict):
         """
         Call external webhook with alert data.
+
+        Uses retry logic with exponential backoff for resilience.
         """
         try:
-            import httpx
-            response = httpx.post(url, json=data, timeout=10.0)
-            logger.debug(f"Webhook response: {response.status_code}")
+            self._post_webhook_with_retry(url, data)
         except Exception as e:
-            logger.error(f"Webhook call failed: {e}")
+            logger.error(f"Webhook call failed after retries: {e}")
+
+    @staticmethod
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+    )
+    def _post_webhook_with_retry(url: str, data: dict):
+        """POST to webhook with retry logic."""
+        with httpx.Client(timeout=10.0) as client:
+            response = client.post(url, json=data)
+            response.raise_for_status()
+            logger.debug(f"Webhook response: {response.status_code}")
 
     # Public methods for rule testing and management
 

@@ -55,6 +55,7 @@ export function useDeviceGPS({
   const watchIdRef = useRef(null);
   const orientationRef = useRef(null);
   const permissionCheckedRef = useRef(false);
+  const permissionStatusRef = useRef(null);
 
   // Check if geolocation is supported
   const isSupported = typeof navigator !== 'undefined' && 'geolocation' in navigator;
@@ -76,6 +77,12 @@ export function useDeviceGPS({
           : result.state === 'denied' ? GPS_PERMISSION_STATES.DENIED
           : GPS_PERMISSION_STATES.PROMPT;
         setPermissionState(state);
+
+        // Clean up previous listener if exists
+        if (permissionStatusRef.current) {
+          permissionStatusRef.current.onchange = null;
+        }
+        permissionStatusRef.current = result;
 
         // Listen for permission changes
         result.onchange = () => {
@@ -104,6 +111,13 @@ export function useDeviceGPS({
       permissionCheckedRef.current = true;
       checkPermission();
     }
+
+    // Cleanup permission status listener on unmount
+    return () => {
+      if (permissionStatusRef.current) {
+        permissionStatusRef.current.onchange = null;
+      }
+    };
   }, [checkPermission]);
 
   // Handle position update

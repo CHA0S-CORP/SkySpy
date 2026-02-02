@@ -74,7 +74,11 @@ class AntennaAnalyticsViewSet(ViewSet):
     @action(detail=False, methods=['get'])
     def history(self, request):
         """Get historical antenna analytics snapshots."""
-        hours = int(request.query_params.get('hours', 24))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
         snapshot_type = request.query_params.get('snapshot_type', 'scheduled')
 
         cutoff = timezone.now() - timedelta(hours=hours)
@@ -104,7 +108,11 @@ class AntennaAnalyticsViewSet(ViewSet):
     @action(detail=False, methods=['get'])
     def trends(self, request):
         """Get antenna performance trends."""
-        hours = int(request.query_params.get('hours', 24))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
         interval = request.query_params.get('interval', 'hourly')
 
         cutoff = timezone.now() - timedelta(hours=hours)
@@ -173,7 +181,11 @@ class AntennaAnalyticsViewSet(ViewSet):
     @action(detail=False, methods=['get'])
     def coverage(self, request):
         """Get antenna coverage summary by direction."""
-        hours = int(request.query_params.get('hours', 24))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
 
         cutoff = timezone.now() - timedelta(hours=hours)
 
@@ -267,7 +279,11 @@ class AntennaAnalyticsViewSet(ViewSet):
     @action(detail=False, methods=['delete'])
     def cleanup(self, request):
         """Delete old antenna analytics snapshots."""
-        days = int(request.query_params.get('days', 7))
+        try:
+            days = int(request.query_params.get('days', 7))
+            days = min(days, 365)  # Cap at 1 year
+        except (ValueError, TypeError):
+            days = 7
         cutoff = timezone.now() - timedelta(days=days)
 
         deleted_count, _ = AntennaAnalyticsSnapshot.objects.filter(

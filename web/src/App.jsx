@@ -18,6 +18,9 @@ import { AircraftDetailPage } from './components/aircraft/AircraftDetailPage';
 import { LoginPage, ProtectedRoute } from './components/auth';
 import { useAuth } from './contexts/AuthContext';
 
+// Error handling
+import { ErrorBoundary } from './components/common/ErrorBoundary';
+
 // Hooks
 import { useSocketIOData, useSocketIOPositions } from './hooks/socket';
 
@@ -129,6 +132,7 @@ export default function App() {
   const {
     aircraft,
     connected,
+    isReady,
     stats,
     safetyEvents,
     acarsMessages,
@@ -325,7 +329,7 @@ export default function App() {
               safetyEvents={safetyEvents}
               acarsMessages={acarsMessages}
               wsRequest={wsRequest}
-              wsConnected={connected}
+              wsConnected={isReady}
               getAirframeError={getAirframeError}
               clearAirframeError={clearAirframeError}
               onViewHistoryEvent={(eventId) => {
@@ -339,7 +343,7 @@ export default function App() {
             />
           )}
           {activeTab === 'aircraft' && <AircraftList aircraft={aircraft} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} />}
-          {activeTab === 'stats' && <StatsView apiBase={config.apiBaseUrl} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} wsRequest={wsRequest} wsConnected={connected} aircraft={aircraft} stats={stats} antennaAnalytics={antennaAnalytics} extendedStats={extendedStats} />}
+          {activeTab === 'stats' && <StatsView apiBase={config.apiBaseUrl} onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} wsRequest={wsRequest} wsConnected={isReady} aircraft={aircraft} stats={stats} antennaAnalytics={antennaAnalytics} extendedStats={extendedStats} />}
           {activeTab === 'history' && (
             <HistoryView
               apiBase={config.apiBaseUrl}
@@ -351,14 +355,14 @@ export default function App() {
               hashParams={hashParams}
               setHashParams={setHashParams}
               wsRequest={wsRequest}
-              wsConnected={connected}
+              wsConnected={isReady}
             />
           )}
           {activeTab === 'audio' && <AudioView apiBase={config.apiBaseUrl} onSelectAircraft={(hex, callsign) => setActiveTab('airframe', { icao: hex, call: callsign })} />}
           {activeTab === 'notams' && <NotamsView apiBase={config.apiBaseUrl} />}
           {activeTab === 'archive' && <ArchiveView apiBase={config.apiBaseUrl} hashParams={hashParams} setHashParams={setHashParams} />}
-          {activeTab === 'alerts' && <AlertsView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={connected} aircraft={aircraft} feederLocation={status?.location} onLaunchCannonball={() => setShowCannonball(true)} />}
-          {activeTab === 'system' && <SystemView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={connected} />}
+          {activeTab === 'alerts' && <AlertsView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={isReady} aircraft={aircraft} feederLocation={status?.location} onLaunchCannonball={() => setShowCannonball(true)} />}
+          {activeTab === 'system' && <SystemView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={isReady} />}
           {activeTab === 'cannonball' && (
             <CannonballMode
               apiBase={config.apiBaseUrl}
@@ -410,7 +414,7 @@ export default function App() {
                 aircraft={foundAircraft}
                 feederLocation={status?.location}
                 wsRequest={wsRequest}
-                wsConnected={connected}
+                wsConnected={isReady}
                 initialTab={hashParams.tab}
                 onTabChange={(tab) => setHashParams({ tab })}
               />
@@ -430,7 +434,7 @@ export default function App() {
               onClose={() => setActiveTab('map')}
               onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
               wsRequest={wsRequest}
-              wsConnected={connected}
+              wsConnected={isReady}
             />
           )}
         </div>
@@ -467,7 +471,7 @@ export default function App() {
               aircraft={aircraft.find(a => a.hex === selectedAircraftHex)}
               feederLocation={status?.location}
               wsRequest={wsRequest}
-              wsConnected={connected}
+              wsConnected={isReady}
             />
           </div>
         </div>
@@ -485,8 +489,12 @@ export default function App() {
 
   // Wrap with ProtectedRoute if auth is enabled
   if (authConfig.authEnabled && !authConfig.publicMode) {
-    return <ProtectedRoute>{mainContent}</ProtectedRoute>;
+    return (
+      <ErrorBoundary>
+        <ProtectedRoute>{mainContent}</ProtectedRoute>
+      </ErrorBoundary>
+    );
   }
 
-  return mainContent;
+  return <ErrorBoundary>{mainContent}</ErrorBoundary>;
 }

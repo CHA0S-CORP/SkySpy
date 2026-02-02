@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 /**
- * Hook to fetch and manage safety event data
- * Handles both WebSocket and HTTP fallback for event details and track data
+ * Hook to fetch and manage safety event data via Socket.IO (no HTTP fallback)
+ * All data fetching requires WebSocket connection
  */
 export function useSafetyEventData({ eventId, apiBase, wsRequest, wsConnected }) {
   const [event, setEvent] = useState(null);
@@ -12,11 +12,24 @@ export function useSafetyEventData({ eventId, apiBase, wsRequest, wsConnected })
   const [acknowledged, setAcknowledged] = useState(false);
   const [acknowledging, setAcknowledging] = useState(false);
 
-  // Fetch event data - prefer WebSocket with HTTP fallback
+  // Request counter to handle race conditions when eventId changes rapidly
+  const requestCounterRef = useRef(0);
+
+  // Fetch event data via WebSocket only
   useEffect(() => {
+    // Increment request counter to track this specific fetch
+    const currentRequestId = ++requestCounterRef.current;
+
     const fetchEvent = async () => {
       if (!eventId) {
         setError('No event ID provided');
+        setLoading(false);
+        return;
+      }
+
+      // Check socket connection
+      if (!wsRequest || !wsConnected) {
+        setError('Socket not connected');
         setLoading(false);
         return;
       }
@@ -25,91 +38,40 @@ export function useSafetyEventData({ eventId, apiBase, wsRequest, wsConnected })
       setError(null);
 
       try {
-        let data = null;
+        // Fetch event detail via WebSocket
+        const data = await wsRequest('safety-event-detail', { event_id: eventId, id: eventId });
 
-        // Prefer WebSocket for event detail
-        if (wsRequest && wsConnected) {
-          try {
-            data = await wsRequest('safety-event-detail', { event_id: eventId, id: eventId });
-            if (data?.error || data?.error_type === 'not_found') {
-              data = null;
-              if (data?.error_type === 'not_found') {
-                setError('Safety event not found');
-                setLoading(false);
-                return;
-              }
-            }
-          } catch (err) {
-            console.debug('Safety event WS request failed:', err.message);
-          }
+        // Check if this request is still current (eventId may have changed)
+        if (currentRequestId !== requestCounterRef.current) {
+          return; // Stale request, discard results
         }
 
-        // HTTP fallback - use Django API endpoint
-        if (!data) {
-          const res = await fetch(`${apiBase}/api/v1/safety/events/${eventId}`);
-          if (!res.ok) {
-            if (res.status === 404) {
-              setError('Safety event not found');
-            } else {
-              setError('Failed to load safety event');
-            }
-            setLoading(false);
-            return;
-          }
-          const contentType = res.headers.get('content-type');
-          if (!contentType || !contentType.includes('application/json')) {
-            setError('Invalid response from server');
-            setLoading(false);
-            return;
-          }
-          data = await res.json();
+        if (data?.error || data?.error_type === 'not_found') {
+          setError('Safety event not found');
+          setLoading(false);
+          return;
         }
 
         // Handle nested data structure from Django REST Framework
-        if (data?.data) {
-          data = data.data;
-        }
+        const eventData = data?.data || data;
 
-        setEvent(data);
-        setAcknowledged(data.acknowledged || data.resolved || false);
+        setEvent(eventData);
+        setAcknowledged(eventData.acknowledged || eventData.resolved || false);
 
         // Fetch track data for involved aircraft
-        const icaos = [data.icao, data.icao_2].filter(Boolean);
+        const icaos = [eventData.icao, eventData.icao_hex, eventData.icao_2].filter(Boolean);
         for (const icao of icaos) {
+          // Check if request is still current before each fetch
+          if (currentRequestId !== requestCounterRef.current) {
+            return; // Stale request, stop fetching
+          }
           try {
-            let trackResult = null;
-
-            // Try WebSocket first
-            if (wsRequest && wsConnected) {
-              try {
-                const result = await wsRequest('sightings', { icao_hex: icao, hours: 2, limit: 500 });
-                if (result && Array.isArray(result.sightings)) {
-                  trackResult = result;
-                } else if (result?.data?.sightings && Array.isArray(result.data.sightings)) {
-                  trackResult = result.data;
-                }
-              } catch (wsErr) {
-                console.warn('WebSocket sightings request failed, falling back to HTTP:', wsErr.message);
-              }
+            const result = await wsRequest('sightings', { icao_hex: icao, hours: 2, limit: 500 });
+            // Check if still current after fetch
+            if (currentRequestId !== requestCounterRef.current) {
+              return; // Stale request, discard results
             }
-
-            // Fallback to HTTP if WebSocket failed or unavailable
-            if (!trackResult) {
-              const trackRes = await fetch(`${apiBase}/api/v1/sightings?icao_hex=${icao}&hours=2&limit=500`);
-              if (trackRes.ok) {
-                const ct = trackRes.headers.get('content-type');
-                if (ct && ct.includes('application/json')) {
-                  const httpResult = await trackRes.json();
-                  if (httpResult && (Array.isArray(httpResult.sightings) || Array.isArray(httpResult.results))) {
-                    trackResult = httpResult;
-                  } else if (httpResult?.data?.sightings || httpResult?.data?.results) {
-                    trackResult = httpResult.data;
-                  }
-                }
-              }
-            }
-
-            const sightings = trackResult?.sightings || trackResult?.results || [];
+            const sightings = result?.sightings || result?.data?.sightings || result?.results || [];
             if (sightings.length > 0) {
               setTrackData(prev => ({ ...prev, [icao]: sightings }));
             }
@@ -118,15 +80,22 @@ export function useSafetyEventData({ eventId, apiBase, wsRequest, wsConnected })
           }
         }
       } catch (err) {
+        // Check if request is still current before setting error state
+        if (currentRequestId !== requestCounterRef.current) {
+          return; // Stale request, discard error
+        }
         console.error('Failed to fetch safety event:', err);
-        setError('Failed to load safety event');
+        setError(err.message || 'Failed to load safety event');
       }
 
-      setLoading(false);
+      // Only update loading state if request is still current
+      if (currentRequestId === requestCounterRef.current) {
+        setLoading(false);
+      }
     };
 
     fetchEvent();
-  }, [eventId, apiBase, wsRequest, wsConnected]);
+  }, [eventId, wsRequest, wsConnected]);
 
   // Listen for real-time updates to this specific event via custom events
   useEffect(() => {
@@ -155,48 +124,32 @@ export function useSafetyEventData({ eventId, apiBase, wsRequest, wsConnected })
     };
   }, [eventId]);
 
-  // Acknowledge event via Django API
+  // Acknowledge event via WebSocket
   const acknowledgeEvent = useCallback(async () => {
     if (!eventId || acknowledging || acknowledged) return;
+
+    // Check socket connection
+    if (!wsRequest || !wsConnected) {
+      console.error('Socket not connected');
+      return;
+    }
 
     setAcknowledging(true);
 
     try {
-      // Try WebSocket first
-      if (wsRequest && wsConnected) {
-        try {
-          const result = await wsRequest('safety-acknowledge', { event_id: eventId, id: eventId });
-          if (result && !result.error) {
-            setAcknowledged(true);
-            setEvent(prev => prev ? { ...prev, acknowledged: true } : prev);
-            setAcknowledging(false);
-            return;
-          }
-        } catch (wsErr) {
-          console.debug('WebSocket acknowledge failed, falling back to HTTP:', wsErr.message);
-        }
-      }
-
-      // HTTP fallback - POST to Django API endpoint
-      const res = await fetch(`${apiBase}/api/v1/safety/events/${eventId}/acknowledge`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (res.ok) {
+      const result = await wsRequest('safety-acknowledge', { event_id: eventId, id: eventId });
+      if (result && !result.error) {
         setAcknowledged(true);
         setEvent(prev => prev ? { ...prev, acknowledged: true } : prev);
       } else {
-        console.error('Failed to acknowledge event:', res.status);
+        console.error('Failed to acknowledge event:', result?.error);
       }
     } catch (err) {
       console.error('Failed to acknowledge event:', err);
     }
 
     setAcknowledging(false);
-  }, [eventId, apiBase, wsRequest, wsConnected, acknowledging, acknowledged]);
+  }, [eventId, wsRequest, wsConnected, acknowledging, acknowledged]);
 
   return {
     event,
@@ -206,7 +159,8 @@ export function useSafetyEventData({ eventId, apiBase, wsRequest, wsConnected })
     acknowledged,
     acknowledging,
     acknowledgeEvent,
-    setEvent
+    setEvent,
+    connected: wsConnected,
   };
 }
 

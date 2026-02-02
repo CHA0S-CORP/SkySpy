@@ -142,7 +142,7 @@ class AcarsService:
         """
         ts = msg.get("timestamp", 0)
         if isinstance(ts, float):
-            ts = int(ts)  # Round to second
+            ts = round(ts)  # Round to nearest second for consistent deduplication
         icao = msg.get("icao_hex", "") or ""
         label = msg.get("label", "") or ""
         text = (msg.get("text", "") or "")[:50]
@@ -234,9 +234,21 @@ class AcarsService:
                 elif self.packet_count % 100 == 0:
                     logger.debug(f"Received {self.packet_count} {self.source} packets so far")
 
-                asyncio.create_task(
+                task = asyncio.create_task(
                     self.service._process_message(data, self.source)
                 )
+                # Add error callback to prevent silent exception loss
+                task.add_done_callback(self._handle_task_exception)
+
+            def _handle_task_exception(self, task):
+                """Handle exceptions from message processing tasks."""
+                try:
+                    # This will raise the exception if one occurred
+                    task.result()
+                except asyncio.CancelledError:
+                    pass  # Task was cancelled, not an error
+                except Exception as e:
+                    logger.error(f"Unhandled exception in {self.source} message processing: {e}", exc_info=True)
 
             def error_received(self, exc):
                 logger.error(f"UDP error on {self.source} listener: {exc}")

@@ -1,11 +1,14 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useState, useCallback, memo } from 'react';
 import {
   Plane, AlertTriangle, Zap, X, ExternalLink, Crosshair, Pin, PinOff,
-  Navigation, Radio, TrendingUp, MapPin, Signal, Building2, Radar, RefreshCw,
-  ArrowUpRight, ArrowDownRight, ArrowRight, LocateFixed, BellPlus
+  Radio, TrendingUp, MapPin, Signal, Building2, Radar, RefreshCw,
+  ArrowUpRight, ArrowDownRight, ArrowRight, LocateFixed, BellPlus,
+  ChevronDown, Image, LineChart
 } from 'lucide-react';
 import { getTailInfo, getCategoryName, windDirToCardinal } from '../../../utils';
 import { getSeverityClass, getEventTypeName } from './ConflictBanner';
+import { CollapsibleSection } from '../../ui';
+import { PrimaryMetrics, SecondaryMetrics } from '../../ui/metric-card';
 
 // Helper to safely parse JSON from fetch response
 const safeJson = async (res) => {
@@ -27,7 +30,6 @@ const getAltitudeColorClass = (alt) => {
 // Get speed color class
 const getSpeedColorClass = (speed, altitude) => {
   if (!speed) return '';
-  // Adjust expected speeds based on altitude
   if (altitude < 10000) {
     if (speed < 150) return 'speed-slow';
     if (speed < 250) return 'speed-normal';
@@ -50,14 +52,446 @@ const getSignalStrengthClass = (rssi) => {
 // Resolve photo URL
 const resolvePhotoUrl = (url) => {
   if (!url) return null;
-  // If it's already an absolute URL, use it
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  // Otherwise prepend S3 URL
   return `https://skyspy-photos.s3.amazonaws.com${url.startsWith('/') ? '' : '/'}${url}`;
 };
 
+// Get trend icon based on distance trend
+const getTrendIcon = (trend) => {
+  switch (trend) {
+    case 'approaching': return ArrowDownRight;
+    case 'receding': return ArrowUpRight;
+    default: return ArrowRight;
+  }
+};
+
 /**
- * ProDetailsPanel component - the detailed aircraft info panel for Pro mode
+ * PanelHeader - Title bar with action buttons
+ */
+const PanelHeader = memo(function PanelHeader({
+  isFollowing,
+  isPinned,
+  onFollow,
+  onPin,
+  onOpenDetail,
+  onClose,
+}) {
+  return (
+    <div className="pro-panel-title-bar" role="banner">
+      <span className="pro-panel-title">AIRCRAFT DETAILS</span>
+      <div className="pro-panel-actions" role="toolbar" aria-label="Panel actions">
+        <button
+          className={`pro-panel-btn ${isFollowing ? 'active' : ''}`}
+          onClick={onFollow}
+          title={isFollowing ? 'Stop following' : 'Follow aircraft'}
+          aria-pressed={isFollowing}
+          aria-label={isFollowing ? 'Stop following aircraft' : 'Follow aircraft'}
+        >
+          <Crosshair size={16} aria-hidden="true" />
+        </button>
+        <button
+          className={`pro-panel-btn ${isPinned ? 'active' : ''}`}
+          onClick={onPin}
+          title={isPinned ? 'Unpin panel' : 'Pin panel open'}
+          aria-pressed={isPinned}
+          aria-label={isPinned ? 'Unpin panel' : 'Pin panel open'}
+        >
+          {isPinned ? <PinOff size={16} aria-hidden="true" /> : <Pin size={16} aria-hidden="true" />}
+        </button>
+        <button
+          className="pro-panel-btn"
+          onClick={onOpenDetail}
+          title="View full aircraft details"
+          aria-label="View full aircraft details"
+        >
+          <ExternalLink size={16} aria-hidden="true" />
+        </button>
+        <button
+          className="pro-panel-close"
+          onClick={onClose}
+          aria-label="Close panel"
+        >
+          <X size={20} aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+  );
+});
+
+/**
+ * AlertBanners - Emergency and Conflict banners
+ */
+const AlertBanners = memo(function AlertBanners({
+  isEmergency,
+  emergencyType,
+  squawk,
+  isInConflict,
+  safetyEvent,
+  conflictSeverity,
+  conflictTitle,
+  onViewHistoryEvent,
+}) {
+  return (
+    <>
+      {/* Emergency Banner */}
+      {isEmergency && (
+        <div
+          className={`pro-emergency-banner squawk-${squawk}`}
+          role="alert"
+          aria-live="assertive"
+        >
+          <AlertTriangle size={18} aria-hidden="true" />
+          <span className="emergency-type">{emergencyType}</span>
+          <span className="emergency-squawk">SQUAWK {squawk}</span>
+        </div>
+      )}
+
+      {/* Safety Event / Conflict Banner */}
+      {isInConflict && safetyEvent && (
+        <div
+          className={`pro-conflict-banner ${getSeverityClass(conflictSeverity)} clickable`}
+          onClick={() => onViewHistoryEvent?.(safetyEvent.id)}
+          title="View in History"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === 'Enter' && onViewHistoryEvent?.(safetyEvent.id)}
+          aria-label={`${conflictTitle}: ${safetyEvent.message}. Click to view in history.`}
+        >
+          <Zap size={18} aria-hidden="true" />
+          <div className="conflict-info">
+            <span className="conflict-label">{conflictTitle}</span>
+            <span className="conflict-message">{safetyEvent.message}</span>
+          </div>
+          {safetyEvent.hex2 && (
+            <div className="conflict-separation">
+              <span>{safetyEvent.horizontalNm}nm</span>
+              <span>{safetyEvent.verticalFt}ft</span>
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+});
+
+/**
+ * AircraftIdentity - Callsign, badges, operator, quick alerts
+ */
+const AircraftIdentity = memo(function AircraftIdentity({
+  aircraft,
+  aircraftInfo,
+  tailInfo,
+  isEmergency,
+  error,
+  onClearError,
+}) {
+  const info = aircraftInfo[aircraft.hex];
+
+  return (
+    <div className="pro-panel-header" role="region" aria-label="Aircraft identification">
+      <div className="pro-callsign-row">
+        <span className="pro-flag" aria-hidden="true">{tailInfo.flag}</span>
+        <h2 className="pro-callsign">{aircraft.flight?.trim() || aircraft.hex?.toUpperCase()}</h2>
+      </div>
+      <div className="pro-badges" role="list" aria-label="Aircraft tags">
+        <span className="pro-badge hex" role="listitem">{aircraft.hex?.toUpperCase()}</span>
+        {(info?.type_name || info?.model || aircraft.type) && (
+          <span className={`pro-badge model ${aircraft.military ? 'military' : ''}`} role="listitem">
+            {info?.type_name || info?.model || aircraft.type}
+          </span>
+        )}
+        <span className="pro-badge category" title={aircraft.category || 'A3'} role="listitem">
+          {getCategoryName(aircraft.category)}
+        </span>
+        {info?.registration && (
+          <span className="pro-badge reg" role="listitem">{info.registration}</span>
+        )}
+        {info?.year_built && (
+          <span className="pro-badge built" role="listitem">
+            {info.year_built}
+            {info.age_years && ` (${info.age_years}y)`}
+          </span>
+        )}
+        {isEmergency && <span className="pro-badge emergency" role="listitem">EMG</span>}
+      </div>
+
+      {/* Operator Label */}
+      {info && (info.operator || info.owner) && (
+        <div className="pro-operator-label">
+          <Building2 size={14} aria-hidden="true" />
+          <span>{info.operator || info.owner}</span>
+        </div>
+      )}
+
+      {/* Airframe Lookup Error */}
+      {error && (
+        <div className="pro-airframe-error" title={error.error_message} role="alert">
+          <AlertTriangle size={14} aria-hidden="true" />
+          <span>Info lookup failed ({error.source})</span>
+          <button
+            className="pro-error-dismiss"
+            onClick={onClearError}
+            title="Dismiss"
+            aria-label="Dismiss error"
+          >
+            <X size={12} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
+      {/* Quick Alert Actions */}
+      <div className="pro-quick-alerts">
+        {aircraft.flight?.trim() && (
+          <button
+            className="pro-alert-btn"
+            onClick={() => {
+              console.log('Add alert for callsign:', aircraft.flight?.trim());
+              alert(`Alert added for callsign: ${aircraft.flight?.trim()}`);
+            }}
+            title={`Add alert for ${aircraft.flight?.trim()}`}
+          >
+            <BellPlus size={14} aria-hidden="true" />
+            <span>Alert {aircraft.flight?.trim()}</span>
+          </button>
+        )}
+        {tailInfo.tailNumber && (
+          <button
+            className="pro-alert-btn"
+            onClick={() => {
+              console.log('Add alert for tail:', tailInfo.tailNumber);
+              alert(`Alert added for tail: ${tailInfo.tailNumber}`);
+            }}
+            title={`Add alert for ${tailInfo.tailNumber}`}
+          >
+            <BellPlus size={14} aria-hidden="true" />
+            <span>Alert {tailInfo.tailNumber}</span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+});
+
+/**
+ * PhotoSection - Collapsible aircraft photo with lazy loading
+ */
+const PhotoSection = memo(function PhotoSection({
+  aircraft,
+  photoUrl,
+  photoLoading,
+  photoError,
+  photoRetry,
+  photoStatus,
+  photoRetryRef,
+  setPhotoUrl,
+  setPhotoLoading,
+  setPhotoError,
+  setPhotoRetry,
+  setPhotoStatus,
+  config,
+  wsRequest,
+  wsConnected,
+}) {
+  const handleRetry = useCallback(() => {
+    if (photoRetryRef.current) {
+      clearInterval(photoRetryRef.current);
+      photoRetryRef.current = null;
+    }
+
+    setPhotoError(false);
+    setPhotoLoading(true);
+    setPhotoRetry(c => c + 1);
+
+    const startTime = Date.now();
+    const retryDuration = 30000;
+    const retryInterval = 3000;
+    const aircraftHex = aircraft.hex;
+
+    const attemptFetch = async () => {
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.ceil((retryDuration - elapsed) / 1000);
+      setPhotoStatus({ message: `Fetching photo... (${remaining}s)` });
+
+      try {
+        let data = null;
+        if (wsRequest && wsConnected) {
+          data = await wsRequest('photo-cache', { icao: aircraftHex });
+          if (data?.error) data = null;
+        } else {
+          const res = await fetch(`${config.apiBaseUrl || ''}/api/v1/airframes/${aircraftHex}/photos`);
+          data = await safeJson(res);
+        }
+
+        if (data?.photo_url || data?.photo_thumbnail_url || data?.thumbnail_url) {
+          setPhotoUrl(resolvePhotoUrl(data.photo_url || data.photo_thumbnail_url || data.thumbnail_url));
+          if (photoRetryRef.current) {
+            clearInterval(photoRetryRef.current);
+            photoRetryRef.current = null;
+          }
+          return true;
+        }
+      } catch {
+        // Continue retrying
+      }
+      return false;
+    };
+
+    attemptFetch().then(success => {
+      if (success) return;
+
+      photoRetryRef.current = setInterval(async () => {
+        const elapsed = Date.now() - startTime;
+        if (elapsed >= retryDuration) {
+          clearInterval(photoRetryRef.current);
+          photoRetryRef.current = null;
+          setPhotoError(true);
+          setPhotoLoading(false);
+          setPhotoStatus({ message: 'Photo fetch timed out' });
+          return;
+        }
+        await attemptFetch();
+      }, retryInterval);
+    });
+  }, [aircraft.hex, config.apiBaseUrl, photoRetryRef, setPhotoError, setPhotoLoading, setPhotoRetry, setPhotoStatus, setPhotoUrl, wsConnected, wsRequest]);
+
+  return (
+    <div className="pro-aircraft-photo">
+      {photoLoading && !photoError && (
+        <div className="pro-photo-loading">
+          <div className="pro-photo-loading-radar">
+            <Radar size={32} className="pro-photo-radar-icon" aria-hidden="true" />
+            <div className="pro-photo-radar-sweep" />
+          </div>
+          <span>{photoStatus?.message || 'Loading photo...'}</span>
+        </div>
+      )}
+      {!photoError && photoUrl && (
+        <img
+          key={`${aircraft.hex}-${photoRetry}-${photoUrl}`}
+          src={photoUrl}
+          alt={aircraft.flight?.trim() || aircraft.hex}
+          onLoad={() => { setPhotoLoading(false); setPhotoStatus(null); }}
+          onError={() => { setPhotoError(true); setPhotoLoading(false); setPhotoStatus(null); }}
+          style={{ opacity: photoLoading ? 0 : 1 }}
+          loading="lazy"
+        />
+      )}
+      {photoError && !photoLoading && (
+        <div className="pro-photo-placeholder">
+          <Plane size={48} aria-hidden="true" />
+          <span>{photoStatus?.message || 'No Photo Available'}</span>
+          <button className="pro-photo-retry" onClick={handleRetry}>
+            <RefreshCw size={14} aria-hidden="true" /> Retry
+          </button>
+        </div>
+      )}
+    </div>
+  );
+});
+
+/**
+ * GraphsSection - Performance graphs in collapsible accordion
+ */
+const GraphsSection = memo(function GraphsSection({
+  altitude,
+  speed,
+  verticalSpeed,
+  distance,
+  altProfileCanvasRef,
+  speedProfileCanvasRef,
+  vsProfileCanvasRef,
+  distProfileCanvasRef,
+  trackCanvasRef,
+}) {
+  // Format V/S value with sign
+  const vsValue = verticalSpeed ?? 0;
+  const vsClass = vsValue > 0 ? 'cyan' : vsValue < 0 ? 'red' : '';
+
+  return (
+    <div className="pro-graphs-container">
+      <div className="pro-profile-chart">
+        <div className="pro-section-header">
+          ALTITUDE PROFILE
+          <span className="profile-value cyan">{altitude.toLocaleString()}</span>
+        </div>
+        <canvas className="profile-canvas" width={280} height={60} ref={altProfileCanvasRef} />
+      </div>
+
+      <div className="pro-profile-chart">
+        <div className="pro-section-header">
+          SPEED PROFILE
+          <span className="profile-value green">{speed || '--'}</span>
+        </div>
+        <canvas className="profile-canvas" width={280} height={60} ref={speedProfileCanvasRef} />
+      </div>
+
+      <div className="pro-profile-chart">
+        <div className="pro-section-header">
+          VERTICAL SPEED
+          <span className={`profile-value ${vsClass}`}>
+            {vsValue > 0 ? '+' : ''}{vsValue}
+          </span>
+        </div>
+        <canvas className="profile-canvas" width={280} height={60} ref={vsProfileCanvasRef} />
+      </div>
+
+      <div className="pro-profile-chart">
+        <div className="pro-section-header">
+          DISTANCE
+          <span className="profile-value purple">{distance.toFixed(1)}</span>
+        </div>
+        <canvas className="profile-canvas" width={280} height={60} ref={distProfileCanvasRef} />
+      </div>
+
+      <div className="pro-track-history">
+        <div className="pro-section-header">TRACK HISTORY</div>
+        <canvas className="track-history-canvas" width={280} height={80} ref={trackCanvasRef} />
+      </div>
+    </div>
+  );
+});
+
+/**
+ * ExternalLinks - Links to FlightAware, ADSBx
+ */
+const ExternalLinks = memo(function ExternalLinks({ callsign, hex }) {
+  return (
+    <div className="pro-external-links">
+      <div className="pro-section-header">EXTERNAL</div>
+      <div className="pro-links">
+        <a
+          href={`https://flightaware.com/live/flight/${callsign || hex}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="pro-link"
+        >
+          FlightAware <ExternalLink size={12} aria-hidden="true" />
+        </a>
+        <a
+          href={`https://globe.adsbexchange.com/?icao=${hex}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="pro-link"
+        >
+          ADSBx <ExternalLink size={12} aria-hidden="true" />
+        </a>
+      </div>
+    </div>
+  );
+});
+
+/**
+ * ProDetailsPanel - Main component with new hierarchy
+ *
+ * Layout:
+ * 1. PanelHeader - Close/Pin/Follow/Expand buttons
+ * 2. AlertBanners - Emergency/Conflict alerts
+ * 3. AircraftIdentity - Callsign, badges, operator
+ * 4. PrimaryMetrics - 2x2 grid (Altitude, Speed, V/S, Distance) - always visible
+ * 5. SecondaryMetrics - Collapsible (Track, Squawk, RSSI, Type) - default collapsed
+ * 6. PhotoSection - Collapsible, lazy-loaded - default collapsed
+ * 7. GraphsSection - Collapsible graphs - default collapsed
+ * 8. ExternalLinks - FlightAware, ADSBx links
  */
 export function ProDetailsPanel({
   config,
@@ -72,9 +506,7 @@ export function ProDetailsPanel({
   setPanelPinned,
   openAircraftDetail,
   onViewHistoryEvent,
-  // Distance helpers
   getDistanceNm,
-  // Photo state
   proPhotoUrl,
   setProPhotoUrl,
   proPhotoLoading,
@@ -86,44 +518,50 @@ export function ProDetailsPanel({
   proPhotoStatus,
   setProPhotoStatus,
   proPhotoRetryRef,
-  // Error handling
   getAircraftError,
   clearAircraftError,
-  // WebSocket
   wsRequest,
   wsConnected,
-  // Canvas refs for graphs
   altProfileCanvasRef,
   speedProfileCanvasRef,
   vsProfileCanvasRef,
   distProfileCanvasRef,
   trackCanvasRef,
 }) {
+  // Section collapse state - persist during session
+  const [sectionsOpen, setSectionsOpen] = useState({
+    secondaryMetrics: false,
+    photo: false,
+    graphs: false,
+  });
+
+  // Don't render if not in pro mode or no aircraft selected
   if (config.mapMode !== 'pro' || !liveAircraft) return null;
 
+  // Emergency state
   const isEmergency = ['7500', '7600', '7700'].includes(liveAircraft.squawk);
   const emergencyType = liveAircraft.squawk === '7500' ? 'HIJACK' :
                        liveAircraft.squawk === '7600' ? 'RADIO FAILURE' :
                        liveAircraft.squawk === '7700' ? 'EMERGENCY' : null;
 
-  // Check for safety event from backend
+  // Conflict/safety event state
   const safetyEvent = activeConflicts.find(e =>
     e.icao?.toUpperCase() === liveAircraft.hex?.toUpperCase() ||
     e.icao_2?.toUpperCase() === liveAircraft.hex?.toUpperCase()
   );
-
   const isInConflict = !!safetyEvent;
   const conflictSeverity = safetyEvent?.severity || null;
   const conflictTitle = safetyEvent ? getEventTypeName(safetyEvent.event_type) : null;
 
-  // Distance trend tracking refs
+  // Distance trend tracking
   const proPrevDistanceRef = useRef(null);
   const proDistanceTrendRef = useRef(null);
   const proTrackedAircraftRef = useRef(null);
 
-  // Calculate values for color coding
+  // Calculate flight data values
   const proAltitude = liveAircraft.alt_baro || liveAircraft.alt_geom || liveAircraft.alt || 0;
   const proSpeed = liveAircraft.gs || liveAircraft.tas;
+  const proVerticalSpeed = liveAircraft.vr ?? liveAircraft.baro_rate ?? liveAircraft.geom_rate ?? 0;
   const proAltClass = getAltitudeColorClass(proAltitude);
   const proSpeedClass = getSpeedColorClass(proSpeed, proAltitude);
 
@@ -144,406 +582,147 @@ export function ProDetailsPanel({
   }
   const proDistTrend = proDistanceTrendRef.current;
 
-  // RSSI signal strength
+  // Secondary metrics values
+  const proTrack = liveAircraft.track || liveAircraft.true_heading || 0;
   const proRssi = liveAircraft.rssi;
   const proSignalClass = proRssi !== undefined ? getSignalStrengthClass(proRssi) : 'weak';
 
   const tailInfo = getTailInfo(liveAircraft.hex, liveAircraft.flight);
 
+  // Panel class names
+  const panelClassName = [
+    'pro-details-panel',
+    isEmergency && 'emergency',
+    isInConflict && `conflict ${getSeverityClass(conflictSeverity)}`,
+    panelPinned && 'pinned',
+  ].filter(Boolean).join(' ');
+
   return (
-    <div className={`pro-details-panel ${isEmergency ? 'emergency' : ''} ${isInConflict ? `conflict ${getSeverityClass(conflictSeverity)}` : ''} ${panelPinned ? 'pinned' : ''}`}>
-      <div className="pro-panel-title-bar">
-        <span className="pro-panel-title">TARGET DETAILS</span>
-        <div className="pro-panel-actions">
-          <button
-            className={`pro-panel-btn ${followingAircraft === liveAircraft.hex ? 'active' : ''}`}
-            onClick={() => {
-              if (!liveAircraft.lat || !liveAircraft.lon) return;
-              if (followingAircraft === liveAircraft.hex) {
-                setFollowingAircraft(null);
-              } else {
-                setFollowingAircraft(liveAircraft.hex);
-              }
-            }}
-            title={followingAircraft === liveAircraft.hex ? 'Stop following' : 'Follow aircraft'}
-          >
-            <Crosshair size={14} />
-          </button>
-          <button
-            className={`pro-panel-btn ${panelPinned ? 'active' : ''}`}
-            onClick={() => setPanelPinned(!panelPinned)}
-            title={panelPinned ? 'Unpin panel' : 'Pin panel open'}
-          >
-            {panelPinned ? <PinOff size={14} /> : <Pin size={14} />}
-          </button>
-          <button
-            className="pro-panel-btn"
-            onClick={() => openAircraftDetail(liveAircraft.hex)}
-            title="View full aircraft details"
-          >
-            <ExternalLink size={14} />
-          </button>
-          <button className="pro-panel-close" onClick={() => !panelPinned && selectAircraft(null)}>
-            <X size={18} />
-          </button>
-        </div>
+    <div
+      className={panelClassName}
+      role="dialog"
+      aria-label={`Aircraft details for ${liveAircraft.flight?.trim() || liveAircraft.hex}`}
+    >
+      {/* Header with action buttons */}
+      <PanelHeader
+        isFollowing={followingAircraft === liveAircraft.hex}
+        isPinned={panelPinned}
+        onFollow={() => {
+          if (!liveAircraft.lat || !liveAircraft.lon) return;
+          setFollowingAircraft(
+            followingAircraft === liveAircraft.hex ? null : liveAircraft.hex
+          );
+        }}
+        onPin={() => setPanelPinned(!panelPinned)}
+        onOpenDetail={() => openAircraftDetail(liveAircraft.hex)}
+        onClose={() => !panelPinned && selectAircraft(null)}
+      />
+
+      {/* Alert banners */}
+      <AlertBanners
+        isEmergency={isEmergency}
+        emergencyType={emergencyType}
+        squawk={liveAircraft.squawk}
+        isInConflict={isInConflict}
+        safetyEvent={safetyEvent}
+        conflictSeverity={conflictSeverity}
+        conflictTitle={conflictTitle}
+        onViewHistoryEvent={onViewHistoryEvent}
+      />
+
+      {/* Aircraft identity section */}
+      <AircraftIdentity
+        aircraft={liveAircraft}
+        aircraftInfo={aircraftInfo}
+        tailInfo={tailInfo}
+        isEmergency={isEmergency}
+        error={getAircraftError(liveAircraft.hex)}
+        onClearError={() => clearAircraftError(liveAircraft.hex)}
+      />
+
+      {/* Primary Metrics - Always visible */}
+      <div className="pro-primary-metrics" role="region" aria-label="Primary flight metrics">
+        <PrimaryMetrics
+          altitude={proAltitude}
+          speed={proSpeed}
+          verticalSpeed={proVerticalSpeed}
+          distance={proDistanceNm}
+          altitudeClass={proAltClass}
+          speedClass={proSpeedClass}
+          distanceTrend={proDistTrend}
+          TrendIcon={getTrendIcon(proDistTrend)}
+        />
       </div>
 
-      {/* Emergency Banner */}
-      {isEmergency && (
-        <div className={`pro-emergency-banner squawk-${liveAircraft.squawk}`}>
-          <AlertTriangle size={18} />
-          <span className="emergency-type">{emergencyType}</span>
-          <span className="emergency-squawk">SQUAWK {liveAircraft.squawk}</span>
-        </div>
-      )}
+      {/* Secondary Metrics - Collapsible */}
+      <CollapsibleSection
+        title="More Details"
+        icon={ChevronDown}
+        defaultOpen={sectionsOpen.secondaryMetrics}
+        onOpenChange={(open) => setSectionsOpen(s => ({ ...s, secondaryMetrics: open }))}
+      >
+        <SecondaryMetrics
+          track={proTrack}
+          trackCardinal={windDirToCardinal(proTrack)}
+          squawk={liveAircraft.squawk}
+          rssi={proRssi}
+          signalClass={proSignalClass}
+          type={liveAircraft.type}
+        />
+      </CollapsibleSection>
 
-      {/* Safety Event / Conflict Banner */}
-      {isInConflict && safetyEvent && (
-        <div
-          className={`pro-conflict-banner ${getSeverityClass(conflictSeverity)} clickable`}
-          onClick={() => onViewHistoryEvent?.(safetyEvent.id)}
-          title="View in History"
-        >
-          <Zap size={18} />
-          <div className="conflict-info">
-            <span className="conflict-label">{conflictTitle}</span>
-            <span className="conflict-message">{safetyEvent.message}</span>
-          </div>
-          {safetyEvent.hex2 && (
-            <div className="conflict-separation">
-              <span>{safetyEvent.horizontalNm}nm</span>
-              <span>{safetyEvent.verticalFt}ft</span>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Photo Section - Collapsible with lazy loading */}
+      <CollapsibleSection
+        title="Photo"
+        icon={Image}
+        defaultOpen={sectionsOpen.photo}
+        onOpenChange={(open) => setSectionsOpen(s => ({ ...s, photo: open }))}
+        lazy
+      >
+        <PhotoSection
+          aircraft={liveAircraft}
+          photoUrl={proPhotoUrl}
+          photoLoading={proPhotoLoading}
+          photoError={proPhotoError}
+          photoRetry={proPhotoRetry}
+          photoStatus={proPhotoStatus}
+          photoRetryRef={proPhotoRetryRef}
+          setPhotoUrl={setProPhotoUrl}
+          setPhotoLoading={setProPhotoLoading}
+          setPhotoError={setProPhotoError}
+          setPhotoRetry={setProPhotoRetry}
+          setPhotoStatus={setProPhotoStatus}
+          config={config}
+          wsRequest={wsRequest}
+          wsConnected={wsConnected}
+        />
+      </CollapsibleSection>
 
-      <div className="pro-panel-header">
-        <div className="pro-callsign-row">
-          <span className="pro-flag">{tailInfo.flag}</span>
-          <h2 className="pro-callsign">{liveAircraft.flight?.trim() || liveAircraft.hex?.toUpperCase()}</h2>
-        </div>
-        <div className="pro-badges">
-          <span className="pro-badge hex">{liveAircraft.hex?.toUpperCase()}</span>
-          {(aircraftInfo[liveAircraft.hex]?.type_name || aircraftInfo[liveAircraft.hex]?.model || liveAircraft.type) && (
-            <span className={`pro-badge model ${liveAircraft.military ? 'military' : ''}`}>
-              {aircraftInfo[liveAircraft.hex]?.type_name || aircraftInfo[liveAircraft.hex]?.model || liveAircraft.type}
-            </span>
-          )}
-          <span className="pro-badge category" title={liveAircraft.category || 'A3'}>{getCategoryName(liveAircraft.category)}</span>
-          {aircraftInfo[liveAircraft.hex]?.registration && (
-            <span className="pro-badge reg">{aircraftInfo[liveAircraft.hex].registration}</span>
-          )}
-          {aircraftInfo[liveAircraft.hex]?.year_built && (
-            <span className="pro-badge built">
-              {aircraftInfo[liveAircraft.hex].year_built}
-              {aircraftInfo[liveAircraft.hex].age_years && ` (${aircraftInfo[liveAircraft.hex].age_years}y)`}
-            </span>
-          )}
-          {isEmergency && <span className="pro-badge emergency">EMG</span>}
-        </div>
+      {/* Graphs Section - Collapsible */}
+      <CollapsibleSection
+        title="Performance Graphs"
+        icon={LineChart}
+        defaultOpen={sectionsOpen.graphs}
+        onOpenChange={(open) => setSectionsOpen(s => ({ ...s, graphs: open }))}
+      >
+        <GraphsSection
+          altitude={proAltitude}
+          speed={proSpeed}
+          verticalSpeed={proVerticalSpeed}
+          distance={proDistanceNm}
+          altProfileCanvasRef={altProfileCanvasRef}
+          speedProfileCanvasRef={speedProfileCanvasRef}
+          vsProfileCanvasRef={vsProfileCanvasRef}
+          distProfileCanvasRef={distProfileCanvasRef}
+          trackCanvasRef={trackCanvasRef}
+        />
+      </CollapsibleSection>
 
-        {/* Quick Alert Actions */}
-        <div className="pro-quick-alerts">
-          {liveAircraft.flight?.trim() && (
-            <button
-              className="pro-alert-btn"
-              onClick={() => {
-                console.log('Add alert for callsign:', liveAircraft.flight?.trim());
-                alert(`Alert added for callsign: ${liveAircraft.flight?.trim()}`);
-              }}
-              title={`Add alert for ${liveAircraft.flight?.trim()}`}
-            >
-              <BellPlus size={12} />
-              <span>Alert {liveAircraft.flight?.trim()}</span>
-            </button>
-          )}
-          {tailInfo.tailNumber && (
-            <button
-              className="pro-alert-btn"
-              onClick={() => {
-                console.log('Add alert for tail:', tailInfo.tailNumber);
-                alert(`Alert added for tail: ${tailInfo.tailNumber}`);
-              }}
-              title={`Add alert for ${tailInfo.tailNumber}`}
-            >
-              <BellPlus size={12} />
-              <span>Alert {tailInfo.tailNumber}</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Aircraft Thumbnail */}
-      <div className="pro-aircraft-photo">
-        {proPhotoLoading && !proPhotoError && (
-          <div className="pro-photo-loading">
-            <div className="pro-photo-loading-radar">
-              <Radar size={32} className="pro-photo-radar-icon" />
-              <div className="pro-photo-radar-sweep" />
-            </div>
-            <span>{proPhotoStatus?.message || 'Loading photo...'}</span>
-          </div>
-        )}
-        {!proPhotoError && proPhotoUrl && (
-          <img
-            key={`${liveAircraft.hex}-${proPhotoRetry}-${proPhotoUrl}`}
-            src={proPhotoUrl}
-            alt={liveAircraft.flight?.trim() || liveAircraft.hex}
-            onLoad={() => { setProPhotoLoading(false); setProPhotoStatus(null); }}
-            onError={() => { setProPhotoError(true); setProPhotoLoading(false); setProPhotoStatus(null); }}
-            style={{ opacity: proPhotoLoading ? 0 : 1 }}
-            loading="lazy"
-          />
-        )}
-        {proPhotoError && !proPhotoLoading && (
-          <div className="pro-photo-placeholder">
-            <Plane size={48} />
-            <span>{proPhotoStatus?.message || 'No Photo Available'}</span>
-            <button
-              className="pro-photo-retry"
-              onClick={() => {
-                if (proPhotoRetryRef.current) {
-                  clearInterval(proPhotoRetryRef.current);
-                  proPhotoRetryRef.current = null;
-                }
-
-                setProPhotoError(false);
-                setProPhotoLoading(true);
-                setProPhotoRetry(c => c + 1);
-
-                const startTime = Date.now();
-                const retryDuration = 30000;
-                const retryInterval = 3000;
-                const aircraftHex = liveAircraft.hex;
-
-                const attemptFetch = async () => {
-                  const elapsed = Date.now() - startTime;
-                  const remaining = Math.ceil((retryDuration - elapsed) / 1000);
-                  setProPhotoStatus({ message: `Fetching photo... (${remaining}s)` });
-
-                  try {
-                    let data = null;
-                    if (wsRequest && wsConnected) {
-                      data = await wsRequest('photo-cache', { icao: aircraftHex });
-                      if (data?.error) data = null;
-                    } else {
-                      const res = await fetch(`${config.apiBaseUrl || ''}/api/v1/airframes/${aircraftHex}/photos`);
-                      data = await safeJson(res);
-                    }
-
-                    if (data?.photo_url || data?.photo_thumbnail_url || data?.thumbnail_url) {
-                      setProPhotoUrl(resolvePhotoUrl(data.photo_url || data.photo_thumbnail_url || data.thumbnail_url));
-                      if (proPhotoRetryRef.current) {
-                        clearInterval(proPhotoRetryRef.current);
-                        proPhotoRetryRef.current = null;
-                      }
-                      return true;
-                    }
-                  } catch {
-                    // Continue retrying
-                  }
-                  return false;
-                };
-
-                attemptFetch().then(success => {
-                  if (success) return;
-
-                  proPhotoRetryRef.current = setInterval(async () => {
-                    const elapsed = Date.now() - startTime;
-                    if (elapsed >= retryDuration) {
-                      clearInterval(proPhotoRetryRef.current);
-                      proPhotoRetryRef.current = null;
-                      setProPhotoError(true);
-                      setProPhotoLoading(false);
-                      setProPhotoStatus({ message: 'Photo fetch timed out' });
-                      return;
-                    }
-                    await attemptFetch();
-                  }, retryInterval);
-                });
-              }}
-            >
-              <RefreshCw size={14} /> Retry
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Operator Label */}
-      {aircraftInfo[liveAircraft.hex] && (aircraftInfo[liveAircraft.hex].operator || aircraftInfo[liveAircraft.hex].owner) && (
-        <div className="pro-operator-label">
-          <Building2 size={14} />
-          <span>{aircraftInfo[liveAircraft.hex].operator || aircraftInfo[liveAircraft.hex].owner}</span>
-        </div>
-      )}
-
-      {/* Airframe Lookup Error */}
-      {getAircraftError(liveAircraft.hex) && (
-        <div className="pro-airframe-error" title={getAircraftError(liveAircraft.hex).error_message}>
-          <AlertTriangle size={14} />
-          <span>
-            Info lookup failed ({getAircraftError(liveAircraft.hex).source})
-          </span>
-          <button
-            className="pro-error-dismiss"
-            onClick={() => clearAircraftError(liveAircraft.hex)}
-            title="Dismiss"
-          >
-            <X size={12} />
-          </button>
-        </div>
-      )}
-
-      <div className="pro-stats-grid">
-        <div className="pro-stat">
-          <div className="pro-stat-label"><Crosshair size={14} /> ALTITUDE</div>
-          <div className={`pro-stat-value ${proAltClass}`}>{proAltitude.toLocaleString()} <span className="unit">ft</span></div>
-        </div>
-        <div className="pro-stat">
-          <div className="pro-stat-label"><Navigation size={14} /> SPEED</div>
-          <div className={`pro-stat-value ${proSpeedClass}`}>{proSpeed || '--'} <span className="unit">kts</span></div>
-        </div>
-        <div className="pro-stat">
-          <div className="pro-stat-label"><Plane size={14} /> TYPE</div>
-          <div className="pro-stat-value">{liveAircraft.type || '--'}</div>
-        </div>
-        <div className="pro-stat">
-          <div className="pro-stat-label"><Radio size={14} /> SQUAWK</div>
-          <div className="pro-stat-value">{liveAircraft.squawk || '1200'}</div>
-        </div>
-        <div className="pro-stat">
-          <div className="pro-stat-label"><TrendingUp size={14} /> V/S</div>
-          {(() => {
-            const vs = liveAircraft.vr ?? liveAircraft.baro_rate ?? liveAircraft.geom_rate ?? 0;
-            const isExtreme = Math.abs(vs) > 3000;
-            const vsClass = vs > 0 ? 'climbing' : vs < 0 ? 'descending' : '';
-            return (
-              <div className={`pro-stat-value ${vsClass} ${isExtreme ? 'extreme-vs' : ''}`}>
-                {vs > 0 ? '+' : ''}{vs} <span className="unit">fpm</span>
-              </div>
-            );
-          })()}
-        </div>
-        <div className="pro-stat">
-          <div className="pro-stat-label"><LocateFixed size={14} /> TRACK</div>
-          <div className="pro-stat-value">
-            {Math.round(liveAircraft.track || liveAircraft.true_heading || 0)}°
-            <span className="unit cardinal">{windDirToCardinal(liveAircraft.track || liveAircraft.true_heading)}</span>
-          </div>
-        </div>
-        <div className="pro-stat">
-          <div className="pro-stat-label"><MapPin size={14} /> DISTANCE</div>
-          <div className={`pro-stat-value distance-value ${proDistTrend || ''}`}>
-            {proDistTrend === 'approaching' ? (
-              <ArrowDownRight size={14} className="trend-icon approaching" />
-            ) : proDistTrend === 'receding' ? (
-              <ArrowUpRight size={14} className="trend-icon receding" />
-            ) : (
-              <ArrowRight size={14} className="trend-icon stable" />
-            )}
-            {proDistanceNm.toFixed(1)} <span className="unit">nm</span>
-          </div>
-        </div>
-        <div className="pro-stat">
-          <div className="pro-stat-label"><Signal size={14} /> RSSI</div>
-          <div className="pro-stat-value rssi-stat">
-            {proRssi !== undefined ? (
-              <>
-                <span className={`signal-bars ${proSignalClass}`}>
-                  <span className="bar bar-1"></span>
-                  <span className="bar bar-2"></span>
-                  <span className="bar bar-3"></span>
-                  <span className="bar bar-4"></span>
-                </span>
-                <span>{proRssi.toFixed(0)}</span>
-                <span className="unit">dB</span>
-              </>
-            ) : (
-              <>-- <span className="unit">dB</span></>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="pro-graphs-container">
-        <div className="pro-profile-chart">
-          <div className="pro-section-header">
-            ALTITUDE PROFILE
-            <span className="profile-value cyan">{proAltitude.toLocaleString()}</span>
-          </div>
-          <canvas
-            className="profile-canvas"
-            width={280}
-            height={60}
-            ref={altProfileCanvasRef}
-          />
-        </div>
-
-        <div className="pro-profile-chart">
-          <div className="pro-section-header">
-            SPEED PROFILE
-            <span className="profile-value green">{liveAircraft.gs || liveAircraft.tas || '--'}</span>
-          </div>
-          <canvas
-            className="profile-canvas"
-            width={280}
-            height={60}
-            ref={speedProfileCanvasRef}
-          />
-        </div>
-
-        <div className="pro-profile-chart">
-          <div className="pro-section-header">
-            VERTICAL SPEED
-            <span className={`profile-value ${(liveAircraft.vr ?? liveAircraft.baro_rate ?? 0) > 0 ? 'cyan' : (liveAircraft.vr ?? liveAircraft.baro_rate ?? 0) < 0 ? 'red' : ''}`}>
-              {(liveAircraft.vr ?? liveAircraft.baro_rate ?? liveAircraft.geom_rate ?? 0) > 0 ? '+' : ''}{liveAircraft.vr ?? liveAircraft.baro_rate ?? liveAircraft.geom_rate ?? 0}
-            </span>
-          </div>
-          <canvas
-            className="profile-canvas"
-            width={280}
-            height={60}
-            ref={vsProfileCanvasRef}
-          />
-        </div>
-
-        <div className="pro-profile-chart">
-          <div className="pro-section-header">
-            DISTANCE
-            <span className="profile-value purple">{proDistanceNm.toFixed(1)}</span>
-          </div>
-          <canvas
-            className="profile-canvas"
-            width={280}
-            height={60}
-            ref={distProfileCanvasRef}
-          />
-        </div>
-
-        <div className="pro-track-history">
-          <div className="pro-section-header">TRACK HISTORY</div>
-          <canvas
-            className="track-history-canvas"
-            width={280}
-            height={80}
-            ref={trackCanvasRef}
-          />
-        </div>
-      </div>
-
-      <div className="pro-external-links">
-        <div className="pro-section-header">EXTERNAL</div>
-        <div className="pro-links">
-          <a href={`https://flightaware.com/live/flight/${liveAircraft.flight?.trim() || liveAircraft.hex}`} target="_blank" rel="noopener noreferrer" className="pro-link">
-            FlightAware <ExternalLink size={12} />
-          </a>
-          <a href={`https://globe.adsbexchange.com/?icao=${liveAircraft.hex}`} target="_blank" rel="noopener noreferrer" className="pro-link">
-            ADSBx <ExternalLink size={12} />
-          </a>
-        </div>
-      </div>
+      {/* External Links */}
+      <ExternalLinks
+        callsign={liveAircraft.flight?.trim()}
+        hex={liveAircraft.hex}
+      />
     </div>
   );
 }

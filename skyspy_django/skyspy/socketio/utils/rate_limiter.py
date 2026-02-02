@@ -99,3 +99,17 @@ class RateLimiter:
                   Use 0 or negative for no limit.
         """
         self._rate_limits[topic] = rate
+
+    def cleanup_old_entries(self, max_age: float = 300.0):
+        """
+        Remove stale entries from the rate limiter to prevent memory leaks.
+
+        This should be called periodically (e.g., on disconnect or via a
+        background task) to clean up entries for topics that are no longer
+        being used.
+
+        Args:
+            max_age: Maximum age in seconds for entries to keep (default: 300s / 5 min)
+        """
+        now = time.time()
+        self._last_send = {k: v for k, v in self._last_send.items() if now - v < max_age}

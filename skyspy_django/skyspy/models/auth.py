@@ -405,6 +405,12 @@ class OIDCClaimMapping(models.Model):
     def matches(self, claims):
         """Check if this mapping matches the given OIDC claims."""
         import re
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        # Maximum regex pattern length to prevent ReDoS attacks
+        MAX_REGEX_PATTERN_LENGTH = 500
 
         if self.claim_name not in claims:
             return False
@@ -423,8 +429,16 @@ class OIDCClaimMapping(models.Model):
                 if self.claim_value in str(value):
                     return True
             elif self.match_type == 'regex':
-                if re.match(self.claim_value, str(value)):
-                    return True
+                # Validate regex pattern length to prevent ReDoS
+                if len(self.claim_value) > MAX_REGEX_PATTERN_LENGTH:
+                    logger.warning(f"OIDC claim mapping regex pattern too long ({len(self.claim_value)} chars), skipping")
+                    return False
+                try:
+                    if re.match(self.claim_value, str(value)):
+                        return True
+                except re.error as e:
+                    logger.warning(f"Invalid OIDC claim mapping regex pattern '{self.claim_value[:50]}...': {e}")
+                    return False
 
         return False
 

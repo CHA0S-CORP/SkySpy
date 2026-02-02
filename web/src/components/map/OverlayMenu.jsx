@@ -1,10 +1,11 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, memo } from 'react';
 import { Layers, X, Radio, Plane, Cloud, AlertTriangle, MapPin } from 'lucide-react';
 
 /**
  * Menu for toggling aviation data overlays
+ * Memoized to prevent re-renders when other map state changes
  */
-export function OverlayMenu({
+export const OverlayMenu = memo(function OverlayMenu({
   show,
   overlays,
   onOverlaysChange,
@@ -187,6 +188,6 @@ export function OverlayMenu({
       </div>
     </div>
   );
-}
+});
 
 export default OverlayMenu;

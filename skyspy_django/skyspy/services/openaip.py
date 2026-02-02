@@ -14,6 +14,7 @@ import httpx
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 logger = logging.getLogger(__name__)
 
@@ -73,13 +74,38 @@ def _is_enabled() -> bool:
     return getattr(settings, 'OPENAIP_ENABLED', False) and _get_api_key()
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+)
+def _http_get_openaip(
+    url: str,
+    params: Optional[Dict],
+    api_key: str,
+    timeout: float = 15.0
+) -> httpx.Response:
+    """HTTP GET with retry logic for OpenAIP API."""
+    with httpx.Client(timeout=timeout) as client:
+        response = client.get(
+            url,
+            params=params,
+            headers={
+                "x-openaip-api-key": api_key,
+                "Accept": "application/json",
+            }
+        )
+        response.raise_for_status()
+        return response
+
+
 def _make_request(
     endpoint: str,
     params: Optional[Dict] = None,
-    timeout: int = 30
+    timeout: int = 15
 ) -> Optional[Dict[str, Any]]:
     """
-    Make a request to the OpenAIP API.
+    Make a request to the OpenAIP API with retry logic.
 
     Args:
         endpoint: API endpoint path
@@ -95,17 +121,13 @@ def _make_request(
         return None
 
     try:
-        with httpx.Client(timeout=timeout) as client:
-            response = client.get(
-                f"{OPENAIP_API_BASE}/{endpoint}",
-                params=params,
-                headers={
-                    "x-openaip-api-key": api_key,
-                    "Accept": "application/json",
-                }
-            )
-            response.raise_for_status()
-            return response.json()
+        response = _http_get_openaip(
+            f"{OPENAIP_API_BASE}/{endpoint}",
+            params,
+            api_key,
+            timeout=float(timeout)
+        )
+        return response.json()
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 429:
@@ -150,7 +172,7 @@ def get_airspaces(
     radius_km = radius_nm * 1.852
 
     params = {
-        'pos': f"{lon},{lat}",
+        'pos': f"{lat},{lon}",
         'dist': int(radius_km * 1000),  # API expects meters
         'limit': 200,
     }
@@ -265,7 +287,7 @@ def get_airports(
     radius_km = radius_nm * 1.852
 
     params = {
-        'pos': f"{lon},{lat}",
+        'pos': f"{lat},{lon}",
         'dist': int(radius_km * 1000),
         'limit': 200,
     }
@@ -357,7 +379,7 @@ def get_navaids(
     radius_km = radius_nm * 1.852
 
     params = {
-        'pos': f"{lon},{lat}",
+        'pos': f"{lat},{lon}",
         'dist': int(radius_km * 1000),
         'limit': 200,
     }
@@ -456,7 +478,7 @@ def get_reporting_points(
     radius_km = radius_nm * 1.852
 
     params = {
-        'pos': f"{lon},{lat}",
+        'pos': f"{lat},{lon}",
         'dist': int(radius_km * 1000),
         'limit': 200,
     }

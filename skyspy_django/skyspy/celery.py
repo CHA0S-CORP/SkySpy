@@ -70,11 +70,34 @@ def debug_task(self):
 # Celery Beat Schedule
 # =============================================================================
 app.conf.beat_schedule = {
-    # Aircraft polling - every 2 seconds
+    # Aircraft polling - every 1 second (skipped when streaming is active)
     'poll-aircraft-every-2s': {
         'task': 'skyspy.tasks.aircraft.poll_aircraft',
-        'schedule': 2.0,
-        'options': {'expires': 2.0},  # Don't queue if missed
+        'schedule': 1.0,
+        'options': {'expires': 1.0},  # Don't queue if missed
+    },
+
+    # Aircraft streaming - check/start every 30 seconds
+    # (actual stream runs continuously, this just ensures it's running)
+    'start-aircraft-stream-every-30s': {
+        'task': 'skyspy.tasks.aircraft_stream.start_aircraft_stream',
+        'schedule': 30.0,
+        'options': {'expires': 30.0},
+    },
+
+    # Aircraft stream cold path - flush buffered data to database every 5 seconds
+    # (non-blocking, doesn't affect client latency)
+    'flush-stream-to-database-every-5s': {
+        'task': 'skyspy.tasks.aircraft_stream.flush_stream_to_database',
+        'schedule': 5.0,
+        'options': {'expires': 5.0},
+    },
+
+    # Aircraft stream cold path - process new aircraft info lookups every 10 seconds
+    'process-new-aircraft-lookups-every-10s': {
+        'task': 'skyspy.tasks.aircraft_stream.process_new_aircraft_lookups',
+        'schedule': 10.0,
+        'options': {'expires': 10.0},
     },
 
     # Session cleanup - every 5 minutes
@@ -246,10 +269,18 @@ app.conf.beat_schedule = {
         'schedule': crontab(hour=3, minute=15),
     },
 
-    # NOTAMs refresh - every 15 minutes
-    'refresh-notams-every-15m': {
+    # SWIM FNS NOTAM consumer - every 5 minutes
+    # Connects to FAA SWIM to receive real-time NOTAM updates
+    'swim-notams-every-5m': {
+        'task': 'skyspy.tasks.notams.consume_swim_notams',
+        'schedule': 300.0,  # 5 minutes
+        'kwargs': {'max_messages': 500, 'timeout_seconds': 240},
+    },
+
+    # Legacy NOTAMs refresh - every 30 minutes (fallback if SWIM disabled)
+    'refresh-notams-every-30m': {
         'task': 'skyspy.tasks.notams.refresh_notams',
-        'schedule': 900.0,  # 15 minutes
+        'schedule': 1800.0,  # 30 minutes
     },
 
     # OpenAIP airspace refresh - daily at 5:15 AM UTC
@@ -363,6 +394,14 @@ app.conf.task_routes = {
     'skyspy.tasks.aircraft.poll_aircraft': {'queue': 'polling'},
     'skyspy.tasks.aircraft.update_stats_cache': {'queue': 'polling'},
     'skyspy.tasks.aircraft.update_safety_stats': {'queue': 'polling'},
+
+    # Aircraft streaming (long-running, uses polling queue for priority)
+    'skyspy.tasks.aircraft_stream.stream_aircraft': {'queue': 'polling'},
+    'skyspy.tasks.aircraft_stream.start_aircraft_stream': {'queue': 'polling'},
+
+    # Aircraft stream cold path (database writes - separate queue to not block hot path)
+    'skyspy.tasks.aircraft_stream.flush_stream_to_database': {'queue': 'database'},
+    'skyspy.tasks.aircraft_stream.process_new_aircraft_lookups': {'queue': 'database'},
 
     # Antenna analytics (runs frequently, should be quick)
     'skyspy.tasks.analytics.update_antenna_analytics': {'queue': 'polling'},

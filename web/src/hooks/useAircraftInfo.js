@@ -68,6 +68,9 @@ export function useAircraftInfo({
   const retryQueue = useRef(new Map()); // icao -> { retryCount, nextRetryAt }
   const retryTimeoutRef = useRef(null);
 
+  // Track bulk fetch setTimeout IDs for cleanup (array of timeout IDs for staggered fetches)
+  const bulkFetchTimeoutIdsRef = useRef([]);
+
   /**
    * Enforce max cache size with LRU eviction
    * Returns a new cache object with oldest entries removed if over limit
@@ -430,17 +433,23 @@ export function useAircraftInfo({
     // Use isInCacheRef to check latest cache state (avoids stale closure issue)
     const stillMissing = icaos.filter(icao => !isInCacheRef(icao) && !pendingFetches.current.has(icao));
 
+    // Clear any previously stored timeout IDs before creating new ones
+    bulkFetchTimeoutIdsRef.current = [];
+
     // Fetch individually with small delays to avoid overwhelming the backend
     for (let i = 0; i < stillMissing.length; i++) {
       const icao = stillMissing[i];
       // Use setTimeout to spread out requests
       // isInCacheRef uses refs internally, so no stale closure issues
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         // Use isInCacheRef for latest cache state inside timeout callback
         if (!isInCacheRef(icao) && !pendingFetches.current.has(icao)) {
           fetchSingleInfo(icao);
         }
       }, i * 50); // 50ms between requests
+
+      // Store timeout ID for cleanup
+      bulkFetchTimeoutIdsRef.current.push(timeoutId);
     }
   }, [fetchBulkInfo, fetchSingleInfo]);
 
@@ -554,6 +563,12 @@ export function useAircraftInfo({
     return () => {
       if (bulkTimeoutRef.current) clearTimeout(bulkTimeoutRef.current);
       if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+
+      // Clear all staggered bulk fetch timeouts to prevent state updates after unmount
+      for (const timeoutId of bulkFetchTimeoutIdsRef.current) {
+        clearTimeout(timeoutId);
+      }
+      bulkFetchTimeoutIdsRef.current = [];
     };
   }, []);
 

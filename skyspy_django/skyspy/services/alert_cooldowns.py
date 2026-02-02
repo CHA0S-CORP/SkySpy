@@ -5,12 +5,121 @@ Provides atomic cooldown checking across multiple Celery workers
 to prevent duplicate alert triggers.
 """
 import logging
+import threading
+import time
+from collections import OrderedDict
 from datetime import datetime, timedelta
 from typing import Tuple, Optional
 
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+# Lua script for atomic check-and-set cooldown operation
+# Returns: [can_trigger (0/1), last_timestamp or nil]
+COOLDOWN_CHECK_SET_LUA = """
+local key = KEYS[1]
+local now_ts = ARGV[1]
+local cooldown_seconds = tonumber(ARGV[2])
+
+-- Try to get existing value
+local existing = redis.call('GET', key)
+
+if existing then
+    -- Key exists, still in cooldown
+    return {0, existing}
+else
+    -- Key doesn't exist or expired, set it atomically
+    redis.call('SETEX', key, cooldown_seconds, now_ts)
+    return {1, nil}
+end
+"""
+
+
+class LRUCooldownCache:
+    """
+    Thread-safe LRU cache for fallback cooldowns with max size limit.
+
+    Automatically evicts oldest entries when max size is reached and
+    periodically cleans up expired entries.
+    """
+
+    MAX_SIZE = 10000
+    CLEANUP_INTERVAL = 60  # seconds
+
+    def __init__(self, max_size: int = MAX_SIZE):
+        self._cache: OrderedDict = OrderedDict()
+        self._lock = threading.Lock()
+        self._max_size = max_size
+        self._last_cleanup = 0.0
+
+    def get(self, key: tuple) -> Optional[datetime]:
+        """Get a cooldown entry, returning None if not found."""
+        with self._lock:
+            if key in self._cache:
+                # Move to end (most recently used)
+                self._cache.move_to_end(key)
+                return self._cache[key]
+            return None
+
+    def set(self, key: tuple, value: datetime):
+        """Set a cooldown entry with LRU eviction if needed."""
+        with self._lock:
+            self._maybe_cleanup()
+
+            if key in self._cache:
+                # Update existing and move to end
+                self._cache[key] = value
+                self._cache.move_to_end(key)
+            else:
+                # Evict oldest if at capacity
+                while len(self._cache) >= self._max_size:
+                    self._cache.popitem(last=False)
+                self._cache[key] = value
+
+    def remove(self, key: tuple) -> bool:
+        """Remove a specific key. Returns True if removed."""
+        with self._lock:
+            if key in self._cache:
+                del self._cache[key]
+                return True
+            return False
+
+    def remove_by_predicate(self, predicate) -> int:
+        """Remove all keys matching predicate. Returns count removed."""
+        with self._lock:
+            keys_to_remove = [k for k in self._cache.keys() if predicate(k)]
+            for key in keys_to_remove:
+                del self._cache[key]
+            return len(keys_to_remove)
+
+    def clear(self) -> int:
+        """Clear all entries. Returns count cleared."""
+        with self._lock:
+            count = len(self._cache)
+            self._cache.clear()
+            return count
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._cache)
+
+    def _maybe_cleanup(self):
+        """Cleanup expired entries periodically. Must be called with lock held."""
+        now = time.time()
+        if now - self._last_cleanup < self.CLEANUP_INTERVAL:
+            return
+
+        self._last_cleanup = now
+        cutoff = datetime.utcnow() - timedelta(minutes=30)  # Keep for 30 min max
+
+        # Remove expired entries (iterate over copy of keys)
+        keys_to_remove = [
+            k for k, v in self._cache.items()
+            if v < cutoff
+        ]
+        for key in keys_to_remove:
+            del self._cache[key]
 
 
 class DistributedCooldownManager:
@@ -25,7 +134,8 @@ class DistributedCooldownManager:
 
     def __init__(self):
         self._redis = None
-        self._fallback_cooldowns: dict = {}  # In-memory fallback
+        self._lua_script = None  # Cached Lua script
+        self._fallback_cooldowns = LRUCooldownCache()  # Thread-safe LRU fallback
 
     @property
     def redis(self):
@@ -46,6 +156,12 @@ class DistributedCooldownManager:
         """Generate Redis key for a rule/aircraft combination."""
         return f"{self.KEY_PREFIX}:{rule_id}:{icao_hex.upper()}"
 
+    def _get_lua_script(self):
+        """Get or create the cached Lua script for atomic cooldown check-and-set."""
+        if self._lua_script is None and self.redis:
+            self._lua_script = self.redis.register_script(COOLDOWN_CHECK_SET_LUA)
+        return self._lua_script
+
     def check_and_set(
         self,
         rule_id: int,
@@ -54,6 +170,8 @@ class DistributedCooldownManager:
     ) -> Tuple[bool, Optional[datetime]]:
         """
         Atomically check if cooldown has passed and set if so.
+
+        Uses a Lua script for atomic check-and-set to prevent TOCTOU race conditions.
 
         Args:
             rule_id: The alert rule ID
@@ -71,27 +189,26 @@ class DistributedCooldownManager:
 
         if self.redis:
             try:
-                # Use SET with NX (only set if not exists) and EX (expiry)
-                # This is atomic - if key exists, returns None, else sets and returns True
-                result = self.redis.set(
-                    key,
-                    str(now_ts),
-                    nx=True,
-                    ex=cooldown_seconds
+                # Use Lua script for atomic check-and-set operation
+                # This eliminates the TOCTOU race condition
+                script = self._get_lua_script()
+                result = script(
+                    keys=[key],
+                    args=[str(now_ts), cooldown_seconds]
                 )
 
-                if result:
+                can_trigger = bool(result[0])
+                last_ts = result[1]
+
+                if can_trigger:
                     # Key was set - cooldown passed (or first trigger)
                     return True, None
                 else:
                     # Key exists - still in cooldown
-                    # Handle race condition where key may have expired between SET and GET
-                    last_ts = self.redis.get(key)
-                    if last_ts is None:
-                        # Key expired between SET and GET - treat as cooldown passed
-                        return True, None
-                    last_time = datetime.fromtimestamp(float(last_ts))
-                    return False, last_time
+                    if last_ts is not None:
+                        last_time = datetime.fromtimestamp(float(last_ts))
+                        return False, last_time
+                    return False, None
 
             except Exception as e:
                 logger.warning(f"Redis cooldown check failed, using fallback: {e}")
@@ -105,7 +222,7 @@ class DistributedCooldownManager:
         icao_hex: str,
         cooldown_seconds: int
     ) -> Tuple[bool, Optional[datetime]]:
-        """In-memory fallback when Redis is unavailable."""
+        """In-memory fallback when Redis is unavailable. Uses thread-safe LRU cache."""
         key = (rule_id, icao_hex.upper())
         now = datetime.utcnow()
 
@@ -116,7 +233,7 @@ class DistributedCooldownManager:
             if elapsed < cooldown_seconds:
                 return False, last_trigger
 
-        self._fallback_cooldowns[key] = now
+        self._fallback_cooldowns.set(key, now)
         return True, last_trigger
 
     def get_remaining_cooldown(
@@ -166,11 +283,8 @@ class DistributedCooldownManager:
             except Exception as e:
                 logger.warning(f"Redis clear_rule failed: {e}")
 
-        # Also clear in-memory fallback
-        keys_to_remove = [k for k in self._fallback_cooldowns.keys() if k[0] == rule_id]
-        for key in keys_to_remove:
-            del self._fallback_cooldowns[key]
-            count += 1
+        # Also clear in-memory fallback using predicate
+        count += self._fallback_cooldowns.remove_by_predicate(lambda k: k[0] == rule_id)
 
         logger.debug(f"Cleared {count} cooldowns for rule {rule_id}")
         return count
@@ -198,11 +312,8 @@ class DistributedCooldownManager:
             except Exception as e:
                 logger.warning(f"Redis clear_aircraft failed: {e}")
 
-        # Also clear in-memory fallback
-        keys_to_remove = [k for k in self._fallback_cooldowns.keys() if k[1] == icao_upper]
-        for key in keys_to_remove:
-            del self._fallback_cooldowns[key]
-            count += 1
+        # Also clear in-memory fallback using predicate
+        count += self._fallback_cooldowns.remove_by_predicate(lambda k: k[1] == icao_upper)
 
         return count
 
@@ -231,9 +342,7 @@ class DistributedCooldownManager:
                 logger.warning(f"Redis clear_all failed: {e}")
 
         # Clear in-memory fallback
-        fallback_count = len(self._fallback_cooldowns)
-        self._fallback_cooldowns.clear()
-        count += fallback_count
+        count += self._fallback_cooldowns.clear()
 
         logger.info(f"Cleared all {count} alert cooldowns")
         return count

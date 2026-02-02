@@ -23,6 +23,9 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
   const [pendingDelete, setPendingDelete] = useState(null);
   const undoTimeoutRef = useRef(null);
 
+  // Ref to hold wsRequest to avoid stale closures in setTimeout callbacks
+  const wsRequestRef = useRef(wsRequest);
+
   // Import state
   const [showImportModal, setShowImportModal] = useState(false);
   const [importData, setImportData] = useState(null);
@@ -81,6 +84,11 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
     };
   }, [alertsConnected, onAlertEvent]);
 
+  // Keep wsRequestRef updated with current wsRequest
+  useEffect(() => {
+    wsRequestRef.current = wsRequest;
+  }, [wsRequest]);
+
   // Cleanup undo timeout on unmount
   useEffect(() => {
     return () => {
@@ -92,6 +100,11 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
 
   // Handle delete with undo support
   const handleDelete = useCallback(async (rule) => {
+    if (!wsRequest || !wsConnected) {
+      showToast('Not connected to server', 'error');
+      return;
+    }
+
     setPendingDelete({
       rule,
       timestamp: Date.now(),
@@ -105,9 +118,14 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
 
     undoTimeoutRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`${apiBase}/api/v1/alerts/rules/${rule.id}`, { method: 'DELETE' });
-        if (!res.ok) {
-          throw new Error('Failed to delete rule');
+        // Use wsRequestRef.current to access the latest wsRequest (avoids stale closure)
+        const currentWsRequest = wsRequestRef.current;
+        if (!currentWsRequest) {
+          throw new Error('WebSocket not available');
+        }
+        const result = await currentWsRequest('alert-rule-delete', { id: rule.id });
+        if (result?.error) {
+          throw new Error(result.error);
         }
         showToast(`Rule "${rule.name}" permanently deleted`, 'success');
         refetch();
@@ -118,7 +136,7 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
         setPendingDelete(null);
       }
     }, UNDO_GRACE_PERIOD);
-  }, [apiBase, refetch, showToast]);
+  }, [wsRequest, wsConnected, refetch, showToast]);
 
   // Handle undo delete
   const handleUndoDelete = useCallback(() => {
@@ -133,15 +151,15 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
 
   // Handle toggle rule enabled/disabled
   const handleToggle = useCallback(async (rule) => {
-    try {
-      const res = await fetch(`${apiBase}/api/v1/alerts/rules/${rule.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !rule.enabled })
-      });
+    if (!wsRequest || !wsConnected) {
+      showToast('Not connected to server', 'error');
+      return;
+    }
 
-      if (!res.ok) {
-        throw new Error('Failed to toggle rule');
+    try {
+      const result = await wsRequest('alert-rule-toggle', { id: rule.id, enabled: !rule.enabled });
+      if (result?.error) {
+        throw new Error(result.error);
       }
 
       showToast(`Rule "${rule.name}" ${rule.enabled ? 'disabled' : 'enabled'}`, 'success');
@@ -150,7 +168,7 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
       console.error('Failed to toggle rule:', err);
       showToast('Failed to update rule', 'error');
     }
-  }, [apiBase, refetch, showToast]);
+  }, [wsRequest, wsConnected, refetch, showToast]);
 
   // Export all rules as JSON
   const handleExportAll = useCallback(() => {
@@ -194,6 +212,11 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
   const handleImport = useCallback(async () => {
     if (!importData?.valid || !importData.rules.length) return;
 
+    if (!wsRequest || !wsConnected) {
+      showToast('Not connected to server', 'error');
+      return;
+    }
+
     setImporting(true);
     const existingRules = data?.rules || [];
     const { duplicates, unique } = findDuplicates(importData.rules, existingRules);
@@ -206,19 +229,15 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
         for (const dup of duplicates) {
           const existing = existingRules.find(r => r.name.toLowerCase() === dup.name.toLowerCase());
           if (existing) {
-            await fetch(`${apiBase}/api/v1/alerts/rules/${existing.id}`, { method: 'DELETE' });
+            await wsRequest('alert-rule-delete', { id: existing.id });
           }
         }
         rulesToImport = [...unique, ...duplicates];
       }
 
       for (const rule of rulesToImport) {
-        const res = await fetch(`${apiBase}/api/v1/alerts/rules`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(convertToApiFormat(rule))
-        });
-        if (res.ok) {
+        const result = await wsRequest('alert-rule-create', convertToApiFormat(rule));
+        if (result && !result.error) {
           importCount++;
         }
       }
@@ -233,7 +252,7 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
       setShowImportModal(false);
       setImportData(null);
     }
-  }, [apiBase, data?.rules, importData, importOption, refetch, showToast]);
+  }, [wsRequest, wsConnected, data?.rules, importData, importOption, refetch, showToast]);
 
   // Filter and sort rules
   const filteredRules = useMemo(() => {

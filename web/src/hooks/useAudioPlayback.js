@@ -28,6 +28,9 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
   const autoplayQueueRef = useRef([]);
   const processAutoplayQueueRef = useRef(null);
 
+  // Track audio event listeners for cleanup (Map of audioId -> { loadedmetadata, ended, error })
+  const audioListenersRef = useRef(new Map());
+
   // Subscribe to global audio state changes
   useEffect(() => {
     const unsubscribe = (callback => {
@@ -49,6 +52,25 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
     return unsubscribe;
   }, []);
 
+  /**
+   * Helper to remove and clean up audio event listeners for a given audio ID.
+   */
+  const removeAudioListeners = useCallback((audioId, audio) => {
+    const listeners = audioListenersRef.current.get(audioId);
+    if (listeners && audio) {
+      if (listeners.loadedmetadata) {
+        audio.removeEventListener('loadedmetadata', listeners.loadedmetadata);
+      }
+      if (listeners.ended) {
+        audio.removeEventListener('ended', listeners.ended);
+      }
+      if (listeners.error) {
+        audio.removeEventListener('error', listeners.error);
+      }
+    }
+    audioListenersRef.current.delete(audioId);
+  }, []);
+
   // Autoplay queue processor
   const processAutoplayQueue = useCallback(() => {
     if (!localAutoplay || globalAudioState.playingId) return;
@@ -64,14 +86,15 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
         if (loadTimeout) clearTimeout(loadTimeout);
       };
 
-      audio.addEventListener('loadedmetadata', () => {
+      // Create named handler functions so they can be removed later
+      const handleLoadedMetadata = function() {
         cleanup();
         globalAudioState.audioDurations[next.id] = audio.duration;
         notifySubscribers({ audioDurations: { ...globalAudioState.audioDurations } });
         setLocalAudioDurations(prev => ({ ...prev, [next.id]: audio.duration }));
-      });
+      };
 
-      audio.addEventListener('ended', () => {
+      const handleEnded = function() {
         cleanup();
         if (globalAudioState.progressIntervalRef) {
           clearInterval(globalAudioState.progressIntervalRef);
@@ -84,9 +107,9 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
         setLocalPlayingId(null);
         setLocalAudioProgress(prev => ({ ...prev, [next.id]: 0 }));
         processAutoplayQueue();
-      });
+      };
 
-      audio.addEventListener('error', () => {
+      const handleError = function() {
         cleanup();
         if (globalAudioState.progressIntervalRef) {
           clearInterval(globalAudioState.progressIntervalRef);
@@ -98,7 +121,18 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
         notifySubscribers({ playingId: null, currentTransmission: null });
         setLocalPlayingId(null);
         processAutoplayQueue();
+      };
+
+      // Store listeners for later cleanup
+      audioListenersRef.current.set(next.id, {
+        loadedmetadata: handleLoadedMetadata,
+        ended: handleEnded,
+        error: handleError,
       });
+
+      audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.addEventListener('ended', handleEnded);
+      audio.addEventListener('error', handleError);
 
       loadTimeout = setTimeout(() => {
         console.warn(`Audio ${next.id} took too long to load, trying next file...`);
@@ -135,7 +169,7 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
         processAutoplayQueue();
       });
     }
-  }, [localAutoplay, isMuted, audioVolume, audioRefs]);
+  }, [localAutoplay, isMuted, audioVolume, audioRefs, removeAudioListeners]);
 
   // Store processAutoplayQueue in ref
   useEffect(() => {
@@ -167,13 +201,14 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
       audio.volume = isMuted ? 0 : audioVolume;
       audioRefs[id] = audio;
 
-      audio.addEventListener('loadedmetadata', () => {
+      // Create named handler functions so they can be removed later
+      const handleLoadedMetadata = function() {
         globalAudioState.audioDurations[id] = audio.duration;
         notifySubscribers({ audioDurations: { ...globalAudioState.audioDurations } });
         setLocalAudioDurations(prev => ({ ...prev, [id]: audio.duration }));
-      });
+      };
 
-      audio.addEventListener('ended', () => {
+      const handleEnded = function() {
         globalAudioState.playingId = null;
         globalAudioState.currentTransmission = null;
         globalAudioState.audioProgress[id] = 0;
@@ -192,15 +227,26 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
             }
           }
         }
-      });
+      };
 
-      audio.addEventListener('error', (e) => {
+      const handleError = function(e) {
         console.error('Audio playback error:', e);
         globalAudioState.playingId = null;
         globalAudioState.currentTransmission = null;
         notifySubscribers({ playingId: null, currentTransmission: null });
         setLocalPlayingId(null);
+      };
+
+      // Store listeners for later cleanup
+      audioListenersRef.current.set(id, {
+        loadedmetadata: handleLoadedMetadata,
+        ended: handleEnded,
+        error: handleError,
       });
+
+      audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.addEventListener('ended', handleEnded);
+      audio.addEventListener('error', handleError);
     }
 
     if (globalAudioState.playingId === id) {
@@ -304,14 +350,33 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
     }
   }, [localAutoplay, handlePlay]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount - clear intervals AND remove all audio event listeners
   useEffect(() => {
     return () => {
+      // Clear progress interval
       if (globalAudioState.progressIntervalRef) {
         clearInterval(globalAudioState.progressIntervalRef);
+        globalAudioState.progressIntervalRef = null;
       }
+
+      // Remove all audio event listeners
+      for (const [audioId, listeners] of audioListenersRef.current.entries()) {
+        const audio = audioRefs[audioId];
+        if (audio && listeners) {
+          if (listeners.loadedmetadata) {
+            audio.removeEventListener('loadedmetadata', listeners.loadedmetadata);
+          }
+          if (listeners.ended) {
+            audio.removeEventListener('ended', listeners.ended);
+          }
+          if (listeners.error) {
+            audio.removeEventListener('error', listeners.error);
+          }
+        }
+      }
+      audioListenersRef.current.clear();
     };
-  }, []);
+  }, [audioRefs]);
 
   return {
     playingId: localPlayingId,

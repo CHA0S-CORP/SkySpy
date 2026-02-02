@@ -21,22 +21,29 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-# Redis client for sync Socket.IO broadcasts
-_redis_client = None
+# Redis connection pool for sync Socket.IO broadcasts
+_redis_pool = None
 
 
 def _get_redis_client():
     """
-    Get or create a sync Redis client for Socket.IO broadcasts.
+    Get a sync Redis client for Socket.IO broadcasts using connection pooling.
 
-    Uses a separate client from channels.py to avoid any potential conflicts.
+    Uses a connection pool to properly manage connections and support
+    automatic reconnection. Each call returns a new Redis client instance
+    that shares the underlying connection pool.
     """
-    global _redis_client
-    if _redis_client is None:
+    global _redis_pool
+    if _redis_pool is None:
         import redis
         redis_url = getattr(settings, 'REDIS_URL', 'redis://localhost:6379/0')
-        _redis_client = redis.from_url(redis_url)
-    return _redis_client
+        _redis_pool = redis.ConnectionPool.from_url(
+            redis_url,
+            max_connections=10,
+            retry_on_timeout=True,
+        )
+    import redis
+    return redis.Redis(connection_pool=_redis_pool)
 
 
 def _build_socketio_message(
@@ -89,26 +96,16 @@ def _serialize_message(message: dict) -> bytes:
     """
     Serialize a message for Redis pub/sub.
 
-    python-socketio's RedisManager uses msgpack for serialization by default.
-    However, if msgpack is not available, it falls back to JSON with a
-    special pickle protocol for complex objects.
-
-    For simplicity and safety (avoiding pickle), we use msgpack if available,
-    otherwise JSON.
+    python-socketio v5.x AsyncRedisManager expects JSON-serialized messages.
+    The _thread method tries json.loads() on received messages.
 
     Args:
         message: The message dict to serialize
 
     Returns:
-        Serialized message bytes
+        Serialized message as JSON bytes
     """
-    try:
-        import msgpack
-        return msgpack.packb(message)
-    except ImportError:
-        # Fallback to JSON if msgpack not available
-        # Note: JSON serialization must match what the receiver expects
-        return json.dumps(message).encode('utf-8')
+    return json.dumps(message).encode('utf-8')
 
 
 def _get_channel_name(namespace: str = '/') -> str:

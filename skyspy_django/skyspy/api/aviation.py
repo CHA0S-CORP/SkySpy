@@ -56,7 +56,11 @@ class AviationViewSet(viewsets.ViewSet):
 
         lat = request.query_params.get('lat')
         lon = request.query_params.get('lon')
-        radius_nm = float(request.query_params.get('radius_nm', 500))
+        try:
+            radius_nm = float(request.query_params.get('radius_nm', 500))
+            radius_nm = min(radius_nm, 1000)  # Cap at 1000nm
+        except (ValueError, TypeError):
+            radius_nm = 500
 
         if lat and lon:
             lat = float(lat)
@@ -100,7 +104,11 @@ class AviationViewSet(viewsets.ViewSet):
         from skyspy.services import weather_cache
 
         icao = request.query_params.get('icao')
-        hours = int(request.query_params.get('hours', 2))
+        try:
+            hours = int(request.query_params.get('hours', 2))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 2
 
         if icao:
             # Fetch METARs for specific station
@@ -109,11 +117,22 @@ class AviationViewSet(viewsets.ViewSet):
             # Fetch METARs for bounding box (default CONUS)
             lat = request.query_params.get('lat')
             lon = request.query_params.get('lon')
-            radius_nm = float(request.query_params.get('radius_nm', 200))
+            try:
+                # Accept both 'radius' and 'radius_nm' for frontend compatibility
+                radius_nm = float(request.query_params.get('radius', request.query_params.get('radius_nm', 200)))
+                radius_nm = min(radius_nm, 1000)  # Cap at 1000nm
+            except (ValueError, TypeError):
+                radius_nm = 200
 
             if lat and lon:
-                lat = float(lat)
-                lon = float(lon)
+                try:
+                    lat = float(lat)
+                    lon = float(lon)
+                except (ValueError, TypeError):
+                    lat = None
+                    lon = None
+
+            if lat is not None and lon is not None:
                 lat_delta = radius_nm / 60
                 lon_delta = radius_nm / 60
                 bbox = f"{lat - lat_delta},{lon - lon_delta},{lat + lat_delta},{lon + lon_delta}"
@@ -146,11 +165,22 @@ class AviationViewSet(viewsets.ViewSet):
 
         lat = request.query_params.get('lat')
         lon = request.query_params.get('lon')
-        radius_nm = float(request.query_params.get('radius_nm', 200))
+        try:
+            # Accept both 'radius' and 'radius_nm' for frontend compatibility
+            radius_nm = float(request.query_params.get('radius', request.query_params.get('radius_nm', 200)))
+            radius_nm = min(radius_nm, 1000)  # Cap at 1000nm
+        except (ValueError, TypeError):
+            radius_nm = 200
 
         if lat and lon:
-            lat = float(lat)
-            lon = float(lon)
+            try:
+                lat = float(lat)
+                lon = float(lon)
+            except (ValueError, TypeError):
+                lat = None
+                lon = None
+
+        if lat is not None and lon is not None:
             lat_delta = radius_nm / 60
             lon_delta = radius_nm / 60
             bbox = f"{lat - lat_delta},{lon - lon_delta},{lat + lat_delta},{lon + lon_delta}"
@@ -182,7 +212,11 @@ class AviationViewSet(viewsets.ViewSet):
         """Get PIREP data with optional spatial filtering."""
         from math import cos, pi
 
-        hours = int(request.query_params.get('hours', 6))
+        try:
+            hours = int(request.query_params.get('hours', 6))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 6
         lat_str = request.query_params.get('lat')
         lon_str = request.query_params.get('lon')
         radius_str = request.query_params.get('radius', request.query_params.get('radius_nm', '500'))
@@ -299,20 +333,28 @@ class AviationViewSet(viewsets.ViewSet):
 
         lat = request.query_params.get('lat')
         lon = request.query_params.get('lon')
-        radius_nm = float(request.query_params.get('radius_nm', 100))
+        try:
+            # Accept both 'radius' and 'radius_nm' for frontend compatibility
+            radius_nm = float(request.query_params.get('radius', request.query_params.get('radius_nm', 100)))
+            radius_nm = min(radius_nm, 1000)  # Cap at 1000nm
+        except (ValueError, TypeError):
+            radius_nm = 100
 
         if lat and lon:
-            lat = float(lat)
-            lon = float(lon)
-            lat_delta = radius_nm / 60
-            lon_delta = radius_nm / 60
+            try:
+                lat = float(lat)
+                lon = float(lon)
+                lat_delta = radius_nm / 60
+                lon_delta = radius_nm / 60
 
-            queryset = queryset.filter(
-                center_lat__gte=lat - lat_delta,
-                center_lat__lte=lat + lat_delta,
-                center_lon__gte=lon - lon_delta,
-                center_lon__lte=lon + lon_delta,
-            )
+                queryset = queryset.filter(
+                    center_lat__gte=lat - lat_delta,
+                    center_lat__lte=lat + lat_delta,
+                    center_lon__gte=lon - lon_delta,
+                    center_lon__lte=lon + lon_delta,
+                )
+            except (ValueError, TypeError):
+                pass  # Skip spatial filtering if coordinates invalid
 
         boundaries = queryset[:200]
 
@@ -337,12 +379,25 @@ class AviationViewSet(viewsets.ViewSet):
         airport_type = request.query_params.get('type')
         lat = request.query_params.get('lat')
         lon = request.query_params.get('lon')
-        radius_nm = float(request.query_params.get('radius_nm', 100))
-        limit = int(request.query_params.get('limit', 500))
+        try:
+            # Accept both 'radius' and 'radius_nm' for frontend compatibility
+            radius_nm = float(request.query_params.get('radius', request.query_params.get('radius_nm', 100)))
+            radius_nm = min(radius_nm, 1000)  # Cap at 1000nm
+        except (ValueError, TypeError):
+            radius_nm = 100
+        try:
+            limit = int(request.query_params.get('limit', 500))
+            limit = min(limit, 1000)  # Cap at 1000
+        except (ValueError, TypeError):
+            limit = 500
 
         # Build cache key from query params (round lat/lon for better cache hits)
-        lat_rounded = round(float(lat), 2) if lat else None
-        lon_rounded = round(float(lon), 2) if lon else None
+        try:
+            lat_rounded = round(float(lat), 2) if lat else None
+            lon_rounded = round(float(lon), 2) if lon else None
+        except (ValueError, TypeError):
+            lat_rounded = None
+            lon_rounded = None
         radius_rounded = round(radius_nm, 0)
         cache_key = f"airports:{lat_rounded}:{lon_rounded}:{radius_rounded}:{airport_type}:{limit}"
 
@@ -356,17 +411,20 @@ class AviationViewSet(viewsets.ViewSet):
             queryset = queryset.filter(airport_type=airport_type)
 
         if lat and lon:
-            lat = float(lat)
-            lon = float(lon)
-            lat_delta = radius_nm / 60
-            lon_delta = radius_nm / 60
+            try:
+                lat = float(lat)
+                lon = float(lon)
+                lat_delta = radius_nm / 60
+                lon_delta = radius_nm / 60
 
-            queryset = queryset.filter(
-                latitude__gte=lat - lat_delta,
-                latitude__lte=lat + lat_delta,
-                longitude__gte=lon - lon_delta,
-                longitude__lte=lon + lon_delta,
-            )
+                queryset = queryset.filter(
+                    latitude__gte=lat - lat_delta,
+                    latitude__lte=lat + lat_delta,
+                    longitude__gte=lon - lon_delta,
+                    longitude__lte=lon + lon_delta,
+                )
+            except (ValueError, TypeError):
+                pass  # Skip spatial filtering if coordinates invalid
 
         airports = queryset[:limit]
 
@@ -401,20 +459,28 @@ class AviationViewSet(viewsets.ViewSet):
 
         lat = request.query_params.get('lat')
         lon = request.query_params.get('lon')
-        radius_nm = float(request.query_params.get('radius_nm', 100))
+        try:
+            # Accept both 'radius' and 'radius_nm' for frontend compatibility
+            radius_nm = float(request.query_params.get('radius', request.query_params.get('radius_nm', 100)))
+            radius_nm = min(radius_nm, 1000)  # Cap at 1000nm
+        except (ValueError, TypeError):
+            radius_nm = 100
 
         if lat and lon:
-            lat = float(lat)
-            lon = float(lon)
-            lat_delta = radius_nm / 60
-            lon_delta = radius_nm / 60
+            try:
+                lat = float(lat)
+                lon = float(lon)
+                lat_delta = radius_nm / 60
+                lon_delta = radius_nm / 60
 
-            queryset = queryset.filter(
-                latitude__gte=lat - lat_delta,
-                latitude__lte=lat + lat_delta,
-                longitude__gte=lon - lon_delta,
-                longitude__lte=lon + lon_delta,
-            )
+                queryset = queryset.filter(
+                    latitude__gte=lat - lat_delta,
+                    latitude__lte=lat + lat_delta,
+                    longitude__gte=lon - lon_delta,
+                    longitude__lte=lon + lon_delta,
+                )
+            except (ValueError, TypeError):
+                pass  # Skip spatial filtering if coordinates invalid
 
         navaids = queryset[:500]
 

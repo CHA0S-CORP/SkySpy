@@ -2,7 +2,8 @@
 NOTAM background tasks.
 
 Provides Celery tasks for:
-- Refreshing cached NOTAMs from FAA Aviation Weather Center
+- Consuming NOTAMs from FAA SWIM FNS (primary source)
+- Refreshing cached NOTAMs (legacy fallback)
 - Broadcasting TFR updates via WebSocket
 """
 import logging
@@ -11,6 +12,99 @@ from datetime import datetime
 from celery import shared_task
 
 logger = logging.getLogger(__name__)
+
+
+@shared_task(bind=True, max_retries=3)
+def consume_swim_notams(self, max_messages: int = 1000, timeout_seconds: int = 300):
+    """
+    Consume NOTAMs from FAA SWIM FNS service.
+
+    This task connects to the FAA SWIM Solace broker and receives
+    real-time NOTAM updates.
+
+    Args:
+        max_messages: Maximum messages to process per run (default 1000)
+        timeout_seconds: Maximum time to run in seconds (default 5 minutes)
+    """
+    from skyspy.services import swim_fns
+
+    if not swim_fns.is_enabled():
+        logger.info("SWIM FNS is disabled, skipping")
+        return {'status': 'disabled'}
+
+    logger.info(f"Starting SWIM FNS consumer (max_messages={max_messages})")
+
+    try:
+        consumer = swim_fns.SwimFnsConsumer()
+
+        if not consumer.connect():
+            logger.error("Failed to connect to SWIM FNS")
+            raise self.retry(exc=Exception("Connection failed"), countdown=60)
+
+        try:
+            # Run with timeout using thread
+            import threading
+
+            def consume_with_limit():
+                consumer.consume_messages(max_messages=max_messages, timeout_ms=5000)
+
+            thread = threading.Thread(target=consume_with_limit)
+            thread.start()
+            thread.join(timeout=timeout_seconds)
+
+            if thread.is_alive():
+                logger.info("Consumer timeout reached, stopping...")
+                consumer.running = False
+                thread.join(timeout=10)
+
+        finally:
+            consumer.disconnect()
+
+        stats = consumer.get_stats()
+        logger.info(f"SWIM FNS consumer finished: {stats}")
+
+        # Broadcast update
+        from skyspy.socketio.utils import sync_emit
+        from skyspy.services import notams
+
+        notam_stats = notams.get_notam_stats()
+        sync_emit(
+            'notam:refresh',
+            {
+                'count': stats.get('messages_processed', 0),
+                'active_notams': notam_stats.get('active_notams', 0),
+                'active_tfrs': notam_stats.get('active_tfrs', 0),
+                'source': 'swim_fns',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            },
+            room='topic_aircraft'
+        )
+
+        return {
+            'status': 'complete',
+            'messages_received': stats.get('messages_received', 0),
+            'messages_processed': stats.get('messages_processed', 0),
+            'errors': stats.get('errors', 0),
+        }
+
+    except Exception as e:
+        logger.error(f"SWIM FNS consumer error: {e}")
+        raise self.retry(exc=e, countdown=120)
+
+
+@shared_task
+def check_swim_status():
+    """Check SWIM FNS connection status and restart if needed."""
+    from skyspy.services import swim_fns
+
+    status = swim_fns.get_status()
+    logger.info(f"SWIM FNS status: {status}")
+
+    if status['enabled'] and not status['connected']:
+        logger.info("SWIM FNS not connected, queueing consumer task")
+        consume_swim_notams.delay()
+
+    return status
 
 
 @shared_task(bind=True, max_retries=3)

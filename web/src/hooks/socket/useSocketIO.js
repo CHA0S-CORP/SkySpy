@@ -68,6 +68,7 @@ export function useSocketIO({
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState(null);
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const [isReady, setIsReady] = useState(false);
 
   // Refs for socket and mount state
   const socketRef = useRef(null);
@@ -107,14 +108,20 @@ export function useSocketIO({
    * Connect to Socket.IO server
    */
   const connect = useCallback(() => {
-    if (!enabledRef.current || !mountedRef.current) return;
-    if (socketRef.current?.connected) return;
+    if (!enabledRef.current || !mountedRef.current) {
+      console.log('[useSocketIO] Connect skipped - enabled:', enabledRef.current, 'mounted:', mountedRef.current);
+      return;
+    }
+    if (socketRef.current?.connected) {
+      console.log('[useSocketIO] Already connected, skipping');
+      return;
+    }
 
     const serverUrl = getSocketIOUrl(apiBaseRef.current);
     const nsPath = namespaceRef.current === '/' ? '' : namespaceRef.current;
     const fullUrl = `${serverUrl}${nsPath}`;
 
-    console.log('[useSocketIO] Connecting to:', fullUrl);
+    console.log('[useSocketIO] Connecting to:', fullUrl, 'path:', pathRef.current);
 
     setConnecting(true);
     setError(null);
@@ -155,6 +162,7 @@ export function useSocketIO({
 
         console.log('[useSocketIO] Connected, socket id:', socket.id);
         setConnected(true);
+        setIsReady(true);
         setConnecting(false);
         setReconnectAttempt(0);
         setError(null);
@@ -168,6 +176,7 @@ export function useSocketIO({
         if (!mountedRef.current) return;
 
         setConnected(false);
+        setIsReady(false);
 
         // Notify disconnect callback
         onDisconnectRef.current?.(reason);
@@ -273,6 +282,7 @@ export function useSocketIO({
       socketRef.current = null;
     }
     setConnected(false);
+    setIsReady(false);
     setConnecting(false);
     setReconnectAttempt(0);
   }, [cleanupInternalHandlers]);
@@ -289,14 +299,6 @@ export function useSocketIO({
       }
     }, 100);
   }, [disconnect, connect]);
-
-  // Store connect/disconnect in refs to avoid dependency issues in main effect
-  const connectRef = useRef(connect);
-  const disconnectRef = useRef(disconnect);
-  useEffect(() => {
-    connectRef.current = connect;
-    disconnectRef.current = disconnect;
-  }, [connect, disconnect]);
 
   /**
    * Emit an event through the socket
@@ -315,8 +317,12 @@ export function useSocketIO({
       }
       return true;
     }
-    // Silently return false - callers should check isReady before emitting
-    // or handle the false return value
+    // Log when emit fails to help diagnose connection issues
+    console.warn('[useSocketIO] Emit failed - socket not connected', {
+      event,
+      hasSocket: !!socketRef.current,
+      socketConnected: socketRef.current?.connected,
+    });
     return false;
   }, []);
 
@@ -381,28 +387,15 @@ export function useSocketIO({
   }, []);
 
   // Connect on mount and when enabled changes
-  // Uses refs for connect/disconnect to avoid triggering effect when functions change
   useEffect(() => {
     mountedRef.current = true;
     enabledRef.current = enabled;
 
-    let connectTimeout = null;
-
     if (enabled) {
-      // Small delay to handle React StrictMode double-mount
-      connectTimeout = setTimeout(() => {
-        if (mountedRef.current && enabledRef.current) {
-          connectRef.current();
-        }
-      }, 100);
-    } else {
-      disconnectRef.current();
+      connect();
     }
 
     return () => {
-      if (connectTimeout) {
-        clearTimeout(connectTimeout);
-      }
       mountedRef.current = false;
 
       // Clean up all user-subscribed event listeners
@@ -433,11 +426,10 @@ export function useSocketIO({
         socketRef.current = null;
       }
     };
-  }, [enabled]); // Only depend on enabled, use refs for functions
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled]); // Only depend on enabled - connect is stable via useCallback
 
   // Check if socket is actually ready (connected AND socket object exists)
-  const isReady = connected && socketRef.current?.connected;
-
   return {
     // Connection state
     socket: socketRef.current,

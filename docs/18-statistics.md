@@ -1296,6 +1296,6 @@ GET /api/v1/stats/flight-patterns?refresh=true
 ---
 
 > **Related Documentation**
-> - [WebSocket API](/docs/websocket) - Real-time streaming details
+> - [Socket.IO API](/docs/socketio-api) - Real-time streaming details
 > - [Authentication](/docs/authentication) - API token management
 > - [Alerts](/docs/alerts) - Set up stat-based alerts

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSocketApi } from './useSocketApi';
 import {
   TIME_RANGE_HOURS,
@@ -142,12 +142,33 @@ export function useStatsData({
   const trackingQualityData = extendedStatsProp?.trackingQuality || fetchedTrackingQuality;
   const engagementData = extendedStatsProp?.engagement || fetchedEngagement;
 
-  // Track throughput over time
+  // Refs to track previous stats values and avoid excessive updates
+  const lastStatsRef = useRef({ messages: null, total: null, with_position: null });
+  const lastUpdateTimeRef = useRef(0);
+
+  // Track throughput over time - debounced to prevent infinite loop
   useEffect(() => {
     if (!stats) return;
 
     const now = Date.now();
     const currentMessages = stats.messages || 0;
+    const currentTotal = stats.total || 0;
+    const currentWithPosition = stats.with_position || 0;
+
+    // Only update if stats changed meaningfully or enough time has passed (1 second minimum)
+    const prev = lastStatsRef.current;
+    const timeSinceLastUpdate = now - lastUpdateTimeRef.current;
+    const statsChanged = prev.messages !== currentMessages ||
+                         prev.total !== currentTotal ||
+                         prev.with_position !== currentWithPosition;
+
+    if (!statsChanged || timeSinceLastUpdate < 1000) {
+      return;
+    }
+
+    // Update refs
+    lastStatsRef.current = { messages: currentMessages, total: currentTotal, with_position: currentWithPosition };
+    lastUpdateTimeRef.current = now;
 
     let rate = 0;
     if (lastMessageCount !== null && throughputHistory.length > 0) {
@@ -164,13 +185,13 @@ export function useStatsData({
     const newPoint = {
       time: now,
       messages: rate,
-      aircraft: stats.total || 0,
-      withPosition: stats.with_position || 0
+      aircraft: currentTotal,
+      withPosition: currentWithPosition
     };
 
     setThroughputHistory(prev => [...prev, newPoint].slice(-60));
-    setAircraftHistory(prev => [...prev, { time: now, count: stats.total || 0 }].slice(-60));
-  }, [stats]);
+    setAircraftHistory(prev => [...prev, { time: now, count: currentTotal }].slice(-60));
+  }, [stats, lastMessageCount, throughputHistory]);
 
   // Computed data for charts
   const altitudeData = useMemo(() => computeAltitudeData(stats), [stats]);

@@ -79,7 +79,7 @@ class APIKeyAuthentication(authentication.BaseAuthentication):
         try:
             api_key_obj = APIKey.objects.select_related('user').get(key_hash=key_hash)
         except APIKey.DoesNotExist:
-            logger.warning(f"Invalid API key attempted: {api_key[:10]}...")
+            logger.warning(f"Invalid API key attempted: {api_key[:4]}...")
             raise AuthenticationFailed('Invalid API key')
 
         # Check if key is valid

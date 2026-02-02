@@ -26,6 +26,7 @@ from django.utils import timezone
 from skyspy.models import AudioTransmission
 from skyspy.socketio.middleware import authenticate_socket, check_topic_permission
 from skyspy.socketio.server import sio
+from skyspy.socketio.utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +64,12 @@ class AudioNamespace(socketio.AsyncNamespace):
                 return False
             logger.warning(f"Audio namespace auth error for {sid}: {error}")
 
-        # Store user in session
-        await sio.save_session(sid, {'user': user, 'auth_error': error}, namespace='/audio')
+        # Store user in session with rate limiter
+        await sio.save_session(sid, {
+            'user': user,
+            'auth_error': error,
+            'rate_limiter': RateLimiter(),
+        }, namespace='/audio')
 
         # Check permission to access audio
         if not await check_topic_permission(user, 'audio'):
@@ -109,9 +114,23 @@ class AudioNamespace(socketio.AsyncNamespace):
             "params": {...}
         }
         """
+        # Check rate limiting
+        session = await sio.get_session(sid, namespace='/audio')
+        rate_limiter = session.get('rate_limiter')
+        if rate_limiter and not rate_limiter.can_send('request'):
+            await self.emit('error', {
+                'request_id': data.get('request_id'),
+                'message': 'Rate limit exceeded, please slow down'
+            }, room=sid)
+            return
+
         request_type = data.get('type')
         request_id = data.get('request_id')
         params = data.get('params', {})
+
+        # Validate params is actually a dict
+        if not isinstance(params, dict):
+            params = {}
 
         if request_type == 'transmissions':
             transmissions = await self._get_transmissions(
@@ -336,26 +355,35 @@ def register_audio_namespace():
 
 
 # Broadcast helper functions for use by other parts of the application
+#
+# Note: Clients in 'audio_all' also join specific rooms (audio_transmissions,
+# audio_transcriptions), so we only emit to the specific room to avoid
+# duplicate messages. The 'audio_all' room is used during on_connect to join
+# all rooms, but broadcasts go to specific rooms only.
 
 async def broadcast_transmission(data: dict):
     """Broadcast a new audio transmission to subscribers."""
+    # Only emit to audio_transmissions room - clients subscribed to 'all'
+    # are also in this room, so they will receive the message
     await sio.emit('audio:transmission', data, room='audio_transmissions', namespace='/audio')
-    await sio.emit('audio:transmission', data, room='audio_all', namespace='/audio')
 
 
 async def broadcast_transcription_started(data: dict):
     """Broadcast transcription started event."""
+    # Only emit to audio_transcriptions room - clients subscribed to 'all'
+    # are also in this room, so they will receive the message
     await sio.emit('audio:transcription_started', data, room='audio_transcriptions', namespace='/audio')
-    await sio.emit('audio:transcription_started', data, room='audio_all', namespace='/audio')
 
 
 async def broadcast_transcription_completed(data: dict):
     """Broadcast transcription completed event."""
+    # Only emit to audio_transcriptions room - clients subscribed to 'all'
+    # are also in this room, so they will receive the message
     await sio.emit('audio:transcription_completed', data, room='audio_transcriptions', namespace='/audio')
-    await sio.emit('audio:transcription_completed', data, room='audio_all', namespace='/audio')
 
 
 async def broadcast_transcription_failed(data: dict):
     """Broadcast transcription failed event."""
+    # Only emit to audio_transcriptions room - clients subscribed to 'all'
+    # are also in this room, so they will receive the message
     await sio.emit('audio:transcription_failed', data, room='audio_transcriptions', namespace='/audio')
-    await sio.emit('audio:transcription_failed', data, room='audio_all', namespace='/audio')

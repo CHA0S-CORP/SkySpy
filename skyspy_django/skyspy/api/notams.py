@@ -71,16 +71,30 @@ class NotamViewSet(viewsets.ViewSet):
         icao = request.query_params.get('icao')
         lat = request.query_params.get('lat')
         lon = request.query_params.get('lon')
-        radius_nm = float(request.query_params.get('radius_nm', 100))
+        try:
+            radius_nm = float(request.query_params.get('radius_nm', 100))
+            radius_nm = min(radius_nm, 1000)  # Cap at 1000nm
+        except (ValueError, TypeError):
+            radius_nm = 100
         notam_type = request.query_params.get('type')
         active_only = request.query_params.get('active_only', 'true').lower() == 'true'
-        limit = int(request.query_params.get('limit', 100))
+        try:
+            limit = int(request.query_params.get('limit', 100))
+            limit = min(limit, 1000)  # Cap at 1000
+        except (ValueError, TypeError):
+            limit = 100
 
         # Convert lat/lon to float if provided
         if lat:
-            lat = float(lat)
+            try:
+                lat = float(lat)
+            except (ValueError, TypeError):
+                lat = None
         if lon:
-            lon = float(lon)
+            try:
+                lon = float(lon)
+            except (ValueError, TypeError):
+                lon = None
 
         notam_list = notams.get_notams(
             icao=icao,
@@ -128,13 +142,23 @@ class NotamViewSet(viewsets.ViewSet):
 
         lat = request.query_params.get('lat')
         lon = request.query_params.get('lon')
-        radius_nm = float(request.query_params.get('radius_nm', 500))
+        try:
+            radius_nm = float(request.query_params.get('radius_nm', 500))
+            radius_nm = min(radius_nm, 1000)  # Cap at 1000nm
+        except (ValueError, TypeError):
+            radius_nm = 500
         active_only = request.query_params.get('active_only', 'true').lower() == 'true'
 
         if lat:
-            lat = float(lat)
+            try:
+                lat = float(lat)
+            except (ValueError, TypeError):
+                lat = None
         if lon:
-            lon = float(lon)
+            try:
+                lon = float(lon)
+            except (ValueError, TypeError):
+                lon = None
 
         tfr_list = notams.get_tfrs(
             lat=lat,
@@ -182,9 +206,19 @@ class NotamViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        lat = float(lat)
-        lon = float(lon)
-        radius_nm = float(request.query_params.get('radius_nm', 50))
+        try:
+            lat = float(lat)
+            lon = float(lon)
+        except (ValueError, TypeError):
+            return Response(
+                {'error': 'lat and lon must be valid numbers'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            radius_nm = float(request.query_params.get('radius_nm', 50))
+            radius_nm = min(radius_nm, 1000)  # Cap at 1000nm
+        except (ValueError, TypeError):
+            radius_nm = 50
 
         notam_list = notams.get_notams(
             lat=lat,

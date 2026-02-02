@@ -19,13 +19,34 @@ import json
 import random
 import time
 import math
-from flask import Flask, jsonify, request
+import socket
+import threading
+import queue
+from flask import Flask, jsonify, request, Response
 from threading import Lock
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Set
 from enum import Enum
 
 app = Flask(__name__)
+
+# JSON streaming (net-json-port style) configuration
+JSON_STREAM_PORT = int(os.getenv("JSON_STREAM_PORT", "30047"))
+JSON_STREAM_ENABLED = os.getenv("JSON_STREAM_ENABLED", "true").lower() == "true"
+JSON_STREAM_INTERVAL_MS = int(os.getenv("JSON_STREAM_INTERVAL_MS", "100"))  # ms between updates
+
+# SSE streaming (ADSBexchange style) configuration
+SSE_ENABLED = os.getenv("SSE_ENABLED", "true").lower() == "true"
+SSE_INTERVAL_MS = int(os.getenv("SSE_INTERVAL_MS", "1000"))  # ms between SSE batches
+
+# Connected streaming clients
+stream_clients: Set[socket.socket] = set()
+stream_clients_lock = Lock()
+
+# SSE client queues
+sse_clients: Dict[int, queue.Queue] = {}
+sse_clients_lock = Lock()
+sse_client_counter = 0
 
 # Configuration from environment
 MOCK_TYPE = os.getenv("MOCK_TYPE", "ultrafeeder")
@@ -1529,10 +1550,28 @@ def conflicts_test():
 def index():
     return jsonify({
         "service": f"{MOCK_TYPE}-mock",
-        "version": "2.1.0",
-        "description": "Realistic ADS-B mock server for testing with conflict detection",
+        "version": "2.3.0",
+        "description": "Realistic ADS-B mock server for testing with streaming support",
+        "streaming": {
+            "tcp_json_port": JSON_STREAM_PORT,
+            "tcp_json_enabled": JSON_STREAM_ENABLED,
+            "sse_enabled": SSE_ENABLED,
+            "sse_endpoint": "/v2/sse",
+        },
         "endpoints": {
-            "aircraft_data": {
+            "streaming": {
+                f"tcp://:{JSON_STREAM_PORT}": "JSON stream (readsb net-json-port compatible)",
+                "/v2/sse": "SSE stream (ADSBexchange compatible)",
+            },
+            "adsbx_v2_api": {
+                "/v2/all": "All aircraft (ADSBx v2 format)",
+                "/v2/icao/<hex>": "Aircraft by ICAO hex",
+                "/v2/callsign/<callsign>": "Aircraft by callsign",
+                "/v2/sqk/<squawk>": "Aircraft by squawk",
+                "/v2/mil": "Military aircraft",
+                "/v2/lat/<lat>/lon/<lon>/dist/<nm>": "Aircraft in area",
+            },
+            "readsb_api": {
                 "/tar1090/data/aircraft.json": "Main 1090MHz aircraft feed",
                 "/tar1090/data/receiver.json": "Receiver information",
                 "/tar1090/data/stats.json": "Receiver statistics",
@@ -1563,20 +1602,462 @@ def index():
     })
 
 
+# ============================================================================
+# SSE Streaming (ADSBexchange compatible)
+# ============================================================================
+
+def format_aircraft_for_sse(ac: dict) -> dict:
+    """
+    Format aircraft data in ADSBexchange SSE format.
+
+    ADSBx uses slightly different field names and structure.
+    """
+    return {
+        "hex": ac.get("hex", "").lower(),  # ADSBx uses lowercase
+        "type": "adsb_icao",
+        "flight": ac.get("flight", "").strip() if ac.get("flight") else None,
+        "r": ac.get("r", ""),  # Registration
+        "t": ac.get("t", ""),  # Aircraft type
+        "alt_baro": int(ac.get("alt_baro", 0)) if ac.get("alt_baro") and ac.get("alt_baro") != "ground" else "ground",
+        "alt_geom": int(ac.get("alt_geom", 0)) if ac.get("alt_geom") else None,
+        "gs": round(ac.get("gs", 0), 1),
+        "track": round(ac.get("track", 0), 1),
+        "baro_rate": int(ac.get("baro_rate", 0)),
+        "squawk": ac.get("squawk"),
+        "emergency": "none" if ac.get("squawk") not in ("7500", "7600", "7700") else {
+            "7500": "hijack",
+            "7600": "nordo",
+            "7700": "general"
+        }.get(ac.get("squawk"), "none"),
+        "category": ac.get("category"),
+        "lat": round(ac.get("lat", 0), 6),
+        "lon": round(ac.get("lon", 0), 6),
+        "nic": ac.get("nic", 8),
+        "rc": ac.get("rc", 186),
+        "seen_pos": round(ac.get("seen_pos", 0), 1),
+        "seen": round(ac.get("seen", 0), 1),
+        "rssi": round(ac.get("rssi", -30), 1),
+        "messages": ac.get("messages", 0),
+        "mlat": [],  # Not MLAT
+        "tisb": [],  # Not TIS-B
+        "nav_qnh": ac.get("nav_qnh"),
+        "nav_altitude_mcp": ac.get("nav_altitude_mcp"),
+        "nav_heading": round(ac.get("nav_heading", ac.get("track", 0)), 1),
+        "nav_modes": ac.get("nav_modes", []),
+        "version": 2,
+        "nic_baro": 1,
+        "nac_p": ac.get("nac_p", 9),
+        "nac_v": ac.get("nac_v", 2),
+        "sil": ac.get("sil", 3),
+        "sil_type": "perhour",
+        "gva": ac.get("gva", 2),
+        "sda": ac.get("sda", 2),
+        "dbFlags": ac.get("dbFlags", 0),
+    }
+
+
+def generate_sse_events():
+    """
+    Generator function for SSE stream.
+    Yields SSE-formatted events with aircraft data.
+    """
+    global sse_client_counter
+
+    # Register this client
+    with sse_clients_lock:
+        sse_client_counter += 1
+        client_id = sse_client_counter
+        client_queue = queue.Queue(maxsize=100)
+        sse_clients[client_id] = client_queue
+
+    print(f"SSE client {client_id} connected")
+
+    try:
+        # Send initial connection event
+        yield f"event: connected\ndata: {json.dumps({'client_id': client_id, 'timestamp': time.time()})}\n\n"
+
+        interval_sec = SSE_INTERVAL_MS / 1000.0
+        last_update = 0
+
+        while True:
+            now = time.time()
+
+            # Send aircraft updates at interval
+            if now - last_update >= interval_sec:
+                with state_lock:
+                    update_all_aircraft(AIRCRAFT_TEMPLATES, aircraft_state)
+
+                    aircraft_list = []
+                    for ac in aircraft_state.values():
+                        aircraft_list.append(format_aircraft_for_sse(ac))
+
+                    # ADSBx format: single event with all aircraft
+                    sse_data = {
+                        "now": now,
+                        "messages": message_count,
+                        "aircraft": aircraft_list,
+                        "total": len(aircraft_list),
+                        "ctime": int(now * 1000),
+                        "ptime": int((now - last_update) * 1000) if last_update else 0,
+                    }
+
+                    yield f"data: {json.dumps(sse_data)}\n\n"
+
+                last_update = now
+
+            # Small sleep to prevent CPU spinning
+            time.sleep(0.05)
+
+    except GeneratorExit:
+        pass
+    finally:
+        with sse_clients_lock:
+            sse_clients.pop(client_id, None)
+        print(f"SSE client {client_id} disconnected")
+
+
+@app.route("/v2/sse")
+def sse_stream():
+    """
+    SSE endpoint compatible with ADSBexchange format.
+
+    Streams aircraft updates as Server-Sent Events.
+    Client should connect with EventSource or similar.
+    """
+    if not SSE_ENABLED:
+        return jsonify({"error": "SSE streaming disabled"}), 503
+
+    return Response(
+        generate_sse_events(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Access-Control-Allow-Origin": "*",
+        }
+    )
+
+
+@app.route("/v2/all")
+def adsbx_v2_all():
+    """
+    ADSBexchange v2 API compatible endpoint - returns all aircraft.
+    """
+    with state_lock:
+        update_all_aircraft(AIRCRAFT_TEMPLATES, aircraft_state)
+        aircraft_list = []
+        for ac in aircraft_state.values():
+            aircraft_list.append(format_aircraft_for_sse(ac))
+
+    return jsonify({
+        "now": time.time(),
+        "messages": message_count,
+        "aircraft": aircraft_list,
+        "total": len(aircraft_list),
+        "ctime": int(time.time() * 1000),
+    })
+
+
+@app.route("/v2/icao/<icao>")
+def adsbx_v2_icao(icao: str):
+    """
+    ADSBexchange v2 API compatible endpoint - lookup by ICAO hex.
+    """
+    icao = icao.upper()
+
+    with state_lock:
+        update_all_aircraft(AIRCRAFT_TEMPLATES, aircraft_state)
+        ac = aircraft_state.get(icao)
+
+        if ac:
+            return jsonify({
+                "now": time.time(),
+                "messages": message_count,
+                "ac": [format_aircraft_for_sse(ac)],
+                "total": 1,
+                "ctime": int(time.time() * 1000),
+            })
+
+    return jsonify({
+        "now": time.time(),
+        "messages": message_count,
+        "ac": [],
+        "total": 0,
+        "ctime": int(time.time() * 1000),
+    })
+
+
+@app.route("/v2/callsign/<callsign>")
+def adsbx_v2_callsign(callsign: str):
+    """
+    ADSBexchange v2 API compatible endpoint - lookup by callsign.
+    """
+    callsign = callsign.upper().strip()
+
+    with state_lock:
+        update_all_aircraft(AIRCRAFT_TEMPLATES, aircraft_state)
+        matches = []
+        for ac in aircraft_state.values():
+            if ac.get("flight", "").strip().upper() == callsign:
+                matches.append(format_aircraft_for_sse(ac))
+
+    return jsonify({
+        "now": time.time(),
+        "messages": message_count,
+        "ac": matches,
+        "total": len(matches),
+        "ctime": int(time.time() * 1000),
+    })
+
+
+@app.route("/v2/sqk/<squawk>")
+def adsbx_v2_squawk(squawk: str):
+    """
+    ADSBexchange v2 API compatible endpoint - lookup by squawk.
+    """
+    with state_lock:
+        update_all_aircraft(AIRCRAFT_TEMPLATES, aircraft_state)
+        matches = []
+        for ac in aircraft_state.values():
+            if ac.get("squawk") == squawk:
+                matches.append(format_aircraft_for_sse(ac))
+
+    return jsonify({
+        "now": time.time(),
+        "messages": message_count,
+        "ac": matches,
+        "total": len(matches),
+        "ctime": int(time.time() * 1000),
+    })
+
+
+@app.route("/v2/mil")
+def adsbx_v2_military():
+    """
+    ADSBexchange v2 API compatible endpoint - military aircraft.
+    """
+    with state_lock:
+        update_all_aircraft(AIRCRAFT_TEMPLATES, aircraft_state)
+        matches = []
+        for ac in aircraft_state.values():
+            if ac.get("dbFlags", 0) & 1:  # Military flag
+                ac_out = format_aircraft_for_sse(ac)
+                ac_out["mil"] = True
+                matches.append(ac_out)
+
+    return jsonify({
+        "now": time.time(),
+        "messages": message_count,
+        "ac": matches,
+        "total": len(matches),
+        "ctime": int(time.time() * 1000),
+    })
+
+
+@app.route("/v2/lat/<lat>/lon/<lon>/dist/<dist>")
+def adsbx_v2_area(lat: str, lon: str, dist: str):
+    """
+    ADSBexchange v2 API compatible endpoint - aircraft in area.
+    """
+    try:
+        center_lat = float(lat)
+        center_lon = float(lon)
+        radius_nm = float(dist)
+    except ValueError:
+        return jsonify({"error": "Invalid coordinates"}), 400
+
+    with state_lock:
+        update_all_aircraft(AIRCRAFT_TEMPLATES, aircraft_state)
+        matches = []
+        for ac in aircraft_state.values():
+            ac_lat = ac.get("lat")
+            ac_lon = ac.get("lon")
+            if ac_lat and ac_lon:
+                distance = calculate_distance_nm(center_lat, center_lon, ac_lat, ac_lon)
+                if distance <= radius_nm:
+                    matches.append(format_aircraft_for_sse(ac))
+
+    return jsonify({
+        "now": time.time(),
+        "messages": message_count,
+        "ac": matches,
+        "total": len(matches),
+        "ctime": int(time.time() * 1000),
+    })
+
+
+# ============================================================================
+# JSON Streaming Server (net-json-port compatible)
+# ============================================================================
+
+def broadcast_to_stream_clients(aircraft_data: dict):
+    """
+    Broadcast a single aircraft update to all connected streaming clients.
+    Sends as NDJSON (newline-delimited JSON).
+    """
+    if not stream_clients:
+        return
+
+    try:
+        line = json.dumps(aircraft_data) + "\n"
+        line_bytes = line.encode('utf-8')
+    except Exception as e:
+        print(f"Error encoding aircraft data: {e}")
+        return
+
+    disconnected = []
+
+    with stream_clients_lock:
+        for client in stream_clients:
+            try:
+                client.sendall(line_bytes)
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                disconnected.append(client)
+
+        # Clean up disconnected clients
+        for client in disconnected:
+            stream_clients.discard(client)
+            try:
+                client.close()
+            except:
+                pass
+
+
+def stream_aircraft_updates():
+    """
+    Background thread that continuously streams aircraft updates to connected clients.
+    Mimics readsb's net-json-port behavior.
+    """
+    global last_update_time
+
+    interval_sec = JSON_STREAM_INTERVAL_MS / 1000.0
+
+    while True:
+        try:
+            # Only stream if there are clients
+            if stream_clients:
+                with state_lock:
+                    # Update aircraft state
+                    update_all_aircraft(AIRCRAFT_TEMPLATES, aircraft_state)
+
+                    # Stream each aircraft as a separate JSON line
+                    for hex_code, ac in aircraft_state.items():
+                        # Build readsb-compatible output
+                        ac_out = {
+                            "hex": ac["hex"],
+                            "type": "adsb_icao",
+                            "flight": ac.get("flight", "").strip() or None,
+                            "r": ac.get("r", ""),
+                            "t": ac["t"],
+                            "lat": round(ac["lat"], 6),
+                            "lon": round(ac["lon"], 6),
+                            "alt_baro": int(ac["alt_baro"]) if ac["alt_baro"] else 0,
+                            "alt_geom": int(ac.get("alt_geom", ac["alt_baro"])) if ac.get("alt_geom") else None,
+                            "gs": round(ac["gs"], 1),
+                            "track": round(ac["track"], 1),
+                            "baro_rate": int(ac["baro_rate"]),
+                            "squawk": ac["squawk"],
+                            "category": ac["category"],
+                            "rssi": round(ac["rssi"], 1),
+                            "dbFlags": ac["dbFlags"],
+                            "seen": round(ac.get("seen", 0), 1),
+                            "messages": ac.get("messages", 0),
+                        }
+
+                        # Remove None values
+                        ac_out = {k: v for k, v in ac_out.items() if v is not None}
+
+                        broadcast_to_stream_clients(ac_out)
+
+            time.sleep(interval_sec)
+
+        except Exception as e:
+            print(f"Error in stream_aircraft_updates: {e}")
+            time.sleep(1)
+
+
+def handle_stream_client(client_socket: socket.socket, address):
+    """Handle a single streaming client connection."""
+    print(f"JSON stream client connected: {address}")
+
+    with stream_clients_lock:
+        stream_clients.add(client_socket)
+
+    try:
+        # Keep connection open until client disconnects
+        # Client just receives data, we monitor for disconnect
+        while True:
+            # Check if client is still connected by attempting a zero-byte recv
+            client_socket.setblocking(False)
+            try:
+                data = client_socket.recv(1, socket.MSG_PEEK)
+                if not data:
+                    break
+            except BlockingIOError:
+                pass  # No data to read, connection still open
+            except:
+                break
+
+            client_socket.setblocking(True)
+            time.sleep(1)
+
+    except Exception as e:
+        print(f"Stream client {address} error: {e}")
+    finally:
+        with stream_clients_lock:
+            stream_clients.discard(client_socket)
+        try:
+            client_socket.close()
+        except:
+            pass
+        print(f"JSON stream client disconnected: {address}")
+
+
+def run_stream_server():
+    """Run the TCP streaming server for net-json-port compatibility."""
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind(("0.0.0.0", JSON_STREAM_PORT))
+    server.listen(10)
+
+    print(f"JSON stream server listening on port {JSON_STREAM_PORT}")
+
+    while True:
+        try:
+            client_socket, address = server.accept()
+            client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
+            # Handle each client in a separate thread
+            client_thread = threading.Thread(
+                target=handle_stream_client,
+                args=(client_socket, address),
+                daemon=True
+            )
+            client_thread.start()
+
+        except Exception as e:
+            print(f"Error accepting stream connection: {e}")
+            time.sleep(1)
+
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "80"))
-    
+
     # Apply traffic density
     density_mult = DENSITY_MULTIPLIERS.get(TRAFFIC_DENSITY, 1.0)
     active_templates = AIRCRAFT_TEMPLATES[:int(len(AIRCRAFT_TEMPLATES) * density_mult)]
-    
+
     # Count conflict test aircraft
     conflict_pairs = len([t for t in AIRCRAFT_TEMPLATES if t.get("conflict_pair")]) // 2
-    
+
     print(f"=" * 60)
-    print(f"ADS-B Mock Server v2.1.0 - Conflict Detection")
+    print(f"ADS-B Mock Server v2.3.0 - Full Streaming Support")
     print(f"=" * 60)
-    print(f"Port:             {port}")
+    print(f"HTTP Port:        {port}")
+    print(f"JSON Stream Port: {JSON_STREAM_PORT} ({'enabled' if JSON_STREAM_ENABLED else 'disabled'})")
+    print(f"SSE Streaming:    {'enabled' if SSE_ENABLED else 'disabled'} ({SSE_INTERVAL_MS}ms)")
+    print(f"Stream Interval:  {JSON_STREAM_INTERVAL_MS}ms")
     print(f"Coverage center:  {COVERAGE_CENTER_LAT:.4f}, {COVERAGE_CENTER_LON:.4f}")
     print(f"Coverage radius:  {COVERAGE_RADIUS_NM} NM")
     print(f"Traffic density:  {TRAFFIC_DENSITY} ({len(active_templates)} aircraft)")
@@ -1587,9 +2068,25 @@ if __name__ == "__main__":
         print(f"  Wind:           {WIND_SPEED_KTS} kts from {WIND_DIRECTION}°")
     print(f"Emergency rate:   {EMERGENCY_RATE * 100:.0f}%")
     print(f"=" * 60)
-    print(f"Endpoints:")
+    print(f"Streaming Endpoints:")
+    print(f"  TCP  :{JSON_STREAM_PORT}     - JSON stream (readsb net-json-port)")
+    print(f"  GET  /v2/sse    - SSE stream (ADSBexchange compatible)")
+    print(f"REST API:")
+    print(f"  /tar1090/data/aircraft.json - readsb format")
+    print(f"  /v2/all         - ADSBx v2 all aircraft")
+    print(f"  /v2/icao/<hex>  - ADSBx v2 by ICAO")
+    print(f"  /v2/mil         - ADSBx v2 military")
     print(f"  /conflicts      - Active proximity conflicts")
-    print(f"  /conflicts/test - Conflict test aircraft status")
     print(f"=" * 60)
-    
+
+    # Start JSON streaming server if enabled
+    if JSON_STREAM_ENABLED:
+        # Start the stream update thread
+        stream_thread = threading.Thread(target=stream_aircraft_updates, daemon=True)
+        stream_thread.start()
+
+        # Start the TCP server thread
+        server_thread = threading.Thread(target=run_stream_server, daemon=True)
+        server_thread.start()
+
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)

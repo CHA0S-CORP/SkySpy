@@ -1256,6 +1256,35 @@
 }
 
 /* ============================================================================
+   Aircraft Markers (Leaflet Map Mode)
+   ============================================================================ */
+
+.aircraft-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.aircraft-marker svg {
+  display: block;
+}
+
+.aircraft-marker.safety-event {
+  animation: safety-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes safety-pulse {
+  0%, 100% { filter: drop-shadow(0 0 4px currentColor); }
+  50% { filter: drop-shadow(0 0 12px currentColor) drop-shadow(0 0 20px rgba(255, 100, 50, 0.5)); }
+}
+
+/* Track/History aircraft markers */
+.track-aircraft-marker,
+.history-aircraft-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* ============================================================================
    Legend Panel Enhancement
    ============================================================================ */
 

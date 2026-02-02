@@ -16,6 +16,7 @@ from typing import Optional, List
 import httpx
 from django.db import transaction
 from django.db.models import Max, Count
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from skyspy.models import CachedAirport, CachedNavaid, CachedGeoJSON, CachedPirep
 
@@ -72,20 +73,51 @@ def haversine_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2 * R * atan2(sqrt(a), sqrt(1 - a))
 
 
+# =============================================================================
+# Retry Helpers for External API Calls
+# =============================================================================
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+)
+def _http_get_awc(url: str, params: dict, timeout: float = 15.0) -> httpx.Response:
+    """HTTP GET with retry logic for AWC API."""
+    with httpx.Client(timeout=timeout) as client:
+        response = client.get(
+            url,
+            params=params,
+            headers={
+                "User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)",
+                "Accept": "application/json",
+            }
+        )
+        response.raise_for_status()
+        return response
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+)
+def _http_get_geojson(url: str, timeout: float = 15.0) -> httpx.Response:
+    """HTTP GET with retry logic for GeoJSON fetches."""
+    with httpx.Client(timeout=timeout) as client:
+        response = client.get(
+            url,
+            headers={"User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)"}
+        )
+        response.raise_for_status()
+        return response
+
+
 def fetch_awc_data(endpoint: str, params: dict) -> dict | list:
-    """Fetch data from Aviation Weather Center API."""
+    """Fetch data from Aviation Weather Center API with retry logic."""
     try:
-        with httpx.Client(timeout=30) as client:
-            response = client.get(
-                f"{AWC_BASE}/{endpoint}",
-                params=params,
-                headers={
-                    "User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)",
-                    "Accept": "application/json",
-                }
-            )
-            response.raise_for_status()
-            return response.json() if response.text else []
+        response = _http_get_awc(f"{AWC_BASE}/{endpoint}", params, timeout=15.0)
+        return response.json() if response.text else []
     except httpx.HTTPStatusError as e:
         logger.error(f"AWC API error for {endpoint}: {e.response.status_code}")
         return {"error": str(e), "status": e.response.status_code}
@@ -95,15 +127,10 @@ def fetch_awc_data(endpoint: str, params: dict) -> dict | list:
 
 
 def fetch_geojson(url: str) -> Optional[dict]:
-    """Fetch GeoJSON data from a URL."""
+    """Fetch GeoJSON data from a URL with retry logic."""
     try:
-        with httpx.Client(timeout=60) as client:
-            response = client.get(
-                url,
-                headers={"User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)"}
-            )
-            response.raise_for_status()
-            return response.json()
+        response = _http_get_geojson(url, timeout=15.0)
+        return response.json()
     except Exception as e:
         logger.error(f"Failed to fetch GeoJSON from {url}: {e}")
         return None

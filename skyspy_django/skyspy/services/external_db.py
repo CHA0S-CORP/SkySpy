@@ -10,6 +10,7 @@ Provides multi-source aircraft database lookups:
 
 Data is loaded into memory for fast lookups and periodically synced to PostgreSQL.
 """
+import atexit
 import csv
 import gzip
 import json
@@ -25,6 +26,7 @@ from typing import Dict, Optional, List, Set
 
 import httpx
 from django.conf import settings
+from tenacity import retry, stop_after_attempt, wait_exponential
 from django.db import transaction
 from django.core.cache import cache
 
@@ -34,6 +36,8 @@ logger = logging.getLogger(__name__)
 
 # Thread pool for background file loading
 _executor = ThreadPoolExecutor(max_workers=2)
+# Register shutdown handler to clean up the executor on program exit
+atexit.register(_executor.shutdown, wait=False)
 
 # Data directory for downloaded databases
 DATA_DIR = Path(os.environ.get("EXTERNAL_DB_DIR", "/data/external_db"))
@@ -159,6 +163,65 @@ REGISTRATION_PREFIXES = {
 }
 
 
+# =============================================================================
+# Retry Helper for External API Calls
+# =============================================================================
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=30))
+def fetch_with_retry(url: str, timeout: float = 60, stream: bool = False, **kwargs) -> httpx.Response:
+    """
+    Fetch a URL with retry logic for resilience.
+
+    Args:
+        url: The URL to fetch
+        timeout: Request timeout in seconds (default 60)
+        stream: Whether to use streaming mode for large downloads
+        **kwargs: Additional arguments to pass to httpx.Client
+
+    Returns:
+        httpx.Response object
+
+    Raises:
+        httpx.HTTPStatusError: If the request fails after all retries
+    """
+    with httpx.Client(timeout=timeout, follow_redirects=True, **kwargs) as client:
+        if stream:
+            # For streaming, we return the response and caller must handle it
+            response = client.get(url)
+        else:
+            response = client.get(url)
+        response.raise_for_status()
+        return response
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=30))
+def stream_with_retry(url: str, target_path: Path, timeout: float = 60, chunk_size: int = 8192 * 1024, **kwargs) -> Path:
+    """
+    Stream download a URL with retry logic for large files.
+
+    Args:
+        url: The URL to fetch
+        target_path: Path to save the downloaded file
+        timeout: Request timeout in seconds (default 60)
+        chunk_size: Size of chunks to download
+        **kwargs: Additional arguments to pass to httpx.Client
+
+    Returns:
+        Path to the downloaded file
+
+    Raises:
+        httpx.HTTPStatusError: If the request fails after all retries
+    """
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    with httpx.Client(timeout=timeout, follow_redirects=True, **kwargs) as client:
+        with client.stream("GET", url) as response:
+            response.raise_for_status()
+            with open(target_path, "wb") as f:
+                for chunk in response.iter_bytes(chunk_size=chunk_size):
+                    f.write(chunk)
+    return target_path
+
+
 def _trunc(value: Optional[str], length: int) -> Optional[str]:
     """Truncate a string to max length."""
     if value is None:
@@ -234,12 +297,9 @@ def download_adsbx_database() -> Optional[Path]:
     try:
         logger.info("Downloading ADS-B Exchange database...")
 
-        with httpx.Client(timeout=300.0, follow_redirects=True) as client:
-            response = client.get(ADSBX_DB_URL)
-            response.raise_for_status()
-
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-            target_path.write_bytes(response.content)
+        response = fetch_with_retry(ADSBX_DB_URL, timeout=60)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_bytes(response.content)
 
         file_size = target_path.stat().st_size
         duration = time.time() - start_time
@@ -344,12 +404,9 @@ def download_tar1090_database() -> Optional[Path]:
     try:
         logger.info("Downloading tar1090-db...")
 
-        with httpx.Client(timeout=300.0, follow_redirects=True) as client:
-            response = client.get(TAR1090_DB_URL)
-            response.raise_for_status()
-
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-            target_path.write_bytes(response.content)
+        response = fetch_with_retry(TAR1090_DB_URL, timeout=60)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_bytes(response.content)
 
         file_size = target_path.stat().st_size
         duration = time.time() - start_time
@@ -456,15 +513,7 @@ def download_faa_database() -> Optional[Path]:
     try:
         logger.info("Downloading FAA Registry...")
 
-        with httpx.Client(timeout=600.0, follow_redirects=True, headers=headers) as client:
-            with client.stream("GET", FAA_MASTER_URL) as response:
-                response.raise_for_status()
-
-                zip_path.parent.mkdir(parents=True, exist_ok=True)
-
-                with open(zip_path, "wb") as f:
-                    for chunk in response.iter_bytes(chunk_size=8192 * 1024):
-                        f.write(chunk)
+        stream_with_retry(FAA_MASTER_URL, zip_path, timeout=60, headers=headers)
 
         with zipfile.ZipFile(zip_path, "r") as zf:
             master_file = None
@@ -594,22 +643,7 @@ def download_opensky_database() -> Optional[Path]:
         target_path.parent.mkdir(parents=True, exist_ok=True)
         logger.info(f"Downloading OpenSky database (~150MB)...")
 
-        with httpx.Client(timeout=600.0, follow_redirects=True) as client:
-            with client.stream("GET", OPENSKY_DB_URL) as response:
-                response.raise_for_status()
-                total_size = int(response.headers.get("content-length", 0))
-                downloaded = 0
-                last_log_percent = 0
-
-                with open(target_path, "wb") as f:
-                    for chunk in response.iter_bytes(chunk_size=1024 * 1024):
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if total_size > 0:
-                            percent = int(downloaded / total_size * 100)
-                            if percent >= last_log_percent + 10:
-                                logger.info(f"OpenSky download: {percent}%")
-                                last_log_percent = percent
+        stream_with_retry(OPENSKY_DB_URL, target_path, timeout=60, chunk_size=1024 * 1024)
 
         duration = time.time() - start_time
         file_size = target_path.stat().st_size

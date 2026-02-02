@@ -341,10 +341,11 @@ class OIDCCallbackView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # Verify state
+        # Verify state using constant-time comparison to prevent timing attacks
+        import secrets
         state = request.GET.get('state')
         expected_state = request.session.get('oidc_state')
-        if not state or state != expected_state:
+        if not state or not secrets.compare_digest(state, expected_state or ''):
             return Response(
                 {'error': 'Invalid state parameter'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -482,6 +483,11 @@ class OIDCCallbackView(APIView):
         # Prevent JavaScript injection in redirect URL (e.g., javascript: URLs)
         if redirect_url.lower().startswith('javascript:'):
             logger.warning(f"OIDC callback rejected JavaScript redirect_url: {redirect_url}")
+            redirect_url = '/'
+
+        # Prevent scheme-relative URLs (e.g., //evil.com) which could redirect to external sites
+        if redirect_url.startswith('//'):
+            logger.warning(f"OIDC callback rejected scheme-relative redirect_url: {redirect_url}")
             redirect_url = '/'
 
         from django.http import HttpResponse

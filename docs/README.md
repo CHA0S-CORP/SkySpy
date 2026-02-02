@@ -87,7 +87,7 @@ flowchart LR
 | | Document | Description |
 |:---:|:---------|:------------|
 | 🌐 | [**REST API**](./05-rest-api.md) | Complete HTTP endpoint reference |
-| ⚡ | [**WebSocket API**](./06-websocket-api.md) | Real-time streaming, channels, events |
+| ⚡ | [**Socket.IO API**](./06-websocket-api.md) | Real-time streaming, namespaces, events |
 
 ---
 

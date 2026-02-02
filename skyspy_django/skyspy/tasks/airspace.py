@@ -2,7 +2,7 @@
 Airspace advisory and boundary refresh tasks.
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone as dt_timezone
 
 import httpx
 from celery import shared_task
@@ -61,37 +61,90 @@ def refresh_airspace_advisories():
 
                 # Process new advisories
                 for adv in advisories:
-                    advisory_id = adv.get('airSigmetId') or adv.get('gairmetId')
+                    # Use 'tag' as identifier (new API format) or fall back to old format
+                    advisory_id = adv.get('tag') or adv.get('airSigmetId') or adv.get('gairmetId')
                     if not advisory_id:
                         continue
 
-                    # Parse times
+                    # Parse times - handle both new and old API formats
                     valid_from = None
                     valid_to = None
 
-                    if adv.get('validTimeFrom'):
+                    # New format: validTime (ISO string), expireTime (unix timestamp)
+                    if adv.get('validTime'):
+                        try:
+                            valid_from = datetime.fromisoformat(
+                                adv['validTime'].replace('Z', '+00:00').replace('.000', '')
+                            )
+                        except (ValueError, TypeError) as e:
+                            logger.debug(f"Invalid validTime format: {adv.get('validTime')} - {e}")
+
+                    if adv.get('expireTime'):
+                        try:
+                            # expireTime is unix timestamp
+                            valid_to = datetime.fromtimestamp(int(adv['expireTime']), tz=dt_timezone.utc)
+                        except (ValueError, TypeError) as e:
+                            logger.debug(f"Invalid expireTime format: {adv.get('expireTime')} - {e}")
+
+                    # Fall back to old format
+                    if not valid_from and adv.get('validTimeFrom'):
                         try:
                             valid_from = datetime.fromisoformat(
                                 adv['validTimeFrom'].replace('Z', '+00:00')
                             )
-                        except (ValueError, TypeError) as e:
-                            logger.debug(f"Invalid validTimeFrom format: {adv.get('validTimeFrom')} - {e}")
+                        except (ValueError, TypeError):
+                            pass
 
-                    if adv.get('validTimeTo'):
+                    if not valid_to and adv.get('validTimeTo'):
                         try:
                             valid_to = datetime.fromisoformat(
                                 adv['validTimeTo'].replace('Z', '+00:00')
                             )
-                        except (ValueError, TypeError) as e:
-                            logger.debug(f"Invalid validTimeTo format: {adv.get('validTimeTo')} - {e}")
+                        except (ValueError, TypeError):
+                            pass
 
-                    # Parse geometry
+                    # Parse geometry - handle new 'coords' format
                     polygon = None
-                    if adv.get('geometry') and adv['geometry'].get('coordinates'):
+                    coords = adv.get('coords')
+                    if coords and isinstance(coords, list):
+                        # Convert coords array to GeoJSON polygon
+                        try:
+                            ring = [[float(c['lon']), float(c['lat'])] for c in coords]
+                            # Close the ring if not already closed
+                            if ring and ring[0] != ring[-1]:
+                                ring.append(ring[0])
+                            polygon = {
+                                'type': 'Polygon',
+                                'coordinates': [ring]
+                            }
+                        except (KeyError, ValueError, TypeError) as e:
+                            logger.debug(f"Failed to parse coords: {e}")
+
+                    # Fall back to old geometry format
+                    if not polygon and adv.get('geometry') and adv['geometry'].get('coordinates'):
                         polygon = {
                             'type': adv['geometry'].get('type', 'Polygon'),
                             'coordinates': adv['geometry']['coordinates']
                         }
+
+                    # Parse altitude - handle new format (base/top as strings) and old format
+                    lower_alt = None
+                    upper_alt = None
+                    if adv.get('base'):
+                        try:
+                            lower_alt = int(adv['base']) if adv['base'] else None
+                        except (ValueError, TypeError):
+                            pass
+                    if adv.get('top'):
+                        try:
+                            upper_alt = int(adv['top']) if adv['top'] else None
+                        except (ValueError, TypeError):
+                            pass
+                    # Fall back to old format
+                    if lower_alt is None:
+                        lower_alt = adv.get('altitudeLow1')
+                    if upper_alt is None:
+                        upper_alt = adv.get('altitudeHi1')
 
                     AirspaceAdvisory.objects.update_or_create(
                         advisory_id=advisory_id,
@@ -101,8 +154,8 @@ def refresh_airspace_advisories():
                             'severity': adv.get('severity'),
                             'valid_from': valid_from,
                             'valid_to': valid_to,
-                            'lower_alt_ft': adv.get('altitudeLow1'),
-                            'upper_alt_ft': adv.get('altitudeHi1'),
+                            'lower_alt_ft': lower_alt,
+                            'upper_alt_ft': upper_alt,
                             'region': adv.get('region'),
                             'polygon': polygon,
                             'raw_text': adv.get('rawAirSigmet'),

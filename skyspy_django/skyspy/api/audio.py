@@ -24,6 +24,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
+from skyspy.api.throttles import UploadRateThrottle
 from skyspy.models import AudioTransmission
 from skyspy.serializers.audio import (
     AudioTransmissionSerializer,
@@ -53,6 +54,7 @@ class AudioViewSet(viewsets.ModelViewSet):
 
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
     permission_classes = [FeatureBasedPermission]
+    throttle_classes = [UploadRateThrottle]
 
     queryset = AudioTransmission.objects.all()
     serializer_class = AudioTransmissionSerializer
@@ -408,8 +410,16 @@ class AudioViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        hours = int(request.query_params.get('hours', 24))
-        limit = int(request.query_params.get('limit', 10))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
+        try:
+            limit = int(request.query_params.get('limit', 10))
+            limit = min(limit, 1000)  # Cap at 1000
+        except (ValueError, TypeError):
+            limit = 10
 
         matched = get_matched_radio_calls(
             callsign=callsign,

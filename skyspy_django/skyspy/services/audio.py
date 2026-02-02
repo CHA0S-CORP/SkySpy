@@ -1215,7 +1215,7 @@ def _transcribe_with_atc_whisper(audio_data: bytes, filename: str) -> dict:
             try:
                 os.unlink(tmp_path)
             except OSError as e:
-                logger.debug(f"Failed to cleanup temp file {tmp_path}: {e}")
+                logger.warning(f"Failed to cleanup temp file {tmp_path}: {e}")
 
 
 def get_matched_radio_calls(

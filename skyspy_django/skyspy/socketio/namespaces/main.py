@@ -88,10 +88,23 @@ class MainNamespace(socketio.AsyncNamespace):
         'aircraft-info-bulk': 'aircraft.view',
         'safety-events': 'safety.view',
         'safety-stats': 'safety.view',
+        'safety-event-detail': 'safety.view',
+        'safety-acknowledge': 'safety.manage',
         'acars-stats': 'acars.view',
         'system-info': 'system.view_info',
         'system-databases': 'system.view_databases',
         'system-status': 'system.view_status',
+        'notification-channels': 'notifications.view',
+        'notification-channel-types': 'notifications.view',
+        'notification-channel-create': 'notifications.manage',
+        'notification-channel-update': 'notifications.manage',
+        'notification-channel-delete': 'notifications.manage',
+        'notification-channel-test': 'notifications.manage',
+        'alert-rules': 'alerts.view',
+        'alert-rule-create': 'alerts.manage',
+        'alert-rule-update': 'alerts.manage',
+        'alert-rule-delete': 'alerts.manage',
+        'alert-rule-toggle': 'alerts.manage',
     }
 
     def __init__(self, namespace: str = '/'):
@@ -131,7 +144,7 @@ class MainNamespace(socketio.AsyncNamespace):
             'subscribed_topics': set(),
             'client_filters': {},
             'rate_limiter': RateLimiter(),
-            'connected_at': datetime.utcnow().isoformat(),
+            'connected_at': timezone.now().isoformat(),
         })
 
         logger.info(
@@ -164,6 +177,15 @@ class MainNamespace(socketio.AsyncNamespace):
             for topic in subscribed:
                 room = f"topic_{topic}"
                 await sio.leave_room(sid, room)
+
+            # Clean up rate limiter to prevent memory leaks
+            rate_limiter = session.get('rate_limiter')
+            if rate_limiter:
+                rate_limiter.cleanup_old_entries()
+                rate_limiter.reset()  # Clear all remaining entries
+
+            # Clear session data explicitly
+            await sio.save_session(sid, {})
 
             logger.info(f"Socket.IO disconnected: {sid}")
         except Exception as e:
@@ -288,6 +310,10 @@ class MainNamespace(socketio.AsyncNamespace):
         request_id = data.get('request_id')
         params = data.get('params', {})
 
+        # Validate params is actually a dict
+        if not isinstance(params, dict):
+            params = {}
+
         if not request_type:
             await self._emit_error(sid, request_id, 'Missing request type')
             return
@@ -317,7 +343,7 @@ class MainNamespace(socketio.AsyncNamespace):
     async def on_ping(self, sid: str, data: Optional[dict] = None):
         """Handle ping request for connection keepalive."""
         await sio.emit('pong', {
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
+            'timestamp': timezone.now().isoformat()
         }, to=sid, namespace=self.namespace)
 
     # =========================================================================
@@ -352,7 +378,7 @@ class MainNamespace(socketio.AsyncNamespace):
             await sio.emit('aircraft:snapshot', {
                 'aircraft': aircraft_list,
                 'count': len(aircraft_list),
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
+                'timestamp': timezone.now().isoformat()
             }, to=sid, namespace=self.namespace)
             logger.info(f"[_send_initial_state] Emitted aircraft:snapshot to {sid}")
         except Exception as e:
@@ -360,6 +386,11 @@ class MainNamespace(socketio.AsyncNamespace):
 
     async def _check_request_permission(self, sid: str, request_type: str) -> bool:
         """Check if the session user has permission for this request type."""
+        # If AUTH_MODE is public, allow all requests
+        auth_mode = getattr(settings, 'AUTH_MODE', 'hybrid')
+        if auth_mode == 'public':
+            return True
+
         # Check if this request type requires a specific permission
         required_perm = self.REQUEST_PERMISSIONS.get(request_type)
 
@@ -404,6 +435,7 @@ class MainNamespace(socketio.AsyncNamespace):
         handlers = {
             'aircraft': self._handle_aircraft,
             'aircraft_list': self._handle_aircraft_list,
+            'aircraft-snapshot': self._handle_aircraft_snapshot,
             'aircraft-info': self._handle_aircraft_info,
             'aircraft-info-bulk': self._handle_aircraft_info_bulk,
             'aircraft-stats': self._handle_aircraft_stats,
@@ -450,6 +482,22 @@ class MainNamespace(socketio.AsyncNamespace):
             'stats-engagement': self._handle_engagement_stats,
             'stats-favorites': self._handle_favorites_stats,
             'stats-time-comparison': self._handle_time_comparison,
+            # Notification channel endpoints
+            'notification-channels': self._handle_notification_channels,
+            'notification-channel-types': self._handle_notification_channel_types,
+            'notification-channel-create': self._handle_notification_channel_create,
+            'notification-channel-update': self._handle_notification_channel_update,
+            'notification-channel-delete': self._handle_notification_channel_delete,
+            'notification-channel-test': self._handle_notification_channel_test,
+            # Safety event endpoints
+            'safety-event-detail': self._handle_safety_event_detail,
+            'safety-acknowledge': self._handle_safety_acknowledge,
+            # Alert rule endpoints
+            'alert-rules': self._handle_alert_rules,
+            'alert-rule-create': self._handle_alert_rule_create,
+            'alert-rule-update': self._handle_alert_rule_update,
+            'alert-rule-delete': self._handle_alert_rule_delete,
+            'alert-rule-toggle': self._handle_alert_rule_toggle,
         }
 
         handler = handlers.get(request_type)
@@ -463,6 +511,15 @@ class MainNamespace(socketio.AsyncNamespace):
         if not icao:
             raise ValueError('Missing icao parameter')
         return await self._get_aircraft_by_icao(icao)
+
+    async def _handle_aircraft_snapshot(self, params: dict):
+        """Return current aircraft snapshot."""
+        aircraft_list = await self._get_current_aircraft()
+        return {
+            'aircraft': aircraft_list,
+            'count': len(aircraft_list),
+            'timestamp': timezone.now().isoformat()
+        }
 
     async def _handle_aircraft_list(self, params: dict):
         """Return list of aircraft with optional filters."""
@@ -690,7 +747,9 @@ class MainNamespace(socketio.AsyncNamespace):
         """Get detailed aircraft info for multiple ICAOs."""
         from skyspy.models import AircraftInfo
 
-        icao_list = [i.upper().strip() for i in icaos if i and not i.startswith('~')][:100]
+        # Slice input first to avoid processing all ICAOs before limiting
+        icaos = (icaos or [])[:100]
+        icao_list = [i.upper().strip() for i in icaos if i and not i.startswith('~')]
         if not icao_list:
             return {'aircraft': {}, 'found': 0, 'requested': 0}
 
@@ -805,11 +864,31 @@ class MainNamespace(socketio.AsyncNamespace):
         if callsign:
             queryset = queryset.filter(callsign__icontains=callsign)
 
-        sightings = list(queryset.order_by('-timestamp')[offset:offset + limit].values(
+        sightings_raw = list(queryset.order_by('-timestamp')[offset:offset + limit].values(
             'id', 'timestamp', 'icao_hex', 'callsign', 'latitude', 'longitude',
             'altitude_baro', 'ground_speed', 'track', 'vertical_rate',
             'distance_nm', 'rssi', 'is_military'
         ))
+
+        # Map field names to match REST API serializer format (lat/lon instead of latitude/longitude)
+        sightings = [
+            {
+                'id': s['id'],
+                'timestamp': s['timestamp'].isoformat() if s['timestamp'] else None,
+                'icao_hex': s['icao_hex'],
+                'callsign': s['callsign'],
+                'lat': s['latitude'],
+                'lon': s['longitude'],
+                'altitude': s['altitude_baro'],
+                'gs': s['ground_speed'],
+                'track': s['track'],
+                'vr': s['vertical_rate'],
+                'distance_nm': s['distance_nm'],
+                'rssi': s['rssi'],
+                'is_military': s['is_military'],
+            }
+            for s in sightings_raw
+        ]
 
         return {
             'sightings': sightings,
@@ -1377,9 +1456,19 @@ class MainNamespace(socketio.AsyncNamespace):
         """Get nearby airports."""
         from skyspy.models import CachedAirport
 
-        lat = params.get('lat', getattr(settings, 'FEEDER_LAT', 0))
-        lon = params.get('lon', getattr(settings, 'FEEDER_LON', 0))
-        radius_nm = params.get('radius', params.get('radius_nm', 50))
+        # Parse lat/lon/radius, converting from string if needed
+        try:
+            lat = float(params.get('lat', getattr(settings, 'FEEDER_LAT', 0)))
+        except (ValueError, TypeError):
+            lat = float(getattr(settings, 'FEEDER_LAT', 0))
+        try:
+            lon = float(params.get('lon', getattr(settings, 'FEEDER_LON', 0)))
+        except (ValueError, TypeError):
+            lon = float(getattr(settings, 'FEEDER_LON', 0))
+        try:
+            radius_nm = float(params.get('radius', params.get('radius_nm', 50)))
+        except (ValueError, TypeError):
+            radius_nm = 50.0
         limit = _parse_int_param(params.get('limit'), 20, min_val=1, max_val=100)
 
         lat_delta = radius_nm / 60
@@ -1409,9 +1498,19 @@ class MainNamespace(socketio.AsyncNamespace):
         """Get nearby navigation aids."""
         from skyspy.models import CachedNavaid
 
-        lat = params.get('lat', getattr(settings, 'FEEDER_LAT', 0))
-        lon = params.get('lon', getattr(settings, 'FEEDER_LON', 0))
-        radius_nm = params.get('radius', params.get('radius_nm', 100))
+        # Parse lat/lon/radius, converting from string if needed
+        try:
+            lat = float(params.get('lat', getattr(settings, 'FEEDER_LAT', 0)))
+        except (ValueError, TypeError):
+            lat = float(getattr(settings, 'FEEDER_LAT', 0))
+        try:
+            lon = float(params.get('lon', getattr(settings, 'FEEDER_LON', 0)))
+        except (ValueError, TypeError):
+            lon = float(getattr(settings, 'FEEDER_LON', 0))
+        try:
+            radius_nm = float(params.get('radius', params.get('radius_nm', 100)))
+        except (ValueError, TypeError):
+            radius_nm = 100.0
         limit = _parse_int_param(params.get('limit'), 50, min_val=1, max_val=200)
 
         lat_delta = radius_nm / 60
@@ -1441,9 +1540,19 @@ class MainNamespace(socketio.AsyncNamespace):
         """Get airspace boundaries."""
         from skyspy.models import AirspaceBoundary
 
-        lat = params.get('lat', getattr(settings, 'FEEDER_LAT', 0))
-        lon = params.get('lon', getattr(settings, 'FEEDER_LON', 0))
-        radius_nm = params.get('radius', params.get('radius_nm', 100))
+        # Parse lat/lon/radius, converting from string if needed
+        try:
+            lat = float(params.get('lat', getattr(settings, 'FEEDER_LAT', 0)))
+        except (ValueError, TypeError):
+            lat = float(getattr(settings, 'FEEDER_LAT', 0))
+        try:
+            lon = float(params.get('lon', getattr(settings, 'FEEDER_LON', 0)))
+        except (ValueError, TypeError):
+            lon = float(getattr(settings, 'FEEDER_LON', 0))
+        try:
+            radius_nm = float(params.get('radius', params.get('radius_nm', 100)))
+        except (ValueError, TypeError):
+            radius_nm = 100.0
 
         lat_delta = radius_nm / 60
         lon_delta = radius_nm / 60
@@ -1505,12 +1614,23 @@ class MainNamespace(socketio.AsyncNamespace):
         from skyspy.models import CachedPirep
 
         hours = _parse_int_param(params.get('hours'), 6, min_val=1, max_val=24)
-        lat = params.get('lat', getattr(settings, 'FEEDER_LAT', 0))
-        lon = params.get('lon', getattr(settings, 'FEEDER_LON', 0))
-        radius_nm = params.get('radius', params.get('radius_nm', 500))
+
+        # Parse lat/lon/radius, converting from string if needed
+        try:
+            lat = float(params.get('lat', getattr(settings, 'FEEDER_LAT', 0)))
+        except (ValueError, TypeError):
+            lat = float(getattr(settings, 'FEEDER_LAT', 0))
+        try:
+            lon = float(params.get('lon', getattr(settings, 'FEEDER_LON', 0)))
+        except (ValueError, TypeError):
+            lon = float(getattr(settings, 'FEEDER_LON', 0))
+        try:
+            radius = float(params.get('radius', params.get('radius_nm', 500)))
+        except (ValueError, TypeError):
+            radius = 500.0
 
         # Build cache key
-        cache_key = f"pireps_ws:{hours}:{round(lat, 2)}:{round(lon, 2)}:{round(radius_nm)}"
+        cache_key = f"pireps_ws:{hours}:{round(lat, 2)}:{round(lon, 2)}:{round(radius)}"
         cached_data = cache.get(cache_key)
         if cached_data is not None:
             return cached_data
@@ -1518,23 +1638,16 @@ class MainNamespace(socketio.AsyncNamespace):
         cutoff = timezone.now() - timedelta(hours=hours)
         query = CachedPirep.objects.filter(observation_time__gte=cutoff)
 
-        # Spatial filtering
-        try:
-            lat = float(lat)
-            lon = float(lon)
-            radius = float(radius_nm) if radius_nm else 500
+        # Spatial filtering (lat, lon, radius already parsed as floats above)
+        lat_delta = radius / 60.0
+        lon_delta = radius / (60.0 * max(cos(lat * pi / 180), 0.1))
 
-            lat_delta = radius / 60.0
-            lon_delta = radius / (60.0 * max(cos(lat * pi / 180), 0.1))
-
-            query = query.filter(
-                latitude__gte=lat - lat_delta,
-                latitude__lte=lat + lat_delta,
-                longitude__gte=lon - lon_delta,
-                longitude__lte=lon + lon_delta,
-            )
-        except (ValueError, TypeError):
-            pass
+        query = query.filter(
+            latitude__gte=lat - lat_delta,
+            latitude__lte=lat + lat_delta,
+            longitude__gte=lon - lon_delta,
+            longitude__lte=lon + lon_delta,
+        )
 
         pireps = query.order_by('-observation_time')[:100]
 
@@ -1549,7 +1662,7 @@ class MainNamespace(socketio.AsyncNamespace):
                 'observation_time': p.observation_time.isoformat() if p.observation_time else None,
                 'aircraft_type': p.aircraft_type,
                 'report_type': p.report_type,
-                'turbulence': p.turbulence_intensity,
+                'turbulence': p.turbulence_type,
                 'icing': p.icing_intensity,
                 'sky_cover': p.sky_cover,
                 'weather': p.weather,
@@ -1838,6 +1951,388 @@ class MainNamespace(socketio.AsyncNamespace):
         except Exception as e:
             logger.debug(f"Error checking user permission: {e}")
             return False
+
+    # =========================================================================
+    # Notification Channel Handlers
+    # =========================================================================
+
+    async def _handle_notification_channels(self, params: dict):
+        """List all notification channels."""
+        return await self._get_notification_channels(params)
+
+    async def _handle_notification_channel_types(self, params: dict):
+        """Get available notification channel types."""
+        return await self._get_notification_channel_types()
+
+    async def _handle_notification_channel_create(self, params: dict):
+        """Create a new notification channel."""
+        return await self._create_notification_channel(params)
+
+    async def _handle_notification_channel_update(self, params: dict):
+        """Update an existing notification channel."""
+        channel_id = params.get('id')
+        if not channel_id:
+            raise ValueError('Missing channel id')
+        return await self._update_notification_channel(channel_id, params)
+
+    async def _handle_notification_channel_delete(self, params: dict):
+        """Delete a notification channel."""
+        channel_id = params.get('id')
+        if not channel_id:
+            raise ValueError('Missing channel id')
+        return await self._delete_notification_channel(channel_id)
+
+    async def _handle_notification_channel_test(self, params: dict):
+        """Test a notification channel."""
+        channel_id = params.get('id')
+        if not channel_id:
+            raise ValueError('Missing channel id')
+        return await self._test_notification_channel(channel_id)
+
+    @sync_to_async
+    def _get_notification_channels(self, params: dict):
+        """Get all notification channels."""
+        from skyspy.models import NotificationChannel
+
+        channels = NotificationChannel.objects.all().order_by('-created_at')
+        return [
+            {
+                'id': str(ch.id),
+                'name': ch.name,
+                'channel_type': ch.channel_type,
+                'enabled': ch.enabled,
+                'verified': ch.verified,
+                'config': ch.config,
+                'created_at': ch.created_at.isoformat() if ch.created_at else None,
+                'updated_at': ch.updated_at.isoformat() if ch.updated_at else None,
+            }
+            for ch in channels
+        ]
+
+    @sync_to_async
+    def _get_notification_channel_types(self):
+        """Get available notification channel types."""
+        from skyspy.models import NotificationChannel
+
+        return {
+            'types': [
+                {'value': choice[0], 'label': choice[1]}
+                for choice in NotificationChannel.CHANNEL_TYPES
+            ]
+        }
+
+    @sync_to_async
+    def _create_notification_channel(self, params: dict):
+        """Create a new notification channel."""
+        from skyspy.models import NotificationChannel
+
+        channel = NotificationChannel.objects.create(
+            name=params.get('name', 'New Channel'),
+            channel_type=params.get('channel_type', 'webhook'),
+            enabled=params.get('enabled', True),
+            config=params.get('config', {}),
+        )
+        return {
+            'id': str(channel.id),
+            'name': channel.name,
+            'channel_type': channel.channel_type,
+            'enabled': channel.enabled,
+            'verified': channel.verified,
+            'config': channel.config,
+            'created_at': channel.created_at.isoformat() if channel.created_at else None,
+        }
+
+    @sync_to_async
+    def _update_notification_channel(self, channel_id, params: dict):
+        """Update a notification channel."""
+        from skyspy.models import NotificationChannel
+
+        try:
+            channel = NotificationChannel.objects.get(id=channel_id)
+        except NotificationChannel.DoesNotExist:
+            raise ValueError('Channel not found')
+
+        if 'name' in params:
+            channel.name = params['name']
+        if 'channel_type' in params:
+            channel.channel_type = params['channel_type']
+        if 'enabled' in params:
+            channel.enabled = params['enabled']
+        if 'config' in params:
+            channel.config = params['config']
+
+        channel.save()
+        return {
+            'id': str(channel.id),
+            'name': channel.name,
+            'channel_type': channel.channel_type,
+            'enabled': channel.enabled,
+            'verified': channel.verified,
+            'config': channel.config,
+            'updated_at': channel.updated_at.isoformat() if channel.updated_at else None,
+        }
+
+    @sync_to_async
+    def _delete_notification_channel(self, channel_id):
+        """Delete a notification channel."""
+        from skyspy.models import NotificationChannel
+
+        try:
+            channel = NotificationChannel.objects.get(id=channel_id)
+            channel.delete()
+            return {'success': True, 'id': str(channel_id)}
+        except NotificationChannel.DoesNotExist:
+            raise ValueError('Channel not found')
+
+    @sync_to_async
+    def _test_notification_channel(self, channel_id):
+        """Test a notification channel by sending a test message."""
+        from skyspy.models import NotificationChannel
+        from skyspy.services.notifications import send_test_notification
+
+        try:
+            channel = NotificationChannel.objects.get(id=channel_id)
+            success, message = send_test_notification(channel)
+            if success:
+                channel.verified = True
+                channel.save(update_fields=['verified'])
+            return {
+                'success': success,
+                'message': message,
+                'verified': channel.verified,
+            }
+        except NotificationChannel.DoesNotExist:
+            raise ValueError('Channel not found')
+
+    # =========================================================================
+    # Safety Event Detail Handlers
+    # =========================================================================
+
+    async def _handle_safety_event_detail(self, params: dict):
+        """Get a specific safety event by ID."""
+        event_id = params.get('id') or params.get('event_id')
+        if not event_id:
+            raise ValueError('Missing event id')
+        return await self._get_safety_event_detail(event_id)
+
+    async def _handle_safety_acknowledge(self, params: dict):
+        """Acknowledge a safety event."""
+        event_id = params.get('id') or params.get('event_id')
+        if not event_id:
+            raise ValueError('Missing event id')
+        return await self._acknowledge_safety_event(event_id)
+
+    @sync_to_async
+    def _get_safety_event_detail(self, event_id):
+        """Get detailed safety event information."""
+        from skyspy.models import SafetyEvent
+
+        try:
+            event = SafetyEvent.objects.get(id=event_id)
+            return {
+                'id': str(event.id),
+                'event_type': event.event_type,
+                'severity': event.severity,
+                'icao_hex': event.icao_hex,
+                'icao': event.icao_hex,
+                'callsign': event.callsign,
+                'timestamp': event.timestamp.isoformat() if event.timestamp else None,
+                'description': event.description,
+                'acknowledged': event.acknowledged,
+                'acknowledged_at': event.acknowledged_at.isoformat() if event.acknowledged_at else None,
+                'latitude': event.latitude,
+                'longitude': event.longitude,
+                'altitude': event.altitude,
+                'ground_speed': event.ground_speed,
+                'vertical_rate': event.vertical_rate,
+                'details': event.details or {},
+            }
+        except SafetyEvent.DoesNotExist:
+            return {'error': 'not_found', 'error_type': 'not_found'}
+
+    @sync_to_async
+    def _acknowledge_safety_event(self, event_id):
+        """Acknowledge a safety event."""
+        from skyspy.models import SafetyEvent
+
+        try:
+            event = SafetyEvent.objects.get(id=event_id)
+            event.acknowledged = True
+            event.acknowledged_at = timezone.now()
+            event.save(update_fields=['acknowledged', 'acknowledged_at'])
+            return {
+                'success': True,
+                'id': str(event.id),
+                'acknowledged': True,
+                'acknowledged_at': event.acknowledged_at.isoformat(),
+            }
+        except SafetyEvent.DoesNotExist:
+            raise ValueError('Event not found')
+
+    # =========================================================================
+    # Alert Rule Handlers
+    # =========================================================================
+
+    async def _handle_alert_rules(self, params: dict):
+        """List all alert rules."""
+        return await self._get_alert_rules(params)
+
+    async def _handle_alert_rule_create(self, params: dict):
+        """Create a new alert rule."""
+        return await self._create_alert_rule(params)
+
+    async def _handle_alert_rule_update(self, params: dict):
+        """Update an existing alert rule."""
+        rule_id = params.get('id')
+        if not rule_id:
+            raise ValueError('Missing rule id')
+        return await self._update_alert_rule(rule_id, params)
+
+    async def _handle_alert_rule_delete(self, params: dict):
+        """Delete an alert rule."""
+        rule_id = params.get('id')
+        if not rule_id:
+            raise ValueError('Missing rule id')
+        return await self._delete_alert_rule(rule_id)
+
+    async def _handle_alert_rule_toggle(self, params: dict):
+        """Toggle an alert rule's enabled status."""
+        rule_id = params.get('id')
+        if not rule_id:
+            raise ValueError('Missing rule id')
+        enabled = params.get('enabled')
+        return await self._toggle_alert_rule(rule_id, enabled)
+
+    @sync_to_async
+    def _get_alert_rules(self, params: dict):
+        """Get all alert rules."""
+        from skyspy.models import AlertRule
+
+        rules = AlertRule.objects.all().order_by('-created_at')
+        return {
+            'rules': [
+                {
+                    'id': str(rule.id),
+                    'name': rule.name,
+                    'description': rule.description,
+                    'enabled': rule.enabled,
+                    'priority': rule.priority,
+                    'conditions': rule.conditions,
+                    'actions': rule.actions,
+                    'cooldown_minutes': rule.cooldown_minutes,
+                    'created_at': rule.created_at.isoformat() if rule.created_at else None,
+                    'updated_at': rule.updated_at.isoformat() if rule.updated_at else None,
+                }
+                for rule in rules
+            ]
+        }
+
+    @sync_to_async
+    def _create_alert_rule(self, params: dict):
+        """Create a new alert rule."""
+        from skyspy.models import AlertRule
+
+        rule = AlertRule.objects.create(
+            name=params.get('name', 'New Rule'),
+            description=params.get('description', ''),
+            enabled=params.get('enabled', True),
+            priority=params.get('priority', 'info'),
+            conditions=params.get('conditions', {}),
+            actions=params.get('actions', []),
+            cooldown_minutes=params.get('cooldown_minutes', 5),
+        )
+        return {
+            'id': str(rule.id),
+            'name': rule.name,
+            'description': rule.description,
+            'enabled': rule.enabled,
+            'priority': rule.priority,
+            'conditions': rule.conditions,
+            'actions': rule.actions,
+            'cooldown_minutes': rule.cooldown_minutes,
+            'created_at': rule.created_at.isoformat() if rule.created_at else None,
+        }
+
+    @sync_to_async
+    def _update_alert_rule(self, rule_id, params: dict):
+        """Update an alert rule."""
+        from skyspy.models import AlertRule
+
+        try:
+            rule = AlertRule.objects.get(id=rule_id)
+        except AlertRule.DoesNotExist:
+            raise ValueError('Rule not found')
+
+        update_fields = []
+        if 'name' in params:
+            rule.name = params['name']
+            update_fields.append('name')
+        if 'description' in params:
+            rule.description = params['description']
+            update_fields.append('description')
+        if 'enabled' in params:
+            rule.enabled = params['enabled']
+            update_fields.append('enabled')
+        if 'priority' in params:
+            rule.priority = params['priority']
+            update_fields.append('priority')
+        if 'conditions' in params:
+            rule.conditions = params['conditions']
+            update_fields.append('conditions')
+        if 'actions' in params:
+            rule.actions = params['actions']
+            update_fields.append('actions')
+        if 'cooldown_minutes' in params:
+            rule.cooldown_minutes = params['cooldown_minutes']
+            update_fields.append('cooldown_minutes')
+
+        if update_fields:
+            update_fields.append('updated_at')
+            rule.save(update_fields=update_fields)
+
+        return {
+            'id': str(rule.id),
+            'name': rule.name,
+            'description': rule.description,
+            'enabled': rule.enabled,
+            'priority': rule.priority,
+            'conditions': rule.conditions,
+            'actions': rule.actions,
+            'cooldown_minutes': rule.cooldown_minutes,
+            'updated_at': rule.updated_at.isoformat() if rule.updated_at else None,
+        }
+
+    @sync_to_async
+    def _delete_alert_rule(self, rule_id):
+        """Delete an alert rule."""
+        from skyspy.models import AlertRule
+
+        try:
+            rule = AlertRule.objects.get(id=rule_id)
+            rule.delete()
+            return {'success': True, 'id': str(rule_id)}
+        except AlertRule.DoesNotExist:
+            raise ValueError('Rule not found')
+
+    @sync_to_async
+    def _toggle_alert_rule(self, rule_id, enabled=None):
+        """Toggle an alert rule's enabled status."""
+        from skyspy.models import AlertRule
+
+        try:
+            rule = AlertRule.objects.get(id=rule_id)
+            if enabled is not None:
+                rule.enabled = enabled
+            else:
+                rule.enabled = not rule.enabled
+            rule.save(update_fields=['enabled', 'updated_at'])
+            return {
+                'success': True,
+                'id': str(rule.id),
+                'enabled': rule.enabled,
+            }
+        except AlertRule.DoesNotExist:
+            raise ValueError('Rule not found')
 
     # =========================================================================
     # Extended Stats Handlers

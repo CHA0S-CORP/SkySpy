@@ -1,11 +1,12 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Info, ChevronDown, ChevronUp, X, Move } from 'lucide-react';
 import { useDraggable } from '../../hooks/useDraggable';
 
 /**
  * Draggable legend panel showing aircraft symbols and color meanings
+ * Memoized to prevent re-renders when other map state changes
  */
-export function LegendPanel({ 
+export const LegendPanel = memo(function LegendPanel({ 
   show, 
   onClose,
   collapsed,
@@ -137,6 +138,6 @@ export function LegendPanel({
       )}
     </div>
   );
-}
+});
 
 export default LegendPanel;

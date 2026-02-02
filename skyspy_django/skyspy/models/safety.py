@@ -43,6 +43,7 @@ class SafetyEvent(models.Model):
         db_table = 'safety_events'
         indexes = [
             models.Index(fields=['event_type', 'timestamp'], name='idx_safety_events_type_time'),
+            models.Index(fields=['severity', 'timestamp'], name='idx_safety_events_sev_time'),
         ]
         ordering = ['-timestamp']
 

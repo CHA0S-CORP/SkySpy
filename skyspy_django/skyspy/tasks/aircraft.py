@@ -93,9 +93,17 @@ def poll_aircraft(self):
     """
     Poll aircraft from ultrafeeder and update cache.
 
-    This task runs every 2 seconds to fetch aircraft positions
+    This task runs every 1-2 seconds to fetch aircraft positions
     from the ADS-B receiver and broadcast updates.
+
+    When streaming is enabled and active, this task skips polling
+    to avoid duplicate updates.
     """
+    # Skip polling if streaming is enabled and active
+    if settings.AIRCRAFT_STREAM_ENABLED and cache.get('aircraft_stream_active'):
+        logger.debug("Skipping poll - aircraft stream is active")
+        return
+
     start_time = time.time()
 
     try:

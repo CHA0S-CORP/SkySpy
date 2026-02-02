@@ -85,15 +85,19 @@ class OIDCAuthenticationBackend:
         # WARNING: Email linking can be a security vulnerability if an attacker
         # controls an OIDC provider and uses matching email addresses to take over accounts
         allow_email_linking = getattr(settings, 'OIDC_ALLOW_EMAIL_LINKING', False)
-        if allow_email_linking and email:
+        # Require email_verified claim to be True before linking to prevent account takeover
+        email_verified = claims.get('email_verified') is True
+        if allow_email_linking and email and email_verified:
             try:
                 user = User.objects.get(email=email)
                 # Link existing user to OIDC
-                logger.info(f"Linking existing user {user.username} to OIDC via email {email}")
+                logger.info(f"Linking existing user {user.username} to OIDC via verified email {email}")
                 self._create_or_update_profile(user, claims, subject, issuer)
                 return user
             except User.DoesNotExist:
                 pass
+        elif allow_email_linking and email and not email_verified:
+            logger.warning(f"OIDC email linking skipped: email {email} is not verified")
 
         # Create new user
         user = User.objects.create_user(

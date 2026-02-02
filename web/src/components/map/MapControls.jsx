@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { 
   ZoomIn, ZoomOut, Maximize, Minimize, 
   Layers, Filter, List, Info, Volume2, VolumeX,
@@ -7,8 +7,9 @@ import {
 
 /**
  * Map control buttons (zoom, fullscreen, toggles)
+ * Memoized to prevent re-renders when other map state changes
  */
-export function MapControls({ 
+export const MapControls = memo(function MapControls({ 
   onZoomIn,
   onZoomOut,
   onToggleFullscreen,
@@ -137,6 +138,6 @@ export function MapControls({
       </div>
     </>
   );
-}
+});
 
 export default MapControls;

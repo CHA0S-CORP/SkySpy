@@ -62,7 +62,7 @@ function interpolateTrack(from, to, t) {
  * @param {number} interpolationMs - Interpolation duration in ms (default: 1000)
  * @returns {Object} Position state and accessors
  */
-export function useSocketIOPositions(enabled, apiBase, interpolate = true, interpolationMs = 1000) {
+export function useSocketIOPositions(enabled, apiBase, interpolate = true, interpolationMs = 800) {
   // Connection state (low-frequency, ok to use React state)
   const [connected, setConnected] = useState(false);
   const [count, setCount] = useState(0);
@@ -119,7 +119,8 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
         if (Array.isArray(aircraftArray)) {
           // Convert aircraft array to positions map
           for (const ac of aircraftArray) {
-            const icao = ac.hex || ac.icao_hex;
+            if (!ac || typeof ac !== 'object') continue;
+            const icao = (ac.hex || ac.icao_hex || '').toUpperCase();
             if (icao && Number.isFinite(ac.lat) && Number.isFinite(ac.lon)) {
               const pos = {
                 lat: ac.lat,
@@ -137,7 +138,8 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
           }
         } else if (positionsObj && typeof positionsObj === 'object') {
           // Legacy positions format
-          for (const [icao, pos] of Object.entries(positionsObj)) {
+          for (const [rawIcao, pos] of Object.entries(positionsObj)) {
+            const icao = rawIcao.toUpperCase();
             if (pos && typeof pos === 'object' &&
                 Number.isFinite(pos.lat) && Number.isFinite(pos.lon)) {
               targetPositionsRef.current[icao] = pos;
@@ -149,17 +151,55 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
         }
 
         setCount(Object.keys(targetPositionsRef.current).length);
-        console.log('[useSocketIOPositions] Position snapshot:', Object.keys(targetPositionsRef.current).length, 'aircraft');
       }
 
-      // Position updates
-      else if (type === 'positions:update') {
-        // Debug: Log position updates
-        const updateCount = Array.isArray(data?.positions)
-          ? data.positions.length
-          : Object.keys(data?.positions || {}).length;
-        console.log('[useSocketIOPositions] positions:update received:', updateCount, 'positions');
+      // Handle aircraft:update for position data
+      else if (type === 'aircraft:update') {
+        const now = performance.now();
+        // aircraft:update may contain a single aircraft or array
+        const aircraftData = data?.data?.aircraft || data?.aircraft || (data?.data ? [data.data] : []);
+        const updates = Array.isArray(aircraftData) ? aircraftData : [aircraftData];
 
+        for (const ac of updates) {
+          if (!ac) continue;
+          const icao = (ac.hex || ac.icao_hex || '').toUpperCase();
+          if (!icao || !Number.isFinite(ac.lat) || !Number.isFinite(ac.lon)) {
+            continue;
+          }
+
+          const posData = {
+            lat: ac.lat,
+            lon: ac.lon,
+            alt: ac.alt_baro || ac.alt,
+            track: ac.track,
+            gs: ac.gs,
+            vr: ac.vr || ac.baro_rate,
+          };
+
+          // Store current target as previous for interpolation
+          if (targetPositionsRef.current[icao]) {
+            prevPositionsRef.current[icao] = { ...targetPositionsRef.current[icao] };
+          } else {
+            prevPositionsRef.current[icao] = posData;
+          }
+
+          targetPositionsRef.current[icao] = posData;
+          lastUpdateRef.current[icao] = now;
+
+          // If not interpolating, update interpolated positions directly
+          if (!interpolateRef.current) {
+            interpolatedPositionsRef.current[icao] = posData;
+          }
+        }
+
+        // Update count
+        if (mountedRef.current) {
+          setCount(Object.keys(targetPositionsRef.current).length);
+        }
+      }
+
+      // Position updates (dedicated event)
+      else if (type === 'positions:update') {
         const now = performance.now();
         const positionsData = data?.positions;
         const removedIcaos = Array.isArray(data?.removed) ? data.removed : [];
@@ -170,7 +210,8 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
 
         // Process array format (from backend task)
         for (const pos of positionsArray) {
-          const icao = pos.hex || pos.icao_hex;
+          if (!pos || typeof pos !== 'object') continue;
+          const icao = (pos.hex || pos.icao_hex || '').toUpperCase();
           if (!icao || !Number.isFinite(pos.lat) || !Number.isFinite(pos.lon)) {
             continue;
           }
@@ -202,7 +243,8 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
 
         // Process legacy object/map format
         if (positionsMap) {
-          for (const [icao, pos] of Object.entries(positionsMap)) {
+          for (const [rawIcao, pos] of Object.entries(positionsMap)) {
+            const icao = rawIcao.toUpperCase();
             if (!pos || typeof pos !== 'object' ||
                 !Number.isFinite(pos.lat) || !Number.isFinite(pos.lon)) {
               continue;
@@ -226,8 +268,9 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
         }
 
         // Remove aircraft
-        for (const icao of removedIcaos) {
-          if (typeof icao === 'string') {
+        for (const rawIcao of removedIcaos) {
+          if (typeof rawIcao === 'string') {
+            const icao = rawIcao.toUpperCase();
             delete targetPositionsRef.current[icao];
             delete prevPositionsRef.current[icao];
             delete lastUpdateRef.current[icao];
@@ -238,6 +281,30 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
         // Update count
         if (mountedRef.current) {
           setCount(Object.keys(targetPositionsRef.current).length);
+        }
+      }
+
+      // Handle aircraft:remove events
+      else if (type === 'aircraft:remove') {
+        // Extract ICAO list from various possible formats
+        const icaoList = data?.icaos || data?.icao_list || data?.hex_list ||
+                        (data?.hex ? [data.hex] : []);
+
+        if (Array.isArray(icaoList) && icaoList.length > 0) {
+          for (const rawIcao of icaoList) {
+            if (typeof rawIcao === 'string') {
+              const icao = rawIcao.toUpperCase();
+              delete targetPositionsRef.current[icao];
+              delete prevPositionsRef.current[icao];
+              delete lastUpdateRef.current[icao];
+              delete interpolatedPositionsRef.current[icao];
+            }
+          }
+
+          // Update count
+          if (mountedRef.current) {
+            setCount(Object.keys(targetPositionsRef.current).length);
+          }
         }
       }
     } catch (err) {
@@ -297,13 +364,18 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
     socketEmitRef.current = emit;
   }, [emit]);
 
-  // Setup event listeners - subscriptions are queued by useSocketIO if socket isn't ready
+  // Setup event listeners when socket is ready
+  // Re-runs when socketReady changes to set up listeners after socket connects
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !socketReady) return;
 
     // Listen for position-related events
+    // Include aircraft:update since backend may send positions via that event
+    // Include aircraft:remove to clean up positions when aircraft disappear
     const eventTypes = [
       'aircraft:snapshot',
+      'aircraft:update',
+      'aircraft:remove',
       'positions:snapshot',
       'positions:update',
       'batch',
@@ -318,7 +390,7 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
     return () => {
       unsubscribers.forEach(unsub => unsub && unsub());
     };
-  }, [enabled, on, handleMessage]);
+  }, [enabled, socketReady, on, handleMessage]);
 
   // Subscribe to topics when socket becomes ready
   useEffect(() => {
@@ -338,6 +410,11 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
+      // Clear position refs to prevent stale data on remount
+      interpolatedPositionsRef.current = {};
+      targetPositionsRef.current = {};
+      prevPositionsRef.current = {};
+      lastUpdateRef.current = {};
     };
   }, []);
 

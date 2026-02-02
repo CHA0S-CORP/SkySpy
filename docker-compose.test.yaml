@@ -45,6 +45,9 @@ services:
       - SENTRY_DSN=
       - PROMETHEUS_ENABLED=false
 
+      # Aircraft streaming - disabled for tests to ensure polling tests still work
+      - AIRCRAFT_STREAM_ENABLED=false
+
       # Python
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
@@ -148,6 +151,20 @@ services:
       - WHISPER_ENABLED=${WHISPER_ENABLED:-False}
       - WHISPER_URL=${WHISPER_URL:-http://whisper:9000}
 
+      # Aircraft streaming (SSE mode preferred, or 'adsbx' for ADSBexchange API)
+      - AIRCRAFT_STREAM_ENABLED=${AIRCRAFT_STREAM_ENABLED:-True}
+      - AIRCRAFT_STREAM_HOST=${AIRCRAFT_STREAM_HOST:-ultrafeeder}
+      - AIRCRAFT_STREAM_PORT=${AIRCRAFT_STREAM_PORT:-30047}
+      - AIRCRAFT_STREAM_BATCH_MS=${AIRCRAFT_STREAM_BATCH_MS:-100}
+      - AIRCRAFT_STREAM_MODE=${AIRCRAFT_STREAM_MODE:-sse}
+      - AIRCRAFT_STREAM_SSE_PORT=${AIRCRAFT_STREAM_SSE_PORT:-80}
+      - AIRCRAFT_STREAM_SSE_PATH=${AIRCRAFT_STREAM_SSE_PATH:-/v2/sse}
+      # ADSBexchange API streaming (when AIRCRAFT_STREAM_MODE=adsbx)
+      - AIRCRAFT_STREAM_ADSBX_INTERVAL=${AIRCRAFT_STREAM_ADSBX_INTERVAL:-2}
+      - AIRCRAFT_STREAM_ADSBX_RADIUS=${AIRCRAFT_STREAM_ADSBX_RADIUS:-250}
+      - ADSBX_LIVE_ENABLED=${ADSBX_LIVE_ENABLED:-False}
+      - ADSBX_RAPIDAPI_KEY=${ADSBX_RAPIDAPI_KEY:-}
+
       # Sentry
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-local-dev}
@@ -211,6 +228,20 @@ services:
       - PHOTO_CACHE_DIR=/data/photos
       - RADIO_ENABLED=${RADIO_ENABLED:-True}
       - RADIO_AUDIO_DIR=/data/radio
+      # Aircraft streaming (SSE mode preferred, or 'adsbx' for ADSBexchange API)
+      - AIRCRAFT_STREAM_ENABLED=${AIRCRAFT_STREAM_ENABLED:-True}
+      - AIRCRAFT_STREAM_HOST=${AIRCRAFT_STREAM_HOST:-ultrafeeder}
+      - AIRCRAFT_STREAM_PORT=${AIRCRAFT_STREAM_PORT:-30047}
+      - AIRCRAFT_STREAM_BATCH_MS=${AIRCRAFT_STREAM_BATCH_MS:-100}
+      - AIRCRAFT_STREAM_MODE=${AIRCRAFT_STREAM_MODE:-sse}
+      - AIRCRAFT_STREAM_SSE_PORT=${AIRCRAFT_STREAM_SSE_PORT:-80}
+      - AIRCRAFT_STREAM_SSE_PATH=${AIRCRAFT_STREAM_SSE_PATH:-/v2/sse}
+      # ADSBexchange API streaming (when AIRCRAFT_STREAM_MODE=adsbx)
+      - AIRCRAFT_STREAM_ADSBX_INTERVAL=${AIRCRAFT_STREAM_ADSBX_INTERVAL:-2}
+      - AIRCRAFT_STREAM_ADSBX_RADIUS=${AIRCRAFT_STREAM_ADSBX_RADIUS:-250}
+      - ADSBX_LIVE_ENABLED=${ADSBX_LIVE_ENABLED:-False}
+      - ADSBX_RAPIDAPI_KEY=${ADSBX_RAPIDAPI_KEY:-}
+      - CELERY_POOL=gevent
     volumes:
       - ./test/api-cache:/data
       - ./skyspy_django/skyspy:/app/skyspy:ro  # Hot reload Python code
@@ -219,13 +250,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      ultrafeeder:
+        condition: service_healthy
     networks:
       - test-network
     command: >
       celery -A skyspy worker
       --loglevel=info
       --concurrency=50
-      --queues=polling,default,database,transcription,notifications
+      --queues=polling,default,database,transcription,notifications,low_priority
       --pool=gevent
 
   # Celery Beat for dev profile
@@ -242,6 +275,8 @@ services:
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-dev-secret-key-change-in-production}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-adsb}:${POSTGRES_PASSWORD:-adsb}@pgbouncer:5432/${POSTGRES_DB:-adsb}
       - REDIS_URL=redis://redis:6379/0
+      # Aircraft streaming (needed for beat schedule)
+      - AIRCRAFT_STREAM_ENABLED=${AIRCRAFT_STREAM_ENABLED:-True}
     volumes:
       - ./skyspy_django/skyspy:/app/skyspy:ro  # Hot reload Python code
     depends_on:
@@ -350,14 +385,22 @@ services:
       dockerfile: Dockerfile
     image: ghcr.io/cha0s-corp/1090-mock:latest
     profiles: ["dev","test"]
-    command: ["python3", "mock_1090.py"]
+    command: ["python3", "mock_server.py"]
     environment:
       - MOCK_TYPE=ultrafeeder
       - ADSBX_API_KEY=${ADSBX_API_KEY:-}
+      # JSON streaming configuration (readsb net-json-port compatible)
+      - JSON_STREAM_ENABLED=${JSON_STREAM_ENABLED:-true}
+      - JSON_STREAM_PORT=30047
+      - JSON_STREAM_INTERVAL_MS=${JSON_STREAM_INTERVAL_MS:-100}
+      # SSE streaming configuration (ADSBexchange compatible)
+      - SSE_ENABLED=${SSE_ENABLED:-true}
+      - SSE_INTERVAL_MS=${SSE_INTERVAL_MS:-1000}
     networks:
       - test-network
     ports:
       - ${ULTRAFEEDER_PORT_EXTERNAL:-18080}:80
+      - ${ULTRAFEEDER_STREAM_PORT_EXTERNAL:-30047}:30047
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
       interval: 10s

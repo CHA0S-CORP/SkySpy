@@ -12,7 +12,7 @@
  * @module useSocketIOData
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSocketIO } from './useSocketIO';
 import {
   DEMO_AIRCRAFT,
@@ -32,6 +32,7 @@ import {
   processAcarsSnapshot,
   processAudioTransmission,
   processAirspaceData,
+  forceFlushAircraftBatch,
 } from '../channels';
 
 /**
@@ -82,9 +83,11 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
 
   // Debug: Log aircraft state changes
   useEffect(() => {
-    const count = Object.keys(aircraft).length;
-    if (count > 0) {
-      console.log('[useSocketIOData] Aircraft state updated:', count, 'aircraft in state');
+    if (import.meta.env.DEV) {
+      const count = Object.keys(aircraft).length;
+      if (count > 0) {
+        console.log('[useSocketIOData] Aircraft state updated:', count, 'aircraft in state');
+      }
     }
   }, [aircraft]);
 
@@ -94,13 +97,17 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
   const handleMessage = useCallback((type, data) => {
     if (!mountedRef.current) return;
 
-    // Debug: Log all incoming messages
-    console.log('[useSocketIOData] Message received:', type, data?.aircraft?.length ?? data?.count ?? '');
+    // Debug: Log all incoming messages (dev only - removed for production performance)
+    if (import.meta.env.DEV) {
+      console.log('[useSocketIOData] Message received:', type, data?.aircraft?.length ?? data?.count ?? '', data);
+    }
 
     try {
       // Handle batch messages
       if (type === 'batch' && Array.isArray(data?.messages)) {
-        console.log('[useSocketIOData] Processing batch with', data.messages.length, 'messages');
+        if (import.meta.env.DEV) {
+          console.log('[useSocketIOData] Processing batch with', data.messages.length, 'messages');
+        }
         data.messages.forEach(msg => {
           if (msg && msg.type) {
             handleMessage(msg.type, msg.data || msg);
@@ -256,6 +263,18 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
 
       // Request/Response
       else if (type === 'response') {
+        if (import.meta.env.DEV) {
+          console.log('[useSocketIOData] Response received:', data?.request_type, data?.request_id);
+        }
+        // Handle aircraft-snapshot response specially - process as aircraft:snapshot event
+        if (data?.request_type === 'aircraft-snapshot' && data?.data?.aircraft) {
+          if (import.meta.env.DEV) {
+            console.log('[useSocketIOData] Processing aircraft-snapshot response with', data.data.aircraft.length, 'aircraft');
+          }
+          const wrappedData = { type: 'aircraft:snapshot', data: data.data };
+          processAircraftSnapshot(wrappedData, setAircraft, setStats);
+        }
+        // Resolve pending request if exists
         if (data?.request_id && pendingRequests.current.has(data.request_id)) {
           const { resolve, timeoutId } = pendingRequests.current.get(data.request_id);
           clearTimeout(timeoutId);
@@ -273,12 +292,18 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
 
       // Subscription confirmations
       else if (type === 'subscribed') {
-        console.log('[useSocketIOData] Subscribed to topics:', data?.topics);
+        if (import.meta.env.DEV) {
+          console.log('[useSocketIOData] Subscribed to topics:', data?.topics);
+        }
       } else if (type === 'unsubscribed') {
-        console.log('[useSocketIOData] Unsubscribed from topics:', data?.topics);
+        if (import.meta.env.DEV) {
+          console.log('[useSocketIOData] Unsubscribed from topics:', data?.topics);
+        }
       }
     } catch (err) {
-      console.error('[useSocketIOData] Error processing message:', type, err);
+      if (import.meta.env.DEV) {
+        console.error('[useSocketIOData] Error processing message:', type, err);
+      }
     }
   }, []);
 
@@ -293,7 +318,9 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
    * to ensure listeners are attached before data starts flowing
    */
   const handleConnect = useCallback(() => {
-    console.log('[useSocketIOData] Socket.IO connected');
+    if (import.meta.env.DEV) {
+      console.log('[useSocketIOData] Socket.IO connected');
+    }
     // Don't subscribe here - wait for event listeners to be set up first
   }, []);
 
@@ -301,7 +328,12 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
    * Handle Socket.IO disconnection
    */
   const handleDisconnect = useCallback((reason) => {
-    console.log('[useSocketIOData] Socket.IO disconnected:', reason);
+    if (import.meta.env.DEV) {
+      console.log('[useSocketIOData] Socket.IO disconnected:', reason);
+    }
+
+    // Flush any pending batched aircraft updates before clearing state
+    forceFlushAircraftBatch();
 
     if (mountedRef.current) {
       setAircraft({});
@@ -351,7 +383,9 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
     // Re-subscribe if topics changed while connected
     if (isReady && socketEmitRef.current && prevTopics !== topics) {
       const topicsList = topics.split(',').map(t => t.trim());
-      console.log('[useSocketIOData] Topics changed, re-subscribing:', topicsList);
+      if (import.meta.env.DEV) {
+        console.log('[useSocketIOData] Topics changed, re-subscribing:', topicsList);
+      }
       socketEmitRef.current('subscribe', { topics: topicsList });
     }
   }, [topics, isReady]);
@@ -392,7 +426,9 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
       'batch',
     ];
 
-    console.log('[useSocketIOData] Setting up event listeners for', eventTypes.length, 'event types');
+    if (import.meta.env.DEV) {
+      console.log('[useSocketIOData] Setting up event listeners for', eventTypes.length, 'event types');
+    }
 
     // Use a wrapper that calls the ref to avoid recreating listeners
     const unsubscribers = eventTypes.map(eventType => {
@@ -406,15 +442,34 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
     return () => {
       unsubscribers.forEach(unsub => unsub && unsub());
     };
-  }, [enabled, on]); // Subscriptions are queued by useSocketIO
+  }, [enabled, isReady, on]); // Re-run when socket becomes ready
 
   // Subscribe to topics when socket becomes ready
   useEffect(() => {
     if (!enabled || !isReady) return;
 
     const topicsList = topicsRef.current.split(',').map(t => t.trim());
-    console.log('[useSocketIOData] Socket ready, subscribing to topics:', topicsList);
+    if (import.meta.env.DEV) {
+      console.log('[useSocketIOData] Socket ready, subscribing to topics:', topicsList);
+    }
     emit('subscribe', { topics: topicsList });
+    if (import.meta.env.DEV) {
+      console.log('[useSocketIOData] Emitted subscribe event');
+    }
+
+    // Request initial aircraft snapshot after subscribing
+    // This is needed because the backend sends the initial snapshot before our listeners are set up
+    if (topicsList.includes('all') || topicsList.includes('aircraft')) {
+      const requestId = `init-${Date.now()}`;
+      if (import.meta.env.DEV) {
+        console.log('[useSocketIOData] Requesting aircraft-snapshot with request_id:', requestId);
+      }
+      emit('request', {
+        type: 'aircraft-snapshot',
+        request_id: requestId,
+        params: {},
+      });
+    }
   }, [enabled, isReady, emit]);
 
   // Mount/unmount cleanup
@@ -422,6 +477,8 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      // Flush any pending batched aircraft updates on unmount
+      forceFlushAircraftBatch();
       const pendingEntries = Array.from(pendingRequests.current.entries());
       pendingRequests.current.clear();
       pendingEntries.forEach(([, { timeoutId }]) => clearTimeout(timeoutId));
@@ -498,7 +555,8 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
    */
   const request = useCallback((type, params = {}, timeoutMs = 10000) => {
     return new Promise((resolve, reject) => {
-      if (!connected) {
+      // Use isReady to ensure socket is fully ready, not just connected state
+      if (!isReady) {
         reject(new Error('Socket.IO not connected'));
         return;
       }
@@ -516,13 +574,21 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
 
       pendingRequests.current.set(requestId, { resolve, reject, timeoutId });
 
-      emit('request', {
+      // Check if emit actually succeeded
+      const emitted = emit('request', {
         type,
         request_id: requestId,
         params,
       });
+
+      if (!emitted) {
+        // Emit failed - socket not actually connected
+        clearTimeout(timeoutId);
+        pendingRequests.current.delete(requestId);
+        reject(new Error('Socket.IO emit failed - not connected'));
+      }
     });
-  }, [connected, emit]);
+  }, [isReady, emit]);
 
   /**
    * Subscribe to additional topics
@@ -585,9 +651,12 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
     }
   }, [connected, emit]);
 
+  // Memoize aircraft array to prevent new array on every render
+  const aircraftArray = useMemo(() => Object.values(aircraft), [aircraft]);
+
   return {
     // Data
-    aircraft: Object.values(aircraft),
+    aircraft: aircraftArray,
     aircraftMap: aircraft,
     stats,
     safetyEvents,
@@ -604,6 +673,7 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
     // Connection state
     connected,
     connecting,
+    isReady,
     error: socketError,
 
     // Methods

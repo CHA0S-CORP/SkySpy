@@ -9,6 +9,7 @@ import logging
 from datetime import datetime, timedelta
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db.models import Count, Avg, Max, Min, F, Q, Case, When, Value, CharField
 from django.db.models.functions import TruncHour, Floor, ExtractHour
 from django.utils import timezone
@@ -236,6 +237,13 @@ class HistoryViewSet(viewsets.ViewSet):
             hours = int(request.query_params.get('hours', 24))
         except (ValueError, TypeError):
             hours = 24
+
+        # Check cache first
+        cache_key = f"history_stats_{hours}"
+        cached = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
         cutoff = timezone.now() - timedelta(hours=hours)
 
         # Get sighting stats
@@ -261,7 +269,7 @@ class HistoryViewSet(viewsets.ViewSet):
             military=Count('id', filter=Q(is_military=True)),
         )
 
-        return Response({
+        result = {
             'total_sightings': sighting_stats['total'] or 0,
             'total_sessions': session_stats['total'] or 0,
             'unique_aircraft': sighting_stats['unique_aircraft'] or 0,
@@ -274,7 +282,11 @@ class HistoryViewSet(viewsets.ViewSet):
             'max_distance_nm': round(sighting_stats['max_distance'] or 0, 1),
             'avg_speed': int(sighting_stats['avg_speed'] or 0),
             'max_speed': sighting_stats['max_speed'],
-        })
+        }
+
+        # Cache for 5 minutes
+        cache.set(cache_key, result, timeout=300)
+        return Response(result)
 
     @extend_schema(
         summary="Get activity trends",
@@ -292,6 +304,13 @@ class HistoryViewSet(viewsets.ViewSet):
         except (ValueError, TypeError):
             hours = 24
         interval = request.query_params.get('interval', 'hour')
+
+        # Check cache first
+        cache_key = f"history_trends_{hours}_{interval}"
+        cached = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
         cutoff = timezone.now() - timedelta(hours=hours)
 
         # Group by hour
@@ -302,7 +321,7 @@ class HistoryViewSet(viewsets.ViewSet):
         ).values('hour').annotate(
             position_count=Count('id'),
             unique_aircraft=Count('icao_hex', distinct=True),
-            military_count=Count('id', filter=F('is_military')),
+            military_count=Count('id', filter=Q(is_military=True)),
             avg_altitude=Avg('altitude_baro'),
             max_altitude=Max('altitude_baro'),
             avg_distance=Avg('distance_nm'),
@@ -333,7 +352,7 @@ class HistoryViewSet(viewsets.ViewSet):
 
         peak_interval = max(intervals, key=lambda x: x['unique_aircraft']) if intervals else None
 
-        return Response({
+        result = {
             'intervals': intervals,
             'interval_type': interval,
             'time_range_hours': hours,
@@ -343,7 +362,11 @@ class HistoryViewSet(viewsets.ViewSet):
                 'peak_interval': peak_interval['timestamp'] if peak_interval else None,
                 'total_intervals': len(intervals),
             }
-        })
+        }
+
+        # Cache for 5 minutes
+        cache.set(cache_key, result, timeout=300)
+        return Response(result)
 
     @extend_schema(
         summary="Get top performers",

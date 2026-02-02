@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, memo } from 'react';
 import {
   Plane, X, ArrowUp, ArrowDown, Navigation,
   AlertTriangle, ExternalLink, Info, Crosshair,
@@ -69,8 +69,9 @@ function getAltitudeColorClass(altitude) {
 
 /**
  * Popup showing selected aircraft details
+ * Memoized to prevent re-renders when other map state changes
  */
-export function AircraftPopup({
+export const AircraftPopup = memo(function AircraftPopup({
   aircraft,
   aircraftInfo,
   onClose,
@@ -342,6 +343,23 @@ export function AircraftPopup({
       </div>
     </div>
   );
-}
+}, (prev, next) => {
+  // Custom shallow comparison for performance
+  // Only re-render if key aircraft properties change
+  if (prev.aircraft?.hex !== next.aircraft?.hex) return false;
+  if (prev.aircraft?.lat !== next.aircraft?.lat) return false;
+  if (prev.aircraft?.lon !== next.aircraft?.lon) return false;
+  if (prev.aircraft?.alt !== next.aircraft?.alt) return false;
+  if (prev.aircraft?.gs !== next.aircraft?.gs) return false;
+  if (prev.aircraft?.track !== next.aircraft?.track) return false;
+  if (prev.aircraft?.squawk !== next.aircraft?.squawk) return false;
+  if (prev.aircraft?.flight !== next.aircraft?.flight) return false;
+  if (prev.aircraft?.vr !== next.aircraft?.vr) return false;
+  if (prev.aircraft?.rssi !== next.aircraft?.rssi) return false;
+  if (prev.mapMode !== next.mapMode) return false;
+  if (prev.trackHistory?.length !== next.trackHistory?.length) return false;
+  // Functions are stable (useCallback), so we don't compare them
+  return true;
+});
 
 export default AircraftPopup;

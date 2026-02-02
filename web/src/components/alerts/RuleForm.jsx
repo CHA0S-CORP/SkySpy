@@ -89,6 +89,8 @@ export function RuleForm({
   rule = null,
   prefillAircraft = null,
   apiBase = '',
+  wsRequest,
+  wsConnected,
   aircraft = [],
   feederLocation = null,
   onClose,
@@ -108,7 +110,7 @@ export function RuleForm({
   // Notification channels
   const [selectedChannelIds, setSelectedChannelIds] = useState(ruleToEdit?.notification_channel_ids || []);
   const [useGlobalNotifications, setUseGlobalNotifications] = useState(ruleToEdit?.use_global_notifications !== false);
-  const { channels, loading: channelsLoading } = useNotificationChannels(apiBase);
+  const { channels, loading: channelsLoading } = useNotificationChannels({ apiBase, wsRequest, wsConnected });
 
   // Focus management
   const modalRef = useRef(null);

@@ -2241,71 +2241,15 @@ Force refresh of airframe data from external sources.
 
 ---
 
-## WebSocket API
+## Socket.IO API (real-time)
 
-Real-time data is available via Django Channels WebSocket connections.
+Real-time data is available via **Socket.IO** (path `/socket.io`, default namespace `/`). Use the same host as the REST API; authenticate by passing a token in the `auth` object when connecting.
 
-### Connection URL
+- **Connection:** `io(origin, { path: '/socket.io', auth: { token: accessToken } })`
+- **Topics:** Subscribe after connect with `emit('subscribe', { topics: ['aircraft', 'safety', ...] })`. Use topic `all` for every stream.
+- **Events:** Server emits `aircraft:snapshot`, `aircraft:update`, `safety:event`, `alert:triggered`, `response`, `error`, etc.
 
-```
-wss://your-domain.com/ws/
-```
-
-### Authentication
-
-Include JWT token in the connection:
-
-```javascript
-const ws = new WebSocket('wss://your-domain.com/ws/?token=' + accessToken);
-```
-
-### Available Topics
-
-| Topic | Description | Update Frequency |
-|-------|-------------|------------------|
-| `aircraft` | Real-time aircraft positions | ~1s |
-| `alerts` | Alert notifications | On trigger |
-| `safety` | Safety event notifications | On detection |
-| `stats` | System statistics updates | ~5s |
-| `acars` | ACARS message stream | On receive |
-| `audio` | Audio transmission notifications | On receive |
-
-### Subscribe to Topics
-
-```json
-{
-  "action": "subscribe",
-  "topic": "aircraft"
-}
-```
-
-### Unsubscribe from Topics
-
-```json
-{
-  "action": "unsubscribe",
-  "topic": "aircraft"
-}
-```
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant WS as WebSocket Server
-    participant Redis
-
-    Client->>WS: Connect with JWT
-    WS->>WS: Validate token
-    WS-->>Client: Connected
-    Client->>WS: Subscribe to "aircraft"
-    WS->>Redis: Join aircraft channel
-    loop Every second
-        Redis-->>WS: Aircraft update
-        WS-->>Client: Aircraft data
-    end
-    Client->>WS: Unsubscribe from "aircraft"
-    WS->>Redis: Leave aircraft channel
-```
+For full details, event shapes, request types, and namespaces (`/`, `/audio`, `/cannonball`), see the [Socket.IO API Reference](./06-websocket-api.md).
 
 ---
 

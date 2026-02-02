@@ -477,8 +477,23 @@ FEEDER_LAT = get_env('FEEDER_LAT', '47.9377', float)
 FEEDER_LON = get_env('FEEDER_LON', '-121.9687', float)
 
 # Polling
-POLLING_INTERVAL = get_env('POLLING_INTERVAL', '2', int)
+POLLING_INTERVAL = get_env('POLLING_INTERVAL', '1', int)
 DB_STORE_INTERVAL = get_env('DB_STORE_INTERVAL', '5', int)
+
+# Aircraft Streaming (replaces polling when enabled)
+# Supports two modes: SSE (preferred) and TCP (legacy)
+AIRCRAFT_STREAM_ENABLED = get_env('AIRCRAFT_STREAM_ENABLED', 'False', bool)
+AIRCRAFT_STREAM_HOST = get_env('AIRCRAFT_STREAM_HOST', ULTRAFEEDER_HOST)
+AIRCRAFT_STREAM_PORT = get_env('AIRCRAFT_STREAM_PORT', '30047', int)  # TCP net-json-port
+AIRCRAFT_STREAM_RECONNECT_DELAY = get_env('AIRCRAFT_STREAM_RECONNECT_DELAY', '5', int)
+AIRCRAFT_STREAM_BATCH_MS = get_env('AIRCRAFT_STREAM_BATCH_MS', '100', int)  # Batch broadcasts
+# SSE streaming settings (preferred mode)
+AIRCRAFT_STREAM_MODE = get_env('AIRCRAFT_STREAM_MODE', 'sse')  # 'sse', 'tcp', 'adsbx', or 'auto'
+AIRCRAFT_STREAM_SSE_PORT = get_env('AIRCRAFT_STREAM_SSE_PORT', '80', int)  # HTTP port for SSE
+AIRCRAFT_STREAM_SSE_PATH = get_env('AIRCRAFT_STREAM_SSE_PATH', '/v2/sse')  # SSE endpoint path
+# ADSBexchange API streaming (polling mode)
+AIRCRAFT_STREAM_ADSBX_INTERVAL = get_env('AIRCRAFT_STREAM_ADSBX_INTERVAL', '2', float)  # Poll interval in seconds
+AIRCRAFT_STREAM_ADSBX_RADIUS = get_env('AIRCRAFT_STREAM_ADSBX_RADIUS', '250', int)  # Radius in nautical miles
 
 # Session Management
 SESSION_TIMEOUT_MINUTES = get_env('SESSION_TIMEOUT_MINUTES', '30', int)
@@ -610,6 +625,17 @@ ADSBX_RAPIDAPI_KEY = get_env('ADSBX_RAPIDAPI_KEY', '')
 # Free tier: 100 requests/month
 AVIATIONSTACK_ENABLED = get_env('AVIATIONSTACK_ENABLED', 'False', bool)
 AVIATIONSTACK_API_KEY = get_env('AVIATIONSTACK_API_KEY', '')
+
+# FAA SWIM FNS (Flight NOTAM System)
+# Provides real-time NOTAM updates via Solace messaging
+# Register at: https://scds.faa.gov/
+SWIM_FNS_ENABLED = get_env('SWIM_FNS_ENABLED', 'False', bool)
+SWIM_FNS_HOST = get_env('SWIM_FNS_HOST', 'ems1.swim.faa.gov')
+SWIM_FNS_PORT = get_env('SWIM_FNS_PORT', '55443', int)
+SWIM_FNS_VPN = get_env('SWIM_FNS_VPN', 'AIM_FNS')
+SWIM_FNS_USERNAME = get_env('SWIM_FNS_USERNAME', '')
+SWIM_FNS_PASSWORD = get_env('SWIM_FNS_PASSWORD', '')
+SWIM_FNS_QUEUE = get_env('SWIM_FNS_QUEUE', '')
 
 
 # =============================================================================

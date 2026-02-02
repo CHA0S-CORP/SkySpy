@@ -63,6 +63,19 @@ class CannonballNamespace(socketio.AsyncNamespace):
     - threat_radius_nm: Threat detection radius in nautical miles
     """
 
+    # Request types that require specific permissions
+    REQUEST_PERMISSIONS = {
+        'threats': 'aircraft.view',
+        'session-info': 'aircraft.view',
+        'sessions': 'cannonball.view_sessions',
+        'patterns': 'cannonball.view_patterns',
+        'alerts': 'cannonball.view_alerts',
+        'alert-acknowledge': 'cannonball.manage_alerts',
+        'alert-acknowledge-all': 'cannonball.manage_alerts',
+        'stats-summary': 'cannonball.view_stats',
+        'known-aircraft-check': 'aircraft.view',
+    }
+
     def __init__(self):
         super().__init__('/cannonball')
         self.supported_topics = ['threats', 'all']
@@ -160,6 +173,13 @@ class CannonballNamespace(socketio.AsyncNamespace):
         except (ValueError, TypeError):
             await self.emit('error', {
                 'message': 'Invalid coordinate values',
+            }, room=sid)
+            return
+
+        # Validate coordinate bounds
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            await self.emit('error', {
+                'message': 'Coordinates out of bounds (lat: -90 to 90, lon: -180 to 180)',
             }, room=sid)
             return
 
@@ -269,42 +289,153 @@ class CannonballNamespace(socketio.AsyncNamespace):
         request_id = data.get('request_id')
         params = data.get('params', {})
 
-        session = await sio.get_session(sid, namespace='/cannonball')
+        # Validate params is actually a dict
+        if not isinstance(params, dict):
+            params = {}
 
-        if request_type == 'threats':
-            position = session.get('position')
-            if position:
-                threats = await self._get_threats(session)
-            else:
-                threats = []
-
-            await self.emit('response', {
-                'request_id': request_id,
-                'request_type': 'threats',
-                'data': {
-                    'threats': threats,
-                    'count': len(threats),
-                    'position': position,
-                },
-            }, room=sid)
-
-        elif request_type == 'session-info':
-            await self.emit('response', {
-                'request_id': request_id,
-                'request_type': 'session-info',
-                'data': {
-                    'session_id': session.get('session_id'),
-                    'position': session.get('position'),
-                    'heading': session.get('heading'),
-                    'radius_nm': session.get('threat_radius_nm', 25.0),
-                },
-            }, room=sid)
-
-        else:
+        if not request_type:
             await self.emit('error', {
                 'request_id': request_id,
-                'message': f'Unknown request type: {request_type}',
+                'message': 'Missing request type',
             }, room=sid)
+            return
+
+        # Check permission for this request type
+        if not await self._check_request_permission(sid, request_type):
+            await self.emit('error', {
+                'request_id': request_id,
+                'message': 'Permission denied',
+            }, room=sid)
+            return
+
+        session = await sio.get_session(sid, namespace='/cannonball')
+
+        try:
+            if request_type == 'threats':
+                position = session.get('position')
+                if position:
+                    threats = await self._get_threats(session)
+                else:
+                    threats = []
+
+                await self.emit('response', {
+                    'request_id': request_id,
+                    'request_type': 'threats',
+                    'data': {
+                        'threats': threats,
+                        'count': len(threats),
+                        'position': position,
+                    },
+                }, room=sid)
+
+            elif request_type == 'session-info':
+                await self.emit('response', {
+                    'request_id': request_id,
+                    'request_type': 'session-info',
+                    'data': {
+                        'session_id': session.get('session_id'),
+                        'position': session.get('position'),
+                        'heading': session.get('heading'),
+                        'radius_nm': session.get('threat_radius_nm', 25.0),
+                    },
+                }, room=sid)
+
+            elif request_type == 'sessions':
+                result = await self._get_sessions(params)
+                await self.emit('response', {
+                    'request_id': request_id,
+                    'request_type': 'sessions',
+                    'data': result,
+                }, room=sid)
+
+            elif request_type == 'patterns':
+                result = await self._get_patterns(params)
+                await self.emit('response', {
+                    'request_id': request_id,
+                    'request_type': 'patterns',
+                    'data': result,
+                }, room=sid)
+
+            elif request_type == 'alerts':
+                result = await self._get_alerts(params)
+                await self.emit('response', {
+                    'request_id': request_id,
+                    'request_type': 'alerts',
+                    'data': result,
+                }, room=sid)
+
+            elif request_type == 'alert-acknowledge':
+                result = await self._acknowledge_alert(params)
+                await self.emit('response', {
+                    'request_id': request_id,
+                    'request_type': 'alert-acknowledge',
+                    'data': result,
+                }, room=sid)
+
+            elif request_type == 'alert-acknowledge-all':
+                result = await self._acknowledge_all_alerts(params)
+                await self.emit('response', {
+                    'request_id': request_id,
+                    'request_type': 'alert-acknowledge-all',
+                    'data': result,
+                }, room=sid)
+
+            elif request_type == 'stats-summary':
+                result = await self._get_stats_summary(params)
+                await self.emit('response', {
+                    'request_id': request_id,
+                    'request_type': 'stats-summary',
+                    'data': result,
+                }, room=sid)
+
+            elif request_type == 'known-aircraft-check':
+                result = await self._check_known_aircraft(params)
+                await self.emit('response', {
+                    'request_id': request_id,
+                    'request_type': 'known-aircraft-check',
+                    'data': result,
+                }, room=sid)
+
+            else:
+                await self.emit('error', {
+                    'request_id': request_id,
+                    'message': f'Unknown request type: {request_type}',
+                }, room=sid)
+
+        except ValueError as e:
+            await self.emit('error', {
+                'request_id': request_id,
+                'message': str(e),
+            }, room=sid)
+        except Exception as e:
+            logger.exception(f"Error handling request {request_type} for {sid}: {e}")
+            await self.emit('error', {
+                'request_id': request_id,
+                'message': 'Internal server error',
+            }, room=sid)
+
+    async def _check_request_permission(self, sid: str, request_type: str) -> bool:
+        """Check if the user has permission for this request type."""
+        from django.conf import settings as django_settings
+
+        auth_mode = getattr(django_settings, 'AUTH_MODE', 'hybrid')
+
+        # Public mode - all permissions granted
+        if auth_mode == 'public':
+            return True
+
+        # Get permission required for this request type
+        permission = self.REQUEST_PERMISSIONS.get(request_type)
+        if not permission:
+            # Unknown request type - allow by default (will be caught by handler)
+            return True
+
+        session = await sio.get_session(sid, namespace='/cannonball')
+        user = session.get('user')
+
+        # Use the permission checking infrastructure
+        from skyspy.socketio.middleware.permissions import _check_permission
+        return await _check_permission(user, permission)
 
     @sync_to_async
     def _get_threats(self, session: dict) -> List[Dict[str, Any]]:
@@ -434,6 +565,224 @@ class CannonballNamespace(socketio.AsyncNamespace):
             return 'departing'
         else:
             return 'holding'
+
+    # =========================================================================
+    # Request Handler Methods
+    # =========================================================================
+
+    @sync_to_async
+    def _get_sessions(self, params: dict) -> Dict[str, Any]:
+        """Get cannonball sessions."""
+        from django.utils import timezone
+        from datetime import timedelta
+
+        from skyspy.models import CannonballSession
+
+        active_only = params.get('active_only', True)
+        hours = params.get('hours', 24)
+        limit = params.get('limit', 50)
+
+        cutoff = timezone.now() - timedelta(hours=hours)
+        queryset = CannonballSession.objects.filter(created_at__gte=cutoff)
+
+        if active_only:
+            queryset = queryset.filter(is_active=True)
+
+        sessions = queryset.order_by('-created_at')[:limit]
+
+        return {
+            'sessions': [
+                {
+                    'id': str(s.id),
+                    'session_id': str(s.session_id),
+                    'is_active': s.is_active,
+                    'created_at': s.created_at.isoformat() if s.created_at else None,
+                    'last_position_at': s.last_position_at.isoformat() if s.last_position_at else None,
+                    'threat_count': s.threat_count,
+                    'alert_count': s.alert_count,
+                }
+                for s in sessions
+            ],
+            'count': len(sessions),
+        }
+
+    @sync_to_async
+    def _get_patterns(self, params: dict) -> Dict[str, Any]:
+        """Get threat detection patterns."""
+        from django.utils import timezone
+        from datetime import timedelta
+
+        from skyspy.models import CannonballPattern
+
+        hours = params.get('hours', 24)
+        limit = params.get('limit', 100)
+
+        cutoff = timezone.now() - timedelta(hours=hours)
+        patterns = CannonballPattern.objects.filter(
+            detected_at__gte=cutoff
+        ).order_by('-detected_at')[:limit]
+
+        return {
+            'patterns': [
+                {
+                    'id': str(p.id),
+                    'pattern_type': p.pattern_type,
+                    'icao_hex': p.icao_hex,
+                    'description': p.description,
+                    'confidence': p.confidence,
+                    'detected_at': p.detected_at.isoformat() if p.detected_at else None,
+                    'metadata': p.metadata or {},
+                }
+                for p in patterns
+            ],
+            'count': len(patterns),
+        }
+
+    @sync_to_async
+    def _get_alerts(self, params: dict) -> Dict[str, Any]:
+        """Get cannonball alerts."""
+        from django.utils import timezone
+        from datetime import timedelta
+
+        from skyspy.models import CannonballAlert
+
+        hours = params.get('hours', 24)
+        unacknowledged = params.get('unacknowledged', False)
+        limit = params.get('limit', 100)
+
+        cutoff = timezone.now() - timedelta(hours=hours)
+        queryset = CannonballAlert.objects.filter(created_at__gte=cutoff)
+
+        if unacknowledged:
+            queryset = queryset.filter(acknowledged=False)
+
+        alerts = queryset.order_by('-created_at')[:limit]
+
+        return {
+            'alerts': [
+                {
+                    'id': str(a.id),
+                    'alert_type': a.alert_type,
+                    'icao_hex': a.icao_hex,
+                    'description': a.description,
+                    'severity': a.severity,
+                    'acknowledged': a.acknowledged,
+                    'created_at': a.created_at.isoformat() if a.created_at else None,
+                    'acknowledged_at': a.acknowledged_at.isoformat() if a.acknowledged_at else None,
+                }
+                for a in alerts
+            ],
+            'count': len(alerts),
+        }
+
+    @sync_to_async
+    def _acknowledge_alert(self, params: dict) -> Dict[str, Any]:
+        """Acknowledge a single alert."""
+        from django.utils import timezone
+
+        from skyspy.models import CannonballAlert
+
+        alert_id = params.get('id')
+        if not alert_id:
+            raise ValueError('Missing alert id')
+
+        try:
+            alert = CannonballAlert.objects.get(id=alert_id)
+            alert.acknowledged = True
+            alert.acknowledged_at = timezone.now()
+            alert.save(update_fields=['acknowledged', 'acknowledged_at'])
+            return {
+                'success': True,
+                'id': str(alert.id),
+                'acknowledged': True,
+            }
+        except CannonballAlert.DoesNotExist:
+            raise ValueError('Alert not found')
+
+    @sync_to_async
+    def _acknowledge_all_alerts(self, params: dict) -> Dict[str, Any]:
+        """Acknowledge all unacknowledged alerts."""
+        from django.utils import timezone
+
+        from skyspy.models import CannonballAlert
+
+        updated = CannonballAlert.objects.filter(
+            acknowledged=False
+        ).update(
+            acknowledged=True,
+            acknowledged_at=timezone.now()
+        )
+
+        return {
+            'success': True,
+            'acknowledged_count': updated,
+        }
+
+    @sync_to_async
+    def _get_stats_summary(self, params: dict) -> Dict[str, Any]:
+        """Get cannonball statistics summary."""
+        from django.db.models import Count, Avg
+        from django.utils import timezone
+        from datetime import timedelta
+
+        from skyspy.models import CannonballSession, CannonballAlert, CannonballPattern
+
+        hours = params.get('hours', 24)
+        cutoff = timezone.now() - timedelta(hours=hours)
+
+        # Session stats
+        session_count = CannonballSession.objects.filter(created_at__gte=cutoff).count()
+        active_sessions = CannonballSession.objects.filter(is_active=True).count()
+
+        # Alert stats
+        alert_count = CannonballAlert.objects.filter(created_at__gte=cutoff).count()
+        unacknowledged_alerts = CannonballAlert.objects.filter(
+            created_at__gte=cutoff, acknowledged=False
+        ).count()
+
+        # Pattern stats
+        pattern_count = CannonballPattern.objects.filter(detected_at__gte=cutoff).count()
+
+        return {
+            'hours': hours,
+            'sessions': {
+                'total': session_count,
+                'active': active_sessions,
+            },
+            'alerts': {
+                'total': alert_count,
+                'unacknowledged': unacknowledged_alerts,
+            },
+            'patterns': {
+                'total': pattern_count,
+            },
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+        }
+
+    @sync_to_async
+    def _check_known_aircraft(self, params: dict) -> Dict[str, Any]:
+        """Check if an aircraft ICAO is in the known LE database."""
+        icao_hex = params.get('icao_hex') or params.get('icao')
+        if not icao_hex:
+            raise ValueError('Missing icao_hex parameter')
+
+        le_info = identify_law_enforcement(
+            hex_code=icao_hex.upper(),
+            callsign=params.get('callsign'),
+            operator=params.get('operator'),
+            category=params.get('category'),
+            type_code=params.get('type_code'),
+        )
+
+        return {
+            'icao_hex': icao_hex.upper(),
+            'is_known': le_info['is_law_enforcement'] or le_info['is_interest'],
+            'is_law_enforcement': le_info['is_law_enforcement'],
+            'is_helicopter': le_info['is_helicopter'],
+            'category': le_info.get('category'),
+            'description': le_info.get('description'),
+            'confidence': le_info.get('confidence', 'unknown'),
+        }
 
 
 # Create and register the namespace

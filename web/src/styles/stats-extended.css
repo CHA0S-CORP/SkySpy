@@ -8,6 +8,122 @@
    Shared Section Styles
    ============================================================================ */
 
+/* ============================================================================
+   Extended Stats Section Container (wrapper for all extended analytics tabs)
+   ============================================================================ */
+
+.extended-stats-section {
+  background: linear-gradient(135deg, rgba(20, 30, 45, 0.9), rgba(15, 25, 35, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 24px;
+}
+
+.extended-stats-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.extended-stats-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.extended-stats-title svg {
+  color: var(--accent-cyan);
+}
+
+.extended-stats-tabs {
+  display: flex;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 4px;
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.extended-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.extended-tab:hover {
+  background: rgba(0, 200, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.extended-tab.active {
+  background: rgba(0, 200, 255, 0.15);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  box-shadow: 0 0 12px rgba(0, 200, 255, 0.15);
+}
+
+.extended-tab svg {
+  opacity: 0.7;
+}
+
+.extended-tab.active svg {
+  opacity: 1;
+}
+
+/* Responsive extended stats */
+@media (max-width: 768px) {
+  .extended-stats-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .extended-stats-tabs {
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Stats sections inside extended stats container - remove redundant styling */
+.extended-stats-section > .stats-section {
+  margin-top: 0;
+  background: transparent;
+  border: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+.extended-stats-section > .stats-section > .section-header {
+  margin-top: 0;
+  padding-top: 0;
+  border-bottom: none;
+  margin-bottom: 16px;
+}
+
+/* ============================================================================
+   Individual Section Styles (content inside tabs)
+   ============================================================================ */
+
 .stats-section {
   background: linear-gradient(135deg, rgba(20, 30, 45, 0.9), rgba(15, 25, 35, 0.95));
   border: 1px solid rgba(255, 255, 255, 0.08);

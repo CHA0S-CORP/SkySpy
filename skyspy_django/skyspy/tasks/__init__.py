@@ -12,6 +12,7 @@ Tasks:
 
 # Import all task modules so Celery autodiscover_tasks() registers them
 from skyspy.tasks import aircraft
+from skyspy.tasks import aircraft_stream
 from skyspy.tasks import airspace
 from skyspy.tasks import analytics
 from skyspy.tasks import external_db

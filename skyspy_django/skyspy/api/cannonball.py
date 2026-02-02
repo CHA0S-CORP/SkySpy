@@ -21,6 +21,7 @@ from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
+from skyspy.api.throttles import AuthRateThrottle
 from skyspy.models import (
     CannonballPattern, CannonballSession, CannonballAlert,
     CannonballKnownAircraft, CannonballStats,
@@ -34,6 +35,7 @@ from skyspy.serializers.cannonball import (
     CannonballLocationUpdateSerializer, CannonballSettingsSerializer,
 )
 from skyspy.auth.authentication import OptionalJWTAuthentication, APIKeyAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
 from skyspy.tasks.cannonball import (
     update_user_location, set_active_cannonball_user, clear_active_cannonball_user,
 )
@@ -49,6 +51,7 @@ class CannonballThreatsView(APIView):
     """
 
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="Get current Cannonball threats",
@@ -90,6 +93,7 @@ class CannonballLocationView(APIView):
     """
 
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="Update user location",
@@ -129,6 +133,7 @@ class CannonballActivateView(APIView):
     """
 
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="Activate Cannonball mode",
@@ -162,6 +167,7 @@ class CannonballSessionViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for Cannonball tracking sessions."""
 
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
     queryset = CannonballSession.objects.all()
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['is_active', 'threat_level', 'identification_method']
@@ -239,6 +245,7 @@ class CannonballPatternViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for detected flight patterns."""
 
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
     queryset = CannonballPattern.objects.all()
     serializer_class = CannonballPatternSerializer
     filter_backends = [DjangoFilterBackend]
@@ -276,11 +283,13 @@ class CannonballPatternViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = self.filter_queryset(self.get_queryset())
         serializer = self.get_serializer(queryset[:100], many=True)
 
-        # Pattern type breakdown
-        pattern_counts = {}
-        for p in queryset.values('pattern_type').distinct():
-            ptype = p['pattern_type']
-            pattern_counts[ptype] = queryset.filter(pattern_type=ptype).count()
+        # Pattern type breakdown - use single aggregated query
+        from django.db.models import Count
+        pattern_counts = dict(
+            queryset.values('pattern_type')
+            .annotate(count=Count('id'))
+            .values_list('pattern_type', 'count')
+        )
 
         return Response({
             'patterns': serializer.data,
@@ -295,7 +304,11 @@ class CannonballPatternViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """Get pattern detection statistics."""
-        hours = int(request.query_params.get('hours', 24))
+        try:
+            hours = int(request.query_params.get('hours', 24))
+            hours = min(hours, 720)  # Cap at 30 days
+        except (ValueError, TypeError):
+            hours = 24
         cutoff = timezone.now() - timedelta(hours=hours)
         queryset = self.get_queryset().filter(detected_at__gte=cutoff)
 
@@ -320,6 +333,7 @@ class CannonballAlertViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for Cannonball alerts."""
 
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
     queryset = CannonballAlert.objects.all()
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['alert_type', 'priority', 'acknowledged']
@@ -405,6 +419,8 @@ class CannonballKnownAircraftViewSet(viewsets.ModelViewSet):
     """ViewSet for known LE aircraft database."""
 
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
+    throttle_classes = [AuthRateThrottle]
     queryset = CannonballKnownAircraft.objects.all()
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['agency_type', 'agency_state', 'verified', 'source']
@@ -492,14 +508,18 @@ class CannonballKnownAircraftViewSet(viewsets.ModelViewSet):
         """Get database statistics."""
         queryset = self.get_queryset()
 
-        by_type = {}
+        # Use single aggregated query for agency type counts
+        from django.db.models import Count
+        by_type_qs = queryset.values('agency_type').annotate(count=Count('id'))
+        by_type = {row['agency_type']: row['count'] for row in by_type_qs if row['agency_type']}
+        # Ensure all agency types are in the dict (even if 0)
         for at in CannonballKnownAircraft.AGENCY_TYPES:
-            by_type[at[0]] = queryset.filter(agency_type=at[0]).count()
+            if at[0] not in by_type:
+                by_type[at[0]] = 0
 
-        by_state = {}
-        for state in queryset.values_list('agency_state', flat=True).distinct():
-            if state:
-                by_state[state] = queryset.filter(agency_state=state).count()
+        # Use single aggregated query for state counts
+        by_state_qs = queryset.exclude(agency_state__isnull=True).exclude(agency_state='').values('agency_state').annotate(count=Count('id'))
+        by_state = {row['agency_state']: row['count'] for row in by_state_qs}
 
         return Response({
             'total': queryset.count(),
@@ -513,6 +533,7 @@ class CannonballStatsViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for Cannonball statistics."""
 
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
     queryset = CannonballStats.objects.all()
     serializer_class = CannonballStatsSerializer
     filter_backends = [DjangoFilterBackend]

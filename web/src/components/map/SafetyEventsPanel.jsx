@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { AlertTriangle, Check, X } from 'lucide-react';
 
 /**
  * Panel showing safety events (emergencies, special squawks, etc.)
+ * Memoized to prevent re-renders when other map state changes
  */
-export function SafetyEventsPanel({ 
+export const SafetyEventsPanel = memo(function SafetyEventsPanel({ 
   events, 
   acknowledgedEvents, 
   onAcknowledge,
@@ -94,6 +95,6 @@ export function SafetyEventsPanel({
       </div>
     </div>
   );
-}
+});
 
 export default SafetyEventsPanel;

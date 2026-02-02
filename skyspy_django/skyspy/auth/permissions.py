@@ -225,7 +225,10 @@ class FeatureBasedPermission(permissions.BasePermission):
         try:
             profile = user.skyspy_profile
             return profile.has_permission(permission)
-        except Exception:
+        except AttributeError:
+            return False
+        except Exception as e:
+            logger.warning(f"Unexpected error checking permission '{permission}': {e}")
             return False
 
     def _check_ownership(self, request, view, obj):
@@ -340,7 +343,10 @@ class HasPermission(permissions.BasePermission):
         try:
             profile = user.skyspy_profile
             return profile.has_all_permissions(required)
-        except Exception:
+        except AttributeError:
+            return False
+        except Exception as e:
+            logger.warning(f"Unexpected error checking permissions: {e}")
             return False
 
     @classmethod
@@ -412,7 +418,10 @@ class HasAnyPermission(permissions.BasePermission):
         try:
             profile = user.skyspy_profile
             return profile.has_any_permission(required)
-        except Exception:
+        except AttributeError:
+            return False
+        except Exception as e:
+            logger.warning(f"Unexpected error checking permissions: {e}")
             return False
 
 
@@ -434,7 +443,10 @@ class IsAdminUser(permissions.BasePermission):
             # Check for admin-level permissions
             admin_perms = ['system.manage', 'users.view', 'roles.view']
             return profile.has_any_permission(admin_perms)
-        except Exception:
+        except AttributeError:
+            return False
+        except Exception as e:
+            logger.warning(f"Unexpected error checking admin permissions: {e}")
             return False
 
 
@@ -455,7 +467,10 @@ class IsSuperAdmin(permissions.BasePermission):
             profile = user.skyspy_profile
             # Check for full user/role management permissions
             return profile.has_all_permissions(['users.create', 'users.delete', 'roles.create', 'roles.delete'])
-        except Exception:
+        except AttributeError:
+            return False
+        except Exception as e:
+            logger.warning(f"Unexpected error checking superadmin permissions: {e}")
             return False
 
 
@@ -490,8 +505,10 @@ class IsOwnerOrAdmin(permissions.BasePermission):
             feature = FeatureBasedPermission.FEATURE_MAP.get(view.__class__.__name__)
             if feature:
                 return profile.has_permission(f"{feature}.manage_all")
-        except Exception:
+        except AttributeError:
             pass
+        except Exception as e:
+            logger.warning(f"Unexpected error checking owner/admin permission: {e}")
 
         return False
 
@@ -563,5 +580,8 @@ class CanAccessAlert(permissions.BasePermission):
             return True
         try:
             return user.skyspy_profile.has_permission(permission)
-        except Exception:
+        except AttributeError:
+            return False
+        except Exception as e:
+            logger.warning(f"Unexpected error checking alert permission '{permission}': {e}")
             return False

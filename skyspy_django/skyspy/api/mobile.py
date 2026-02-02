@@ -18,6 +18,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
+from skyspy.api.throttles import AuthRateThrottle
 from skyspy.services.law_enforcement_db import (
     identify_law_enforcement,
     get_threat_level,
@@ -47,6 +48,7 @@ class MobileViewSet(ViewSet):
 
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
     permission_classes = [FeatureBasedPermission]
+    throttle_classes = [AuthRateThrottle]
 
     @action(detail=False, methods=['POST'], url_path='position')
     def update_position(self, request):

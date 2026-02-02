@@ -6,9 +6,12 @@ individual emissions while maintaining responsiveness.
 """
 import asyncio
 import json
+import logging
 from collections import deque
 from datetime import datetime
 from typing import Callable, Optional, Any
+
+logger = logging.getLogger(__name__)
 
 
 # Default batch configuration
@@ -84,7 +87,12 @@ class MessageBatcher:
             if len(self._batch) >= self._config['max_size'] or self._batch_size_bytes >= max_bytes:
                 if self._batch_task and not self._batch_task.done():
                     self._batch_task.cancel()
-                await self._flush()
+                try:
+                    await self._flush()
+                except Exception as e:
+                    # Log error but don't lose already-cleared messages
+                    # (messages were already removed from batch in _flush)
+                    logger.error(f"Error flushing message batch: {e}", exc_info=True)
 
     async def _flush_after_delay(self):
         """Wait for batch window then flush."""
@@ -92,7 +100,11 @@ class MessageBatcher:
             await asyncio.sleep(self._config['window_ms'] / 1000.0)
             await self._flush()
         except asyncio.CancelledError:
+            # Task was cancelled (likely due to immediate flush), this is expected
             pass
+        except Exception as e:
+            # Log error to prevent silent message loss
+            logger.error(f"Error in delayed batch flush: {e}", exc_info=True)
 
     async def _flush(self):
         """Send all batched messages."""
@@ -121,7 +133,10 @@ class MessageBatcher:
         """Force flush any pending messages."""
         if self._batch_task and not self._batch_task.done():
             self._batch_task.cancel()
-        await self._flush()
+        try:
+            await self._flush()
+        except Exception as e:
+            logger.error(f"Error in flush_now: {e}", exc_info=True)
 
     @property
     def pending_count(self) -> int:

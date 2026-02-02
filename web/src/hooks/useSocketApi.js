@@ -1,19 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { parseDRFError } from './useApi';
 
 /**
- * WebSocket-first API hook with HTTP fallback for Django REST Framework.
- * Uses WebSocket for data fetching when connected, with HTTP fallback.
+ * WebSocket-only API hook for Django REST Framework.
+ * Uses WebSocket for all data fetching - no HTTP fallback.
  *
  * @param {string} endpoint - The API endpoint (e.g., '/api/v1/aircraft/stats')
  * @param {number} interval - Polling interval in ms (null = no polling, 0 = one-time fetch)
- * @param {string} apiBase - API base URL for HTTP fallback
+ * @param {string} apiBase - API base URL (unused, kept for compatibility)
  * @param {Object} options - Additional options
- * @param {Function} options.wsRequest - WebSocket request function
- * @param {boolean} options.wsConnected - Whether WebSocket is connected
+ * @param {Function} options.wsRequest - WebSocket request function (required)
+ * @param {boolean} options.wsConnected - Whether WebSocket is connected (required)
  * @param {string} options.socketEvent - Socket event name to use (derived from endpoint if not provided)
  * @param {Object} options.socketParams - Parameters to pass to socket request
- * @param {boolean} options.disableSocket - Force HTTP-only mode
+ * @param {boolean} options.disableSocket - Deprecated, no longer supported
  */
 export function useSocketApi(endpoint, interval = null, apiBase = '', options = {}) {
   const { wsRequest, wsConnected, socketEvent, socketParams = {}, disableSocket = false } = options;
@@ -48,49 +47,40 @@ export function useSocketApi(endpoint, interval = null, apiBase = '', options = 
     }
     lastFetchRef.current = now;
 
-    try {
-      let result = null;
-
-      // Try WebSocket first if available and not disabled (use refs for current values)
-      if (!disableSocket && wsRequestRef.current && wsConnectedRef.current && derivedSocketEvent) {
-        try {
-          // Parse query params from endpoint to include in socket request
-          const params = { ...socketParamsRef.current, ...parseQueryParams(endpoint) };
-          result = await wsRequestRef.current(derivedSocketEvent, params);
-
-          if (result?.error) {
-            // Socket returned error, fall through to HTTP
-            result = null;
-          }
-        } catch (err) {
-          // Socket request failed, fall through to HTTP
-          console.debug(`Socket request failed for ${derivedSocketEvent}:`, err.message);
-        }
+    // Check if socket is available
+    if (!wsRequestRef.current || !wsConnectedRef.current) {
+      if (mountedRef.current) {
+        setError('Socket not connected');
+        setLoading(false);
       }
+      return;
+    }
 
-      // HTTP fallback if socket didn't work or isn't available
-      if (result === null) {
-        const baseUrl = (apiBase || '').replace(/\/$/, ''); // Strip trailing slash
-        const res = await fetch(`${baseUrl}${endpoint}`);
+    // Socket disabled - no longer supported, set error
+    if (disableSocket) {
+      if (mountedRef.current) {
+        setError('Socket requests required (HTTP fallback removed)');
+        setLoading(false);
+      }
+      return;
+    }
 
-        // Check content type before parsing JSON
-        const contentType = res.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
-          }
-          throw new Error('Invalid response format');
-        }
+    // Check for valid socket event mapping
+    if (!derivedSocketEvent) {
+      if (mountedRef.current) {
+        setError(`No socket event mapping for endpoint: ${endpoint}`);
+        setLoading(false);
+      }
+      return;
+    }
 
-        const json = await res.json();
+    try {
+      // Parse query params from endpoint to include in socket request
+      const params = { ...socketParamsRef.current, ...parseQueryParams(endpoint) };
+      const result = await wsRequestRef.current(derivedSocketEvent, params);
 
-        // Handle Django REST Framework error responses
-        if (!res.ok) {
-          const errorMessage = parseDRFError(json);
-          throw new Error(errorMessage);
-        }
-
-        result = json;
+      if (result?.error) {
+        throw new Error(result.error);
       }
 
       if (mountedRef.current) {
@@ -99,14 +89,14 @@ export function useSocketApi(endpoint, interval = null, apiBase = '', options = 
       }
     } catch (err) {
       if (mountedRef.current) {
-        setError(err.message);
+        setError(err.message || 'Socket request failed');
       }
     } finally {
       if (mountedRef.current) {
         setLoading(false);
       }
     }
-  }, [endpoint, apiBase, derivedSocketEvent, disableSocket]);
+  }, [endpoint, derivedSocketEvent, disableSocket]);
 
   useEffect(() => {
     mountedRef.current = true;

@@ -29,14 +29,9 @@ def _get_cors_origins():
     if origins:
         return origins
 
-    # Fallback for development: allow localhost
+    # Fallback for development: allow all origins
     if getattr(settings, 'DEBUG', False):
-        return [
-            'http://localhost:3000',
-            'http://localhost:5173',
-            'http://127.0.0.1:3000',
-            'http://127.0.0.1:5173',
-        ]
+        return '*'
 
     return []
 

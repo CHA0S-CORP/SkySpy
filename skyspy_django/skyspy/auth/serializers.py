@@ -250,6 +250,27 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 
         return attrs
 
+    def _can_assign_role(self, role):
+        """Check if the requesting user can assign this role."""
+        request = self.context.get('request')
+        if not request or not request.user:
+            return False
+
+        # Superusers can assign any role
+        if request.user.is_superuser:
+            return True
+
+        # Non-superusers cannot assign the superadmin role
+        if role.name == 'superadmin':
+            return False
+
+        # Check if the requesting user has the users.edit permission
+        try:
+            profile = request.user.skyspy_profile
+            return profile.has_permission('users.edit')
+        except Exception:
+            return False
+
     def update(self, instance, validated_data):
         # Handle nested user fields
         user_data = {}
@@ -287,11 +308,13 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         if roles is not None:
             # Remove existing roles
             UserRole.objects.filter(user=user).delete()
-            # Add new roles
+            # Add new roles (with permission check)
             for role_name in roles:
                 try:
                     role = Role.objects.get(name=role_name)
-                    UserRole.objects.create(user=user, role=role)
+                    # Check if the requesting user can assign this role
+                    if self._can_assign_role(role):
+                        UserRole.objects.create(user=user, role=role)
                 except Role.DoesNotExist:
                     pass
 

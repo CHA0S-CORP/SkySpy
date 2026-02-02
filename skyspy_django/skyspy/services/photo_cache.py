@@ -16,6 +16,7 @@ from typing import Optional, Tuple
 
 import httpx
 from django.conf import settings
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from skyspy.models import AircraftInfo
 from skyspy.services.storage import (
@@ -42,6 +43,28 @@ PLANESPOTTERS_ID_REGEX = re.compile(r"plnspttrs\.net/\d+/(\d+)_")
 # Retry settings
 MAX_RETRIES = 3
 RETRY_DELAY = 0.5
+
+
+# =============================================================================
+# Retry Helpers for HTTP Requests
+# =============================================================================
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+)
+def _http_get_with_retry(
+    url: str,
+    headers: dict,
+    timeout: float = 15.0,
+    follow_redirects: bool = True
+) -> httpx.Response:
+    """HTTP GET with retry logic for photo downloads."""
+    with httpx.Client(timeout=timeout) as client:
+        response = client.get(url, headers=headers, follow_redirects=follow_redirects)
+        response.raise_for_status()
+        return response
 
 
 def get_cache_dir() -> Path:
@@ -240,10 +263,8 @@ def _scrape_planespotters_full_size(page_url: str) -> Optional[str]:
             "Accept-Language": "en-US,en;q=0.9",
         }
 
-        with httpx.Client(timeout=30.0) as client:
-            resp = client.get(page_url, headers=headers, follow_redirects=True)
-            resp.raise_for_status()
-            html = resp.text
+        resp = _http_get_with_retry(page_url, headers, timeout=15.0)
+        html = resp.text
 
         # Try to find original size URL (_o.jpg)
         original_match = re.search(r'https://cdn\.plnspttrs\.net/[^"\'<>\s]+_o\.jpg', html)
@@ -269,7 +290,7 @@ def download_photo(
     url: str,
     icao_hex: str,
     is_thumbnail: bool = False,
-    timeout: float = 30.0,
+    timeout: float = 15.0,
     photo_page_link: Optional[str] = None,
     force: bool = False
 ) -> Optional[str]:
@@ -336,9 +357,7 @@ def download_photo(
                 "Accept": "image/*",
             }
 
-        with httpx.Client(timeout=timeout) as client:
-            response = client.get(target_url, headers=headers, follow_redirects=True)
-            response.raise_for_status()
+        response = _http_get_with_retry(target_url, headers, timeout=timeout)
 
         # Verify it's an image
         content_type = response.headers.get("content-type", "")

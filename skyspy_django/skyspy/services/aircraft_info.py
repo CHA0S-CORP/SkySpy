@@ -16,12 +16,43 @@ from typing import Optional, Dict, List, Set
 
 import httpx
 from django.conf import settings
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from django.core.cache import cache
 
 from skyspy.models import AircraftInfo
 from skyspy.services import external_db
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Retry Helpers for External API Calls
+# =============================================================================
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+)
+def _http_get_with_retry(url: str, timeout: float = 15.0) -> httpx.Response:
+    """HTTP GET with retry logic for external APIs."""
+    with httpx.Client(timeout=timeout) as client:
+        response = client.get(url)
+        response.raise_for_status()
+        return response
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+)
+def _http_head_with_retry(url: str, timeout: float = 5.0) -> httpx.Response:
+    """HTTP HEAD with retry logic for external APIs."""
+    with httpx.Client(timeout=timeout) as client:
+        response = client.head(url)
+        return response  # Don't raise_for_status for HEAD - 404 is valid
+
 
 # In-memory cache for fast lookups
 _info_cache: Dict[str, dict] = {}
@@ -106,23 +137,26 @@ def get_bulk_aircraft_info(icao_list: List[str]) -> Dict[str, dict]:
     Get info for multiple aircraft.
 
     Returns dict mapping ICAO hex to info dict.
+    Thread-safe: acquires lock once for entire cache check phase.
     """
     result = {}
     missing_icaos = []
     now = time.time()
 
+    # Normalize all ICAOs first
+    normalized_icaos = []
     for icao in icao_list:
         icao = icao.upper().strip().lstrip('~')
-        if not icao or len(icao) != 6:
-            continue
+        if icao and len(icao) == 6:
+            normalized_icaos.append(icao)
 
-        # Check cache first
-        with _cache_lock:
+    # Check cache for all ICAOs at once (single lock acquisition for thread safety)
+    with _cache_lock:
+        for icao in normalized_icaos:
             if icao in _info_cache and _cache_ttl.get(icao, 0) > now:
                 result[icao] = _info_cache[icao]
-                continue
-
-        missing_icaos.append(icao)
+            else:
+                missing_icaos.append(icao)
 
     # Bulk fetch from database
     if missing_icaos:
@@ -131,24 +165,25 @@ def get_bulk_aircraft_info(icao_list: List[str]) -> Dict[str, dict]:
                 icao_hex__in=missing_icaos,
                 fetch_failed=False
             )
+            found_icaos = set()
             for db_info in db_infos:
                 info = _serialize_db_info(db_info)
                 result[db_info.icao_hex] = info
                 _update_cache(db_info.icao_hex, info)
-                # Use discard-like approach to avoid ValueError if not in list
-                if db_info.icao_hex in missing_icaos:
-                    missing_icaos.remove(db_info.icao_hex)
+                found_icaos.add(db_info.icao_hex)
+
+            # Update missing_icaos to exclude found ones (safe - local variable)
+            missing_icaos = [icao for icao in missing_icaos if icao not in found_icaos]
         except Exception as e:
             logger.debug(f"Bulk database lookup failed: {e}")
 
     # Remaining from in-memory databases
-    for icao in missing_icaos[:]:
+    for icao in missing_icaos:
         data = external_db.lookup_all(icao)
         if data:
             info = _normalize_external_data(icao, data)
             result[icao] = info
             _update_cache(icao, info)
-            # No need to remove since we're iterating a copy
 
     return result
 
@@ -366,7 +401,7 @@ def _fetch_from_external_apis(icao: str) -> Optional[dict]:
     # Try HexDB
     try:
         url = f"https://hexdb.io/api/v1/aircraft/{icao}"
-        response = httpx.get(url, timeout=10.0)
+        response = _http_get_with_retry(url, timeout=10.0)
 
         if response.status_code == 200:
             data = response.json()
@@ -383,7 +418,7 @@ def _fetch_from_external_apis(icao: str) -> Optional[dict]:
             # Try to get photo from HexDB
             photo_url = f"https://hexdb.io/hex-image?hex={icao.lower()}"
             try:
-                photo_resp = httpx.head(photo_url, timeout=5.0)
+                photo_resp = _http_head_with_retry(photo_url, timeout=5.0)
                 if photo_resp.status_code == 200:
                     content_type = photo_resp.headers.get('content-type', '')
                     if content_type.startswith('image/'):
@@ -414,7 +449,7 @@ def _fetch_from_external_apis(icao: str) -> Optional[dict]:
     if info and not info.get('photo_url'):
         try:
             ps_url = f"https://api.planespotters.net/pub/photos/hex/{icao}"
-            response = httpx.get(ps_url, timeout=10.0)
+            response = _http_get_with_retry(ps_url, timeout=10.0)
             if response.status_code == 200:
                 data = response.json()
                 if data.get('photos'):

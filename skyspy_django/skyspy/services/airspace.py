@@ -103,7 +103,7 @@ def get_boundaries(
     if lat is not None and lon is not None:
         # Approximate degrees per NM
         nm_per_deg_lat = 60
-        nm_per_deg_lon = 60 * abs(cos(radians(lat))) if lat else 60
+        nm_per_deg_lon = 60 * abs(cos(radians(lat))) if lat is not None else 60
 
         lat_range = radius_nm / nm_per_deg_lat
         lon_range = radius_nm / nm_per_deg_lon
@@ -131,7 +131,7 @@ def get_boundaries(
 
             if lat is not None and lon is not None:
                 nm_per_deg_lat = 60
-                nm_per_deg_lon = 60 * abs(cos(radians(lat))) if lat else 60
+                nm_per_deg_lon = 60 * abs(cos(radians(lat))) if lat is not None else 60
                 lat_range = radius_nm / nm_per_deg_lat
                 lon_range = radius_nm / nm_per_deg_lon
 

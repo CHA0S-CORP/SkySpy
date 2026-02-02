@@ -1,138 +1,155 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-// Helper to safely parse JSON from fetch response
-const safeJson = async (res) => {
-  const ct = res.headers.get('content-type');
-  if (!ct || !ct.includes('application/json')) return null;
-  try { return await res.json(); } catch { return null; }
-};
-
 /**
- * Hook for managing notification channels.
+ * Hook for managing notification channels via Socket.IO.
  * Provides CRUD operations and channel testing.
+ *
+ * @param {Object} options - Configuration options
+ * @param {string} options.apiBase - API base URL (unused, kept for compatibility)
+ * @param {Function} options.wsRequest - WebSocket request function from useSocketIOData
+ * @param {boolean} options.wsConnected - Whether WebSocket is connected
  */
-export function useNotificationChannels(apiBase = '') {
+export function useNotificationChannels({ apiBase = '', wsRequest, wsConnected } = {}) {
   const [channels, setChannels] = useState([]);
   const [channelTypes, setChannelTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [connected, setConnected] = useState(false);
   const mountedRef = useRef(true);
 
-  // Fetch all channels
+  // Track connection state
+  useEffect(() => {
+    setConnected(!!wsConnected);
+  }, [wsConnected]);
+
+  // Fetch all channels via Socket.IO
   const fetchChannels = useCallback(async () => {
+    if (!wsRequest || !wsConnected) {
+      if (mountedRef.current) {
+        setError('Socket not connected');
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       setLoading(true);
-      const res = await fetch(`${apiBase}/api/v1/notifications/channels/`);
-      const data = await safeJson(res);
-      if (!data) throw new Error(`HTTP ${res.status}`);
+      const data = await wsRequest('notification-channels', {});
+
       if (mountedRef.current) {
-        // Ensure we always set an array
-        const channelList = data?.results || data;
+        // Handle both array and results formats
+        const channelList = Array.isArray(data) ? data : (data?.results || data?.channels || []);
         setChannels(Array.isArray(channelList) ? channelList : []);
         setError(null);
       }
     } catch (err) {
       if (mountedRef.current) {
-        setError(err.message);
+        setError(err.message || 'Failed to fetch channels');
       }
     } finally {
       if (mountedRef.current) {
         setLoading(false);
       }
     }
-  }, [apiBase]);
+  }, [wsRequest, wsConnected]);
 
-  // Fetch channel types
+  // Fetch channel types via Socket.IO
   const fetchChannelTypes = useCallback(async () => {
+    if (!wsRequest || !wsConnected) {
+      return;
+    }
+
     try {
-      const res = await fetch(`${apiBase}/api/v1/notifications/channels/types/`);
-      const data = await safeJson(res);
-      if (!data) throw new Error(`HTTP ${res.status}`);
+      const data = await wsRequest('notification-channel-types', {});
       if (mountedRef.current) {
-        setChannelTypes(data.types || data || []);
+        setChannelTypes(data?.types || data || []);
       }
     } catch (err) {
       console.warn('Failed to fetch channel types:', err);
     }
-  }, [apiBase]);
+  }, [wsRequest, wsConnected]);
 
-  // Create a new channel
+  // Create a new channel via Socket.IO
   const createChannel = useCallback(async (channelData) => {
-    const res = await fetch(`${apiBase}/api/v1/notifications/channels/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(channelData),
-    });
-    const data = await safeJson(res);
-    if (!res.ok) {
-      throw new Error(data?.error || data?.detail || 'Failed to create channel');
+    if (!wsRequest || !wsConnected) {
+      throw new Error('Socket not connected');
+    }
+
+    const data = await wsRequest('notification-channel-create', channelData);
+    if (data?.error) {
+      throw new Error(data.error);
     }
     await fetchChannels();
     return data;
-  }, [apiBase, fetchChannels]);
+  }, [wsRequest, wsConnected, fetchChannels]);
 
-  // Update a channel
+  // Update a channel via Socket.IO
   const updateChannel = useCallback(async (id, channelData) => {
-    const res = await fetch(`${apiBase}/api/v1/notifications/channels/${id}/`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(channelData),
-    });
-    const data = await safeJson(res);
-    if (!res.ok) {
-      throw new Error(data?.error || data?.detail || 'Failed to update channel');
+    if (!wsRequest || !wsConnected) {
+      throw new Error('Socket not connected');
+    }
+
+    const data = await wsRequest('notification-channel-update', { id, ...channelData });
+    if (data?.error) {
+      throw new Error(data.error);
     }
     await fetchChannels();
     return data;
-  }, [apiBase, fetchChannels]);
+  }, [wsRequest, wsConnected, fetchChannels]);
 
-  // Delete a channel
+  // Delete a channel via Socket.IO
   const deleteChannel = useCallback(async (id) => {
-    const res = await fetch(`${apiBase}/api/v1/notifications/channels/${id}/`, {
-      method: 'DELETE',
-    });
-    if (!res.ok) {
-      const data = await safeJson(res);
-      throw new Error(data?.error || data?.detail || 'Failed to delete channel');
+    if (!wsRequest || !wsConnected) {
+      throw new Error('Socket not connected');
+    }
+
+    const data = await wsRequest('notification-channel-delete', { id });
+    if (data?.error) {
+      throw new Error(data.error);
     }
     await fetchChannels();
-  }, [apiBase, fetchChannels]);
+  }, [wsRequest, wsConnected, fetchChannels]);
 
-  // Test a channel
+  // Test a channel via Socket.IO
   const testChannel = useCallback(async (id) => {
-    const res = await fetch(`${apiBase}/api/v1/notifications/channels/${id}/test/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    });
-    const data = await safeJson(res);
-    if (!res.ok) {
-      throw new Error(data?.error || data?.detail || 'Test failed');
+    if (!wsRequest || !wsConnected) {
+      throw new Error('Socket not connected');
+    }
+
+    const data = await wsRequest('notification-channel-test', { id });
+    if (data?.error) {
+      throw new Error(data.error);
     }
     // Refresh channels to get updated verification status
     await fetchChannels();
     return data;
-  }, [apiBase, fetchChannels]);
+  }, [wsRequest, wsConnected, fetchChannels]);
 
   // Toggle channel enabled status
   const toggleChannel = useCallback(async (channel) => {
     return updateChannel(channel.id, { enabled: !channel.enabled });
   }, [updateChannel]);
 
+  // Initial fetch when connection is established
   useEffect(() => {
     mountedRef.current = true;
-    fetchChannels();
-    fetchChannelTypes();
+
+    if (wsConnected && wsRequest) {
+      fetchChannels();
+      fetchChannelTypes();
+    }
+
     return () => {
       mountedRef.current = false;
     };
-  }, [fetchChannels, fetchChannelTypes]);
+  }, [wsConnected, wsRequest, fetchChannels, fetchChannelTypes]);
 
   return {
     channels,
     channelTypes,
     loading,
     error,
+    connected,
     refetch: fetchChannels,
     createChannel,
     updateChannel,

@@ -52,12 +52,14 @@ export function MiniRadar({
   const padding = 10;
   const effectiveRadius = radius - padding;
 
-  // Calculate threat positions
+  // Calculate threat positions (filter out threats without valid distance/bearing)
   const threatPositions = useMemo(() => {
-    return threats.map(threat => ({
-      ...threat,
-      ...threatToPosition(threat, effectiveRadius, maxRange, userHeading),
-    }));
+    return threats
+      .filter(threat => threat.distance_nm != null && threat.bearing != null)
+      .map(threat => ({
+        ...threat,
+        ...threatToPosition(threat, effectiveRadius, maxRange, userHeading),
+      }));
   }, [threats, effectiveRadius, maxRange, userHeading]);
 
   // Range ring distances
@@ -224,7 +226,7 @@ export function MiniRadar({
               )}
 
               {/* Label for expanded mode */}
-              {expanded && (
+              {expanded && threat.distance_nm != null && (
                 <text
                   x={threat.x + padding + 10}
                   y={threat.y + padding + 4}

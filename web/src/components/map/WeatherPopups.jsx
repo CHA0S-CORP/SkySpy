@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, memo } from 'react';
 import {
   X, Cloud, Wind, Thermometer, Eye, Navigation,
   Radio, Plane, ExternalLink, AlertTriangle, Snowflake
@@ -41,8 +41,9 @@ const windDirToCardinal = (deg) => {
 
 /**
  * METAR weather popup
+ * Memoized to prevent re-renders when other map state changes
  */
-export function MetarPopup({ metar, onClose, mapMode, getDistanceNm, getBearing }) {
+export const MetarPopup = memo(function MetarPopup({ metar, onClose, mapMode, getDistanceNm, getBearing }) {
   const { position, isDragging, handleMouseDown } = useDraggable({ x: 100, y: 100 });
   const popupRef = usePopupAccessibility(!!metar, onClose);
   const titleId = `metar-popup-title-${metar?.icaoId || metar?.stationId || 'unknown'}`;
@@ -151,12 +152,13 @@ export function MetarPopup({ metar, onClose, mapMode, getDistanceNm, getBearing 
       </div>
     </div>
   );
-}
+});
 
 /**
  * PIREP popup
+ * Memoized to prevent re-renders when other map state changes
  */
-export function PirepPopup({ pirep, onClose, mapMode, getDistanceNm, getBearing }) {
+export const PirepPopup = memo(function PirepPopup({ pirep, onClose, mapMode, getDistanceNm, getBearing }) {
   const { position, isDragging, handleMouseDown } = useDraggable({ x: 100, y: 100 });
   const popupRef = usePopupAccessibility(!!pirep, onClose);
   const titleId = `pirep-popup-title-${pirep?.icaoId || 'unknown'}`;
@@ -282,12 +284,13 @@ export function PirepPopup({ pirep, onClose, mapMode, getDistanceNm, getBearing 
       </div>
     </div>
   );
-}
+});
 
 /**
  * Navaid popup
+ * Memoized to prevent re-renders when other map state changes
  */
-export function NavaidPopup({ navaid, onClose, mapMode, getDistanceNm, getBearing }) {
+export const NavaidPopup = memo(function NavaidPopup({ navaid, onClose, mapMode, getDistanceNm, getBearing }) {
   const { position, isDragging, handleMouseDown } = useDraggable({ x: 100, y: 100 });
   const popupRef = usePopupAccessibility(!!navaid, onClose);
   const titleId = `navaid-popup-title-${navaid?.id || 'unknown'}`;
@@ -368,12 +371,13 @@ export function NavaidPopup({ navaid, onClose, mapMode, getDistanceNm, getBearin
       </div>
     </div>
   );
-}
+});
 
 /**
  * Airport popup
+ * Memoized to prevent re-renders when other map state changes
  */
-export function AirportPopup({ airport, onClose, mapMode, getDistanceNm, getBearing }) {
+export const AirportPopup = memo(function AirportPopup({ airport, onClose, mapMode, getDistanceNm, getBearing }) {
   const { position, isDragging, handleMouseDown } = useDraggable({ x: 100, y: 100 });
   const popupRef = usePopupAccessibility(!!airport, onClose);
   const icao = airport?.icao || airport?.icaoId || airport?.faaId || airport?.id || 'APT';
@@ -473,6 +477,6 @@ export function AirportPopup({ airport, onClose, mapMode, getDistanceNm, getBear
       </div>
     </div>
   );
-}
+});
 
 export { windDirToCardinal };

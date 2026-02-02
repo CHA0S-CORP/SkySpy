@@ -4,6 +4,7 @@ NOTAM (Notice to Air Missions) service.
 Fetches, parses, and caches NOTAM data from FAA Aviation Weather API.
 Includes support for TFR (Temporary Flight Restriction) boundaries.
 """
+import json
 import logging
 from datetime import datetime, timedelta
 from math import radians, cos, sin, sqrt, atan2
@@ -11,6 +12,7 @@ from typing import Optional, List, Dict, Any
 
 import httpx
 from django.db import transaction
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from django.db.models import Q
 from django.utils import timezone
 
@@ -37,6 +39,34 @@ REFRESH_INTERVAL_SECONDS = 900
 
 # In-memory cache metadata
 _last_refresh: Optional[datetime] = None
+
+
+# =============================================================================
+# Retry Helpers for External API Calls
+# =============================================================================
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+)
+def _http_post_with_retry(url: str, json_data: dict, headers: dict, timeout: float = 15.0) -> httpx.Response:
+    """HTTP POST with retry logic for NOTAM API."""
+    with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+        response = client.post(url, json=json_data, headers=headers)
+        return response
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+)
+def _http_get_with_retry(url: str, headers: dict, timeout: float = 15.0) -> httpx.Response:
+    """HTTP GET with retry logic for TFR API."""
+    with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+        response = client.get(url, headers=headers)
+        return response
 
 
 def haversine_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -82,56 +112,57 @@ def fetch_notams_from_api(
         # So we'll try TFR endpoint instead for area searches
         return fetch_tfrs_from_api(lat, lon, radius_nm)
 
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Origin": "https://notams.aim.faa.gov",
+        "Referer": "https://notams.aim.faa.gov/notamSearch/",
+    }
+
     try:
-        with httpx.Client(timeout=30, follow_redirects=True) as client:
-            response = client.post(
-                FAA_NOTAM_API_URL,
-                json=search_params,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "Accept": "application/json",
-                    "Content-Type": "application/json",
-                    "Origin": "https://notams.aim.faa.gov",
-                    "Referer": "https://notams.aim.faa.gov/notamSearch/",
-                }
-            )
+        response = _http_post_with_retry(FAA_NOTAM_API_URL, search_params, headers, timeout=30)
 
-            if response.status_code == 404:
-                logger.warning("FAA NOTAM API returned 404 - endpoint may have changed")
-                return []
-
-            response.raise_for_status()
-
-            # Check if response is JSON before parsing
-            content_type = response.headers.get("content-type", "")
-            if "json" not in content_type and "javascript" not in content_type:
-                logger.warning(f"NOTAM API returned non-JSON content-type: {content_type}")
-                return []
-
-            data = response.json() if response.text else {}
-
-            # Parse the FAA NOTAM Search response format
-            notams = []
-            if isinstance(data, dict):
-                notam_list = data.get("notamList", [])
-                for item in notam_list:
-                    notams.append({
-                        "id": item.get("notamNumber") or item.get("id"),
-                        "notamId": item.get("notamNumber"),
-                        "type": item.get("classification", "D"),
-                        "icaoId": item.get("facilityDesignator") or icao,
-                        "location": item.get("facilityDesignator") or icao,
-                        "text": item.get("traditionalMessage") or item.get("text", ""),
-                        "effectiveStart": item.get("effectiveStart") or item.get("startValidity"),
-                        "effectiveEnd": item.get("effectiveEnd") or item.get("endValidity"),
-                        "lat": item.get("coordinates", {}).get("latitude"),
-                        "lon": item.get("coordinates", {}).get("longitude"),
-                    })
-                return notams
-            elif isinstance(data, list):
-                return data
-
+        if response.status_code == 404:
+            logger.warning("FAA NOTAM API returned 404 - endpoint may have changed")
             return []
+
+        response.raise_for_status()
+
+        # Check if response is JSON before parsing
+        content_type = response.headers.get("content-type", "")
+        if "json" not in content_type and "javascript" not in content_type:
+            logger.warning(f"NOTAM API returned non-JSON content-type: {content_type}")
+            return []
+
+        try:
+            data = response.json() if response.text else {}
+        except json.JSONDecodeError as e:
+            logger.warning(f"NOTAM API returned invalid JSON: {e}")
+            return []
+
+        # Parse the FAA NOTAM Search response format
+        notams = []
+        if isinstance(data, dict):
+            notam_list = data.get("notamList", [])
+            for item in notam_list:
+                notams.append({
+                    "id": item.get("notamNumber") or item.get("id"),
+                    "notamId": item.get("notamNumber"),
+                    "type": item.get("classification", "D"),
+                    "icaoId": item.get("facilityDesignator") or icao,
+                    "location": item.get("facilityDesignator") or icao,
+                    "text": item.get("traditionalMessage") or item.get("text", ""),
+                    "effectiveStart": item.get("effectiveStart") or item.get("startValidity"),
+                    "effectiveEnd": item.get("effectiveEnd") or item.get("endValidity"),
+                    "lat": item.get("coordinates", {}).get("latitude"),
+                    "lon": item.get("coordinates", {}).get("longitude"),
+                })
+            return notams
+        elif isinstance(data, list):
+            return data
+
+        return []
 
     except httpx.HTTPStatusError as e:
         logger.error(f"NOTAM API HTTP error: {e.response.status_code}")
@@ -157,61 +188,63 @@ def fetch_tfrs_from_api(
     Returns:
         List of TFR dictionaries
     """
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/json",
+    }
+
     try:
-        with httpx.Client(timeout=30, follow_redirects=True) as client:
-            response = client.get(
-                TFR_DATA_URL,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "Accept": "application/json",
-                }
-            )
+        response = _http_get_with_retry(TFR_DATA_URL, headers, timeout=15.0)
 
-            if response.status_code == 404:
-                logger.warning("FAA TFR API returned 404 - endpoint may have changed")
-                return []
+        if response.status_code == 404:
+            logger.warning("FAA TFR API returned 404 - endpoint may have changed")
+            return []
 
-            response.raise_for_status()
+        response.raise_for_status()
 
-            # Check if response is JSON before parsing
-            content_type = response.headers.get("content-type", "")
-            if "json" not in content_type and "javascript" not in content_type:
-                logger.warning(f"TFR API returned non-JSON content-type: {content_type}")
-                return []
+        # Check if response is JSON before parsing
+        content_type = response.headers.get("content-type", "")
+        if "json" not in content_type and "javascript" not in content_type:
+            logger.warning(f"TFR API returned non-JSON content-type: {content_type}")
+            return []
 
+        try:
             data = response.json() if response.text else []
+        except json.JSONDecodeError as e:
+            logger.warning(f"TFR API returned invalid JSON: {e}")
+            return []
 
-            tfrs = []
-            tfr_list = data if isinstance(data, list) else data.get("tfrs", [])
+        tfrs = []
+        tfr_list = data if isinstance(data, list) else data.get("tfrs", [])
 
-            for item in tfr_list:
-                tfr = {
-                    "id": item.get("notam") or item.get("id"),
-                    "notamId": item.get("notam"),
-                    "type": "TFR",
-                    "text": item.get("txtDescrUSNS") or item.get("description", ""),
-                    "effectiveStart": item.get("dateEffective"),
-                    "effectiveEnd": item.get("dateExpire"),
-                    "reason": item.get("txtDescrModern") or item.get("type"),
-                    "geometry": item.get("geometry"),
-                }
+        for item in tfr_list:
+            tfr = {
+                "id": item.get("notam") or item.get("id"),
+                "notamId": item.get("notam"),
+                "type": "TFR",
+                "text": item.get("txtDescrUSNS") or item.get("description", ""),
+                "effectiveStart": item.get("dateEffective"),
+                "effectiveEnd": item.get("dateExpire"),
+                "reason": item.get("txtDescrModern") or item.get("type"),
+                "geometry": item.get("geometry"),
+            }
 
-                # Extract coordinates if available
-                if item.get("lat"):
-                    tfr["lat"] = float(item.get("lat"))
-                if item.get("lng") or item.get("lon"):
-                    tfr["lon"] = float(item.get("lng") or item.get("lon"))
+            # Extract coordinates if available
+            if item.get("lat"):
+                tfr["lat"] = float(item.get("lat"))
+            if item.get("lng") or item.get("lon"):
+                tfr["lon"] = float(item.get("lng") or item.get("lon"))
 
-                # Filter by distance if coordinates provided
-                if lat is not None and lon is not None and tfr.get("lat") and tfr.get("lon"):
-                    distance = haversine_nm(lat, lon, tfr["lat"], tfr["lon"])
-                    if distance > radius_nm:
-                        continue
-                    tfr["distance_nm"] = round(distance, 1)
+            # Filter by distance if coordinates provided
+            if lat is not None and lon is not None and tfr.get("lat") and tfr.get("lon"):
+                distance = haversine_nm(lat, lon, tfr["lat"], tfr["lon"])
+                if distance > radius_nm:
+                    continue
+                tfr["distance_nm"] = round(distance, 1)
 
-                tfrs.append(tfr)
+            tfrs.append(tfr)
 
-            return tfrs
+        return tfrs
 
     except httpx.HTTPStatusError as e:
         logger.error(f"TFR API HTTP error: {e.response.status_code}")

@@ -14,6 +14,7 @@ from typing import Optional, Dict, Any, List, Tuple
 import httpx
 from django.conf import settings
 from django.core.cache import cache
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +36,39 @@ def _is_enabled() -> bool:
     return getattr(settings, 'ADSBX_LIVE_ENABLED', False) and _get_api_key()
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+)
+def _http_get_adsbx(
+    url: str,
+    params: Optional[Dict],
+    api_key: str,
+    timeout: float = 15.0
+) -> httpx.Response:
+    """HTTP GET with retry logic for ADS-B Exchange API."""
+    with httpx.Client(timeout=timeout) as client:
+        response = client.get(
+            url,
+            params=params,
+            headers={
+                "X-RapidAPI-Key": api_key,
+                "X-RapidAPI-Host": ADSBX_RAPIDAPI_HOST,
+                "Accept": "application/json",
+            }
+        )
+        response.raise_for_status()
+        return response
+
+
 def _make_request(
     endpoint: str,
     params: Optional[Dict] = None,
     timeout: int = 15
 ) -> Optional[Dict[str, Any]]:
     """
-    Make a request to the ADS-B Exchange API via RapidAPI.
+    Make a request to the ADS-B Exchange API via RapidAPI with retry logic.
 
     Args:
         endpoint: API endpoint path
@@ -57,18 +84,13 @@ def _make_request(
         return None
 
     try:
-        with httpx.Client(timeout=timeout) as client:
-            response = client.get(
-                f"{ADSBX_RAPIDAPI_BASE}/{endpoint}",
-                params=params,
-                headers={
-                    "X-RapidAPI-Key": api_key,
-                    "X-RapidAPI-Host": ADSBX_RAPIDAPI_HOST,
-                    "Accept": "application/json",
-                }
-            )
-            response.raise_for_status()
-            return response.json()
+        response = _http_get_adsbx(
+            f"{ADSBX_RAPIDAPI_BASE}/{endpoint}",
+            params,
+            api_key,
+            timeout=float(timeout)
+        )
+        return response.json()
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 429:

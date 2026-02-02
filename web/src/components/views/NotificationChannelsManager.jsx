@@ -252,19 +252,20 @@ function getUrlHint(type) {
 }
 
 // Main Component
-export function NotificationChannelsManager({ apiBase }) {
+export function NotificationChannelsManager({ apiBase, wsRequest, wsConnected }) {
   const {
     channels,
     channelTypes,
     loading,
     error,
+    connected,
     refetch,
     createChannel,
     updateChannel,
     deleteChannel,
     testChannel,
     toggleChannel,
-  } = useNotificationChannels(apiBase);
+  } = useNotificationChannels({ apiBase, wsRequest, wsConnected });
 
   const [showForm, setShowForm] = useState(false);
   const [editChannel, setEditChannel] = useState(null);
@@ -296,6 +297,15 @@ export function NotificationChannelsManager({ apiBase }) {
       setTestingId(null);
     }
   };
+
+  if (!connected && !loading) {
+    return (
+      <div className="channels-error" role="alert">
+        <AlertCircle size={24} />
+        <span>Connection lost. Unable to manage notification channels.</span>
+      </div>
+    );
+  }
 
   if (loading && channels.length === 0) {
     return (

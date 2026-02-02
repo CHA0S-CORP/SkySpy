@@ -20,6 +20,9 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
+# Maximum allowed regex pattern length to prevent ReDoS attacks
+MAX_REGEX_PATTERN_LENGTH = 500
+
 
 @dataclass
 class CompiledRule:
@@ -260,10 +263,11 @@ class AlertRuleCache:
         return ""
 
     def _generate_version(self) -> str:
-        """Generate a new cache version string."""
+        """Generate a new cache version string with strong uniqueness."""
+        import uuid
         return hashlib.md5(
-            f"{datetime.utcnow().isoformat()}".encode()
-        ).hexdigest()[:8]
+            f"{datetime.utcnow().isoformat()}:{uuid.uuid4().hex}".encode()
+        ).hexdigest()[:16]
 
     def get_active_rules(self, user_id: Optional[int] = None) -> List[CompiledRule]:
         """
@@ -386,13 +390,20 @@ class AlertRuleCache:
             if timezone.is_naive(expires_at):
                 expires_at = timezone.make_aware(expires_at)
 
-        # Recompile regex if needed
+        # Recompile regex if needed, with length validation to prevent ReDoS
         compiled_regex = None
         if data.get('operator') == 'regex' and data.get('value'):
-            try:
-                compiled_regex = re.compile(data['value'], re.IGNORECASE)
-            except re.error as e:
-                logger.warning(f"Invalid regex pattern in rule {data.get('id')}: {data.get('value')} - {e}")
+            pattern_value = data['value']
+            if len(pattern_value) > MAX_REGEX_PATTERN_LENGTH:
+                logger.warning(
+                    f"Regex pattern too long in rule {data.get('id')}: "
+                    f"{len(pattern_value)} chars (max {MAX_REGEX_PATTERN_LENGTH}), skipping compilation"
+                )
+            else:
+                try:
+                    compiled_regex = re.compile(pattern_value, re.IGNORECASE)
+                except re.error as e:
+                    logger.warning(f"Invalid regex pattern in rule {data.get('id')}: {pattern_value} - {e}")
 
         return CompiledRule(
             id=data['id'],

@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
+from skyspy.api.throttles import AuthRateThrottle
 from skyspy.models import AlertRule, AlertHistory, AlertSubscription, AlertAggregate
 from skyspy.serializers.alerts import (
     AlertRuleSerializer,
@@ -36,6 +37,7 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
 
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
     permission_classes = [CanAccessAlert, IsOwnerOrAdmin]
+    throttle_classes = [AuthRateThrottle]
 
     queryset = AlertRule.objects.all()
     filter_backends = [DjangoFilterBackend]
@@ -54,7 +56,7 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Filter rules by ownership and visibility."""
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related('owner')
         user = self.request.user
 
         # Apply visibility filtering
@@ -78,18 +80,35 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
             return queryset.filter(visibility='public')
 
     def _user_has_manage_all_permission(self, user):
-        """Check if user has alerts.manage_all permission or superadmin role."""
+        """Check if user has alerts.manage_all permission or superadmin role.
+
+        Results are cached on the request object to avoid repeated DB queries.
+        """
         if not user.is_authenticated:
             return False
+
+        # Cache the result on the request object to avoid N+1 queries
+        request = getattr(self, 'request', None)
+        if request is not None:
+            if hasattr(request, '_manage_all_permission'):
+                return request._manage_all_permission
+
         # Check if user has admin/superadmin role or explicit permission
         from skyspy.models.auth import UserRole
         user_roles = UserRole.objects.filter(user=user).select_related('role')
+        result = False
         for user_role in user_roles:
             permissions = user_role.role.permissions or []
             role_name = user_role.role.name.lower()
             if 'alerts.manage_all' in permissions or role_name in ('admin', 'superadmin'):
-                return True
-        return False
+                result = True
+                break
+
+        # Cache the result on the request object
+        if request is not None:
+            request._manage_all_permission = result
+
+        return result
 
     def _user_is_superadmin(self, user):
         """Check if user has superadmin role."""
@@ -181,7 +200,7 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
         serializer = AlertRuleSerializer(queryset, many=True, context={'request': request})
         return Response({
             'rules': serializer.data,
-            'count': queryset.count()
+            'count': len(serializer.data)
         })
 
     @extend_schema(
@@ -490,20 +509,32 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         summary="Export all rules as JSON",
+        parameters=[
+            OpenApiParameter(name='limit', type=int, description='Maximum rules to export (default: 500)'),
+        ],
         responses={200: dict}
     )
     @action(detail=False, methods=['get'])
     def export(self, request):
         """Export all user's rules as JSON."""
+        # Get limit parameter with default of 500
+        try:
+            limit = int(request.query_params.get('limit', 500))
+        except (ValueError, TypeError):
+            limit = 500
+        # Cap at reasonable maximum
+        limit = min(limit, 1000)
+
         if request.user.is_authenticated:
-            queryset = AlertRule.objects.filter(owner=request.user)
+            queryset = AlertRule.objects.filter(owner=request.user)[:limit]
         else:
-            queryset = AlertRule.objects.filter(visibility='public')
+            queryset = AlertRule.objects.filter(visibility='public')[:limit]
 
         serializer = AlertRuleSerializer(queryset, many=True)
         return Response({
             'rules': serializer.data,
-            'count': queryset.count(),
+            'count': len(serializer.data),
+            'limit': limit,
             'exported_at': timezone.now().isoformat(),
         })
 
@@ -719,7 +750,7 @@ class AlertHistoryViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         """Filter history by ownership and time range."""
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related('rule', 'rule__owner')
         user = self.request.user
 
         # Time range filter

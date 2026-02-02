@@ -16,6 +16,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from skyspy.api.throttles import AuthRateThrottle
 from skyspy.auth.permissions import HasPermission, IsSuperAdmin, IsAdminUser
 from skyspy.auth.serializers import (
     SkyspyUserSerializer,
@@ -48,6 +49,7 @@ class UserViewSet(viewsets.ModelViewSet):
     ).all()
     serializer_class = SkyspyUserSerializer
     permission_classes = [IsAuthenticated, HasPermission.with_perms('users.view')]
+    throttle_classes = [AuthRateThrottle]
 
     def get_permissions(self):
         if self.action in ['create']:
@@ -244,6 +246,7 @@ class RoleViewSet(viewsets.ModelViewSet):
     queryset = Role.objects.all()
     serializer_class = RoleSerializer
     permission_classes = [IsAuthenticated, HasPermission.with_perms('roles.view')]
+    throttle_classes = [AuthRateThrottle]
 
     def get_permissions(self):
         if self.action in ['create']:
@@ -378,6 +381,7 @@ class APIKeyViewSet(viewsets.ModelViewSet):
     """
     serializer_class = APIKeySerializer
     permission_classes = [IsAuthenticated, HasPermission.with_perms('users.view')]
+    throttle_classes = [AuthRateThrottle]
 
     def get_queryset(self):
         """Get queryset with optional filtering."""

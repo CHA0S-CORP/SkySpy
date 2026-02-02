@@ -1,11 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, memo } from 'react';
 import { List, X, ChevronDown, ChevronUp, Search, Move, ArrowUp, ArrowDown } from 'lucide-react';
 import { useDraggable } from '../../hooks/useDraggable';
 
 /**
  * Draggable floating aircraft list panel on the map
+ * Memoized to prevent re-renders when other map state changes
  */
-export function AircraftListPanel({ 
+export const AircraftListPanel = memo(function AircraftListPanel({ 
   aircraft,
   selectedHex,
   onSelectAircraft,
@@ -164,6 +165,18 @@ export function AircraftListPanel({
       )}
     </div>
   );
-}
+}, (prev, next) => {
+  // Custom comparison - only re-render for meaningful changes
+  if (prev.show !== next.show) return false;
+  if (prev.expanded !== next.expanded) return false;
+  if (prev.selectedHex !== next.selectedHex) return false;
+  if (prev.displayCount !== next.displayCount) return false;
+  // Compare aircraft array length first (fast check)
+  if (prev.aircraft?.length !== next.aircraft?.length) return false;
+  // For aircraft data, we rely on the batching to reduce update frequency
+  // A deeper comparison would be too expensive
+  if (prev.aircraft !== next.aircraft) return false;
+  return true;
+});
 
 export default AircraftListPanel;
