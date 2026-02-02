@@ -1717,20 +1717,20 @@ func TestModel_Itoa(t *testing.T) {
 }
 
 func TestModel_Max(t *testing.T) {
-	if max(5.0, 3.0) != 5.0 {
-		t.Error("max(5, 3) should be 5")
+	if maxFloat(5.0, 3.0) != 5.0 {
+		t.Error("maxFloat(5, 3) should be 5")
 	}
 
-	if max(3.0, 5.0) != 5.0 {
-		t.Error("max(3, 5) should be 5")
+	if maxFloat(3.0, 5.0) != 5.0 {
+		t.Error("maxFloat(3, 5) should be 5")
 	}
 
-	if max(5.0, 5.0) != 5.0 {
-		t.Error("max(5, 5) should be 5")
+	if maxFloat(5.0, 5.0) != 5.0 {
+		t.Error("maxFloat(5, 5) should be 5")
 	}
 
-	if max(-1.0, -5.0) != -1.0 {
-		t.Error("max(-1, -5) should be -1")
+	if maxFloat(-1.0, -5.0) != -1.0 {
+		t.Error("maxFloat(-1, -5) should be -1")
 	}
 }
 
@@ -3020,12 +3020,12 @@ func TestModel_NewModel_RangeSelection(t *testing.T) {
 
 	// Test with range larger than all options (should use last that's >= default)
 	cfg.Radar.DefaultRange = 500
-	m = NewModel(cfg)
+	_ = NewModel(cfg)
 
 	// Should use 400 as it's the highest available
 	// Actually, the loop breaks when r >= DefaultRange, so 400 >= 500 is false
 	// So it will stay at default rangeIdx=2 (100)
-	// Let me check the logic again
+	// Just verify no panic
 }
 
 func TestModel_NewModel_WithOverlays(t *testing.T) {

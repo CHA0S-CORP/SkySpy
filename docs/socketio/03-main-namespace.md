@@ -1,15 +1,8 @@
 ---
-title: Main Namespace
-slug: socketio-main-namespace
-category:
-  uri: uri-that-does-not-map-to-api-reference
-position: 3
-content:
-  excerpt: >-
-    Aircraft tracking, safety events, alerts, and statistics on the default
-    Socket.IO namespace
-privacy:
-  view: public
+title: "Main Namespace"
+slug: "socketio-main-namespace"
+excerpt: "Aircraft tracking, safety events, alerts, and statistics on the default Socket.IO namespace"
+hidden: false
 ---
 
 # Main Namespace
@@ -20,9 +13,13 @@ The main namespace (`/`) is the default connection point for most SkySpy feature
 
 Connect to the main namespace to receive real-time updates. Use topic subscriptions to control which data streams you receive.
 
-> 📘 Automatic Snapshot
->
-> On connection, the server automatically emits `aircraft:snapshot` with the current state of all aircraft in range. Subscribe to topics to receive ongoing updates.
+[block:callout]
+{
+  "type": "info",
+  "title": "Automatic Snapshot",
+  "body": "On connection, the server automatically emits `aircraft:snapshot` with the current state of all aircraft in range. Subscribe to topics to receive ongoing updates."
+}
+[/block]
 
 ## Topics
 
@@ -302,9 +299,13 @@ Monitor safety-critical events like TCAS alerts, emergency squawks, and proximit
 
 Receive notifications when custom alert rules are triggered (geo-fence, altitude, callsign, etc.).
 
-> 📘 User-Specific
->
-> Alert events are sent to authenticated users only. Each user receives alerts for their own rules.
+[block:callout]
+{
+  "type": "info",
+  "title": "User-Specific",
+  "body": "Alert events are sent to authenticated users only. Each user receives alerts for their own rules."
+}
+[/block]
 
 [block:parameters]
 {
@@ -471,8 +472,10 @@ Subscribe to the `stats` topic for live analytics updates.
 
 ## Next Steps
 
-> 📘 Explore More Features
->
-> - [Specialized Namespaces](/docs/socketio-specialized-namespaces) - Audio and Cannonball namespaces
-> - [Client Implementation](/docs/socketio-client-implementation) - Complete examples
-> - [Troubleshooting](/docs/socketio-troubleshooting) - Common issues and solutions
+[block:callout]
+{
+  "type": "info",
+  "title": "Explore More Features",
+  "body": "- [Specialized Namespaces](/docs/socketio-specialized-namespaces) - Audio and Cannonball namespaces\n- [Client Implementation](/docs/socketio-client-implementation) - Complete examples\n- [Troubleshooting](/docs/socketio-troubleshooting) - Common issues and solutions"
+}
+[/block]

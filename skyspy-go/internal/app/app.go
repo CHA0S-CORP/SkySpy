@@ -354,7 +354,7 @@ func (m *Model) handleRadarKey(key string) (tea.Model, tea.Cmd) {
 	switch key {
 	case "up", "k":
 		m.selectPrev()
-	case "down", "j":
+	case keyDown, "j":
 		m.selectNext()
 	case "+", "=":
 		m.zoomOut()
@@ -432,13 +432,13 @@ func (m *Model) handleSettingsKey(key string) (tea.Model, tea.Cmd) {
 	themes := theme.List()
 
 	switch key {
-	case "t", "T", "esc":
+	case "t", "T", keyEsc:
 		m.viewMode = ViewRadar
 	case "up", "k":
 		m.settingsCursor = (m.settingsCursor - 1 + len(themes)) % len(themes)
-	case "down", "j":
+	case keyDown, "j":
 		m.settingsCursor = (m.settingsCursor + 1) % len(themes)
-	case "enter", " ":
+	case keyEnter, " ":
 		m.setTheme(themes[m.settingsCursor])
 	}
 	return m, nil
@@ -856,10 +856,13 @@ func (m *Model) saveOverlays() {
 	overlayConfigs := m.overlayManager.ToConfig()
 	m.config.Overlays.Overlays = make([]config.OverlayConfig, len(overlayConfigs))
 	for i, ov := range overlayConfigs {
+		path, _ := ov["source_file"].(string)
+		enabled, _ := ov["enabled"].(bool)
+		key, _ := ov["key"].(string)
 		m.config.Overlays.Overlays[i] = config.OverlayConfig{
-			Path:    ov["source_file"].(string),
-			Enabled: ov["enabled"].(bool),
-			Key:     ov["key"].(string),
+			Path:    path,
+			Enabled: enabled,
+			Key:     key,
 		}
 		if color, ok := ov["color"].(string); ok && color != "" {
 			m.config.Overlays.Overlays[i].Color = &color
@@ -991,7 +994,7 @@ func (m *Model) GetSpectrumLabels() []string {
 	return m.spectrumAnalyzer.GetBandLabels()
 }
 
-func max(a, b float64) float64 {
+func maxFloat(a, b float64) float64 {
 	if a > b {
 		return a
 	}
@@ -1037,7 +1040,7 @@ func (m *Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.viewMode = ViewRadar
 		return m, nil
 	case "backspace":
-		if len(m.searchQuery) > 0 {
+		if m.searchQuery != "" {
 			m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
 			m.updateSearchResults()
 		}

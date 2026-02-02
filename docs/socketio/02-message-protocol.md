@@ -1,13 +1,8 @@
 ---
-title: Message Protocol
-slug: socketio-message-protocol
-category:
-  uri: uri-that-does-not-map-to-api-reference
-position: 2
-content:
-  excerpt: 'Understanding Socket.IO events, payloads, and the request/response pattern'
-privacy:
-  view: public
+title: "Message Protocol"
+slug: "socketio-message-protocol"
+excerpt: "Understanding Socket.IO events, payloads, and the request/response pattern"
+hidden: false
 ---
 
 # Message Protocol
@@ -20,9 +15,13 @@ Socket.IO uses **events** instead of raw messages. Each event has:
 - **Name** (string): The event type (e.g., `subscribe`, `aircraft:update`)
 - **Payload** (usually an object): The data associated with the event
 
-> 📘 Convention
->
-> SkySpy uses colon-separated namespacing for events (e.g., `aircraft:update`, `safety:event`). This makes it easy to identify the domain and action.
+[block:callout]
+{
+  "type": "info",
+  "title": "Convention",
+  "body": "SkySpy uses colon-separated namespacing for events (e.g., `aircraft:update`, `safety:event`). This makes it easy to identify the domain and action."
+}
+[/block]
 
 ## Client → Server Events
 
@@ -178,9 +177,13 @@ These are the events the server emits to your client.
 }
 [/block]
 
-> 📘 Payload Compatibility
->
-> Payloads match the formats described in the REST API documentation. Only the transport mechanism is different (Socket.IO events vs. HTTP responses).
+[block:callout]
+{
+  "type": "info",
+  "title": "Payload Compatibility",
+  "body": "Payloads match the formats described in the REST API documentation. Only the transport mechanism is different (Socket.IO events vs. HTTP responses)."
+}
+[/block]
 
 ## Batch Messages
 
@@ -217,9 +220,13 @@ To optimize bandwidth, high-frequency updates may be batched into a single `batc
 }
 [/block]
 
-> ✅ Critical Events Bypass Batching
->
-> Critical event types (alert, safety, emergency) bypass batching and are emitted immediately to ensure low latency for important events.
+[block:callout]
+{
+  "type": "success",
+  "title": "Critical Events Bypass Batching",
+  "body": "Critical event types (alert, safety, emergency) bypass batching and are emitted immediately to ensure low latency for important events."
+}
+[/block]
 
 ### Batch Configuration
 
@@ -253,19 +260,17 @@ For on-demand queries (historical data, aircraft info, etc.), use the `request` 
 
 ### Request Flow
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant S as Server
-
-    C->>S: request { type, request_id, params }
-
-    alt Success
-        S->>C: response { request_id, data }
-    else Error
-        S->>C: error { request_id, message }
-    end
-```
+[block:code]
+{
+  "codes": [
+    {
+      "code": "sequenceDiagram\n    participant C as Client\n    participant S as Server\n\n    C->>S: request { type, request_id, params }\n\n    alt Success\n        S->>C: response { request_id, data }\n    else Error\n        S->>C: error { request_id, message }\n    end",
+      "language": "mermaid",
+      "name": "Request/Response Flow"
+    }
+  ]
+}
+[/block]
 
 ### Request Format
 
@@ -386,12 +391,20 @@ Different topics have different rate limits to optimize bandwidth and prevent ov
 }
 [/block]
 
-> 📘 Client-Side Throttling
->
-> If your application can't keep up with the update rate, implement client-side throttling or request lower-frequency updates. Critical events (alerts, safety) are never rate-limited.
+[block:callout]
+{
+  "type": "info",
+  "title": "Client-Side Throttling",
+  "body": "If your application can't keep up with the update rate, implement client-side throttling or request lower-frequency updates. Critical events (alerts, safety) are never rate-limited."
+}
+[/block]
 
 ## Next Steps
 
-> 📘 Ready to stream data?
->
-> Learn about the [main namespace](/docs/socketio-main-namespace) to start receiving aircraft positions, safety events, and alerts. Or explore [specialized namespaces](/docs/socketio-specialized-namespaces) for audio and mobile features.
+[block:callout]
+{
+  "type": "info",
+  "title": "Ready to stream data?",
+  "body": "Learn about the [main namespace](/docs/socketio-main-namespace) to start receiving aircraft positions, safety events, and alerts. Or explore [specialized namespaces](/docs/socketio-specialized-namespaces) for audio and mobile features."
+}
+[/block]

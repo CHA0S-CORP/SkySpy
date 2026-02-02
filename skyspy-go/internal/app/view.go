@@ -10,6 +10,9 @@ import (
 	"github.com/skyspy/skyspy-go/internal/theme"
 )
 
+// Placeholder for missing values
+const emptyPlaceholder = "----"
+
 // View renders the application
 func (m *Model) View() string {
 	var sb strings.Builder
@@ -249,7 +252,7 @@ func (m *Model) renderTargetPanel() string {
 
 	for _, row := range rows {
 		if row.value == "" {
-			row.value = "----"
+			row.value = emptyPlaceholder
 		}
 		sb.WriteString(borderStyle.Render("│") + textDim.Render(fmt.Sprintf("  %-4s ", row.label)) + row.style.Render(fmt.Sprintf("%-23s", row.value)) + borderStyle.Render("│"))
 		sb.WriteString("\n")
@@ -1012,7 +1015,7 @@ func (m *Model) renderHelpPanel() string {
 
 func (m *Model) formatAlt(t *radar.Target) string {
 	if !t.HasAlt {
-		return "----"
+		return emptyPlaceholder
 	}
 	if t.Altitude >= 18000 {
 		return fmt.Sprintf("FL%03d", t.Altitude/100)
@@ -1060,7 +1063,7 @@ func (m *Model) formatBearing(t *radar.Target) string {
 
 func (m *Model) formatSquawk(t *radar.Target) string {
 	if t.Squawk == "" {
-		return "----"
+		return emptyPlaceholder
 	}
 	return t.Squawk
 }

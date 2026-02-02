@@ -1,15 +1,8 @@
 ---
-title: Connection & Authentication
-slug: socketio-connection
-category:
-  uri: uri-that-does-not-map-to-api-reference
-position: 1
-content:
-  excerpt: >-
-    Connect to SkySpy's Socket.IO server, authenticate, and choose the right
-    namespace
-privacy:
-  view: public
+title: "Connection & Authentication"
+slug: "socketio-connection"
+excerpt: "Connect to SkySpy's Socket.IO server, authenticate, and choose the right namespace"
+hidden: false
 ---
 
 # Connection & Authentication
@@ -41,9 +34,13 @@ Socket.IO is served on the same host as the HTTP API. The default path is `/sock
 }
 [/block]
 
-> 📘 Single Connection Design
->
-> There are **no separate URLs per stream** (e.g., no `/ws/aircraft/`). Use a single connection to the default namespace and subscribe to topics, or connect to a dedicated namespace for audio or cannonball.
+[block:callout]
+{
+  "type": "info",
+  "title": "Single Connection Design",
+  "body": "There are **no separate URLs per stream** (e.g., no `/ws/aircraft/`). Use a single connection to the default namespace and subscribe to topics, or connect to a dedicated namespace for audio or cannonball."
+}
+[/block]
 
 ## Namespaces
 
@@ -78,31 +75,29 @@ SkySpy uses Socket.IO namespaces to organize different types of real-time data s
 }
 [/block]
 
-> 💡 Recommendation
->
-> For most applications, connect to the **main namespace** (`/`) and subscribe to `aircraft`, `safety`, `alerts`, etc. Use `/audio` or `/cannonball` only when you need those specific features.
+[block:callout]
+{
+  "type": "info",
+  "title": "Recommendation",
+  "body": "For most applications, connect to the **main namespace** (`/`) and subscribe to `aircraft`, `safety`, `alerts`, etc. Use `/audio` or `/cannonball` only when you need those specific features."
+}
+[/block]
 
 ## Authentication
 
 ### Connection Handshake
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant S as Server
-    participant A as Auth
-
-    C->>S: connect(auth: { token })
-    S->>A: Validate token
-    A-->>S: User or Anonymous
-    S-->>C: connect accepted
-    S->>C: aircraft:snapshot (main ns)
-    C->>S: subscribe({ topics })
-    S-->>C: subscribed({ topics })
-    loop Real-time
-        S->>C: events (aircraft:update, etc.)
-    end
-```
+[block:code]
+{
+  "codes": [
+    {
+      "code": "sequenceDiagram\n    participant C as Client\n    participant S as Server\n    participant A as Auth\n\n    C->>S: connect(auth: { token })\n    S->>A: Validate token\n    A-->>S: User or Anonymous\n    S-->>C: connect accepted\n    S->>C: aircraft:snapshot (main ns)\n    C->>S: subscribe({ topics })\n    S-->>C: subscribed({ topics })\n    loop Real-time\n        S->>C: events (aircraft:update, etc.)\n    end",
+      "language": "mermaid",
+      "name": "Connection Flow"
+    }
+  ]
+}
+[/block]
 
 ### Authentication Modes
 
@@ -127,9 +122,13 @@ sequenceDiagram
 }
 [/block]
 
-> 🚧 Security Best Practice
->
-> Send credentials in the **auth** object when connecting. Do not put tokens in query strings as they are often logged by proxies and load balancers.
+[block:callout]
+{
+  "type": "warning",
+  "title": "Security Best Practice",
+  "body": "Send credentials in the **auth** object when connecting. Do not put tokens in query strings as they are often logged by proxies and load balancers."
+}
+[/block]
 
 ### Passing the Token
 
@@ -177,9 +176,13 @@ sequenceDiagram
 }
 [/block]
 
-> ✅ Token Validation
->
-> Tokens are validated on connection. If authentication fails in `private` mode or with `WS_REJECT_INVALID_TOKENS=True`, the connection will be rejected with a `connect_error` event.
+[block:callout]
+{
+  "type": "success",
+  "title": "Token Validation",
+  "body": "Tokens are validated on connection. If authentication fails in `private` mode or with `WS_REJECT_INVALID_TOKENS=True`, the connection will be rejected with a `connect_error` event."
+}
+[/block]
 
 ## Connection Lifecycle
 
@@ -259,9 +262,13 @@ Socket.IO client includes automatic reconnection with exponential backoff and ji
 }
 [/block]
 
-> 📘 Disconnect Reasons
->
-> Disconnect reasons (e.g., `io server disconnect`, `io client disconnect`, `transport close`) indicate whether to reconnect automatically. The client will **not** auto-reconnect if the server explicitly disconnects (e.g., auth failure).
+[block:callout]
+{
+  "type": "info",
+  "title": "Disconnect Reasons",
+  "body": "Disconnect reasons (e.g., `io server disconnect`, `io client disconnect`, `transport close`) indicate whether to reconnect automatically. The client will **not** auto-reconnect if the server explicitly disconnects (e.g., auth failure)."
+}
+[/block]
 
 ## Complete Connection Example
 
@@ -284,6 +291,10 @@ Socket.IO client includes automatic reconnection with exponential backoff and ji
 
 ## Next Steps
 
-> 📘 Ready to stream data?
->
-> Now that you're connected, learn about the [message protocol](/docs/socketio-message-protocol) to understand events and payloads, or jump to the [main namespace](/docs/socketio-main-namespace) to start streaming aircraft data.
+[block:callout]
+{
+  "type": "info",
+  "title": "Ready to stream data?",
+  "body": "Now that you're connected, learn about the [message protocol](/docs/socketio-message-protocol) to understand events and payloads, or jump to the [main namespace](/docs/socketio-main-namespace) to start streaming aircraft data."
+}
+[/block]

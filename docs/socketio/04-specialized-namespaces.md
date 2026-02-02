@@ -1,15 +1,8 @@
 ---
-title: Specialized Namespaces
-slug: socketio-specialized-namespaces
-category:
-  uri: uri-that-does-not-map-to-api-reference
-position: 4
-content:
-  excerpt: >-
-    Audio transcriptions, radio monitoring, and mobile threat detection
-    namespaces
-privacy:
-  view: public
+title: "Specialized Namespaces"
+slug: "socketio-specialized-namespaces"
+excerpt: "Audio transcriptions, radio monitoring, and mobile threat detection namespaces"
+hidden: false
 ---
 
 # Specialized Namespaces
@@ -43,9 +36,13 @@ SkySpy provides dedicated namespaces for specialized features: audio/radio monit
 }
 [/block]
 
-> 💡 When to Use Specialized Namespaces
->
-> Use specialized namespaces when you only need a specific feature (e.g., audio monitoring) without aircraft tracking. This reduces bandwidth and simplifies client logic.
+[block:callout]
+{
+  "type": "info",
+  "title": "When to Use Specialized Namespaces",
+  "body": "Use specialized namespaces when you only need a specific feature (e.g., audio monitoring) without aircraft tracking. This reduces bandwidth and simplifies client logic."
+}
+[/block]
 
 ## Audio Namespace (`/audio`)
 

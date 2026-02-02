@@ -1,22 +1,19 @@
 ---
-title: Socket.IO Overview
-slug: socketio-overview
-category:
-  uri: uri-that-does-not-map-to-api-reference
-position: 0
-content:
-  excerpt: >-
-    Real-time aviation data streaming with Socket.IO - architecture, features,
-    and capabilities
-privacy:
-  view: public
+title: "Socket.IO Overview"
+slug: "socketio-overview"
+excerpt: "Real-time aviation data streaming with Socket.IO - architecture, features, and capabilities"
+hidden: false
 ---
 
 # Socket.IO Overview
 
-> 📘 Real-time aviation data at your fingertips
->
-> SkySpy provides live streaming through Socket.IO with namespaces, topic subscriptions, rate limiting, and optional Redis-backed scaling for production deployments.
+[block:callout]
+{
+  "type": "info",
+  "title": "Real-time aviation data at your fingertips",
+  "body": "SkySpy provides live streaming through Socket.IO with namespaces, topic subscriptions, rate limiting, and optional Redis-backed scaling for production deployments."
+}
+[/block]
 
 ## What is Socket.IO?
 
@@ -24,30 +21,25 @@ SkySpy's Socket.IO API delivers real-time bidirectional communication for tracki
 
 ## Architecture
 
-```mermaid
-graph LR
-    subgraph Clients
-        A[Web App]
-        B[Mobile App]
-        C[Script]
-    end
+[block:code]
+{
+  "codes": [
+    {
+      "code": "graph LR\n    subgraph Clients\n        A[Web App]\n        B[Mobile App]\n        C[Script]\n    end\n\n    subgraph SkySpy Server\n        D[Socket.IO Server]\n        E[ASGI / Uvicorn]\n        F[Redis Pub/Sub]\n    end\n\n    A -->|/socket.io| D\n    B -->|/socket.io| D\n    C -->|/socket.io| D\n    D --> E\n    E <--> F",
+      "language": "mermaid",
+      "name": "Architecture Diagram"
+    }
+  ]
+}
+[/block]
 
-    subgraph SkySpy Server
-        D[Socket.IO Server]
-        E[ASGI / Uvicorn]
-        F[Redis Pub/Sub]
-    end
-
-    A -->|/socket.io| D
-    B -->|/socket.io| D
-    C -->|/socket.io| D
-    D --> E
-    E <--> F
-```
-
-> ✅ Production Ready
->
-> Socket.IO provides automatic reconnection, message batching, and delta updates to optimize bandwidth while maintaining real-time responsiveness.
+[block:callout]
+{
+  "type": "success",
+  "title": "Production Ready",
+  "body": "Socket.IO provides automatic reconnection, message batching, and delta updates to optimize bandwidth while maintaining real-time responsiveness."
+}
+[/block]
 
 ## What You Can Stream
 
@@ -157,9 +149,13 @@ socket.on('response', (data) => {
 });
 ```
 
-> 📘 Hybrid Approach
->
-> SkySpy uses both patterns: streaming for real-time updates and request/response for on-demand queries. This provides the best balance of performance and flexibility.
+[block:callout]
+{
+  "type": "info",
+  "title": "Hybrid Approach",
+  "body": "SkySpy uses both patterns: streaming for real-time updates and request/response for on-demand queries. This provides the best balance of performance and flexibility."
+}
+[/block]
 
 ## Performance Characteristics
 
@@ -192,12 +188,19 @@ socket.on('response', (data) => {
 
 ## Next Steps
 
-[block:html]
+**Connection & Authentication**
+[Learn how to connect, authenticate, and choose the right namespace](/docs/socketio-connection)
+
+**Message Protocol**
+[Understand events, payloads, and request/response patterns](/docs/socketio-message-protocol)
+
+**Quick Start**
+[JavaScript and Python code examples to get started](/docs/socketio-client-implementation)
+
+[block:callout]
 {
-  "html": "<div style=\"display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin: 2rem 0;\">\n  <a href=\"/docs/socketio-connection\" style=\"display: block; padding: 1.5rem; border: 1px solid #e1e4e8; border-radius: 8px; text-decoration: none; color: inherit;\">\n    <div style=\"font-size: 1.5rem; margin-bottom: 0.5rem;\">🔌</div>\n    <h3 style=\"margin: 0 0 0.5rem 0;\">Connection</h3>\n    <p style=\"margin: 0; color: #586069;\">Learn how to connect, authenticate, and choose the right namespace</p>\n  </a>\n  \n  <a href=\"/docs/socketio-message-protocol\" style=\"display: block; padding: 1.5rem; border: 1px solid #e1e4e8; border-radius: 8px; text-decoration: none; color: inherit;\">\n    <div style=\"font-size: 1.5rem; margin-bottom: 0.5rem;\">💬</div>\n    <h3 style=\"margin: 0 0 0.5rem 0;\">Message Protocol</h3>\n    <p style=\"margin: 0; color: #586069;\">Understand events, payloads, and request/response patterns</p>\n  </a>\n  \n  <a href=\"/docs/socketio-client-implementation\" style=\"display: block; padding: 1.5rem; border: 1px solid #e1e4e8; border-radius: 8px; text-decoration: none; color: inherit;\">\n    <div style=\"font-size: 1.5rem; margin-bottom: 0.5rem;\">⚡</div>\n    <h3 style=\"margin: 0 0 0.5rem 0;\">Quick Start</h3>\n    <p style=\"margin: 0; color: #586069;\">JavaScript and Python code examples to get started</p>\n  </a>\n</div>"
+  "type": "info",
+  "title": "Need Help?",
+  "body": "See the [REST API documentation](/docs/rest-api) for additional context or visit the [troubleshooting guide](/docs/socketio-troubleshooting) if you encounter issues."
 }
 [/block]
-
-> 📘 Need Help?
->
-> See the [REST API documentation](/docs/rest-api) for additional context or visit the [troubleshooting guide](/docs/socketio-troubleshooting) if you encounter issues.

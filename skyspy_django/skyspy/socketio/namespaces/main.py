@@ -303,7 +303,11 @@ class MainNamespace(socketio.AsyncNamespace):
                     aircraft_list = await self._get_current_aircraft()
                     await sio.emit(
                         "aircraft:snapshot",
-                        {"aircraft": aircraft_list, "count": len(aircraft_list), "timestamp": timezone.now().isoformat()},
+                        {
+                            "aircraft": aircraft_list,
+                            "count": len(aircraft_list),
+                            "timestamp": timezone.now().isoformat(),
+                        },
                         to=sid,
                         namespace=self.namespace,
                     )
@@ -1134,11 +1138,7 @@ class MainNamespace(socketio.AsyncNamespace):
 
         # Get safety event counts per ICAO in the time range
         safety_counts = {}
-        safety_events = (
-            SafetyEvent.objects.filter(timestamp__gte=cutoff)
-            .values("icao_hex")
-            .annotate(count=Count("id"))
-        )
+        safety_events = SafetyEvent.objects.filter(timestamp__gte=cutoff).values("icao_hex").annotate(count=Count("id"))
         for item in safety_events:
             if item["icao_hex"]:
                 safety_counts[item["icao_hex"]] = item["count"]
@@ -1172,25 +1172,27 @@ class MainNamespace(socketio.AsyncNamespace):
                 delta = s["last_seen"] - s["first_seen"]
                 duration_min = round(delta.total_seconds() / 60, 1)
 
-            sessions.append({
-                "id": s["id"],
-                "icao_hex": s["icao_hex"],
-                "callsign": s["callsign"],
-                "first_seen": s["first_seen"],
-                "last_seen": s["last_seen"],
-                "duration_min": duration_min,
-                "message_count": s["total_positions"],
-                "min_distance_nm": s["min_distance_nm"],
-                "max_distance_nm": s["max_distance_nm"],
-                "min_alt": s["min_altitude"],
-                "max_alt": s["max_altitude"],
-                "max_vr": s["max_vertical_rate"],
-                "min_rssi": s["min_rssi"],
-                "max_rssi": s["max_rssi"],
-                "is_military": s["is_military"],
-                "type": s["aircraft_type"],
-                "safety_event_count": safety_counts.get(s["icao_hex"], 0),
-            })
+            sessions.append(
+                {
+                    "id": s["id"],
+                    "icao_hex": s["icao_hex"],
+                    "callsign": s["callsign"],
+                    "first_seen": s["first_seen"],
+                    "last_seen": s["last_seen"],
+                    "duration_min": duration_min,
+                    "message_count": s["total_positions"],
+                    "min_distance_nm": s["min_distance_nm"],
+                    "max_distance_nm": s["max_distance_nm"],
+                    "min_alt": s["min_altitude"],
+                    "max_alt": s["max_altitude"],
+                    "max_vr": s["max_vertical_rate"],
+                    "min_rssi": s["min_rssi"],
+                    "max_rssi": s["max_rssi"],
+                    "is_military": s["is_military"],
+                    "type": s["aircraft_type"],
+                    "safety_event_count": safety_counts.get(s["icao_hex"], 0),
+                }
+            )
 
         return {"sessions": sessions, "count": len(sessions), "hours": hours}
 
