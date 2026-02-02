@@ -252,9 +252,61 @@ function MapView({
       const saved = localStorage.getItem('adsb-airspace-type-filters');
       return saved
         ? JSON.parse(saved)
-        : { B: true, C: true, D: true, E: false, MOA: true, RESTRICTED: true, WARNING: true, PROHIBITED: true, TFR: true, ALERT: true };
+        : {
+            B: true,
+            C: true,
+            D: true,
+            E: false,
+            MOA: true,
+            RESTRICTED: true,
+            WARNING: true,
+            PROHIBITED: true,
+            TFR: true,
+            ALERT: true,
+          };
     } catch {
-      return { B: true, C: true, D: true, E: false, MOA: true, RESTRICTED: true, WARNING: true, PROHIBITED: true, TFR: true, ALERT: true };
+      return {
+        B: true,
+        C: true,
+        D: true,
+        E: false,
+        MOA: true,
+        RESTRICTED: true,
+        WARNING: true,
+        PROHIBITED: true,
+        TFR: true,
+        ALERT: true,
+      };
+    }
+  });
+  const [weatherAdvisoryFilters, setWeatherAdvisoryFilters] = useState(() => {
+    try {
+      const saved = localStorage.getItem('adsb-weather-advisory-filters');
+      return saved
+        ? JSON.parse(saved)
+        : {
+            IFR: true,
+            TURB: true,
+            ICE: true,
+            TS: true,
+            MT_OBSC: true,
+            VOLCANIC_ASH: true,
+            LLWS: true,
+            SFC_WND: true,
+            FZLVL: true,
+          };
+    } catch {
+      return {
+        IFR: true,
+        TURB: true,
+        ICE: true,
+        TS: true,
+        MT_OBSC: true,
+        VOLCANIC_ASH: true,
+        LLWS: true,
+        SFC_WND: true,
+        FZLVL: true,
+      };
     }
   });
   const [radarRange, setRadarRange] = useState(50); // nm
@@ -3907,8 +3959,12 @@ function MapView({
       if (airspaceTypeFilters[asClass] !== undefined) {
         return airspaceTypeFilters[asClass];
       }
-      // For G-AIRMETs and other advisories, always show
-      if (as.isAdvisory) return true;
+      // For G-AIRMETs and other advisories, filter by hazard type
+      if (as.isAdvisory && as.hazard) {
+        if (weatherAdvisoryFilters[as.hazard] !== undefined) {
+          return weatherAdvisoryFilters[as.hazard];
+        }
+      }
       // Default to showing unknown types
       return true;
     });
@@ -4718,7 +4774,15 @@ function MapView({
         ctx.save();
         ctx.setLineDash([6, 4]);
 
-        airspaceAdvisories.forEach((adv) => {
+        // Filter advisories by hazard type
+        const filteredAdvisories = airspaceAdvisories.filter((adv) => {
+          if (adv.hazard && weatherAdvisoryFilters[adv.hazard] !== undefined) {
+            return weatherAdvisoryFilters[adv.hazard];
+          }
+          return true;
+        });
+
+        filteredAdvisories.forEach((adv) => {
           // Handle GeoJSON format: { type: "Polygon", coordinates: [[[lon, lat], ...]] }
           // or flat array format: [[lon, lat], ...]
           let polygonCoords = adv.polygon;
@@ -7558,13 +7622,22 @@ function MapView({
               // Check Airspaces if enabled - use point-in-polygon test
               if (overlays.airspace) {
                 // Compute filtered airspace data inline (same logic as canvas rendering)
-                const rawAirspaces = [...(aviationData.airspaces || []), ...(aviationData.boundaries || [])];
+                const rawAirspaces = [
+                  ...(aviationData.airspaces || []),
+                  ...(aviationData.boundaries || []),
+                ];
                 const filteredAirspaces = rawAirspaces.filter((as) => {
-                  const asClass = as.class || as.airspace_class || as.type?.replace('CLASS_', '') || '';
+                  const asClass =
+                    as.class || as.airspace_class || as.type?.replace('CLASS_', '') || '';
                   if (airspaceTypeFilters[asClass] !== undefined) {
                     return airspaceTypeFilters[asClass];
                   }
-                  if (as.isAdvisory) return true;
+                  // For G-AIRMETs and other advisories, filter by hazard type
+                  if (as.isAdvisory && as.hazard) {
+                    if (weatherAdvisoryFilters[as.hazard] !== undefined) {
+                      return weatherAdvisoryFilters[as.hazard];
+                    }
+                  }
                   return true;
                 });
                 filteredAirspaces.forEach((as) => {
@@ -7575,7 +7648,10 @@ function MapView({
                       polygonCoords = as.polygon;
                     } else if (as.polygon.type === 'Polygon' && as.polygon.coordinates?.[0]) {
                       polygonCoords = as.polygon.coordinates[0];
-                    } else if (as.polygon.type === 'MultiPolygon' && as.polygon.coordinates?.[0]?.[0]) {
+                    } else if (
+                      as.polygon.type === 'MultiPolygon' &&
+                      as.polygon.coordinates?.[0]?.[0]
+                    ) {
                       polygonCoords = as.polygon.coordinates[0][0];
                     }
                   }
@@ -7594,13 +7670,23 @@ function MapView({
                   // Point-in-polygon test (ray casting algorithm)
                   let inside = false;
                   for (let i = 0, j = polygonCoords.length - 1; i < polygonCoords.length; j = i++) {
-                    const xi = Array.isArray(polygonCoords[i]) ? polygonCoords[i][0] : polygonCoords[i].lon;
-                    const yi = Array.isArray(polygonCoords[i]) ? polygonCoords[i][1] : polygonCoords[i].lat;
-                    const xj = Array.isArray(polygonCoords[j]) ? polygonCoords[j][0] : polygonCoords[j].lon;
-                    const yj = Array.isArray(polygonCoords[j]) ? polygonCoords[j][1] : polygonCoords[j].lat;
+                    const xi = Array.isArray(polygonCoords[i])
+                      ? polygonCoords[i][0]
+                      : polygonCoords[i].lon;
+                    const yi = Array.isArray(polygonCoords[i])
+                      ? polygonCoords[i][1]
+                      : polygonCoords[i].lat;
+                    const xj = Array.isArray(polygonCoords[j])
+                      ? polygonCoords[j][0]
+                      : polygonCoords[j].lon;
+                    const yj = Array.isArray(polygonCoords[j])
+                      ? polygonCoords[j][1]
+                      : polygonCoords[j].lat;
 
-                    if (yi > clickLat !== yj > clickLat &&
-                        clickLon < ((xj - xi) * (clickLat - yi)) / (yj - yi) + xi) {
+                    if (
+                      yi > clickLat !== yj > clickLat &&
+                      clickLon < ((xj - xi) * (clickLat - yi)) / (yj - yi) + xi
+                    ) {
                       inside = !inside;
                     }
                   }
@@ -7611,7 +7697,9 @@ function MapView({
                     const centerLon = as.center_lon || as.lon;
                     if (centerLat && centerLon) {
                       const centerPos = getScreenPos(centerLat, centerLon);
-                      const clickDist = Math.sqrt((clickX - centerPos.x) ** 2 + (clickY - centerPos.y) ** 2);
+                      const clickDist = Math.sqrt(
+                        (clickX - centerPos.x) ** 2 + (clickY - centerPos.y) ** 2
+                      );
                       // Only select if closer than current closest (or if no closer point-based item)
                       if (clickDist < closestDist || closestDist > 30) {
                         closestDist = Math.min(clickDist, 25); // Cap distance for polygon items
@@ -7980,7 +8068,10 @@ function MapView({
                 />
                 <span className="toggle-label">Show Labels</span>
               </label>
-              <div className="overlay-section-title" style={{ paddingLeft: '20px', fontSize: '10px', marginTop: '8px' }}>
+              <div
+                className="overlay-section-title"
+                style={{ paddingLeft: '20px', fontSize: '10px', marginTop: '8px' }}
+              >
                 Airspace Types
               </div>
               {[
@@ -8000,9 +8091,50 @@ function MapView({
                     type="checkbox"
                     checked={airspaceTypeFilters[key] ?? true}
                     onChange={() => {
-                      const newFilters = { ...airspaceTypeFilters, [key]: !airspaceTypeFilters[key] };
+                      const newFilters = {
+                        ...airspaceTypeFilters,
+                        [key]: !airspaceTypeFilters[key],
+                      };
                       setAirspaceTypeFilters(newFilters);
-                      localStorage.setItem('adsb-airspace-type-filters', JSON.stringify(newFilters));
+                      localStorage.setItem(
+                        'adsb-airspace-type-filters',
+                        JSON.stringify(newFilters)
+                      );
+                    }}
+                  />
+                  <span className="toggle-label">{label}</span>
+                </label>
+              ))}
+              <div
+                className="overlay-section-title"
+                style={{ paddingLeft: '20px', fontSize: '10px', marginTop: '8px' }}
+              >
+                Weather Advisories (G-AIRMET)
+              </div>
+              {[
+                { key: 'IFR', label: 'IFR Conditions' },
+                { key: 'TURB', label: 'Turbulence' },
+                { key: 'ICE', label: 'Icing' },
+                { key: 'TS', label: 'Thunderstorm' },
+                { key: 'MT_OBSC', label: 'Mountain Obscuration' },
+                { key: 'LLWS', label: 'Low Level Wind Shear' },
+                { key: 'SFC_WND', label: 'Surface Wind' },
+                { key: 'FZLVL', label: 'Freezing Level' },
+              ].map(({ key, label }) => (
+                <label key={key} className="overlay-toggle" style={{ paddingLeft: '30px' }}>
+                  <input
+                    type="checkbox"
+                    checked={weatherAdvisoryFilters[key] ?? true}
+                    onChange={() => {
+                      const newFilters = {
+                        ...weatherAdvisoryFilters,
+                        [key]: !weatherAdvisoryFilters[key],
+                      };
+                      setWeatherAdvisoryFilters(newFilters);
+                      localStorage.setItem(
+                        'adsb-weather-advisory-filters',
+                        JSON.stringify(newFilters)
+                      );
                     }}
                   />
                   <span className="toggle-label">{label}</span>
@@ -9824,7 +9956,10 @@ function MapView({
             <span
               className={`airport-class-badge class-${(selectedAirspace.class || selectedAirspace.airspace_class || '').toLowerCase()}`}
             >
-              {selectedAirspace.class || selectedAirspace.airspace_class || selectedAirspace.type || 'Airspace'}
+              {selectedAirspace.class ||
+                selectedAirspace.airspace_class ||
+                selectedAirspace.type ||
+                'Airspace'}
             </span>
           </div>
 
@@ -9839,24 +9974,34 @@ function MapView({
             <div className="detail-row">
               <span>Class/Type</span>
               <span>
-                {selectedAirspace.class || selectedAirspace.airspace_class || selectedAirspace.type || 'Unknown'}
+                {selectedAirspace.class ||
+                  selectedAirspace.airspace_class ||
+                  selectedAirspace.type ||
+                  'Unknown'}
               </span>
             </div>
 
-            {(selectedAirspace.floor_ft !== undefined || selectedAirspace.lower_alt_ft !== undefined) && (
+            {(selectedAirspace.floor_ft !== undefined ||
+              selectedAirspace.lower_alt_ft !== undefined) && (
               <div className="detail-row">
                 <span>Floor</span>
                 <span>
-                  {(selectedAirspace.floor_ft ?? selectedAirspace.lower_alt_ft)?.toLocaleString() || 'SFC'} ft
+                  {(selectedAirspace.floor_ft ?? selectedAirspace.lower_alt_ft)?.toLocaleString() ||
+                    'SFC'}{' '}
+                  ft
                 </span>
               </div>
             )}
 
-            {(selectedAirspace.ceiling_ft !== undefined || selectedAirspace.upper_alt_ft !== undefined) && (
+            {(selectedAirspace.ceiling_ft !== undefined ||
+              selectedAirspace.upper_alt_ft !== undefined) && (
               <div className="detail-row">
                 <span>Ceiling</span>
                 <span>
-                  {(selectedAirspace.ceiling_ft ?? selectedAirspace.upper_alt_ft)?.toLocaleString() || 'UNL'} ft
+                  {(
+                    selectedAirspace.ceiling_ft ?? selectedAirspace.upper_alt_ft
+                  )?.toLocaleString() || 'UNL'}{' '}
+                  ft
                 </span>
               </div>
             )}
