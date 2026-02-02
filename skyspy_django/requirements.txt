@@ -24,6 +24,7 @@ django_eventstream>=4.5
 # Background Tasks (Celery)
 celery[redis,gevent]>=5.3
 django-celery-beat>=2.5
+django-celery-results>=2.5
 gevent>=24.2
 
 # HTTP client for SSE streaming

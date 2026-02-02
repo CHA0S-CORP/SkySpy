@@ -135,7 +135,7 @@ sequenceDiagram
     participant S as AcarsService
     participant C as Cache
     participant DB as PostgreSQL
-    participant WS as WebSocket
+    participant WS as Socket.IO
 
     D->>R: JSON Message
     R->>U: Forward UDP
@@ -275,7 +275,7 @@ flowchart LR
 | 4️⃣ | LRU cache check (30-second TTL) |
 | 5️⃣ | Airline info extracted, label decoded, libacars parsing |
 | 6️⃣ | Persisted to PostgreSQL database |
-| 7️⃣ | Sent to WebSocket subscribers |
+| 7️⃣ | Sent to Socket.IO subscribers |
 
 ### 🚀 Starting the Service
 
@@ -695,19 +695,19 @@ cache = LRUCache(maxsize=10000, ttl_seconds=30)
 
 ## 🖥️ Frontend Integration
 
-### WebSocket Connection
+### Socket.IO Connection
 
 ```mermaid
 sequenceDiagram
     participant Client as 🖥️ Browser
-    participant WS as 🔌 WebSocket
+    participant WS as 🔌 Socket.IO
     participant Django as 🐍 Django
 
-    Client->>WS: Connect ws://host/ws/acars/
+    Client->>WS: Connect io('/acars')
     WS->>Django: Establish connection
     Django-->>Client: Connection ACK
 
-    Client->>WS: {"type": "subscribe", "topic": "messages"}
+    Client->>WS: socket.emit('subscribe', {topic: 'messages'})
 
     loop Real-time Updates
         Django->>WS: New ACARS message
@@ -715,17 +715,19 @@ sequenceDiagram
     end
 ```
 
-**WebSocket Endpoint:**
-```
-ws://hostname/ws/acars/
+**Socket.IO Connection:**
+```javascript
+import { io } from 'socket.io-client';
+
+const socket = io('https://hostname/acars', {
+  path: '/socket.io/',
+  transports: ['websocket', 'polling']
+});
 ```
 
 **Subscribe to Messages:**
-```json
-{
-  "type": "subscribe",
-  "topic": "messages"
-}
+```javascript
+socket.emit('subscribe', { topic: 'messages' });
 ```
 
 ### 📡 Events
@@ -734,6 +736,17 @@ ws://hostname/ws/acars/
 |:------|:------------|
 | `acars:message` | New ACARS message received |
 | `acars:snapshot` | Initial message batch on connect |
+
+**Listening for Events:**
+```javascript
+socket.on('acars:message', (data) => {
+  console.log('New ACARS message:', data);
+});
+
+socket.on('acars:snapshot', (data) => {
+  console.log('Initial messages:', data);
+});
+```
 
 ### useAircraftAcars Hook
 
@@ -1031,7 +1044,7 @@ docker run -d \
 | 📍 **Position Reports** | Uses real aircraft positions when available |
 | 🔀 **Multiple Formats** | Generates both acarsdec and dumpvdl2 formats |
 | 🖥️ **Web Interface** | Monitor at http://localhost:8080 |
-| ⚡ **WebSocket Streaming** | Real-time message feed |
+| ⚡ **Socket.IO Streaming** | Real-time message feed |
 | 💉 **Message Injection** | POST custom messages via API |
 
 ### Mock API Endpoints

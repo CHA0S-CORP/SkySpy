@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 // Config directories and files
@@ -12,13 +13,22 @@ var (
 	ConfigDir   string
 	ConfigFile  string
 	OverlaysDir string
+	configOnce  sync.Once
 )
 
-func init() {
-	homeDir, _ := os.UserHomeDir()
-	ConfigDir = filepath.Join(homeDir, ".config", "skyspy")
-	ConfigFile = filepath.Join(ConfigDir, "settings.json")
-	OverlaysDir = filepath.Join(ConfigDir, "overlays")
+// initConfigPaths initializes the configuration paths
+func initConfigPaths() {
+	configOnce.Do(func() {
+		homeDir, _ := os.UserHomeDir()
+		ConfigDir = filepath.Join(homeDir, ".config", "skyspy")
+		ConfigFile = filepath.Join(ConfigDir, "settings.json")
+		OverlaysDir = filepath.Join(ConfigDir, "overlays")
+	})
+}
+
+// ensurePathsInitialized ensures config paths are initialized
+func ensurePathsInitialized() {
+	initConfigPaths()
 }
 
 // DisplaySettings contains UI display options
@@ -224,6 +234,7 @@ func DefaultConfig() *Config {
 
 // EnsureConfigDir creates config directories if they don't exist
 func EnsureConfigDir() error {
+	ensurePathsInitialized()
 	if err := os.MkdirAll(ConfigDir, 0o755); err != nil {
 		return err
 	}
@@ -232,6 +243,7 @@ func EnsureConfigDir() error {
 
 // Load loads configuration from file or returns defaults
 func Load() (*Config, error) {
+	ensurePathsInitialized()
 	if _, err := os.Stat(ConfigFile); os.IsNotExist(err) {
 		return DefaultConfig(), nil
 	}
@@ -265,6 +277,7 @@ func Save(config *Config) error {
 
 // GetConfigPath returns the config file path
 func GetConfigPath() string {
+	ensurePathsInitialized()
 	return ConfigFile
 }
 

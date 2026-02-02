@@ -175,7 +175,7 @@ python manage.py migrate
 # Start development server
 python manage.py runserver 0.0.0.0:8000
 
-# Or with Daphne for WebSocket support
+# Or with Daphne for Socket.IO support
 daphne -b 0.0.0.0 -p 8000 skyspy.asgi:application
 ```
 
@@ -368,11 +368,11 @@ gitGraph
     commit id: "add tests"
     checkout develop
     merge feature/new-alerts
-    branch fix/websocket-bug
-    checkout fix/websocket-bug
+    branch fix/socketio-bug
+    checkout fix/socketio-bug
     commit id: "fix bug"
     checkout develop
-    merge fix/websocket-bug
+    merge fix/socketio-bug
     checkout main
     merge develop tag: "v2.6.0"
 ```
@@ -423,7 +423,7 @@ Follow **Conventional Commits** for clear history:
 | `docs` | | Documentation only | Update API endpoint examples |
 | `style` | | Formatting, no code change | Format with Black |
 | `refactor` | | Code restructuring | Extract safety monitoring logic |
-| `test` | | Adding or updating tests | Add WebSocket integration tests |
+| `test` | | Adding or updating tests | Add Socket.IO integration tests |
 | `chore` | | Build process, tooling | Update CI workflow |
 | `perf` | | Performance improvement | Optimize database queries |
 
@@ -434,7 +434,7 @@ Follow **Conventional Commits** for clear history:
 git commit -m "feat(alerts): add proximity alert distance configuration"
 
 # Bug fix
-git commit -m "fix(websocket): handle reconnection on network timeout"
+git commit -m "fix(socketio): handle reconnection on network timeout"
 
 # Documentation
 git commit -m "docs(api): update alert rule endpoint examples"
