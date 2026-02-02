@@ -196,7 +196,8 @@ func TestLoadGeofencesFromFile(t *testing.T) {
 	// Test loading single geofence
 	singleFile := tmpDir + "/single.json"
 	singleJSON := `{"id": "single", "name": "Single", "type": "circle", "center": {"lat": 45.0, "lon": -93.0}, "radius_nm": 5.0, "enabled": true}`
-	if err := os.WriteFile(singleFile, []byte(singleJSON), 0o644); err != nil {
+	err = os.WriteFile(singleFile, []byte(singleJSON), 0o644)
+	if err != nil {
 		t.Fatalf("Failed to write single test file: %v", err)
 	}
 
@@ -216,7 +217,8 @@ func TestLoadGeofencesFromFile(t *testing.T) {
 
 	// Test loading invalid JSON
 	invalidFile := tmpDir + "/invalid.json"
-	if err := os.WriteFile(invalidFile, []byte("not json"), 0o644); err != nil {
+	err = os.WriteFile(invalidFile, []byte("not json"), 0o644)
+	if err != nil {
 		t.Fatalf("Failed to write invalid test file: %v", err)
 	}
 	_, err = LoadGeofencesFromFile(invalidFile)
@@ -265,7 +267,8 @@ func TestLoadGeofenceFromGeoJSON(t *testing.T) {
 			}
 		}]
 	}`
-	if err := os.WriteFile(featureCollectionFile, []byte(featureCollectionJSON), 0o644); err != nil {
+	err := os.WriteFile(featureCollectionFile, []byte(featureCollectionJSON), 0o644)
+	if err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -289,7 +292,8 @@ func TestLoadGeofenceFromGeoJSON(t *testing.T) {
 			"coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]
 		}
 	}`
-	if err := os.WriteFile(featureFile, []byte(featureJSON), 0o644); err != nil {
+	err = os.WriteFile(featureFile, []byte(featureJSON), 0o644)
+	if err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -307,7 +311,8 @@ func TestLoadGeofenceFromGeoJSON(t *testing.T) {
 		"type": "Point",
 		"coordinates": [-93.0, 45.0]
 	}`
-	if err := os.WriteFile(pointFile, []byte(pointJSON), 0o644); err != nil {
+	err = os.WriteFile(pointFile, []byte(pointJSON), 0o644)
+	if err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -332,7 +337,8 @@ func TestLoadGeofenceFromGeoJSON(t *testing.T) {
 		"type": "Point",
 		"coordinates": [-93.0, 45.0]
 	}`
-	if err := os.WriteFile(namedFile, []byte(namedJSON), 0o644); err != nil {
+	err = os.WriteFile(namedFile, []byte(namedJSON), 0o644)
+	if err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -352,7 +358,8 @@ func TestLoadGeofenceFromGeoJSON(t *testing.T) {
 
 	// Test invalid JSON
 	invalidFile := tmpDir + "/invalid.geojson"
-	if err := os.WriteFile(invalidFile, []byte("not json"), 0o644); err != nil {
+	err = os.WriteFile(invalidFile, []byte("not json"), 0o644)
+	if err != nil {
 		t.Fatalf("Failed to write invalid test file: %v", err)
 	}
 	_, err = LoadGeofenceFromGeoJSON(invalidFile)
@@ -580,13 +587,15 @@ func TestLoadGeofencesFromFileWithTildeExpansion(t *testing.T) {
 
 	// Write a test file
 	testFile := tmpDir + "/geofences_test_tilde.json"
-	if err := os.WriteFile(testFile, []byte(`[]`), 0o644); err != nil {
+	err = os.WriteFile(testFile, []byte(`[]`), 0o644)
+	if err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
 	// Test tilde expansion by using the real home directory
 	homeTestFile := home + "/.skyspy_test_geofences.json"
-	if err := os.WriteFile(homeTestFile, []byte(`[]`), 0o644); err != nil {
+	err = os.WriteFile(homeTestFile, []byte(`[]`), 0o644)
+	if err != nil {
 		t.Fatalf("Failed to write home test file: %v", err)
 	}
 	defer os.Remove(homeTestFile)

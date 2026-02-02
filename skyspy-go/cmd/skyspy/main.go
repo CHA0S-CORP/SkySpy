@@ -146,11 +146,11 @@ func run(cmd *cobra.Command, args []string) error {
 
 	// Add command-line overlays
 	for _, ov := range overlays {
-		absPath, err := filepath.Abs(ov)
-		if err != nil {
+		absPath, absErr := filepath.Abs(ov)
+		if absErr != nil {
 			absPath = ov
 		}
-		if _, err := os.Stat(absPath); err == nil {
+		if _, statErr := os.Stat(absPath); statErr == nil {
 			cfg.Overlays.Overlays = append(cfg.Overlays.Overlays, config.OverlayConfig{
 				Path:    absPath,
 				Enabled: true,

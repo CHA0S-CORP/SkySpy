@@ -307,6 +307,7 @@ func SaveGeofencesToFile(path string, geofences []*Geofence) error {
 		return err
 	}
 
+	//nolint:gosec // G306: Geofence configs are not sensitive and can be world-readable
 	return os.WriteFile(path, data, 0o644)
 }
 

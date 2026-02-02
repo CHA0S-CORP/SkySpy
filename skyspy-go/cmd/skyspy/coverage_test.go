@@ -933,6 +933,6 @@ func TestRunWithAPIKeyAuthRequired(t *testing.T) {
 var coveragePortCounter int32 = 51000
 
 func getTestPortCoverage() int {
-	port := int(atomic.AddInt32(&coveragePortCounter, 1))
-	return port
+	testPort := int(atomic.AddInt32(&coveragePortCounter, 1))
+	return testPort
 }
