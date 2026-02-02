@@ -638,7 +638,7 @@ func TestEvaluateConditionEnteringGeofenceEdgeCases(t *testing.T) {
 		HasLat: false,
 		HasLon: true,
 	}
-	triggered = engine.CheckAircraft(state5, prevState)
+	_ = engine.CheckAircraft(state5, prevState)
 	// Should not trigger without lat
 
 	// Test with prev state without lat/lon
@@ -654,7 +654,7 @@ func TestEvaluateConditionEnteringGeofenceEdgeCases(t *testing.T) {
 		HasLat: true,
 		HasLon: true,
 	}
-	triggered = engine.CheckAircraft(state6, prevState6)
+	_ = engine.CheckAircraft(state6, prevState6)
 	// Should not trigger with prev state without lat/lon
 }
 
@@ -691,7 +691,7 @@ func TestFormatMessageAllPlaceholders(t *testing.T) {
 		Distance: 0,
 		HasSpeed: false,
 	}
-	triggered = engine.CheckAircraft(state2, nil)
+	_ = engine.CheckAircraft(state2, nil)
 	// Message should use hex when callsign is empty
 }
 

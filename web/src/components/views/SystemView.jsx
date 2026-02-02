@@ -26,7 +26,6 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
-import { useSocketApi } from '../../hooks';
 
 /**
  * SystemView Component
@@ -45,7 +44,6 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
   const [health, setHealth] = useState(null);
   const [systemInfo, setSystemInfo] = useState(null);
   const [databaseStats, setDatabaseStats] = useState(null);
-  const [wsStatus, setWsStatus] = useState(null);
   const [notifConfig, setNotifConfig] = useState(null);
   const [safetyStatus, setSafetyStatus] = useState(null);
   const [acarsStats, setAcarsStats] = useState(null);
@@ -63,61 +61,64 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
   const mapRef = useRef(null);
   const eventIdCounter = useRef(0);
 
-  // Socket options for useSocketApi
-  const socketOpts = { wsRequest, wsConnected };
-  // When socket is connected, use longer polling intervals since we fetch via socket primarily
-  const pollInterval = wsConnected ? 30000 : 10000;
+  // Helper to safely parse JSON responses
+  const safeJson = async (res) => {
+    if (!res.ok) return null;
+    try {
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  };
 
-  // HTTP fetchers with WebSocket preference - using Django API endpoints
-  // Django system endpoints:
-  // - /api/v1/system/status - System status
-  // - /api/v1/system/health - Health check
-  // - /api/v1/system/info - System info
-  // - /api/v1/system/databases - Database stats
-  const { data: httpStatus, refetch: refetchHttpStatus } = useSocketApi(
-    '/api/v1/system/status',
-    pollInterval,
-    apiBase,
-    socketOpts
-  );
-  const { data: httpHealth } = useSocketApi(
-    '/api/v1/system/health',
-    pollInterval,
-    apiBase,
-    socketOpts
-  );
-  const { data: httpSystemInfo } = useSocketApi(
-    '/api/v1/system/info',
-    pollInterval,
-    apiBase,
-    socketOpts
-  );
-  const { data: httpDatabaseStats } = useSocketApi(
-    '/api/v1/system/databases',
-    pollInterval,
-    apiBase,
-    socketOpts
-  );
-  // Legacy fallback endpoints (try both old and new)
-  const { data: httpHealthRoot } = useSocketApi('/health', pollInterval, apiBase, socketOpts);
-  const { data: httpNotifConfig } = useSocketApi(
-    '/api/v1/notifications/config',
-    null,
-    apiBase,
-    socketOpts
-  );
-  const { data: httpSafetyStatus } = useSocketApi(
-    '/api/v1/safety/monitor/status',
-    pollInterval,
-    apiBase,
-    socketOpts
-  );
-  const { data: httpAcarsStats } = useSocketApi(
-    '/api/v1/acars/stats?hours=1',
-    pollInterval,
-    apiBase,
-    socketOpts
-  );
+  // HTTP fallback fetch function
+  const fetchViaHttp = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const [statusRes, healthRes, infoRes, dbRes, safetyRes, acarsRes, notifRes] =
+        await Promise.all([
+          fetch(`${apiBase}/api/v1/system/status`).catch(() => null),
+          fetch(`${apiBase}/api/v1/system/health`).catch(() => null),
+          fetch(`${apiBase}/api/v1/system/info`).catch(() => null),
+          fetch(`${apiBase}/api/v1/system/databases`).catch(() => null),
+          fetch(`${apiBase}/api/v1/safety/monitor/status`).catch(() => null),
+          fetch(`${apiBase}/api/v1/acars/stats?hours=1`).catch(() => null),
+          fetch(`${apiBase}/api/v1/notifications/config`).catch(() => null),
+        ]);
+
+      const [statusData, healthData, infoData, dbData, safetyData, acarsData, notifData] =
+        await Promise.all([
+          statusRes ? safeJson(statusRes) : null,
+          healthRes ? safeJson(healthRes) : null,
+          infoRes ? safeJson(infoRes) : null,
+          dbRes ? safeJson(dbRes) : null,
+          safetyRes ? safeJson(safetyRes) : null,
+          acarsRes ? safeJson(acarsRes) : null,
+          notifRes ? safeJson(notifRes) : null,
+        ]);
+
+      if (statusData) setStatus(statusData);
+      if (healthData) setHealth(healthData);
+      if (infoData) setSystemInfo(infoData);
+      if (dbData) setDatabaseStats(dbData);
+      if (safetyData) setSafetyStatus(safetyData);
+      if (acarsData) setAcarsStats(acarsData);
+      if (notifData) setNotifConfig(notifData);
+
+      setLastUpdate(new Date());
+      setLoading(false);
+      return true;
+    } catch (err) {
+      console.error('SystemView HTTP fetch error:', err);
+      setError('HTTP fetch failed');
+      setLoading(false);
+      return false;
+    }
+  }, [apiBase]);
 
   // Fetch all status data via WebSocket - using Django API events
   const fetchViaSocket = useCallback(async () => {
@@ -145,11 +146,6 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
       if (safetyData && !safetyData.error) setSafetyStatus(safetyData);
       if (acarsData && !acarsData.error) setAcarsStats(acarsData);
 
-      // Derive wsStatus from status or health data if available
-      if (statusData?.websocket || healthData?.websocket) {
-        setWsStatus(statusData?.websocket || healthData?.websocket || {});
-      }
-
       setLastUpdate(new Date());
       setLoading(false);
       return true;
@@ -161,62 +157,33 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
     }
   }, [wsRequest, wsConnected]);
 
-  // Use HTTP data as fallback/supplement (updates state if not already set or newer)
+  // Initial fetch and periodic refresh - use WebSocket if connected, else HTTP
   useEffect(() => {
-    if (httpStatus && !status) setStatus(httpStatus);
-    // Use Django health endpoint, fallback to root /health
-    if ((httpHealth || httpHealthRoot) && !health) setHealth(httpHealth || httpHealthRoot);
-    if (httpSystemInfo && !systemInfo) setSystemInfo(httpSystemInfo);
-    if (httpDatabaseStats && !databaseStats) setDatabaseStats(httpDatabaseStats);
-    // Derive wsStatus from status data if available
-    if (httpStatus?.websocket && !wsStatus) setWsStatus(httpStatus.websocket);
-    if (httpSafetyStatus && !safetyStatus) setSafetyStatus(httpSafetyStatus);
-    if (httpAcarsStats && !acarsStats) setAcarsStats(httpAcarsStats);
-    if (httpStatus || httpHealth || httpHealthRoot || httpSafetyStatus) {
-      setLoading(false);
-    }
-  }, [
-    httpStatus,
-    httpHealth,
-    httpHealthRoot,
-    httpSystemInfo,
-    httpDatabaseStats,
-    httpSafetyStatus,
-    httpAcarsStats,
-    status,
-    health,
-    systemInfo,
-    databaseStats,
-    wsStatus,
-    safetyStatus,
-    acarsStats,
-  ]);
-
-  // Always use HTTP for notification config (not available via WebSocket)
-  useEffect(() => {
-    if (httpNotifConfig) setNotifConfig(httpNotifConfig);
-  }, [httpNotifConfig]);
-
-  // Initial fetch and periodic refresh via WebSocket
-  useEffect(() => {
-    if (!wsConnected || !wsRequest) return;
+    const doFetch = () => {
+      if (wsConnected && wsRequest) {
+        fetchViaSocket();
+      } else {
+        fetchViaHttp();
+      }
+    };
 
     // Initial fetch
-    fetchViaSocket();
+    doFetch();
 
-    // Refresh every 15 seconds via WebSocket (reduced from 5s)
-    const interval = setInterval(fetchViaSocket, 15000);
+    // Refresh interval: 15s for WebSocket, 10s for HTTP
+    const intervalMs = wsConnected ? 15000 : 10000;
+    const interval = setInterval(doFetch, intervalMs);
     return () => clearInterval(interval);
-  }, [wsConnected, wsRequest, fetchViaSocket]);
+  }, [wsConnected, wsRequest, fetchViaSocket, fetchViaHttp]);
 
   // Manual refresh handler
   const handleRefresh = useCallback(() => {
     if (wsConnected && wsRequest) {
       fetchViaSocket();
     } else {
-      refetchHttpStatus?.();
+      fetchViaHttp();
     }
-  }, [wsConnected, wsRequest, fetchViaSocket, refetchHttpStatus]);
+  }, [wsConnected, wsRequest, fetchViaSocket, fetchViaHttp]);
 
   // Track system events for timeline
   const addSystemEvent = useCallback((type, message, severity = 'info') => {
@@ -282,8 +249,7 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
       database: getServiceStatus('database'),
       redis: getServiceStatus('redis'),
       celery: getServiceStatus('celery'),
-      websocket:
-        status?.websocket_connections !== undefined || wsConnected ? 'online' : 'offline',
+      websocket: status?.websocket_connections !== undefined || wsConnected ? 'online' : 'offline',
     };
 
     Object.entries(currentServices).forEach(([service, currentStatus]) => {
@@ -674,7 +640,7 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
                   </div>
                   <div className="detail-row">
                     <span className="detail-label">Poll Interval</span>
-                    <span className="detail-value">{pollInterval / 1000}s</span>
+                    <span className="detail-value">{wsConnected ? 15 : 10}s</span>
                   </div>
                 </div>
               )}

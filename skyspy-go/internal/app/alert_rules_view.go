@@ -5,23 +5,30 @@ import (
 	"github.com/skyspy/skyspy-go/internal/alerts"
 )
 
+// Key constants for alert rules view
+const (
+	keyEsc   = "esc"
+	keyDown  = "down"
+	keyEnter = "enter"
+)
+
 // handleAlertRulesKey handles keyboard input in alert rules view
 func (m *Model) handleAlertRulesKey(key string) {
 	rules := m.GetAlertRules()
 	ruleCount := len(rules)
 
 	switch key {
-	case "esc", "R":
+	case keyEsc, "R":
 		m.viewMode = ViewRadar
 	case "up", "k":
 		if ruleCount > 0 {
 			m.alertRuleCursor = (m.alertRuleCursor - 1 + ruleCount) % ruleCount
 		}
-	case "down", "j":
+	case keyDown, "j":
 		if ruleCount > 0 {
 			m.alertRuleCursor = (m.alertRuleCursor + 1) % ruleCount
 		}
-	case "enter", " ":
+	case keyEnter, " ":
 		if ruleCount > 0 && m.alertState != nil {
 			rule := rules[m.alertRuleCursor]
 			enabled := m.alertState.ToggleRule(rule.ID)

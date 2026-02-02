@@ -99,14 +99,14 @@ class ArchiveViewSet(viewsets.ViewSet):
         now = timezone.now()
         cutoff = now - timedelta(days=days)
 
-        # Query archived PIREPs
+        # Query archived PIREPs first
         queryset = CachedPirep.objects.filter(is_archived=True)
 
-        # If no archived PIREPs, fall back to old PIREPs by observation time
+        # If no archived PIREPs, show all PIREPs within the date range as historical data
         if not queryset.exists():
-            queryset = CachedPirep.objects.filter(observation_time__lt=now - timedelta(hours=6))
-
-        queryset = queryset.filter(Q(archived_at__gte=cutoff) | Q(observation_time__gte=cutoff))
+            queryset = CachedPirep.objects.filter(observation_time__gte=cutoff)
+        else:
+            queryset = queryset.filter(Q(archived_at__gte=cutoff) | Q(observation_time__gte=cutoff))
 
         if icao:
             queryset = queryset.filter(location__iexact=icao)

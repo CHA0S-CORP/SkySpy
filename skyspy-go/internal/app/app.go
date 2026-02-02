@@ -349,6 +349,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+//nolint:gocyclo // Large switch statement for keyboard handling
 func (m *Model) handleRadarKey(key string) (tea.Model, tea.Cmd) {
 	switch key {
 	case "up", "k":

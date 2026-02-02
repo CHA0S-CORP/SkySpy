@@ -221,7 +221,7 @@ func ParseFloat(s string) float64 {
 		}
 	}
 
-	if len(s) > 0 && s[0] == '-' {
+	if s != "" && s[0] == '-' {
 		result = -result
 	}
 

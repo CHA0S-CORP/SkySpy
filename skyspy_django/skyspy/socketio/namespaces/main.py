@@ -253,6 +253,64 @@ class MainNamespace(socketio.AsyncNamespace):
             namespace=self.namespace,
         )
 
+        # Send initial snapshots for newly joined topics
+        await self._send_topic_snapshots(sid, joined)
+
+    async def _send_topic_snapshots(self, sid: str, topics: list):
+        """Send initial snapshots for the given topics."""
+        for topic in topics:
+            try:
+                if topic == "notams":
+                    notam_data = await self._get_notam_snapshot({"active_only": True, "limit": 100})
+                    await sio.emit("notam:snapshot", notam_data, to=sid, namespace=self.namespace)
+                    logger.debug(f"[_send_topic_snapshots] Emitted notam:snapshot to {sid}")
+                elif topic == "safety":
+                    safety_events = await self._get_recent_safety_events()
+                    await sio.emit(
+                        "safety:snapshot",
+                        {"events": safety_events, "count": len(safety_events), "timestamp": timezone.now().isoformat()},
+                        to=sid,
+                        namespace=self.namespace,
+                    )
+                    logger.debug(f"[_send_topic_snapshots] Emitted safety:snapshot to {sid}")
+                elif topic == "alerts":
+                    alert_history = await self._get_alert_history({"limit": 50})
+                    await sio.emit(
+                        "alert:snapshot",
+                        {
+                            "alerts": alert_history,
+                            "count": len(alert_history),
+                            "timestamp": timezone.now().isoformat(),
+                        },
+                        to=sid,
+                        namespace=self.namespace,
+                    )
+                    logger.debug(f"[_send_topic_snapshots] Emitted alert:snapshot to {sid}")
+                elif topic == "acars":
+                    acars_messages = await self._get_recent_acars()
+                    await sio.emit(
+                        "acars:snapshot",
+                        {
+                            "messages": acars_messages,
+                            "count": len(acars_messages),
+                            "timestamp": timezone.now().isoformat(),
+                        },
+                        to=sid,
+                        namespace=self.namespace,
+                    )
+                    logger.debug(f"[_send_topic_snapshots] Emitted acars:snapshot to {sid}")
+                elif topic == "aircraft":
+                    aircraft_list = await self._get_current_aircraft()
+                    await sio.emit(
+                        "aircraft:snapshot",
+                        {"aircraft": aircraft_list, "count": len(aircraft_list), "timestamp": timezone.now().isoformat()},
+                        to=sid,
+                        namespace=self.namespace,
+                    )
+                    logger.debug(f"[_send_topic_snapshots] Emitted aircraft:snapshot to {sid}")
+            except Exception as e:
+                logger.error(f"Failed to send {topic} snapshot to {sid}: {e}", exc_info=True)
+
     async def on_unsubscribe(self, sid: str, data: dict):
         """
         Handle topic unsubscription request.
@@ -1060,7 +1118,9 @@ class MainNamespace(socketio.AsyncNamespace):
     @sync_to_async
     def _get_history_sessions(self, params: dict):
         """Get aircraft sessions."""
-        from skyspy.models import AircraftSession
+        from django.db.models import Count
+
+        from skyspy.models import AircraftSession, SafetyEvent
 
         hours = _parse_int_param(params.get("hours"), 24, min_val=1, max_val=720)
         limit = _parse_int_param(params.get("limit"), 50, min_val=1, max_val=200)
@@ -1072,7 +1132,18 @@ class MainNamespace(socketio.AsyncNamespace):
         if icao_hex:
             queryset = queryset.filter(icao_hex=icao_hex.upper())
 
-        sessions = list(
+        # Get safety event counts per ICAO in the time range
+        safety_counts = {}
+        safety_events = (
+            SafetyEvent.objects.filter(timestamp__gte=cutoff)
+            .values("icao_hex")
+            .annotate(count=Count("id"))
+        )
+        for item in safety_events:
+            if item["icao_hex"]:
+                safety_counts[item["icao_hex"]] = item["count"]
+
+        raw_sessions = list(
             queryset.order_by("-last_seen")[:limit].values(
                 "id",
                 "icao_hex",
@@ -1084,9 +1155,42 @@ class MainNamespace(socketio.AsyncNamespace):
                 "max_altitude",
                 "min_distance_nm",
                 "max_distance_nm",
+                "max_vertical_rate",
+                "min_rssi",
+                "max_rssi",
                 "is_military",
+                "aircraft_type",
             )
         )
+
+        # Transform to match frontend expected field names
+        sessions = []
+        for s in raw_sessions:
+            # Calculate duration in minutes
+            duration_min = 0.0
+            if s["first_seen"] and s["last_seen"]:
+                delta = s["last_seen"] - s["first_seen"]
+                duration_min = round(delta.total_seconds() / 60, 1)
+
+            sessions.append({
+                "id": s["id"],
+                "icao_hex": s["icao_hex"],
+                "callsign": s["callsign"],
+                "first_seen": s["first_seen"],
+                "last_seen": s["last_seen"],
+                "duration_min": duration_min,
+                "message_count": s["total_positions"],
+                "min_distance_nm": s["min_distance_nm"],
+                "max_distance_nm": s["max_distance_nm"],
+                "min_alt": s["min_altitude"],
+                "max_alt": s["max_altitude"],
+                "max_vr": s["max_vertical_rate"],
+                "min_rssi": s["min_rssi"],
+                "max_rssi": s["max_rssi"],
+                "is_military": s["is_military"],
+                "type": s["aircraft_type"],
+                "safety_event_count": safety_counts.get(s["icao_hex"], 0),
+            })
 
         return {"sessions": sessions, "count": len(sessions), "hours": hours}
 

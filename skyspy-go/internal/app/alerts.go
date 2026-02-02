@@ -49,7 +49,7 @@ func NewAlertState(cfg *config.Config) *AlertState {
 }
 
 // CheckAircraft checks an aircraft against alert rules and returns any triggered alerts
-func (a *AlertState) CheckAircraft(target *radar.Target, prevTarget *radar.Target) []alerts.TriggeredAlert {
+func (a *AlertState) CheckAircraft(target, prevTarget *radar.Target) []alerts.TriggeredAlert {
 	if !a.AlertsEnabled || a.Engine == nil {
 		return nil
 	}

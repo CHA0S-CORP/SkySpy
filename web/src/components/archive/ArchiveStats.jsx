@@ -39,7 +39,7 @@ export function ArchiveStats({ stats, loading }) {
         </div>
         <div className="stat-item">
           <span className="stat-value">{stats.pireps?.total_records || 0}</span>
-          <span className="stat-label">Total Records</span>
+          <span className="stat-label">Active (not archived)</span>
         </div>
       </div>
     </div>

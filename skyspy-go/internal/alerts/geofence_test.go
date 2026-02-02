@@ -327,12 +327,12 @@ func TestLoadGeofenceFromGeoJSON(t *testing.T) {
 
 	// Test with name property at root level
 	namedFile := tmpDir + "/named.geojson"
-	namedJson := `{
+	namedJSON := `{
 		"name": "My Geofence",
 		"type": "Point",
 		"coordinates": [-93.0, 45.0]
 	}`
-	if err := os.WriteFile(namedFile, []byte(namedJson), 0644); err != nil {
+	if err := os.WriteFile(namedFile, []byte(namedJSON), 0644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
