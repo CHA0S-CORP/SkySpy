@@ -82,7 +82,7 @@ flowchart LR
     end
 
     subgraph Backend["⚙️ Backend"]
-        WS["WebSocket Server"]
+        SIO["Socket.IO Server"]
         REST["REST API"]
         REDIS["Redis Cache"]
     end
@@ -92,15 +92,15 @@ flowchart LR
         LIST["Aircraft List"]
     end
 
-    ADS --> WS
-    MLAT --> WS
-    WS --> REDIS
+    ADS --> SIO
+    MLAT --> SIO
+    SIO --> REDIS
     REDIS --> MAP
     REST --> MAP
     MAP --> LIST
 
     style ADS fill:#2ecc71,stroke:#27ae60
-    style WS fill:#3498db,stroke:#2980b9
+    style SIO fill:#3498db,stroke:#2980b9
     style MAP fill:#9b59b6,stroke:#8e44ad
 ```
 
@@ -846,37 +846,37 @@ GET /api/v1/photos/{icao}/thumb/
 
 ---
 
-## 🔌 WebSocket Integration
+## 🔌 Socket.IO Integration
 
 ```mermaid
 sequenceDiagram
     participant Client as 🖥️ Client
-    participant WS as 📡 WebSocket
+    participant SIO as 📡 Socket.IO
     participant Redis as 💾 Redis
     participant API as ⚙️ Backend
 
-    Client->>WS: Connect
-    WS-->>Client: Connection ACK
+    Client->>SIO: Connect
+    SIO-->>Client: Connection ACK
 
-    Client->>WS: Subscribe (aircraft)
-    WS->>Redis: Register subscriber
+    Client->>SIO: Subscribe (aircraft)
+    SIO->>Redis: Register subscriber
 
     loop Real-time Updates
         API->>Redis: Publish positions
-        Redis->>WS: Broadcast
-        WS-->>Client: Position update
+        Redis->>SIO: Broadcast
+        SIO-->>Client: Position update
     end
 
-    Client->>WS: Request (airports)
-    WS->>API: Fetch data
-    API-->>WS: Airport data
-    WS-->>Client: Response
+    Client->>SIO: Emit request (airports)
+    SIO->>API: Fetch data
+    API-->>SIO: Airport data
+    SIO-->>Client: Response event
 ```
 
-### WebSocket Request Types
+### Socket.IO Event Types
 
-| Type | Description |
-|------|-------------|
+| Event | Description |
+|-------|-------------|
 | `navaids` | 📍 Request NAVAIDs in viewport |
 | `airports` | 🛫 Request airports in viewport |
 | `airspace-boundaries` | 📐 Request static airspace |
@@ -887,15 +887,17 @@ sequenceDiagram
 | `taf` | 📊 Request single station TAF |
 | `aircraft-info` | ✈️ Request aircraft info by ICAO |
 
-### Example WebSocket Request
+### Example Socket.IO Request
 
 ```javascript
-wsRequest('airports', {
+socket.emit('airports', {
   lat: 40.7128,
   lon: -74.006,
   radius: 100,
   limit: 50
-}, 10000);  // 10 second timeout
+}, (response) => {
+  console.log('Airports:', response);
+});
 ```
 
 ---

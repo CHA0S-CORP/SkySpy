@@ -215,7 +215,7 @@ func TestParseShapefileWithPoints(t *testing.T) {
 	binary.BigEndian.PutUint32(data[24:28], uint32(fileLength))
 
 	// Write file
-	if err := os.WriteFile(shpPath, data, 0644); err != nil {
+	if err := os.WriteFile(shpPath, data, 0o644); err != nil {
 		t.Fatalf("Failed to write shapefile: %v", err)
 	}
 
@@ -270,7 +270,7 @@ func TestParseShapefileWithPolyLine(t *testing.T) {
 	fileLength := len(data) / 2
 	binary.BigEndian.PutUint32(data[24:28], uint32(fileLength))
 
-	if err := os.WriteFile(shpPath, data, 0644); err != nil {
+	if err := os.WriteFile(shpPath, data, 0o644); err != nil {
 		t.Fatalf("Failed to write shapefile: %v", err)
 	}
 
@@ -322,7 +322,7 @@ func TestParseShapefileWithPolygon(t *testing.T) {
 	fileLength := len(data) / 2
 	binary.BigEndian.PutUint32(data[24:28], uint32(fileLength))
 
-	if err := os.WriteFile(shpPath, data, 0644); err != nil {
+	if err := os.WriteFile(shpPath, data, 0o644); err != nil {
 		t.Fatalf("Failed to write shapefile: %v", err)
 	}
 
@@ -366,17 +366,17 @@ func TestParseDBF(t *testing.T) {
 	// DBF header (32 bytes)
 	dbfData := make([]byte, 0)
 	header := make([]byte, 32)
-	header[0] = 0x03                                        // dBASE III
-	binary.LittleEndian.PutUint32(header[4:8], 2)           // 2 records
-	binary.LittleEndian.PutUint16(header[8:10], 32+32+1)    // Header size (header + 1 field + terminator)
-	binary.LittleEndian.PutUint16(header[10:12], 1+10)      // Record size (deletion flag + field)
+	header[0] = 0x03                                     // dBASE III
+	binary.LittleEndian.PutUint32(header[4:8], 2)        // 2 records
+	binary.LittleEndian.PutUint16(header[8:10], 32+32+1) // Header size (header + 1 field + terminator)
+	binary.LittleEndian.PutUint16(header[10:12], 1+10)   // Record size (deletion flag + field)
 	dbfData = append(dbfData, header...)
 
 	// Field descriptor (32 bytes)
 	field := make([]byte, 32)
-	copy(field[0:11], "NAME")     // Field name
-	field[11] = 'C'               // Character type
-	field[16] = 10                // Field length
+	copy(field[0:11], "NAME") // Field name
+	field[11] = 'C'           // Character type
+	field[16] = 10            // Field length
 	dbfData = append(dbfData, field...)
 
 	// Header terminator
@@ -394,7 +394,7 @@ func TestParseDBF(t *testing.T) {
 	copy(record2[1:], "City      ")
 	dbfData = append(dbfData, record2...)
 
-	if err := os.WriteFile(dbfPath, dbfData, 0644); err != nil {
+	if err := os.WriteFile(dbfPath, dbfData, 0o644); err != nil {
 		t.Fatalf("Failed to write DBF file: %v", err)
 	}
 
@@ -438,7 +438,7 @@ func TestParseShapefileWithDBF(t *testing.T) {
 	fileLength := len(data) / 2
 	binary.BigEndian.PutUint32(data[24:28], uint32(fileLength))
 
-	if err := os.WriteFile(shpPath, data, 0644); err != nil {
+	if err := os.WriteFile(shpPath, data, 0o644); err != nil {
 		t.Fatalf("Failed to write shapefile: %v", err)
 	}
 
@@ -466,7 +466,7 @@ func TestParseShapefileWithDBF(t *testing.T) {
 	copy(record[1:], "SFO       ")
 	dbfData = append(dbfData, record...)
 
-	if err := os.WriteFile(dbfPath, dbfData, 0644); err != nil {
+	if err := os.WriteFile(dbfPath, dbfData, 0o644); err != nil {
 		t.Fatalf("Failed to write DBF file: %v", err)
 	}
 
@@ -604,7 +604,7 @@ func TestParseShapefileWithMultiPoint(t *testing.T) {
 	fileLength := len(data) / 2
 	binary.BigEndian.PutUint32(data[24:28], uint32(fileLength))
 
-	if err := os.WriteFile(shpPath, data, 0644); err != nil {
+	if err := os.WriteFile(shpPath, data, 0o644); err != nil {
 		t.Fatalf("Failed to write shapefile: %v", err)
 	}
 
@@ -775,7 +775,7 @@ func TestParseDBFTooSmall(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	dbfPath := filepath.Join(tmpDir, "small.dbf")
-	if err := os.WriteFile(dbfPath, []byte("too small"), 0644); err != nil {
+	if err := os.WriteFile(dbfPath, []byte("too small"), 0o644); err != nil {
 		t.Fatalf("Failed to write file: %v", err)
 	}
 
@@ -799,7 +799,7 @@ func TestParseDBFInvalidHeaderSize(t *testing.T) {
 	dbfData[0] = 0x03
 	binary.LittleEndian.PutUint16(dbfData[8:10], 1000) // Header size larger than file
 
-	if err := os.WriteFile(dbfPath, dbfData, 0644); err != nil {
+	if err := os.WriteFile(dbfPath, dbfData, 0o644); err != nil {
 		t.Fatalf("Failed to write file: %v", err)
 	}
 
@@ -817,7 +817,7 @@ func TestParseShapefileFileTooSmall(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	shpPath := filepath.Join(tmpDir, "small.shp")
-	if err := os.WriteFile(shpPath, []byte("too small"), 0644); err != nil {
+	if err := os.WriteFile(shpPath, []byte("too small"), 0o644); err != nil {
 		t.Fatalf("Failed to write file: %v", err)
 	}
 
@@ -841,7 +841,7 @@ func TestParseShapefileInvalidMagicNumber(t *testing.T) {
 	// Wrong magic number (should be 9994 = 0x270A in big endian)
 	data[0], data[1], data[2], data[3] = 0, 0, 0, 1 // Magic = 1
 
-	if err := os.WriteFile(shpPath, data, 0644); err != nil {
+	if err := os.WriteFile(shpPath, data, 0o644); err != nil {
 		t.Fatalf("Failed to write file: %v", err)
 	}
 
@@ -943,7 +943,7 @@ func TestParsePolygonMultipleParts(t *testing.T) {
 	fileLength := len(data) / 2
 	binary.BigEndian.PutUint32(data[24:28], uint32(fileLength))
 
-	if err := os.WriteFile(shpPath, data, 0644); err != nil {
+	if err := os.WriteFile(shpPath, data, 0o644); err != nil {
 		t.Fatalf("Failed to write shapefile: %v", err)
 	}
 
@@ -994,7 +994,7 @@ func TestParseShapefileWithZTypes(t *testing.T) {
 	fileLength := len(data) / 2
 	binary.BigEndian.PutUint32(data[24:28], uint32(fileLength))
 
-	if err := os.WriteFile(shpPath, data, 0644); err != nil {
+	if err := os.WriteFile(shpPath, data, 0o644); err != nil {
 		t.Fatalf("Failed to write shapefile: %v", err)
 	}
 
@@ -1036,7 +1036,7 @@ func TestParseShapefileWithMTypes(t *testing.T) {
 	fileLength := len(data) / 2
 	binary.BigEndian.PutUint32(data[24:28], uint32(fileLength))
 
-	if err := os.WriteFile(shpPath, data, 0644); err != nil {
+	if err := os.WriteFile(shpPath, data, 0o644); err != nil {
 		t.Fatalf("Failed to write shapefile: %v", err)
 	}
 
@@ -1082,7 +1082,7 @@ func TestParseDBFFieldNameNullTerminator(t *testing.T) {
 	copy(record[1:], "Test      ")
 	dbfData = append(dbfData, record...)
 
-	if err := os.WriteFile(dbfPath, dbfData, 0644); err != nil {
+	if err := os.WriteFile(dbfPath, dbfData, 0o644); err != nil {
 		t.Fatalf("Failed to write DBF file: %v", err)
 	}
 
@@ -1118,7 +1118,7 @@ func TestParseShapefileRecordHeaderTruncated(t *testing.T) {
 	fileLength := len(data) / 2
 	binary.BigEndian.PutUint32(data[24:28], uint32(fileLength))
 
-	if err := os.WriteFile(shpPath, data, 0644); err != nil {
+	if err := os.WriteFile(shpPath, data, 0o644); err != nil {
 		t.Fatalf("Failed to write shapefile: %v", err)
 	}
 
@@ -1148,7 +1148,7 @@ func TestParseShapefileRecordDataTruncated(t *testing.T) {
 
 	// Add record header claiming 100 bytes of content but only provide 4
 	recordHeader := make([]byte, 8)
-	binary.BigEndian.PutUint32(recordHeader[0:4], 1) // Record number
+	binary.BigEndian.PutUint32(recordHeader[0:4], 1)  // Record number
 	binary.BigEndian.PutUint32(recordHeader[4:8], 50) // Content length = 100 bytes = 50 words
 
 	data = append(data, recordHeader...)
@@ -1157,7 +1157,7 @@ func TestParseShapefileRecordDataTruncated(t *testing.T) {
 	fileLength := len(data) / 2
 	binary.BigEndian.PutUint32(data[24:28], uint32(fileLength))
 
-	if err := os.WriteFile(shpPath, data, 0644); err != nil {
+	if err := os.WriteFile(shpPath, data, 0o644); err != nil {
 		t.Fatalf("Failed to write shapefile: %v", err)
 	}
 
@@ -1196,7 +1196,7 @@ func TestParseShapefileRecordTooShort(t *testing.T) {
 	fileLength := len(data) / 2
 	binary.BigEndian.PutUint32(data[24:28], uint32(fileLength))
 
-	if err := os.WriteFile(shpPath, data, 0644); err != nil {
+	if err := os.WriteFile(shpPath, data, 0o644); err != nil {
 		t.Fatalf("Failed to write shapefile: %v", err)
 	}
 
@@ -1243,7 +1243,7 @@ func TestParseDBFRecordTruncated(t *testing.T) {
 	copy(record[1:], "Test      ")
 	dbfData = append(dbfData, record...)
 
-	if err := os.WriteFile(dbfPath, dbfData, 0644); err != nil {
+	if err := os.WriteFile(dbfPath, dbfData, 0o644); err != nil {
 		t.Fatalf("Failed to write DBF file: %v", err)
 	}
 
@@ -1312,7 +1312,7 @@ func TestParseDBFFieldTruncated(t *testing.T) {
 	copy(record[1:], "Test      ")
 	dbfData = append(dbfData, record...)
 
-	if err := os.WriteFile(dbfPath, dbfData, 0644); err != nil {
+	if err := os.WriteFile(dbfPath, dbfData, 0o644); err != nil {
 		t.Fatalf("Failed to write DBF file: %v", err)
 	}
 

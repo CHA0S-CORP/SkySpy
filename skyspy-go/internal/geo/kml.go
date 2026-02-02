@@ -25,29 +25,29 @@ type kmlRoot struct {
 
 // kmlDocument represents a KML Document
 type kmlDocument struct {
-	Name       string           `xml:"name"`
-	Folders    []kmlFolder      `xml:"Folder"`
-	Placemarks []kmlPlacemark   `xml:"Placemark"`
-	Styles     []kmlStyle       `xml:"Style"`
-	StyleMaps  []kmlStyleMap    `xml:"StyleMap"`
+	Name       string         `xml:"name"`
+	Folders    []kmlFolder    `xml:"Folder"`
+	Placemarks []kmlPlacemark `xml:"Placemark"`
+	Styles     []kmlStyle     `xml:"Style"`
+	StyleMaps  []kmlStyleMap  `xml:"StyleMap"`
 }
 
 // kmlFolder represents a KML Folder
 type kmlFolder struct {
-	Name       string           `xml:"name"`
-	Folders    []kmlFolder      `xml:"Folder"`
-	Placemarks []kmlPlacemark   `xml:"Placemark"`
+	Name       string         `xml:"name"`
+	Folders    []kmlFolder    `xml:"Folder"`
+	Placemarks []kmlPlacemark `xml:"Placemark"`
 }
 
 // kmlPlacemark represents a KML Placemark
 type kmlPlacemark struct {
-	Name        string          `xml:"name"`
-	Description string          `xml:"description"`
-	StyleURL    string          `xml:"styleUrl"`
-	Point       *kmlPoint       `xml:"Point"`
-	LineString  *kmlLineString  `xml:"LineString"`
-	Polygon     *kmlPolygon     `xml:"Polygon"`
-	MultiGeom   *kmlMultiGeom   `xml:"MultiGeometry"`
+	Name        string         `xml:"name"`
+	Description string         `xml:"description"`
+	StyleURL    string         `xml:"styleUrl"`
+	Point       *kmlPoint      `xml:"Point"`
+	LineString  *kmlLineString `xml:"LineString"`
+	Polygon     *kmlPolygon    `xml:"Polygon"`
+	MultiGeom   *kmlMultiGeom  `xml:"MultiGeometry"`
 }
 
 // kmlPoint represents a KML Point geometry
@@ -62,7 +62,7 @@ type kmlLineString struct {
 
 // kmlPolygon represents a KML Polygon geometry
 type kmlPolygon struct {
-	OuterBoundaryIs kmlBoundary `xml:"outerBoundaryIs"`
+	OuterBoundaryIs kmlBoundary   `xml:"outerBoundaryIs"`
 	InnerBoundaryIs []kmlBoundary `xml:"innerBoundaryIs"`
 }
 
@@ -85,7 +85,7 @@ type kmlMultiGeom struct {
 
 // kmlStyle represents a KML Style
 type kmlStyle struct {
-	ID        string       `xml:"id,attr"`
+	ID        string        `xml:"id,attr"`
 	LineStyle *kmlLineStyle `xml:"LineStyle"`
 	PolyStyle *kmlPolyStyle `xml:"PolyStyle"`
 	IconStyle *kmlIconStyle `xml:"IconStyle"`
@@ -93,7 +93,7 @@ type kmlStyle struct {
 
 // kmlStyleMap represents a KML StyleMap
 type kmlStyleMap struct {
-	ID    string        `xml:"id,attr"`
+	ID    string         `xml:"id,attr"`
 	Pairs []kmlStylePair `xml:"Pair"`
 }
 
@@ -118,7 +118,7 @@ type kmlPolyStyle struct {
 
 // kmlIconStyle represents KML IconStyle
 type kmlIconStyle struct {
-	Color string `xml:"color"`
+	Color string  `xml:"color"`
 	Scale float64 `xml:"scale"`
 }
 

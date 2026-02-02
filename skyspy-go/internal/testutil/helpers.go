@@ -152,7 +152,7 @@ func TempConfigDir() (string, func()) {
 	// Create the nested structure that SkySpy expects
 	configDir := filepath.Join(dir, ".config", "skyspy")
 	credsDir := filepath.Join(configDir, "credentials")
-	os.MkdirAll(credsDir, 0700)
+	os.MkdirAll(credsDir, 0o700)
 
 	cleanup := func() {
 		os.RemoveAll(dir)
@@ -446,7 +446,7 @@ func TempFileWithName(name, content string) (string, func()) {
 	}
 
 	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		os.RemoveAll(dir)
 		return "", func() {}
 	}

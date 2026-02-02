@@ -125,7 +125,7 @@ func TestSoundManager_GenerateSound_ExistingFile(t *testing.T) {
 
 	// Create an existing file
 	existingPath := filepath.Join(tempDir, "existing.wav")
-	if err := os.WriteFile(existingPath, []byte("existing content"), 0644); err != nil {
+	if err := os.WriteFile(existingPath, []byte("existing content"), 0o644); err != nil {
 		t.Fatalf("Failed to create existing file: %v", err)
 	}
 
@@ -245,10 +245,10 @@ func TestSin(t *testing.T) {
 		epsilon  float64
 	}{
 		{0, 0, 0.0001},
-		{3.141592653589793 / 2, 1, 0.0001},   // pi/2
-		{3.141592653589793, 0, 0.001},        // pi (Taylor series has some error at pi)
+		{3.141592653589793 / 2, 1, 0.0001},    // pi/2
+		{3.141592653589793, 0, 0.001},         // pi (Taylor series has some error at pi)
 		{3.141592653589793 * 3 / 2, -1, 0.01}, // 3pi/2
-		{-3.141592653589793 / 2, -1, 0.0001}, // -pi/2
+		{-3.141592653589793 / 2, -1, 0.0001},  // -pi/2
 	}
 
 	for _, tt := range tests {
@@ -366,7 +366,7 @@ func TestSoundManager_GenerateSound_WriteError(t *testing.T) {
 
 	// Create a file with the name of the sound directory
 	invalidSoundDir := filepath.Join(tempDir, "sounds")
-	if err := os.WriteFile(invalidSoundDir, []byte("not a dir"), 0644); err != nil {
+	if err := os.WriteFile(invalidSoundDir, []byte("not a dir"), 0o644); err != nil {
 		t.Fatalf("Failed to create blocking file: %v", err)
 	}
 

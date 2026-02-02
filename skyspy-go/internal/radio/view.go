@@ -843,6 +843,6 @@ func (m *Model) renderSignalBars(ac *Aircraft) string {
 
 func getCompass(heading float64) string {
 	directions := []string{"N", "NE", "E", "SE", "S", "SW", "W", "NW"}
-	idx := int((heading + 22.5) / 45) % 8
+	idx := int((heading+22.5)/45) % 8
 	return directions[idx]
 }

@@ -291,11 +291,11 @@ func SaveAsText(content string, filename string) error {
 	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
 	plainText := ansiRegex.ReplaceAllString(content, "")
 
-	if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil && filepath.Dir(filename) != "" && filepath.Dir(filename) != "." {
+	if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil && filepath.Dir(filename) != "" && filepath.Dir(filename) != "." {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	if err := os.WriteFile(filename, []byte(plainText), 0644); err != nil {
+	if err := os.WriteFile(filename, []byte(plainText), 0o644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -310,11 +310,11 @@ func SaveAsHTML(content string, filename string) error {
 
 	htmlContent := convertANSIToHTML(content)
 
-	if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil && filepath.Dir(filename) != "" && filepath.Dir(filename) != "." {
+	if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil && filepath.Dir(filename) != "" && filepath.Dir(filename) != "." {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	if err := os.WriteFile(filename, []byte(htmlContent), 0644); err != nil {
+	if err := os.WriteFile(filename, []byte(htmlContent), 0o644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 

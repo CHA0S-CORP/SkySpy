@@ -8,9 +8,9 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/spf13/cobra"
 	"github.com/skyspy/skyspy-go/internal/config"
 	"github.com/skyspy/skyspy-go/internal/theme"
+	"github.com/spf13/cobra"
 )
 
 var configureCmd = &cobra.Command{
@@ -73,16 +73,16 @@ type wizardField struct {
 }
 
 type wizardModel struct {
-	cfg           *config.Config
-	section       int
-	fieldIndex    int
-	fields        [][]wizardField
-	sectionNames  []string
-	width         int
-	height        int
-	quitting      bool
-	saved         bool
-	err           error
+	cfg          *config.Config
+	section      int
+	fieldIndex   int
+	fields       [][]wizardField
+	sectionNames []string
+	width        int
+	height       int
+	quitting     bool
+	saved        bool
+	err          error
 
 	// Styles
 	titleStyle    lipgloss.Style

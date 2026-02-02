@@ -134,14 +134,14 @@ sequenceDiagram
     participant Task as 🔄 poll_aircraft
     participant ADS-B as 📡 ADS-B Receiver
     participant Cache as 💾 Redis Cache
-    participant WS as 🔌 WebSocket
+    participant SIO as 🔌 Socket.IO
 
     Beat->>Task: Every 2 seconds
     Task->>ADS-B: Fetch positions
     ADS-B-->>Task: Aircraft data
     Task->>Cache: Update current_aircraft
-    Task->>WS: Broadcast updates
-    Note over WS: aircraft_update<br/>positions_update<br/>aircraft_new<br/>aircraft_remove
+    Task->>SIO: Broadcast updates
+    Note over SIO: aircraft_update<br/>positions_update<br/>aircraft_new<br/>aircraft_remove
 ```
 
 | Property | Value |

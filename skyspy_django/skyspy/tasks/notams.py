@@ -23,6 +23,9 @@ def consume_swim_notams(self, max_messages: int = 1000, timeout_seconds: int = 3
     This task connects to the FAA SWIM Solace broker and receives
     real-time NOTAM updates.
 
+    Uses subprocess execution to avoid gevent compatibility issues with the
+    Solace PubSub+ library.
+
     Args:
         max_messages: Maximum messages to process per run (default 1000)
         timeout_seconds: Maximum time to run in seconds (default 5 minutes)
@@ -36,32 +39,20 @@ def consume_swim_notams(self, max_messages: int = 1000, timeout_seconds: int = 3
     logger.info(f"Starting SWIM FNS consumer (max_messages={max_messages})")
 
     try:
-        consumer = swim_fns.SwimFnsConsumer()
+        # Use gevent-safe consumer that runs in subprocess if needed
+        stats = swim_fns.consume_with_gevent_workaround(
+            max_messages=max_messages, timeout_seconds=timeout_seconds
+        )
 
-        if not consumer.connect():
+        if stats.get("status") == "connection_failed":
             logger.error("Failed to connect to SWIM FNS")
             raise self.retry(exc=Exception("Connection failed"), countdown=60)
 
-        try:
-            # Run with timeout using thread
-            import threading
+        if stats.get("status") == "error":
+            error_msg = stats.get("error_message", "Unknown error")
+            logger.error(f"SWIM FNS consumer error: {error_msg}")
+            raise self.retry(exc=Exception(error_msg), countdown=120)
 
-            def consume_with_limit():
-                consumer.consume_messages(max_messages=max_messages, timeout_ms=5000)
-
-            thread = threading.Thread(target=consume_with_limit)
-            thread.start()
-            thread.join(timeout=timeout_seconds)
-
-            if thread.is_alive():
-                logger.info("Consumer timeout reached, stopping...")
-                consumer.running = False
-                thread.join(timeout=10)
-
-        finally:
-            consumer.disconnect()
-
-        stats = consumer.get_stats()
         logger.info(f"SWIM FNS consumer finished: {stats}")
 
         # Broadcast update
@@ -82,7 +73,7 @@ def consume_swim_notams(self, max_messages: int = 1000, timeout_seconds: int = 3
         )
 
         return {
-            "status": "complete",
+            "status": stats.get("status", "complete"),
             "messages_received": stats.get("messages_received", 0),
             "messages_processed": stats.get("messages_processed", 0),
             "errors": stats.get("errors", 0),

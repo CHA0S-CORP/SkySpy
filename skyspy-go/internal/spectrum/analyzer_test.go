@@ -209,8 +209,8 @@ func TestAnalyzer_GetSpectrum(t *testing.T) {
 	analyzer := NewAnalyzer()
 
 	// Add samples across different bands
-	analyzer.AddSampleSimple(-5, 5)   // Strong signal, close
-	analyzer.AddSampleSimple(-15, 60) // Medium signal, far
+	analyzer.AddSampleSimple(-5, 5)    // Strong signal, close
+	analyzer.AddSampleSimple(-15, 60)  // Medium signal, far
 	analyzer.AddSampleSimple(-25, 150) // Weak signal, very far
 
 	spectrum := analyzer.GetSpectrum(0) // 0 means use default band count
@@ -509,15 +509,15 @@ func TestAnalyzer_DistanceBands(t *testing.T) {
 		distance float64
 		expected int // -1 means no band found
 	}{
-		{0, 0},      // 0-10 band
-		{5, 0},      // 0-10 band
-		{10, 1},     // 10-25 band (inclusive of min)
-		{25, 2},     // 25-50 band
-		{50, 3},     // 50-75 band
-		{100, 5},    // 100-150 band
-		{300, 8},    // 300-400 band
-		{500, 9},    // 400+ band (last band)
-		{1000, 9},   // Far distance goes to last band
+		{0, 0},    // 0-10 band
+		{5, 0},    // 0-10 band
+		{10, 1},   // 10-25 band (inclusive of min)
+		{25, 2},   // 25-50 band
+		{50, 3},   // 50-75 band
+		{100, 5},  // 100-150 band
+		{300, 8},  // 300-400 band
+		{500, 9},  // 400+ band (last band)
+		{1000, 9}, // Far distance goes to last band
 	}
 
 	for _, tc := range testCases {
@@ -1079,7 +1079,7 @@ func TestAnalyzer_GetSpectrumSmoothed_Interpolation(t *testing.T) {
 	analyzer := NewAnalyzer()
 
 	// Add samples to different bands to create variation
-	analyzer.AddSampleSimple(-5, 5)   // Close band
+	analyzer.AddSampleSimple(-5, 5)    // Close band
 	analyzer.AddSampleSimple(-20, 100) // Far band
 
 	// Get smoothed spectrum with different number of bins than bands

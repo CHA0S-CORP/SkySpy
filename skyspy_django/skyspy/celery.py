@@ -222,6 +222,13 @@ app.conf.beat_schedule = {
         "schedule": 10.0,
         "options": {"expires": 10.0},
     },
+    # ACARS decode queue processing - every 30 seconds
+    # Picks up messages that need libacars decoding
+    "process-acars-decode-queue-every-30s": {
+        "task": "skyspy.tasks.acars.process_acars_decode_queue",
+        "schedule": 30.0,
+        "options": {"expires": 30.0},
+    },
     # Hourly antenna analytics aggregation - every hour
     "aggregate-hourly-antenna-analytics": {
         "task": "skyspy.tasks.analytics.aggregate_hourly_antenna_analytics",
@@ -400,6 +407,10 @@ app.conf.task_routes = {
     "skyspy.tasks.cleanup.*": {"queue": "low_priority"},
     # Long-running transcription tasks
     "skyspy.tasks.transcription.*": {"queue": "transcription"},
+    # ACARS decoding tasks (can be slow with libacars)
+    "skyspy.tasks.acars.decode_acars_message": {"queue": "database"},
+    "skyspy.tasks.acars.decode_acars_batch": {"queue": "database"},
+    "skyspy.tasks.acars.process_acars_decode_queue": {"queue": "database"},
     # Notification tasks
     "skyspy.tasks.notifications.send_notification_task": {"queue": "notifications"},
     "skyspy.tasks.notifications.process_notification_queue": {"queue": "notifications"},

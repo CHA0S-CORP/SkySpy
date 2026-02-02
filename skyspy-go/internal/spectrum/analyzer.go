@@ -60,11 +60,11 @@ type Analyzer struct {
 	mu            sync.RWMutex
 	bands         []BandData
 	distanceBands []DistanceBand
-	decayRate     float64    // Rate at which old data fades (0.0 to 1.0)
-	smoothing     float64    // Smoothing factor for display (0.0 to 1.0)
-	prevSpectrum  []float64  // Previous spectrum values for smoothing
-	peakValues    []float64  // Peak hold values
-	peakDecay     float64    // Rate at which peaks decay
+	decayRate     float64   // Rate at which old data fades (0.0 to 1.0)
+	smoothing     float64   // Smoothing factor for display (0.0 to 1.0)
+	prevSpectrum  []float64 // Previous spectrum values for smoothing
+	peakValues    []float64 // Peak hold values
+	peakDecay     float64   // Rate at which peaks decay
 }
 
 // NewAnalyzer creates a new spectrum analyzer
@@ -81,11 +81,11 @@ func NewAnalyzer() *Analyzer {
 	return &Analyzer{
 		bands:         bands,
 		distanceBands: DefaultDistanceBands,
-		decayRate:     0.15,   // 15% decay per update cycle
-		smoothing:     0.3,    // 30% new value, 70% old value
+		decayRate:     0.15, // 15% decay per update cycle
+		smoothing:     0.3,  // 30% new value, 70% old value
 		prevSpectrum:  make([]float64, len(DefaultDistanceBands)),
 		peakValues:    make([]float64, len(DefaultDistanceBands)),
-		peakDecay:     0.02,   // Peaks decay slowly
+		peakDecay:     0.02, // Peaks decay slowly
 	}
 }
 
@@ -391,8 +391,8 @@ func (a *Analyzer) GetStats() SpectrumStats {
 	defer a.mu.RUnlock()
 
 	stats := SpectrumStats{
-		BandCount:   len(a.bands),
-		BandStats:   make([]BandStats, len(a.bands)),
+		BandCount: len(a.bands),
+		BandStats: make([]BandStats, len(a.bands)),
 	}
 
 	for i, band := range a.bands {

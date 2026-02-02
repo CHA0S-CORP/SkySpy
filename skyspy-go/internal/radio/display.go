@@ -23,22 +23,22 @@ const (
 
 // Aircraft represents an aircraft in the radio display
 type Aircraft struct {
-	Hex       string
-	Callsign  string
-	ACType    string
-	Altitude  int
-	Speed     float64
-	Track     float64
-	Vertical  float64
-	Distance  float64
-	RSSI      float64
-	Squawk    string
-	Military  bool
-	HasAlt    bool
-	HasSpeed  bool
-	HasTrack  bool
-	HasVS     bool
-	HasRSSI   bool
+	Hex      string
+	Callsign string
+	ACType   string
+	Altitude int
+	Speed    float64
+	Track    float64
+	Vertical float64
+	Distance float64
+	RSSI     float64
+	Squawk   string
+	Military bool
+	HasAlt   bool
+	HasSpeed bool
+	HasTrack bool
+	HasVS    bool
+	HasRSSI  bool
 }
 
 // IsEmergency returns true if aircraft has emergency squawk
@@ -74,10 +74,10 @@ type Model struct {
 	Connected     bool
 
 	// Animation state
-	Blink     bool
-	Frame     int
-	ScanPos   int
-	Spinners  []string
+	Blink    bool
+	Frame    int
+	ScanPos  int
+	Spinners []string
 
 	// VU meters
 	VULeft  float64
@@ -89,11 +89,11 @@ type Model struct {
 	FreqDisp  *ui.FrequencyDisplay
 
 	// Configuration
-	Config    *config.Config
-	Theme     *theme.Theme
-	WSClient  *ws.Client
-	Width     int
-	Height    int
+	Config   *config.Config
+	Theme    *theme.Theme
+	WSClient *ws.Client
+	Width    int
+	Height   int
 
 	// Scanning mode
 	ScanMode        bool

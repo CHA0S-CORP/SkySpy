@@ -544,7 +544,7 @@ func TestAlertPlayer_PlaySound_WithValidPath(t *testing.T) {
 	// Create a valid sound file
 	soundPath := filepath.Join(tempDir, "test.wav")
 	wavData := generateWav(800, 100, 0.5)
-	if err := os.WriteFile(soundPath, wavData, 0644); err != nil {
+	if err := os.WriteFile(soundPath, wavData, 0o644); err != nil {
 		t.Fatalf("Failed to write sound file: %v", err)
 	}
 

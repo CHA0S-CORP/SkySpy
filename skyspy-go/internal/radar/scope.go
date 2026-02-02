@@ -21,27 +21,27 @@ const (
 
 // Target represents an aircraft target on the radar
 type Target struct {
-	Hex       string
-	Callsign  string
-	Lat       float64
-	Lon       float64
-	Altitude  int
-	Speed     float64
-	Track     float64
-	Vertical  float64
-	Distance  float64
-	Bearing   float64
-	RSSI      float64
-	Squawk    string
-	ACType    string
-	Military  bool
-	HasLat    bool
-	HasLon    bool
-	HasAlt    bool
-	HasSpeed  bool
-	HasTrack  bool
-	HasVS     bool
-	HasRSSI   bool
+	Hex      string
+	Callsign string
+	Lat      float64
+	Lon      float64
+	Altitude int
+	Speed    float64
+	Track    float64
+	Vertical float64
+	Distance float64
+	Bearing  float64
+	RSSI     float64
+	Squawk   string
+	ACType   string
+	Military bool
+	HasLat   bool
+	HasLon   bool
+	HasAlt   bool
+	HasSpeed bool
+	HasTrack bool
+	HasVS    bool
+	HasRSSI  bool
 }
 
 // IsEmergency returns true if the target has an emergency squawk
@@ -57,10 +57,10 @@ type cell struct {
 
 // Scope handles radar scope rendering
 type Scope struct {
-	cells      [][]cell
-	theme      *theme.Theme
-	maxRange   float64
-	rangeRings int
+	cells       [][]cell
+	theme       *theme.Theme
+	maxRange    float64
+	rangeRings  int
 	showCompass bool
 }
 
@@ -74,10 +74,10 @@ func NewScope(t *theme.Theme, maxRange float64, rangeRings int, showCompass bool
 		}
 	}
 	return &Scope{
-		cells:      cells,
-		theme:      t,
-		maxRange:   maxRange,
-		rangeRings: rangeRings,
+		cells:       cells,
+		theme:       t,
+		maxRange:    maxRange,
+		rangeRings:  rangeRings,
 		showCompass: showCompass,
 	}
 }
@@ -155,7 +155,7 @@ func (s *Scope) DrawCompass() {
 
 	// Draw cardinal labels
 	labels := []struct {
-		label string
+		label  string
 		dx, dy int
 	}{
 		{"N", 0, -maxRadius},

@@ -62,8 +62,8 @@ func GenerateAircraft(count int) []Aircraft {
 // generateRandomAircraft creates a single random aircraft
 func generateRandomAircraft() Aircraft {
 	hex := generateHex()
-	lat := randomFloat(25.0, 49.0)      // Continental US latitude range
-	lon := randomFloat(-125.0, -67.0)   // Continental US longitude range
+	lat := randomFloat(25.0, 49.0)    // Continental US latitude range
+	lon := randomFloat(-125.0, -67.0) // Continental US longitude range
 	alt := randomInt(1000, 45000)
 	gs := randomFloat(100.0, 550.0)
 	track := randomFloat(0.0, 359.9)

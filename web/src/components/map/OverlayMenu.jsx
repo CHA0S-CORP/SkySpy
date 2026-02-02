@@ -1,5 +1,15 @@
 import React, { useRef, useEffect, memo } from 'react';
-import { Layers, X, Radio, Plane, Cloud, AlertTriangle, MapPin, Wind, FileWarning } from 'lucide-react';
+import {
+  Layers,
+  X,
+  Radio,
+  Plane,
+  Cloud,
+  AlertTriangle,
+  MapPin,
+  Wind,
+  FileWarning,
+} from 'lucide-react';
 
 /**
  * Menu for toggling aviation data overlays

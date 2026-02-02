@@ -113,11 +113,11 @@ func ExportAircraftJSON(aircraft map[string]*radar.Target, directory string) (st
 		return "", fmt.Errorf("failed to marshal JSON: %w", err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil && filepath.Dir(filename) != "" && filepath.Dir(filename) != "." {
+	if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil && filepath.Dir(filename) != "" && filepath.Dir(filename) != "." {
 		return "", fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	if err := os.WriteFile(filename, jsonData, 0644); err != nil {
+	if err := os.WriteFile(filename, jsonData, 0o644); err != nil {
 		return "", fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -181,11 +181,11 @@ func ExportAircraftJSONToFile(aircraft map[string]*radar.Target, filename string
 		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil && filepath.Dir(filename) != "" && filepath.Dir(filename) != "." {
+	if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil && filepath.Dir(filename) != "" && filepath.Dir(filename) != "." {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	if err := os.WriteFile(filename, jsonData, 0644); err != nil {
+	if err := os.WriteFile(filename, jsonData, 0o644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -223,11 +223,11 @@ func ExportACARSJSON(messages []ACARSMessage, directory string) (string, error) 
 		return "", fmt.Errorf("failed to marshal JSON: %w", err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil && filepath.Dir(filename) != "" && filepath.Dir(filename) != "." {
+	if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil && filepath.Dir(filename) != "" && filepath.Dir(filename) != "." {
 		return "", fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	if err := os.WriteFile(filename, jsonData, 0644); err != nil {
+	if err := os.WriteFile(filename, jsonData, 0o644); err != nil {
 		return "", fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -263,11 +263,11 @@ func ExportACARSJSONToFile(messages []ACARSMessage, filename string) error {
 		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil && filepath.Dir(filename) != "" && filepath.Dir(filename) != "." {
+	if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil && filepath.Dir(filename) != "" && filepath.Dir(filename) != "." {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	if err := os.WriteFile(filename, jsonData, 0644); err != nil {
+	if err := os.WriteFile(filename, jsonData, 0o644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 

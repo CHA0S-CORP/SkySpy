@@ -5,10 +5,10 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/spf13/cobra"
 	"github.com/skyspy/skyspy-go/internal/config"
 	"github.com/skyspy/skyspy-go/internal/radio"
 	"github.com/skyspy/skyspy-go/internal/theme"
+	"github.com/spf13/cobra"
 )
 
 var (

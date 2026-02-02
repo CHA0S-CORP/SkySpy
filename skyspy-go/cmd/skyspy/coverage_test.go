@@ -76,7 +76,7 @@ func TestRunWithOverlayFiles(t *testing.T) {
 
 	// Create a mock overlay file
 	overlayPath := filepath.Join(tmpDir, "test.geojson")
-	if err := os.WriteFile(overlayPath, []byte(`{"type":"FeatureCollection","features":[]}`), 0644); err != nil {
+	if err := os.WriteFile(overlayPath, []byte(`{"type":"FeatureCollection","features":[]}`), 0o644); err != nil {
 		t.Fatalf("Failed to create test overlay: %v", err)
 	}
 
@@ -261,7 +261,7 @@ func TestExportDirAbsolutePath(t *testing.T) {
 
 	// Create config dir
 	configDir := filepath.Join(tmpDir, ".config", "skyspy")
-	os.MkdirAll(configDir, 0755)
+	os.MkdirAll(configDir, 0o755)
 
 	origExportDir := exportDir
 	origListThemes := listThemes
@@ -457,7 +457,7 @@ func TestRunAllOverrides(t *testing.T) {
 
 	// Create overlay file
 	overlayPath := filepath.Join(tmpDir, "overlay.geojson")
-	os.WriteFile(overlayPath, []byte(`{"type":"FeatureCollection","features":[]}`), 0644)
+	os.WriteFile(overlayPath, []byte(`{"type":"FeatureCollection","features":[]}`), 0o644)
 
 	origHost := host
 	origPort := port
@@ -510,9 +510,9 @@ func TestConfigLoadWithInvalidFile(t *testing.T) {
 
 	// Create config directory with invalid JSON
 	configDir := filepath.Join(tmpDir, ".config", "skyspy")
-	os.MkdirAll(configDir, 0755)
+	os.MkdirAll(configDir, 0o755)
 	configFile := filepath.Join(configDir, "settings.json")
-	os.WriteFile(configFile, []byte("invalid json"), 0644)
+	os.WriteFile(configFile, []byte("invalid json"), 0o644)
 
 	origListThemes := listThemes
 	listThemes = true
@@ -533,9 +533,9 @@ func TestConfigLoadWithPartialJSON(t *testing.T) {
 	defer cleanup()
 
 	configDir := filepath.Join(tmpDir, ".config", "skyspy")
-	os.MkdirAll(configDir, 0755)
+	os.MkdirAll(configDir, 0o755)
 	configFile := filepath.Join(configDir, "settings.json")
-	os.WriteFile(configFile, []byte(`{"display":{"theme":"matrix"}}`), 0644)
+	os.WriteFile(configFile, []byte(`{"display":{"theme":"matrix"}}`), 0o644)
 
 	origListThemes := listThemes
 	listThemes = true
@@ -744,7 +744,7 @@ func TestConfigLoadAndSave(t *testing.T) {
 
 	// Create config directory
 	configDir := filepath.Join(tmpDir, ".config", "skyspy")
-	os.MkdirAll(configDir, 0755)
+	os.MkdirAll(configDir, 0o755)
 
 	// Load default config
 	cfg, err := config.Load()
@@ -790,8 +790,8 @@ func TestOverlayPathResolution(t *testing.T) {
 	// Create multiple overlay files
 	overlay1 := filepath.Join(tmpDir, "overlay1.geojson")
 	overlay2 := filepath.Join(tmpDir, "overlay2.geojson")
-	os.WriteFile(overlay1, []byte(`{"type":"FeatureCollection","features":[]}`), 0644)
-	os.WriteFile(overlay2, []byte(`{"type":"FeatureCollection","features":[]}`), 0644)
+	os.WriteFile(overlay1, []byte(`{"type":"FeatureCollection","features":[]}`), 0o644)
+	os.WriteFile(overlay2, []byte(`{"type":"FeatureCollection","features":[]}`), 0o644)
 
 	origOverlays := overlays
 	origListThemes := listThemes

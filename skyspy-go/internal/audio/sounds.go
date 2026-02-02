@@ -9,10 +9,10 @@ import (
 
 // SoundManager handles sound file management and generation
 type SoundManager struct {
-	soundDir     string
-	soundPaths   map[AlertType]string
-	initialized  bool
-	mu           sync.Mutex
+	soundDir    string
+	soundPaths  map[AlertType]string
+	initialized bool
+	mu          sync.Mutex
 }
 
 // NewSoundManager creates a new sound manager
@@ -43,7 +43,7 @@ func (m *SoundManager) GetSoundPath(alertType AlertType) string {
 // initializeSounds creates the sound directory and generates sound files
 func (m *SoundManager) initializeSounds() {
 	// Create sound directory if it doesn't exist
-	if err := os.MkdirAll(m.soundDir, 0755); err != nil {
+	if err := os.MkdirAll(m.soundDir, 0o755); err != nil {
 		return
 	}
 
@@ -77,7 +77,7 @@ func (m *SoundManager) generateSound(alertType AlertType, filename string) strin
 	}
 
 	// Write the WAV file
-	if err := os.WriteFile(soundPath, wavData, 0644); err != nil {
+	if err := os.WriteFile(soundPath, wavData, 0o644); err != nil {
 		return ""
 	}
 

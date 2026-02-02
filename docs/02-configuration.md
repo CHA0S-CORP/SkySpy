@@ -56,7 +56,7 @@ flowchart TD
     subgraph Outputs["🎯 Applied To"]
         RUNTIME --> API["🌐 API Server"]
         RUNTIME --> CELERY["⏰ Celery Workers"]
-        RUNTIME --> WS["📡 WebSocket Channels"]
+        RUNTIME --> WS["📡 Socket.IO Channels"]
         RUNTIME --> FRONTEND["💻 Frontend"]
     end
 
@@ -733,9 +733,9 @@ The frontend stores user preferences in browser localStorage via `/web/src/utils
 ## ⚡ Performance Tuning
 
 <details>
-<summary><strong>📡 WebSocket Rate Limiting</strong></summary>
+<summary><strong>📡 Socket.IO Rate Limiting</strong></summary>
 
-Control WebSocket broadcast frequencies to prevent client overload:
+Control Socket.IO broadcast frequencies to prevent client overload:
 
 ```python
 WS_RATE_LIMITS = {
@@ -1097,5 +1097,5 @@ Token is invalid or expired
 |:---------|:------------|
 | [Installation Guide](./01-installation.md) | Getting started with SkysPy |
 | [API Reference](./03-api-reference.md) | REST API documentation |
-| [WebSocket Events](./04-websockets.md) | Real-time event reference |
+| [Socket.IO Events](./04-websockets.md) | Real-time event reference |
 | [Deployment Guide](./05-deployment.md) | Production deployment |

@@ -10,13 +10,13 @@ import (
 
 // AuthConfig represents the authentication configuration from the API
 type AuthConfig struct {
-	AuthMode         string                    `json:"auth_mode"`
-	AuthEnabled      bool                      `json:"auth_enabled"`
-	OIDCEnabled      bool                      `json:"oidc_enabled"`
-	OIDCProviderName string                    `json:"oidc_provider_name"`
-	LocalAuthEnabled bool                      `json:"local_auth_enabled"`
-	APIKeyEnabled    bool                      `json:"api_key_enabled"`
-	Features         map[string]FeatureAccess  `json:"features,omitempty"`
+	AuthMode         string                   `json:"auth_mode"`
+	AuthEnabled      bool                     `json:"auth_enabled"`
+	OIDCEnabled      bool                     `json:"oidc_enabled"`
+	OIDCProviderName string                   `json:"oidc_provider_name"`
+	LocalAuthEnabled bool                     `json:"local_auth_enabled"`
+	APIKeyEnabled    bool                     `json:"api_key_enabled"`
+	Features         map[string]FeatureAccess `json:"features,omitempty"`
 }
 
 // FeatureAccess represents access configuration for a feature

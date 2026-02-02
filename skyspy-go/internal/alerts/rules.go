@@ -12,15 +12,15 @@ import (
 type ConditionType string
 
 const (
-	ConditionSquawk          ConditionType = "squawk"
-	ConditionCallsign        ConditionType = "callsign"
-	ConditionHex             ConditionType = "hex"
-	ConditionMilitary        ConditionType = "military"
-	ConditionAltitudeAbove   ConditionType = "altitude_above"
-	ConditionAltitudeBelow   ConditionType = "altitude_below"
-	ConditionDistanceWithin  ConditionType = "distance_within"
+	ConditionSquawk           ConditionType = "squawk"
+	ConditionCallsign         ConditionType = "callsign"
+	ConditionHex              ConditionType = "hex"
+	ConditionMilitary         ConditionType = "military"
+	ConditionAltitudeAbove    ConditionType = "altitude_above"
+	ConditionAltitudeBelow    ConditionType = "altitude_below"
+	ConditionDistanceWithin   ConditionType = "distance_within"
 	ConditionEnteringGeofence ConditionType = "entering_geofence"
-	ConditionSpeedAbove      ConditionType = "speed_above"
+	ConditionSpeedAbove       ConditionType = "speed_above"
 )
 
 // ActionType represents the type of action to take when alert triggers
@@ -48,14 +48,14 @@ type Action struct {
 
 // AlertRule represents a configurable alert rule
 type AlertRule struct {
-	ID           string        `json:"id"`
-	Name         string        `json:"name"`
-	Description  string        `json:"description,omitempty"`
-	Enabled      bool          `json:"enabled"`
-	Conditions   []Condition   `json:"conditions"`
-	Actions      []Action      `json:"actions"`
-	Cooldown     time.Duration `json:"cooldown"`
-	Priority     int           `json:"priority"`
+	ID          string        `json:"id"`
+	Name        string        `json:"name"`
+	Description string        `json:"description,omitempty"`
+	Enabled     bool          `json:"enabled"`
+	Conditions  []Condition   `json:"conditions"`
+	Actions     []Action      `json:"actions"`
+	Cooldown    time.Duration `json:"cooldown"`
+	Priority    int           `json:"priority"`
 
 	// Runtime state (not serialized)
 	lastTriggered map[string]time.Time
@@ -153,19 +153,19 @@ type TriggeredAlert struct {
 
 // AircraftState represents the current state of an aircraft for alert checking
 type AircraftState struct {
-	Hex       string
-	Callsign  string
-	Squawk    string
-	Lat       float64
-	Lon       float64
-	Altitude  int
-	Speed     float64
-	Distance  float64
-	Military  bool
-	HasLat    bool
-	HasLon    bool
-	HasAlt    bool
-	HasSpeed  bool
+	Hex      string
+	Callsign string
+	Squawk   string
+	Lat      float64
+	Lon      float64
+	Altitude int
+	Speed    float64
+	Distance float64
+	Military bool
+	HasLat   bool
+	HasLon   bool
+	HasAlt   bool
+	HasSpeed bool
 }
 
 // MatchesWildcard checks if a string matches a wildcard pattern

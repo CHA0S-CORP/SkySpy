@@ -503,18 +503,18 @@ func TestScope_Render(t *testing.T) {
 
 func TestScope_CoordinateConversion(t *testing.T) {
 	testCases := []struct {
-		distance      float64
-		bearing       float64
-		maxRange      float64
-		desc          string
-		mayBeOutside  bool // diagonal angles at max range may exceed bounds due to aspect ratio
+		distance     float64
+		bearing      float64
+		maxRange     float64
+		desc         string
+		mayBeOutside bool // diagonal angles at max range may exceed bounds due to aspect ratio
 	}{
 		{0, 0, 100, "center at origin", false},
 		{50, 0, 100, "north at half range", false},
 		{50, 90, 100, "east at half range", false},
 		{50, 180, 100, "south at half range", false},
 		{50, 270, 100, "west at half range", false},
-		{100, 45, 100, "NE at max range", true},   // may be outside due to x*2 aspect ratio
+		{100, 45, 100, "NE at max range", true}, // may be outside due to x*2 aspect ratio
 		{150, 0, 100, "beyond max range", false},
 	}
 
@@ -591,30 +591,30 @@ func TestHaversineBearing(t *testing.T) {
 		},
 		{
 			lat1: 0, lon1: 0, lat2: 1, lon2: 0,
-			expectedDist: 60.0, // 1 degree lat ~ 60nm
-			expectedBearing: 0, // Due north
-			distTolerance: 1, bearingTolerance: 1,
+			expectedDist:    60.0, // 1 degree lat ~ 60nm
+			expectedBearing: 0,    // Due north
+			distTolerance:   1, bearingTolerance: 1,
 			desc: "1 degree north",
 		},
 		{
 			lat1: 0, lon1: 0, lat2: 0, lon2: 1,
-			expectedDist: 60.0, // 1 degree lon at equator ~ 60nm
-			expectedBearing: 90, // Due east
-			distTolerance: 1, bearingTolerance: 1,
+			expectedDist:    60.0, // 1 degree lon at equator ~ 60nm
+			expectedBearing: 90,   // Due east
+			distTolerance:   1, bearingTolerance: 1,
 			desc: "1 degree east at equator",
 		},
 		{
 			lat1: 52.0, lon1: 4.0, lat2: 52.0, lon2: 5.0,
-			expectedDist: 37.0, // At latitude 52, 1 degree lon ~ 37nm
-			expectedBearing: 90, // Due east
-			distTolerance: 2, bearingTolerance: 2,
+			expectedDist:    37.0, // At latitude 52, 1 degree lon ~ 37nm
+			expectedBearing: 90,   // Due east
+			distTolerance:   2, bearingTolerance: 2,
 			desc: "1 degree east at Amsterdam",
 		},
 		{
 			lat1: 51.5, lon1: -0.1, lat2: 48.8, lon2: 2.3,
-			expectedDist: 187.0, // London to Paris ~ 187nm
-			expectedBearing: 148, // Southeast
-			distTolerance: 5, bearingTolerance: 5,
+			expectedDist:    187.0, // London to Paris ~ 187nm
+			expectedBearing: 148,   // Southeast
+			distTolerance:   5, bearingTolerance: 5,
 			desc: "London to Paris",
 		},
 	}
@@ -1551,9 +1551,9 @@ func TestScope_DrawTargets_HeadingVectorOutOfBounds(t *testing.T) {
 		"edgevec": {
 			Hex:      "edgevec",
 			Callsign: "EDGE",
-			Distance: 90.0,  // Near max range
-			Bearing:  90.0,  // East
-			Track:    90.0,  // Heading further East (will go out of bounds)
+			Distance: 90.0, // Near max range
+			Bearing:  90.0, // East
+			Track:    90.0, // Heading further East (will go out of bounds)
 			HasLat:   true,
 			HasLon:   true,
 			HasTrack: true,

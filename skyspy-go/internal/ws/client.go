@@ -32,22 +32,22 @@ type Message struct {
 
 // Aircraft represents aircraft data from the WebSocket
 type Aircraft struct {
-	Hex       string   `json:"hex"`
-	Flight    string   `json:"flight"`
-	Lat       *float64 `json:"lat"`
-	Lon       *float64 `json:"lon"`
-	AltBaro   *int     `json:"alt_baro"`
-	Alt       *int     `json:"alt"`
-	GS        *float64 `json:"gs"`
-	Track     *float64 `json:"track"`
-	BaroRate  *float64 `json:"baro_rate"`
-	VR        *float64 `json:"vr"`
-	Squawk    string   `json:"squawk"`
-	RSSI      *float64 `json:"rssi"`
-	Type      string   `json:"t"`
-	Military  bool     `json:"military"`
-	Distance  *float64 `json:"distance_nm"`
-	Bearing   *float64 `json:"bearing"`
+	Hex      string   `json:"hex"`
+	Flight   string   `json:"flight"`
+	Lat      *float64 `json:"lat"`
+	Lon      *float64 `json:"lon"`
+	AltBaro  *int     `json:"alt_baro"`
+	Alt      *int     `json:"alt"`
+	GS       *float64 `json:"gs"`
+	Track    *float64 `json:"track"`
+	BaroRate *float64 `json:"baro_rate"`
+	VR       *float64 `json:"vr"`
+	Squawk   string   `json:"squawk"`
+	RSSI     *float64 `json:"rssi"`
+	Type     string   `json:"t"`
+	Military bool     `json:"military"`
+	Distance *float64 `json:"distance_nm"`
+	Bearing  *float64 `json:"bearing"`
 }
 
 // AircraftSnapshotData represents snapshot data containing multiple aircraft

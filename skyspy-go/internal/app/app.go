@@ -48,12 +48,12 @@ type Model struct {
 	acarsMessages []ACARSMessage
 
 	// Selection and navigation
-	selectedHex     string
-	rangeIdx        int
-	rangeOptions    []int
-	maxRange        float64
-	settingsCursor  int
-	overlayCursor   int
+	selectedHex    string
+	rangeIdx       int
+	rangeOptions   []int
+	maxRange       float64
+	settingsCursor int
+	overlayCursor  int
 
 	// Animation state
 	sweepAngle float64

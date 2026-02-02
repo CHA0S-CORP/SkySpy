@@ -112,8 +112,8 @@ func RenderStereoVU(t *theme.Theme, left, right float64, width int) string {
 
 // SignalMeter represents a signal strength meter
 type SignalMeter struct {
-	Bars   int
-	Theme  *theme.Theme
+	Bars  int
+	Theme *theme.Theme
 }
 
 // NewSignalMeter creates a new signal meter

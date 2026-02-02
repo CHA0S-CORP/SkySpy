@@ -35,8 +35,8 @@ SkysPy is a real-time ADS-B aircraft tracking system built on modern, battle-tes
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
-| **Backend** | Django 5.0+ | REST API & WebSocket server |
-| **ASGI Server** | Daphne | WebSocket support |
+| **Backend** | Django 5.0+ | REST API & Socket.IO server |
+| **ASGI Server** | Daphne | Socket.IO support |
 | **Task Queue** | Celery + gevent | Background processing |
 | **Database** | PostgreSQL 16 | Primary data store |
 | **Cache/Broker** | Redis 7 | Message broker & cache |
@@ -99,7 +99,7 @@ flowchart TB
 
 | Service | Port | Protocol | Description |
 |---------|------|----------|-------------|
-| `api` | `8000` | HTTP/WS | Django API server (Daphne ASGI) |
+| `api` | `8000` | HTTP/Socket.IO | Django API server (Daphne ASGI) |
 | `celery-worker` | - | - | Background task processing |
 | `celery-beat` | - | - | Periodic task scheduler |
 | `redis` | `6379` | TCP | Message broker and cache |
@@ -769,8 +769,8 @@ server {
         proxy_connect_timeout 75s;
     }
 
-    # WebSocket endpoints
-    location /ws/ {
+    # Socket.IO endpoint
+    location /socket.io/ {
         proxy_pass http://skyspy_api;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -1475,14 +1475,14 @@ python3 -c "from django.core.management.utils import get_random_secret_key; prin
 docker compose exec api python manage.py migrate
 ```
 
-> **Warning: WebSocket Connection Issues** - Verify Daphne is running and nginx is configured correctly.
+> **Warning: Socket.IO Connection Issues** - Verify Daphne is running and nginx is configured correctly.
 
 ```bash
 # Check Daphne is running
 docker compose exec api ps aux | grep daphne
 
-# Verify WebSocket endpoint
-curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" http://localhost:8000/ws/aircraft/
+# Verify Socket.IO endpoint
+curl -i http://localhost:8000/socket.io/?EIO=4&transport=polling
 
 # Ensure nginx proxy_read_timeout is high enough (86400 for 24 hours)
 ```

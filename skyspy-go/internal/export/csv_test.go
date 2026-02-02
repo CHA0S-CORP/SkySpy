@@ -571,7 +571,7 @@ func TestExportAircraft_Error(t *testing.T) {
 	// Create a file that will block directory creation
 	tmpDir := t.TempDir()
 	blockingFile := filepath.Join(tmpDir, "blocking_file")
-	if err := os.WriteFile(blockingFile, []byte("block"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("block"), 0o644); err != nil {
 		t.Fatalf("failed to create blocking file: %v", err)
 	}
 
@@ -592,7 +592,7 @@ func TestExportAircraftToFile_Error(t *testing.T) {
 	// Create a file that will block directory creation
 	tmpDir := t.TempDir()
 	blockingFile := filepath.Join(tmpDir, "blocking_file")
-	if err := os.WriteFile(blockingFile, []byte("block"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("block"), 0o644); err != nil {
 		t.Fatalf("failed to create blocking file: %v", err)
 	}
 
@@ -637,7 +637,7 @@ func TestExportACARSMessages_Error(t *testing.T) {
 	// Create a file that will block directory creation
 	tmpDir := t.TempDir()
 	blockingFile := filepath.Join(tmpDir, "blocking_file")
-	if err := os.WriteFile(blockingFile, []byte("block"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("block"), 0o644); err != nil {
 		t.Fatalf("failed to create blocking file: %v", err)
 	}
 
@@ -683,7 +683,7 @@ func TestExportACARSMessagesToFile_Error(t *testing.T) {
 	// Create a file that will block directory creation
 	tmpDir := t.TempDir()
 	blockingFile := filepath.Join(tmpDir, "blocking_file")
-	if err := os.WriteFile(blockingFile, []byte("block"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("block"), 0o644); err != nil {
 		t.Fatalf("failed to create blocking file: %v", err)
 	}
 
@@ -999,13 +999,13 @@ func TestExportAircraft_SecondCreateFails(t *testing.T) {
 
 	// Create a directory and make it read-only so file creation fails
 	readOnlyDir := filepath.Join(tmpDir, "readonly")
-	if err := os.MkdirAll(readOnlyDir, 0755); err != nil {
+	if err := os.MkdirAll(readOnlyDir, 0o755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
 
 	// Create a file inside that will block directory creation at that path
 	blockingFile := filepath.Join(readOnlyDir, "blocker")
-	if err := os.WriteFile(blockingFile, []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("x"), 0o644); err != nil {
 		t.Fatalf("failed to create blocker: %v", err)
 	}
 
@@ -1028,7 +1028,7 @@ func TestExportAircraftToFile_SecondCreateFails(t *testing.T) {
 
 	// Create a file that blocks directory creation
 	blockingFile := filepath.Join(tmpDir, "blocker")
-	if err := os.WriteFile(blockingFile, []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("x"), 0o644); err != nil {
 		t.Fatalf("failed to create blocker: %v", err)
 	}
 
@@ -1051,7 +1051,7 @@ func TestExportACARSMessages_SecondCreateFails(t *testing.T) {
 
 	// Create a file that blocks directory creation
 	blockingFile := filepath.Join(tmpDir, "blocker")
-	if err := os.WriteFile(blockingFile, []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("x"), 0o644); err != nil {
 		t.Fatalf("failed to create blocker: %v", err)
 	}
 
@@ -1074,7 +1074,7 @@ func TestExportACARSMessagesToFile_SecondCreateFails(t *testing.T) {
 
 	// Create a file that blocks directory creation
 	blockingFile := filepath.Join(tmpDir, "blocker")
-	if err := os.WriteFile(blockingFile, []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("x"), 0o644); err != nil {
 		t.Fatalf("failed to create blocker: %v", err)
 	}
 
@@ -1097,10 +1097,10 @@ func TestExportAircraft_CSV_WriteError(t *testing.T) {
 
 	// Create a read-only directory
 	readOnlyDir := filepath.Join(tmpDir, "readonly")
-	if err := os.MkdirAll(readOnlyDir, 0555); err != nil {
+	if err := os.MkdirAll(readOnlyDir, 0o555); err != nil {
 		t.Fatalf("failed to create read-only dir: %v", err)
 	}
-	defer os.Chmod(readOnlyDir, 0755)
+	defer os.Chmod(readOnlyDir, 0o755)
 
 	aircraft := map[string]*radar.Target{
 		"ABC123": {Hex: "ABC123"},
@@ -1119,10 +1119,10 @@ func TestExportAircraftToFile_CSV_WriteError(t *testing.T) {
 
 	// Create a read-only directory
 	readOnlyDir := filepath.Join(tmpDir, "readonly")
-	if err := os.MkdirAll(readOnlyDir, 0555); err != nil {
+	if err := os.MkdirAll(readOnlyDir, 0o555); err != nil {
 		t.Fatalf("failed to create read-only dir: %v", err)
 	}
-	defer os.Chmod(readOnlyDir, 0755)
+	defer os.Chmod(readOnlyDir, 0o755)
 
 	filename := filepath.Join(readOnlyDir, "test.csv")
 
@@ -1143,10 +1143,10 @@ func TestExportACARSMessages_CSV_WriteError(t *testing.T) {
 
 	// Create a read-only directory
 	readOnlyDir := filepath.Join(tmpDir, "readonly")
-	if err := os.MkdirAll(readOnlyDir, 0555); err != nil {
+	if err := os.MkdirAll(readOnlyDir, 0o555); err != nil {
 		t.Fatalf("failed to create read-only dir: %v", err)
 	}
-	defer os.Chmod(readOnlyDir, 0755)
+	defer os.Chmod(readOnlyDir, 0o755)
 
 	messages := []ACARSMessage{
 		{Callsign: "UAL123"},
@@ -1165,10 +1165,10 @@ func TestExportACARSMessagesToFile_CSV_WriteError(t *testing.T) {
 
 	// Create a read-only directory
 	readOnlyDir := filepath.Join(tmpDir, "readonly")
-	if err := os.MkdirAll(readOnlyDir, 0555); err != nil {
+	if err := os.MkdirAll(readOnlyDir, 0o555); err != nil {
 		t.Fatalf("failed to create read-only dir: %v", err)
 	}
-	defer os.Chmod(readOnlyDir, 0755)
+	defer os.Chmod(readOnlyDir, 0o755)
 
 	filename := filepath.Join(readOnlyDir, "test.csv")
 

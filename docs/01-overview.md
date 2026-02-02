@@ -99,9 +99,9 @@ flowchart TB
 | Component | Technology | Purpose |
 |:----------|:-----------|:--------|
 | ![Django](https://img.shields.io/badge/Framework-Django%205.x-092E20?logo=django) | Django 5.x | Web framework with ORM |
-| ![Daphne](https://img.shields.io/badge/Server-Daphne-44B78B) | Daphne | WebSocket-capable async server |
+| ![Daphne](https://img.shields.io/badge/Server-Daphne-44B78B) | Daphne | Socket.IO-capable async server |
 | ![DRF](https://img.shields.io/badge/API-DRF-A30000) | Django REST Framework | RESTful API with OpenAPI schema |
-| ![Channels](https://img.shields.io/badge/Realtime-Channels-44B78B) | Django Channels | WebSocket consumers and channel layers |
+| ![Socket.IO](https://img.shields.io/badge/Realtime-Socket.IO-44B78B) | Socket.IO | Real-time bidirectional event-based communication |
 | ![Celery](https://img.shields.io/badge/Tasks-Celery-37814A?logo=celery) | Celery + gevent | Background task processing with green threads |
 | ![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL%2016-4169E1?logo=postgresql) | PostgreSQL 16 | Primary data store |
 | ![Redis](https://img.shields.io/badge/Cache-Redis%207-DC382D?logo=redis) | Redis 7 | Caching, message broker, channel layer |
@@ -206,18 +206,18 @@ flowchart TB
 
 <br/>
 
-### 4️⃣ WebSocket Consumers
+### 4️⃣ Socket.IO Namespaces
 
-Django Channels provides real-time data streaming via WebSocket:
+Socket.IO provides real-time data streaming via namespaces:
 
-| Endpoint | Purpose | Description |
+| Namespace | Purpose | Description |
 |:---------|:--------|:------------|
-| 🛩️ `/ws/aircraft/` | Aircraft Updates | Real-time position streaming |
-| 🚨 `/ws/safety/` | Safety Events | Emergency and TCAS notifications |
-| 🔔 `/ws/alerts/` | Alert Triggers | Custom rule match notifications |
-| 📻 `/ws/acars/` | ACARS Stream | Decoded message feed |
-| 📊 `/ws/stats/` | Statistics | Live metrics updates |
-| 📱 `/ws/cannonball/` | Mobile Mode | GPS-based threat detection |
+| 🛩️ `/aircraft` | Aircraft Updates | Real-time position streaming |
+| 🚨 `/safety` | Safety Events | Emergency and TCAS notifications |
+| 🔔 `/alerts` | Alert Triggers | Custom rule match notifications |
+| 📻 `/acars` | ACARS Stream | Decoded message feed |
+| 📊 `/stats` | Statistics | Live metrics updates |
+| 📱 `/cannonball` | Mobile Mode | GPS-based threat detection |
 
 <br/>
 
@@ -247,7 +247,7 @@ flowchart TD
     A["📡 ADS-B Receiver<br/>(Ultrafeeder)"] --> B["🔗 JSON API Endpoint<br/>/tar1090/data/aircraft.json"]
     B --> C["⚙️ Celery Task<br/>poll_aircraft"]
     C --> D["⚡ Update Redis Cache<br/>(live aircraft state)"]
-    C --> E["📢 Broadcast via<br/>Django Channels"]
+    C --> E["📢 Broadcast via<br/>Socket.IO"]
     C --> F["💾 Store to PostgreSQL<br/>(periodic snapshots)"]
     D --> G["👥 Connected Clients"]
     E --> G
@@ -279,7 +279,7 @@ flowchart TD
     F --> G
 
     G -->|Yes| H["💾 Create SafetyEvent Record"]
-    H --> I["📢 Broadcast via /ws/safety/"]
+    H --> I["📢 Broadcast via Socket.IO"]
     I --> J["🔔 Trigger Notifications<br/>(if configured)"]
 ```
 
@@ -299,7 +299,7 @@ flowchart TD
     F --> G{"Rule Matches?"}
     G -->|Yes| H["💾 Create AlertHistory Record"]
     H --> I["📤 Dispatch Notifications"]
-    I --> J["📢 Broadcast via /ws/alerts/"]
+    I --> J["📢 Broadcast via Socket.IO"]
 ```
 
 <br/>

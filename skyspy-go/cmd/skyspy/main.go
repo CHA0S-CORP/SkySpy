@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/spf13/cobra"
 	"github.com/skyspy/skyspy-go/internal/app"
 	"github.com/skyspy/skyspy-go/internal/auth"
 	"github.com/skyspy/skyspy-go/internal/config"
 	"github.com/skyspy/skyspy-go/internal/theme"
+	"github.com/spf13/cobra"
 )
 
 var (

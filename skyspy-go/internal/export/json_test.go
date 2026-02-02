@@ -562,7 +562,7 @@ func TestExportAircraftJSON_Error(t *testing.T) {
 	// Create a file that will block directory creation
 	tmpDir := t.TempDir()
 	blockingFile := filepath.Join(tmpDir, "blocking_file")
-	if err := os.WriteFile(blockingFile, []byte("block"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("block"), 0o644); err != nil {
 		t.Fatalf("failed to create blocking file: %v", err)
 	}
 
@@ -583,7 +583,7 @@ func TestExportAircraftJSONToFile_Error(t *testing.T) {
 	// Create a file that will block directory creation
 	tmpDir := t.TempDir()
 	blockingFile := filepath.Join(tmpDir, "blocking_file")
-	if err := os.WriteFile(blockingFile, []byte("block"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("block"), 0o644); err != nil {
 		t.Fatalf("failed to create blocking file: %v", err)
 	}
 
@@ -628,7 +628,7 @@ func TestExportACARSJSON_Error(t *testing.T) {
 	// Create a file that will block directory creation
 	tmpDir := t.TempDir()
 	blockingFile := filepath.Join(tmpDir, "blocking_file")
-	if err := os.WriteFile(blockingFile, []byte("block"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("block"), 0o644); err != nil {
 		t.Fatalf("failed to create blocking file: %v", err)
 	}
 
@@ -674,7 +674,7 @@ func TestExportACARSJSONToFile_Error(t *testing.T) {
 	// Create a file that will block directory creation
 	tmpDir := t.TempDir()
 	blockingFile := filepath.Join(tmpDir, "blocking_file")
-	if err := os.WriteFile(blockingFile, []byte("block"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("block"), 0o644); err != nil {
 		t.Fatalf("failed to create blocking file: %v", err)
 	}
 
@@ -1077,7 +1077,7 @@ func TestExportAircraftJSONToFile_MkdirAllError(t *testing.T) {
 
 	// Create a file that blocks directory creation
 	blockingFile := filepath.Join(tmpDir, "blocker")
-	if err := os.WriteFile(blockingFile, []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("x"), 0o644); err != nil {
 		t.Fatalf("failed to create blocker: %v", err)
 	}
 
@@ -1100,7 +1100,7 @@ func TestExportACARSJSONToFile_MkdirAllError(t *testing.T) {
 
 	// Create a file that blocks directory creation
 	blockingFile := filepath.Join(tmpDir, "blocker")
-	if err := os.WriteFile(blockingFile, []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("x"), 0o644); err != nil {
 		t.Fatalf("failed to create blocker: %v", err)
 	}
 
@@ -1123,10 +1123,10 @@ func TestExportAircraftJSON_WriteFileError(t *testing.T) {
 
 	// Create a read-only directory
 	readOnlyDir := filepath.Join(tmpDir, "readonly")
-	if err := os.MkdirAll(readOnlyDir, 0555); err != nil {
+	if err := os.MkdirAll(readOnlyDir, 0o555); err != nil {
 		t.Fatalf("failed to create read-only dir: %v", err)
 	}
-	defer os.Chmod(readOnlyDir, 0755) // Cleanup
+	defer os.Chmod(readOnlyDir, 0o755) // Cleanup
 
 	aircraft := map[string]*radar.Target{
 		"ABC123": {Hex: "ABC123"},
@@ -1145,10 +1145,10 @@ func TestExportAircraftJSONToFile_WriteFileError(t *testing.T) {
 
 	// Create a read-only directory
 	readOnlyDir := filepath.Join(tmpDir, "readonly")
-	if err := os.MkdirAll(readOnlyDir, 0555); err != nil {
+	if err := os.MkdirAll(readOnlyDir, 0o555); err != nil {
 		t.Fatalf("failed to create read-only dir: %v", err)
 	}
-	defer os.Chmod(readOnlyDir, 0755) // Cleanup
+	defer os.Chmod(readOnlyDir, 0o755) // Cleanup
 
 	filename := filepath.Join(readOnlyDir, "test.json")
 
@@ -1169,10 +1169,10 @@ func TestExportACARSJSON_WriteFileError(t *testing.T) {
 
 	// Create a read-only directory
 	readOnlyDir := filepath.Join(tmpDir, "readonly")
-	if err := os.MkdirAll(readOnlyDir, 0555); err != nil {
+	if err := os.MkdirAll(readOnlyDir, 0o555); err != nil {
 		t.Fatalf("failed to create read-only dir: %v", err)
 	}
-	defer os.Chmod(readOnlyDir, 0755) // Cleanup
+	defer os.Chmod(readOnlyDir, 0o755) // Cleanup
 
 	messages := []ACARSMessage{
 		{Callsign: "UAL123"},
@@ -1191,10 +1191,10 @@ func TestExportACARSJSONToFile_WriteFileError(t *testing.T) {
 
 	// Create a read-only directory
 	readOnlyDir := filepath.Join(tmpDir, "readonly")
-	if err := os.MkdirAll(readOnlyDir, 0555); err != nil {
+	if err := os.MkdirAll(readOnlyDir, 0o555); err != nil {
 		t.Fatalf("failed to create read-only dir: %v", err)
 	}
-	defer os.Chmod(readOnlyDir, 0755) // Cleanup
+	defer os.Chmod(readOnlyDir, 0o755) // Cleanup
 
 	filename := filepath.Join(readOnlyDir, "test.json")
 

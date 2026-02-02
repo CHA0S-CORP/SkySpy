@@ -875,7 +875,7 @@ func TestCaptureScreen_Error(t *testing.T) {
 	tmpDir := t.TempDir()
 	// Create a file that will block directory creation
 	blockingFile := filepath.Join(tmpDir, "blocking_file")
-	if err := os.WriteFile(blockingFile, []byte("block"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("block"), 0o644); err != nil {
 		t.Fatalf("failed to create blocking file: %v", err)
 	}
 
@@ -893,7 +893,7 @@ func TestSaveAsText_Error(t *testing.T) {
 	// Use a path that cannot be written to
 	tmpDir := t.TempDir()
 	blockingFile := filepath.Join(tmpDir, "blocking_file")
-	if err := os.WriteFile(blockingFile, []byte("block"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("block"), 0o644); err != nil {
 		t.Fatalf("failed to create blocking file: %v", err)
 	}
 
@@ -911,7 +911,7 @@ func TestSaveAsHTML_Error(t *testing.T) {
 	// Use a path that cannot be written to
 	tmpDir := t.TempDir()
 	blockingFile := filepath.Join(tmpDir, "blocking_file")
-	if err := os.WriteFile(blockingFile, []byte("block"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("block"), 0o644); err != nil {
 		t.Fatalf("failed to create blocking file: %v", err)
 	}
 
@@ -1038,7 +1038,7 @@ func TestSaveAsText_MkdirAllError(t *testing.T) {
 
 	// Create a file that blocks directory creation
 	blockingFile := filepath.Join(tmpDir, "blocker")
-	if err := os.WriteFile(blockingFile, []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("x"), 0o644); err != nil {
 		t.Fatalf("failed to create blocker: %v", err)
 	}
 
@@ -1057,7 +1057,7 @@ func TestSaveAsHTML_MkdirAllError(t *testing.T) {
 
 	// Create a file that blocks directory creation
 	blockingFile := filepath.Join(tmpDir, "blocker")
-	if err := os.WriteFile(blockingFile, []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(blockingFile, []byte("x"), 0o644); err != nil {
 		t.Fatalf("failed to create blocker: %v", err)
 	}
 
@@ -1076,7 +1076,7 @@ func TestSaveAsText_WriteFileError(t *testing.T) {
 
 	// Create a read-only directory
 	readOnlyDir := filepath.Join(tmpDir, "readonly")
-	if err := os.MkdirAll(readOnlyDir, 0555); err != nil {
+	if err := os.MkdirAll(readOnlyDir, 0o555); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
 
@@ -1096,7 +1096,7 @@ func TestSaveAsHTML_WriteFileError(t *testing.T) {
 
 	// Create a read-only directory
 	readOnlyDir := filepath.Join(tmpDir, "readonly")
-	if err := os.MkdirAll(readOnlyDir, 0555); err != nil {
+	if err := os.MkdirAll(readOnlyDir, 0o555); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
 

@@ -50,7 +50,7 @@ flowchart TB
 
     subgraph API["Backend API"]
         REST[REST API<br/>Django REST]
-        WS[WebSocket<br/>Channels]
+        WS[Socket.IO<br/>Real-time]
     end
 
     subgraph AuthLayer["Auth Layer"]
@@ -112,7 +112,7 @@ AUTH_MODE=hybrid  # Options: public, private, hybrid
 | **Scoped Access** | No | Yes | Yes |
 | **User Context** | Yes | Yes | Yes |
 | **External IdP** | No | No | Yes |
-| **WebSocket Support** | Yes | Yes | Yes |
+| **Socket.IO Support** | Yes | Yes | Yes |
 
 ---
 
@@ -684,50 +684,58 @@ curl -X PATCH https://your-skyspy-instance/api/v1/feature-access/aircraft \
 
 ---
 
-## WebSocket Authentication
+## Socket.IO Authentication
 
-WebSocket connections support both JWT tokens and API keys for real-time data streaming.
+Socket.IO connections support both JWT tokens and API keys for real-time data streaming.
 
-### WebSocket Authentication Flow
+### Socket.IO Authentication Flow
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant Client as Client
-    participant WS as WebSocket Server
+    participant SIO as Socket.IO Server
     participant Auth as Auth Middleware
-    participant Consumer as Consumer
+    participant Handler as Event Handler
 
-    Client->>WS: Connect with token<br/>(Sec-WebSocket-Protocol)
-    WS->>Auth: Validate token
+    Client->>SIO: Connect with token<br/>(auth parameter)
+    SIO->>Auth: Validate token
 
     alt Token Valid
-        Auth-->>WS: User authenticated
-        WS->>Consumer: Accept connection
-        Consumer-->>Client: Connection accepted
+        Auth-->>SIO: User authenticated
+        SIO->>Handler: Accept connection
+        Handler-->>Client: Connection accepted
 
         loop Real-time Updates
-            Consumer->>Client: Aircraft data
-            Consumer->>Client: Alert notifications
+            Handler->>Client: Aircraft data
+            Handler->>Client: Alert notifications
         end
     else Token Invalid
-        Auth-->>WS: Authentication failed
-        WS-->>Client: Close (4001)
+        Auth-->>SIO: Authentication failed
+        SIO-->>Client: Disconnect (4001)
     end
 ```
 
 ### Authentication Methods
 
-> **Recommended: Sec-WebSocket-Protocol Header**
+> **Recommended: Auth Parameter**
 >
 > ```javascript
-> const ws = new WebSocket('wss://your-skyspy/ws/aircraft', ['Bearer', accessToken]);
+> import { io } from 'socket.io-client';
+> const socket = io('https://your-skyspy', {
+>   path: '/socket.io/',
+>   auth: {
+>     token: accessToken
+>   }
+> });
 > ```
 
 > **Warning: Not Recommended - Query String**
 >
 > ```javascript
-> const ws = new WebSocket('wss://your-skyspy/ws/aircraft?token=eyJ...');
+> const socket = io('https://your-skyspy?token=eyJ...', {
+>   path: '/socket.io/'
+> });
 > ```
 >
 > **Why?** Tokens may appear in server logs and browser history.
@@ -747,21 +755,25 @@ sequenceDiagram
 ### Handling Connection Rejection
 
 ```javascript
-const ws = new WebSocket('wss://your-skyspy/ws/aircraft', ['Bearer', token]);
+import { io } from 'socket.io-client';
 
-ws.onclose = (event) => {
-  switch (event.code) {
-    case 4001:
-      console.error('Authentication failed - invalid or expired token');
-      // Trigger re-authentication
-      break;
-    case 4003:
-      console.error('Permission denied - insufficient access');
-      break;
-    default:
-      console.log('Connection closed:', event.code);
+const socket = io('https://your-skyspy', {
+  path: '/socket.io/',
+  auth: {
+    token: token
   }
-};
+});
+
+socket.on('connect_error', (error) => {
+  if (error.message === 'Authentication failed') {
+    console.error('Authentication failed - invalid or expired token');
+    // Trigger re-authentication
+  } else if (error.message === 'Permission denied') {
+    console.error('Permission denied - insufficient access');
+  } else {
+    console.error('Connection error:', error.message);
+  }
+});
 ```
 
 ---
@@ -1119,17 +1131,17 @@ CORS_ALLOWED_ORIGINS=https://your-frontend-domain.com
 > 2. Add callback URL to IdP allowed redirects: `https://your-domain/api/v1/auth/oidc/callback`
 > 3. Verify scopes are enabled in IdP application settings
 
-> **WebSocket Connection Rejected (4001)**
+> **Socket.IO Connection Rejected**
 >
 > **Possible causes:**
 > - Token is invalid or expired
-> - Using query string instead of header
-> - `WS_REJECT_INVALID_TOKENS` is enabled
+> - Using query string instead of auth parameter
+> - Token format incorrect
 >
 > **Solutions:**
 > 1. Refresh token before connecting
-> 2. Use `Sec-WebSocket-Protocol` header: `new WebSocket(url, ['Bearer', token])`
-> 3. Check WebSocket middleware configuration
+> 2. Use `auth` parameter: `io(url, { auth: { token: token } })`
+> 3. Check Socket.IO authentication middleware configuration
 
 ### Debug Logging
 

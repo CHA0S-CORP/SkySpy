@@ -29,7 +29,7 @@ func TestParseKMLPoint(t *testing.T) {
 </kml>`
 
 	kmlPath := filepath.Join(tmpDir, "test.kml")
-	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0644); err != nil {
+	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0o644); err != nil {
 		t.Fatalf("Failed to write KML file: %v", err)
 	}
 
@@ -92,7 +92,7 @@ func TestParseKMLLineString(t *testing.T) {
 </kml>`
 
 	kmlPath := filepath.Join(tmpDir, "test_line.kml")
-	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0644); err != nil {
+	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0o644); err != nil {
 		t.Fatalf("Failed to write KML file: %v", err)
 	}
 
@@ -145,7 +145,7 @@ func TestParseKMLPolygon(t *testing.T) {
 </kml>`
 
 	kmlPath := filepath.Join(tmpDir, "test_polygon.kml")
-	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0644); err != nil {
+	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0o644); err != nil {
 		t.Fatalf("Failed to write KML file: %v", err)
 	}
 
@@ -201,7 +201,7 @@ func TestParseKMLFolders(t *testing.T) {
 </kml>`
 
 	kmlPath := filepath.Join(tmpDir, "test_folders.kml")
-	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0644); err != nil {
+	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0o644); err != nil {
 		t.Fatalf("Failed to write KML file: %v", err)
 	}
 
@@ -256,7 +256,7 @@ func TestParseKMLMultiGeometry(t *testing.T) {
 </kml>`
 
 	kmlPath := filepath.Join(tmpDir, "test_multi.kml")
-	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0644); err != nil {
+	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0o644); err != nil {
 		t.Fatalf("Failed to write KML file: %v", err)
 	}
 
@@ -430,7 +430,7 @@ func TestParseKMLRootPlacemarks(t *testing.T) {
 </kml>`
 
 	kmlPath := filepath.Join(tmpDir, "test_root.kml")
-	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0644); err != nil {
+	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0o644); err != nil {
 		t.Fatalf("Failed to write KML file: %v", err)
 	}
 
@@ -466,7 +466,7 @@ func TestParseKMLRootFolder(t *testing.T) {
 </kml>`
 
 	kmlPath := filepath.Join(tmpDir, "test_root_folder.kml")
-	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0644); err != nil {
+	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0o644); err != nil {
 		t.Fatalf("Failed to write KML file: %v", err)
 	}
 
@@ -532,7 +532,7 @@ func TestParseKMLInvalidXML(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	kmlPath := filepath.Join(tmpDir, "invalid.kml")
-	if err := os.WriteFile(kmlPath, []byte("not valid xml <><>"), 0644); err != nil {
+	if err := os.WriteFile(kmlPath, []byte("not valid xml <><>"), 0o644); err != nil {
 		t.Fatalf("Failed to write KML file: %v", err)
 	}
 
@@ -650,7 +650,7 @@ func TestParseKMLMultiGeometryWithPolygon(t *testing.T) {
 </kml>`
 
 	kmlPath := filepath.Join(tmpDir, "test_multi_poly.kml")
-	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0644); err != nil {
+	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0o644); err != nil {
 		t.Fatalf("Failed to write KML file: %v", err)
 	}
 
@@ -705,7 +705,7 @@ func TestParseKMLEmptyGeometries(t *testing.T) {
 </kml>`
 
 	kmlPath := filepath.Join(tmpDir, "test_empty.kml")
-	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0644); err != nil {
+	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0o644); err != nil {
 		t.Fatalf("Failed to write KML file: %v", err)
 	}
 
@@ -753,7 +753,7 @@ func TestParseKMLEmptyMultiGeometry(t *testing.T) {
 </kml>`
 
 	kmlPath := filepath.Join(tmpDir, "test_empty_multi.kml")
-	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0644); err != nil {
+	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0o644); err != nil {
 		t.Fatalf("Failed to write KML file: %v", err)
 	}
 

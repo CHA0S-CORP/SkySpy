@@ -383,7 +383,6 @@ func parseCoordinates(coords []interface{}) []GeoPoint {
 	return points
 }
 
-
 // HaversineDistance calculates distance in nautical miles between two points
 func HaversineDistance(lat1, lon1, lat2, lon2 float64) float64 {
 	const R = 3440.065 // Earth radius in nm

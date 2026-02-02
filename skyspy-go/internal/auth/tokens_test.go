@@ -450,8 +450,8 @@ func TestFileTokenStore_FilePermissions(t *testing.T) {
 
 	mode := info.Mode().Perm()
 	// Should be 0600 (owner read/write only)
-	if mode != 0600 {
-		t.Errorf("expected file permissions 0600, got %o", mode)
+	if mode != 0o600 {
+		t.Errorf("expected file permissions 0o600, got %o", mode)
 	}
 }
 
@@ -547,7 +547,7 @@ func TestFileTokenStore_CorruptedFile(t *testing.T) {
 
 	// Create a corrupted file
 	filename := filepath.Join(tempDir, "corrupted_8080.json")
-	err = os.WriteFile(filename, []byte("not valid base64 or encrypted data!!!"), 0600)
+	err = os.WriteFile(filename, []byte("not valid base64 or encrypted data!!!"), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create corrupted file: %v", err)
 	}
@@ -573,7 +573,7 @@ func TestFileTokenStore_EmptyFile(t *testing.T) {
 
 	// Create an empty file
 	filename := filepath.Join(tempDir, "empty_8080.json")
-	err = os.WriteFile(filename, []byte(""), 0600)
+	err = os.WriteFile(filename, []byte(""), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create empty file: %v", err)
 	}
@@ -697,8 +697,8 @@ func TestNewFileTokenStore(t *testing.T) {
 
 	// Verify directory permissions (should be 0700)
 	mode := info.Mode().Perm()
-	if mode != 0700 {
-		t.Errorf("expected directory permissions 0700, got %o", mode)
+	if mode != 0o700 {
+		t.Errorf("expected directory permissions 0o700, got %o", mode)
 	}
 }
 
@@ -731,9 +731,9 @@ func TestFileTokenStore_List_DirectoryWithNonJsonFiles(t *testing.T) {
 	}
 
 	// Create some non-JSON files that should be ignored
-	os.WriteFile(filepath.Join(tempDir, "readme.txt"), []byte("test"), 0600)
-	os.WriteFile(filepath.Join(tempDir, "config.yaml"), []byte("test"), 0600)
-	os.Mkdir(filepath.Join(tempDir, "subdir"), 0700)
+	os.WriteFile(filepath.Join(tempDir, "readme.txt"), []byte("test"), 0o600)
+	os.WriteFile(filepath.Join(tempDir, "config.yaml"), []byte("test"), 0o600)
+	os.Mkdir(filepath.Join(tempDir, "subdir"), 0o700)
 
 	// Create a valid JSON file
 	testTokens := &TokenSet{
@@ -771,7 +771,7 @@ func TestFileTokenStore_Load_ReadError(t *testing.T) {
 
 	// Create a file that exists but is a directory (to cause read error)
 	filename := filepath.Join(tempDir, "directory_8080.json")
-	err = os.Mkdir(filename, 0700)
+	err = os.Mkdir(filename, 0o700)
 	if err != nil {
 		t.Fatalf("failed to create test directory: %v", err)
 	}
@@ -797,7 +797,7 @@ func TestFileTokenStore_Load_DecryptError(t *testing.T) {
 	// Create a file with valid base64 but invalid encrypted content
 	filename := filepath.Join(tempDir, "decrypt-error_8080.json")
 	// Valid base64 but too short to be valid AES-GCM ciphertext
-	err = os.WriteFile(filename, []byte(base64.StdEncoding.EncodeToString([]byte("short"))), 0600)
+	err = os.WriteFile(filename, []byte(base64.StdEncoding.EncodeToString([]byte("short"))), 0o600)
 	if err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
@@ -822,7 +822,7 @@ func TestFileTokenStore_Load_InvalidBase64(t *testing.T) {
 
 	// Create a file with invalid base64 content
 	filename := filepath.Join(tempDir, "invalid-base64_8080.json")
-	err = os.WriteFile(filename, []byte("!!!not base64!!!"), 0600)
+	err = os.WriteFile(filename, []byte("!!!not base64!!!"), 0o600)
 	if err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
@@ -853,7 +853,7 @@ func TestFileTokenStore_Load_InvalidJSON(t *testing.T) {
 	}
 
 	filename := filepath.Join(tempDir, "invalid-json_8080.json")
-	err = os.WriteFile(filename, encrypted, 0600)
+	err = os.WriteFile(filename, encrypted, 0o600)
 	if err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
@@ -876,7 +876,7 @@ func TestFileTokenStore_Delete_ReadOnlyDirectory(t *testing.T) {
 	}
 	defer func() {
 		// Restore permissions before cleanup
-		os.Chmod(tempDir, 0700)
+		os.Chmod(tempDir, 0o700)
 		os.RemoveAll(tempDir)
 	}()
 
@@ -896,7 +896,7 @@ func TestFileTokenStore_Delete_ReadOnlyDirectory(t *testing.T) {
 	}
 
 	// Make directory read-only
-	os.Chmod(tempDir, 0500)
+	os.Chmod(tempDir, 0o500)
 
 	// Try to delete - should fail
 	err = store.Delete("readonly-test:8080")
@@ -1056,7 +1056,7 @@ func TestFileTokenStore_Save_WriteError(t *testing.T) {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	defer func() {
-		os.Chmod(tempDir, 0700)
+		os.Chmod(tempDir, 0o700)
 		os.RemoveAll(tempDir)
 	}()
 
@@ -1071,7 +1071,7 @@ func TestFileTokenStore_Save_WriteError(t *testing.T) {
 	}
 
 	// Make directory read-only to cause write error
-	os.Chmod(tempDir, 0500)
+	os.Chmod(tempDir, 0o500)
 
 	err = store.Save("write-error:8080", testTokens)
 	if err == nil {
@@ -1125,7 +1125,7 @@ func TestFileTokenStore_List_IgnoresDirectories(t *testing.T) {
 	}
 
 	// Create a subdirectory with .json extension (should be ignored)
-	os.Mkdir(filepath.Join(tempDir, "subdir.json"), 0700)
+	os.Mkdir(filepath.Join(tempDir, "subdir.json"), 0o700)
 
 	// Create a valid token file
 	testTokens := &TokenSet{
@@ -1230,7 +1230,7 @@ func TestFileTokenStore_List_ReadDirError(t *testing.T) {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	defer func() {
-		os.Chmod(tempDir, 0700)
+		os.Chmod(tempDir, 0o700)
 		os.RemoveAll(tempDir)
 	}()
 
@@ -1240,7 +1240,7 @@ func TestFileTokenStore_List_ReadDirError(t *testing.T) {
 	}
 
 	// Make directory unreadable
-	os.Chmod(tempDir, 0000)
+	os.Chmod(tempDir, 0o000)
 
 	_, err = store.List()
 	if err == nil {

@@ -800,19 +800,19 @@ func TestFilter_IsActive(t *testing.T) {
 
 func TestFilter_Description(t *testing.T) {
 	tests := []struct {
-		name        string
-		filter      *Filter
+		name          string
+		filter        *Filter
 		shouldBeEmpty bool
-		contains    []string
+		contains      []string
 	}{
 		{
-			name:        "nil filter",
-			filter:      nil,
+			name:          "nil filter",
+			filter:        nil,
 			shouldBeEmpty: true,
 		},
 		{
-			name:        "empty filter",
-			filter:      &Filter{},
+			name:          "empty filter",
+			filter:        &Filter{},
 			shouldBeEmpty: true,
 		},
 		{
@@ -864,12 +864,12 @@ func TestFilter_Description(t *testing.T) {
 
 func TestFilter_HighlightMatch(t *testing.T) {
 	tests := []struct {
-		name         string
-		query        string
-		text         string
-		wantBefore   string
-		wantMatch    string
-		wantAfter    string
+		name       string
+		query      string
+		text       string
+		wantBefore string
+		wantMatch  string
+		wantAfter  string
 	}{
 		{
 			name:       "no query",

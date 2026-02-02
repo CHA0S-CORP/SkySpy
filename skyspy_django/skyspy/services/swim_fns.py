@@ -5,9 +5,14 @@ Connects to FAA's SWIM Solace messaging system to receive real-time NOTAM update
 Documentation: https://github.com/faa-swim/fns-client
 
 Message format is AIXM 5.1 (Aeronautical Information Exchange Model).
+
+NOTE: The Solace PubSub+ library uses threading primitives that are incompatible
+with gevent monkey patching. To work around this, the SWIM consumer runs in a
+subprocess without gevent interference.
 """
 
 import logging
+import multiprocessing
 import threading
 import time
 import xml.etree.ElementTree as ET
@@ -20,6 +25,15 @@ from django.db import transaction
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+# Check if gevent is active (monkey patching applied)
+_GEVENT_ACTIVE = False
+try:
+    from gevent import monkey
+
+    _GEVENT_ACTIVE = monkey.is_module_patched("threading")
+except ImportError:
+    pass
 
 # AIXM namespaces for parsing
 AIXM_NAMESPACES = {
@@ -551,3 +565,182 @@ def get_status() -> dict[str, Any]:
         status["stats"] = _consumer.get_stats()
 
     return status
+
+
+# =============================================================================
+# Subprocess runner for gevent compatibility
+# =============================================================================
+
+
+def _subprocess_consume_worker(config: dict, max_messages: int, timeout_seconds: int, result_queue):
+    """
+    Worker function that runs in a subprocess without gevent interference.
+
+    This function is called via multiprocessing.Process to avoid gevent
+    monkey patching issues with the Solace library.
+    """
+    import os
+    import sys
+
+    # Set up Django in the subprocess
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "skyspy.settings")
+
+    import django
+
+    django.setup()
+
+    # Now import and run the consumer
+    from solace.messaging.config.transport_security_strategy import TLS
+    from solace.messaging.messaging_service import MessagingService
+    from solace.messaging.resources.queue import Queue
+
+    stats = {
+        "messages_received": 0,
+        "messages_processed": 0,
+        "errors": 0,
+        "status": "starting",
+    }
+
+    try:
+        # Build connection properties
+        broker_props = {
+            "solace.messaging.transport.host": f"tcps://{config['host']}:{config['port']}",
+            "solace.messaging.service.vpn-name": config["vpn"],
+            "solace.messaging.authentication.scheme.basic.username": config["username"],
+            "solace.messaging.authentication.scheme.basic.password": config["password"],
+        }
+
+        # Create messaging service with TLS
+        transport_security = TLS.create().without_certificate_validation()
+
+        messaging_service = MessagingService.builder().from_properties(broker_props).with_transport_security_strategy(
+            transport_security
+        ).build()
+
+        messaging_service.connect()
+
+        # Create queue receiver
+        queue = Queue.durable_non_exclusive_queue(config["queue"])
+        receiver = messaging_service.create_persistent_message_receiver_builder().build(queue)
+        receiver.start()
+
+        stats["status"] = "connected"
+
+        # Consume messages
+        import time
+
+        start_time = time.time()
+        message_count = 0
+
+        while time.time() - start_time < timeout_seconds:
+            if max_messages and message_count >= max_messages:
+                break
+
+            try:
+                message = receiver.receive_message(5000)  # 5s timeout
+                if message:
+                    stats["messages_received"] += 1
+                    payload = message.get_payload_as_string()
+
+                    if payload:
+                        # Parse and store NOTAM
+                        notam_data = parse_aixm_notam(payload)
+                        if notam_data:
+                            store_notam(notam_data)
+                            stats["messages_processed"] += 1
+                            message_count += 1
+
+                    receiver.ack(message)
+
+            except Exception as e:
+                stats["errors"] += 1
+                print(f"Error receiving message: {e}", file=sys.stderr)
+                time.sleep(1)
+
+        # Cleanup
+        receiver.terminate()
+        messaging_service.disconnect()
+        stats["status"] = "complete"
+
+    except Exception as e:
+        stats["status"] = "error"
+        stats["error_message"] = str(e)
+        print(f"SWIM consumer error: {e}", file=sys.stderr)
+
+    result_queue.put(stats)
+
+
+def run_consumer_subprocess(max_messages: int = 1000, timeout_seconds: int = 300) -> dict[str, Any]:
+    """
+    Run the SWIM consumer in a subprocess to avoid gevent compatibility issues.
+
+    This is the preferred method when running under gevent (Celery with gevent pool).
+
+    Args:
+        max_messages: Maximum messages to process
+        timeout_seconds: Maximum time to run
+
+    Returns:
+        Statistics dictionary with processing results
+    """
+    if not is_enabled():
+        return {"status": "disabled"}
+
+    config = get_connection_config()
+    result_queue = multiprocessing.Queue()
+
+    # Start worker process
+    process = multiprocessing.Process(
+        target=_subprocess_consume_worker, args=(config, max_messages, timeout_seconds, result_queue)
+    )
+    process.start()
+
+    # Wait for completion with timeout (add buffer for process overhead)
+    process.join(timeout=timeout_seconds + 30)
+
+    if process.is_alive():
+        logger.warning("SWIM consumer subprocess timed out, terminating")
+        process.terminate()
+        process.join(timeout=5)
+        if process.is_alive():
+            process.kill()
+        return {"status": "timeout", "messages_processed": 0, "errors": 1}
+
+    # Get results
+    try:
+        stats = result_queue.get_nowait()
+        return stats
+    except Exception:
+        return {"status": "error", "error_message": "Failed to get results from subprocess"}
+
+
+def consume_with_gevent_workaround(max_messages: int = 1000, timeout_seconds: int = 300) -> dict[str, Any]:
+    """
+    Consume SWIM messages with automatic gevent detection and workaround.
+
+    If gevent is active, runs consumer in a subprocess. Otherwise, runs directly.
+
+    Args:
+        max_messages: Maximum messages to process
+        timeout_seconds: Maximum time to run
+
+    Returns:
+        Statistics dictionary with processing results
+    """
+    if _GEVENT_ACTIVE:
+        logger.info("Gevent detected, running SWIM consumer in subprocess")
+        return run_consumer_subprocess(max_messages, timeout_seconds)
+    else:
+        # Run directly
+        if not is_enabled():
+            return {"status": "disabled"}
+
+        consumer = SwimFnsConsumer()
+        if consumer.connect():
+            try:
+                consumer.consume_messages(max_messages=max_messages, timeout_ms=5000)
+                return consumer.get_stats()
+            finally:
+                consumer.disconnect()
+        else:
+            return {"status": "connection_failed"}

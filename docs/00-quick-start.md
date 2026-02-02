@@ -30,7 +30,7 @@ SkysPy is a real-time aircraft tracking and monitoring platform that processes A
 | 📡 | **ACARS/VDL2 message decoding** for datalink messages |
 | 🎙️ | **Radio audio capture** with optional AI transcription |
 | 📊 | **Historical data** with session replay and analytics |
-| 🔌 | **REST API and WebSocket** interfaces for integration |
+| 🔌 | **REST API and Socket.IO** interfaces for integration |
 
 </div>
 
@@ -59,7 +59,7 @@ flowchart TB
     end
 
     UF <-->|ADS-B Data| API
-    WEB <-->|REST/WebSocket| API
+    WEB <-->|REST/Socket.IO| API
     API <--> CELERY
     API <--> PG
     API <--> REDIS
@@ -182,8 +182,8 @@ docker compose up -d
 | Service | Purpose | Icon |
 |:--------|:--------|:----:|
 | PostgreSQL | Database for aircraft and session data | 🐘 |
-| Redis | Cache, message broker, and WebSocket channel layer | 🔴 |
-| API | Django REST API with WebSocket support | 🌐 |
+| Redis | Cache, message broker, and Socket.IO channel layer | 🔴 |
+| API | Django REST API with Socket.IO support | 🌐 |
 | Celery Worker | Background task processing | ⚙️ |
 | Celery Beat | Scheduled task runner | ⏰ |
 
@@ -346,27 +346,30 @@ curl http://localhost:8000/api/v1/system/status/
 
 ---
 
-#### ⚡ WebSocket Connections
+#### ⚡ Socket.IO Connections
 
-For real-time updates, connect via WebSocket:
+For real-time updates, connect via Socket.IO:
 
-| WebSocket | Description | Icon |
+| Namespace | Description | Icon |
 |:----------|:------------|:----:|
-| `ws://localhost:8000/ws/aircraft/` | Live aircraft positions | ✈️ |
-| `ws://localhost:8000/ws/safety/` | Safety event alerts | 🛡️ |
-| `ws://localhost:8000/ws/acars/` | ACARS messages | 📡 |
-| `ws://localhost:8000/ws/alerts/` | Custom alert triggers | 🔔 |
-| `ws://localhost:8000/ws/all/` | Combined feed (all topics) | 📺 |
+| `/` | Main namespace - all topics | 📺 |
+| `/aircraft` | Live aircraft positions | ✈️ |
+| `/safety` | Safety event alerts | 🛡️ |
+| `/acars` | ACARS messages | 📡 |
+| `/alerts` | Custom alert triggers | 🔔 |
 
-**Example WebSocket connection (JavaScript):**
+**Example Socket.IO connection (JavaScript):**
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8000/ws/aircraft/');
+import { io } from 'socket.io-client';
 
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
+const socket = io('http://localhost:8000', {
+  path: '/socket.io/',
+});
+
+socket.on('aircraft:update', (data) => {
   console.log('Aircraft update:', data);
-};
+});
 ```
 
 #### 📚 Interactive API Documentation
@@ -521,18 +524,22 @@ docker compose logs postgres
 
 ---
 
-#### 🔌 WebSocket Connection Failed
+#### 🔌 Socket.IO Connection Failed
 
-> ⚠️ **WebSocket not connecting?**
+> ⚠️ **Socket.IO not connecting?**
 >
-> Ensure you're using `ws://` (not `wss://`) for local connections:
+> Ensure you're using `http://` (not `https://`) for local connections:
 
 ```javascript
 // ✅ Correct for local development
-const ws = new WebSocket('ws://localhost:8000/ws/aircraft/');
+const socket = io('http://localhost:8000', {
+  path: '/socket.io/',
+});
 
 // ❌ Wrong - HTTPS not configured locally
-const ws = new WebSocket('wss://localhost:8000/ws/aircraft/');
+const socket = io('https://localhost:8000', {
+  path: '/socket.io/',
+});
 ```
 
 ---
@@ -566,7 +573,7 @@ curl http://localhost:8000/api/v1/system/status/
 | [🔐 Authentication](./02-authentication.md) | Set up user authentication and OIDC/SSO | 🔑 |
 | [🔔 Alerts & Notifications](./03-alerts.md) | Advanced alert rules and notification setup | 📬 |
 | [📡 API Reference](./04-api-reference.md) | Complete REST API documentation | 🔌 |
-| [⚡ WebSocket Guide](./05-websockets.md) | Real-time data streaming | 🌐 |
+| [⚡ Socket.IO Guide](./05-websockets.md) | Real-time data streaming | 🌐 |
 | [📻 ACARS Integration](./06-acars.md) | Set up ACARS/VDL2 message decoding | 📡 |
 | [🎙️ Audio & Transcription](./07-audio.md) | Radio capture and AI transcription | 🔊 |
 | [🚀 Deployment](./08-deployment.md) | Production deployment best practices | ☁️ |

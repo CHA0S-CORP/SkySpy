@@ -28,9 +28,9 @@ type Geofence struct {
 	ID          string          `json:"id"`
 	Name        string          `json:"name"`
 	Type        GeofenceType    `json:"type"`
-	Points      []GeofencePoint `json:"points,omitempty"`      // For polygon
-	Center      *GeofencePoint  `json:"center,omitempty"`      // For circle
-	RadiusNM    float64         `json:"radius_nm,omitempty"`   // For circle (nautical miles)
+	Points      []GeofencePoint `json:"points,omitempty"`    // For polygon
+	Center      *GeofencePoint  `json:"center,omitempty"`    // For circle
+	RadiusNM    float64         `json:"radius_nm,omitempty"` // For circle (nautical miles)
 	Enabled     bool            `json:"enabled"`
 	Description string          `json:"description,omitempty"`
 }
@@ -307,7 +307,7 @@ func SaveGeofencesToFile(path string, geofences []*Geofence) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0o644)
 }
 
 // LoadGeofenceFromGeoJSON loads a geofence from a GeoJSON file

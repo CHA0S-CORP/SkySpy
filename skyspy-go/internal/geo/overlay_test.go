@@ -232,7 +232,7 @@ func TestLoadOverlayGeoJSON(t *testing.T) {
 	}`
 
 	geojsonPath := filepath.Join(tmpDir, "test.geojson")
-	if err := os.WriteFile(geojsonPath, []byte(geojsonContent), 0644); err != nil {
+	if err := os.WriteFile(geojsonPath, []byte(geojsonContent), 0o644); err != nil {
 		t.Fatalf("Failed to write GeoJSON file: %v", err)
 	}
 
@@ -273,7 +273,7 @@ func TestLoadOverlayJSONExtension(t *testing.T) {
 	}`
 
 	jsonPath := filepath.Join(tmpDir, "test.json")
-	if err := os.WriteFile(jsonPath, []byte(geojsonContent), 0644); err != nil {
+	if err := os.WriteFile(jsonPath, []byte(geojsonContent), 0o644); err != nil {
 		t.Fatalf("Failed to write JSON file: %v", err)
 	}
 
@@ -310,7 +310,7 @@ func TestLoadOverlayUnknownExtension(t *testing.T) {
 	}`
 
 	unknownPath := filepath.Join(tmpDir, "test.unknown")
-	if err := os.WriteFile(unknownPath, []byte(geojsonContent), 0644); err != nil {
+	if err := os.WriteFile(unknownPath, []byte(geojsonContent), 0o644); err != nil {
 		t.Fatalf("Failed to write file: %v", err)
 	}
 
@@ -333,7 +333,7 @@ func TestLoadOverlayUnknownExtensionFails(t *testing.T) {
 
 	// Test with unknown extension and invalid content
 	unknownPath := filepath.Join(tmpDir, "test.xyz")
-	if err := os.WriteFile(unknownPath, []byte("invalid content"), 0644); err != nil {
+	if err := os.WriteFile(unknownPath, []byte("invalid content"), 0o644); err != nil {
 		t.Fatalf("Failed to write file: %v", err)
 	}
 
@@ -394,7 +394,7 @@ func TestLoadGeoJSONSingleGeometry(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(tmpDir, tc.name+".geojson")
-			if err := os.WriteFile(path, []byte(tc.content), 0644); err != nil {
+			if err := os.WriteFile(path, []byte(tc.content), 0o644); err != nil {
 				t.Fatalf("Failed to write file: %v", err)
 			}
 
@@ -578,7 +578,7 @@ func TestParseGeoJSONFeatureNameKeys(t *testing.T) {
 func TestParseCoordinatesInvalidCoord(t *testing.T) {
 	coords := []interface{}{
 		"not a coordinate",
-		[]interface{}{-122.4}, // Too few
+		[]interface{}{-122.4},       // Too few
 		[]interface{}{-122.4, 37.7}, // Valid
 	}
 
@@ -1023,7 +1023,7 @@ func TestOverlayManagerLoadFromFile(t *testing.T) {
 	}`
 
 	geojsonPath := filepath.Join(tmpDir, "test.geojson")
-	if err := os.WriteFile(geojsonPath, []byte(geojsonContent), 0644); err != nil {
+	if err := os.WriteFile(geojsonPath, []byte(geojsonContent), 0o644); err != nil {
 		t.Fatalf("Failed to write file: %v", err)
 	}
 
@@ -1060,7 +1060,7 @@ func TestLoadGeoJSONInvalidJSON(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	invalidPath := filepath.Join(tmpDir, "invalid.geojson")
-	if err := os.WriteFile(invalidPath, []byte("not valid json"), 0644); err != nil {
+	if err := os.WriteFile(invalidPath, []byte("not valid json"), 0o644); err != nil {
 		t.Fatalf("Failed to write file: %v", err)
 	}
 
@@ -1091,7 +1091,7 @@ func TestLoadGeoJSONNonFeatureInArray(t *testing.T) {
 	}`
 
 	path := filepath.Join(tmpDir, "test.geojson")
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("Failed to write file: %v", err)
 	}
 
@@ -1130,7 +1130,7 @@ func TestLoadOverlayWithShpExtension(t *testing.T) {
 	// Shape type (little endian): 1 (point)
 	header[32], header[33], header[34], header[35] = 1, 0, 0, 0
 
-	if err := os.WriteFile(shpPath, header, 0644); err != nil {
+	if err := os.WriteFile(shpPath, header, 0o644); err != nil {
 		t.Fatalf("Failed to write shapefile: %v", err)
 	}
 
@@ -1165,7 +1165,7 @@ func TestLoadOverlayWithKmlExtension(t *testing.T) {
 </kml>`
 
 	kmlPath := filepath.Join(tmpDir, "test.kml")
-	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0644); err != nil {
+	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0o644); err != nil {
 		t.Fatalf("Failed to write KML file: %v", err)
 	}
 
@@ -1265,7 +1265,7 @@ func TestLoadOverlayAutoDetectKML(t *testing.T) {
 
 	// Use unknown extension
 	kmlPath := filepath.Join(tmpDir, "test.data")
-	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0644); err != nil {
+	if err := os.WriteFile(kmlPath, []byte(kmlContent), 0o644); err != nil {
 		t.Fatalf("Failed to write file: %v", err)
 	}
 
@@ -1303,7 +1303,7 @@ func TestLoadOverlayAutoDetectShapefile(t *testing.T) {
 	// Shape type (little endian): 1 (point)
 	header[32], header[33], header[34], header[35] = 1, 0, 0, 0
 
-	if err := os.WriteFile(shpPath, header, 0644); err != nil {
+	if err := os.WriteFile(shpPath, header, 0o644); err != nil {
 		t.Fatalf("Failed to write shapefile: %v", err)
 	}
 
@@ -1326,7 +1326,7 @@ func TestLoadGeoJSONReadError(t *testing.T) {
 
 	// Try to read a directory as a file - this should fail on ReadFile
 	dirPath := filepath.Join(tmpDir, "subdir")
-	if err := os.Mkdir(dirPath, 0755); err != nil {
+	if err := os.Mkdir(dirPath, 0o755); err != nil {
 		t.Fatalf("Failed to create directory: %v", err)
 	}
 

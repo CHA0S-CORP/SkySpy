@@ -233,6 +233,10 @@ function MapView({
   positionsRef = null,
   positionSocketConnected = false,
 }) {
+  // Use feeder location or default - defined early for use in hooks below
+  const feederLat = feederLocation?.lat || 47.9377;
+  const feederLon = feederLocation?.lon || -121.9687;
+
   const [selectedAircraft, setSelectedAircraft] = useState(null);
   const [selectedMetar, setSelectedMetar] = useState(null);
   const [selectedPirep, setSelectedPirep] = useState(null);
@@ -692,10 +696,6 @@ function MapView({
   const alarmAudioRef = useRef(null); // Audio element for conflict alarm
   const alarmPlayingRef = useRef(false); // Track if alarm is currently playing
   const alarmIntervalRef = useRef(null); // Interval for looping alarm
-
-  // Use feeder location or default
-  const feederLat = feederLocation?.lat || 47.9377;
-  const feederLon = feederLocation?.lon || -121.9687;
 
   // Refs to access latest feeder location in event handlers
   const feederLatRef = useRef(feederLat);

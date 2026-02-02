@@ -10,7 +10,7 @@ Uses the comprehensive stats_cache service for:
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from celery import shared_task
 from django.core.cache import cache
@@ -251,41 +251,24 @@ def calculate_daily_stats():
     """
     Calculate daily statistics for reporting.
 
+    Uses GamificationService to calculate and persist stats to the DailyStats model.
     Generates:
     - Daily aircraft counts
     - Peak traffic times
     - Military activity
     - Coverage statistics
+    - Aircraft type and operator breakdowns
     """
+    from skyspy.services.gamification import GamificationService
+
     today = timezone.now().date()
     yesterday = today - timedelta(days=1)
 
-    # Get yesterday's sightings
-    start = datetime.combine(yesterday, datetime.min.time())
-    end = datetime.combine(today, datetime.min.time())
+    # Use GamificationService to calculate and persist stats
+    service = GamificationService()
+    service.update_daily_stats(for_date=yesterday)
 
-    sightings = AircraftSighting.objects.filter(timestamp__gte=start, timestamp__lt=end)
-
-    sessions = AircraftSession.objects.filter(last_seen__gte=start, last_seen__lt=end)
-
-    stats = {
-        "date": yesterday.isoformat(),
-        "total_sightings": sightings.count(),
-        "unique_aircraft": sightings.values("icao_hex").distinct().count(),
-        "total_sessions": sessions.count(),
-        "military_sessions": sessions.filter(is_military=True).count(),
-        "max_concurrent": 0,  # Would need more complex calculation
-        "avg_distance": round(sightings.aggregate(Avg("distance_nm"))["distance_nm__avg"] or 0, 1),
-        "max_distance": sightings.aggregate(Max("distance_nm"))["distance_nm__max"] or 0,
-    }
-
-    # Store in cache for quick retrieval
-    cache_key = f"daily_stats_{yesterday.isoformat()}"
-    cache.set(cache_key, stats, timeout=86400 * 7)  # Keep for 7 days
-
-    logger.info(f"Daily stats for {yesterday}: {stats['unique_aircraft']} aircraft")
-
-    return stats
+    logger.info(f"Daily stats calculated and persisted for {yesterday}")
 
 
 @shared_task
@@ -676,7 +659,7 @@ def update_favorite_tracking():
 
     Runs every 5 minutes.
     """
-    from skyspy.models import AircraftFavorite, AircraftSession
+    from skyspy.models import AircraftFavorite
 
     try:
         cutoff = timezone.now() - timedelta(minutes=5)

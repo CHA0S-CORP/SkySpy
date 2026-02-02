@@ -1002,4 +1002,3 @@ func TestMsgCmdFunctions(t *testing.T) {
 		t.Error("acarsMsgCmd should return non-nil command")
 	}
 }
-

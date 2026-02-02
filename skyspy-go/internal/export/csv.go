@@ -27,7 +27,7 @@ func ExportAircraft(aircraft map[string]*radar.Target, directory string) (string
 
 	file, err := os.Create(filename)
 	if err != nil {
-		if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
 			return "", fmt.Errorf("failed to create directory: %w", err)
 		}
 		file, err = os.Create(filename)
@@ -95,7 +95,7 @@ func ExportAircraft(aircraft map[string]*radar.Target, directory string) (string
 func ExportAircraftToFile(aircraft map[string]*radar.Target, filename string) error {
 	file, err := os.Create(filename)
 	if err != nil {
-		if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
 			return fmt.Errorf("failed to create directory: %w", err)
 		}
 		file, err = os.Create(filename)
@@ -165,7 +165,7 @@ func ExportACARSMessages(messages []ACARSMessage, directory string) (string, err
 
 	file, err := os.Create(filename)
 	if err != nil {
-		if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
 			return "", fmt.Errorf("failed to create directory: %w", err)
 		}
 		file, err = os.Create(filename)
@@ -216,7 +216,7 @@ func ExportACARSMessages(messages []ACARSMessage, directory string) (string, err
 func ExportACARSMessagesToFile(messages []ACARSMessage, filename string) error {
 	file, err := os.Create(filename)
 	if err != nil {
-		if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
 			return fmt.Errorf("failed to create directory: %w", err)
 		}
 		file, err = os.Create(filename)

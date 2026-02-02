@@ -613,9 +613,17 @@ def decode_message_text(text: str, label: str = None, libacars_data: dict = None
     return decoded
 
 
-def enrich_acars_message(msg: dict) -> dict:
+def enrich_acars_message(msg: dict, *, decode_text: bool = False) -> dict:
     """
     Enrich an ACARS message with decoded information.
+
+    Args:
+        msg: Raw ACARS message dict
+        decode_text: If True, decode message text with libacars (CPU-intensive).
+                     Set to False for fast ingestion (decoding done via Celery).
+
+    Returns:
+        Enriched message dict with airline and label info, optionally decoded text.
     """
     enriched = dict(msg)
 
@@ -643,19 +651,20 @@ def enrich_acars_message(msg: dict) -> dict:
     else:
         enriched["label_info"] = None
 
-    # Decode text content
-    text = msg.get("text")
-    libacars_data = msg.get("libacars")
-    if text:
-        # Get message direction if available (1=uplink/air-to-ground, 2=downlink/ground-to-air)
-        direction = 0
-        if msg.get("fromaddr"):
-            direction = 1  # Air-to-ground (has sender address)
-        elif msg.get("toaddr"):
-            direction = 2  # Ground-to-air (has recipient address)
+    # Decode text content (optional - can be deferred to Celery)
+    if decode_text:
+        text = msg.get("text")
+        libacars_data = msg.get("libacars")
+        if text:
+            # Get message direction if available (1=uplink/air-to-ground, 2=downlink/ground-to-air)
+            direction = 0
+            if msg.get("fromaddr"):
+                direction = 1  # Air-to-ground (has sender address)
+            elif msg.get("toaddr"):
+                direction = 2  # Ground-to-air (has recipient address)
 
-        decoded_text = decode_message_text(text, label, libacars_data, direction)
-        if decoded_text:
-            enriched["decoded_text"] = decoded_text
+            decoded_text = decode_message_text(text, label, libacars_data, direction)
+            if decoded_text:
+                enriched["decoded_text"] = decoded_text
 
     return enriched

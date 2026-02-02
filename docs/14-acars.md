@@ -54,7 +54,7 @@ SkySpy receives, decodes, stores, and displays real-time **ACARS** (Aircraft Com
 
 > ⚡ **Real-time Streaming**
 >
-> WebSocket-based live message delivery to connected clients
+> Socket.IO-based live message delivery to connected clients
 
 > 🏷️ **Message Enrichment**
 >

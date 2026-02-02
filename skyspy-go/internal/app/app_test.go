@@ -265,7 +265,7 @@ func TestModel_HandleAircraftNew(t *testing.T) {
 	// Send new aircraft message
 	newAircraft := ws.Aircraft{
 		Hex:      "NEW789",
-		Flight:  "NEWFL01",
+		Flight:   "NEWFL01",
 		Lat:      floatPtr(52.2),
 		Lon:      floatPtr(4.2),
 		AltBaro:  intPtr(28000),
@@ -3645,8 +3645,8 @@ func TestView_RenderTargetPanel_AllDataTypes(t *testing.T) {
 	// Create aircraft with all data types
 	m.aircraft["FULL"] = &radar.Target{
 		Hex:      "FULL",
-		Callsign: "",    // Empty to test default
-		ACType:   "",    // Empty
+		Callsign: "", // Empty to test default
+		ACType:   "", // Empty
 		HasAlt:   true,
 		Altitude: 20000, // FL200
 		HasSpeed: true,
@@ -4094,7 +4094,7 @@ func TestView_RenderTargetList_AllBranches(t *testing.T) {
 	}
 	m.aircraft["A2"] = &radar.Target{
 		Hex:      "A2",
-		Callsign: "",       // No callsign - should show hex
+		Callsign: "", // No callsign - should show hex
 		HasAlt:   true,
 		Altitude: 500, // Low altitude
 		Distance: 0,   // No distance
@@ -4122,7 +4122,7 @@ func TestView_RenderACARSPanel_AllBranches(t *testing.T) {
 		{
 			Callsign: "LONGCALLSIGN1234", // Long callsign
 			Flight:   "",
-			Label:    "H1EXTRA", // Long label
+			Label:    "H1EXTRA",                // Long label
 			Text:     strings.Repeat("A", 100), // Long text
 		},
 		{
@@ -4192,7 +4192,7 @@ func TestView_RenderSearchPanel_AllBranches(t *testing.T) {
 		m.aircraft[hex] = &radar.Target{
 			Hex:      hex,
 			Callsign: "A" + strings.Repeat(string(rune('A'+i)), 10), // Long callsign
-			HasAlt:   false, // No altitude
+			HasAlt:   false,                                         // No altitude
 		}
 	}
 
@@ -4843,7 +4843,7 @@ func TestModel_NewModel_WithValidOverlayFile(t *testing.T) {
 		]
 	}`
 
-	err := os.WriteFile(geojsonPath, []byte(geojsonContent), 0644)
+	err := os.WriteFile(geojsonPath, []byte(geojsonContent), 0o644)
 	if err != nil {
 		t.Fatalf("failed to create temp geojson: %v", err)
 	}
@@ -4888,7 +4888,7 @@ func TestModel_NewModelWithAuth_WithValidOverlayFile(t *testing.T) {
 		]
 	}`
 
-	err := os.WriteFile(geojsonPath, []byte(geojsonContent), 0644)
+	err := os.WriteFile(geojsonPath, []byte(geojsonContent), 0o644)
 	if err != nil {
 		t.Fatalf("failed to create temp geojson: %v", err)
 	}
@@ -5473,7 +5473,7 @@ func TestModel_NewModelWithAuth_NoOverlayColor(t *testing.T) {
 		]
 	}`
 
-	err := os.WriteFile(geojsonPath, []byte(geojsonContent), 0644)
+	err := os.WriteFile(geojsonPath, []byte(geojsonContent), 0o644)
 	if err != nil {
 		t.Fatalf("failed to create temp geojson: %v", err)
 	}
@@ -5897,9 +5897,9 @@ func TestView_RenderACARSPanel_LongMessage(t *testing.T) {
 	// Add message with very long text
 	m.acarsMessages = []ACARSMessage{
 		{
-			Callsign: "LONGCS12345", // Long callsign
-			Flight:   "LONGFL12345", // Long flight
-			Label:    "LONGLAB",     // Long label
+			Callsign: "LONGCS12345",            // Long callsign
+			Flight:   "LONGFL12345",            // Long flight
+			Label:    "LONGLAB",                // Long label
 			Text:     strings.Repeat("X", 200), // Very long text
 		},
 	}

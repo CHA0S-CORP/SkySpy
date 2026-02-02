@@ -295,7 +295,7 @@ func TestLoad_ValidFile(t *testing.T) {
 		t.Fatalf("Failed to marshal config: %v", err)
 	}
 
-	if err := os.WriteFile(ConfigFile, data, 0644); err != nil {
+	if err := os.WriteFile(ConfigFile, data, 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -335,7 +335,7 @@ func TestLoad_InvalidJSON(t *testing.T) {
 	}()
 
 	// Write invalid JSON
-	if err := os.WriteFile(ConfigFile, []byte("invalid json {{{"), 0644); err != nil {
+	if err := os.WriteFile(ConfigFile, []byte("invalid json {{{"), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -371,7 +371,7 @@ func TestLoad_UnreadableFile(t *testing.T) {
 
 	// Create a directory with the same name as the config file
 	// This will make ReadFile fail
-	if err := os.Mkdir(ConfigFile, 0755); err != nil {
+	if err := os.Mkdir(ConfigFile, 0o755); err != nil {
 		t.Fatalf("Failed to create directory: %v", err)
 	}
 
@@ -484,12 +484,12 @@ func TestSave_WriteFileError(t *testing.T) {
 	ConfigFile = filepath.Join(ConfigDir, "settings.json")
 
 	// Create the directory structure first
-	if err := os.MkdirAll(ConfigDir, 0755); err != nil {
+	if err := os.MkdirAll(ConfigDir, 0o755); err != nil {
 		t.Fatalf("Failed to create config dir: %v", err)
 	}
 
 	// Create a directory where the file should be - this will cause WriteFile to fail
-	if err := os.MkdirAll(ConfigFile, 0755); err != nil {
+	if err := os.MkdirAll(ConfigFile, 0o755); err != nil {
 		t.Fatalf("Failed to create blocking dir: %v", err)
 	}
 
@@ -626,9 +626,9 @@ func TestConfigStructs_JSON(t *testing.T) {
 			},
 			Geofences: []GeofenceConfig{
 				{
-					ID:          "geo1",
-					Name:        "Test Geofence",
-					Type:        "polygon",
+					ID:   "geo1",
+					Name: "Test Geofence",
+					Type: "polygon",
 					Points: []GeofencePointConfig{
 						{Lat: 37.0, Lon: -122.0},
 						{Lat: 38.0, Lon: -122.0},

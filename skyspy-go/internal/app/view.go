@@ -449,9 +449,9 @@ func (m *Model) renderFreqPanel() string {
 	sb.WriteString("\n")
 
 	freqs := []struct {
-		freq   string
-		label  string
-		style  lipgloss.Style
+		freq  string
+		label string
+		style lipgloss.Style
 	}{
 		{"1090.000", "ADS-B", successStyle},
 		{"136.900", "ACARS", infoStyle},
@@ -485,7 +485,7 @@ func (m *Model) renderACARSPanel() string {
 
 	var sb strings.Builder
 
-	sb.WriteString(borderStyle.Render("╭─") + infoStyle.Render("ACARS") + borderStyle.Render(strings.Repeat("─", 87) + "╮"))
+	sb.WriteString(borderStyle.Render("╭─") + infoStyle.Render("ACARS") + borderStyle.Render(strings.Repeat("─", 87)+"╮"))
 	sb.WriteString("\n")
 
 	// Show last 3 messages

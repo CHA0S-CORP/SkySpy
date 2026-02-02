@@ -23,7 +23,7 @@ SkysPy provides a powerful **dual-layer** alert and monitoring system:
 | **Automated Safety Monitoring** | Real-time detection of dangerous flight conditions, TCAS events, and emergency squawks |
 | **Custom Alert Rules** | User-defined rules with flexible conditions, scheduling, and multi-channel notifications |
 
-> Both systems integrate with **WebSocket streaming** for real-time notifications and support enterprise features including role-based access control, notification channels, and audit history.
+> Both systems integrate with **Socket.IO streaming** for real-time notifications and support enterprise features including role-based access control, notification channels, and audit history.
 
 ---
 
@@ -41,7 +41,7 @@ flowchart LR
     B --> E[📉 Extreme VS]
     B --> F[✈️ Proximity Conflict]
     C & D & E & F --> G[🔔 Alert Dispatch]
-    G --> H[📱 WebSocket]
+    G --> H[📱 Socket.IO]
     G --> I[📧 Notifications]
 ```
 
@@ -504,7 +504,7 @@ The cooldown system prevents alert spam:
 
 ### Viewing Alert History
 
-Alert history is accessible via API and WebSocket, with filtering by:
+Alert history is accessible via API and Socket.IO, with filtering by:
 
 - Time range (hours)
 - Severity/priority
@@ -758,73 +758,75 @@ Response:
 
 ---
 
-## WebSocket Alert Streaming
+## Socket.IO Alert Streaming
 
 ### Connection
 
-Connect to the alerts WebSocket endpoint:
+Connect to the alerts Socket.IO namespace:
 
-```
-wss://your-skyspy-instance/ws/alerts/
+```javascript
+import { io } from 'socket.io-client';
+
+const socket = io('https://your-skyspy-instance/alerts', {
+  path: '/socket.io/',
+  transports: ['websocket', 'polling']
+});
 ```
 
 ---
 
-### Message Types
+### Event Types
 
 #### Subscribe
 
-```json
-{
-  "type": "subscribe",
-  "topic": "alerts"
-}
+```javascript
+socket.emit('subscribe', { topic: 'alerts' });
 ```
 
 #### Alert Triggered
 
-```json
-{
-  "type": "alert:triggered",
-  "data": {
-    "rule_id": 123,
-    "rule_name": "Military Aircraft",
-    "icao": "AE1234",
-    "callsign": "RCH123",
-    "message": "Alert 'Military Aircraft' triggered for RCH123",
-    "priority": "warning",
-    "aircraft": { },
-    "timestamp": "2024-01-15T10:30:00Z"
-  }
-}
+```javascript
+socket.on('alert:triggered', (data) => {
+  console.log(data);
+  // {
+  //   "rule_id": 123,
+  //   "rule_name": "Military Aircraft",
+  //   "icao": "AE1234",
+  //   "callsign": "RCH123",
+  //   "message": "Alert 'Military Aircraft' triggered for RCH123",
+  //   "priority": "warning",
+  //   "aircraft": { },
+  //   "timestamp": "2024-01-15T10:30:00Z"
+  // }
+});
 ```
 
 #### Safety Event
 
-```json
-{
-  "type": "safety_event",
-  "data": {
-    "event_type": "tcas_ra",
-    "severity": "critical",
-    "icao_hex": "ABC123",
-    "message": "TCAS RA suspected: ...",
-    "timestamp": "2024-01-15T10:30:00Z"
-  }
-}
+```javascript
+socket.on('safety_event', (data) => {
+  console.log(data);
+  // {
+  //   "event_type": "tcas_ra",
+  //   "severity": "critical",
+  //   "icao_hex": "ABC123",
+  //   "message": "TCAS RA suspected: ...",
+  //   "timestamp": "2024-01-15T10:30:00Z"
+  // }
+});
 ```
 
 #### Snapshot
 
-```json
-{
-  "type": "alert:snapshot",
-  "data": {
-    "alerts": [],
-    "count": 20,
-    "timestamp": "2024-01-15T10:30:00Z"
-  }
-}
+```javascript
+socket.on('alert:snapshot', (data) => {
+  console.log(data);
+  // {
+  //   "alerts": [],
+  //   "count": 20,
+  //   "timestamp": "2024-01-15T10:30:00Z"
+  // }
+});
 ```
 
 ---
@@ -833,27 +835,28 @@ wss://your-skyspy-instance/ws/alerts/
 
 **Request:**
 
-```json
-{
-  "type": "request",
-  "request_id": "req-123",
-  "request_type": "alerts",
-  "params": {
-    "hours": 24,
-    "limit": 50
+```javascript
+socket.emit('request', {
+  request_id: 'req-123',
+  request_type: 'alerts',
+  params: {
+    hours: 24,
+    limit: 50
   }
-}
+});
 ```
 
 **Response:**
 
-```json
-{
-  "type": "response",
-  "request_id": "req-123",
-  "request_type": "alerts",
-  "data": []
-}
+```javascript
+socket.on('response', (data) => {
+  console.log(data);
+  // {
+  //   "request_id": "req-123",
+  //   "request_type": "alerts",
+  //   "data": []
+  // }
+});
 ```
 
 ---
@@ -1254,6 +1257,6 @@ GET /api/v1/alerts/rules/metrics/
 
 ## Related Documentation
 
-- [WebSocket Integration Guide](./websocket-guide.md)
+- [Socket.IO Integration Guide](./06-socketio-api.md)
 - [API Authentication](./authentication.md)
 - [Deployment Guide](./deployment.md)

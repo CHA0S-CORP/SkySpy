@@ -283,8 +283,8 @@ class AcarsService:
                     with self._stats_lock:
                         self._frequency_counts[freq_mhz] += 1
 
-                # Enrich message with airline and label info
-                enriched = enrich_acars_message(normalized)
+                # Enrich message with airline and label info (skip text decode - done via Celery)
+                enriched = enrich_acars_message(normalized, decode_text=False)
 
                 # Update statistics
                 with self._stats_lock:
@@ -468,8 +468,12 @@ class AcarsService:
             logger.error(f"Error normalizing {source} message: {e}", exc_info=True)
             return None
 
-    async def _store_message(self, msg: dict):
-        """Store an ACARS message in the database."""
+    async def _store_message(self, msg: dict) -> int | None:
+        """Store an ACARS message in the database and queue for decoding.
+
+        Returns:
+            The message ID if stored successfully, None otherwise.
+        """
         from asgiref.sync import sync_to_async
 
         from skyspy.models import AcarsMessage
@@ -500,7 +504,7 @@ class AcarsService:
                     ack=msg.get("ack"),
                     mode=msg.get("mode"),
                     text=msg.get("text"),
-                    decoded=msg.get("decoded_text"),
+                    decoded=None,  # Decoded in background via Celery
                     signal_level=msg.get("signal_level"),
                     error_count=msg.get("error_count"),
                     station_id=msg.get("station_id"),
@@ -512,8 +516,38 @@ class AcarsService:
                 f"flight={msg.get('callsign') or msg.get('registration') or 'N/A'}"
             )
 
+            # Queue for libacars decoding in background
+            self._queue_decode_task(record.id, msg.get("label"))
+
+            return record.id
+
         except Exception as e:
             logger.error(f"Error storing ACARS message: {e}", exc_info=True)
+            return None
+
+    def _queue_decode_task(self, message_id: int, label: str | None):
+        """Queue a Celery task to decode the message with libacars.
+
+        Only queues for labels that can be meaningfully decoded.
+        """
+        # Labels that benefit from libacars/custom decoding
+        decodable_labels = {
+            "H1", "H2",  # FANS-1/A (ADS-C, CPDLC)
+            "SA", "S1", "S2",  # System address messages
+            "AA", "AB", "AC",  # ARINC 622 messages
+            "BA", "B1", "B2", "B3", "B4", "B5", "B6",  # Various airline formats
+            "_d", "2Z", "5Z",  # MIAM compressed messages
+            "10", "11", "12", "13", "80",  # OOOI events
+            "15", "16", "17",  # ETA/Departure/Arrival
+            "44", "QA", "QB", "QC", "QD", "QE", "QF",  # Weather
+        }
+
+        if label and label in decodable_labels:
+            try:
+                from skyspy.tasks.acars import decode_acars_message
+                decode_acars_message.delay(message_id)
+            except Exception as e:
+                logger.warning(f"Failed to queue decode task for message {message_id}: {e}")
 
     async def _broadcast_message(self, msg: dict):
         """Broadcast ACARS message to WebSocket clients via Socket.IO."""

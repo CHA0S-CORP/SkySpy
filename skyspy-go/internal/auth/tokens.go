@@ -57,7 +57,7 @@ func NewFileTokenStore() (*FileTokenStore, error) {
 	}
 
 	dir := filepath.Join(homeDir, ".config", "skyspy", "credentials")
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
 
@@ -105,7 +105,7 @@ func (s *FileTokenStore) Save(host string, tokens *TokenSet) error {
 	}
 
 	filename := filepath.Join(s.dir, hostToFilename(host))
-	return os.WriteFile(filename, encrypted, 0600)
+	return os.WriteFile(filename, encrypted, 0o600)
 }
 
 // Load retrieves tokens for a host

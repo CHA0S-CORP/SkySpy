@@ -9,9 +9,9 @@ import (
 
 // Config directories and files
 var (
-	ConfigDir    string
-	ConfigFile   string
-	OverlaysDir  string
+	ConfigDir   string
+	ConfigFile  string
+	OverlaysDir string
 )
 
 func init() {
@@ -23,17 +23,17 @@ func init() {
 
 // DisplaySettings contains UI display options
 type DisplaySettings struct {
-	Theme          string `json:"theme"`
-	ShowLabels     bool   `json:"show_labels"`
-	ShowTrails     bool   `json:"show_trails"`
-	RefreshRate    int    `json:"refresh_rate"`
-	CompactMode    bool   `json:"compact_mode"`
-	ShowACARS      bool   `json:"show_acars"`
-	ShowTargetList bool   `json:"show_target_list"`
-	ShowVUMeters   bool   `json:"show_vu_meters"`
-	ShowSpectrum   bool   `json:"show_spectrum"`
-	ShowFrequencies bool  `json:"show_frequencies"`
-	ShowStatsPanel bool   `json:"show_stats_panel"`
+	Theme           string `json:"theme"`
+	ShowLabels      bool   `json:"show_labels"`
+	ShowTrails      bool   `json:"show_trails"`
+	RefreshRate     int    `json:"refresh_rate"`
+	CompactMode     bool   `json:"compact_mode"`
+	ShowACARS       bool   `json:"show_acars"`
+	ShowTargetList  bool   `json:"show_target_list"`
+	ShowVUMeters    bool   `json:"show_vu_meters"`
+	ShowSpectrum    bool   `json:"show_spectrum"`
+	ShowFrequencies bool   `json:"show_frequencies"`
+	ShowStatsPanel  bool   `json:"show_stats_panel"`
 }
 
 // RadarSettings contains radar scope options
@@ -49,12 +49,12 @@ type RadarSettings struct {
 
 // FilterSettings contains aircraft filter options
 type FilterSettings struct {
-	MilitaryOnly bool    `json:"military_only"`
-	MinAltitude  *int    `json:"min_altitude,omitempty"`
-	MaxAltitude  *int    `json:"max_altitude,omitempty"`
+	MilitaryOnly bool     `json:"military_only"`
+	MinAltitude  *int     `json:"min_altitude,omitempty"`
+	MaxAltitude  *int     `json:"max_altitude,omitempty"`
 	MinDistance  *float64 `json:"min_distance,omitempty"`
 	MaxDistance  *float64 `json:"max_distance,omitempty"`
-	HideGround   bool    `json:"hide_ground"`
+	HideGround   bool     `json:"hide_ground"`
 }
 
 // ConnectionSettings contains server connection options
@@ -165,17 +165,17 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Display: DisplaySettings{
-			Theme:          "classic",
-			ShowLabels:     true,
-			ShowTrails:     false,
-			RefreshRate:    10,
-			CompactMode:    false,
-			ShowACARS:      true,
-			ShowTargetList: true,
-			ShowVUMeters:   true,
-			ShowSpectrum:   true,
+			Theme:           "classic",
+			ShowLabels:      true,
+			ShowTrails:      false,
+			RefreshRate:     10,
+			CompactMode:     false,
+			ShowACARS:       true,
+			ShowTargetList:  true,
+			ShowVUMeters:    true,
+			ShowSpectrum:    true,
 			ShowFrequencies: true,
-			ShowStatsPanel: true,
+			ShowStatsPanel:  true,
 		},
 		Radar: RadarSettings{
 			DefaultRange: 100,
@@ -224,10 +224,10 @@ func DefaultConfig() *Config {
 
 // EnsureConfigDir creates config directories if they don't exist
 func EnsureConfigDir() error {
-	if err := os.MkdirAll(ConfigDir, 0755); err != nil {
+	if err := os.MkdirAll(ConfigDir, 0o755); err != nil {
 		return err
 	}
-	return os.MkdirAll(OverlaysDir, 0755)
+	return os.MkdirAll(OverlaysDir, 0o755)
 }
 
 // Load loads configuration from file or returns defaults
@@ -260,7 +260,7 @@ func Save(config *Config) error {
 		return err
 	}
 
-	return os.WriteFile(ConfigFile, data, 0644)
+	return os.WriteFile(ConfigFile, data, 0o644)
 }
 
 // GetConfigPath returns the config file path

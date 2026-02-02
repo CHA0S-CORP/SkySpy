@@ -15,16 +15,16 @@ import (
 
 // testServer provides a test WebSocket server for testing the client
 type testServer struct {
-	server       *httptest.Server
-	upgrader     websocket.Upgrader
-	connections  []*websocket.Conn
-	mu           sync.Mutex
-	lastHeaders  http.Header
-	messages     [][]byte
-	onConnect    func(*websocket.Conn)
-	onMessage    func(*websocket.Conn, []byte)
-	closeOnRead  bool
-	rejectAuth   bool
+	server      *httptest.Server
+	upgrader    websocket.Upgrader
+	connections []*websocket.Conn
+	mu          sync.Mutex
+	lastHeaders http.Header
+	messages    [][]byte
+	onConnect   func(*websocket.Conn)
+	onMessage   func(*websocket.Conn, []byte)
+	closeOnRead bool
+	rejectAuth  bool
 }
 
 func newTestServer() *testServer {

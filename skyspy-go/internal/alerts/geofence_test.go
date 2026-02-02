@@ -181,7 +181,7 @@ func TestLoadGeofencesFromFile(t *testing.T) {
 		{"id": "gf2", "name": "Test 2", "type": "polygon", "points": [{"lat": 0, "lon": 0}, {"lat": 0, "lon": 1}, {"lat": 1, "lon": 1}], "enabled": true}
 	]`
 
-	if err := os.WriteFile(tmpFile, []byte(jsonData), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte(jsonData), 0o644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -196,7 +196,7 @@ func TestLoadGeofencesFromFile(t *testing.T) {
 	// Test loading single geofence
 	singleFile := tmpDir + "/single.json"
 	singleJSON := `{"id": "single", "name": "Single", "type": "circle", "center": {"lat": 45.0, "lon": -93.0}, "radius_nm": 5.0, "enabled": true}`
-	if err := os.WriteFile(singleFile, []byte(singleJSON), 0644); err != nil {
+	if err := os.WriteFile(singleFile, []byte(singleJSON), 0o644); err != nil {
 		t.Fatalf("Failed to write single test file: %v", err)
 	}
 
@@ -216,7 +216,7 @@ func TestLoadGeofencesFromFile(t *testing.T) {
 
 	// Test loading invalid JSON
 	invalidFile := tmpDir + "/invalid.json"
-	if err := os.WriteFile(invalidFile, []byte("not json"), 0644); err != nil {
+	if err := os.WriteFile(invalidFile, []byte("not json"), 0o644); err != nil {
 		t.Fatalf("Failed to write invalid test file: %v", err)
 	}
 	_, err = LoadGeofencesFromFile(invalidFile)
@@ -265,7 +265,7 @@ func TestLoadGeofenceFromGeoJSON(t *testing.T) {
 			}
 		}]
 	}`
-	if err := os.WriteFile(featureCollectionFile, []byte(featureCollectionJSON), 0644); err != nil {
+	if err := os.WriteFile(featureCollectionFile, []byte(featureCollectionJSON), 0o644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -289,7 +289,7 @@ func TestLoadGeofenceFromGeoJSON(t *testing.T) {
 			"coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]
 		}
 	}`
-	if err := os.WriteFile(featureFile, []byte(featureJSON), 0644); err != nil {
+	if err := os.WriteFile(featureFile, []byte(featureJSON), 0o644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -307,7 +307,7 @@ func TestLoadGeofenceFromGeoJSON(t *testing.T) {
 		"type": "Point",
 		"coordinates": [-93.0, 45.0]
 	}`
-	if err := os.WriteFile(pointFile, []byte(pointJSON), 0644); err != nil {
+	if err := os.WriteFile(pointFile, []byte(pointJSON), 0o644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -332,7 +332,7 @@ func TestLoadGeofenceFromGeoJSON(t *testing.T) {
 		"type": "Point",
 		"coordinates": [-93.0, 45.0]
 	}`
-	if err := os.WriteFile(namedFile, []byte(namedJSON), 0644); err != nil {
+	if err := os.WriteFile(namedFile, []byte(namedJSON), 0o644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -352,7 +352,7 @@ func TestLoadGeofenceFromGeoJSON(t *testing.T) {
 
 	// Test invalid JSON
 	invalidFile := tmpDir + "/invalid.geojson"
-	if err := os.WriteFile(invalidFile, []byte("not json"), 0644); err != nil {
+	if err := os.WriteFile(invalidFile, []byte("not json"), 0o644); err != nil {
 		t.Fatalf("Failed to write invalid test file: %v", err)
 	}
 	_, err = LoadGeofenceFromGeoJSON(invalidFile)
@@ -528,7 +528,7 @@ func TestLoadGeofencesFromFileWithTilde(t *testing.T) {
 	defer os.Unsetenv("TEST_GEOFENCE_DIR")
 
 	testFile := tmpDir + "/test.json"
-	if err := os.WriteFile(testFile, []byte(`[]`), 0644); err != nil {
+	if err := os.WriteFile(testFile, []byte(`[]`), 0o644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -558,7 +558,7 @@ func TestLoadGeofenceFromGeoJSONWithTilde(t *testing.T) {
 	defer os.Unsetenv("TEST_GEOFENCE_DIR")
 
 	testFile := tmpDir + "/test.geojson"
-	if err := os.WriteFile(testFile, []byte(`{"type": "Point", "coordinates": [0, 0]}`), 0644); err != nil {
+	if err := os.WriteFile(testFile, []byte(`{"type": "Point", "coordinates": [0, 0]}`), 0o644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -580,13 +580,13 @@ func TestLoadGeofencesFromFileWithTildeExpansion(t *testing.T) {
 
 	// Write a test file
 	testFile := tmpDir + "/geofences_test_tilde.json"
-	if err := os.WriteFile(testFile, []byte(`[]`), 0644); err != nil {
+	if err := os.WriteFile(testFile, []byte(`[]`), 0o644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
 	// Test tilde expansion by using the real home directory
 	homeTestFile := home + "/.skyspy_test_geofences.json"
-	if err := os.WriteFile(homeTestFile, []byte(`[]`), 0644); err != nil {
+	if err := os.WriteFile(homeTestFile, []byte(`[]`), 0o644); err != nil {
 		t.Fatalf("Failed to write home test file: %v", err)
 	}
 	defer os.Remove(homeTestFile)
@@ -624,7 +624,7 @@ func TestLoadGeofenceFromGeoJSONWithTildeExpansion(t *testing.T) {
 
 	// Test with tilde path
 	homeTestFile := home + "/.skyspy_test_geojson.json"
-	if err := os.WriteFile(homeTestFile, []byte(`{"type": "Point", "coordinates": [0, 0]}`), 0644); err != nil {
+	if err := os.WriteFile(homeTestFile, []byte(`{"type": "Point", "coordinates": [0, 0]}`), 0o644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 	defer os.Remove(homeTestFile)
@@ -651,7 +651,7 @@ func TestLoadGeofenceFromGeoJSONFeatureWithName(t *testing.T) {
 			}
 		}]
 	}`
-	if err := os.WriteFile(featureFile, []byte(featureJSON), 0644); err != nil {
+	if err := os.WriteFile(featureFile, []byte(featureJSON), 0o644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -686,11 +686,11 @@ func TestGetBoundingBoxPolygonAllBranches(t *testing.T) {
 	// Create polygon that exercises all min/max branches
 	// First point at (2, 2), then points below, above, left, right
 	gf := NewPolygonGeofence("test", "Test", []GeofencePoint{
-		{Lat: 2.0, Lon: 2.0},   // Starting point
-		{Lat: 1.0, Lon: 2.0},   // p.Lat < minLat
-		{Lat: 3.0, Lon: 2.0},   // p.Lat > maxLat
-		{Lat: 2.0, Lon: 1.0},   // p.Lon < minLon
-		{Lat: 2.0, Lon: 3.0},   // p.Lon > maxLon
+		{Lat: 2.0, Lon: 2.0}, // Starting point
+		{Lat: 1.0, Lon: 2.0}, // p.Lat < minLat
+		{Lat: 3.0, Lon: 2.0}, // p.Lat > maxLat
+		{Lat: 2.0, Lon: 1.0}, // p.Lon < minLon
+		{Lat: 2.0, Lon: 3.0}, // p.Lon > maxLon
 	})
 
 	minLat, minLon, maxLat, maxLon := gf.GetBoundingBox()

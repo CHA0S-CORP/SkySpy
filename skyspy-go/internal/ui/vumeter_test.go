@@ -56,10 +56,10 @@ func TestVUMeter_SetValue(t *testing.T) {
 		{0.0, 0.0},
 		{0.5, 0.5},
 		{1.0, 1.0},
-		{-0.5, 0.0},  // Should clamp to 0
-		{1.5, 1.0},   // Should clamp to 1
-		{-100, 0.0},  // Should clamp to 0
-		{100, 1.0},   // Should clamp to 1
+		{-0.5, 0.0}, // Should clamp to 0
+		{1.5, 1.0},  // Should clamp to 1
+		{-100, 0.0}, // Should clamp to 0
+		{100, 1.0},  // Should clamp to 1
 	}
 
 	for _, tc := range testCases {
@@ -121,11 +121,11 @@ func TestVUMeter_RenderHorizontal_Clamping(t *testing.T) {
 		level    float64
 		expected int
 	}{
-		{-1.0, 0},   // Below 0 should clamp to 0
+		{-1.0, 0}, // Below 0 should clamp to 0
 		{-0.5, 0},
 		{0.0, 0},
 		{1.0, 10},
-		{1.5, 10},   // Above 1 should clamp to 1
+		{1.5, 10}, // Above 1 should clamp to 1
 		{10.0, 10},
 	}
 
@@ -259,14 +259,14 @@ func TestSignalMeter_Render(t *testing.T) {
 		rssi         float64
 		expectedBars int
 	}{
-		{0, 5},      // Very strong
-		{-2, 5},     // Still 5 bars
-		{-5, 4},     // 4 bars
-		{-10, 3},    // 3 bars
-		{-15, 2},    // 2 bars
-		{-20, 1},    // 1 bar
-		{-30, 0},    // No bars
-		{-50, 0},    // Very weak
+		{0, 5},   // Very strong
+		{-2, 5},  // Still 5 bars
+		{-5, 4},  // 4 bars
+		{-10, 3}, // 3 bars
+		{-15, 2}, // 2 bars
+		{-20, 1}, // 1 bar
+		{-30, 0}, // No bars
+		{-50, 0}, // Very weak
 	}
 
 	for _, tc := range testCases {
@@ -301,8 +301,8 @@ func TestSignalMeter_RenderFromLevel(t *testing.T) {
 		{0.6, 3},
 		{0.8, 4},
 		{1.0, 5},
-		{-0.5, 0},  // Clamped
-		{1.5, 5},   // Clamped
+		{-0.5, 0}, // Clamped
+		{1.5, 5},  // Clamped
 	}
 
 	for _, tc := range testCases {
@@ -560,13 +560,13 @@ func TestSignalMeter_Render_AllLevels(t *testing.T) {
 		rssi         float64
 		expectedBars int
 	}{
-		{0, 5},    // Very strong: >-3 = 5 bars
-		{-3, 4},   // Strong: >-6 = 4 bars
-		{-6, 3},   // Good: >-12 = 3 bars
-		{-12, 2},  // Fair: >-18 = 2 bars
-		{-18, 1},  // Weak: >-24 = 1 bar
-		{-24, 0},  // Very weak: 0 bars
-		{-50, 0},  // No signal: 0 bars
+		{0, 5},   // Very strong: >-3 = 5 bars
+		{-3, 4},  // Strong: >-6 = 4 bars
+		{-6, 3},  // Good: >-12 = 3 bars
+		{-12, 2}, // Fair: >-18 = 2 bars
+		{-18, 1}, // Weak: >-24 = 1 bar
+		{-24, 0}, // Very weak: 0 bars
+		{-50, 0}, // No signal: 0 bars
 	}
 
 	for _, tc := range testCases {

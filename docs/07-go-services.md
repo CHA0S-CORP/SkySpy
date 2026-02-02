@@ -18,7 +18,7 @@ SkySpy includes a lightning-fast Go-based CLI application (`skyspy-go`) that del
 
 ## 🎯 Overview
 
-The SkySpy Go CLI is a feature-rich terminal application built using the [Bubble Tea](https://github.com/charmbracelet/bubbletea) framework. It connects to the Django backend via WebSocket to receive real-time aircraft data and presents it in an interactive radar display with VU meters, spectrum visualization, and customizable themes.
+The SkySpy Go CLI is a feature-rich terminal application built using the [Bubble Tea](https://github.com/charmbracelet/bubbletea) framework. It connects to the Django backend via Socket.IO to receive real-time aircraft data and presents it in an interactive radar display with VU meters, spectrum visualization, and customizable themes.
 
 > 📘 **Built with Bubble Tea**
 >
@@ -99,23 +99,23 @@ graph TB
         end
 
         subgraph Network["Network Layer"]
-            WS[🔌 WebSocket Client]
+            SIO[🔌 Socket.IO Client]
         end
     end
 
     subgraph Backend["☁️ Django Backend"]
-        AC["/ws/aircraft/"]
-        AR["/ws/acars/"]
+        AC["/aircraft namespace"]
+        AR["/acars namespace"]
     end
 
-    RS --> WS
-    SA --> WS
-    VU --> WS
-    AE --> WS
-    GF --> WS
-    TT --> WS
-    WS --> AC
-    WS --> AR
+    RS --> SIO
+    SA --> SIO
+    VU --> SIO
+    AE --> SIO
+    GF --> SIO
+    TT --> SIO
+    SIO --> AC
+    SIO --> AR
 
     style CLI fill:#1a1a2e,stroke:#16213e,color:#fff
     style Backend fill:#0f3460,stroke:#16213e,color:#fff
@@ -191,7 +191,7 @@ skyspy-go/
 │   │   ├── vumeter.go          # VU meter rendering
 │   │   └── spectrum.go         # Spectrum display
 │   │
-│   ├── 📂 ws/                  # WebSocket client
+│   ├── 📂 ws/                  # Socket.IO client
 │   │   └── client.go           # Connection and message handling
 │   │
 │   └── 📂 testutil/            # Test utilities
@@ -205,9 +205,9 @@ skyspy-go/
 
 ## 🔧 Core Components
 
-### 1. 🔌 WebSocket Client (`internal/ws`)
+### 1. 🔌 Socket.IO Client (`internal/ws`)
 
-The WebSocket client maintains persistent connections to the Django backend for real-time data streaming.
+The Socket.IO client maintains persistent connections to the Django backend for real-time data streaming.
 
 > ℹ️ **Message Types**
 >
@@ -228,12 +228,12 @@ const (
 **Connection Configuration:**
 
 ```go
-// Creating a WebSocket client with authentication
+// Creating a Socket.IO client with authentication
 client := ws.NewClientWithAuth(
     host,           // Server hostname
     port,           // Server port
     reconnectDelay, // Seconds between reconnection attempts
-    authProvider,   // Function returning auth header
+    authProvider,   // Function returning auth token
 )
 
 // Start the connection (non-blocking)
@@ -247,14 +247,18 @@ for msg := range client.AircraftMessages() {
 
 **Authentication Support:**
 
-The client supports both OIDC tokens and API keys via the `Sec-WebSocket-Protocol` header:
+The client supports both OIDC tokens and API keys via Socket.IO auth parameters:
 
 ```go
 // Bearer token authentication
-header.Set("Sec-WebSocket-Protocol", "Bearer, "+token)
+authData := map[string]interface{}{
+    "token": token,
+}
 
 // API key authentication
-header.Set("Sec-WebSocket-Protocol", "ApiKey, "+apiKey)
+authData := map[string]interface{}{
+    "token": apiKey,
+}
 ```
 
 ---
@@ -587,26 +591,26 @@ removed := tracker.Cleanup()
 
 ## 🔗 Django Backend Integration
 
-### WebSocket Endpoints
+### Socket.IO Namespaces
 
-The Go CLI connects to two WebSocket endpoints on the Django backend:
+The Go CLI connects to Socket.IO namespaces on the Django backend:
 
 ```mermaid
 sequenceDiagram
     participant CLI as 🖥️ Go CLI
-    participant WS as 🔌 WebSocket
+    participant SIO as 🔌 Socket.IO
     participant Django as ☁️ Django Backend
 
-    CLI->>WS: Connect to /ws/aircraft/
-    CLI->>WS: Connect to /ws/acars/
-    WS->>Django: Establish connection
-    Django-->>WS: Connection acknowledged
-    CLI->>WS: Subscribe to topics
+    CLI->>SIO: Connect to /aircraft namespace
+    CLI->>SIO: Connect to /acars namespace
+    SIO->>Django: Establish connection
+    Django-->>SIO: Connection acknowledged
+    CLI->>SIO: Subscribe to topics
     loop Real-time Updates
-        Django-->>WS: aircraft:update
-        WS-->>CLI: Aircraft data
-        Django-->>WS: acars:message
-        WS-->>CLI: ACARS data
+        Django-->>SIO: aircraft:update
+        SIO-->>CLI: Aircraft data
+        Django-->>SIO: acars:message
+        SIO-->>CLI: ACARS data
     end
 ```
 

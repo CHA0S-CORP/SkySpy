@@ -40,7 +40,7 @@ flowchart TB
 |-------|-----------|----------|---------|
 | **Unit Tests** | pytest + pytest-django | `skyspy_django/skyspy/tests/` | Test individual functions, methods, and classes |
 | **Integration Tests** | pytest + pytest-asyncio | `skyspy_django/skyspy/tests/` | Test component interactions and data flow |
-| **Backend E2E** | pytest + Django Channels | `skyspy_django/skyspy/tests/e2e/` | Test WebSocket consumers and real-time features |
+| **Backend E2E** | pytest + Django Channels | `skyspy_django/skyspy/tests/e2e/` | Test Socket.IO consumers and real-time features |
 | **Frontend E2E** | Playwright | `web/e2e/` | Test user workflows in the browser |
 
 ### Coverage Targets
@@ -70,7 +70,7 @@ skyspy_django/skyspy/tests/
 ├── e2e/
 │   ├── conftest.py               # E2E-specific fixtures
 │   ├── test_e2e_stats.py         # Statistics E2E tests
-│   └── test_e2e_websocket.py     # WebSocket E2E tests
+│   └── test_e2e_websocket.py     # Socket.IO E2E tests
 ├── test_api_*.py                 # REST API endpoint tests
 ├── test_consumers_*.py           # WebSocket consumer tests
 ├── test_services_*.py            # Business logic/service tests
@@ -97,10 +97,10 @@ web/e2e/
 | Pattern | Description | Example |
 |---------|-------------|---------|
 | `test_api_*.py` | API endpoint tests | `test_api_aircraft.py` |
-| `test_consumers_*.py` | WebSocket consumer tests | `test_consumers_aircraft.py` |
+| `test_consumers_*.py` | Socket.IO consumer tests | `test_consumers_aircraft.py` |
 | `test_services_*.py` | Service layer tests | `test_services_alerts.py` |
 | `test_tasks_*.py` | Celery task tests | `test_tasks_airspace.py` |
-| `test_e2e_*.py` | Backend E2E tests | `test_e2e_websocket.py` |
+| `test_e2e_*.py` | Backend E2E tests | `test_e2e_socket_io.py` |
 | `*.spec.js` | Frontend E2E tests | `map.spec.js` |
 
 ---
@@ -169,9 +169,9 @@ pytest skyspy/tests/test_integration.py -v --asyncio-mode=auto
 
 ### E2E Tests
 
-> **Backend E2E (WebSocket/Channels)**
+> **Backend E2E (Socket.IO/Channels)**
 >
-> Tests real-time WebSocket functionality and Django Channels consumers.
+> Tests real-time Socket.IO functionality and Django Channels consumers.
 
 **All Backend E2E:**
 
@@ -182,7 +182,7 @@ pytest skyspy/tests/e2e/ -v
 **Specific E2E Test:**
 
 ```bash
-pytest skyspy/tests/e2e/test_e2e_websocket.py::test_aircraft_position_updates -v
+pytest skyspy/tests/e2e/test_e2e_socket_io.py::test_aircraft_position_updates -v
 ```
 
 > **Frontend E2E (Playwright)**
@@ -259,16 +259,16 @@ def authenticated_client(api_client, user):
     return api_client
 ```
 
-> **WebSocket Fixtures**
+> **Socket.IO Fixtures**
 >
-> Enable testing of real-time WebSocket functionality.
+> Enable testing of real-time Socket.IO functionality.
 
 ```python
 @pytest.fixture
 async def communicator(application):
-    """WebSocket communicator for testing consumers."""
+    """Socket.IO communicator for testing consumers."""
     from channels.testing import WebsocketCommunicator
-    communicator = WebsocketCommunicator(application, "/ws/aircraft/")
+    communicator = WebsocketCommunicator(application, "/socket.io/")
     connected, _ = await communicator.connect()
     assert connected
     yield communicator
@@ -449,13 +449,13 @@ export const test = base.extend({
         await use(mocks);
     },
 
-    // WebSocket mock
-    wsMock: async ({ page }, use) => {
-        const wsMock = new WebSocketMock();
-        await page.exposeFunction('__wsMockSend', (data) => {
-            wsMock.emit(JSON.parse(data));
+    // Socket.IO mock
+    socketMock: async ({ page }, use) => {
+        const socketMock = new SocketIOMock();
+        await page.exposeFunction('__socketMockEmit', (event, data) => {
+            socketMock.emit(event, data);
         });
-        await use(wsMock);
+        await use(socketMock);
     },
 
     // Helper utilities
@@ -576,12 +576,12 @@ test('displays aircraft list', async ({ page }) => {
 });
 ```
 
-> **WebSocket Mocking**
+> **Socket.IO Mocking**
 >
 > Simulate real-time updates in browser tests.
 
 ```javascript
-class WebSocketMock {
+class SocketIOMock {
     constructor() {
         this.handlers = new Map();
         this.messages = [];
@@ -591,32 +591,29 @@ class WebSocketMock {
         this.handlers.set(event, handler);
     }
 
-    emit(data) {
-        const handler = this.handlers.get('message');
-        if (handler) handler({ data: JSON.stringify(data) });
+    emit(event, data) {
+        const handler = this.handlers.get(event);
+        if (handler) handler(data);
     }
 
     send(data) {
-        this.messages.push(JSON.parse(data));
+        this.messages.push(data);
     }
 
     simulateAircraftUpdate(aircraft) {
-        this.emit({
-            type: 'aircraft.position',
-            payload: aircraft
-        });
+        this.emit('aircraft:update', aircraft);
     }
 }
 
-test('receives real-time aircraft updates', async ({ page, wsMock }) => {
+test('receives real-time aircraft updates', async ({ page, socketMock }) => {
     await page.goto('/');
 
-    // Simulate incoming WebSocket message
-    wsMock.simulateAircraftUpdate({
-        icao_hex: 'ABC123',
-        latitude: 40.7128,
-        longitude: -74.0060,
-        altitude: 35000
+    // Simulate incoming Socket.IO message
+    socketMock.simulateAircraftUpdate({
+        hex: 'ABC123',
+        lat: 40.7128,
+        lon: -74.0060,
+        alt_baro: 35000
     });
 
     await expect(page.locator('[data-aircraft-id="ABC123"]')).toBeVisible();
@@ -949,7 +946,7 @@ class TestAircraftAPI:
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 ```
 
-### Backend WebSocket Consumer Test Template
+### Backend Socket.IO Consumer Test Template
 
 ```python
 import pytest
@@ -958,11 +955,11 @@ from skyspy.channels.consumers.aircraft import AircraftConsumer
 
 @pytest.mark.asyncio
 class TestAircraftConsumer:
-    """Tests for the Aircraft WebSocket consumer."""
+    """Tests for the Aircraft Socket.IO consumer."""
 
     @pytest.fixture
     async def communicator(self, application):
-        communicator = WebsocketCommunicator(application, "/ws/aircraft/")
+        communicator = WebsocketCommunicator(application, "/socket.io/")
         connected, _ = await communicator.connect()
         assert connected
         yield communicator
@@ -972,18 +969,18 @@ class TestAircraftConsumer:
         """Test subscribing to aircraft updates."""
         await communicator.send_json_to({
             "type": "subscribe",
-            "channel": "aircraft.updates"
+            "topics": ["aircraft"]
         })
 
         response = await communicator.receive_json_from()
 
-        assert response["type"] == "subscription.confirmed"
+        assert response["type"] == "subscribed"
 
     async def test_receive_position_update(self, communicator):
         """Test receiving aircraft position updates."""
         await communicator.send_json_to({
             "type": "subscribe",
-            "channel": "aircraft.ABC123"
+            "topics": ["aircraft"]
         })
 
         # Simulate position update from channel layer
@@ -991,8 +988,8 @@ class TestAircraftConsumer:
 
         response = await communicator.receive_json_from(timeout=5)
 
-        assert response["type"] == "aircraft.position"
-        assert response["payload"]["icao_hex"] == "ABC123"
+        assert response["type"] == "aircraft:update"
+        assert response["data"]["hex"] == "ABC123"
 ```
 
 ### Frontend E2E Test Template
@@ -1103,7 +1100,7 @@ def test_needs_database():
     pass
 ```
 
-> **Warning: WebSocket Tests Timing Out**
+> **Warning: Socket.IO Tests Timing Out**
 >
 > Increase the timeout or check consumer connection logic
 

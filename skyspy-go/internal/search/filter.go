@@ -10,7 +10,7 @@ import (
 
 // Filter represents search/filter criteria for aircraft
 type Filter struct {
-	Query       string
+	Query        string
 	MilitaryOnly bool
 	MinAltitude  int
 	MaxAltitude  int
@@ -31,7 +31,7 @@ func PresetAllAircraft() *Filter {
 // PresetMilitaryOnly returns a filter for military aircraft only
 func PresetMilitaryOnly() *Filter {
 	return &Filter{
-		Query:       "mil",
+		Query:        "mil",
 		MilitaryOnly: true,
 	}
 }

@@ -53,24 +53,24 @@ type recordHeader struct {
 
 // dbfHeader represents the dBASE file header
 type dbfHeader struct {
-	Version      byte
-	Year         byte
-	Month        byte
-	Day          byte
-	RecordCount  uint32
-	HeaderSize   uint16
-	RecordSize   uint16
-	Reserved     [20]byte
+	Version     byte
+	Year        byte
+	Month       byte
+	Day         byte
+	RecordCount uint32
+	HeaderSize  uint16
+	RecordSize  uint16
+	Reserved    [20]byte
 }
 
 // dbfField represents a field descriptor in the dBASE file
 type dbfField struct {
-	Name          [11]byte
-	Type          byte
-	Reserved1     [4]byte
-	FieldLength   byte
-	DecimalCount  byte
-	Reserved2     [14]byte
+	Name         [11]byte
+	Type         byte
+	Reserved1    [4]byte
+	FieldLength  byte
+	DecimalCount byte
+	Reserved2    [14]byte
 }
 
 // ParseShapefile reads a shapefile and returns a GeoOverlay
