@@ -968,8 +968,6 @@ jobs:
     needs: [detect-changes, test-go, security-go]
     if: |
       always() &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') &&
       (needs.test-go.result == 'success' || needs.test-go.result == 'skipped') &&
       (needs.security-go.result == 'success' || needs.security-go.result == 'skipped')
     timeout-minutes: 20
