@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"sync"
 )
 
 // Config directories and files
@@ -13,17 +12,18 @@ var (
 	ConfigDir   string
 	ConfigFile  string
 	OverlaysDir string
-	configOnce  sync.Once
 )
 
-// initConfigPaths initializes the configuration paths
+func init() {
+	homeDir, _ := os.UserHomeDir()
+	ConfigDir = filepath.Join(homeDir, ".config", "skyspy")
+	ConfigFile = filepath.Join(ConfigDir, "settings.json")
+	OverlaysDir = filepath.Join(ConfigDir, "overlays")
+}
+
+// initConfigPaths is kept for backward compatibility
 func initConfigPaths() {
-	configOnce.Do(func() {
-		homeDir, _ := os.UserHomeDir()
-		ConfigDir = filepath.Join(homeDir, ".config", "skyspy")
-		ConfigFile = filepath.Join(ConfigDir, "settings.json")
-		OverlaysDir = filepath.Join(ConfigDir, "overlays")
-	})
+	// Paths are now initialized in init()
 }
 
 // ensurePathsInitialized ensures config paths are initialized

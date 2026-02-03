@@ -196,6 +196,7 @@ func MatchesWildcard(pattern, value string) bool {
 // ParseFloat parses a string to float64, returns 0 on error
 func ParseFloat(s string) float64 {
 	var result float64
+Loop:
 	for i := 0; i < len(s); i++ {
 		c := s[i]
 		switch {
@@ -218,7 +219,7 @@ func ParseFloat(s string) float64 {
 			// Negative number handled at end
 			continue
 		default:
-			break
+			break Loop
 		}
 	}
 

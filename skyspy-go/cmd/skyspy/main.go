@@ -55,9 +55,10 @@ Examples:
 	RunE: run,
 }
 
-// setupCommands initializes all command flags and subcommands.
+// SetupCommands initializes all command flags and subcommands.
 // This replaces init() to satisfy gochecknoinits linter.
-func setupCommands() {
+// Exported for testing.
+func SetupCommands() {
 	// Global flags (available to all commands)
 	rootCmd.PersistentFlags().StringVar(&host, "host", "", "Server hostname")
 	rootCmd.PersistentFlags().IntVar(&port, "port", 0, "Server port")
@@ -87,7 +88,7 @@ func setupCommands() {
 
 func main() {
 	// Initialize commands and flags
-	setupCommands()
+	SetupCommands()
 
 	// Check for API key in environment
 	if envKey := os.Getenv("SKYSPY_API_KEY"); envKey != "" && apiKey == "" {

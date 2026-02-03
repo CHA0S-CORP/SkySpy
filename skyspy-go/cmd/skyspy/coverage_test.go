@@ -12,6 +12,13 @@ import (
 	"github.com/skyspy/skyspy-go/internal/theme"
 )
 
+// TestMain sets up the test environment
+func TestMain(m *testing.M) {
+	// Initialize commands before running tests
+	SetupCommands()
+	os.Exit(m.Run())
+}
+
 // TestColorToANSI tests the colorToANSI function with all branches
 func TestColorToANSI(t *testing.T) {
 	tests := []struct {
