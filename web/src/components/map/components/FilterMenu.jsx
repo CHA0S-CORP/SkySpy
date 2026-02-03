@@ -27,7 +27,7 @@ export function FilterMenu({
   };
 
   return (
-    <div className="overlay-menu filter-menu" onClick={(e) => e.stopPropagation()}>
+    <aside className="overlay-menu filter-menu" aria-label="Traffic filters menu">
       <div className="overlay-menu-header">
         <span>Traffic Filters</span>
         <button onClick={() => setShowFilterMenu(false)}>
@@ -198,6 +198,6 @@ export function FilterMenu({
         <RefreshCw size={14} />
         <span>Reset Filters</span>
       </button>
-    </div>
+    </aside>
   );
 }

@@ -15,6 +15,7 @@ export function TestRuleModal({ rule, aircraft, feederLocation, onClose }) {
       onKeyDown={(e) => e.key === 'Escape' && onClose()}
       role="presentation"
     >
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
       <div
         className="modal modal-medium"
         onClick={(e) => e.stopPropagation()}

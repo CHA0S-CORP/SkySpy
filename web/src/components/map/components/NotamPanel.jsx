@@ -89,9 +89,9 @@ export function NotamPanel({
   const tfrCount = notams?.filter((n) => n.type === 'TFR').length || 0;
 
   return (
-    <div className="notam-panel pro-style" style={panelStyle}>
+    <aside className="notam-panel pro-style" style={panelStyle} aria-label="NOTAMs panel">
       {/* Drag handle header */}
-      <div className="notam-panel-header" onMouseDown={handleMouseDown}>
+      <div className="notam-panel-header" onMouseDown={handleMouseDown} role="toolbar" aria-label="NOTAM panel controls">
         <div className="notam-panel-drag-handle">
           <GripHorizontal size={16} />
         </div>
@@ -166,7 +166,7 @@ export function NotamPanel({
           />
         ))}
       </div>
-    </div>
+    </aside>
   );
 }
 

@@ -140,7 +140,8 @@ export function ProSearchBar({
           <Navigation size={18} />
         </button>
         {showShortTracks && (
-          <div className="pro-track-length-slider" onClick={(e) => e.stopPropagation()}>
+          /* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events */
+          <fieldset className="pro-track-length-slider" onClick={(e) => e.stopPropagation()} aria-label="Track length slider">
             <input
               type="range"
               min="5"
@@ -151,7 +152,7 @@ export function ProSearchBar({
               title={`Trail length: ${config.shortTrackLength || 15} positions`}
             />
             <span className="track-length-value">{config.shortTrackLength || 15}</span>
-          </div>
+          </fieldset>
         )}
         <button
           className={`pro-header-btn ${showSelectedTrack ? 'active' : ''}`}

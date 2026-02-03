@@ -380,6 +380,7 @@ export const CustomStyling = {
  */
 export const WithAnimatedContent = {
   render: () => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [openItem, setOpenItem] = React.useState(null);
 
     return (

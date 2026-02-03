@@ -235,6 +235,7 @@ export const MultipleSections = {
  */
 export const LazyLoaded = {
   render: (args) => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [renderCount, setRenderCount] = useState(0);
 
     // This content simulates expensive rendering
@@ -290,6 +291,7 @@ export const LazyLoaded = {
  */
 export const Controlled = {
   render: () => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [isOpen, setIsOpen] = useState(false);
 
     return (
@@ -349,6 +351,7 @@ export const Controlled = {
  */
 export const Uncontrolled = {
   render: (args) => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [lastChange, setLastChange] = useState(null);
 
     return (

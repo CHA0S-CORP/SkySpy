@@ -31,22 +31,23 @@ export function LegendPanel({
             }
           : {}
       }
-      onMouseDown={handleLegendMouseDown}
-      onTouchStart={(e) => {
-        if (e.target.closest('button')) return;
-        const touch = e.touches[0];
-        const rect = e.currentTarget.getBoundingClientRect();
-        legendDragStartRef.current = {
-          x: touch.clientX,
-          y: touch.clientY,
-          startX: legendPosition.x ?? rect.left,
-          startY: legendPosition.y ?? rect.top,
-        };
-      }}
-      role="complementary"
       aria-label="Symbol legend"
     >
-      <div className="legend-header">
+      <div
+        className="legend-header"
+        onMouseDown={handleLegendMouseDown}
+        onTouchStart={(e) => {
+          if (e.target.closest('button')) return;
+          const touch = e.touches[0];
+          const rect = e.currentTarget.parentElement.getBoundingClientRect();
+          legendDragStartRef.current = {
+            x: touch.clientX,
+            y: touch.clientY,
+            startX: legendPosition.x ?? rect.left,
+            startY: legendPosition.y ?? rect.top,
+          };
+        }}
+      >
         <span>Symbol Legend</span>
         <div className="legend-header-buttons">
           <button

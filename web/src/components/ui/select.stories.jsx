@@ -255,6 +255,7 @@ export const WithDefaultValue = {
  */
 export const Controlled = {
   render: () => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [value, setValue] = React.useState('medium');
 
     return (
@@ -304,6 +305,7 @@ export const Controlled = {
  */
 export const FormIntegration = {
   render: () => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [formData, setFormData] = React.useState({
       ruleName: '',
       conditionType: '',
@@ -313,7 +315,6 @@ export const FormIntegration = {
 
     const handleSubmit = (e) => {
       e.preventDefault();
-      // eslint-disable-next-line no-alert
       alert(`Form submitted:\n${JSON.stringify(formData, null, 2)}`);
     };
 
@@ -335,12 +336,12 @@ export const FormIntegration = {
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-text-primary">Condition Type</label>
+            <label htmlFor="condition-type-select" className="text-sm font-medium text-text-primary">Condition Type</label>
             <Select
               value={formData.conditionType}
               onValueChange={(value) => setFormData({ ...formData, conditionType: value })}
             >
-              <SelectTrigger>
+              <SelectTrigger id="condition-type-select">
                 <SelectValue placeholder="Select type" />
               </SelectTrigger>
               <SelectContent>
@@ -353,12 +354,12 @@ export const FormIntegration = {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-text-primary">Operator</label>
+            <label htmlFor="operator-select" className="text-sm font-medium text-text-primary">Operator</label>
             <Select
               value={formData.operator}
               onValueChange={(value) => setFormData({ ...formData, operator: value })}
             >
-              <SelectTrigger>
+              <SelectTrigger id="operator-select">
                 <SelectValue placeholder="Select operator" />
               </SelectTrigger>
               <SelectContent>
@@ -372,12 +373,12 @@ export const FormIntegration = {
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-text-primary">Priority Level</label>
+          <label htmlFor="priority-select" className="text-sm font-medium text-text-primary">Priority Level</label>
           <Select
             value={formData.priority}
             onValueChange={(value) => setFormData({ ...formData, priority: value })}
           >
-            <SelectTrigger>
+            <SelectTrigger id="priority-select">
               <SelectValue placeholder="Select priority level" />
             </SelectTrigger>
             <SelectContent>

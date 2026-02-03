@@ -159,17 +159,22 @@ export const AircraftPopup = memo(
     };
 
     return (
-      <section
+      <div
         ref={popupRef}
         className={`aircraft-popup ${mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''} ${isEmergency ? 'emergency' : ''}`}
         style={popupStyle}
-        onMouseDown={handleMouseDown}
-        onTouchStart={handleMouseDown}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
       >
+        {/* Drag handle in header */}
+        <div
+          className="popup-drag-handle"
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleMouseDown}
+          aria-hidden="true"
+        />
         <button className="popup-close no-drag" onClick={onClose} aria-label="Close popup">
           <X size={16} />
         </button>
@@ -369,7 +374,7 @@ export const AircraftPopup = memo(
             ADSBx
           </a>
         </div>
-      </section>
+      </div>
     );
   },
   (prev, next) => {

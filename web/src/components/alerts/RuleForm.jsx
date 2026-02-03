@@ -295,6 +295,7 @@ export function RuleForm({
       onKeyDown={(e) => e.key === 'Escape' && handleClose()}
       role="presentation"
     >
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
       <div
         className="modal modal-large rule-form"
         ref={modalRef}

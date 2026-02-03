@@ -246,6 +246,7 @@ export const DisabledState = {
  */
 export const CompleteFormExample = {
   render: () => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [errors, setErrors] = React.useState({
       name: '',
       altitude: 'Altitude must be between 0 and 60,000 feet',

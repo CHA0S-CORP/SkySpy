@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
 // Helper to safely parse JSON from fetch response
 const safeJson = async (res) => {

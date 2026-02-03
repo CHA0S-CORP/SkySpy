@@ -14,8 +14,11 @@ export function MetarPopup({ metar, config, popupPosition, isDragging, onClose, 
     <div
       className={`weather-popup ${config.mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''}`}
       style={{ left: popupPosition.x, top: popupPosition.y }}
-      onMouseDown={onMouseDown}
+      role="dialog"
+      aria-label={`METAR weather for ${metar.stationId || metar.icaoId || 'station'}`}
     >
+      {/* Drag handle */}
+      <div className="popup-drag-handle" onMouseDown={onMouseDown} aria-hidden="true" />
       <button className="popup-close" onClick={onClose}>
         <X size={16} />
       </button>
@@ -104,7 +107,7 @@ export function MetarPopup({ metar, config, popupPosition, isDragging, onClose, 
           <div className="detail-row decoded-section">
             <span>Altimeter</span>
             <div className="decoded-value">
-              <strong>{decoded.altimeter.inhg}" Hg</strong>
+              <strong>{decoded.altimeter.inhg}&quot; Hg</strong>
               <span className="decoded-desc">{decoded.altimeter.description}</span>
             </div>
           </div>

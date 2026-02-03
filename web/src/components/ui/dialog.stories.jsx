@@ -360,7 +360,7 @@ export const WithFormContent = {
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-text-primary">Notification Methods</label>
+            <span className="text-sm font-medium text-text-primary">Notification Methods</span>
             <div className="flex gap-4">
               <label className="flex items-center gap-2 text-text-secondary">
                 <input
@@ -576,6 +576,7 @@ export const WithMultipleActions = {
  */
 export const Controlled = {
   render: () => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [open, setOpen] = React.useState(false);
 
     return (

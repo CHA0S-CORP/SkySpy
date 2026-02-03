@@ -3,7 +3,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 /**
  * Custom hook for handling map alarms, notifications, and audio alerts
  */
-export function useMapAlarms({ config, soundMuted, setSoundMuted }) {
+export function useMapAlarms({ config, soundMuted }) {
   const [acknowledgedEvents, setAcknowledgedEvents] = useState(new Set());
 
   // Refs for audio state

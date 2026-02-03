@@ -22,8 +22,11 @@ export function AirportPopup({
     <div
       className={`weather-popup airport-popup ${config.mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''}`}
       style={{ left: popupPosition.x, top: popupPosition.y }}
-      onMouseDown={onMouseDown}
+      role="dialog"
+      aria-label={`Airport information for ${airportCode}`}
     >
+      {/* Drag handle */}
+      <div className="popup-drag-handle" onMouseDown={onMouseDown} aria-hidden="true" />
       <button className="popup-close" onClick={onClose}>
         <X size={16} />
       </button>

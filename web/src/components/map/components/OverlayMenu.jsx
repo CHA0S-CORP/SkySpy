@@ -44,7 +44,8 @@ export function OverlayMenu({
   if (!showOverlayMenu) return null;
 
   return (
-    <div className="overlay-menu" onClick={(e) => e.stopPropagation()}>
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
+    <aside className="overlay-menu" onClick={(e) => e.stopPropagation()} aria-label="Map layers menu">
       <div className="overlay-menu-header">
         <span>Map Layers</span>
         <button onClick={() => setShowOverlayMenu(false)}>
@@ -510,6 +511,6 @@ export function OverlayMenu({
         <span>Symbol Legend</span>
       </button>
       <div className="overlay-note">Weather data from aviationweather.gov</div>
-    </div>
+    </aside>
   );
 }

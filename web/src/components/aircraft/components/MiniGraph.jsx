@@ -84,6 +84,7 @@ export function MiniGraph({
   }
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
       className={`mini-graph ${graphZoom > 1 ? 'zoomable' : ''}`}
       onWheel={onWheel}

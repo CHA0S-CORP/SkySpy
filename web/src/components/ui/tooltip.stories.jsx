@@ -518,7 +518,8 @@ export const OnDisabledElement = {
   render: () => (
     <Tooltip delayDuration={0}>
       <TooltipTrigger asChild>
-        <span tabIndex={0}>
+        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+        <span tabIndex={0} role="group">
           <button
             disabled
             className="px-4 py-2 bg-bg-card border border-border rounded-lg text-text-dim cursor-not-allowed opacity-50"

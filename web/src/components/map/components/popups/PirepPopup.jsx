@@ -93,8 +93,11 @@ export function PirepPopup({
     <div
       className={`weather-popup pirep-popup ${config.mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${decoded?.type === 'UUA' ? 'urgent-pirep' : ''} ${isDragging ? 'dragging' : ''}`}
       style={{ left: popupPosition.x, top: popupPosition.y }}
-      onMouseDown={onMouseDown}
+      role="dialog"
+      aria-label={`Pilot report ${decoded?.type || 'UA'}`}
     >
+      {/* Drag handle */}
+      <div className="popup-drag-handle" onMouseDown={onMouseDown} aria-hidden="true" />
       <button className="popup-close" onClick={onClose}>
         <X size={16} />
       </button>

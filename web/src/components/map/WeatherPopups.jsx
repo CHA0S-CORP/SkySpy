@@ -92,12 +92,13 @@ export const MetarPopup = memo(function MetarPopup({
       ref={popupRef}
       className={`weather-popup metar-popup ${mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''}`}
       style={{ left: position.x, top: position.y }}
-      onMouseDown={handleMouseDown}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
       tabIndex={-1}
     >
+      {/* Drag handle */}
+      <div className="popup-drag-handle" onMouseDown={handleMouseDown} aria-hidden="true" />
       <button className="popup-close no-drag" onClick={onClose} aria-label="Close METAR popup">
         <X size={16} />
       </button>
@@ -231,12 +232,13 @@ export const PirepPopup = memo(function PirepPopup({
       ref={popupRef}
       className={`weather-popup pirep-popup ${mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''} ${isUrgent ? 'urgent' : ''}`}
       style={{ left: position.x, top: position.y }}
-      onMouseDown={handleMouseDown}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
       tabIndex={-1}
     >
+      {/* Drag handle */}
+      <div className="popup-drag-handle" onMouseDown={handleMouseDown} aria-hidden="true" />
       <button className="popup-close no-drag" onClick={onClose} aria-label="Close PIREP popup">
         <X size={16} />
       </button>
@@ -379,12 +381,13 @@ export const NavaidPopup = memo(function NavaidPopup({
       ref={popupRef}
       className={`weather-popup navaid-popup ${mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''}`}
       style={{ left: position.x, top: position.y }}
-      onMouseDown={handleMouseDown}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
       tabIndex={-1}
     >
+      {/* Drag handle */}
+      <div className="popup-drag-handle" onMouseDown={handleMouseDown} aria-hidden="true" />
       <button className="popup-close no-drag" onClick={onClose} aria-label="Close navaid popup">
         <X size={16} />
       </button>
@@ -477,12 +480,13 @@ export const AirportPopup = memo(function AirportPopup({
       ref={popupRef}
       className={`weather-popup airport-popup ${mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''}`}
       style={{ left: position.x, top: position.y }}
-      onMouseDown={handleMouseDown}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
       tabIndex={-1}
     >
+      {/* Drag handle */}
+      <div className="popup-drag-handle" onMouseDown={handleMouseDown} aria-hidden="true" />
       <button className="popup-close no-drag" onClick={onClose} aria-label="Close airport popup">
         <X size={16} />
       </button>

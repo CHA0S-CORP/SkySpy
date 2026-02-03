@@ -33,7 +33,8 @@ export function NotamCard({ notam, expanded, onToggle }) {
   const severityColors = SEVERITY_COLORS[severity] || SEVERITY_COLORS.advisory;
 
   return (
-    <div
+    <button
+      type="button"
       className={`notam-card ${notam.type?.toLowerCase()} ${expanded ? 'expanded' : ''} ${isActive ? 'active' : 'upcoming'} severity-${severity}`}
       onClick={onToggle}
     >
@@ -187,7 +188,7 @@ export function NotamCard({ notam, expanded, onToggle }) {
           )}
         </div>
       )}
-    </div>
+    </button>
   );
 }
 

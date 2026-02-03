@@ -30,12 +30,9 @@ export const LegendPanel = memo(function LegendPanel({
     <aside
       className={`legend-panel ${mapMode === 'pro' ? 'pro-legend' : 'crt-legend'} ${isDragging ? 'dragging' : ''}`}
       style={legendStyle}
-      onMouseDown={handleMouseDown}
-      onTouchStart={handleMouseDown}
-      role="complementary"
       aria-label="Map legend"
     >
-      <div className="legend-header">
+      <div className="legend-header" onMouseDown={handleMouseDown} onTouchStart={handleMouseDown}>
         <Move size={14} className="drag-handle" />
         <Info size={16} />
         <span>Legend</span>

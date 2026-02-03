@@ -372,16 +372,17 @@ export const RichContent = {
       <TabsContent value="form">
         <div className="p-4 bg-bg-card rounded-lg space-y-3">
           <div>
-            <label className="text-text-secondary text-sm block mb-1">Refresh Rate</label>
-            <select className="w-full bg-bg-hover text-text-primary rounded px-3 py-2 text-sm">
+            <label htmlFor="refresh-rate-select" className="text-text-secondary text-sm block mb-1">Refresh Rate</label>
+            <select id="refresh-rate-select" className="w-full bg-bg-hover text-text-primary rounded px-3 py-2 text-sm">
               <option>1 second</option>
               <option>5 seconds</option>
               <option>10 seconds</option>
             </select>
           </div>
           <div>
-            <label className="text-text-secondary text-sm block mb-1">Max Range (nm)</label>
+            <label htmlFor="max-range-input" className="text-text-secondary text-sm block mb-1">Max Range (nm)</label>
             <input
+              id="max-range-input"
               type="number"
               defaultValue="250"
               className="w-full bg-bg-hover text-text-primary rounded px-3 py-2 text-sm"

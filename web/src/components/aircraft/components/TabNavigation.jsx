@@ -105,6 +105,7 @@ export function TabNavigation({
         <div
           ref={tabListRef}
           role="tablist"
+          tabIndex={0}
           onKeyDown={handleKeyDown}
           className="detail-tabs-inner"
         >

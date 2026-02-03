@@ -5,7 +5,7 @@ import { formatDate } from './notamUtils';
 // TFR Summary Card
 export function TfrCard({ tfr, onViewDetails }) {
   return (
-    <div className="tfr-card" onClick={onViewDetails}>
+    <button type="button" className="tfr-card" onClick={onViewDetails}>
       <div className="tfr-header">
         <Shield size={18} className="tfr-icon" />
         <div className="tfr-info">
@@ -30,7 +30,7 @@ export function TfrCard({ tfr, onViewDetails }) {
           )}
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 

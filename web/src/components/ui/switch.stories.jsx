@@ -175,6 +175,7 @@ export const WithLabel = {
  */
 export const Controlled = {
   render: () => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [isEnabled, setIsEnabled] = React.useState(false);
 
     return (
@@ -225,6 +226,7 @@ export const Controlled = {
  */
 export const FormIntegration = {
   render: () => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [settings, setSettings] = React.useState({
       pushNotifications: true,
       emailAlerts: false,
@@ -235,7 +237,6 @@ export const FormIntegration = {
 
     const handleSubmit = (e) => {
       e.preventDefault();
-      // eslint-disable-next-line no-alert
       alert(`Settings saved:\n${JSON.stringify(settings, null, 2)}`);
     };
 

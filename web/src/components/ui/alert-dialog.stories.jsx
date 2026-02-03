@@ -244,7 +244,9 @@ export const WithCustomContent = {
  */
 export const Controlled = {
   render: () => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [open, setOpen] = React.useState(false);
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [isProcessing, setIsProcessing] = React.useState(false);
 
     const handleConfirm = async () => {

@@ -71,15 +71,12 @@ export const AircraftListPanel = memo(
         : {};
 
     return (
-      <div
+      <aside
         className={`aircraft-list-panel ${isDragging ? 'dragging' : ''}`}
         style={listStyle}
-        onMouseDown={handleMouseDown}
-        onTouchStart={handleMouseDown}
-        role="region"
         aria-label="Aircraft list panel"
       >
-        <div className="list-panel-header">
+        <div className="list-panel-header" onMouseDown={handleMouseDown} onTouchStart={handleMouseDown}>
           <Move size={14} className="drag-handle" />
           <List size={16} />
           <span>Aircraft ({filteredAircraft.length})</span>
@@ -180,7 +177,7 @@ export const AircraftListPanel = memo(
             </div>
           </>
         )}
-      </div>
+      </aside>
     );
   },
   (prev, next) => {

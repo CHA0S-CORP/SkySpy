@@ -7186,6 +7186,7 @@ function MapView({
   }, [initAudioContext]);
 
   return (
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
     <div className="map-container" onClick={handleMapClick}>
       {/* Mobile Map Header - map controls for mobile devices */}
       <div className="mobile-map-header">
@@ -7256,6 +7257,7 @@ function MapView({
 
       {/* Mobile Controls Dropdown */}
       {showMobileControls && (
+        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
         <div className="mobile-controls-dropdown" onClick={(e) => e.stopPropagation()}>
           <div className="mobile-controls-grid">
             <button
@@ -7342,7 +7344,6 @@ function MapView({
                     setSelectedAirport(null);
                     setPopupPosition({ x: 16, y: 16 });
                     selectAircraft(ac);
-
                     // Fly to the aircraft location based on map mode
                     if (ac.lat && ac.lon) {
                       if (config.mapMode === 'map' && leafletMapRef.current) {
@@ -7351,10 +7352,26 @@ function MapView({
                           easeLinearity: 0.25,
                         });
                       }
-                      // CRT/Radar modes are centered on feeder, no pan available
                     }
                   }
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const ac = aircraft.find(
+                      (a) => a.hex?.toUpperCase() === event.icao?.toUpperCase()
+                    );
+                    if (ac) {
+                      setSelectedMetar(null);
+                      setSelectedPirep(null);
+                      setSelectedNavaid(null);
+                      setSelectedAirport(null);
+                      setPopupPosition({ x: 16, y: 16 });
+                      selectAircraft(ac);
+                    }
+                  }
+                }}
+                role="button"
+                tabIndex={0}
                 style={{ cursor: 'pointer' }}
               >
                 <AlertTriangle size={28} />
@@ -7418,7 +7435,11 @@ function MapView({
                     transform: `translate(-50%, -50%) rotate(${ac.track || 0}deg)`,
                   }}
                   onClick={() => selectAircraft(ac)}
+                  onKeyDown={(e) => e.key === 'Enter' && selectAircraft(ac)}
+                  role="button"
+                  tabIndex={0}
                   title={`${ac.flight || ac.hex} - ${ac.alt || '?'}ft`}
+                  aria-label={`Aircraft ${ac.flight || ac.hex}`}
                 >
                   <Plane size={16} />
                 </div>
@@ -8074,6 +8095,7 @@ function MapView({
 
       {/* Overlay Menu - available on all map modes */}
       {showOverlayMenu && (
+        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
         <div className="overlay-menu" onClick={(e) => e.stopPropagation()}>
           <div className="overlay-menu-header">
             <span>Map Layers</span>
@@ -8585,6 +8607,7 @@ function MapView({
 
       {/* Traffic Filter Menu - available on all map modes */}
       {showFilterMenu && (
+        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
         <div className="overlay-menu filter-menu" onClick={(e) => e.stopPropagation()}>
           <div className="overlay-menu-header">
             <span>Traffic Filters</span>
@@ -9020,11 +9043,15 @@ function MapView({
                           key={ac.hex}
                           className={`aircraft-list-item ${selectedAircraft?.hex === ac.hex ? 'selected' : ''} ${isEmergency ? 'emergency flash-emergency' : ''} ${isConflict ? `conflict flash-conflict ${getSeverityClass(conflictSeverity)}` : ''} ${ac.military ? 'military' : ''}`}
                           onClick={() => selectAircraft(ac)}
+                          onKeyDown={(e) => e.key === 'Enter' && selectAircraft(ac)}
+                          role="button"
+                          tabIndex={0}
                           title={
                             safetyEvent
                               ? `${getEventTypeName(safetyEvent.event_type)}: ${safetyEvent.message}`
                               : ''
                           }
+                          aria-label={`Select aircraft ${ac.flight?.trim() || ac.hex}`}
                         >
                           <div className="aircraft-list-primary">
                             <span className="aircraft-flag">{tailInfo.flag}</span>
@@ -9413,6 +9440,9 @@ function MapView({
                     <div
                       className="conflict-message-row clickable"
                       onClick={() => onViewHistoryEvent?.(safetyEvent.id)}
+                      onKeyDown={(e) => e.key === 'Enter' && onViewHistoryEvent?.(safetyEvent.id)}
+                      role="button"
+                      tabIndex={0}
                       title="View in History"
                     >
                       <span className="conflict-event-message">{safetyEvent.message}</span>
@@ -10208,6 +10238,7 @@ function MapView({
               <Navigation size={18} />
             </button>
             {showShortTracks && (
+              // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
               <div className="pro-track-length-slider" onClick={(e) => e.stopPropagation()}>
                 <input
                   type="range"
@@ -10354,6 +10385,9 @@ function MapView({
                 <div
                   className={`pro-conflict-banner ${getSeverityClass(conflictSeverity)} clickable`}
                   onClick={() => onViewHistoryEvent?.(safetyEvent.id)}
+                  onKeyDown={(e) => e.key === 'Enter' && onViewHistoryEvent?.(safetyEvent.id)}
+                  role="button"
+                  tabIndex={0}
                   title="View in History"
                 >
                   <Zap size={18} />
@@ -10976,6 +11010,13 @@ function MapView({
                         setAircraftDetailHex(linkHex);
                       }
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && canLink) {
+                        setAircraftDetailHex(linkHex);
+                      }
+                    }}
+                    role={canLink ? 'button' : undefined}
+                    tabIndex={canLink ? 0 : undefined}
                     title={
                       isMatched
                         ? 'Click to view aircraft (in range)'
@@ -11073,7 +11114,9 @@ function MapView({
 
       {/* Aircraft Detail Modal */}
       {aircraftDetailHex && (
+        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
         <div className="aircraft-detail-overlay" onClick={() => openAircraftDetail(null)}>
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
           <div className="aircraft-detail-modal" onClick={(e) => e.stopPropagation()}>
             <AircraftDetailPage
               hex={aircraftDetailHex}
