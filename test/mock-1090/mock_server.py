@@ -1664,15 +1664,15 @@ def update_all_aircraft(templates, state_dict):
         if template:
             state_dict[hex_code] = spawn_aircraft(template, edge_spawn=True)
 
-    # Randomly remove 1-2 aircraft every ~30 seconds (simulates signal loss)
-    if random.random() < 0.03 and len(state_dict) > 10:
+    # Randomly remove 1-2 aircraft frequently (simulates signal loss/departures)
+    if random.random() < 0.15 and len(state_dict) > 10:
         keys = list(state_dict.keys())
         hex_to_remove = random.choice(keys)
         del state_dict[hex_to_remove]
 
     # Randomly add back removed aircraft (simulates aircraft returning)
     missing_hexes = [t["hex"] for t in templates if t["hex"] not in state_dict]
-    if missing_hexes and random.random() < 0.05:
+    if missing_hexes and random.random() < 0.10:
         hex_to_add = random.choice(missing_hexes)
         template = next((t for t in templates if t["hex"] == hex_to_add), None)
         if template:
