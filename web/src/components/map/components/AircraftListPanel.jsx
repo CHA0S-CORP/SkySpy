@@ -133,11 +133,15 @@ export function AircraftListPanel({
                 key={ac.hex}
                 className={`aircraft-list-item ${selectedAircraft?.hex === ac.hex ? 'selected' : ''} ${isEmergency ? 'emergency flash-emergency' : ''} ${isConflict ? `conflict flash-conflict ${getSeverityClass(conflictSeverity)}` : ''} ${ac.military ? 'military' : ''}`}
                 onClick={() => selectAircraft(ac)}
+                onKeyDown={(e) => e.key === 'Enter' && selectAircraft(ac)}
+                role="button"
+                tabIndex={0}
                 title={
                   safetyEvent
                     ? `${getEventTypeName(safetyEvent.event_type)}: ${safetyEvent.message}`
                     : ''
                 }
+                aria-label={`Select aircraft ${ac.flight?.trim() || ac.hex}`}
               >
                 <div className="aircraft-list-primary">
                   <span className="aircraft-flag">{tailInfo.flag}</span>

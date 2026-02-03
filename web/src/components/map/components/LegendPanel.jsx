@@ -19,7 +19,7 @@ export function LegendPanel({
   if (config.mapMode !== 'crt' && config.mapMode !== 'pro') return null;
 
   return (
-    <div
+    <aside
       className={`legend-panel ${config.mapMode === 'pro' ? 'pro-style' : ''} ${isLegendDragging ? 'dragging' : ''} ${legendCollapsed ? 'collapsed' : ''}`}
       style={
         legendPosition.x !== null
@@ -43,6 +43,8 @@ export function LegendPanel({
           startY: legendPosition.y ?? rect.top,
         };
       }}
+      role="complementary"
+      aria-label="Symbol legend"
     >
       <div className="legend-header">
         <span>Symbol Legend</span>
@@ -142,6 +144,6 @@ export function LegendPanel({
           </div>
         </>
       )}
-    </div>
+    </aside>
   );
 }

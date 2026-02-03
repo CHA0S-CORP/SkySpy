@@ -194,6 +194,17 @@ export function ConflictBanner({
               selectAircraft(ac);
             }
           }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              const ac = aircraft.find((a) => a.hex?.toUpperCase() === event.icao?.toUpperCase());
+              if (ac) {
+                selectAircraft(ac);
+              }
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label={`${getEventTypeName(event.event_type)} conflict for ${event.callsign || event.icao}`}
         >
           <div className="banner-icon">
             <AlertTriangle size={20} />
