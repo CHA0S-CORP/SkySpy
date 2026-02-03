@@ -1271,6 +1271,8 @@ jobs:
           echo "| Integration Tests | ${{ needs.test-python-integration.result == 'success' && ':white_check_mark:' || (needs.test-python-integration.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.test-python-integration.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| E2E Tests | ${{ needs.test-e2e.result == 'success' && ':white_check_mark:' || (needs.test-e2e.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.test-e2e.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Docker Build | ${{ needs.docker-build-push.result == 'success' && ':white_check_mark:' || (needs.docker-build-push.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.docker-build-push.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Sign | ${{ needs.sign-docker-images.result == 'success' && ':white_check_mark:' || (needs.sign-docker-images.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.sign-docker-images.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Go Binaries | ${{ needs.build-sign-go-binaries.result == 'success' && ':white_check_mark:' || (needs.build-sign-go-binaries.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.build-sign-go-binaries.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Links Section
@@ -1323,12 +1325,14 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [ci-success, docker-build-push]
+    needs: [ci-success, docker-build-push, sign-docker-images, build-sign-go-binaries]
     if: |
       github.event_name == 'workflow_dispatch' &&
       inputs.create_release == true &&
       needs.ci-success.result == 'success' &&
-      needs.docker-build-push.result == 'success'
+      needs.docker-build-push.result == 'success' &&
+      (needs.sign-docker-images.result == 'success' || needs.sign-docker-images.result == 'skipped') &&
+      (needs.build-sign-go-binaries.result == 'success' || needs.build-sign-go-binaries.result == 'skipped')
     permissions:
       contents: write
     steps:
@@ -1386,11 +1390,21 @@ jobs:
           fi
 
           echo "" >> changelog.md
-          echo "### Docker Images" >> changelog.md
+          echo "### Docker Images (Signed)" >> changelog.md
           echo "\`\`\`" >> changelog.md
           echo "ghcr.io/${{ github.repository }}:v${{ steps.version.outputs.version }}" >> changelog.md
           echo "ghcr.io/${{ github.repository }}-rtl-airband-uploader:v${{ steps.version.outputs.version }}" >> changelog.md
           echo "\`\`\`" >> changelog.md
+          echo "" >> changelog.md
+          echo "### CLI Binaries (Signed)" >> changelog.md
+          echo "All binaries are signed with ephemeral certificates. See \`VERIFY.md\` for verification instructions." >> changelog.md
+          echo "| Platform | Archive |" >> changelog.md
+          echo "|----------|---------|" >> changelog.md
+          echo "| Linux amd64 | \`skyspy-linux-amd64-v${{ steps.version.outputs.version }}.tar.gz\` |" >> changelog.md
+          echo "| Linux arm64 | \`skyspy-linux-arm64-v${{ steps.version.outputs.version }}.tar.gz\` |" >> changelog.md
+          echo "| macOS amd64 | \`skyspy-darwin-amd64-v${{ steps.version.outputs.version }}.tar.gz\` |" >> changelog.md
+          echo "| macOS arm64 | \`skyspy-darwin-arm64-v${{ steps.version.outputs.version }}.tar.gz\` |" >> changelog.md
+          echo "| Windows amd64 | \`skyspy-windows-amd64-v${{ steps.version.outputs.version }}.zip\` |" >> changelog.md
 
           echo "" >> changelog.md
           echo "**Full Changelog**: ${{ github.server_url }}/${{ github.repository }}/compare/${PREV_TAG:-$(git rev-list --max-parents=0 HEAD)}..v${{ steps.version.outputs.version }}" >> changelog.md
@@ -1401,6 +1415,12 @@ jobs:
         with:
           name: openapi-schema
           path: release-assets/
+        continue-on-error: true
+      - name: Download signed Go binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: go-binaries-signed
+          path: release-assets/go/
         continue-on-error: true
       - name: Create tag
         run: |
@@ -1418,6 +1438,12 @@ jobs:
           prerelease: ${{ inputs.prerelease }}
           files: |
             release-assets/*
+            release-assets/go/*.tar.gz
+            release-assets/go/*.zip
+            release-assets/go/checksums.txt
+            release-assets/go/checksums.txt.sig
+            release-assets/go/signing-cert.pem
+            release-assets/go/VERIFY.md
           generate_release_notes: false
       - name: Release summary
         run: |
@@ -1427,8 +1453,12 @@ jobs:
           echo "- **Tag**: [v${{ steps.version.outputs.version }}](${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.version }})" >> $GITHUB_STEP_SUMMARY
           echo "- **Draft**: ${{ inputs.draft }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Pre-release**: ${{ inputs.prerelease }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Artifacts Signed**: Yes (ephemeral or CA certificates)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Docker Images" >> $GITHUB_STEP_SUMMARY
+          echo "### Docker Images (Signed)" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "docker pull ghcr.io/${{ github.repository }}:v${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### CLI Binaries (Signed)" >> $GITHUB_STEP_SUMMARY
+          echo "Download from the release assets. Verify with \`VERIFY.md\` instructions." >> $GITHUB_STEP_SUMMARY
