@@ -49,6 +49,10 @@ export const SafetyEventsPanel = memo(function SafetyEventsPanel({
                 <span
                   className="event-callsign clickable"
                   onClick={() => onSelectAircraft?.(event.icao)}
+                  onKeyDown={(e) => e.key === 'Enter' && onSelectAircraft?.(event.icao)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Select aircraft ${event.callsign || event.icao}`}
                 >
                   {event.callsign || event.icao}
                 </span>

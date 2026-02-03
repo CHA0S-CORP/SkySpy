@@ -80,7 +80,10 @@ export function LeaderboardCard({
             <div
               key={item.hex || i}
               className={`leaderboard-item ${onSelect ? 'clickable' : ''}`}
+              role={onSelect ? 'button' : undefined}
+              tabIndex={onSelect ? 0 : undefined}
               onClick={() => onSelect?.(item.hex)}
+              onKeyDown={onSelect ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(item.hex); } } : undefined}
             >
               <span className="leaderboard-rank">{i + 1}</span>
               <div className="leaderboard-info">
@@ -137,7 +140,10 @@ export function SquawkWatchlist({ aircraftData, onSelect }) {
             <div
               key={i}
               className={`watchlist-alert ${ac.severity}`}
+              role={onSelect ? 'button' : undefined}
+              tabIndex={onSelect ? 0 : undefined}
               onClick={() => onSelect?.(ac.hex)}
+              onKeyDown={onSelect ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(ac.hex); } } : undefined}
             >
               <div className="alert-badge">{ac.squawk}</div>
               <div className="alert-info">

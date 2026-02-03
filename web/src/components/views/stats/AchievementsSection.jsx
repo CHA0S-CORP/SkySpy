@@ -152,7 +152,10 @@ export function AchievementsSection({ data, loading, onSelectAircraft }) {
                 <div
                   key={sighting.icao_hex || i}
                   className={`sighting-item ${onSelectAircraft ? 'clickable' : ''}`}
+                  role={onSelectAircraft ? 'button' : undefined}
+                  tabIndex={onSelectAircraft ? 0 : undefined}
                   onClick={() => onSelectAircraft?.(sighting.icao_hex)}
+                  onKeyDown={onSelectAircraft ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectAircraft(sighting.icao_hex); } } : undefined}
                 >
                   <div
                     className="sighting-rarity"

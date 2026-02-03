@@ -133,6 +133,13 @@ export function AcarsPanel({
                     setAircraftDetailHex(linkHex);
                   }
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && canLink) {
+                    setAircraftDetailHex(linkHex);
+                  }
+                }}
+                role={canLink ? 'button' : undefined}
+                tabIndex={canLink ? 0 : undefined}
                 title={
                   isMatched
                     ? 'Click to view aircraft (in range)'
