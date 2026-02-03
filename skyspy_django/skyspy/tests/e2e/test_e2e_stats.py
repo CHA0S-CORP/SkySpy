@@ -377,23 +377,29 @@ def spotted_collection_data(db):
 
 @pytest.fixture
 def daily_stats_data(db):
-    """Create daily stats data."""
+    """Create daily stats data.
+
+    Note: Use update_or_create to handle cases where records already exist
+    from mock feeder or previous test runs.
+    """
     stats = []
     now = timezone.now()
 
     for i in range(30):
-        day_stats = DailyStats.objects.create(
+        day_stats, _ = DailyStats.objects.update_or_create(
             date=(now - timedelta(days=i)).date(),
-            unique_aircraft=50 + i * 2,
-            new_aircraft=5 + i % 10,
-            total_sessions=100 + i * 3,
-            total_positions=10000 + i * 500,
-            military_count=3 + i % 5,
-            max_distance_nm=100.0 + i * 5,
-            max_altitude=35000 + i * 100,
-            max_speed=500.0 + i * 2,
-            aircraft_types={"B738": 20 + i, "A320": 15 + i, "E75L": 10 + i},
-            operators={"UAL": 25 + i, "DAL": 20 + i, "AAL": 15 + i},
+            defaults={
+                "unique_aircraft": 50 + i * 2,
+                "new_aircraft": 5 + i % 10,
+                "total_sessions": 100 + i * 3,
+                "total_positions": 10000 + i * 500,
+                "military_count": 3 + i % 5,
+                "max_distance_nm": 100.0 + i * 5,
+                "max_altitude": 35000 + i * 100,
+                "max_speed": 500.0 + i * 2,
+                "aircraft_types": {"B738": 20 + i, "A320": 15 + i, "E75L": 10 + i},
+                "operators": {"UAL": 25 + i, "DAL": 20 + i, "AAL": 15 + i},
+            },
         )
         stats.append(day_stats)
 
@@ -1354,38 +1360,60 @@ class TestConfigurationModels:
         assert pattern.name == "Air Force One"
 
     def test_rare_aircraft_type_creation(self, db):
-        """Test creating rare aircraft type configuration."""
+        """Test creating rare aircraft type configuration.
+
+        Note: Use unique type_code to avoid conflicts with pre-existing data.
+        """
+        import uuid
+
+        unique_type = f"XT{uuid.uuid4().hex[:4].upper()}"
         rare_type = RareAircraftType.objects.create(
-            type_code="A388",
-            type_name="Airbus A380-800",
-            manufacturer="Airbus",
+            type_code=unique_type,
+            type_name="Test Aircraft Type",
+            manufacturer="TestCorp",
             category="rare",
-            description="Rare in US airspace",
+            description="Test rare aircraft",
             rarity_score=7,
-            total_produced=251,
-            currently_active=220,
+            total_produced=10,
+            currently_active=5,
             is_active=True,
         )
         assert rare_type.id is not None
-        assert rare_type.type_code == "A388"
+        assert rare_type.type_code == unique_type
 
     def test_filter_active_patterns(self, db):
-        """Test filtering active patterns."""
-        NotableRegistration.objects.create(
-            name="Active Pattern",
+        """Test filtering active patterns.
+
+        Note: This test verifies that we can create and filter patterns.
+        Pre-existing patterns from migrations/fixtures may exist, so we
+        test by adding patterns and verifying they're included in results.
+        """
+        initial_count = NotableRegistration.objects.filter(is_active=True).count()
+
+        active_pattern = NotableRegistration.objects.create(
+            name="Test Active Pattern",
             pattern_type="prefix",
-            pattern="N1",
+            pattern="TSTA",
             category="test",
             is_active=True,
         )
-        NotableRegistration.objects.create(
-            name="Inactive Pattern",
+        inactive_pattern = NotableRegistration.objects.create(
+            name="Test Inactive Pattern",
             pattern_type="prefix",
-            pattern="N2",
+            pattern="TSTI",
             category="test",
             is_active=False,
         )
 
+        # Verify active count increased by 1
         active = NotableRegistration.objects.filter(is_active=True)
-        assert active.count() == 1
-        assert active.first().name == "Active Pattern"
+        assert active.count() == initial_count + 1
+
+        # Verify our active pattern is in the results
+        active_names = list(active.values_list("name", flat=True))
+        assert "Test Active Pattern" in active_names
+        assert "Test Inactive Pattern" not in active_names
+
+        # Clean up test data
+        active_pattern.delete()
+        inactive_pattern.delete()

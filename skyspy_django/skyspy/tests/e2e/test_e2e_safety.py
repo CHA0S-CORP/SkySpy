@@ -1158,7 +1158,7 @@ class TestAPIKeyAuthentication:
 
         api_key, raw_key = expired_api_key
         client = APIClient()
-        client.credentials(HTTP_AUTHORIZATION=f"Api-Key {raw_key}")
+        client.credentials(HTTP_AUTHORIZATION=f"ApiKey {raw_key}")
 
         response = client.get("/api/v1/safety/events/")
         # Expired key should be denied (401 or 403)

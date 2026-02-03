@@ -570,8 +570,15 @@ class TestFeatureAccessConfiguration:
 
         assert response.status_code == status.HTTP_200_OK
 
-    def test_feature_authenticated_access_requires_login(self, api_client, feature_access_authenticated):
-        """Features configured as authenticated require login."""
+    def test_feature_authenticated_access_requires_login(
+        self, api_client, feature_access_authenticated, auth_mode_authenticated
+    ):
+        """Features configured as authenticated require login.
+
+        Note: This test requires both feature_access_authenticated AND
+        auth_mode_authenticated fixtures to ensure authentication is enforced.
+        The global AUTH_MODE setting may override feature-level settings.
+        """
         response = api_client.get("/api/v1/aircraft/")
 
         assert response.status_code in [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN]

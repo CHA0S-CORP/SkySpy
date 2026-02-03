@@ -355,8 +355,16 @@ def create_api_key(db):
 
 @pytest.fixture
 def operator_api_key(operator_user, create_api_key):
-    """API key for operator user."""
-    api_key, raw_key = create_api_key(operator_user, name="Operator API Key")
+    """API key for operator user with common feature scopes.
+
+    Note: API keys require explicit feature scopes for permission checks.
+    The scopes should be feature names (e.g., "safety", not "safety.view").
+    """
+    api_key, raw_key = create_api_key(
+        operator_user,
+        name="Operator API Key",
+        scopes=["aircraft", "safety", "alerts", "history"],
+    )
     return api_key, raw_key
 
 
@@ -365,7 +373,7 @@ def api_key_client(operator_api_key):
     """API client authenticated with API key."""
     api_key, raw_key = operator_api_key
     client = APIClient()
-    client.credentials(HTTP_AUTHORIZATION=f"Api-Key {raw_key}")
+    client.credentials(HTTP_AUTHORIZATION=f"ApiKey {raw_key}")
     return client
 
 

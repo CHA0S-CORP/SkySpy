@@ -252,20 +252,26 @@ def update_state_and_broadcast(batch: list[dict]):
 
     # Broadcast to clients (this is the latency-critical part)
     try:
-        # 1. Position updates with removed list (lightest payload, lowest latency)
-        broadcast_positions_fast(batch, all_removed, timestamp)
+        # Filter out removed aircraft from batch before broadcasting
+        # This prevents race condition where aircraft:update re-adds removed aircraft
+        removed_set = set(all_removed)
+        filtered_batch = [ac for ac in batch if ac.get("hex") not in removed_set]
 
-        # 2. Full aircraft update
-        broadcast_aircraft_update(batch, timestamp)
+        # 1. Removed aircraft events FIRST (ensures cleanup before updates)
+        if all_removed:
+            logger.info(f"Broadcasting removal of {len(all_removed)} aircraft: {all_removed[:5]}...")
+            broadcast_removed_aircraft(all_removed, timestamp)
 
-        # 3. New aircraft events
+        # 2. Position updates with removed list (lightest payload, lowest latency)
+        broadcast_positions_fast(filtered_batch, all_removed, timestamp)
+
+        # 3. Full aircraft update (filtered to exclude removed aircraft)
+        broadcast_aircraft_update(filtered_batch, timestamp)
+
+        # 4. New aircraft events
         if new_icaos:
             new_aircraft = [batch_by_icao[icao] for icao in new_icaos if icao in batch_by_icao]
             broadcast_new_aircraft(new_aircraft, timestamp)
-
-        # 4. Removed aircraft events (for data hooks)
-        if all_removed:
-            broadcast_removed_aircraft(all_removed, timestamp)
 
     except Exception as e:
         logger.warning(f"Broadcast error: {e}")
