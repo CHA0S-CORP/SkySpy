@@ -142,7 +142,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.23'
           cache-dependency-path: skyspy-go/go.sum
       - uses: golangci/golangci-lint-action@v6
         with:
@@ -162,7 +162,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.23'
           cache-dependency-path: skyspy-go/go.sum
       - name: Run tests
         working-directory: skyspy-go
@@ -264,7 +264,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.23'
           cache-dependency-path: skyspy-go/go.sum
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
