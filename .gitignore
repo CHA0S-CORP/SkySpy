@@ -7,3 +7,5 @@ test/api-cache/
 .vscode/
 __pycache__/
 web/test-results/
+*storybook.log
+storybook-static

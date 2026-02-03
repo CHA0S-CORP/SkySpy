@@ -1,11 +1,20 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 // Use environment variable for API target, default to localhost for local dev
 const apiTarget = process.env.VITE_API_TARGET || 'http://localhost:8000'
 
-export default defineConfig(({ command }) => ({
-  plugins: [react()],
+export default defineConfig(({ command, mode }) => ({
+  plugins: [
+    react(),
+    mode === 'production' && visualizer({
+      template: 'treemap',
+      filename: 'dist/stats.html',
+      gzipSize: true,
+      brotliSize: true,
+    }),
+  ].filter(Boolean),
   // Only use /static/ base for build, not for dev server
   base: command === 'build' ? '/static/' : '/',
   build: {
@@ -14,7 +23,30 @@ export default defineConfig(({ command }) => ({
     minify: 'terser',
     rollupOptions: {
       output: {
-        manualChunks: undefined,
+        manualChunks: (id) => {
+          if (id.includes('node_modules')) {
+            // Vendor chunk: React core
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+              return 'vendor'
+            }
+            // Radix UI chunk
+            if (id.includes('@radix-ui')) {
+              return 'radix'
+            }
+            // TanStack/React Query chunk
+            if (id.includes('@tanstack')) {
+              return 'query'
+            }
+            // Leaflet/map chunk
+            if (id.includes('leaflet')) {
+              return 'map'
+            }
+            // Framer Motion chunk
+            if (id.includes('framer-motion')) {
+              return 'motion'
+            }
+          }
+        },
       },
     },
   },

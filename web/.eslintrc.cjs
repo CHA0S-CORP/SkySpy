@@ -5,12 +5,7 @@ module.exports = {
     es2022: true,
     node: true,
   },
-  extends: [
-    'eslint:recommended',
-    'plugin:react/recommended',
-    'plugin:react/jsx-runtime',
-    'plugin:react-hooks/recommended',
-  ],
+  extends: ['eslint:recommended', 'plugin:react/recommended', 'plugin:react/jsx-runtime', 'plugin:react-hooks/recommended', 'plugin:jsx-a11y/recommended', 'plugin:storybook/recommended'],
   parserOptions: {
     ecmaVersion: 'latest',
     sourceType: 'module',
@@ -18,7 +13,7 @@ module.exports = {
       jsx: true,
     },
   },
-  plugins: ['react', 'react-hooks'],
+  plugins: ['react', 'react-hooks', 'jsx-a11y'],
   settings: {
     react: {
       version: 'detect',
@@ -48,6 +43,14 @@ module.exports = {
     'prefer-const': 'warn',
     'no-var': 'error',
     'eqeqeq': ['warn', 'always', { null: 'ignore' }],
+
+    // Accessibility rules (jsx-a11y)
+    'jsx-a11y/alt-text': 'error',
+    'jsx-a11y/anchor-has-content': 'error',
+    'jsx-a11y/click-events-have-key-events': 'error',
+    'jsx-a11y/interactive-supports-focus': 'error',
+    'jsx-a11y/label-has-associated-control': 'error',
+    'jsx-a11y/no-static-element-interactions': 'warn',
   },
   ignorePatterns: [
     'dist',
