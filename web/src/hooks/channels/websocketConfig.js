@@ -7,7 +7,6 @@
 
 import {
   RECONNECT_CONFIG,
-  getWebSocketUrl,
   getReconnectDelay as getReconnectDelayWithBackoff,
 } from '../../utils/websocket';
 

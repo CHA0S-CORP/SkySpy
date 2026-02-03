@@ -20,7 +20,18 @@ export function SightingsTable({ sightings, sortField, sortDirection, onSort, on
             <tr key={i}>
               <td>{new Date(s.timestamp).toLocaleTimeString()}</td>
               <td className="mono">
-                <span className="icao-link" onClick={() => onSelectAircraft?.(s.icao_hex)}>
+                <span
+                  className="icao-link"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onSelectAircraft?.(s.icao_hex)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelectAircraft?.(s.icao_hex);
+                    }
+                  }}
+                >
                   {s.icao_hex}
                 </span>
               </td>

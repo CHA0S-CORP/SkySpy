@@ -9,7 +9,6 @@
  * - Threat colors by level
  */
 import React, { useMemo } from 'react';
-import { Navigation2 } from 'lucide-react';
 
 // Convert distance/bearing to x,y coordinates on radar
 function threatToPosition(threat, radius, maxRange, userHeading) {

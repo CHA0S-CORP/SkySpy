@@ -12,7 +12,6 @@ export function TelemetryOverlay({ telemetry, isCollapsed, onToggle }) {
       className={`track-telemetry-overlay ${isCollapsed ? 'collapsed' : ''}`}
       role="region"
       aria-label="Aircraft telemetry"
-      aria-expanded={!isCollapsed}
     >
       <button
         className="telem-toggle"

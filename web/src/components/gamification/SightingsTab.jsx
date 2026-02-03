@@ -23,6 +23,14 @@ export function SightingsTab({ rare_sightings, onSelectAircraft }) {
                 key={sighting.icao_hex || i}
                 className={`sighting-item large ${onSelectAircraft ? 'clickable' : ''}`}
                 onClick={() => onSelectAircraft?.(sighting.icao_hex)}
+                role={onSelectAircraft ? 'button' : undefined}
+                tabIndex={onSelectAircraft ? 0 : undefined}
+                onKeyDown={(e) => {
+                  if ((e.key === 'Enter' || e.key === ' ') && onSelectAircraft) {
+                    e.preventDefault();
+                    onSelectAircraft(sighting.icao_hex);
+                  }
+                }}
               >
                 <div
                   className="sighting-rarity large"

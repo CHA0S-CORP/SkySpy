@@ -509,7 +509,13 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
 
     return (
       <div key={name} className={`status-item expandable ${isExpanded ? 'expanded' : ''}`}>
-        <div className="status-item-header" onClick={() => toggleServiceExpand(name)}>
+        <div
+          className="status-item-header"
+          role="button"
+          tabIndex={0}
+          onClick={() => toggleServiceExpand(name)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleServiceExpand(name); } }}
+        >
           <span className="service-name">
             {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             {displayName}
@@ -616,7 +622,13 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
             <div
               className={`status-item expandable ${expandedService === 'client' ? 'expanded' : ''}`}
             >
-              <div className="status-item-header" onClick={() => toggleServiceExpand('client')}>
+              <div
+                className="status-item-header"
+                role="button"
+                tabIndex={0}
+                onClick={() => toggleServiceExpand('client')}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleServiceExpand('client'); } }}
+              >
                 <span className="service-name">
                   {expandedService === 'client' ? (
                     <ChevronDown size={14} />

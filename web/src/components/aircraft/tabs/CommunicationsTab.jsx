@@ -158,7 +158,7 @@ export function CommunicationsTab({
       />
 
       {/* Sub-Tab Navigation */}
-      <nav className="comm-subtabs" role="tablist" aria-label="Communication types">
+      <div className="comm-subtabs" role="tablist" aria-label="Communication types">
         <SubTabButton
           id="radio"
           label="Radio"
@@ -175,7 +175,7 @@ export function CommunicationsTab({
           isActive={activeSubTab === 'acars'}
           onClick={() => setActiveSubTab('acars')}
         />
-      </nav>
+      </div>
 
       {/* Sub-Tab Content */}
       <div className="comm-content">

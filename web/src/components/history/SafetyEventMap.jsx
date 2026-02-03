@@ -168,13 +168,35 @@ export function SafetyEventMap({
           <span>Event Location</span>
         </div>
         {event.aircraft_snapshot?.lat && (
-          <div className="legend-item clickable" onClick={() => onSelectAircraft?.(event.icao)}>
+          <div
+            className="legend-item clickable"
+            role="button"
+            tabIndex={0}
+            onClick={() => onSelectAircraft?.(event.icao)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onSelectAircraft?.(event.icao);
+              }
+            }}
+          >
             <span className="legend-marker ac1-marker"></span>
             <span className="legend-callsign">{event.callsign || event.icao}</span>
           </div>
         )}
         {event.aircraft_snapshot_2?.lat && (
-          <div className="legend-item clickable" onClick={() => onSelectAircraft?.(event.icao_2)}>
+          <div
+            className="legend-item clickable"
+            role="button"
+            tabIndex={0}
+            onClick={() => onSelectAircraft?.(event.icao_2)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onSelectAircraft?.(event.icao_2);
+              }
+            }}
+          >
             <span className="legend-marker ac2-marker"></span>
             <span className="legend-callsign">{event.callsign_2 || event.icao_2}</span>
           </div>

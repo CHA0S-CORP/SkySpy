@@ -86,8 +86,6 @@ export const ColumnSelector = memo(function ColumnSelector({
                 <label
                   key={column.id}
                   className={`al-column-item ${isVisible ? 'active' : ''}`}
-                  role="menuitemcheckbox"
-                  aria-checked={isVisible}
                 >
                   <input
                     type="checkbox"

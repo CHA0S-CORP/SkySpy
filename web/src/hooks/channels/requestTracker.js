@@ -73,7 +73,7 @@ export function createRequestTracker() {
    * @param {Error} error - The error to reject with
    */
   function clearAll(error = new Error('Connection closed')) {
-    for (const [requestId, pending] of pendingRequests) {
+    for (const [_requestId, pending] of pendingRequests) {
       clearTimeout(pending.timeoutId);
       pending.reject(error);
     }

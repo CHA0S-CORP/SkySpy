@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Bell,
   Trash2,
@@ -19,8 +19,6 @@ import {
 import { useSocketApi } from '../../hooks';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { SEVERITY_ICONS, SEVERITY_LABELS, PAGE_SIZE_OPTIONS } from './alertHistoryConstants';
-import { AlertHistoryItem } from './AlertHistoryItem';
-import { AlertHistoryToolbar } from './AlertHistoryToolbar';
 
 /**
  * Consolidated AlertHistory component with:

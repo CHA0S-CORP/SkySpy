@@ -10,8 +10,7 @@ import {
 import L from 'leaflet';
 import { ReplayControlsCompact } from '../components/ReplayControls';
 import { getSeverityClass, formatEventType } from './safetyConstants';
-import { createAircraftIcon, getInterpolatedPosition, safeJson } from './safetyMapUtils';
-import { SnapshotSection } from './SnapshotSection';
+import { safeJson } from './safetyMapUtils';
 
 export function SafetyTab({
   hex,
@@ -687,23 +686,25 @@ export function SafetyTab({
                       onSpeedChange={(speed) => handleSafetySpeedChange(eventKey, speed)}
                     />
                     <div className="safety-map-legend">
-                      <div
+                      <button
                         className="legend-item clickable"
                         onClick={() => onSelectAircraft?.(event.icao)}
+                        type="button"
                       >
                         <span className="legend-marker ac1-marker"></span>
                         <span className="legend-callsign">{event.callsign || event.icao}</span>
-                      </div>
+                      </button>
                       {event.icao_2 && (
-                        <div
+                        <button
                           className="legend-item clickable"
                           onClick={() => onSelectAircraft?.(event.icao_2)}
+                          type="button"
                         >
                           <span className="legend-marker ac2-marker"></span>
                           <span className="legend-callsign">
                             {event.callsign_2 || event.icao_2}
                           </span>
-                        </div>
+                        </button>
                       )}
                       <div className="legend-item">
                         <span className="legend-marker event-marker"></span>

@@ -76,6 +76,8 @@ export const AircraftListPanel = memo(
         style={listStyle}
         onMouseDown={handleMouseDown}
         onTouchStart={handleMouseDown}
+        role="region"
+        aria-label="Aircraft list panel"
       >
         <div className="list-panel-header">
           <Move size={14} className="drag-handle" />
@@ -101,37 +103,45 @@ export const AircraftListPanel = memo(
               />
             </div>
 
-            <div className="list-table-header no-drag">
-              <div
+            <div className="list-table-header no-drag" role="row">
+              <button
+                type="button"
                 className={`list-col callsign ${sortField === 'flight' ? 'sorted' : ''}`}
                 onClick={() => handleSort('flight')}
+                aria-label={`Sort by callsign ${sortField === 'flight' ? (sortAsc ? 'ascending' : 'descending') : ''}`}
               >
                 Callsign
                 {sortField === 'flight' &&
                   (sortAsc ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
-              </div>
-              <div
+              </button>
+              <button
+                type="button"
                 className={`list-col altitude ${sortField === 'alt' ? 'sorted' : ''}`}
                 onClick={() => handleSort('alt')}
+                aria-label={`Sort by altitude ${sortField === 'alt' ? (sortAsc ? 'ascending' : 'descending') : ''}`}
               >
                 Alt
                 {sortField === 'alt' && (sortAsc ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
-              </div>
-              <div
+              </button>
+              <button
+                type="button"
                 className={`list-col speed ${sortField === 'gs' ? 'sorted' : ''}`}
                 onClick={() => handleSort('gs')}
+                aria-label={`Sort by speed ${sortField === 'gs' ? (sortAsc ? 'ascending' : 'descending') : ''}`}
               >
                 Spd
                 {sortField === 'gs' && (sortAsc ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
-              </div>
-              <div
+              </button>
+              <button
+                type="button"
                 className={`list-col distance ${sortField === 'distance_nm' ? 'sorted' : ''}`}
                 onClick={() => handleSort('distance_nm')}
+                aria-label={`Sort by distance ${sortField === 'distance_nm' ? (sortAsc ? 'ascending' : 'descending') : ''}`}
               >
                 Dist
                 {sortField === 'distance_nm' &&
                   (sortAsc ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
-              </div>
+              </button>
             </div>
 
             <div className="list-content no-drag">
@@ -144,6 +154,10 @@ export const AircraftListPanel = memo(
                     key={ac.hex}
                     className={`aircraft-list-item ${isSelected ? 'selected' : ''} ${isEmergency ? 'emergency' : ''} ${ac.military ? 'military' : ''}`}
                     onClick={() => onSelectAircraft?.(ac.hex)}
+                    onKeyDown={(e) => e.key === 'Enter' && onSelectAircraft?.(ac.hex)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Select aircraft ${ac.flight?.trim() || ac.hex}`}
                   >
                     <div className="list-col callsign">
                       {ac.flight?.trim() || ac.hex}

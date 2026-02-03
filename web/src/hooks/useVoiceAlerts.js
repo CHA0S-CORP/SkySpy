@@ -179,7 +179,6 @@ export function useVoiceAlerts({
       if (!enabled || !isSupported || !threat) return;
 
       const threatId = threat.hex || threat.callsign;
-      const now = Date.now();
 
       // Debounce: don't announce same threat within 30 seconds
       const lastAnnounced = announcedThreatsRef.current.has(threatId);

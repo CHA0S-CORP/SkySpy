@@ -110,7 +110,18 @@ const AudioItem = memo(function AudioItem({
           </div>
 
           {/* Progress Bar */}
-          <div className="audio-progress-container" onClick={(e) => onSeek(id, e)}>
+          <div
+            className="audio-progress-container"
+            role="button"
+            tabIndex={0}
+            onClick={(e) => onSeek(id, e)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onSeek(id, e);
+              }
+            }}
+          >
             <div className="audio-progress-bar">
               <div className="audio-progress-fill" style={{ width: `${progress}%` }} />
             </div>

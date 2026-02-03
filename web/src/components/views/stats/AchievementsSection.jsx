@@ -115,7 +115,10 @@ export function AchievementsSection({ data, loading, onSelectAircraft }) {
                   <div
                     key={record.type || i}
                     className={`record-card ${onSelectAircraft && record.icao_hex ? 'clickable' : ''}`}
+                    role={onSelectAircraft && record.icao_hex ? 'button' : undefined}
+                    tabIndex={onSelectAircraft && record.icao_hex ? 0 : undefined}
                     onClick={() => record.icao_hex && onSelectAircraft?.(record.icao_hex)}
+                    onKeyDown={onSelectAircraft && record.icao_hex ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectAircraft(record.icao_hex); } } : undefined}
                   >
                     <div className="record-icon">
                       <IconComponent size={24} />

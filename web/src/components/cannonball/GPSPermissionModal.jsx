@@ -14,10 +14,8 @@ import {
   Shield,
   AlertTriangle,
   RefreshCw,
-  X,
   Smartphone,
   Settings,
-  ExternalLink,
 } from 'lucide-react';
 import { GPS_PERMISSION_STATES } from '../../hooks/useDeviceGPS';
 
@@ -195,7 +193,7 @@ function PermissionUnavailableContent({ onContinueWithout }) {
       <h2 className="gps-modal-title">Location Not Available</h2>
 
       <p className="gps-modal-description">
-        Your browser or device doesn't support location services. Cannonball Mode will work without
+        Your browser or device doesn&apos;t support location services. Cannonball Mode will work without
         GPS, but distance and direction features will be unavailable.
       </p>
 
@@ -228,8 +226,21 @@ export const GPSPermissionModal = memo(function GPSPermissionModal({
   }
 
   return (
-    <div className="gps-modal-overlay" onClick={onClose}>
-      <div className="gps-modal" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="gps-modal-overlay"
+      onClick={onClose}
+      onKeyDown={(e) => e.key === 'Escape' && onClose?.()}
+      role="button"
+      tabIndex={0}
+    >
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- stopPropagation needed to prevent overlay close */}
+      <div
+        className="gps-modal"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
         {permissionState === GPS_PERMISSION_STATES.REQUESTING && <PermissionRequestingContent />}
 
         {permissionState === GPS_PERMISSION_STATES.PROMPT && (

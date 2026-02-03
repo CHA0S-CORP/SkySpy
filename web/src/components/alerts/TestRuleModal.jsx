@@ -12,11 +12,16 @@ export function TestRuleModal({ rule, aircraft, feederLocation, onClose }) {
     <div
       className="modal-overlay"
       onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="test-modal-title"
+      onKeyDown={(e) => e.key === 'Escape' && onClose()}
+      role="presentation"
     >
-      <div className="modal modal-medium" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal modal-medium"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="test-modal-title"
+      >
         <div className="modal-header">
           <h3 id="test-modal-title">
             <TestTube2 size={20} aria-hidden="true" style={{ marginRight: '8px' }} />

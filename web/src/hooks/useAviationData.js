@@ -18,8 +18,7 @@ export function useAviationData(
   feederLat,
   feederLon,
   radarRange,
-  overlays,
-  apiBaseUrl = ''
+  overlays
 ) {
   const [aviationData, setAviationData] = useState({
     navaids: [],

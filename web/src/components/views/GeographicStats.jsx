@@ -202,8 +202,9 @@ export function GeographicStats({ apiBase, wsRequest, wsConnected, onSelectAircr
         <div className="advanced-filters-panel">
           <div className="filter-row">
             <div className="filter-field">
-              <label>Country</label>
+              <label htmlFor="geographic-country-filter">Country</label>
               <input
+                id="geographic-country-filter"
                 type="text"
                 placeholder="Filter by country..."
                 value={countryFilter}

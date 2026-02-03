@@ -13,13 +13,11 @@ import {
   X,
   Volume2,
   VolumeX,
-  Smartphone,
   Eye,
   EyeOff,
   Bell,
   BellOff,
   Radar,
-  Filter,
   Moon,
   Sun,
   ChevronDown,
@@ -27,10 +25,8 @@ import {
   Vibrate,
   Plane,
   Shield,
-  AlertTriangle,
   Navigation,
   Server,
-  Cpu,
 } from 'lucide-react';
 
 // Default settings

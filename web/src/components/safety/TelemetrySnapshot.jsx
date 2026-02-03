@@ -69,12 +69,22 @@ export function TelemetrySnapshot({ snapshot, label, onSelectAircraft }) {
  * Individual Snapshot Item
  */
 function SnapshotItem({ label, value, className = '', onClick }) {
+  const isClickable = !!onClick;
   return (
     <div className="snapshot-item">
       <span>{label}</span>
-      <span className={className} onClick={onClick}>
-        {value}
-      </span>
+      {isClickable ? (
+        <button
+          type="button"
+          className={className}
+          onClick={onClick}
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+        >
+          {value}
+        </button>
+      ) : (
+        <span className={className}>{value}</span>
+      )}
     </div>
   );
 }

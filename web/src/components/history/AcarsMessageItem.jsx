@@ -42,6 +42,14 @@ export function AcarsMessageItem({
           onSelectAircraft(linkHex);
         }
       }}
+      role={canLink ? 'button' : undefined}
+      tabIndex={canLink ? 0 : undefined}
+      onKeyDown={(e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && canLink && onSelectAircraft) {
+          e.preventDefault();
+          onSelectAircraft(linkHex);
+        }
+      }}
       title={
         canLink
           ? isFromHistory
@@ -61,6 +69,15 @@ export function AcarsMessageItem({
                 onSelectAircraft(linkHex);
               }
             }}
+            role={canLink ? 'button' : undefined}
+            tabIndex={canLink ? 0 : undefined}
+            onKeyDown={(e) => {
+              if ((e.key === 'Enter' || e.key === ' ') && canLink && onSelectAircraft) {
+                e.stopPropagation();
+                e.preventDefault();
+                onSelectAircraft(linkHex);
+              }
+            }}
           >
             {msg.callsign}
             {canLink && <ExternalLink size={10} />}
@@ -75,6 +92,8 @@ export function AcarsMessageItem({
         {msg.registration && (
           <span
             className="acars-history-reg clickable"
+            role="button"
+            tabIndex={0}
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
@@ -82,6 +101,17 @@ export function AcarsMessageItem({
                 onSelectAircraft(linkHex);
               } else if (onSelectByTail) {
                 onSelectByTail(msg.registration);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.stopPropagation();
+                e.preventDefault();
+                if (canLink && onSelectAircraft) {
+                  onSelectAircraft(linkHex);
+                } else if (onSelectByTail) {
+                  onSelectByTail(msg.registration);
+                }
               }
             }}
           >
@@ -111,11 +141,22 @@ export function AcarsMessageItem({
         <div className="acars-history-aircraft">
           <span
             className="acars-history-icao clickable"
+            role="button"
+            tabIndex={0}
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
               if (onSelectAircraft) {
                 onSelectAircraft(linkHex);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.stopPropagation();
+                e.preventDefault();
+                if (onSelectAircraft) {
+                  onSelectAircraft(linkHex);
+                }
               }
             }}
           >

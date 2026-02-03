@@ -102,8 +102,8 @@ export function VirtualList({
     [onScroll]
   );
 
-  // Scroll to index
-  const scrollToIndex = useCallback(
+  // Scroll to index (available for external use via ref if needed)
+  const _scrollToIndex = useCallback(
     (index, align = 'start') => {
       if (!containerRef.current) return;
 

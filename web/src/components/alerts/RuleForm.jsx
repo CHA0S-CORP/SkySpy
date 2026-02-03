@@ -20,7 +20,7 @@ const SEVERITY_ICONS = {
 function SeveritySelector({ value, onChange }) {
   return (
     <div className="form-group">
-      <label id="severity-label">Priority</label>
+      <span id="severity-label" className="form-label">Priority</span>
       <div className="severity-options" role="radiogroup" aria-labelledby="severity-label">
         {Object.entries(SEVERITY_CONFIG).map(([key, config]) => {
           const { label, iconName, color } = config;
@@ -289,7 +289,12 @@ export function RuleForm({
   };
 
   return (
-    <div className="modal-overlay rule-form-overlay" onClick={handleClose} role="presentation">
+    <div
+      className="modal-overlay rule-form-overlay"
+      onClick={handleClose}
+      onKeyDown={(e) => e.key === 'Escape' && handleClose()}
+      role="presentation"
+    >
       <div
         className="modal modal-large rule-form"
         ref={modalRef}
@@ -369,8 +374,9 @@ export function RuleForm({
 
           {/* Conditions Builder */}
           <div className="form-group">
-            <label>Conditions *</label>
+            <span id="conditions-label" className="form-label">Conditions *</span>
             <ConditionBuilder
+              aria-labelledby="conditions-label"
               conditions={form.conditions}
               validationErrors={validationErrors}
               onChange={(conditions) => setForm({ ...form, conditions })}

@@ -1,15 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import {
-  MAX_CACHE_SIZE,
-  isCacheEntryValid,
-  enforceMaxCacheSize,
-  cleanupCache,
-  safeJson,
-  createBatches,
-  isValidIcao,
-  normalizeIcao,
-  createErrorInfo,
-} from './aircraftInfo';
+import { safeJson } from './aircraftInfo';
 
 /**
  * Robust aircraft info lookup hook with:

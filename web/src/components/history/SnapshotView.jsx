@@ -19,7 +19,18 @@ export function SnapshotView({ snapshot, label, onSelectAircraft }) {
         {snapshot.hex && (
           <div className="snapshot-item">
             <span>ICAO</span>
-            <span className="icao-link" onClick={() => onSelectAircraft?.(snapshot.hex)}>
+            <span
+              className="icao-link"
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelectAircraft?.(snapshot.hex)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelectAircraft?.(snapshot.hex);
+                }
+              }}
+            >
               {snapshot.hex}
             </span>
           </div>

@@ -392,9 +392,10 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
       {showFilters && (
         <div className="advanced-filters">
           <div className="filter-group">
-            <label>Altitude (ft)</label>
+            <label htmlFor="altitude-filter-min">Altitude (ft)</label>
             <div className="range-inputs">
               <input
+                id="altitude-filter-min"
                 type="number"
                 placeholder="Min"
                 value={filters.minAltitude}
@@ -402,6 +403,7 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
               />
               <span>to</span>
               <input
+                id="altitude-filter-max"
                 type="number"
                 placeholder="Max"
                 value={filters.maxAltitude}
@@ -410,9 +412,10 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
             </div>
           </div>
           <div className="filter-group">
-            <label>Distance (nm)</label>
+            <label htmlFor="distance-filter-min">Distance (nm)</label>
             <div className="range-inputs">
               <input
+                id="distance-filter-min"
                 type="number"
                 placeholder="Min"
                 value={filters.minDistance}
@@ -420,6 +423,7 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
               />
               <span>to</span>
               <input
+                id="distance-filter-max"
                 type="number"
                 placeholder="Max"
                 value={filters.maxDistance}
@@ -428,9 +432,10 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
             </div>
           </div>
           <div className="filter-group">
-            <label>Speed (kts)</label>
+            <label htmlFor="speed-filter-min">Speed (kts)</label>
             <div className="range-inputs">
               <input
+                id="speed-filter-min"
                 type="number"
                 placeholder="Min"
                 value={filters.minSpeed}
@@ -438,6 +443,7 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
               />
               <span>to</span>
               <input
+                id="speed-filter-max"
                 type="number"
                 placeholder="Max"
                 value={filters.maxSpeed}

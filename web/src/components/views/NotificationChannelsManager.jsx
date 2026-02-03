@@ -88,7 +88,12 @@ function ChannelFormModal({ channel, channelTypes, onClose, onSave }) {
   const selectedTypeInfo = CHANNEL_TYPE_INFO[channelType] || CHANNEL_TYPE_INFO.custom;
 
   return (
-    <div className="modal-overlay" onClick={onClose} role="presentation">
+    <div
+      className="modal-overlay"
+      onClick={onClose}
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+      role="presentation"
+    >
       <div
         className="modal channel-form-modal"
         ref={modalRef}

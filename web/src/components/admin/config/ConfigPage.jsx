@@ -333,8 +333,25 @@ export function ConfigPage({ apiBase = '', onToast }) {
 
       {/* Import Modal */}
       {showImportModal && (
-        <div className="config-modal-overlay" onClick={() => setShowImportModal(false)}>
-          <div className="config-modal" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="config-modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={() => setShowImportModal(false)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setShowImportModal(false);
+            }
+          }}
+        >
+          <div
+            className="config-modal"
+            role="button"
+            tabIndex={0}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
             <div className="config-modal-header">
               <h3>Import Configuration</h3>
               <button onClick={() => setShowImportModal(false)} className="config-modal-close">

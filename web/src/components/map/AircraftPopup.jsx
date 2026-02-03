@@ -159,7 +159,7 @@ export const AircraftPopup = memo(
     };
 
     return (
-      <div
+      <section
         ref={popupRef}
         className={`aircraft-popup ${mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''} ${isEmergency ? 'emergency' : ''}`}
         style={popupStyle}
@@ -369,7 +369,7 @@ export const AircraftPopup = memo(
             ADSBx
           </a>
         </div>
-      </div>
+      </section>
     );
   },
   (prev, next) => {

@@ -33,8 +33,6 @@ export function useHistoryStream({
   const itemsRef = useRef(items);
   itemsRef.current = items;
 
-  // Event handlers for different stream types
-  const eventHandlers = useRef({});
   const isLiveRef = useRef(isLive);
 
   // Keep isLiveRef in sync

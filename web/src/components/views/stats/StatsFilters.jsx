@@ -29,7 +29,13 @@ export function TimeRangeSelector({ timeRange, onTimeRangeChange }) {
  */
 export function MilitaryToggle({ showMilitaryOnly, onToggle }) {
   return (
-    <div className={`filter-toggle ${showMilitaryOnly ? 'active' : ''}`} onClick={onToggle}>
+    <div
+      className={`filter-toggle ${showMilitaryOnly ? 'active' : ''}`}
+      role="button"
+      tabIndex={0}
+      onClick={onToggle}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
+    >
       <span className="toggle-indicator" />
       <span>Military Only</span>
     </div>
@@ -74,8 +80,8 @@ export function AdvancedFiltersPanel({
     <div className="advanced-filters-panel">
       <div className="filter-row">
         <div className="filter-field">
-          <label>Category</label>
-          <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+          <label htmlFor="stats-category-filter">Category</label>
+          <select id="stats-category-filter" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
             <option value="">All Categories</option>
             <option value="A0">A0 - No ADS-B</option>
             <option value="A1">A1 - Light</option>
@@ -88,8 +94,9 @@ export function AdvancedFiltersPanel({
           </select>
         </div>
         <div className="filter-field">
-          <label>Aircraft Type</label>
+          <label htmlFor="stats-aircraft-type-filter">Aircraft Type</label>
           <input
+            id="stats-aircraft-type-filter"
             type="text"
             placeholder="e.g. B738, A320"
             value={aircraftType}
@@ -99,8 +106,9 @@ export function AdvancedFiltersPanel({
       </div>
       <div className="filter-row">
         <div className="filter-field">
-          <label>Min Altitude (ft)</label>
+          <label htmlFor="stats-min-altitude-filter">Min Altitude (ft)</label>
           <input
+            id="stats-min-altitude-filter"
             type="number"
             placeholder="0"
             value={minAltitude}
@@ -108,8 +116,9 @@ export function AdvancedFiltersPanel({
           />
         </div>
         <div className="filter-field">
-          <label>Max Altitude (ft)</label>
+          <label htmlFor="stats-max-altitude-filter">Max Altitude (ft)</label>
           <input
+            id="stats-max-altitude-filter"
             type="number"
             placeholder="60000"
             value={maxAltitude}
@@ -117,8 +126,9 @@ export function AdvancedFiltersPanel({
           />
         </div>
         <div className="filter-field">
-          <label>Min Distance (nm)</label>
+          <label htmlFor="stats-min-distance-filter">Min Distance (nm)</label>
           <input
+            id="stats-min-distance-filter"
             type="number"
             placeholder="0"
             value={minDistance}
@@ -126,8 +136,9 @@ export function AdvancedFiltersPanel({
           />
         </div>
         <div className="filter-field">
-          <label>Max Distance (nm)</label>
+          <label htmlFor="stats-max-distance-filter">Max Distance (nm)</label>
           <input
+            id="stats-max-distance-filter"
             type="number"
             placeholder="250"
             value={maxDistance}

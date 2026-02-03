@@ -49,6 +49,14 @@ function AircraftCard({ icao, callsign, telemetry, color, onSelect }) {
     <div
       className="sep-aircraft-card"
       onClick={() => onSelect?.(icao)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect?.(icao);
+        }
+      }}
+      role="button"
+      tabIndex={0}
       style={{ '--ac-color': color }}
     >
       <div className="sep-ac-header">

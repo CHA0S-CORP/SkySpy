@@ -309,6 +309,9 @@ export const AcarsPanel = memo(function AcarsPanel({
                   <span
                     className="acars-callsign clickable"
                     onClick={() => onSelectAircraft?.(msg.icao_hex)}
+                    onKeyDown={(e) => e.key === 'Enter' && onSelectAircraft?.(msg.icao_hex)}
+                    role="button"
+                    tabIndex={0}
                     title={msg.airline?.name || 'Click to select aircraft'}
                   >
                     {msg.callsign || msg.icao_hex || 'Unknown'}

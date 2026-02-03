@@ -147,14 +147,25 @@ export function FlightDataGraphs({
           onTouchStart={handleGraphDragStart}
           onTouchMove={handleGraphDragMove}
           onTouchEnd={handleGraphDragEnd}
+          role="slider"
+          aria-label={`${label} graph`}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={positionPercent ?? 0}
+          tabIndex={0}
           style={{ touchAction: 'none', cursor: 'grab' }}
         >
           <div className="mini-graph-header">
             <span className="mini-graph-label">{label}</span>
             {isZoomed && (
-              <span className="mini-graph-zoom" onClick={resetGraphZoom}>
+              <button
+                className="mini-graph-zoom"
+                onClick={resetGraphZoom}
+                type="button"
+                aria-label="Reset zoom"
+              >
                 {zoom.toFixed(1)}x
-              </span>
+              </button>
             )}
             {currentValue !== null && (
               <span className="mini-graph-current" style={{ color }}>

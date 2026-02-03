@@ -7,7 +7,6 @@ import { Plane } from 'lucide-react';
  */
 export function AltitudeRangeViz({ decoded, pirep }) {
   const maxFL = 450; // FL450 = 45,000 ft
-  const minFL = 0;
 
   // Get reported altitude
   const flightLevel = pirep?.flight_level ?? pirep?.fltLvl;

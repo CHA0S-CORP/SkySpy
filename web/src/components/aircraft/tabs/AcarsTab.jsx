@@ -137,7 +137,6 @@ export function AcarsTab({
       ) : (
         <ul
           className={`acars-list ${acarsCompactMode ? 'compact' : ''}`}
-          role="list"
           aria-label="ACARS messages"
         >
           {filteredMessages.map((msg, i) => {

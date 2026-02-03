@@ -180,6 +180,7 @@ export default function LoginPage() {
                     placeholder="Enter your credentials"
                     disabled={isSubmitting}
                     autoComplete="username"
+                    // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional for login form UX
                     autoFocus
                   />
                   <div className="input-glow" />

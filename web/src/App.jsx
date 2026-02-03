@@ -356,7 +356,18 @@ export default function App() {
 
       {/* Mobile menu overlay */}
       {mobileMenuOpen && (
-        <div className="mobile-menu-overlay" onClick={() => setMobileMenuOpen(false)} />
+        <div
+          className="mobile-menu-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={() => setMobileMenuOpen(false)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setMobileMenuOpen(false);
+            }
+          }}
+        />
       )}
 
       {/* Mobile menu toggle */}
@@ -565,8 +576,30 @@ export default function App() {
       )}
 
       {selectedAircraftHex && (
-        <div className="aircraft-detail-overlay" onClick={() => setSelectedAircraftHex(null)}>
-          <div className="aircraft-detail-modal" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="aircraft-detail-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={() => setSelectedAircraftHex(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setSelectedAircraftHex(null);
+            }
+          }}
+        >
+          <div
+            className="aircraft-detail-modal"
+            role="button"
+            tabIndex={0}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+            }}
+          >
             <AircraftDetailPage
               hex={selectedAircraftHex}
               apiUrl={config.apiBaseUrl}

@@ -114,7 +114,7 @@ export function RadioTab({
           <span>No transmissions mentioning this aircraft in the selected time range</span>
         </div>
       ) : (
-        <ul className="radio-list" role="list" aria-label="Radio transmissions">
+        <ul className="radio-list" aria-label="Radio transmissions">
           {filteredRadioTransmissions.map((transmission) => {
             const id = transmission.id;
             const isPlaying = radioPlayingId === id;
@@ -164,6 +164,13 @@ export function RadioTab({
                     <div
                       className="radio-progress-container"
                       onClick={(e) => handleRadioSeek(id, e)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowRight') {
+                          handleRadioSeek(id, { ...e, type: 'keydown', direction: 'forward' });
+                        } else if (e.key === 'ArrowLeft') {
+                          handleRadioSeek(id, { ...e, type: 'keydown', direction: 'backward' });
+                        }
+                      }}
                       role="slider"
                       aria-label="Audio progress"
                       aria-valuemin={0}

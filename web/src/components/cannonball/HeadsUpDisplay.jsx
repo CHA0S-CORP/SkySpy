@@ -19,7 +19,7 @@ export const HeadsUpDisplay = memo(function HeadsUpDisplay({
   threat,
   threatCount,
   userHeading,
-  gpsActive,
+  _gpsActive,
 }) {
   // No threats - show all clear
   if (!threat) {

@@ -7,9 +7,10 @@ export function AdvancedFilters({ filters, setFilters }) {
   return (
     <div className="advanced-filters">
       <div className="filter-group">
-        <label>Altitude (ft)</label>
+        <label htmlFor="filter-min-altitude">Altitude (ft)</label>
         <div className="range-inputs">
           <input
+            id="filter-min-altitude"
             type="number"
             placeholder="Min"
             value={filters.minAltitude}
@@ -25,9 +26,10 @@ export function AdvancedFilters({ filters, setFilters }) {
         </div>
       </div>
       <div className="filter-group">
-        <label>Distance (nm)</label>
+        <label htmlFor="filter-min-distance">Distance (nm)</label>
         <div className="range-inputs">
           <input
+            id="filter-min-distance"
             type="number"
             placeholder="Min"
             value={filters.minDistance}
@@ -43,9 +45,10 @@ export function AdvancedFilters({ filters, setFilters }) {
         </div>
       </div>
       <div className="filter-group">
-        <label>Speed (kts)</label>
+        <label htmlFor="filter-min-speed">Speed (kts)</label>
         <div className="range-inputs">
           <input
+            id="filter-min-speed"
             type="number"
             placeholder="Min"
             value={filters.minSpeed}

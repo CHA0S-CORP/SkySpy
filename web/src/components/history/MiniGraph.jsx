@@ -117,7 +117,18 @@ export function MiniGraph({
       <div className="mini-graph-header">
         <span className="mini-graph-label">{label}</span>
         {isZoomed && (
-          <span className="mini-graph-zoom" onClick={() => onResetZoom?.(eventKey)}>
+          <span
+            className="mini-graph-zoom"
+            role="button"
+            tabIndex={0}
+            onClick={() => onResetZoom?.(eventKey)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onResetZoom?.(eventKey);
+              }
+            }}
+          >
             {zoom.toFixed(1)}x
           </span>
         )}

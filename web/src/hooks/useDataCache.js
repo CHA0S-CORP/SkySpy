@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef } from 'react';
 
 // Default TTL values in milliseconds
 const DEFAULT_TTL = {

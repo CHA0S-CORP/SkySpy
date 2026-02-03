@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Database, ChevronDown, ChevronRight } from 'lucide-react';
 import { BentoCard } from '../../../ui/bento-card';
 import { Badge } from '../../../ui/badge';

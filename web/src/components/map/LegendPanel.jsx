@@ -27,11 +27,13 @@ export const LegendPanel = memo(function LegendPanel({
       : {};
 
   return (
-    <div
+    <aside
       className={`legend-panel ${mapMode === 'pro' ? 'pro-legend' : 'crt-legend'} ${isDragging ? 'dragging' : ''}`}
       style={legendStyle}
       onMouseDown={handleMouseDown}
       onTouchStart={handleMouseDown}
+      role="complementary"
+      aria-label="Map legend"
     >
       <div className="legend-header">
         <Move size={14} className="drag-handle" />
@@ -136,7 +138,7 @@ export const LegendPanel = memo(function LegendPanel({
           </div>
         </div>
       )}
-    </div>
+    </aside>
   );
 });
 

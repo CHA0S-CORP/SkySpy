@@ -162,8 +162,9 @@ export function FlightPatternsStats({ apiBase, wsRequest, wsConnected, onSelectA
         <div className="advanced-filters-panel">
           <div className="filter-row">
             <div className="filter-field">
-              <label>Aircraft Type</label>
+              <label htmlFor="flight-patterns-type-filter">Aircraft Type</label>
               <input
+                id="flight-patterns-type-filter"
                 type="text"
                 placeholder="e.g. B738, A320"
                 value={typeFilter}

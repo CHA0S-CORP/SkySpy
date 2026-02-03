@@ -19,7 +19,15 @@ export function ArchivedNotamCard({ notam, expanded, onToggle }) {
   return (
     <div
       className={`archive-card notam-card ${notam.notam_type?.toLowerCase()} ${expanded ? 'expanded' : ''}`}
+      role="button"
+      tabIndex={0}
       onClick={onToggle}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onToggle();
+        }
+      }}
     >
       <div className="archive-card-header">
         <div className="archive-type-badge" style={{ backgroundColor: typeInfo.color }}>

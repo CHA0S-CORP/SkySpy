@@ -262,6 +262,12 @@ function TelemetryGraph({
       onTouchStart={onDragStart}
       onTouchMove={onDragMove}
       onTouchEnd={onDragEnd}
+      role="slider"
+      aria-label={`${label} graph`}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={position ?? 0}
+      tabIndex={0}
       style={{ touchAction: 'none', cursor: 'grab' }}
     >
       <div className="tg-graph-header">

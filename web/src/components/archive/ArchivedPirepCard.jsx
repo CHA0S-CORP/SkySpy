@@ -55,7 +55,15 @@ export function ArchivedPirepCard({ pirep, expanded, onToggle }) {
   return (
     <div
       className={`archive-card pirep-card ${isUrgent ? 'urgent' : ''} ${expanded ? 'expanded' : ''} severity-${maxSeverity}`}
+      role="button"
+      tabIndex={0}
       onClick={onToggle}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onToggle();
+        }
+      }}
     >
       {/* Severity indicator bar on left side */}
       <div

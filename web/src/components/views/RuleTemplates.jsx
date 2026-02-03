@@ -152,7 +152,12 @@ export function RuleTemplates({ onClose, onSelectTemplate }) {
   };
 
   return (
-    <div className="rule-templates-overlay" onClick={handleOverlayClick}>
+    <div
+      className="rule-templates-overlay"
+      role="presentation"
+      onClick={handleOverlayClick}
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+    >
       <div
         className="rule-templates-modal"
         role="dialog"

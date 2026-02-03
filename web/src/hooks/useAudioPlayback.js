@@ -101,7 +101,7 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
       audio.volume = isMutedRef.current ? 0 : audioVolumeRef.current;
       audioRefs[next.id] = audio;
 
-      let loadTimeout;
+      let loadTimeout = null;
       const cleanup = () => {
         if (loadTimeout) clearTimeout(loadTimeout);
       };

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Calendar, ChevronDown, X, Clock } from 'lucide-react';
+import { Calendar, ChevronDown, Clock } from 'lucide-react';
 
 const PRESETS = [
   { label: '1 hour', value: '1h', hours: 1 },
@@ -152,9 +152,10 @@ export function DateRangePicker({ value = '24h', customRange, onChange }) {
           ) : (
             <div className="date-range-custom">
               <div className="date-input-group">
-                <label>Start</label>
+                <label htmlFor="date-range-start-date">Start</label>
                 <div className="date-time-inputs">
                   <input
+                    id="date-range-start-date"
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
@@ -167,9 +168,9 @@ export function DateRangePicker({ value = '24h', customRange, onChange }) {
                 </div>
               </div>
               <div className="date-input-group">
-                <label>End</label>
+                <label htmlFor="date-range-end-date">End</label>
                 <div className="date-time-inputs">
-                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                  <input id="date-range-end-date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                   <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
                 </div>
               </div>

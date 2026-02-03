@@ -23,7 +23,6 @@ import {
   BarChart2,
   Map as MapIcon,
 } from 'lucide-react';
-import { formatETA } from '../../utils/threatPrediction';
 
 const THREAT_COLORS = {
   critical: '#ef4444',

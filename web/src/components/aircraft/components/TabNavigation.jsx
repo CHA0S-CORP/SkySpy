@@ -101,13 +101,13 @@ export function TabNavigation({
     <div
       className={`detail-tabs-wrapper ${showLeftFade ? 'fade-left' : ''} ${showRightFade ? 'fade-right' : ''}`}
     >
-      <nav
-        ref={tabListRef}
-        className="detail-tabs"
-        role="tablist"
-        aria-label="Aircraft information tabs"
-        onKeyDown={handleKeyDown}
-      >
+      <nav className="detail-tabs" aria-label="Aircraft information tabs">
+        <div
+          ref={tabListRef}
+          role="tablist"
+          onKeyDown={handleKeyDown}
+          className="detail-tabs-inner"
+        >
         {TAB_CONFIG.map((tab, index) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -139,6 +139,7 @@ export function TabNavigation({
             </button>
           );
         })}
+        </div>
       </nav>
     </div>
   );

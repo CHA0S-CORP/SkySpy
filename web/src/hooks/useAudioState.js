@@ -8,7 +8,7 @@
  * - Subscriber pattern for state change notifications
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 // Emergency keywords for filtering distress calls
 export const EMERGENCY_KEYWORDS = [

@@ -11,7 +11,15 @@ export function SessionCard({ session, onSelectAircraft }) {
   return (
     <div
       className={`session-card ${session.is_military ? 'military' : ''} ${session.safety_event_count > 0 ? 'has-safety-events' : ''} type-${typeCategory}`}
+      role="button"
+      tabIndex={0}
       onClick={() => onSelectAircraft?.(session.icao_hex)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelectAircraft?.(session.icao_hex);
+        }
+      }}
     >
       <div className="session-header">
         <div className="session-identity">
@@ -31,9 +39,18 @@ export function SessionCard({ session, onSelectAircraft }) {
           <div className="session-icao-row">
             <span
               className="icao-link"
+              role="button"
+              tabIndex={0}
               onClick={(e) => {
                 e.stopPropagation();
                 onSelectAircraft?.(session.icao_hex);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  onSelectAircraft?.(session.icao_hex);
+                }
               }}
             >
               {session.icao_hex}

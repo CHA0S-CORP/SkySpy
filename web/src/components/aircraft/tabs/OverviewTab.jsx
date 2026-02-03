@@ -79,7 +79,7 @@ function isEmergencySquawk(squawk) {
 /**
  * LiveTelemetrySection - Real-time flight data display
  */
-function LiveTelemetrySection({ aircraft, trackHistory, calculateDistance }) {
+function LiveTelemetrySection({ aircraft, trackHistory: _trackHistory, calculateDistance }) {
   if (!aircraft) {
     return (
       <div className="detail-empty" role="status">

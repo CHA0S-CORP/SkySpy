@@ -202,8 +202,9 @@ export function AcarsStats({ apiBase, wsRequest, wsConnected }) {
         <div className="advanced-filters-panel">
           <div className="filter-row">
             <div className="filter-field">
-              <label>Message Type</label>
+              <label htmlFor="acars-type-filter">Message Type</label>
               <input
+                id="acars-type-filter"
                 type="text"
                 placeholder="Filter by type..."
                 value={typeFilter}

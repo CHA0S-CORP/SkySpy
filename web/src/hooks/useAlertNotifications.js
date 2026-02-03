@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useToastContextSafe, TOAST_TYPES } from './useToast';
+import { useToastContextSafe } from './useToast';
 
 // Helper to safely parse JSON from fetch response
 const safeJson = async (res) => {

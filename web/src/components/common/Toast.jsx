@@ -66,12 +66,21 @@ export function Toast({ toast, onRemove }) {
 
   const isClickable = Boolean(toast.onClick);
 
+  const handleKeyDown = (e) => {
+    if (isClickable && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      handleClick();
+    }
+  };
+
   return (
     <div
       className={`toast toast-${toast.type} ${isExiting ? 'toast-exit' : 'toast-enter'} ${isClickable ? 'toast-clickable' : ''}`}
-      role="alert"
+      role={isClickable ? 'button' : 'alert'}
       aria-live="polite"
+      tabIndex={isClickable ? 0 : undefined}
       onClick={isClickable ? handleClick : undefined}
+      onKeyDown={isClickable ? handleKeyDown : undefined}
       style={isClickable ? { cursor: 'pointer' } : undefined}
     >
       <div className="toast-icon">{getIcon(toast.type)}</div>

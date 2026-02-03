@@ -57,6 +57,10 @@ export const ConflictBanner = memo(function ConflictBanner({
                 <span
                   className="conflict-callsign clickable"
                   onClick={() => onSelectAircraft?.(event.icao)}
+                  onKeyDown={(e) => e.key === 'Enter' && onSelectAircraft?.(event.icao)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Select aircraft ${event.callsign || event.icao}`}
                 >
                   {event.callsign || event.icao}
                 </span>
@@ -64,6 +68,10 @@ export const ConflictBanner = memo(function ConflictBanner({
                 <span
                   className="conflict-callsign clickable"
                   onClick={() => onSelectAircraft?.(event.icao_2)}
+                  onKeyDown={(e) => e.key === 'Enter' && onSelectAircraft?.(event.icao_2)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Select aircraft ${event.callsign_2 || event.icao_2}`}
                 >
                   {event.callsign_2 || event.icao_2}
                 </span>

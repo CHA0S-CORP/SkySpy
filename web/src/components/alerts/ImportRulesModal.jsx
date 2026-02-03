@@ -18,7 +18,12 @@ export function ImportRulesModal({
   );
 
   return (
-    <div className="modal-overlay" onClick={onClose} role="presentation">
+    <div
+      className="modal-overlay"
+      onClick={onClose}
+      onKeyDown={(e) => e.key === 'Escape' && onClose()}
+      role="presentation"
+    >
       <div
         className="modal import-modal"
         onClick={(e) => e.stopPropagation()}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Plane, ExternalLink, ArrowRight, Check } from 'lucide-react';
+import { AlertTriangle, Plane, ArrowRight, Check } from 'lucide-react';
 
 /**
  * Safety Event Card Component
