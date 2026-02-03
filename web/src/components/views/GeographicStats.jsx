@@ -1,12 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import {
   Globe,
-  Building2,
   MapPin,
   Flag,
   Users,
-  Plane,
-  ExternalLink,
   Clock,
   Filter,
   ChevronDown,
@@ -22,7 +19,7 @@ import { useStats } from '../../hooks';
  * - Connected airports
  * - Regional distribution
  */
-export function GeographicStats({ apiBase, wsRequest, wsConnected, onSelectAircraft }) {
+export function GeographicStats({ apiBase, wsRequest, wsConnected, onSelectAircraft: _onSelectAircraft }) {
   const [timeRange, setTimeRange] = useState('24h');
   const [showFilters, setShowFilters] = useState(false);
   const [countryFilter, setCountryFilter] = useState('');
@@ -53,7 +50,6 @@ export function GeographicStats({ apiBase, wsRequest, wsConnected, onSelectAircr
   );
 
   const maxAirlineCount = Math.max(...airlines.map((a) => a.count || 0), 1);
-  const maxAirportCount = Math.max(...airports.map((a) => a.count || 0), 1);
 
   // Colors for countries pie
   const countryColors = [

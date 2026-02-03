@@ -214,6 +214,8 @@ export const playAudioFromGlobal = (transmission) => {
     globalAudioState.audioRefs[id] = audio;
 
     audio.addEventListener('loadedmetadata', () => {
+      // Only notify if there are active subscribers
+      if (globalAudioState.subscribers.length === 0) return;
       globalAudioState.audioDurations[id] = audio.duration;
       notifySubscribers({ audioDurations: { ...globalAudioState.audioDurations } });
     });
@@ -222,16 +224,20 @@ export const playAudioFromGlobal = (transmission) => {
       globalAudioState.playingId = null;
       globalAudioState.currentTransmission = null;
       globalAudioState.audioProgress[id] = 0;
-      notifySubscribers({
-        playingId: null,
-        currentTransmission: null,
-        audioProgress: { ...globalAudioState.audioProgress },
-      });
 
       // Clear progress interval
       if (globalAudioState.progressIntervalRef) {
         clearInterval(globalAudioState.progressIntervalRef);
         globalAudioState.progressIntervalRef = null;
+      }
+
+      // Only notify if there are active subscribers
+      if (globalAudioState.subscribers.length > 0) {
+        notifySubscribers({
+          playingId: null,
+          currentTransmission: null,
+          audioProgress: { ...globalAudioState.audioProgress },
+        });
       }
 
       // Play next in queue
@@ -242,7 +248,11 @@ export const playAudioFromGlobal = (transmission) => {
       console.error('Global audio playback error:', e);
       globalAudioState.playingId = null;
       globalAudioState.currentTransmission = null;
-      notifySubscribers({ playingId: null, currentTransmission: null });
+
+      // Only notify if there are active subscribers
+      if (globalAudioState.subscribers.length > 0) {
+        notifySubscribers({ playingId: null, currentTransmission: null });
+      }
 
       // Try next in queue
       setTimeout(() => processGlobalAutoplayQueue(), 100);

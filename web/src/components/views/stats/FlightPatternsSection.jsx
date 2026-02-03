@@ -4,9 +4,7 @@ import {
   Clock,
   Plane,
   Timer,
-  TrendingUp,
   ArrowRight,
-  BarChart2,
   Loader2,
 } from 'lucide-react';
 
@@ -17,7 +15,7 @@ import {
  * - Aircraft types breakdown
  * - Average flight duration by type
  */
-export function FlightPatternsSection({ data, loading, onSelectAircraft }) {
+export function FlightPatternsSection({ data, loading, onSelectAircraft: _onSelectAircraft }) {
   const {
     top_routes = [],
     busiest_hours = [],

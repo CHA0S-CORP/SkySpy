@@ -1,5 +1,5 @@
 import React, { forwardRef, useRef, useEffect, useState, memo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { cva } from 'class-variance-authority';
 import { cn } from './cn';
 

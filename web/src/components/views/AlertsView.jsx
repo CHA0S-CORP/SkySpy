@@ -194,7 +194,7 @@ export function AlertsView({
       {/* Undo Delete Banner */}
       {pendingDelete && (
         <div className="undo-delete-banner" role="alert" aria-live="assertive">
-          <span>Rule "{pendingDelete.rule.name}" will be deleted</span>
+          <span>Rule &quot;{pendingDelete.rule.name}&quot; will be deleted</span>
           <button className="btn-secondary btn-sm" onClick={handleUndoDelete}>
             <Undo2 size={14} /> Undo
           </button>

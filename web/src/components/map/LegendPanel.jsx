@@ -32,7 +32,7 @@ export const LegendPanel = memo(function LegendPanel({
       style={legendStyle}
       aria-label="Map legend"
     >
-      <div className="legend-header" onMouseDown={handleMouseDown} onTouchStart={handleMouseDown}>
+      <div className="legend-header" role="toolbar" aria-label="Legend controls" onMouseDown={handleMouseDown} onTouchStart={handleMouseDown}>
         <Move size={14} className="drag-handle" />
         <Info size={16} />
         <span>Legend</span>

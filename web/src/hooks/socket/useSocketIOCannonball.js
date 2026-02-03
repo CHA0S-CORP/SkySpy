@@ -58,6 +58,7 @@ export function useSocketIOCannonball({
     // Set initial radius - use setTimeout to ensure emit ref is populated
     // This handles the case where connection happens before emit ref is set
     setTimeout(() => {
+      if (!mountedRef.current) return;
       if (socketEmitRef.current) {
         socketEmitRef.current('set_radius', { radius_nm: threatRadiusRef.current });
 

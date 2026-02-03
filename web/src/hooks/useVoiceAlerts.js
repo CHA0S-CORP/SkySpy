@@ -86,6 +86,19 @@ export function useVoiceAlerts({
   const queueRef = useRef([]);
   const announcedThreatsRef = useRef(new Set());
   const lastAnnouncementRef = useRef(null);
+  const mountedRef = useRef(true);
+  const threatTimeoutsRef = useRef(new Map());
+
+  // Track mounted state and cleanup timeouts on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      // Clear all threat timeouts on unmount
+      threatTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+      threatTimeoutsRef.current.clear();
+    };
+  }, []);
 
   // Check for speech synthesis support
   useEffect(() => {
@@ -212,9 +225,17 @@ export function useVoiceAlerts({
 
       // Track announced threats (auto-clear after 30s)
       announcedThreatsRef.current.add(threatId);
-      setTimeout(() => {
-        announcedThreatsRef.current.delete(threatId);
+      // Clear any existing timeout for this threat
+      if (threatTimeoutsRef.current.has(threatId)) {
+        clearTimeout(threatTimeoutsRef.current.get(threatId));
+      }
+      const timeoutId = setTimeout(() => {
+        if (mountedRef.current) {
+          announcedThreatsRef.current.delete(threatId);
+          threatTimeoutsRef.current.delete(threatId);
+        }
       }, 30000);
+      threatTimeoutsRef.current.set(threatId, timeoutId);
 
       // Use priority for critical threats
       if (threat.threat_level === 'critical') {

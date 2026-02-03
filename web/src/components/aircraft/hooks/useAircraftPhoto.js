@@ -142,6 +142,10 @@ export function useAircraftPhoto({ hex, baseUrl, initialPhotoData = null }) {
           clearInterval(intervalId);
           intervalsRef.current.delete(intervalId);
           retryPhotoRef.current = null;
+        } else {
+          console.error('Error polling for photo:', e);
+          // On non-abort error, increment attempts to eventually stop polling
+          attempts++;
         }
       }
     }, 3000);
@@ -181,7 +185,11 @@ export function useAircraftPhoto({ hex, baseUrl, initialPhotoData = null }) {
           fetch(`${baseUrl}/api/v1/airframes/${hex}/photos/fetch/`, {
             method: 'POST',
             signal: abortController.signal,
-          }).catch(() => {});
+          }).catch((err) => {
+            if (err.name !== 'AbortError') {
+              console.error('Background photo fetch failed:', err);
+            }
+          });
 
           // Poll for photo
           let attempts = 0;

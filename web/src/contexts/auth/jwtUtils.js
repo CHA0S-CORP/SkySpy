@@ -7,7 +7,18 @@
  */
 export function parseJwt(token) {
   try {
-    const base64Url = token.split('.')[1];
+    if (!token || typeof token !== 'string') {
+      return null;
+    }
+    // Validate JWT structure: must have exactly 3 parts separated by dots
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      return null;
+    }
+    const base64Url = parts[1];
+    if (!base64Url) {
+      return null;
+    }
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     const jsonPayload = decodeURIComponent(
       atob(base64)

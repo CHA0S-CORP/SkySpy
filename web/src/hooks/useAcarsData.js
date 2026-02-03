@@ -67,7 +67,9 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
   }, [apiBase]);
 
   // Fetch ACARS messages when viewing ACARS tab
+  const mountedRef = useRef(true);
   useEffect(() => {
+    mountedRef.current = true;
     if (viewType !== 'acars') return;
 
     const fetchAcars = async () => {
@@ -105,7 +107,7 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
           result = await safeJson(res);
         }
 
-        if (result) {
+        if (result && mountedRef.current) {
           setAcarsMessages(result.messages || result.results || result || []);
         }
       } catch (err) {
@@ -113,6 +115,10 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
       }
     };
     fetchAcars();
+
+    return () => {
+      mountedRef.current = false;
+    };
   }, [viewType, timeRange, acarsSource, acarsAirlineFilter, acarsSelectedLabels, apiBase]);
 
   // Lookup hex values from sightings for ACARS messages with callsign but no icao_hex
@@ -131,10 +137,13 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
 
     if (callsignsToLookup.size === 0) return;
 
+    let isMounted = true;
+
     const lookupCallsigns = async () => {
       const lookups = Array.from(callsignsToLookup).slice(0, 10);
 
       for (const callsign of lookups) {
+        if (!isMounted) return;
         try {
           let data;
           if (wsRequest && wsConnected) {
@@ -156,6 +165,7 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
             if (!data) throw new Error('HTTP request failed');
           }
           const sightings = data?.sightings || data?.results || [];
+          if (!isMounted) return;
           if (sightings.length > 0 && sightings[0].icao_hex) {
             setCallsignHexCache((prev) => ({
               ...prev,
@@ -165,12 +175,18 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
             setCallsignHexCache((prev) => ({ ...prev, [callsign]: null }));
           }
         } catch (err) {
-          setCallsignHexCache((prev) => ({ ...prev, [callsign]: null }));
+          if (isMounted) {
+            setCallsignHexCache((prev) => ({ ...prev, [callsign]: null }));
+          }
         }
       }
     };
 
     lookupCallsigns();
+
+    return () => {
+      isMounted = false;
+    };
   }, [viewType, acarsMessages.length, apiBase, wsRequest, wsConnected]);
 
   // Lookup ICAO hex from registration for ACARS messages
@@ -189,10 +205,13 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
 
     if (regsToLookup.size === 0) return;
 
+    let isMounted = true;
+
     const lookupRegs = async () => {
       const lookups = Array.from(regsToLookup).slice(0, 10);
 
       for (const reg of lookups) {
+        if (!isMounted) return;
         try {
           let data;
           if (wsRequest && wsConnected) {
@@ -214,6 +233,7 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
             if (!data) throw new Error('HTTP request failed');
           }
           const sightings = data?.sightings || data?.results || [];
+          if (!isMounted) return;
           if (sightings.length > 0 && sightings[0].icao_hex) {
             setRegHexCache((prev) => ({
               ...prev,
@@ -223,12 +243,18 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
             setRegHexCache((prev) => ({ ...prev, [reg]: null }));
           }
         } catch (err) {
-          setRegHexCache((prev) => ({ ...prev, [reg]: null }));
+          if (isMounted) {
+            setRegHexCache((prev) => ({ ...prev, [reg]: null }));
+          }
         }
       }
     };
 
     lookupRegs();
+
+    return () => {
+      isMounted = false;
+    };
   }, [viewType, acarsMessages.length, apiBase, wsRequest, wsConnected]);
 
   // Close label dropdown when clicking outside

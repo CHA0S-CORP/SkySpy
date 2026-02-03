@@ -2,14 +2,12 @@ import React, { useMemo } from 'react';
 import {
   Calendar,
   TrendingUp,
-  TrendingDown,
   Sun,
   Moon,
   ArrowUpRight,
   ArrowDownRight,
   Minus,
   BarChart2,
-  Clock,
   Loader2,
 } from 'lucide-react';
 
@@ -20,7 +18,7 @@ import {
  * - Weekend vs weekday chart
  * - Trend charts (30-day, 12-week, 12-month)
  */
-export function TimeComparisonSection({ data, loading }) {
+export function TimeComparisonSection({ data, loading, onSelectAircraft: _onSelectAircraft }) {
   const {
     week_over_week = {},
     day_night_ratio = {},

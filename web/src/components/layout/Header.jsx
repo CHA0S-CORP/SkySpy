@@ -1,18 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { Plane, MapPin, Clock, Settings, BellRing, BellOff, Users } from 'lucide-react';
 import { saveConfig } from '../../utils/config';
 import { AudioPlaybackControl } from './AudioPlaybackControl';
 
-export function Header({ stats, location, onlineUsers, config, setConfig, setShowSettings }) {
+// Memoized time display component to prevent re-renders from propagating
+const TimeDisplay = memo(function TimeDisplay() {
   const [time, setTime] = useState(new Date());
-  const [notifPermission, setNotifPermission] = useState(
-    'Notification' in window ? Notification.permission : 'denied'
-  );
 
   useEffect(() => {
     const id = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  return (
+    <div className="header-time">
+      <Clock size={14} />
+      <span>{time.toUTCString().slice(17, 25)} UTC</span>
+    </div>
+  );
+});
+
+export function Header({ stats, location, onlineUsers, config, setConfig, setShowSettings }) {
+  const [notifPermission, setNotifPermission] = useState(
+    'Notification' in window ? Notification.permission : 'denied'
+  );
 
   const handleNotifToggle = async () => {
     if (notifPermission === 'granted') {
@@ -76,10 +87,7 @@ export function Header({ stats, location, onlineUsers, config, setConfig, setSho
         <button className="header-btn" onClick={() => setShowSettings(true)}>
           <Settings size={16} />
         </button>
-        <div className="header-time">
-          <Clock size={14} />
-          <span>{time.toUTCString().slice(17, 25)} UTC</span>
-        </div>
+        <TimeDisplay />
       </div>
     </header>
   );

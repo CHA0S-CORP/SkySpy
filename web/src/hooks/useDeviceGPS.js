@@ -53,7 +53,7 @@ export function useDeviceGPS({
   const [permissionState, setPermissionState] = useState(GPS_PERMISSION_STATES.UNKNOWN);
 
   const watchIdRef = useRef(null);
-  const orientationRef = useRef(null);
+  const orientationHandlerRef = useRef(null);
   const permissionCheckedRef = useRef(false);
   const permissionStatusRef = useRef(null);
 
@@ -259,21 +259,22 @@ export function useDeviceGPS({
 
     // Request device orientation for heading
     if (typeof DeviceOrientationEvent !== 'undefined') {
+      // Store the handler reference for proper cleanup
+      orientationHandlerRef.current = handleOrientation;
+
       // Check if we need to request permission (iOS 13+)
       if (typeof DeviceOrientationEvent.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission()
           .then((orientationPermState) => {
-            if (orientationPermState === 'granted') {
-              window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-              window.addEventListener('deviceorientation', handleOrientation, true);
-              orientationRef.current = true;
+            if (orientationPermState === 'granted' && orientationHandlerRef.current) {
+              window.addEventListener('deviceorientationabsolute', orientationHandlerRef.current, true);
+              window.addEventListener('deviceorientation', orientationHandlerRef.current, true);
             }
           })
           .catch(console.error);
       } else {
-        window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-        window.addEventListener('deviceorientation', handleOrientation, true);
-        orientationRef.current = true;
+        window.addEventListener('deviceorientationabsolute', orientationHandlerRef.current, true);
+        window.addEventListener('deviceorientation', orientationHandlerRef.current, true);
       }
     }
   }, [
@@ -294,14 +295,14 @@ export function useDeviceGPS({
       watchIdRef.current = null;
     }
 
-    if (orientationRef.current) {
-      window.removeEventListener('deviceorientationabsolute', handleOrientation, true);
-      window.removeEventListener('deviceorientation', handleOrientation, true);
-      orientationRef.current = false;
+    if (orientationHandlerRef.current) {
+      window.removeEventListener('deviceorientationabsolute', orientationHandlerRef.current, true);
+      window.removeEventListener('deviceorientation', orientationHandlerRef.current, true);
+      orientationHandlerRef.current = null;
     }
 
     setIsTracking(false);
-  }, [handleOrientation]);
+  }, []);
 
   // Request single position update
   const getCurrentPosition = useCallback(() => {
@@ -349,9 +350,10 @@ export function useDeviceGPS({
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
       }
-      if (orientationRef.current) {
-        window.removeEventListener('deviceorientationabsolute', handleOrientation, true);
-        window.removeEventListener('deviceorientation', handleOrientation, true);
+      if (orientationHandlerRef.current) {
+        window.removeEventListener('deviceorientationabsolute', orientationHandlerRef.current, true);
+        window.removeEventListener('deviceorientation', orientationHandlerRef.current, true);
+        orientationHandlerRef.current = null;
       }
     };
   }, [
@@ -361,7 +363,6 @@ export function useDeviceGPS({
     permissionState,
     startTracking,
     stopTracking,
-    handleOrientation,
   ]);
 
   // Retry tracking after permission change

@@ -77,7 +77,7 @@ export const MetarPopup = memo(function MetarPopup({
   onClose,
   mapMode,
   getDistanceNm,
-  getBearing,
+  getBearing: _getBearing,
 }) {
   const { position, isDragging, handleMouseDown } = useDraggable({ x: 100, y: 100 });
   const popupRef = usePopupAccessibility(!!metar, onClose);
@@ -186,16 +186,10 @@ export const MetarPopup = memo(function MetarPopup({
         )}
 
         {getDistanceNm && metar.lat && (
-          <>
-            <div className="detail-row">
-              <span>Distance</span>
-              <span>{getDistanceNm(metar.lat, metar.lon).toFixed(1)} nm</span>
-            </div>
-            <div className="detail-row">
-              <span>Bearing</span>
-              <span>{Math.round(getBearing(metar.lat, metar.lon))}°</span>
-            </div>
-          </>
+          <div className="detail-row">
+            <span>Distance</span>
+            <span>{getDistanceNm(metar.lat, metar.lon).toFixed(1)} nm</span>
+          </div>
         )}
       </div>
     </div>
@@ -211,7 +205,7 @@ export const PirepPopup = memo(function PirepPopup({
   onClose,
   mapMode,
   getDistanceNm,
-  getBearing,
+  getBearing: _getBearing,
 }) {
   const { position, isDragging, handleMouseDown } = useDraggable({ x: 100, y: 100 });
   const popupRef = usePopupAccessibility(!!pirep, onClose);

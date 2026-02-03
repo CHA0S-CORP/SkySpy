@@ -235,7 +235,7 @@ export function PatternsTab({ correlationData }) {
       <div className="patterns-grid">
         <div className="pattern-card">
           <div className="pattern-title">Altitude vs Speed</div>
-          {correlationData.altitude_vs_speed?.slice(0, 4).map((band, i) => (
+          {correlationData.altitude_vs_speed?.slice(0, 4).map((band) => (
             <div key={band.altitude_band} className="pattern-row">
               <span className="pattern-label">{band.altitude_band}</span>
               <span className="pattern-value">{band.avg_speed || '--'} kt avg</span>

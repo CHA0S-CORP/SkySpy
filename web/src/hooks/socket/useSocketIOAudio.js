@@ -69,6 +69,11 @@ export const retrySocketIOAudio = () => {
 /**
  * Handle new transmission from socket
  *
+ * NOTE: This function mutates globalAudioState without synchronization.
+ * Multiple concurrent calls could result in race conditions when updating
+ * recentTransmissions or autoplayQueue arrays. Consider adding a mutex or
+ * queueing mechanism if issues arise in high-frequency scenarios.
+ *
  * @param {Object} transmission - Transmission data
  */
 const handleNewTransmission = (transmission) => {

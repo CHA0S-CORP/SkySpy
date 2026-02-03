@@ -10,8 +10,6 @@ import {
   AlertCircle,
   TrendingUp,
   Clock,
-  Filter,
-  ChevronDown,
   Eye,
   Repeat,
 } from 'lucide-react';
@@ -26,7 +24,6 @@ import { useStats } from '../../hooks';
  */
 export function SessionAnalyticsStats({ apiBase, wsRequest, wsConnected }) {
   const [timeRange, setTimeRange] = useState('24h');
-  const [showFilters, setShowFilters] = useState(false);
 
   const hours = { '1h': 1, '6h': 6, '24h': 24, '48h': 48, '7d': 168, '30d': 720 };
   const selectedHours = hours[timeRange] || 24;
@@ -318,7 +315,7 @@ export function SessionAnalyticsStats({ apiBase, wsRequest, wsConnected }) {
             <span>Data Completeness</span>
           </div>
           <div className="completeness-bars expanded">
-            {completenessItems.map((item, i) => (
+            {completenessItems.map((item) => (
               <div key={item.label} className="completeness-item expanded">
                 <div className="completeness-header">
                   <item.icon size={14} />

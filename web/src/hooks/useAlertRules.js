@@ -116,14 +116,16 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
       const ruleIdToDelete = rule.id;
       const deleteTimestamp = Date.now();
 
+      // Clear any existing undo timeout first to prevent orphaned timeouts
+      if (undoTimeoutRef.current) {
+        clearTimeout(undoTimeoutRef.current);
+        undoTimeoutRef.current = null;
+      }
+
       setPendingDelete({
         rule,
         timestamp: deleteTimestamp,
       });
-
-      if (undoTimeoutRef.current) {
-        clearTimeout(undoTimeoutRef.current);
-      }
 
       showToast(`Rule "${rule.name}" deleted. Click Undo to restore.`, 'warning');
 

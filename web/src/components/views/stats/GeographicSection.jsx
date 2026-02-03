@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Globe, Building2, MapPin, Flag, Users, Plane, ExternalLink, Loader2 } from 'lucide-react';
+import { Globe, MapPin, Flag, Users, Loader2 } from 'lucide-react';
 
 /**
  * GeographicSection - Displays geographic analytics
@@ -7,7 +7,7 @@ import { Globe, Building2, MapPin, Flag, Users, Plane, ExternalLink, Loader2 } f
  * - Top airlines/operators list
  * - Connected airports
  */
-export function GeographicSection({ data, loading, onSelectAircraft }) {
+export function GeographicSection({ data, loading, onSelectAircraft: _onSelectAircraft }) {
   const { countries = [], airlines = [], airports = [], regions = [] } = data || {};
 
   // Colors for countries pie
@@ -70,7 +70,6 @@ export function GeographicSection({ data, loading, onSelectAircraft }) {
   if (!data) return null;
 
   const maxAirlineCount = Math.max(...airlines.map((a) => a.count || 0), 1);
-  const maxAirportCount = Math.max(...airports.map((a) => a.count || 0), 1);
   const maxRegionCount = Math.max(...regions.map((r) => r.count || 0), 1);
 
   // SVG arc path helper

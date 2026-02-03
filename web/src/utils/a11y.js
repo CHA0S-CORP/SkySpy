@@ -23,15 +23,19 @@ export async function initA11y() {
   }
 
   try {
-    // Use Function constructor to prevent Vite from statically analyzing this import
-    // This allows the code to work even when @axe-core/react is not installed
-    const dynamicImport = new Function('specifier', 'return import(specifier)');
-
-    const [axeModule, React, ReactDOM] = await Promise.all([
-      dynamicImport('@axe-core/react').catch(() => null),
-      dynamicImport('react'),
-      dynamicImport('react-dom'),
-    ]);
+    // Dynamically import optional dependencies
+    // These imports may fail if the packages are not installed (e.g., in production)
+    let axeModule, React, ReactDOM;
+    try {
+      [axeModule, React, ReactDOM] = await Promise.all([
+        import('@axe-core/react').catch(() => null),
+        import('react'),
+        import('react-dom'),
+      ]);
+    } catch {
+      // Packages not available, silently skip
+      return;
+    }
 
     // If axe-core is not available, silently skip
     if (!axeModule) {

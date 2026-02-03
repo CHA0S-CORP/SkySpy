@@ -16,7 +16,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useSocketApi } from '../../hooks';
 import { globalAudioState, hasEmergencyKeyword } from '../../hooks/useAudioState';
-import { useSocketIOAudio, retrySocketIOAudio } from '../../hooks/socket';
+import { useSocketIOAudio } from '../../hooks/socket';
 import { useAudioPlayback } from '../../hooks/useAudioPlayback';
 import { AudioStatsBar, AudioFilters, AudioControls, AudioList } from '../audio';
 

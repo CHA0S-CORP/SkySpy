@@ -11,42 +11,21 @@ import {
   ChevronUp,
   ChevronDown,
   ChevronLeft,
-  ChevronRight,
   X,
-  Eye,
-  EyeOff,
-  Settings,
-  Trash2,
-  Plus,
   Shield,
   Bell,
-  Database,
   Zap,
   RefreshCw,
-  TestTube2,
   AlertTriangle,
-  BarChart3,
-  History,
-  Map as MapIcon,
   Radar,
   Moon,
   Sun,
-  BellRing,
-  BellOff,
   Layers,
   ExternalLink,
-  Ship,
-  Radio as RadioIcon,
-  LayoutDashboard,
-  LineChart,
-  MessageSquare,
-  Anchor,
   Wind,
   Snowflake,
-  CloudRain,
   Thermometer,
   Navigation,
-  Info,
   HelpCircle,
   Compass,
   Volume2,
@@ -58,8 +37,6 @@ import {
   Crosshair,
   BellPlus,
   TrendingUp,
-  TrendingDown,
-  Minus,
   ArrowUpRight,
   ArrowDownRight,
   ArrowRight,
@@ -69,28 +46,19 @@ import {
   Pin,
   PinOff,
   MessageCircle,
-  Camera,
-  Calendar,
   Building2,
-  Flag,
-  Hash,
-  Wifi,
-  WifiOff,
   Loader2,
   FileWarning,
 } from 'lucide-react';
 
 // Import utilities
 import {
-  getConfig,
   saveConfig,
   getOverlays,
   saveOverlays,
   getLayerOpacities,
   saveLayerOpacities,
   getTailInfo,
-  getCountryFromIcao,
-  getTailNumber,
   getCategoryName,
   decodeMetar,
   decodePirep,
@@ -100,8 +68,6 @@ import {
   getAgeOpacity,
   formatPirepAltitude,
   windDirToCardinal,
-  utcToLocal,
-  utcToLocalTime,
   callsignsMatch,
 } from '../../utils';
 
@@ -231,7 +197,7 @@ function MapView({
   hashParams = {},
   setHashParams,
   positionsRef = null,
-  positionSocketConnected = false,
+  _positionSocketConnected = false,
 }) {
   // Use feeder location or default - defined early for use in hooks below
   const feederLat = feederLocation?.lat || 47.9377;
@@ -412,7 +378,7 @@ function MapView({
     unacknowledgeAdvisory,
     unacknowledgedCount: advisoryUnacknowledgedCount,
     refresh: refreshAdvisories,
-    isAcknowledged: isAdvisoryAcknowledged,
+    isAcknowledged: _isAdvisoryAcknowledged,
   } = useAirspaceAdvisories(wsRequest, wsConnected, {
     hazardFilter: advisoryHazardFilter,
     refreshInterval: 60000,
@@ -426,7 +392,7 @@ function MapView({
     acknowledged: acknowledgedNotams,
     acknowledgeNotam,
     unacknowledgeNotam,
-    unacknowledgedCount: notamUnacknowledgedCount,
+    unacknowledgedCount: _notamUnacknowledgedCount,
     refresh: refreshNotams,
   } = useNotams(wsRequest, wsConnected, {
     typeFilter: notamTypeFilter,
@@ -714,7 +680,7 @@ function MapView({
   // Store initial center from URL to apply when map initializes
   const initialCenterRef = useRef(null);
   const initialZoomRef = useRef(null);
-  const centerUpdateTimeoutRef = useRef(null);
+  const _centerUpdateTimeoutRef = useRef(null);
 
   // Ref to always have access to latest setHashParams in event handlers
   const setHashParamsRef = useRef(setHashParams);
@@ -740,7 +706,7 @@ function MapView({
     startPanX: 0,
     startPanY: 0,
   }); // For smooth pinch-to-zoom and two-finger pan
-  const conflictsRef = useRef([]); // Track conflicts for banner
+  const _conflictsRef = useRef([]); // Track conflicts for banner
   const shortTrackFetchedRef = useRef(new Map()); // Track which aircraft have had history fetched (hex -> timestamp)
   const prevAircraftIcaosRef = useRef(new Set()); // Track previous aircraft ICAOs for auto-lookup on sighting
 
@@ -760,7 +726,7 @@ function MapView({
   const notifiedConflictsRef = useRef(new Set()); // Track notified conflict pairs
   const notifiedEmergenciesRef = useRef(new Set()); // Track notified emergency aircraft
   const autoAckScheduledRef = useRef(new Set()); // Track events with scheduled auto-acknowledge
-  const alarmAudioRef = useRef(null); // Audio element for conflict alarm
+  const _alarmAudioRef = useRef(null); // Audio element for conflict alarm
   const alarmPlayingRef = useRef(false); // Track if alarm is currently playing
   const alarmIntervalRef = useRef(null); // Interval for looping alarm
 
@@ -2707,7 +2673,7 @@ function MapView({
   }, [selectedAircraft, trackHistory]);
 
   // Animation frame counter for loading spinners
-  const [canvasAnimFrame, setCanvasAnimFrame] = useState(0);
+  const [_canvasAnimFrame, setCanvasAnimFrame] = useState(0);
 
   // Auto-refresh canvas animation when waiting for data
   useEffect(() => {
@@ -4048,8 +4014,8 @@ function MapView({
       ctx.fillRect(0, 0, width, height);
 
       // For Pro mode, calculate scale to show full area (no circular limit)
-      // nmPerPixel tells us how many nm one pixel represents
-      const nmPerPixel = isPro
+      // _nmPerPixel tells us how many nm one pixel represents (kept for future use)
+      const _nmPerPixel = isPro
         ? radarRange / (Math.min(width, height) * 0.45)
         : radarRange / maxRadius;
 
@@ -4113,7 +4079,7 @@ function MapView({
 
         for (let lat = minGridLat; lat <= maxGridLat; lat += gridSpacingDeg) {
           const p1 = latLonToScreen(lat, feederLon - radarRange * degPerNm * 1.5);
-          const p2 = latLonToScreen(lat, feederLon + radarRange * degPerNm * 1.5);
+          const _p2 = latLonToScreen(lat, feederLon + radarRange * degPerNm * 1.5);
           if (p1.y > 0 && p1.y < height) {
             ctx.beginPath();
             ctx.moveTo(0, p1.y);
@@ -5607,7 +5573,7 @@ function MapView({
         ctx.beginPath();
 
         let started = false;
-        history.forEach((point, i) => {
+        history.forEach((point) => {
           const pos = latLonToScreen(point.lat, point.lon);
           // Skip points outside canvas
           if (pos.x < -50 || pos.x > width + 50 || pos.y < -50 || pos.y > height + 50) return;
@@ -6905,7 +6871,7 @@ function MapView({
     trackHistory,
   ]);
 
-  const cycleMapMode = () => {
+  const _cycleMapMode = () => {
     const modes = ['radar', 'crt', 'pro', 'map'];
     const currentIndex = modes.indexOf(config.mapMode);
     const nextMode = modes[(currentIndex + 1) % modes.length];
@@ -6951,7 +6917,7 @@ function MapView({
   };
 
   // Update layer opacity
-  const updateLayerOpacity = (layer, opacity) => {
+  const _updateLayerOpacity = (layer, opacity) => {
     setLayerOpacities((prev) => ({ ...prev, [layer]: opacity }));
   };
 
@@ -8816,21 +8782,29 @@ function MapView({
                 }
               : {}
           }
-          onMouseDown={handleLegendMouseDown}
-          onTouchStart={(e) => {
-            if (e.target.closest('button')) return;
-            const touch = e.touches[0];
-            setIsLegendDragging(true);
-            const rect = e.currentTarget.getBoundingClientRect();
-            legendDragStartRef.current = {
-              x: touch.clientX,
-              y: touch.clientY,
-              startX: legendPosition.x ?? rect.left,
-              startY: legendPosition.y ?? rect.top,
-            };
-          }}
         >
-          <div className="legend-header">
+          <div
+            role="toolbar"
+            aria-label="Legend panel drag handle"
+            tabIndex={0}
+            className="legend-header"
+            onMouseDown={handleLegendMouseDown}
+            onTouchStart={(e) => {
+              if (e.target.closest('button')) return;
+              const touch = e.touches[0];
+              setIsLegendDragging(true);
+              const rect = e.currentTarget.parentElement.getBoundingClientRect();
+              legendDragStartRef.current = {
+                x: touch.clientX,
+                y: touch.clientY,
+                startX: legendPosition.x ?? rect.left,
+                startY: legendPosition.y ?? rect.top,
+              };
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setShowLegend(false);
+            }}
+          >
             <span>Symbol Legend</span>
             <div className="legend-header-buttons">
               <button
@@ -8959,6 +8933,8 @@ function MapView({
           }
         >
           <div
+            role="toolbar"
+            aria-label="Aircraft list controls"
             className="aircraft-list-header"
             onMouseDown={handleListMouseDown}
             onTouchStart={(e) => {
@@ -9204,13 +9180,19 @@ function MapView({
               {/* Main Aircraft Panel */}
               <div
                 className={`aircraft-popup ${config.mapMode === 'crt' ? 'crt-popup' : ''} ${config.mapMode === 'pro' ? 'pro-popup' : ''} ${isEmergency ? 'emergency-popup' : ''} ${isConflict ? `conflict-popup ${getSeverityClass(conflictSeverity)}` : ''} ${isDragging ? 'dragging' : ''}`}
-                onMouseDown={handlePopupMouseDown}
               >
                 <button className="popup-close" onClick={() => selectAircraft(null)}>
                   <X size={16} />
                 </button>
                 <div
+                  role="toolbar"
+                  aria-label="Drag to move panel"
+                  tabIndex={0}
                   className={`popup-header ${isEmergency ? 'emergency-header' : ''} ${isConflict ? `conflict-header ${getSeverityClass(conflictSeverity)}` : ''}`}
+                  onMouseDown={handlePopupMouseDown}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') selectAircraft(null);
+                  }}
                 >
                   <Plane size={20} />
                   <span className="popup-callsign">{liveAircraft.flight || liveAircraft.hex}</span>
@@ -9503,12 +9485,20 @@ function MapView({
             <div
               className={`weather-popup ${config.mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''}`}
               style={{ left: popupPosition.x, top: popupPosition.y }}
-              onMouseDown={handlePopupMouseDown}
             >
               <button className="popup-close" onClick={() => setSelectedMetar(null)}>
                 <X size={16} />
               </button>
-              <div className="popup-header">
+              <div
+                role="toolbar"
+                aria-label="Drag to move panel"
+                tabIndex={0}
+                className="popup-header"
+                onMouseDown={handlePopupMouseDown}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setSelectedMetar(null);
+                }}
+              >
                 <MapPin size={20} />
                 <span className="popup-callsign">
                   {selectedMetar.stationId || selectedMetar.icaoId || 'METAR'}
@@ -9595,7 +9585,7 @@ function MapView({
                   <div className="detail-row decoded-section">
                     <span>Altimeter</span>
                     <div className="decoded-value">
-                      <strong>{decoded.altimeter.inhg}" Hg</strong>
+                      <strong>{decoded.altimeter.inhg}&quot; Hg</strong>
                       <span className="decoded-desc">{decoded.altimeter.description}</span>
                     </div>
                   </div>
@@ -9658,12 +9648,20 @@ function MapView({
             <div
               className={`weather-popup pirep-popup ${config.mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${decoded?.type === 'UUA' ? 'urgent-pirep' : ''} ${isDragging ? 'dragging' : ''}`}
               style={{ left: popupPosition.x, top: popupPosition.y }}
-              onMouseDown={handlePopupMouseDown}
             >
               <button className="popup-close" onClick={() => setSelectedPirep(null)}>
                 <X size={16} />
               </button>
-              <div className="popup-header">
+              <div
+                role="toolbar"
+                aria-label="Drag to move panel"
+                tabIndex={0}
+                className="popup-header"
+                onMouseDown={handlePopupMouseDown}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setSelectedPirep(null);
+                }}
+              >
                 <AlertTriangle size={20} />
                 <span className="popup-callsign">PIREP</span>
                 <span className={`pirep-type-badge ${decoded?.type === 'UUA' ? 'urgent' : ''}`}>
@@ -9861,12 +9859,20 @@ function MapView({
         <div
           className={`weather-popup navaid-popup ${config.mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''}`}
           style={{ left: popupPosition.x, top: popupPosition.y }}
-          onMouseDown={handlePopupMouseDown}
         >
           <button className="popup-close" onClick={() => setSelectedNavaid(null)}>
             <X size={16} />
           </button>
-          <div className="popup-header">
+          <div
+            role="toolbar"
+            aria-label="Drag to move panel"
+            tabIndex={0}
+            className="popup-header"
+            onMouseDown={handlePopupMouseDown}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setSelectedNavaid(null);
+            }}
+          >
             <Radio size={20} />
             <span className="popup-callsign">{selectedNavaid.id}</span>
             <span className="navaid-type-badge">{selectedNavaid.type || 'NAV'}</span>
@@ -9931,12 +9937,20 @@ function MapView({
         <div
           className={`weather-popup airport-popup ${config.mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''}`}
           style={{ left: popupPosition.x, top: popupPosition.y }}
-          onMouseDown={handlePopupMouseDown}
         >
           <button className="popup-close" onClick={() => setSelectedAirport(null)}>
             <X size={16} />
           </button>
-          <div className="popup-header">
+          <div
+            role="toolbar"
+            aria-label="Drag to move panel"
+            tabIndex={0}
+            className="popup-header"
+            onMouseDown={handlePopupMouseDown}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setSelectedAirport(null);
+            }}
+          >
             <Plane size={20} />
             <span className="popup-callsign">
               {selectedAirport.icao ||
@@ -10035,12 +10049,20 @@ function MapView({
         <div
           className={`weather-popup airspace-popup ${config.mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''}`}
           style={{ left: popupPosition.x, top: popupPosition.y }}
-          onMouseDown={handlePopupMouseDown}
         >
           <button className="popup-close" onClick={() => setSelectedAirspace(null)}>
             <X size={16} />
           </button>
-          <div className="popup-header">
+          <div
+            role="toolbar"
+            aria-label="Drag to move panel"
+            tabIndex={0}
+            className="popup-header"
+            onMouseDown={handlePopupMouseDown}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setSelectedAirspace(null);
+            }}
+          >
             <Layers size={20} />
             <span className="popup-callsign">{selectedAirspace.name || 'Airspace'}</span>
             <span

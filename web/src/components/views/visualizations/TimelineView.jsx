@@ -281,6 +281,8 @@ export function TimelineView({ events = [], onEventClick, selectedEventId, start
         })}
       </div>
 
+      {/* Timeline container needs drag/scroll interactions for visualization panning */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
         ref={containerRef}
         className={`timeline-container ${isDragging ? 'dragging' : ''}`}

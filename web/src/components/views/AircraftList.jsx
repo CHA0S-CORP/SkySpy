@@ -8,7 +8,6 @@ import {
   ArrowUp,
   ArrowDown,
   Plane,
-  Radio,
   Filter,
   X,
   ChevronRight,
@@ -23,8 +22,6 @@ import { useListPreferences } from '../../hooks/useListPreferences';
 // Row heights for virtual scrolling
 const ROW_HEIGHT_COMPACT = 32;
 const ROW_HEIGHT_COMFORTABLE = 44;
-const CARD_HEIGHT = 160;
-const CARD_HEIGHT_COMPACT = 100;
 
 export function AircraftList({ aircraft, onSelectAircraft }) {
   const [sortField, setSortField] = useState('distance_nm');
@@ -290,14 +287,6 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
       />
     ),
     [onSelectAircraft, visibleColumns, density]
-  );
-
-  // Render card for virtual list (used in grid layout)
-  const renderCard = useCallback(
-    (ac, index) => (
-      <AircraftCard aircraft={ac} onSelect={onSelectAircraft} compact={window.innerWidth < 480} />
-    ),
-    [onSelectAircraft]
   );
 
   // Get visible column headers

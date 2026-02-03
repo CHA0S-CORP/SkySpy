@@ -11,7 +11,6 @@ export function useDraggable(
   const [position, setPosition] = useState(initialPosition);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0, startX: 0, startY: 0 });
-  const listenersAddedRef = useRef(false);
 
   const handleMouseDown = useCallback(
     (e) => {
@@ -76,27 +75,20 @@ export function useDraggable(
 
   // Global event listeners for drag
   useEffect(() => {
-    if (isDragging && !listenersAddedRef.current) {
-      listenersAddedRef.current = true;
+    if (isDragging) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
       window.addEventListener('touchmove', handleMouseMove, { passive: true });
       window.addEventListener('touchend', handleMouseUp, { passive: true });
-      return () => {
-        listenersAddedRef.current = false;
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
-        window.removeEventListener('touchmove', handleMouseMove);
-        window.removeEventListener('touchend', handleMouseUp);
-      };
-    } else if (!isDragging && listenersAddedRef.current) {
-      // Clean up when dragging stops
-      listenersAddedRef.current = false;
+    }
+
+    // Always return cleanup to remove listeners on unmount or when isDragging changes
+    return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('touchmove', handleMouseMove);
       window.removeEventListener('touchend', handleMouseUp);
-    }
+    };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
   const resetPosition = useCallback(() => {

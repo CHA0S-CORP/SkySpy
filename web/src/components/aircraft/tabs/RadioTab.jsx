@@ -5,7 +5,7 @@ import { getGlobalAudioState } from '../../views/AudioView';
 export function RadioTab({
   hex,
   radioLoading,
-  radioTransmissions,
+  radioTransmissions: _radioTransmissions,
   filteredRadioTransmissions,
   radioHours,
   setRadioHours,

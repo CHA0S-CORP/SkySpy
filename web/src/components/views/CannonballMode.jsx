@@ -16,7 +16,7 @@ import { useGestures } from '../../hooks/useGestures';
 import { useWakeLock } from '../../hooks/useWakeLock';
 import { useCannonballSettings } from '../../hooks/useCannonballSettings';
 import { useThreatCalculation } from '../../hooks/useThreatCalculation';
-import { useCannonballGPS, GPS_PERMISSION_STATES } from '../../hooks/useCannonballGPS';
+import { useCannonballGPS } from '../../hooks/useCannonballGPS';
 
 // Sub-components
 import { SettingsPanel } from '../cannonball/SettingsPanel';

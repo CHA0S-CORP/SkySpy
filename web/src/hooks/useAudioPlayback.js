@@ -46,6 +46,9 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
   // Track audio event listeners for cleanup (Map of audioId -> { loadedmetadata, ended, error })
   const audioListenersRef = useRef(new Map());
 
+  // Track mounted state to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+
   // Subscribe to global audio state changes
   useEffect(() => {
     const unsubscribe = ((callback) => {
@@ -111,7 +114,9 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
         cleanup();
         globalAudioState.audioDurations[next.id] = audio.duration;
         notifySubscribers({ audioDurations: { ...globalAudioState.audioDurations } });
-        setLocalAudioDurations((prev) => ({ ...prev, [next.id]: audio.duration }));
+        if (isMountedRef.current) {
+          setLocalAudioDurations((prev) => ({ ...prev, [next.id]: audio.duration }));
+        }
       };
 
       const handleEnded = function () {
@@ -128,8 +133,10 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
           currentTransmission: null,
           audioProgress: { ...globalAudioState.audioProgress },
         });
-        setLocalPlayingId(null);
-        setLocalAudioProgress((prev) => ({ ...prev, [next.id]: 0 }));
+        if (isMountedRef.current) {
+          setLocalPlayingId(null);
+          setLocalAudioProgress((prev) => ({ ...prev, [next.id]: 0 }));
+        }
         processAutoplayQueue();
       };
 
@@ -143,7 +150,9 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
         globalAudioState.playingId = null;
         globalAudioState.currentTransmission = null;
         notifySubscribers({ playingId: null, currentTransmission: null });
-        setLocalPlayingId(null);
+        if (isMountedRef.current) {
+          setLocalPlayingId(null);
+        }
         processAutoplayQueue();
       };
 
@@ -176,13 +185,17 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
           globalAudioState.playingId = next.id;
           globalAudioState.currentTransmission = next;
           notifySubscribers({ playingId: next.id, currentTransmission: next });
-          setLocalPlayingId(next.id);
+          if (isMountedRef.current) {
+            setLocalPlayingId(next.id);
+          }
           globalAudioState.progressIntervalRef = setInterval(() => {
             if (audio && !audio.paused) {
               const progress = (audio.currentTime / audio.duration) * 100 || 0;
               globalAudioState.audioProgress[next.id] = progress;
               notifySubscribers({ audioProgress: { ...globalAudioState.audioProgress } });
-              setLocalAudioProgress((prev) => ({ ...prev, [next.id]: progress }));
+              if (isMountedRef.current) {
+                setLocalAudioProgress((prev) => ({ ...prev, [next.id]: progress }));
+              }
             }
           }, 100);
         })
@@ -192,7 +205,9 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
           globalAudioState.playingId = null;
           globalAudioState.currentTransmission = null;
           notifySubscribers({ playingId: null, currentTransmission: null });
-          setLocalPlayingId(null);
+          if (isMountedRef.current) {
+            setLocalPlayingId(null);
+          }
           processAutoplayQueue();
         });
     }
@@ -398,7 +413,10 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
 
   // Cleanup on unmount - clear intervals AND remove all audio event listeners
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
+
       // Clear progress interval
       if (globalAudioState.progressIntervalRef) {
         clearInterval(globalAudioState.progressIntervalRef);

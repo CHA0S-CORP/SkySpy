@@ -10,8 +10,6 @@ import {
   Minus,
   BarChart2,
   Clock,
-  Filter,
-  ChevronDown,
   RefreshCw,
 } from 'lucide-react';
 import { useStats } from '../../hooks';

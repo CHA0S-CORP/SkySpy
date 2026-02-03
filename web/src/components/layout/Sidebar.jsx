@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, memo } from 'react';
 import {
   Plane,
   Radio,
@@ -27,6 +27,18 @@ import {
 } from 'lucide-react';
 import { useAlertNotifications } from '../../hooks/useAlertNotifications';
 import { useAuth } from '../../contexts/AuthContext';
+
+// Memoized mobile time display component to prevent re-renders from propagating
+const MobileTimeDisplay = memo(function MobileTimeDisplay() {
+  const [time, setTime] = useState(new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return <span>{time.toISOString().slice(11, 19)}Z</span>;
+});
 
 // Tab definitions with feature permissions
 const tabs = [
@@ -64,7 +76,6 @@ export function Sidebar({
   onLaunchCannonball,
 }) {
   const [servicesExpanded, setServicesExpanded] = useState(false);
-  const [time, setTime] = useState(new Date());
   const { unacknowledgedCount, markAllAsRead } = useAlertNotifications();
   const { canAccessFeature, config: authConfig } = useAuth();
 
@@ -94,11 +105,6 @@ export function Sidebar({
     }
   }, [activeTab, unacknowledgedCount, markAllAsRead]);
 
-  useEffect(() => {
-    const id = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-
   return (
     <div className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       {/* Mobile Stats Bar - shown only on mobile */}
@@ -109,7 +115,7 @@ export function Sidebar({
         </div>
         <div className="mobile-stat">
           <Clock size={14} />
-          <span>{time.toISOString().slice(11, 19)}Z</span>
+          <MobileTimeDisplay />
         </div>
         <button className="mobile-settings-btn" onClick={onOpenSettings} title="Settings">
           <Settings size={16} />

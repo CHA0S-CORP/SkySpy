@@ -7,7 +7,7 @@
  * - Tap to focus on specific threat
  * - Auto-cycle mode option
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { Navigation2, ChevronUp, ChevronDown, Minus, Clock } from 'lucide-react';
 import { formatETA } from '../../utils/threatPrediction';
 import { getDirectionName } from '../../utils/lawEnforcement';
@@ -18,7 +18,7 @@ const THREAT_COLORS = {
   info: '#22c55e',
 };
 
-function ThreatCell({ threat, userHeading, onSelect, isSelected, showEta = false }) {
+const ThreatCell = memo(function ThreatCell({ threat, userHeading, onSelect, isSelected, showEta = false }) {
   if (!threat) {
     return (
       <div className="threat-cell empty">
@@ -84,7 +84,7 @@ function ThreatCell({ threat, userHeading, onSelect, isSelected, showEta = false
       {threat.callsign && <div className="cell-callsign">{threat.callsign}</div>}
     </button>
   );
-}
+});
 
 export function ThreatGrid({
   threats = [],

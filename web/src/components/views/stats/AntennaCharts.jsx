@@ -4,7 +4,7 @@ import { Navigation, Signal } from 'lucide-react';
 /**
  * PolarPlot - Antenna reception polar diagram with real data
  */
-export function PolarPlot({ data, loading }) {
+export function PolarPlot({ data, loading: _loading }) {
   const bearingData = data?.bearing_data || [];
   const summary = data?.summary || {};
 
@@ -208,7 +208,7 @@ export function PolarPlot({ data, loading }) {
 /**
  * RSSIScatter - RSSI vs Distance scatter plot with real data
  */
-export function RSSIScatter({ data, loading }) {
+export function RSSIScatter({ data, loading: _loading }) {
   const scatterData = data?.scatter_data || [];
   const bandStats = data?.band_statistics || [];
   const trendLine = data?.trend_line;

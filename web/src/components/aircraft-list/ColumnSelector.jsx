@@ -1,4 +1,4 @@
-import React, { memo, useState, useRef, useEffect } from 'react';
+import React, { memo, useState, useRef, useEffect, useMemo } from 'react';
 import { Columns, Check, RotateCcw } from 'lucide-react';
 
 /**
@@ -28,8 +28,8 @@ export const ColumnSelector = memo(function ColumnSelector({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  // Determine active preset
-  const getActivePreset = () => {
+  // Determine active preset (memoized to avoid repeated JSON.stringify comparisons)
+  const activePreset = useMemo(() => {
     const sortedVisible = [...visibleColumns].sort();
     for (const [presetName, presetCols] of Object.entries(presets)) {
       const sortedPreset = [...presetCols].sort();
@@ -38,9 +38,7 @@ export const ColumnSelector = memo(function ColumnSelector({
       }
     }
     return null;
-  };
-
-  const activePreset = getActivePreset();
+  }, [visibleColumns, presets]);
 
   return (
     <div className="al-column-selector" ref={dropdownRef}>

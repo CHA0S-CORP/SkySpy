@@ -450,9 +450,6 @@ export function useAircraftInfo({
       (icao) => !isInCacheRef(icao) && !pendingFetches.current.has(icao)
     );
 
-    // Clear any previously stored timeout IDs before creating new ones
-    bulkFetchTimeoutIdsRef.current = [];
-
     // Fetch individually with small delays to avoid overwhelming the backend
     for (let i = 0; i < stillMissing.length; i++) {
       const icao = stillMissing[i];
@@ -463,6 +460,10 @@ export function useAircraftInfo({
         if (!isInCacheRef(icao) && !pendingFetches.current.has(icao)) {
           fetchSingleInfo(icao);
         }
+        // Remove completed timeout from array
+        bulkFetchTimeoutIdsRef.current = bulkFetchTimeoutIdsRef.current.filter(
+          (id) => id !== timeoutId
+        );
       }, i * 50); // 50ms between requests
 
       // Store timeout ID for cleanup

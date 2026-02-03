@@ -5,22 +5,23 @@ const LINK_CONFIG = [
   {
     id: 'flightaware',
     label: 'FlightAware',
-    getUrl: (hex, callsign) => `https://flightaware.com/live/flight/${callsign || hex}`,
+    getUrl: (hex, callsign) =>
+      `https://flightaware.com/live/flight/${encodeURIComponent(callsign || hex)}`,
   },
   {
     id: 'adsbexchange',
     label: 'ADSBexchange',
-    getUrl: (hex) => `https://globe.adsbexchange.com/?icao=${hex}`,
+    getUrl: (hex) => `https://globe.adsbexchange.com/?icao=${encodeURIComponent(hex)}`,
   },
   {
     id: 'flightradar24',
     label: 'Flightradar24',
-    getUrl: (hex) => `https://www.flightradar24.com/${hex}`,
+    getUrl: (hex) => `https://www.flightradar24.com/${encodeURIComponent(hex)}`,
   },
   {
     id: 'planespotters',
     label: 'Planespotters',
-    getUrl: (hex) => `https://planespotters.net/hex/${hex}`,
+    getUrl: (hex) => `https://planespotters.net/hex/${encodeURIComponent(hex)}`,
   },
 ];
 

@@ -292,6 +292,11 @@ export function AuthProvider({ children }) {
 
         const handleMessage = (event) => {
           if (isCleanedUp) return;
+          // Validate origin to prevent malicious postMessage attacks
+          const expectedOrigin = new URL(apiBaseUrl).origin;
+          if (event.origin !== expectedOrigin && event.origin !== window.location.origin) {
+            return;
+          }
           if (event.data && event.data.type === 'oidc_callback') {
             cleanup();
             if (event.data.access) {

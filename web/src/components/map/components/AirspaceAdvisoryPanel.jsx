@@ -78,7 +78,7 @@ export function AirspaceAdvisoryPanel({
   return (
     <div className="advisory-panel pro-style" style={panelStyle}>
       {/* Drag handle header */}
-      <div className="advisory-panel-header" onMouseDown={handleMouseDown}>
+      <div className="advisory-panel-header" role="toolbar" aria-label="Advisory panel controls" onMouseDown={handleMouseDown}>
         <div className="advisory-panel-drag-handle">
           <GripHorizontal size={16} />
         </div>

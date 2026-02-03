@@ -681,13 +681,13 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
    */
   const subscribe = useCallback(
     (newTopics) => {
-      if (connected) {
+      if (isReady) {
         emit('subscribe', {
           topics: Array.isArray(newTopics) ? newTopics : [newTopics],
         });
       }
     },
-    [connected, emit]
+    [isReady, emit]
   );
 
   /**
@@ -697,13 +697,13 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
    */
   const unsubscribe = useCallback(
     (removeTopics) => {
-      if (connected) {
+      if (isReady) {
         emit('unsubscribe', {
           topics: Array.isArray(removeTopics) ? removeTopics : [removeTopics],
         });
       }
     },
-    [connected, emit]
+    [isReady, emit]
   );
 
   /**

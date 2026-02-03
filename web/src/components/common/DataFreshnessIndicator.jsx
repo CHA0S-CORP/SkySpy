@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 
 /**
  * DataFreshnessIndicator - Shows data age with color-coded status
+ * Memoized to prevent parent re-renders from the internal timer updates
  * @param {number} lastUpdated - Unix timestamp in milliseconds
  * @param {number} freshThreshold - Seconds before data is considered stale (default: 30)
  * @param {number} staleThreshold - Seconds before data is considered very stale (default: 120)
  * @param {boolean} showLabel - Whether to show the text label (default: true)
  * @param {string} size - Size variant: 'sm', 'md', 'lg' (default: 'md')
  */
-export function DataFreshnessIndicator({
+export const DataFreshnessIndicator = memo(function DataFreshnessIndicator({
   lastUpdated,
   freshThreshold = 30,
   staleThreshold = 120,
@@ -53,12 +54,13 @@ export function DataFreshnessIndicator({
       {showLabel && <span className="freshness-text">{formatAge()}</span>}
     </span>
   );
-}
+});
 
 /**
  * DataFreshnessBadge - Compact badge variant with status text
+ * Memoized to prevent parent re-renders from the internal timer updates
  */
-export function DataFreshnessBadge({ lastUpdated, label = 'Data' }) {
+export const DataFreshnessBadge = memo(function DataFreshnessBadge({ lastUpdated, label = 'Data' }) {
   const [age, setAge] = useState(0);
 
   useEffect(() => {
@@ -90,6 +92,6 @@ export function DataFreshnessBadge({ lastUpdated, label = 'Data' }) {
       <span className="freshness-status">{text}</span>
     </div>
   );
-}
+});
 
 export default DataFreshnessIndicator;

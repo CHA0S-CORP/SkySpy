@@ -14,6 +14,7 @@ export function useMapAlarms() {
   const alarmIntervalRef = useRef(null);
   const notifiedEventsRef = useRef(new Set());
   const notifiedEmergenciesRef = useRef(new Set());
+  const mountedRef = useRef(true);
 
   // Save sound muted preference
   useEffect(() => {
@@ -291,7 +292,10 @@ export function useMapAlarms() {
       const interval = severity === 'critical' ? 1500 : severity === 'warning' ? 2500 : 3000;
 
       alarmIntervalRef.current = setInterval(() => {
-        playConflictAlarm(severity);
+        // Check if component is still mounted before playing alarm
+        if (mountedRef.current) {
+          playConflictAlarm(severity);
+        }
       }, interval);
     },
     [playConflictAlarm, soundMuted]
@@ -314,7 +318,9 @@ export function useMapAlarms() {
 
   // Cleanup on unmount
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       stopAlarmLoop();
     };
   }, [stopAlarmLoop]);

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 /**
  * Parse Django REST Framework error responses.
@@ -70,11 +70,12 @@ export function useApi(endpoint, interval = null, apiBase = '') {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const abortControllerRef = useRef(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (signal) => {
     try {
       const baseUrl = apiBase || '';
-      const res = await fetch(`${baseUrl}${endpoint}`);
+      const res = await fetch(`${baseUrl}${endpoint}`, { signal });
       const { ok, data: json, status } = await safeJson(res);
 
       if (!ok) {
@@ -90,6 +91,7 @@ export function useApi(endpoint, interval = null, apiBase = '') {
       setData(json);
       setError(null);
     } catch (err) {
+      if (err.name === 'AbortError') return;
       setError(err.message);
     } finally {
       setLoading(false);
@@ -97,14 +99,42 @@ export function useApi(endpoint, interval = null, apiBase = '') {
   }, [endpoint, apiBase]);
 
   useEffect(() => {
-    fetchData();
-    if (interval) {
-      const id = setInterval(fetchData, interval);
-      return () => clearInterval(id);
+    // Abort any previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    fetchData(abortController.signal);
+
+    let intervalId;
+    if (interval) {
+      intervalId = setInterval(() => {
+        if (!abortController.signal.aborted) {
+          fetchData(abortController.signal);
+        }
+      }, interval);
+    }
+
+    return () => {
+      abortController.abort();
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [fetchData, interval]);
 
-  return { data, loading, error, refetch: fetchData };
+  const refetch = useCallback(() => {
+    // Abort any previous request before starting a new one
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    fetchData(abortController.signal);
+  }, [fetchData]);
+
+  return { data, loading, error, refetch };
 }
 
 // Export error parser for use in other hooks

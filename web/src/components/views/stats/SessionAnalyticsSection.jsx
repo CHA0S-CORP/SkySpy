@@ -1,13 +1,11 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import {
   Activity,
-  Signal,
   BarChart3,
   Users,
   RefreshCw,
   Gauge,
   CheckCircle,
-  AlertCircle,
   TrendingUp,
   Loader2,
 } from 'lucide-react';
@@ -17,7 +15,7 @@ import {
  * - Tracking quality metrics (update rate, completeness score)
  * - Engagement stats (peak concurrent, return aircraft)
  */
-export function SessionAnalyticsSection({ data, loading }) {
+export function SessionAnalyticsSection({ data, loading, onSelectAircraft: _onSelectAircraft }) {
   // Show loading skeleton when data is loading
   if (loading) {
     return (
@@ -197,7 +195,7 @@ export function SessionAnalyticsSection({ data, loading }) {
             <span>Data Completeness</span>
           </div>
           <div className="completeness-bars">
-            {completenessItems.map((item, i) => (
+            {completenessItems.map((item) => (
               <div key={item.label} className="completeness-item">
                 <div className="completeness-header">
                   <span className="completeness-label">{item.label}</span>

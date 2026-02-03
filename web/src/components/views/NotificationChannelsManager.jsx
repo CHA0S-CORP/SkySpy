@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Plus,
   X,
@@ -6,7 +6,6 @@ import {
   Trash2,
   Settings,
   Bell,
-  BellOff,
   Send,
   CheckCircle,
   AlertCircle,
@@ -34,7 +33,7 @@ const CHANNEL_TYPE_INFO = {
 };
 
 // Channel Form Modal
-function ChannelFormModal({ channel, channelTypes, onClose, onSave }) {
+function ChannelFormModal({ channel, channelTypes: _channelTypes, onClose, onSave }) {
   const [name, setName] = useState(channel?.name || '');
   const [channelType, setChannelType] = useState(channel?.channel_type || 'webhook');
   const [appriseUrl, setAppriseUrl] = useState(channel?.apprise_url || '');
@@ -84,8 +83,6 @@ function ChannelFormModal({ channel, channelTypes, onClose, onSave }) {
       setSaving(false);
     }
   };
-
-  const selectedTypeInfo = CHANNEL_TYPE_INFO[channelType] || CHANNEL_TYPE_INFO.custom;
 
   return (
     <div

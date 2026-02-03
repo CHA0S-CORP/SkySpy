@@ -35,6 +35,8 @@ export function LegendPanel({
     >
       <div
         className="legend-header"
+        role="toolbar"
+        aria-label="Legend controls"
         onMouseDown={handleLegendMouseDown}
         onTouchStart={(e) => {
           if (e.target.closest('button')) return;

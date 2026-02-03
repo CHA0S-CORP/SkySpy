@@ -88,6 +88,9 @@ export function useSocketIOApi({
   });
 
   // Setup event listeners for response/error
+  // NOTE: handleResponse and handleError are stable callbacks (only depend on refs),
+  // but they're included in deps for correctness. If callback churn becomes
+  // an issue, consider using refs to store the handlers.
   useEffect(() => {
     if (!enabled) return;
 

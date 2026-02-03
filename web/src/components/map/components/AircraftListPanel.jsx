@@ -90,6 +90,8 @@ export function AircraftListPanel({
     >
       <div
         className="aircraft-list-header"
+        role="toolbar"
+        aria-label="Aircraft list controls"
         onMouseDown={handleListMouseDown}
         onTouchStart={(e) => {
           const touch = e.touches[0];
