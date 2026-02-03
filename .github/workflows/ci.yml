@@ -673,7 +673,10 @@ jobs:
             --set "*.cache-from=type=gha" \
             --set "*.cache-to=type=gha,mode=max" \
             --load
-          docker compose -f docker-compose.test.yaml --env-file .env.test --profile dev up -d --wait
+
+          # Start only services required for E2E tests (excludes mock-airband-uploader)
+          docker compose -f docker-compose.test.yaml --env-file .env.test up -d --wait \
+            postgres pgbouncer redis ultrafeeder dump978 api adsb-dashboard celery-worker celery-beat
         env:
           DOCKER_BUILDKIT: 1
       - uses: actions/setup-node@v4
