@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 // Config directories and files
@@ -12,18 +13,32 @@ var (
 	ConfigDir   string
 	ConfigFile  string
 	OverlaysDir string
+	configOnce  sync.Once
 )
 
-func init() {
-	homeDir, _ := os.UserHomeDir()
-	ConfigDir = filepath.Join(homeDir, ".config", "skyspy")
-	ConfigFile = filepath.Join(ConfigDir, "settings.json")
-	OverlaysDir = filepath.Join(ConfigDir, "overlays")
+// InitConfigPaths initializes the configuration paths.
+// Exported so tests can call it explicitly.
+func InitConfigPaths() {
+	configOnce.Do(func() {
+		homeDir, _ := os.UserHomeDir()
+		ConfigDir = filepath.Join(homeDir, ".config", "skyspy")
+		ConfigFile = filepath.Join(ConfigDir, "settings.json")
+		OverlaysDir = filepath.Join(ConfigDir, "overlays")
+	})
 }
 
-// initConfigPaths is kept for backward compatibility
+// ResetConfigPathsForTesting resets the config paths for testing.
+// This allows tests to re-initialize paths after modifying them.
+func ResetConfigPathsForTesting() {
+	configOnce = sync.Once{}
+	ConfigDir = ""
+	ConfigFile = ""
+	OverlaysDir = ""
+}
+
+// initConfigPaths is kept for backward compatibility (lowercase)
 func initConfigPaths() {
-	// Paths are now initialized in init()
+	InitConfigPaths()
 }
 
 // ensurePathsInitialized ensures config paths are initialized

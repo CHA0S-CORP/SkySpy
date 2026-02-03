@@ -705,7 +705,11 @@ func TestConfigStructs_JSON(t *testing.T) {
 }
 
 func TestInit(t *testing.T) {
-	// Verify init() set up the package variables
+	// Reset and re-initialize config paths for this test
+	// This is needed because other tests may have modified the global variables
+	ResetConfigPathsForTesting()
+	InitConfigPaths()
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		t.Skip("Could not get user home dir")
