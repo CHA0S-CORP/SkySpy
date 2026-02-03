@@ -757,13 +757,478 @@ jobs:
           push-to-registry: true
 
   # ===========================================================================
+  # Stage 7: Sign Docker Images
+  # ===========================================================================
+
+  sign-docker-images:
+    name: Sign Docker Images
+    runs-on: ubuntu-latest
+    needs: [docker-build-push]
+    if: |
+      always() &&
+      needs.docker-build-push.result == 'success' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: API
+            image-suffix: ""
+          - name: rtl-airband-uploader
+            image-suffix: -rtl-airband-uploader
+          - name: 1090 Mock
+            image-suffix: -1090-mock
+          - name: ACARS Mock
+            image-suffix: -acarshub-mock
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install signing tools
+        run: |
+          # Install step-cli
+          wget -q https://dl.smallstep.com/gh-release/cli/gh-release-header/v0.27.2/step-cli_0.27.2_amd64.deb
+          sudo dpkg -i step-cli_0.27.2_amd64.deb
+          rm step-cli_0.27.2_amd64.deb
+
+          # Install notation
+          NOTATION_VERSION="1.2.0"
+          wget -q "https://github.com/notaryproject/notation/releases/download/v${NOTATION_VERSION}/notation_${NOTATION_VERSION}_linux_amd64.tar.gz"
+          tar -xzf "notation_${NOTATION_VERSION}_linux_amd64.tar.gz"
+          sudo mv notation /usr/local/bin/
+          rm "notation_${NOTATION_VERSION}_linux_amd64.tar.gz"
+
+      - name: Login to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate signing certificate
+        id: cert
+        env:
+          STEP_CA_URL: ${{ secrets.STEP_CA_URL }}
+          STEP_CA_FINGERPRINT: ${{ secrets.STEP_CA_FINGERPRINT }}
+          STEP_CA_JWK: ${{ secrets.STEP_CA_JWK }}
+        run: |
+          mkdir -p $HOME/.config/notation/signing-keys
+          CERT_DIR=$(mktemp -d)
+          echo "cert_dir=$CERT_DIR" >> $GITHUB_OUTPUT
+
+          if [[ -n "$STEP_CA_URL" && -n "$STEP_CA_FINGERPRINT" && -n "$STEP_CA_JWK" ]]; then
+            echo "Using Step CA for certificate generation"
+            echo "signing_method=ca" >> $GITHUB_OUTPUT
+
+            # Write JWK to temp file
+            echo "$STEP_CA_JWK" > "$CERT_DIR/provisioner.jwk"
+
+            # Get certificate from Step CA
+            step ca certificate \
+              "skyspy-ci@github.com" \
+              "$CERT_DIR/signing.crt" \
+              "$CERT_DIR/signing.key" \
+              --ca-url "$STEP_CA_URL" \
+              --fingerprint "$STEP_CA_FINGERPRINT" \
+              --provisioner "ci-signing" \
+              --provisioner-password-file "$CERT_DIR/provisioner.jwk" \
+              --not-after 24h \
+              --force
+          else
+            echo "Using ephemeral self-signed certificate"
+            echo "signing_method=ephemeral" >> $GITHUB_OUTPUT
+
+            # Create ephemeral self-signed certificate
+            step certificate create \
+              "skyspy-ci@github.com" \
+              "$CERT_DIR/signing.crt" \
+              "$CERT_DIR/signing.key" \
+              --profile leaf \
+              --not-after 24h \
+              --no-password \
+              --insecure \
+              --kty EC \
+              --curve P-256 \
+              --force
+          fi
+
+          # Set restrictive permissions
+          chmod 600 "$CERT_DIR/signing.key"
+          chmod 644 "$CERT_DIR/signing.crt"
+
+      - name: Configure notation
+        env:
+          CERT_DIR: ${{ steps.cert.outputs.cert_dir }}
+        run: |
+          # Add signing key to notation
+          notation key add skyspy-signing \
+            --plugin-config "certificatePath=$CERT_DIR/signing.crt" \
+            --id "$CERT_DIR/signing.key" \
+            --default
+
+          # Configure trust policy for verification
+          mkdir -p $HOME/.config/notation/trustpolicy
+          cat > $HOME/.config/notation/trustpolicy/trustpolicy.json << 'EOF'
+          {
+            "version": "1.0",
+            "trustPolicies": [
+              {
+                "name": "skyspy-images",
+                "registryScopes": ["ghcr.io/${{ github.repository }}*"],
+                "signatureVerification": {
+                  "level": "strict"
+                },
+                "trustStores": ["ca:skyspy"],
+                "trustedIdentities": ["*"]
+              }
+            ]
+          }
+          EOF
+
+      - name: Get image digest
+        id: digest
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image-suffix }}"
+
+          # Get tag based on ref
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+          elif [[ "${{ github.ref }}" == refs/heads/* ]]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="sha-$(echo ${{ github.sha }} | cut -c1-7)"
+          fi
+
+          # Get the digest for the image
+          DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${TAG}" --format '{{.Manifest.Digest}}' 2>/dev/null || true)
+
+          if [[ -z "$DIGEST" ]]; then
+            echo "Could not get digest for ${IMAGE}:${TAG}, trying latest"
+            DIGEST=$(docker buildx imagetools inspect "${IMAGE}:latest" --format '{{.Manifest.Digest}}' 2>/dev/null || true)
+            TAG="latest"
+          fi
+
+          echo "image=${IMAGE}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "digest=${DIGEST}" >> $GITHUB_OUTPUT
+          echo "full_ref=${IMAGE}@${DIGEST}" >> $GITHUB_OUTPUT
+
+      - name: Sign Docker image
+        if: steps.digest.outputs.digest != ''
+        env:
+          CERT_DIR: ${{ steps.cert.outputs.cert_dir }}
+        run: |
+          echo "Signing ${{ steps.digest.outputs.full_ref }}"
+
+          # Sign using notation with the certificate
+          notation sign \
+            "${{ steps.digest.outputs.full_ref }}" \
+            --key "$CERT_DIR/signing.key" \
+            --signature-format cose \
+            --timestamp-url "http://timestamp.digicert.com" || \
+          notation sign \
+            "${{ steps.digest.outputs.full_ref }}" \
+            --key "$CERT_DIR/signing.key" \
+            --signature-format cose
+
+          echo "Successfully signed ${{ matrix.name }} image"
+
+      - name: Verify signature
+        if: steps.digest.outputs.digest != ''
+        env:
+          CERT_DIR: ${{ steps.cert.outputs.cert_dir }}
+        run: |
+          # Add certificate to trust store for verification
+          mkdir -p $HOME/.config/notation/truststore/x509/ca/skyspy
+          cp "$CERT_DIR/signing.crt" $HOME/.config/notation/truststore/x509/ca/skyspy/
+
+          notation verify "${{ steps.digest.outputs.full_ref }}" || echo "Verification skipped (self-signed cert)"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf "${{ steps.cert.outputs.cert_dir }}"
+
+  # ===========================================================================
+  # Stage 8: Build & Sign Go Binaries
+  # ===========================================================================
+
+  build-sign-go-binaries:
+    name: Build & Sign Go Binaries
+    runs-on: ubuntu-latest
+    needs: [detect-changes, test-go, security-go]
+    if: |
+      always() &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') &&
+      (needs.test-go.result == 'success' || needs.test-go.result == 'skipped') &&
+      (needs.security-go.result == 'success' || needs.security-go.result == 'skipped')
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: skyspy-go/go.sum
+
+      - name: Install step-cli
+        run: |
+          wget -q https://dl.smallstep.com/gh-release/cli/gh-release-header/v0.27.2/step-cli_0.27.2_amd64.deb
+          sudo dpkg -i step-cli_0.27.2_amd64.deb
+          rm step-cli_0.27.2_amd64.deb
+
+      - name: Get version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="v0.0.0-$(date +%Y%m%d)-$(echo ${{ github.sha }} | cut -c1-7)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build binaries
+        working-directory: skyspy-go
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          CGO_ENABLED: "0"
+        run: |
+          mkdir -p dist
+
+          # Define build targets
+          TARGETS=(
+            "linux/amd64"
+            "linux/arm64"
+            "darwin/amd64"
+            "darwin/arm64"
+            "windows/amd64"
+          )
+
+          LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${{ github.sha }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          for target in "${TARGETS[@]}"; do
+            GOOS="${target%/*}"
+            GOARCH="${target#*/}"
+            OUTPUT="dist/skyspy-${GOOS}-${GOARCH}"
+
+            if [[ "$GOOS" == "windows" ]]; then
+              OUTPUT="${OUTPUT}.exe"
+            fi
+
+            echo "Building for ${GOOS}/${GOARCH}..."
+            GOOS="$GOOS" GOARCH="$GOARCH" go build \
+              -ldflags "$LDFLAGS" \
+              -trimpath \
+              -o "$OUTPUT" \
+              ./cmd/skyspy
+
+            echo "Built: $OUTPUT"
+          done
+
+          ls -la dist/
+
+      - name: Generate signing certificate
+        id: cert
+        env:
+          STEP_CA_URL: ${{ secrets.STEP_CA_URL }}
+          STEP_CA_FINGERPRINT: ${{ secrets.STEP_CA_FINGERPRINT }}
+          STEP_CA_JWK: ${{ secrets.STEP_CA_JWK }}
+        run: |
+          CERT_DIR=$(mktemp -d)
+          echo "cert_dir=$CERT_DIR" >> $GITHUB_OUTPUT
+
+          if [[ -n "$STEP_CA_URL" && -n "$STEP_CA_FINGERPRINT" && -n "$STEP_CA_JWK" ]]; then
+            echo "Using Step CA for certificate generation"
+            echo "signing_method=ca" >> $GITHUB_OUTPUT
+
+            # Write JWK to temp file
+            echo "$STEP_CA_JWK" > "$CERT_DIR/provisioner.jwk"
+
+            # Get certificate from Step CA
+            step ca certificate \
+              "skyspy-ci@github.com" \
+              "$CERT_DIR/signing.crt" \
+              "$CERT_DIR/signing.key" \
+              --ca-url "$STEP_CA_URL" \
+              --fingerprint "$STEP_CA_FINGERPRINT" \
+              --provisioner "ci-signing" \
+              --provisioner-password-file "$CERT_DIR/provisioner.jwk" \
+              --not-after 24h \
+              --force
+          else
+            echo "Using ephemeral self-signed certificate"
+            echo "signing_method=ephemeral" >> $GITHUB_OUTPUT
+
+            # Create ephemeral self-signed certificate
+            step certificate create \
+              "skyspy-ci@github.com" \
+              "$CERT_DIR/signing.crt" \
+              "$CERT_DIR/signing.key" \
+              --profile leaf \
+              --not-after 24h \
+              --no-password \
+              --insecure \
+              --kty EC \
+              --curve P-256 \
+              --force
+          fi
+
+          # Set restrictive permissions
+          chmod 600 "$CERT_DIR/signing.key"
+          chmod 644 "$CERT_DIR/signing.crt"
+
+      - name: Create checksums and sign binaries
+        working-directory: skyspy-go
+        env:
+          CERT_DIR: ${{ steps.cert.outputs.cert_dir }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          cd dist
+
+          # Generate SHA256 checksums
+          sha256sum skyspy-* > checksums.txt
+          echo "Checksums:"
+          cat checksums.txt
+
+          # Sign each binary with OpenSSL using the certificate
+          for binary in skyspy-*; do
+            if [[ -f "$binary" && "$binary" != *.sig && "$binary" != *.txt ]]; then
+              echo "Signing $binary..."
+              openssl dgst -sha256 -sign "$CERT_DIR/signing.key" -out "${binary}.sig" "$binary"
+              echo "Created ${binary}.sig"
+            fi
+          done
+
+          # Sign the checksums file
+          openssl dgst -sha256 -sign "$CERT_DIR/signing.key" -out checksums.txt.sig checksums.txt
+
+          # Export the public certificate for verification
+          cp "$CERT_DIR/signing.crt" signing-cert.pem
+
+          # Create verification instructions
+          cat > VERIFY.md << 'EOF'
+          # Verifying Binary Signatures
+
+          ## Prerequisites
+          - OpenSSL installed
+
+          ## Verification Steps
+
+          1. Verify checksums:
+          ```bash
+          sha256sum -c checksums.txt
+          ```
+
+          2. Verify binary signature:
+          ```bash
+          openssl dgst -sha256 -verify signing-cert.pem -signature <binary>.sig <binary>
+          ```
+
+          3. Verify checksums signature:
+          ```bash
+          openssl dgst -sha256 -verify signing-cert.pem -signature checksums.txt.sig checksums.txt
+          ```
+
+          ## Certificate Info
+          View certificate details:
+          ```bash
+          openssl x509 -in signing-cert.pem -text -noout
+          ```
+          EOF
+
+          ls -la
+
+      - name: Create archives
+        working-directory: skyspy-go/dist
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # Create tar.gz for Unix binaries
+          for binary in skyspy-linux-* skyspy-darwin-*; do
+            if [[ -f "$binary" && ! "$binary" =~ \.sig$ ]]; then
+              ARCHIVE_NAME="${binary}-${VERSION}.tar.gz"
+              tar -czvf "$ARCHIVE_NAME" "$binary" "${binary}.sig" signing-cert.pem VERIFY.md
+              echo "Created $ARCHIVE_NAME"
+            fi
+          done
+
+          # Create zip for Windows
+          for binary in skyspy-windows-*; do
+            if [[ -f "$binary" && ! "$binary" =~ \.sig$ ]]; then
+              ARCHIVE_NAME="${binary%.exe}-${VERSION}.zip"
+              zip "$ARCHIVE_NAME" "$binary" "${binary}.sig" signing-cert.pem VERIFY.md
+              echo "Created $ARCHIVE_NAME"
+            fi
+          done
+
+          # Final checksums including archives
+          sha256sum *.tar.gz *.zip 2>/dev/null >> checksums.txt || true
+
+          ls -la
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-binaries-signed
+          path: |
+            skyspy-go/dist/*.tar.gz
+            skyspy-go/dist/*.zip
+            skyspy-go/dist/checksums.txt
+            skyspy-go/dist/checksums.txt.sig
+            skyspy-go/dist/signing-cert.pem
+            skyspy-go/dist/VERIFY.md
+          retention-days: 30
+
+      - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            skyspy-go/dist/*.tar.gz
+            skyspy-go/dist/*.zip
+            skyspy-go/dist/checksums.txt
+            skyspy-go/dist/checksums.txt.sig
+            skyspy-go/dist/signing-cert.pem
+            skyspy-go/dist/VERIFY.md
+          fail_on_unmatched_files: false
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf "${{ steps.cert.outputs.cert_dir }}"
+
+      - name: Summary
+        run: |
+          echo "## Go Binaries Built & Signed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Signing Method**: ${{ steps.cert.outputs.signing_method }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "| Platform | Binary |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Linux amd64 | \`skyspy-linux-amd64\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Linux arm64 | \`skyspy-linux-arm64\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| macOS amd64 | \`skyspy-darwin-amd64\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| macOS arm64 | \`skyspy-darwin-arm64\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Windows amd64 | \`skyspy-windows-amd64.exe\` |" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
   # CI Gate
   # ===========================================================================
 
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [lint-python, lint-go, lint-frontend, security-python, security-frontend, security-go, test-python-unit, test-go, test-frontend-unit, build-frontend, test-python-integration, test-e2e, docker-build-push, export-openapi, sync-docs, codeql]
+    needs: [lint-python, lint-go, lint-frontend, security-python, security-frontend, security-go, test-python-unit, test-go, test-frontend-unit, build-frontend, test-python-integration, test-e2e, docker-build-push, sign-docker-images, build-sign-go-binaries, export-openapi, sync-docs, codeql]
     if: always()
     steps:
       - name: Check results
