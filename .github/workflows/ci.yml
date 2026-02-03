@@ -53,7 +53,7 @@ jobs:
               - 'docker-compose*.yml'
 
   # ===========================================================================
-  # Python: Lint, Security & Tests
+  # Python: Lint & Tests
   # ===========================================================================
 
   lint-python:
@@ -65,19 +65,6 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv tool run ruff check --output-format=github .
       - run: uv tool run ruff format --check .
-
-  security-python:
-    name: Python Security
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - name: Run security scans
-        run: |
-          uv tool run bandit -r skyspy_django skyspy_common -x "*/tests/*,*/test_*" -ll -ii
-          grep -v '^-e ' skyspy_django/requirements.txt > /tmp/requirements-audit.txt
-          uv tool run pip-audit --requirement /tmp/requirements-audit.txt --ignore-vuln PYSEC-2024-48
 
   test-python-unit:
     name: Python Tests
@@ -193,7 +180,7 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   # ===========================================================================
-  # Frontend: Lint, Security & Tests
+  # Frontend: Lint & Tests
   # ===========================================================================
 
   lint-frontend:
@@ -210,20 +197,6 @@ jobs:
       - run: npm ci
         working-directory: web
       - run: npm run lint && npm run format:check
-        working-directory: web
-
-  security-frontend:
-    name: Frontend Security
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci && npm audit --audit-level=high
         working-directory: web
 
   test-frontend-unit:
@@ -252,12 +225,64 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+  # ===========================================================================
+  # Security
+  # ===========================================================================
+
+  security-python:
+    name: Python Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Run security scans
+        run: |
+          uv tool run bandit -r skyspy_django skyspy_common -x "*/tests/*,*/test_*" -ll -ii
+          grep -v '^-e ' skyspy_django/requirements.txt > /tmp/requirements-audit.txt
+          uv tool run pip-audit --requirement /tmp/requirements-audit.txt --ignore-vuln PYSEC-2024-48
+
+  security-frontend:
+    name: Frontend Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci && npm audit --audit-level=high
+        working-directory: web
+
+  security-go:
+    name: Go Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: skyspy-go/go.sum
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Run govulncheck
+        working-directory: skyspy-go
+        run: govulncheck ./...
+
+  # ===========================================================================
+  # Build
+  # ===========================================================================
+
   build-frontend:
     name: Build Frontend
     runs-on: ubuntu-latest
-    needs: [detect-changes, test-frontend-unit, security-frontend]
+    needs: [detect-changes, lint-frontend, test-frontend-unit, security-frontend]
     if: |
       needs.detect-changes.outputs.frontend == 'true' &&
+      needs.lint-frontend.result == 'success' &&
       needs.test-frontend-unit.result == 'success' &&
       needs.security-frontend.result == 'success'
     timeout-minutes: 5
@@ -465,10 +490,9 @@ jobs:
     needs: [detect-changes, docker-build-push]
     if: |
       always() &&
-      github.ref == 'refs/heads/main' &&
       github.event_name == 'push' &&
-      needs.detect-changes.outputs.python == 'true' &&
-      needs.docker-build-push.result == 'success'
+      needs.docker-build-push.result == 'success' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     timeout-minutes: 10
     concurrency:
       group: readme-api-sync
@@ -518,7 +542,25 @@ jobs:
           source .venv/bin/activate
           python manage.py migrate --noinput
           python manage.py spectacular --file openapi.json --validate
-      - name: Upload to ReadMe
+      - name: Get version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "version=" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Upload to ReadMe (release)
+        if: steps.version.outputs.is_release == 'true'
+        uses: readmeio/rdme@v8
+        with:
+          rdme: openapi upload skyspy_django/openapi.json --key=${{ secrets.README_API_KEY }} --slug=skyspy-api --version=${{ steps.version.outputs.version }} --create
+      - name: Upload to ReadMe (main)
+        if: steps.version.outputs.is_release != 'true'
         uses: readmeio/rdme@v8
         with:
           rdme: openapi upload skyspy_django/openapi.json --key=${{ secrets.README_API_KEY }} --slug=skyspy-api --confirm-overwrite
@@ -529,16 +571,34 @@ jobs:
     needs: [detect-changes, docker-build-push]
     if: |
       always() &&
-      github.ref == 'refs/heads/main' &&
       github.event_name == 'push' &&
-      needs.docker-build-push.result == 'success'
+      needs.docker-build-push.result == 'success' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     timeout-minutes: 5
     concurrency:
       group: readme-docs-sync
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
-      - name: Sync documentation to ReadMe
+      - name: Get version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "version=" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Sync documentation to ReadMe (release)
+        if: steps.version.outputs.is_release == 'true'
+        uses: readmeio/rdme@v8
+        with:
+          rdme: docs upload docs --key=${{ secrets.README_API_KEY }} --version=${{ steps.version.outputs.version }}
+      - name: Sync documentation to ReadMe (main)
+        if: steps.version.outputs.is_release != 'true'
         uses: readmeio/rdme@v8
         with:
           rdme: docs upload docs --key=${{ secrets.README_API_KEY }}
@@ -550,7 +610,7 @@ jobs:
   docker-build-push:
     name: Build ${{ matrix.name }}
     runs-on: ubuntu-latest
-    needs: [detect-changes, lint-python, lint-go, lint-frontend, security-python, security-frontend, test-python-unit, test-go, test-python-integration, test-e2e]
+    needs: [detect-changes, lint-python, lint-go, lint-frontend, security-python, security-frontend, security-go, test-python-unit, test-go, test-python-integration, test-e2e]
     if: |
       always() &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
@@ -559,6 +619,7 @@ jobs:
       needs.lint-frontend.result == 'success' &&
       needs.security-python.result == 'success' &&
       needs.security-frontend.result == 'success' &&
+      needs.security-go.result == 'success' &&
       (needs.test-python-unit.result == 'success' || needs.test-python-unit.result == 'skipped') &&
       (needs.test-go.result == 'success' || needs.test-go.result == 'skipped') &&
       (needs.test-python-integration.result == 'success' || needs.test-python-integration.result == 'skipped') &&
@@ -635,7 +696,7 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [lint-python, lint-go, lint-frontend, security-python, security-frontend, test-python-unit, test-go, test-frontend-unit, build-frontend, test-python-integration, test-e2e, docker-build-push, export-openapi, sync-docs]
+    needs: [lint-python, lint-go, lint-frontend, security-python, security-frontend, security-go, test-python-unit, test-go, test-frontend-unit, build-frontend, test-python-integration, test-e2e, docker-build-push, export-openapi, sync-docs]
     if: always()
     steps:
       - name: Check results
