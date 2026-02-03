@@ -10,6 +10,8 @@ export function normalizeAircraft(data) {
   const hex = data.hex || data.icao || data.icao_hex || '';
   return {
     hex: hex.toUpperCase(),
+    // Client-side timestamp for staleness detection (when we last received an update)
+    _clientTimestamp: Date.now(),
     flight: data.flight || data.callsign || data.call || null,
     // Registration / tail number
     r: data.r || data.registration || data.tail || null,

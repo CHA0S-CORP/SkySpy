@@ -530,6 +530,46 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
     };
   }, []);
 
+  // Stale aircraft cleanup - removes aircraft not updated in 60+ seconds
+  // This is a safety net in case backend removal events are missed
+  useEffect(() => {
+    if (!enabled) return;
+
+    const STALE_THRESHOLD_MS = 60000; // 60 seconds
+    const CLEANUP_INTERVAL_MS = 10000; // Check every 10 seconds
+
+    const cleanupStaleAircraft = () => {
+      if (!mountedRef.current) return;
+
+      const now = Date.now();
+      setAircraft((prev) => {
+        const staleHexes = [];
+        Object.entries(prev).forEach(([hex, ac]) => {
+          // Check if aircraft has a client timestamp and is stale
+          if (ac._clientTimestamp && now - ac._clientTimestamp > STALE_THRESHOLD_MS) {
+            staleHexes.push(hex);
+          }
+        });
+
+        if (staleHexes.length === 0) return prev;
+
+        if (import.meta.env.DEV) {
+          console.log('[useSocketIOData] Removing', staleHexes.length, 'stale aircraft:', staleHexes);
+        }
+
+        const next = { ...prev };
+        staleHexes.forEach((hex) => delete next[hex]);
+        return next;
+      });
+    };
+
+    const cleanupIntervalId = setInterval(cleanupStaleAircraft, CLEANUP_INTERVAL_MS);
+
+    return () => {
+      clearInterval(cleanupIntervalId);
+    };
+  }, [enabled]);
+
   // Demo mode for development
   useEffect(() => {
     if (import.meta.env.PROD) return;
