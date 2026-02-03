@@ -7,6 +7,23 @@ on:
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a release'
+        type: boolean
+        default: false
+      version:
+        description: 'Release version (e.g., 1.2.3)'
+        type: string
+        required: false
+      prerelease:
+        description: 'Mark as pre-release'
+        type: boolean
+        default: false
+      draft:
+        description: 'Create as draft release'
+        type: boolean
+        default: true
 
 env:
   REGISTRY: ghcr.io
@@ -832,3 +849,120 @@ jobs:
           echo "### Cache" >> $GITHUB_STEP_SUMMARY
           echo "- Python venv, npm, Playwright, Go modules, and Docker layers are cached" >> $GITHUB_STEP_SUMMARY
           echo "- [View Cache Usage](${{ github.server_url }}/${{ github.repository }}/actions/caches)" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # Release (manual trigger only)
+  # ===========================================================================
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [ci-success, docker-build-push]
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      inputs.create_release == true &&
+      needs.ci-success.result == 'success' &&
+      needs.docker-build-push.result == 'success'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate version
+        id: version
+        run: |
+          VERSION="${{ inputs.version }}"
+          if [[ -z "$VERSION" ]]; then
+            # Auto-generate version from date if not provided
+            VERSION="$(date +%Y.%m.%d)-$(git rev-parse --short HEAD)"
+            echo "Auto-generated version: $VERSION"
+          fi
+          # Validate semver-ish format
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]] && [[ ! "$VERSION" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}- ]]; then
+            echo "Warning: Version '$VERSION' doesn't follow semver format"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+      - name: Check if tag exists
+        run: |
+          if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "Error: Tag v${{ steps.version.outputs.version }} already exists"
+            exit 1
+          fi
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          echo "## What's Changed" > changelog.md
+          echo "" >> changelog.md
+
+          if [[ -n "$PREV_TAG" ]]; then
+            echo "Changes since $PREV_TAG:" >> changelog.md
+            echo "" >> changelog.md
+
+            # Group commits by type
+            echo "### Features" >> changelog.md
+            git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --grep="^feat" >> changelog.md || true
+            echo "" >> changelog.md
+
+            echo "### Bug Fixes" >> changelog.md
+            git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --grep="^fix" >> changelog.md || true
+            echo "" >> changelog.md
+
+            echo "### Other Changes" >> changelog.md
+            git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --invert-grep --grep="^feat" --grep="^fix" | head -20 >> changelog.md || true
+            echo "" >> changelog.md
+          else
+            echo "Initial release" >> changelog.md
+          fi
+
+          echo "" >> changelog.md
+          echo "### Docker Images" >> changelog.md
+          echo "\`\`\`" >> changelog.md
+          echo "ghcr.io/${{ github.repository }}:v${{ steps.version.outputs.version }}" >> changelog.md
+          echo "ghcr.io/${{ github.repository }}-rtl-airband-uploader:v${{ steps.version.outputs.version }}" >> changelog.md
+          echo "\`\`\`" >> changelog.md
+
+          echo "" >> changelog.md
+          echo "**Full Changelog**: ${{ github.server_url }}/${{ github.repository }}/compare/${PREV_TAG:-$(git rev-list --max-parents=0 HEAD)}..v${{ steps.version.outputs.version }}" >> changelog.md
+
+          cat changelog.md
+      - name: Download OpenAPI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: openapi-schema
+          path: release-assets/
+        continue-on-error: true
+      - name: Create tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          body_path: changelog.md
+          draft: ${{ inputs.draft }}
+          prerelease: ${{ inputs.prerelease }}
+          files: |
+            release-assets/*
+          generate_release_notes: false
+      - name: Release summary
+        run: |
+          echo "## Release Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: v${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag**: [v${{ steps.version.outputs.version }}](${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.version }})" >> $GITHUB_STEP_SUMMARY
+          echo "- **Draft**: ${{ inputs.draft }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Pre-release**: ${{ inputs.prerelease }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Docker Images" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ghcr.io/${{ github.repository }}:v${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
