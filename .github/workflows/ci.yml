@@ -322,6 +322,11 @@ jobs:
           EOF
       - name: Build and run tests
         run: |
+          # Create test-results directory with write permissions for container user
+          mkdir -p test-results
+          chmod 777 test-results
+          # Remove any stale coverage files from previous runs
+          rm -f test-results/.coverage test-results/coverage.xml
           docker buildx bake -f docker-compose.test.yaml \
             --set "*.cache-from=type=gha" \
             --set "*.cache-to=type=gha,mode=max" \
