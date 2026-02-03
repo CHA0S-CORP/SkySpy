@@ -6,6 +6,9 @@
  * Initialize axe-core accessibility testing in development mode.
  * This is a no-op in production and handles errors gracefully.
  *
+ * Note: @axe-core/react is an optional devDependency. If not installed,
+ * this function silently does nothing.
+ *
  * @returns {Promise<void>}
  */
 export async function initA11y() {
@@ -14,11 +17,26 @@ export async function initA11y() {
     return;
   }
 
+  // Skip if running in Docker or CI where devDependencies may not be installed
+  if (import.meta.env.VITE_SKIP_A11Y) {
+    return;
+  }
+
   try {
-    // Dynamically import axe-core/react to avoid bundling in production
-    const axe = await import('@axe-core/react');
-    const React = await import('react');
-    const ReactDOM = await import('react-dom');
+    // Use Function constructor to prevent Vite from statically analyzing this import
+    // This allows the code to work even when @axe-core/react is not installed
+    const dynamicImport = new Function('specifier', 'return import(specifier)');
+
+    const [axeModule, React, ReactDOM] = await Promise.all([
+      dynamicImport('@axe-core/react').catch(() => null),
+      dynamicImport('react'),
+      dynamicImport('react-dom'),
+    ]);
+
+    // If axe-core is not available, silently skip
+    if (!axeModule) {
+      return;
+    }
 
     // Configure axe with specific accessibility rules
     const config = {
@@ -31,9 +49,8 @@ export async function initA11y() {
     };
 
     // Initialize axe with React and ReactDOM
-    axe.default(React, ReactDOM, 1000, config);
-  } catch (error) {
-    // Gracefully handle any errors during initialization
-    console.warn('[a11y] Failed to initialize axe-core:', error.message);
+    axeModule.default(React, ReactDOM, 1000, config);
+  } catch {
+    // Silently ignore - a11y testing is optional
   }
 }
