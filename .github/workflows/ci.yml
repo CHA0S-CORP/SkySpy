@@ -332,7 +332,7 @@ jobs:
             --set "*.cache-to=type=gha,mode=max" \
             --load
           docker compose -f docker-compose.test.yaml --env-file .env.test up -d --wait postgres pgbouncer redis ultrafeeder dump978
-          docker compose -f docker-compose.test.yaml --env-file .env.test --profile test run --rm api-test
+          docker compose -f docker-compose.test.yaml --env-file .env.test --profile test run --rm --user root api-test
         env:
           DOCKER_BUILDKIT: 1
       - uses: actions/upload-artifact@v4
