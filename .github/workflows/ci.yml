@@ -308,6 +308,123 @@ jobs:
         working-directory: skyspy-go
         run: govulncheck ./...
 
+  snyk-python:
+    name: Snyk Python
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.python == 'true'
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: snyk/actions/setup@master
+      - name: Snyk test
+        working-directory: skyspy_django
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          if [[ -n "$SNYK_TOKEN" ]]; then
+            snyk test --file=requirements.txt --severity-threshold=high || true
+          else
+            echo "SNYK_TOKEN not set, skipping Snyk scan"
+          fi
+        continue-on-error: true
+
+  snyk-frontend:
+    name: Snyk Frontend
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+      - uses: snyk/actions/setup@master
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+      - name: Snyk test
+        working-directory: web
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          if [[ -n "$SNYK_TOKEN" ]]; then
+            snyk test --severity-threshold=high || true
+          else
+            echo "SNYK_TOKEN not set, skipping Snyk scan"
+          fi
+        continue-on-error: true
+
+  snyk-go:
+    name: Snyk Go
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.go == 'true'
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: skyspy-go/go.sum
+      - uses: snyk/actions/setup@master
+      - name: Snyk test
+        working-directory: skyspy-go
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          if [[ -n "$SNYK_TOKEN" ]]; then
+            snyk test --severity-threshold=high || true
+          else
+            echo "SNYK_TOKEN not set, skipping Snyk scan"
+          fi
+        continue-on-error: true
+
+  snyk-docker:
+    name: Snyk Docker
+    runs-on: ubuntu-latest
+    needs: [detect-changes, docker-build-push]
+    if: |
+      always() &&
+      needs.docker-build-push.result == 'success'
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: snyk/actions/setup@master
+      - name: Login to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Snyk container test
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          if [[ -n "$SNYK_TOKEN" ]]; then
+            # Get tag based on ref
+            if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+              TAG="${{ github.ref_name }}"
+            elif [[ "${{ github.ref }}" == refs/heads/* ]]; then
+              TAG="${{ github.ref_name }}"
+            else
+              TAG="sha-$(echo ${{ github.sha }} | cut -c1-7)"
+            fi
+
+            IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}"
+            echo "Scanning ${IMAGE}..."
+            snyk container test "$IMAGE" --severity-threshold=high || true
+          else
+            echo "SNYK_TOKEN not set, skipping Snyk container scan"
+          fi
+        continue-on-error: true
+
   codeql:
     name: CodeQL Analysis
     runs-on: ubuntu-latest
@@ -852,7 +969,8 @@ jobs:
               "skyspy-ci@github.com" \
               "$CERT_DIR/signing.crt" \
               "$CERT_DIR/signing.key" \
-              --profile leaf \
+              --profile self-signed \
+              --subtle \
               --not-after 24h \
               --no-password \
               --insecure \
@@ -1121,7 +1239,8 @@ jobs:
               "skyspy-ci@github.com" \
               "$CERT_DIR/signing.crt" \
               "$CERT_DIR/signing.key" \
-              --profile leaf \
+              --profile self-signed \
+              --subtle \
               --not-after 24h \
               --no-password \
               --insecure \
@@ -1253,7 +1372,8 @@ jobs:
               "skyspy-ci@github.com" \
               /tmp/signing.crt \
               /tmp/signing.key \
-              --profile leaf \
+              --profile self-signed \
+              --subtle \
               --not-after 24h \
               --no-password \
               --insecure \
@@ -1321,7 +1441,7 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [lint-python, lint-go, lint-frontend, security-python, security-frontend, security-go, test-python-unit, test-go, test-frontend-unit, build-frontend, test-python-integration, test-e2e, docker-build-push, sign-docker-images, go-version, build-go-binaries, sign-go-binaries, package-go-binaries, export-openapi, sync-docs, codeql]
+    needs: [lint-python, lint-go, lint-frontend, security-python, security-frontend, security-go, snyk-python, snyk-frontend, snyk-go, snyk-docker, test-python-unit, test-go, test-frontend-unit, build-frontend, test-python-integration, test-e2e, docker-build-push, sign-docker-images, go-version, build-go-binaries, sign-go-binaries, package-go-binaries, export-openapi, sync-docs, codeql]
     if: always()
     steps:
       - name: Check results
@@ -1357,6 +1477,10 @@ jobs:
           echo "| Python Security | ${{ needs.security-python.result == 'success' && ':white_check_mark:' || (needs.security-python.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.security-python.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Frontend Security | ${{ needs.security-frontend.result == 'success' && ':white_check_mark:' || (needs.security-frontend.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.security-frontend.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Go Security | ${{ needs.security-go.result == 'success' && ':white_check_mark:' || (needs.security-go.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.security-go.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Snyk Python | ${{ needs.snyk-python.result == 'success' && ':white_check_mark:' || (needs.snyk-python.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.snyk-python.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Snyk Frontend | ${{ needs.snyk-frontend.result == 'success' && ':white_check_mark:' || (needs.snyk-frontend.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.snyk-frontend.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Snyk Go | ${{ needs.snyk-go.result == 'success' && ':white_check_mark:' || (needs.snyk-go.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.snyk-go.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Snyk Docker | ${{ needs.snyk-docker.result == 'success' && ':white_check_mark:' || (needs.snyk-docker.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.snyk-docker.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| CodeQL | ${{ needs.codeql.result == 'success' && ':white_check_mark:' || (needs.codeql.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.codeql.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Python Tests | ${{ needs.test-python-unit.result == 'success' && ':white_check_mark:' || (needs.test-python-unit.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.test-python-unit.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Go Tests | ${{ needs.test-go.result == 'success' && ':white_check_mark:' || (needs.test-go.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.test-go.result }} |" >> $GITHUB_STEP_SUMMARY
