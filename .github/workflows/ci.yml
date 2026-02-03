@@ -608,6 +608,11 @@ jobs:
         uses: readmeio/rdme@v8
         with:
           rdme: openapi upload skyspy_django/openapi.json --key=${{ secrets.README_API_KEY }} --slug=skyspy-api --confirm-overwrite
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openapi-schema
+          path: skyspy_django/openapi.json
+          retention-days: 30
 
   sync-docs:
     name: Sync Docs to ReadMe
@@ -740,7 +745,7 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [lint-python, lint-go, lint-frontend, security-python, security-frontend, security-go, test-python-unit, test-go, test-frontend-unit, build-frontend, test-python-integration, test-e2e, docker-build-push, export-openapi, sync-docs]
+    needs: [lint-python, lint-go, lint-frontend, security-python, security-frontend, security-go, test-python-unit, test-go, test-frontend-unit, build-frontend, test-python-integration, test-e2e, docker-build-push, export-openapi, sync-docs, codeql]
     if: always()
     steps:
       - name: Check results
@@ -752,3 +757,78 @@ jobs:
             exit 1
           fi
           echo "CI passed"
+      - name: Generate summary
+        if: always()
+        run: |
+          echo "## CI Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Status
+          if echo '${{ toJSON(needs.*.result) }}' | grep -qE '"failure"|"cancelled"'; then
+            echo "### Status: :x: Failed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Status: :white_check_mark: Passed" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Job Results Table
+          echo "### Job Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Python Lint | ${{ needs.lint-python.result == 'success' && ':white_check_mark:' || (needs.lint-python.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.lint-python.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Go Lint | ${{ needs.lint-go.result == 'success' && ':white_check_mark:' || (needs.lint-go.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.lint-go.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend Lint | ${{ needs.lint-frontend.result == 'success' && ':white_check_mark:' || (needs.lint-frontend.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.lint-frontend.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python Security | ${{ needs.security-python.result == 'success' && ':white_check_mark:' || (needs.security-python.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.security-python.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend Security | ${{ needs.security-frontend.result == 'success' && ':white_check_mark:' || (needs.security-frontend.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.security-frontend.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Go Security | ${{ needs.security-go.result == 'success' && ':white_check_mark:' || (needs.security-go.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.security-go.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| CodeQL | ${{ needs.codeql.result == 'success' && ':white_check_mark:' || (needs.codeql.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.codeql.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python Tests | ${{ needs.test-python-unit.result == 'success' && ':white_check_mark:' || (needs.test-python-unit.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.test-python-unit.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Go Tests | ${{ needs.test-go.result == 'success' && ':white_check_mark:' || (needs.test-go.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.test-go.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend Tests | ${{ needs.test-frontend-unit.result == 'success' && ':white_check_mark:' || (needs.test-frontend-unit.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.test-frontend-unit.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration Tests | ${{ needs.test-python-integration.result == 'success' && ':white_check_mark:' || (needs.test-python-integration.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.test-python-integration.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| E2E Tests | ${{ needs.test-e2e.result == 'success' && ':white_check_mark:' || (needs.test-e2e.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.test-e2e.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Build | ${{ needs.docker-build-push.result == 'success' && ':white_check_mark:' || (needs.docker-build-push.result == 'skipped' && ':fast_forward:' || ':x:') }} ${{ needs.docker-build-push.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Links Section
+          echo "### Links" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Vercel Preview (for PRs)
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "- :rocket: **Vercel Preview**: [View Deployment](https://skyspy-git-${{ github.head_ref }}-${{ github.repository_owner }}.vercel.app)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Artifacts
+          echo "- :package: **Artifacts**: [View All Artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts)" >> $GITHUB_STEP_SUMMARY
+
+          # Conditional artifact links
+          if [[ "${{ needs.test-e2e.result }}" != "skipped" ]]; then
+            echo "  - :test_tube: Playwright Report" >> $GITHUB_STEP_SUMMARY
+            echo "  - :clipboard: E2E Test Results" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [[ "${{ needs.test-python-integration.result }}" != "skipped" ]]; then
+            echo "  - :clipboard: Integration Test Results" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [[ "${{ needs.export-openapi.result }}" == "success" ]]; then
+            echo "  - :page_facing_up: OpenAPI Schema" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Docker Images (if built)
+          if [[ "${{ needs.docker-build-push.result }}" == "success" ]]; then
+            echo "### Docker Images" >> $GITHUB_STEP_SUMMARY
+            echo "- \`ghcr.io/${{ github.repository }}:${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- \`ghcr.io/${{ github.repository }}-rtl-airband-uploader:${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Coverage (link to Codecov)
+          echo "### Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "- :bar_chart: [View on Codecov](https://codecov.io/gh/${{ github.repository }}/pull/${{ github.event.pull_request.number || github.sha }})" >> $GITHUB_STEP_SUMMARY
+
+          # Cache Stats
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Cache" >> $GITHUB_STEP_SUMMARY
+          echo "- Python venv, npm, Playwright, Go modules, and Docker layers are cached" >> $GITHUB_STEP_SUMMARY
+          echo "- [View Cache Usage](${{ github.server_url }}/${{ github.repository }}/actions/caches)" >> $GITHUB_STEP_SUMMARY
