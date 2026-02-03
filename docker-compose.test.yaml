@@ -53,6 +53,7 @@ services:
       - PYTHONUNBUFFERED=1
     volumes:
       - ./test-results:/app/test-results
+      - ./skyspy_django/skyspy:/app/skyspy:ro  # Hot reload Python code
     depends_on:
       pgbouncer:
         condition: service_healthy

@@ -356,7 +356,8 @@ def _use_synthetic_data(now: float) -> list[dict]:
     with data_lock:
         # Update synthetic aircraft positions slightly for realism
         if using_synthetic_data and cached_aircraft:
-            # Nudge existing aircraft
+            # Nudge existing aircraft and filter out those that left coverage
+            updated_aircraft = []
             for ac in cached_aircraft:
                 if ac.get("lat") and ac.get("lon"):
                     # Move based on track and speed
@@ -366,6 +367,28 @@ def _use_synthetic_data(now: float) -> list[dict]:
                     ac["lon"] = round(ac["lon"] + math.sin(track_rad) * speed_factor * 0.01, 6)
                     ac["seen"] = round(random.uniform(0, 2), 1)
                     ac["seen_pos"] = round(random.uniform(0, 2), 1)
+
+                    # Check if aircraft is still within coverage area
+                    dist = calculate_distance_nm(
+                        COVERAGE_CENTER_LAT, COVERAGE_CENTER_LON, ac["lat"], ac["lon"]
+                    )
+                    if dist <= COVERAGE_RADIUS_NM * 1.2:
+                        updated_aircraft.append(ac)
+
+            # Randomly remove 1-3 aircraft per update (simulates departures/signal loss)
+            if len(updated_aircraft) > 10 and random.random() < 0.3:
+                num_to_remove = random.randint(1, min(3, len(updated_aircraft) - 10))
+                for _ in range(num_to_remove):
+                    if updated_aircraft:
+                        updated_aircraft.pop(random.randint(0, len(updated_aircraft) - 1))
+
+            # Randomly add 1-2 new aircraft per update (simulates arrivals)
+            if random.random() < 0.3:
+                num_to_add = random.randint(1, 2)
+                new_aircraft = generate_synthetic_aircraft()[:num_to_add]
+                updated_aircraft.extend(new_aircraft)
+
+            cached_aircraft = updated_aircraft
         else:
             # Generate fresh synthetic data
             cached_aircraft = generate_synthetic_aircraft()
