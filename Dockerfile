@@ -38,7 +38,7 @@ RUN git clone --depth 1 --branch v2.2.0 https://github.com/szpajder/libacars.git
 # -----------------------------------------------------------------------------
 # Stage 1: Build dependencies
 # -----------------------------------------------------------------------------
-FROM python:3.14-slim as builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /app
 
@@ -74,7 +74,7 @@ RUN grep -v '^-e \.\.' requirements.txt > requirements-docker.txt && \
 # -----------------------------------------------------------------------------
 # Stage 2: Production image
 # -----------------------------------------------------------------------------
-FROM python:3.12-slim as production
+FROM python:3.14-slim AS production
 
 # Labels
 LABEL maintainer="SkysPy Team"
