@@ -53,52 +53,8 @@ jobs:
               - 'docker-compose*.yml'
 
   # ===========================================================================
-  # Stage 1b: Linting & Security (runs in parallel with path detection)
+  # Stage 1b: Security (runs in parallel with path detection)
   # ===========================================================================
-
-  lint-python:
-    name: Lint Python
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - run: uv tool run ruff check --output-format=github .
-      - run: uv tool run ruff format --check .
-
-  lint-frontend:
-    name: Lint Frontend
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci
-        working-directory: web
-      - run: npm run lint && npm run format:check
-        working-directory: web
-
-  lint-go:
-    name: Lint Go
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-          cache-dependency-path: skyspy-go/go.sum
-      - uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          working-directory: skyspy-go
-      - name: Check gofmt
-        working-directory: skyspy-go
-        run: test -z "$(gofmt -l .)"
 
   security-python:
     name: Security Python
@@ -133,7 +89,7 @@ jobs:
   # ===========================================================================
 
   test-python-unit:
-    name: Python Unit Tests
+    name: Python Lint & Tests
     runs-on: ubuntu-latest
     needs: detect-changes
     if: needs.detect-changes.outputs.python == 'true'
@@ -172,6 +128,10 @@ jobs:
         with:
           python-version: '3.12'
       - uses: astral-sh/setup-uv@v5
+      - name: Lint
+        run: |
+          uv tool run ruff check --output-format=github .
+          uv tool run ruff format --check .
       - name: Install dependencies
         working-directory: skyspy_django
         run: |
@@ -197,7 +157,7 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   test-go:
-    name: Go Tests
+    name: Go Lint & Tests
     runs-on: ubuntu-latest
     needs: detect-changes
     if: needs.detect-changes.outputs.go == 'true'
@@ -208,6 +168,13 @@ jobs:
         with:
           go-version: '1.22'
           cache-dependency-path: skyspy-go/go.sum
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: skyspy-go
+      - name: Check gofmt
+        working-directory: skyspy-go
+        run: test -z "$(gofmt -l .)"
       - name: Run tests
         working-directory: skyspy-go
         run: |
@@ -224,7 +191,7 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   test-frontend-unit:
-    name: Frontend Unit Tests
+    name: Frontend Lint & Tests
     runs-on: ubuntu-latest
     needs: detect-changes
     if: needs.detect-changes.outputs.frontend == 'true'
@@ -238,7 +205,11 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
         working-directory: web
-      - run: npm run test:unit:coverage
+      - name: Lint
+        run: npm run lint && npm run format:check
+        working-directory: web
+      - name: Run tests
+        run: npm run test:unit:coverage
         working-directory: web
       - uses: codecov/codecov-action@v5
         with:
@@ -628,7 +599,7 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [lint-python, lint-frontend, lint-go, security-python, security-frontend, test-python-unit, test-go, test-frontend-unit, build-frontend, test-python-integration, test-e2e, docker-build-push, export-openapi, sync-docs]
+    needs: [security-python, security-frontend, test-python-unit, test-go, test-frontend-unit, build-frontend, test-python-integration, test-e2e, docker-build-push, export-openapi, sync-docs]
     if: always()
     steps:
       - name: Check results
