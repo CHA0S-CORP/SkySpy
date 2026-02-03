@@ -369,9 +369,7 @@ def _use_synthetic_data(now: float) -> list[dict]:
                     ac["seen_pos"] = round(random.uniform(0, 2), 1)
 
                     # Check if aircraft is still within coverage area
-                    dist = calculate_distance_nm(
-                        COVERAGE_CENTER_LAT, COVERAGE_CENTER_LON, ac["lat"], ac["lon"]
-                    )
+                    dist = calculate_distance_nm(COVERAGE_CENTER_LAT, COVERAGE_CENTER_LON, ac["lat"], ac["lon"])
                     if dist <= COVERAGE_RADIUS_NM * 1.2:
                         updated_aircraft.append(ac)
 
