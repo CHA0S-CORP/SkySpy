@@ -1,14 +1,14 @@
 {
   "$schema": "https://smallstep.com/docs/step-cli/reference/ca/provisioner/#json-schema",
   "description": "Step CA configuration for CI signing operations",
-  "ca-url": "${STEP_CA_URL}",
-  "fingerprint": "${STEP_CA_FINGERPRINT}",
+  "ca-url": "https://ca.example.com",
+  "fingerprint": "REPLACE_WITH_YOUR_CA_FINGERPRINT",
   "provisioner": {
     "type": "JWK",
-    "name": "ci-signing",
-    "key": "${STEP_CA_JWK}"
+    "name": "ci-signing"
   },
   "certificate": {
+    "subject": "skyspy-ci@github.com",
     "not-after": "24h",
     "san": [
       "skyspy-ci@github.com"

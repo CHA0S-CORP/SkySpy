@@ -812,15 +812,20 @@ jobs:
       - name: Generate signing certificate
         id: cert
         env:
-          STEP_CA_URL: ${{ secrets.STEP_CA_URL }}
-          STEP_CA_FINGERPRINT: ${{ secrets.STEP_CA_FINGERPRINT }}
           STEP_CA_JWK: ${{ secrets.STEP_CA_JWK }}
         run: |
           mkdir -p $HOME/.config/notation/signing-keys
           CERT_DIR=$(mktemp -d)
           echo "cert_dir=$CERT_DIR" >> $GITHUB_OUTPUT
 
-          if [[ -n "$STEP_CA_URL" && -n "$STEP_CA_FINGERPRINT" && -n "$STEP_CA_JWK" ]]; then
+          # Read CA config from repo
+          CA_CONFIG=".github/signing/step-ca.json"
+          STEP_CA_URL=$(jq -r '."ca-url"' "$CA_CONFIG")
+          STEP_CA_FINGERPRINT=$(jq -r '.fingerprint' "$CA_CONFIG")
+          PROVISIONER_NAME=$(jq -r '.provisioner.name' "$CA_CONFIG")
+
+          # Check if CA is configured (not placeholder values) and JWK secret exists
+          if [[ -n "$STEP_CA_JWK" && "$STEP_CA_URL" != "https://ca.example.com" && "$STEP_CA_FINGERPRINT" != "REPLACE_WITH_YOUR_CA_FINGERPRINT" ]]; then
             echo "Using Step CA for certificate generation"
             echo "signing_method=ca" >> $GITHUB_OUTPUT
 
@@ -834,7 +839,7 @@ jobs:
               "$CERT_DIR/signing.key" \
               --ca-url "$STEP_CA_URL" \
               --fingerprint "$STEP_CA_FINGERPRINT" \
-              --provisioner "ci-signing" \
+              --provisioner "$PROVISIONER_NAME" \
               --provisioner-password-file "$CERT_DIR/provisioner.jwk" \
               --not-after 24h \
               --force
@@ -1038,14 +1043,19 @@ jobs:
       - name: Generate signing certificate
         id: cert
         env:
-          STEP_CA_URL: ${{ secrets.STEP_CA_URL }}
-          STEP_CA_FINGERPRINT: ${{ secrets.STEP_CA_FINGERPRINT }}
           STEP_CA_JWK: ${{ secrets.STEP_CA_JWK }}
         run: |
           CERT_DIR=$(mktemp -d)
           echo "cert_dir=$CERT_DIR" >> $GITHUB_OUTPUT
 
-          if [[ -n "$STEP_CA_URL" && -n "$STEP_CA_FINGERPRINT" && -n "$STEP_CA_JWK" ]]; then
+          # Read CA config from repo
+          CA_CONFIG=".github/signing/step-ca.json"
+          STEP_CA_URL=$(jq -r '."ca-url"' "$CA_CONFIG")
+          STEP_CA_FINGERPRINT=$(jq -r '.fingerprint' "$CA_CONFIG")
+          PROVISIONER_NAME=$(jq -r '.provisioner.name' "$CA_CONFIG")
+
+          # Check if CA is configured (not placeholder values) and JWK secret exists
+          if [[ -n "$STEP_CA_JWK" && "$STEP_CA_URL" != "https://ca.example.com" && "$STEP_CA_FINGERPRINT" != "REPLACE_WITH_YOUR_CA_FINGERPRINT" ]]; then
             echo "Using Step CA for certificate generation"
             echo "signing_method=ca" >> $GITHUB_OUTPUT
 
@@ -1059,7 +1069,7 @@ jobs:
               "$CERT_DIR/signing.key" \
               --ca-url "$STEP_CA_URL" \
               --fingerprint "$STEP_CA_FINGERPRINT" \
-              --provisioner "ci-signing" \
+              --provisioner "$PROVISIONER_NAME" \
               --provisioner-password-file "$CERT_DIR/provisioner.jwk" \
               --not-after 24h \
               --force
