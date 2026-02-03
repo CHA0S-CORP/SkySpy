@@ -53,11 +53,21 @@ jobs:
               - 'docker-compose*.yml'
 
   # ===========================================================================
-  # Stage 1b: Security (runs in parallel with path detection)
+  # Python: Lint, Security & Tests
   # ===========================================================================
 
+  lint-python:
+    name: Python Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv tool run ruff check --output-format=github .
+      - run: uv tool run ruff format --check .
+
   security-python:
-    name: Security Python
+    name: Python Security
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -66,32 +76,13 @@ jobs:
       - name: Run security scans
         run: |
           uv tool run bandit -r skyspy_django skyspy_common -x "*/tests/*,*/test_*" -ll -ii
-          # Filter out editable installs (-e) which pip-audit can't resolve in CI
           grep -v '^-e ' skyspy_django/requirements.txt > /tmp/requirements-audit.txt
           uv tool run pip-audit --requirement /tmp/requirements-audit.txt --ignore-vuln PYSEC-2024-48
 
-  security-frontend:
-    name: Security Frontend
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci && npm audit --audit-level=high
-        working-directory: web
-
-  # ===========================================================================
-  # Stage 2: Unit Tests (parallel after path detection)
-  # ===========================================================================
-
   test-python-unit:
-    name: Python Lint & Tests
+    name: Python Tests
     runs-on: ubuntu-latest
-    needs: detect-changes
+    needs: [detect-changes, lint-python]
     if: needs.detect-changes.outputs.python == 'true'
     timeout-minutes: 10
     services:
@@ -128,10 +119,6 @@ jobs:
         with:
           python-version: '3.12'
       - uses: astral-sh/setup-uv@v5
-      - name: Lint
-        run: |
-          uv tool run ruff check --output-format=github .
-          uv tool run ruff format --check .
       - name: Install dependencies
         working-directory: skyspy_django
         run: |
@@ -156,12 +143,14 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  test-go:
-    name: Go Lint & Tests
+  # ===========================================================================
+  # Go: Lint & Tests
+  # ===========================================================================
+
+  lint-go:
+    name: Go Lint
     runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.go == 'true'
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -175,6 +164,19 @@ jobs:
       - name: Check gofmt
         working-directory: skyspy-go
         run: test -z "$(gofmt -l .)"
+
+  test-go:
+    name: Go Tests
+    runs-on: ubuntu-latest
+    needs: [detect-changes, lint-go]
+    if: needs.detect-changes.outputs.go == 'true'
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: skyspy-go/go.sum
       - name: Run tests
         working-directory: skyspy-go
         run: |
@@ -190,11 +192,13 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  test-frontend-unit:
-    name: Frontend Lint & Tests
+  # ===========================================================================
+  # Frontend: Lint, Security & Tests
+  # ===========================================================================
+
+  lint-frontend:
+    name: Frontend Lint
     runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.frontend == 'true'
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -205,8 +209,37 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
         working-directory: web
-      - name: Lint
-        run: npm run lint && npm run format:check
+      - run: npm run lint && npm run format:check
+        working-directory: web
+
+  security-frontend:
+    name: Frontend Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci && npm audit --audit-level=high
+        working-directory: web
+
+  test-frontend-unit:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    needs: [detect-changes, lint-frontend]
+    if: needs.detect-changes.outputs.frontend == 'true'
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
         working-directory: web
       - name: Run tests
         run: npm run test:unit:coverage
@@ -517,10 +550,13 @@ jobs:
   docker-build-push:
     name: Build ${{ matrix.name }}
     runs-on: ubuntu-latest
-    needs: [detect-changes, security-python, security-frontend, test-python-unit, test-go, test-python-integration, test-e2e]
+    needs: [detect-changes, lint-python, lint-go, lint-frontend, security-python, security-frontend, test-python-unit, test-go, test-python-integration, test-e2e]
     if: |
       always() &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      needs.lint-python.result == 'success' &&
+      needs.lint-go.result == 'success' &&
+      needs.lint-frontend.result == 'success' &&
       needs.security-python.result == 'success' &&
       needs.security-frontend.result == 'success' &&
       (needs.test-python-unit.result == 'success' || needs.test-python-unit.result == 'skipped') &&
@@ -599,7 +635,7 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [security-python, security-frontend, test-python-unit, test-go, test-frontend-unit, build-frontend, test-python-integration, test-e2e, docker-build-push, export-openapi, sync-docs]
+    needs: [lint-python, lint-go, lint-frontend, security-python, security-frontend, test-python-unit, test-go, test-frontend-unit, build-frontend, test-python-integration, test-e2e, docker-build-push, export-openapi, sync-docs]
     if: always()
     steps:
       - name: Check results
