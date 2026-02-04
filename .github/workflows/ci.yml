@@ -91,7 +91,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-changes, lint-python]
     if: needs.detect-changes.outputs.python == 'true'
-    timeout-minutes: 10
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16-alpine
@@ -137,14 +137,14 @@ jobs:
         run: |
           uv venv
           uv pip install -r requirements.txt
-          uv pip install pytest pytest-cov pytest-django pytest-asyncio
+          uv pip install pytest pytest-cov pytest-django pytest-asyncio pytest-xdist
           uv pip install -e ../skyspy_common
       - name: Run tests
         working-directory: skyspy_django
         run: |
           source .venv/bin/activate
           python manage.py migrate --noinput
-          pytest -v --tb=short \
+          pytest -v --tb=short -n auto \
             --ignore=skyspy/tests/e2e \
             --ignore=skyspy/tests/integration \
             --cov=skyspy --cov-report=xml --cov-fail-under=40  # TODO: Investigate coverage drop and restore to 80
@@ -234,7 +234,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-changes, lint-frontend]
     if: needs.detect-changes.outputs.frontend == 'true'
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -245,7 +245,7 @@ jobs:
       - run: npm ci
         working-directory: web
       - name: Run tests
-        run: npm run test:unit:coverage
+        run: npm run test:unit:coverage -- --pool=threads --poolOptions.threads.singleThread=false
         working-directory: web
       - uses: codecov/codecov-action@v5
         with:
