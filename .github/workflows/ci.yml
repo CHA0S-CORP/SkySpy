@@ -133,9 +133,11 @@ jobs:
           key: venv-${{ runner.os }}-${{ hashFiles('skyspy_django/requirements.txt', 'skyspy_common/pyproject.toml') }}
       - name: Install dependencies
         working-directory: skyspy_django
-        if: steps.venv-cache.outputs.cache-hit != 'true'
         run: |
-          uv venv
+          if [ ! -d ".venv" ]; then
+            uv venv
+          fi
+          source .venv/bin/activate
           uv pip install -r requirements.txt
           uv pip install pytest pytest-cov pytest-django pytest-asyncio pytest-xdist
           uv pip install -e ../skyspy_common
@@ -234,7 +236,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-changes, lint-frontend]
     if: needs.detect-changes.outputs.frontend == 'true'
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
