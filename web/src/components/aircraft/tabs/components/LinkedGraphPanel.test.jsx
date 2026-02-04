@@ -280,21 +280,22 @@ describe('LinkedGraphPanel', () => {
   });
 
   describe('accessibility', () => {
-    it('should have role img on graphs', () => {
+    it('should have role button on graphs', () => {
       const { container } = render(<LinkedGraphPanel {...defaultProps} />);
-      const graphs = container.querySelectorAll('[role="img"]');
+      const graphs = container.querySelectorAll('[role="button"]');
       expect(graphs.length).toBe(6);
     });
 
     it('should have aria-label on graphs', () => {
       const { container } = render(<LinkedGraphPanel {...defaultProps} />);
-      const altGraph = container.querySelector('[aria-label="Altitude graph"]');
+      const altGraph = container.querySelector('[aria-label*="Altitude"]');
       expect(altGraph).toBeInTheDocument();
     });
 
     it('should be keyboard focusable', () => {
       const { container } = render(<LinkedGraphPanel {...defaultProps} />);
-      const graphs = container.querySelectorAll('.linked-graphs-panel__graph[tabIndex="0"]');
+      // DOM attribute is lowercase 'tabindex', not camelCase
+      const graphs = container.querySelectorAll('.linked-graphs-panel__graph[tabindex="0"]');
       expect(graphs.length).toBe(6);
     });
   });

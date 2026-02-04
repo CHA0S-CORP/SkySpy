@@ -224,20 +224,22 @@ describe('App', () => {
       expect(screen.getByTestId('system-view')).toBeInTheDocument();
     });
 
-    it('should render notams view for #notams', async () => {
+    it('should render history view for #notams (notams is now part of history)', async () => {
       window.location.hash = '#notams';
       await act(async () => {
         render(<App />);
       });
-      expect(screen.getByTestId('notams-view')).toBeInTheDocument();
+      // NOTAMs are now integrated into HistoryView
+      expect(screen.getByTestId('history-view')).toBeInTheDocument();
     });
 
-    it('should render archive view for #archive', async () => {
+    it('should render history view for #archive (archive is now part of history)', async () => {
       window.location.hash = '#archive';
       await act(async () => {
         render(<App />);
       });
-      expect(screen.getByTestId('archive-view')).toBeInTheDocument();
+      // Archive is now integrated into HistoryView
+      expect(screen.getByTestId('history-view')).toBeInTheDocument();
     });
 
     it('should render admin config for #admin', async () => {
@@ -421,6 +423,10 @@ describe('App', () => {
 
   describe('sidebar collapse', () => {
     it('should toggle sidebar collapsed class', async () => {
+      // Sidebar auto-collapses below 1200px, so ensure window is wide enough
+      const originalInnerWidth = window.innerWidth;
+      Object.defineProperty(window, 'innerWidth', { value: 1400, writable: true });
+
       window.location.hash = '#map';
       await act(async () => {
         render(<App />);
@@ -435,6 +441,9 @@ describe('App', () => {
       });
 
       expect(document.querySelector('.app')).toHaveClass('sidebar-collapsed');
+
+      // Restore original value
+      Object.defineProperty(window, 'innerWidth', { value: originalInnerWidth, writable: true });
     });
   });
 

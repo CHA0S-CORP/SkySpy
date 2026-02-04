@@ -120,6 +120,7 @@ describe('HistoryTab', () => {
     setGraphZoom: vi.fn(),
     graphScrollOffset: 0,
     setGraphScrollOffset: vi.fn(),
+    useEnhancedLayout: false, // Use legacy layout for these tests
   };
 
   beforeEach(() => {

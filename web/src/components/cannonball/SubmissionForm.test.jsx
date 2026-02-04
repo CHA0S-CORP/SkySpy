@@ -127,7 +127,15 @@ describe('SubmissionForm', () => {
       const user = userEvent.setup();
       renderForm();
 
-      await user.type(screen.getByLabelText(/registration.*optional/i), 'INVALIDREG123456');
+      // Use invalid characters (special chars not allowed by regex /^[A-Z0-9-]{2,10}$/i)
+      // Also fill in required fields to ensure we get to registration validation
+      await user.type(screen.getByLabelText(/icao hex code/i), 'A12345');
+      await user.type(screen.getByLabelText(/agency name/i), 'Test Agency');
+      await user.type(
+        screen.getByLabelText(/evidence description/i),
+        'This is test evidence description that meets the minimum character requirement.'
+      );
+      await user.type(screen.getByLabelText(/registration.*optional/i), 'N@#$%');
       await user.click(screen.getByRole('button', { name: /submit for review/i }));
 
       expect(await screen.findByText(/invalid registration format/i)).toBeInTheDocument();
@@ -137,9 +145,12 @@ describe('SubmissionForm', () => {
       const user = userEvent.setup();
       renderForm();
 
-      await user.type(screen.getByLabelText(/evidence url.*optional/i), 'not-a-url');
+      // Just fill the URL field with invalid value and submit
+      // We'll get validation errors for required fields AND the URL format error
+      await user.type(screen.getByLabelText(/evidence url.*optional/i), 'ftp://not-http-url.com');
       await user.click(screen.getByRole('button', { name: /submit for review/i }));
 
+      // Should show URL error even if required field errors also appear
       expect(await screen.findByText(/url must start with http/i)).toBeInTheDocument();
     });
   });

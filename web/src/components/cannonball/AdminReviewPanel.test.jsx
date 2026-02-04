@@ -69,7 +69,8 @@ describe('AdminReviewPanel', () => {
       expect(screen.getByText('100')).toBeInTheDocument(); // Total
       expect(screen.getByText('10')).toBeInTheDocument(); // Pending
       expect(screen.getByText('80')).toBeInTheDocument(); // Approved
-      expect(screen.getByText('5')).toBeInTheDocument(); // Rejected (and Duplicates)
+      // Both rejected (5) and duplicates (5) have the same value, so use getAllByText
+      expect(screen.getAllByText('5').length).toBe(2); // Rejected and Duplicates
     });
 
     it('should render pending submissions count in header', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RuleForm } from './RuleForm';
 
@@ -468,16 +468,14 @@ describe('RuleForm', () => {
     });
 
     it('should update cooldown value', async () => {
-      const user = userEvent.setup();
       render(<RuleForm {...defaultProps} />);
 
       const cooldownInput = screen.getByLabelText(/cooldown/i);
-      // Clear and type new value
-      await user.clear(cooldownInput);
-      await user.type(cooldownInput, '600');
+      // Use fireEvent.change for number inputs as userEvent has issues with them
+      fireEvent.change(cooldownInput, { target: { value: '600' } });
 
-      // Cooldown should contain 600, though precise behavior depends on number input
-      expect(cooldownInput.value).toContain('600');
+      // Cooldown should be 600
+      expect(cooldownInput.value).toBe('600');
     });
   });
 
