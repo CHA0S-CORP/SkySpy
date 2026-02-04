@@ -105,9 +105,17 @@ export function SavedViewsManager({
               <div
                 key={view.id}
                 className="saved-views-manager__item"
+                role="button"
+                tabIndex={0}
                 onClick={() => {
                   onLoad?.(view);
                   setIsOpen(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    onLoad?.(view);
+                    setIsOpen(false);
+                  }
                 }}
               >
                 <span className="saved-views-manager__item-name">{view.name}</span>
@@ -180,7 +188,10 @@ export function SavedViewsManager({
           ) : (
             <div
               className="saved-views-manager__add"
+              role="button"
+              tabIndex={0}
               onClick={() => setIsNaming(true)}
+              onKeyDown={(e) => e.key === 'Enter' && setIsNaming(true)}
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                 <path

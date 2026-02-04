@@ -351,9 +351,10 @@ class SwimFnsConsumerTests(TestCase):
 
     def test_default_handler(self):
         """Test default message handler."""
-        with patch("skyspy.services.swim_fns.parse_aixm_notam") as mock_parse, patch(
-            "skyspy.services.swim_fns.store_notam"
-        ) as mock_store:
+        with (
+            patch("skyspy.services.swim_fns.parse_aixm_notam") as mock_parse,
+            patch("skyspy.services.swim_fns.store_notam") as mock_store,
+        ):
             mock_parse.return_value = {"notam_id": "TEST123"}
 
             self.consumer._default_handler("<xml>test</xml>")

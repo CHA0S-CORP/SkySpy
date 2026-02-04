@@ -192,10 +192,7 @@ class LEDataImportService:
             # Update data source stats
             data_source.record_successful_fetch(len(records))
 
-            logger.info(
-                f"Import complete for {source_name}: "
-                f"{imported} imported, {updated} updated, {skipped} skipped"
-            )
+            logger.info(f"Import complete for {source_name}: {imported} imported, {updated} updated, {skipped} skipped")
 
         except requests.RequestException as e:
             error_msg = f"Failed to fetch {source_name}: {e}"
@@ -344,9 +341,7 @@ class LEDataImportService:
             return existing
         return f"{existing}\n---\n{new}"
 
-    def _merge_evidence(
-        self, existing: list[dict], new: list[dict]
-    ) -> list[dict]:
+    def _merge_evidence(self, existing: list[dict], new: list[dict]) -> list[dict]:
         """Merge evidence links without duplication."""
         # Use source name as dedup key
         existing_sources = {e.get("source") for e in existing}

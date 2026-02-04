@@ -365,7 +365,9 @@ class CalculateTopAircraftTests(TestCase):
 
     def test_limits_to_five(self):
         """Test that top lists are limited to 5 entries."""
-        aircraft_list = [{"hex": f"A{i}", "gs": i * 100, "lat": 45.0, "lon": -122.0, "distance_nm": i} for i in range(10)]
+        aircraft_list = [
+            {"hex": f"A{i}", "gs": i * 100, "lat": 45.0, "lon": -122.0, "distance_nm": i} for i in range(10)
+        ]
 
         result = calculate_top_aircraft(aircraft_list)
 
@@ -460,10 +462,18 @@ class HistoryStatsTests(TestCase):
         # Create test sightings
         now = timezone.now()
         AircraftSightingFactory(
-            timestamp=now - timedelta(hours=1), altitude_baro=35000, distance_nm=15.5, ground_speed=450, is_military=False
+            timestamp=now - timedelta(hours=1),
+            altitude_baro=35000,
+            distance_nm=15.5,
+            ground_speed=450,
+            is_military=False,
         )
         AircraftSightingFactory(
-            timestamp=now - timedelta(hours=2), altitude_baro=25000, distance_nm=25.0, ground_speed=350, is_military=True
+            timestamp=now - timedelta(hours=2),
+            altitude_baro=25000,
+            distance_nm=25.0,
+            ground_speed=350,
+            is_military=True,
         )
 
         result = calculate_history_stats(hours=24)
@@ -745,7 +755,9 @@ class GeographicStatsTests(TestCase):
         # Create session with aircraft info
         session = AircraftSessionFactory(last_seen=now - timedelta(hours=1))
 
-        AircraftInfoFactory(icao_hex=session.icao_hex, registration="N12345", operator="United Airlines", country="United States")
+        AircraftInfoFactory(
+            icao_hex=session.icao_hex, registration="N12345", operator="United Airlines", country="United States"
+        )
 
         result = calculate_geographic_stats(hours=24)
 

@@ -1001,9 +1001,7 @@ class SubmitterReputation(models.Model):
 
     def record_submission_result(self, was_approved: bool):
         """Update stats after a submission is reviewed."""
-        self.total_submissions = (
-            self.approved_submissions + self.rejected_submissions + self.pending_submissions
-        )
+        self.total_submissions = self.approved_submissions + self.rejected_submissions + self.pending_submissions
 
         if was_approved:
             self.approved_submissions += 1

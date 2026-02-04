@@ -631,10 +631,7 @@ class TestErrorHandling:
 
             # Should emit error response
             emit_calls = mock_sio_server.emit.call_args_list
-            any(
-                call[0][0] == "error" or (call[0][0] == "response" and "error" in str(call))
-                for call in emit_calls
-            )
+            any(call[0][0] == "error" or (call[0][0] == "response" and "error" in str(call)) for call in emit_calls)
             # Either error event or response with error message
             assert mock_sio_server.emit.called
 
@@ -837,7 +834,9 @@ class TestConnectionLifecycle:
         from skyspy.socketio.namespaces.main import MainNamespace
 
         with patch("skyspy.socketio.namespaces.main.sio", mock_sio_server):
-            with patch("skyspy.socketio.namespaces.main.authenticate_socket", AsyncMock(return_value=(AnonymousUser(), None))):
+            with patch(
+                "skyspy.socketio.namespaces.main.authenticate_socket", AsyncMock(return_value=(AnonymousUser(), None))
+            ):
                 with patch("skyspy.socketio.namespaces.main.check_topic_permission", AsyncMock(return_value=True)):
                     namespace = MainNamespace("/")
 

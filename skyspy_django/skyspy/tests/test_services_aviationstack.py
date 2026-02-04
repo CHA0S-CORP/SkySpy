@@ -131,9 +131,7 @@ class MakeRequestTests(TestCase):
         mock_response.status_code = 500
 
         mock_client = MagicMock()
-        mock_client.get.side_effect = httpx.HTTPStatusError(
-            "Server error", request=MagicMock(), response=mock_response
-        )
+        mock_client.get.side_effect = httpx.HTTPStatusError("Server error", request=MagicMock(), response=mock_response)
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
         mock_client_class.return_value = mock_client

@@ -60,11 +60,15 @@ class TestStatsCalculationPerformance:
                 response = client.get("/api/v1/aircraft/stats/")
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": response.status_code == status.HTTP_200_OK,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": response.status_code == status.HTTP_200_OK,
+                        "error": None,
+                    },
+                )()
             )
 
             data = response.json()
@@ -86,9 +90,7 @@ class TestStatsCalculationPerformance:
 
         for _ in range(10):
             with timed_operation() as timer:
-                result = AircraftSighting.objects.filter(
-                    timestamp__gte=cutoff
-                ).aggregate(
+                result = AircraftSighting.objects.filter(timestamp__gte=cutoff).aggregate(
                     total=Count("id"),
                     unique_aircraft=Count("icao_hex", distinct=True),
                     avg_altitude=Avg("altitude_baro"),
@@ -99,11 +101,15 @@ class TestStatsCalculationPerformance:
                 )
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -123,26 +129,29 @@ class TestStatsCalculationPerformance:
 
         for _ in range(10):
             with timed_operation() as timer:
-                AircraftSession.objects.filter(
-                    last_seen__gte=cutoff
-                ).aggregate(
+                AircraftSession.objects.filter(last_seen__gte=cutoff).aggregate(
                     total_sessions=Count("id"),
                     unique_aircraft=Count("icao_hex", distinct=True),
                     avg_positions=Avg("total_positions"),
                     max_positions=Max("total_positions"),
                     avg_duration=Avg(
                         (timezone.now() - AircraftSession.objects.first().first_seen).total_seconds()
-                        if AircraftSession.objects.exists() else 0
+                        if AircraftSession.objects.exists()
+                        else 0
                     ),
                     military_sessions=Count("id", filter=Q(is_military=True)),
                 )
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -186,11 +195,15 @@ class TestTimeSeriesAggregation:
                 )
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -222,11 +235,15 @@ class TestTimeSeriesAggregation:
                 )
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -256,11 +273,15 @@ class TestTimeSeriesAggregation:
                 )
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -300,11 +321,15 @@ class TestGeographicAggregation:
                 )
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -333,11 +358,15 @@ class TestGeographicAggregation:
                 )
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -367,11 +396,15 @@ class TestGeographicAggregation:
                 )
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -484,9 +517,7 @@ class TestSafetyStatsPerformance:
 
         for _ in range(10):
             with timed_operation() as timer:
-                result = SafetyEvent.objects.filter(
-                    timestamp__gte=cutoff
-                ).aggregate(
+                result = SafetyEvent.objects.filter(timestamp__gte=cutoff).aggregate(
                     total=Count("id"),
                     critical=Count("id", filter=Q(severity="critical")),
                     warning=Count("id", filter=Q(severity="warning")),
@@ -494,11 +525,15 @@ class TestSafetyStatsPerformance:
                 )
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -529,11 +564,15 @@ class TestSafetyStatsPerformance:
                 )
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -561,9 +600,7 @@ class TestAlertStatsPerformance:
 
         for _ in range(10):
             with timed_operation() as timer:
-                result = AlertHistory.objects.filter(
-                    triggered_at__gte=cutoff
-                ).aggregate(
+                result = AlertHistory.objects.filter(triggered_at__gte=cutoff).aggregate(
                     total=Count("id"),
                     critical=Count("id", filter=Q(priority="critical")),
                     warning=Count("id", filter=Q(priority="warning")),
@@ -572,11 +609,15 @@ class TestAlertStatsPerformance:
                 )
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -607,11 +648,15 @@ class TestAlertStatsPerformance:
                 )
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -643,11 +688,15 @@ class TestAlertStatsPerformance:
                 )
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()

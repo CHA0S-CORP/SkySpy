@@ -182,7 +182,10 @@ export function DenseDataTable({
                 minWidth: column.minWidth,
                 flex: column.flex || (column.width ? `0 0 ${column.width}` : 1),
               }}
+              role="button"
+              tabIndex={0}
               onClick={() => handleHeaderClick(column)}
+              onKeyDown={(e) => e.key === 'Enter' && handleHeaderClick(column)}
             >
               {column.label}
               {sortField === column.field && (
@@ -221,7 +224,10 @@ export function DenseDataTable({
                     row.safety_event_count > 0 ? 'dense-data-table__row--safety' : ''
                   }`}
                   style={{ height: rowHeight }}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onRowClick?.(row, actualIndex)}
+                  onKeyDown={(e) => e.key === 'Enter' && onRowClick?.(row, actualIndex)}
                 >
                   {columns.map((column) => (
                     <div

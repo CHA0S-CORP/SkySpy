@@ -156,7 +156,7 @@ class FrequentRoutesTests(TestCase):
                 source="acars",
                 icao_hex=f"ABC{i:03d}",
                 callsign="UAL123",
-                decoded={"dep": f"K{i:03d}", "arr": f"K{i+100:03d}"},
+                decoded={"dep": f"K{i:03d}", "arr": f"K{i + 100:03d}"},
             )
 
         result = fps.calculate_frequent_routes(hours=24, limit=10)
@@ -635,7 +635,7 @@ class MilitaryBreakdownTests(TestCase):
             )
             AircraftInfo.objects.create(
                 icao_hex=icao,
-                registration=f"N{i+100:05d}",
+                registration=f"N{i + 100:05d}",
             )
 
         result = fps.calculate_military_breakdown(hours=24)

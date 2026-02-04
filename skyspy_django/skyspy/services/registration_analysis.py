@@ -381,8 +381,7 @@ class RegistrationAnalysisService:
             RegistrationAnalysis.objects.filter(
                 risk_level="high",
                 manually_reviewed=False,
-            )
-            .order_by("-shell_company_score")[:limit]
+            ).order_by("-shell_company_score")[:limit]
         )
 
     def record_transfer(
@@ -397,9 +396,7 @@ class RegistrationAnalysisService:
         """
         # Calculate days since last transfer
         last_transfer = (
-            RegistrationTransfer.objects.filter(registration=registration)
-            .order_by("-transfer_date")
-            .first()
+            RegistrationTransfer.objects.filter(registration=registration).order_by("-transfer_date").first()
         )
 
         days_since = None

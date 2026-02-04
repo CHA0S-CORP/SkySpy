@@ -446,7 +446,11 @@ class AudioTransmissionTests(TestCase):
 
         with patch("skyspy.services.audio.save_file_locally"):
             transmission = create_transmission(
-                audio_data=audio_data, filename=filename, frequency_mhz=118.0, channel_name="Test Channel", queue_transcription=False
+                audio_data=audio_data,
+                filename=filename,
+                frequency_mhz=118.0,
+                channel_name="Test Channel",
+                queue_transcription=False,
             )
 
             self.assertIsNotNone(transmission)
@@ -468,7 +472,9 @@ class AudioTransmissionTests(TestCase):
         audio_data = b"fake audio data"
 
         with self.assertRaises(ValueError) as context:
-            create_transmission(audio_data=audio_data, filename="test.mp3", frequency_mhz=50.0, queue_transcription=False)
+            create_transmission(
+                audio_data=audio_data, filename="test.mp3", frequency_mhz=50.0, queue_transcription=False
+            )
 
         self.assertIn("valid airband range", str(context.exception))
 
@@ -539,7 +545,9 @@ class ProcessTranscriptionTests(TestCase):
 
         self.assertFalse(result)
 
-    @override_settings(WHISPER_ENABLED=True, WHISPER_URL="http://whisper:9000", S3_ENABLED=False, RADIO_AUDIO_DIR="/tmp")
+    @override_settings(
+        WHISPER_ENABLED=True, WHISPER_URL="http://whisper:9000", S3_ENABLED=False, RADIO_AUDIO_DIR="/tmp"
+    )
     @patch("skyspy.services.audio._transcribe_with_whisper")
     @patch("skyspy.services.audio.read_local_file")
     def test_process_transcription_success(self, mock_read, mock_transcribe):
@@ -562,7 +570,9 @@ class ProcessTranscriptionTests(TestCase):
         self.assertEqual(transmission.transcription_status, "completed")
         self.assertIn("United", transmission.transcript)
 
-    @override_settings(WHISPER_ENABLED=True, WHISPER_URL="http://whisper:9000", S3_ENABLED=False, RADIO_AUDIO_DIR="/tmp")
+    @override_settings(
+        WHISPER_ENABLED=True, WHISPER_URL="http://whisper:9000", S3_ENABLED=False, RADIO_AUDIO_DIR="/tmp"
+    )
     @patch("skyspy.services.audio._transcribe_with_whisper")
     @patch("skyspy.services.audio.read_local_file")
     def test_process_transcription_failure(self, mock_read, mock_transcribe):
@@ -603,7 +613,9 @@ class GetMatchedRadioCallsTests(TestCase):
         transmission = AudioTransmissionFactory(
             completed=True,
         )
-        transmission.identified_airframes = [{"callsign": "UAL456", "type": "airline", "airline_icao": "UAL", "confidence": 0.9}]
+        transmission.identified_airframes = [
+            {"callsign": "UAL456", "type": "airline", "airline_icao": "UAL", "confidence": 0.9}
+        ]
         transmission.save()
 
         result = get_matched_radio_calls(callsign="UAL456", hours=24)
@@ -616,7 +628,9 @@ class GetMatchedRadioCallsTests(TestCase):
         transmission = AudioTransmissionFactory(
             completed=True,
         )
-        transmission.identified_airframes = [{"callsign": "UAL123", "type": "airline", "airline_icao": "UAL", "confidence": 0.9}]
+        transmission.identified_airframes = [
+            {"callsign": "UAL123", "type": "airline", "airline_icao": "UAL", "confidence": 0.9}
+        ]
         transmission.save()
 
         result = get_matched_radio_calls(operator_icao="UAL", hours=24)

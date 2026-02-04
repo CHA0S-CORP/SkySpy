@@ -202,9 +202,7 @@ class NotificationDispatcherSafetyEventTests(TestCase):
 
     @patch("skyspy.services.notification_dispatcher.notification_router")
     @patch("skyspy.services.notification_dispatcher.template_engine")
-    def test_dispatch_safety_event_uses_severity_as_priority(
-        self, mock_template_engine, mock_router
-    ):
+    def test_dispatch_safety_event_uses_severity_as_priority(self, mock_template_engine, mock_router):
         """Test that safety event severity maps to priority."""
         mock_router.get_channels_for_priority.return_value = [
             RoutedNotification(
@@ -235,9 +233,7 @@ class NotificationDispatcherSafetyEventTests(TestCase):
 
     @patch("skyspy.services.notification_dispatcher.notification_router")
     @patch("skyspy.services.notification_dispatcher.template_engine")
-    def test_dispatch_safety_event_default_severity(
-        self, mock_template_engine, mock_router
-    ):
+    def test_dispatch_safety_event_default_severity(self, mock_template_engine, mock_router):
         """Test that default severity is warning."""
         event_without_severity = {
             "event_type": "proximity_conflict",

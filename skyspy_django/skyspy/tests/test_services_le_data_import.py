@@ -129,9 +129,7 @@ class LEDataImportServiceTests(TestCase):
             {"icao_hex": "B67890", "registration": "N67890", "agency_name": "DHS"},
         ]
 
-        imported, updated, skipped, errors = self.service._import_records(
-            records, source, 0.9
-        )
+        imported, updated, skipped, errors = self.service._import_records(records, source, 0.9)
 
         self.assertEqual(imported, 2)
         self.assertEqual(updated, 0)
@@ -155,9 +153,7 @@ class LEDataImportServiceTests(TestCase):
 
         records = [{"icao_hex": "A12345", "registration": "N12345", "agency_name": "FBI"}]
 
-        imported, updated, skipped, errors = self.service._import_records(
-            records, source, 0.9
-        )
+        imported, updated, skipped, errors = self.service._import_records(records, source, 0.9)
 
         self.assertEqual(imported, 0)
         self.assertEqual(updated, 1)
@@ -181,9 +177,7 @@ class LEDataImportServiceTests(TestCase):
 
         records = [{"icao_hex": "A12345", "registration": "N67890", "agency_name": "Unknown"}]
 
-        imported, updated, skipped, errors = self.service._import_records(
-            records, source, 0.7
-        )
+        imported, updated, skipped, errors = self.service._import_records(records, source, 0.7)
 
         self.assertEqual(imported, 0)
         self.assertEqual(updated, 0)
@@ -200,9 +194,7 @@ class LEDataImportServiceTests(TestCase):
             {"icao_hex": "", "agency_name": "Test"},  # Empty
         ]
 
-        imported, updated, skipped, errors = self.service._import_records(
-            records, source, 0.9
-        )
+        imported, updated, skipped, errors = self.service._import_records(records, source, 0.9)
 
         self.assertEqual(imported, 0)
         self.assertEqual(skipped, 2)

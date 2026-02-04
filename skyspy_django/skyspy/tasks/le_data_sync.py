@@ -60,19 +60,20 @@ def sync_le_external_sources(self, force: bool = False):
 
                 if result.success:
                     logger.info(
-                        f"Synced {source.name}: {result.records_imported} imported, "
-                        f"{result.records_updated} updated"
+                        f"Synced {source.name}: {result.records_imported} imported, {result.records_updated} updated"
                     )
                 else:
                     logger.warning(f"Failed to sync {source.name}: {result.errors}")
 
             except Exception as e:
                 logger.exception(f"Error syncing {source.name}: {e}")
-                results.append({
-                    "source_name": source.name,
-                    "success": False,
-                    "errors": [str(e)],
-                })
+                results.append(
+                    {
+                        "source_name": source.name,
+                        "success": False,
+                        "errors": [str(e)],
+                    }
+                )
 
         return {
             "status": "completed",
@@ -131,10 +132,7 @@ def deduplicate_le_database(dry_run: bool = True):
         if dry_run:
             logger.info(f"Deduplication dry run: {stats['duplicates_found']} duplicates found")
         else:
-            logger.info(
-                f"Deduplication complete: {stats['merged']} records merged, "
-                f"{stats['errors']} errors"
-            )
+            logger.info(f"Deduplication complete: {stats['merged']} records merged, {stats['errors']} errors")
 
         return stats
 
@@ -168,20 +166,21 @@ def check_source_health():
 
             # Check for recent errors
             if source.fetch_errors:
-                recent_errors = [
-                    e for e in source.fetch_errors
-                    if e.get("timestamp")
-                ]
+                recent_errors = [e for e in source.fetch_errors if e.get("timestamp")]
                 if len(recent_errors) >= 3:
                     issues.append(f"Multiple recent errors: {len(recent_errors)}")
 
             if issues:
-                unhealthy_sources.append({
-                    "name": source.name,
-                    "issues": issues,
-                    "last_successful_fetch": source.last_successful_fetch.isoformat() if source.last_successful_fetch else None,
-                    "record_count": source.record_count,
-                })
+                unhealthy_sources.append(
+                    {
+                        "name": source.name,
+                        "issues": issues,
+                        "last_successful_fetch": source.last_successful_fetch.isoformat()
+                        if source.last_successful_fetch
+                        else None,
+                        "record_count": source.record_count,
+                    }
+                )
 
         if unhealthy_sources:
             logger.warning(f"Unhealthy LE data sources: {unhealthy_sources}")
@@ -205,7 +204,6 @@ def refresh_source_metadata():
     Updates record counts and validates source configurations.
     """
     try:
-
         sources = LEDataSource.objects.all()
         updated = 0
 

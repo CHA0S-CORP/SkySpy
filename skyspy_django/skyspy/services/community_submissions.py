@@ -119,13 +119,9 @@ class CommunitySubmissionService:
         duplicate = self.check_duplicate(icao_hex)
         if duplicate:
             if duplicate.status == "approved":
-                raise ValidationError(
-                    f"This aircraft ({icao_hex}) is already in the database"
-                )
+                raise ValidationError(f"This aircraft ({icao_hex}) is already in the database")
             elif duplicate.status == "pending":
-                raise ValidationError(
-                    f"A submission for this aircraft ({icao_hex}) is already pending review"
-                )
+                raise ValidationError(f"A submission for this aircraft ({icao_hex}) is already pending review")
 
         # Calculate initial confidence based on submitter reputation
         confidence_score = 0.5
@@ -166,10 +162,7 @@ class CommunitySubmissionService:
                 reputation.last_submission_at = timezone.now()
                 reputation.save()
 
-        logger.info(
-            f"Created submission {submission.id} for {icao_hex} by "
-            f"{user.username if user else 'anonymous'}"
-        )
+        logger.info(f"Created submission {submission.id} for {icao_hex} by {user.username if user else 'anonymous'}")
 
         return submission
 
@@ -262,9 +255,7 @@ class CommunitySubmissionService:
             if submission.submitted_by:
                 self.update_submitter_reputation(submission.submitted_by, was_approved=True)
 
-        logger.info(
-            f"Approved submission {submission.id} - created aircraft {aircraft.id}"
-        )
+        logger.info(f"Approved submission {submission.id} - created aircraft {aircraft.id}")
 
         return aircraft
 
@@ -360,11 +351,7 @@ class CommunitySubmissionService:
         reputation.record_submission_result(was_approved)
 
         # Check if user should become trusted
-        if (
-            reputation.approved_submissions >= 5
-            and reputation.reputation_score >= 0.8
-            and not reputation.is_trusted
-        ):
+        if reputation.approved_submissions >= 5 and reputation.reputation_score >= 0.8 and not reputation.is_trusted:
             reputation.is_trusted = True
             logger.info(f"User {user.username} is now a trusted submitter")
 
@@ -431,19 +418,14 @@ class CommunitySubmissionService:
         limit: int = 50,
     ) -> list[CommunitySubmission]:
         """Get submissions by a specific user."""
-        return list(
-            CommunitySubmission.objects.filter(submitted_by=user)
-            .order_by("-submitted_at")[:limit]
-        )
+        return list(CommunitySubmission.objects.filter(submitted_by=user).order_by("-submitted_at")[:limit])
 
     def get_submission_stats(self) -> dict[str, Any]:
         """Get submission statistics."""
         from django.db.models import Count
 
         status_counts = dict(
-            CommunitySubmission.objects.values("status")
-            .annotate(count=Count("id"))
-            .values_list("status", "count")
+            CommunitySubmission.objects.values("status").annotate(count=Count("id")).values_list("status", "count")
         )
 
         return {

@@ -186,9 +186,7 @@ class CheckAndRefreshGeodataTaskTest(TestCase):
     @patch("skyspy.tasks.geodata.refresh_all_geodata")
     @patch("skyspy.services.openflights.should_refresh")
     @patch("skyspy.services.geodata.should_refresh")
-    def test_triggers_refresh_when_stale(
-        self, mock_geo_should, mock_of_should, mock_refresh_geo, mock_refresh_of
-    ):
+    def test_triggers_refresh_when_stale(self, mock_geo_should, mock_of_should, mock_refresh_geo, mock_refresh_of):
         """Test that refresh is triggered when data is stale."""
         mock_geo_should.return_value = True
         mock_of_should.return_value = False
@@ -212,9 +210,7 @@ class CheckAndRefreshGeodataTaskTest(TestCase):
     @patch("skyspy.tasks.geodata.refresh_openflights_data")
     @patch("skyspy.services.openflights.should_refresh")
     @patch("skyspy.services.geodata.should_refresh")
-    def test_triggers_openflights_refresh_when_stale(
-        self, mock_geo_should, mock_of_should, mock_refresh_of
-    ):
+    def test_triggers_openflights_refresh_when_stale(self, mock_geo_should, mock_of_should, mock_refresh_of):
         """Test that OpenFlights refresh is triggered when stale."""
         mock_geo_should.return_value = False
         mock_of_should.return_value = True

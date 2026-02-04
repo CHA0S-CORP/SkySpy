@@ -184,7 +184,7 @@ class RegistrationAnalysisServiceTests(TestCase):
             RegistrationTransfer.objects.create(
                 registration="N12345",
                 previous_owner=f"Owner {i}",
-                new_owner=f"Owner {i+1}",
+                new_owner=f"Owner {i + 1}",
                 transfer_date=today - timedelta(days=365 * i),
             )
 

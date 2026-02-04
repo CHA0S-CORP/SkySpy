@@ -211,8 +211,8 @@ export function LinkedGraphPanel({
       <div
         className="linked-graphs-panel__graph"
         key={config.key}
-        role="img"
-        aria-label={`${config.label} graph`}
+        role="application"
+        aria-label={`${config.label} graph - interactive chart`}
         tabIndex={0}
         style={{ height }}
         onMouseMove={handleMouseMove}

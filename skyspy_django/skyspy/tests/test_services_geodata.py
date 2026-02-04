@@ -553,12 +553,8 @@ class CacheStatsTests(TestCase):
 
     def test_get_cache_stats_with_data(self):
         """Test cache stats with data present."""
-        CachedAirport.objects.create(
-            icao_id="KSEA", name="Seattle", latitude=47.4, longitude=-122.3
-        )
-        CachedNavaid.objects.create(
-            ident="SEA", name="Seattle VOR", latitude=47.4, longitude=-122.3
-        )
+        CachedAirport.objects.create(icao_id="KSEA", name="Seattle", latitude=47.4, longitude=-122.3)
+        CachedNavaid.objects.create(ident="SEA", name="Seattle VOR", latitude=47.4, longitude=-122.3)
 
         stats = geodata.get_cache_stats()
 
@@ -588,12 +584,8 @@ class ShouldRefreshTests(TestCase):
 
     def test_should_refresh_with_recent_data(self):
         """Test that refresh is not needed with recent data."""
-        CachedAirport.objects.create(
-            icao_id="KSEA", name="Seattle", latitude=47.4, longitude=-122.3
-        )
-        CachedNavaid.objects.create(
-            ident="SEA", name="Seattle VOR", latitude=47.4, longitude=-122.3
-        )
+        CachedAirport.objects.create(icao_id="KSEA", name="Seattle", latitude=47.4, longitude=-122.3)
+        CachedNavaid.objects.create(ident="SEA", name="Seattle VOR", latitude=47.4, longitude=-122.3)
 
         result = geodata.should_refresh()
 

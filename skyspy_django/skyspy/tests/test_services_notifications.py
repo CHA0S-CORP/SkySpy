@@ -416,9 +416,7 @@ class ConvenienceFunctionsTests(TestCase):
 
         result = send_notification("Test", "Body", notify_type="info")
 
-        mock_notifier.send.assert_called_once_with(
-            "Test", "Body", "info"
-        )
+        mock_notifier.send.assert_called_once_with("Test", "Body", "info")
         assert result is True
 
     @patch("skyspy.services.notifications.notifier")

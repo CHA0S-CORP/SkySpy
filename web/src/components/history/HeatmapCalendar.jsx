@@ -166,7 +166,10 @@ export function HeatmapCalendar({
               <div
                 key={hourIndex}
                 className="heatmap-calendar__cell"
+                role="button"
+                tabIndex={0}
                 onClick={() => onCellClick?.({ day: dayIndex, hour: hourIndex, count })}
+                onKeyDown={(e) => e.key === 'Enter' && onCellClick?.({ day: dayIndex, hour: hourIndex, count })}
                 title={`${dayLabels[dayIndex]} ${hourIndex}:00 - ${count} events`}
                 style={{
                   width: cellSize,
@@ -180,6 +183,12 @@ export function HeatmapCalendar({
                   e.currentTarget.style.transform = 'scale(1.15)';
                 }}
                 onMouseOut={(e) => {
+                  e.currentTarget.style.transform = 'scale(1)';
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.transform = 'scale(1.15)';
+                }}
+                onBlur={(e) => {
                   e.currentTarget.style.transform = 'scale(1)';
                 }}
               />

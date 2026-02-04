@@ -317,8 +317,14 @@ class CannonballSettingsSerializer(serializers.Serializer):
     patterns_enabled = serializers.ListField(
         child=serializers.ChoiceField(
             choices=[
-                "circling", "loitering", "grid_search", "speed_trap",
-                "stakeout", "racetrack", "highway_tracking", "area_search"
+                "circling",
+                "loitering",
+                "grid_search",
+                "speed_trap",
+                "stakeout",
+                "racetrack",
+                "highway_tracking",
+                "area_search",
             ]
         ),
         default=["circling", "loitering", "grid_search", "speed_trap", "stakeout", "racetrack", "highway_tracking"],

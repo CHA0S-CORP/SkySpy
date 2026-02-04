@@ -113,9 +113,7 @@ class MakeRequestTests(TestCase):
         mock_get_key.return_value = "test-key"
         mock_response = MagicMock()
         mock_response.status_code = 429
-        mock_http_get.side_effect = httpx.HTTPStatusError(
-            "Rate limited", request=MagicMock(), response=mock_response
-        )
+        mock_http_get.side_effect = httpx.HTTPStatusError("Rate limited", request=MagicMock(), response=mock_response)
 
         result = adsbx_live._make_request("v2/icao/ABC123/")
 
@@ -130,9 +128,7 @@ class MakeRequestTests(TestCase):
         mock_get_key.return_value = "invalid-key"
         mock_response = MagicMock()
         mock_response.status_code = 401
-        mock_http_get.side_effect = httpx.HTTPStatusError(
-            "Unauthorized", request=MagicMock(), response=mock_response
-        )
+        mock_http_get.side_effect = httpx.HTTPStatusError("Unauthorized", request=MagicMock(), response=mock_response)
 
         result = adsbx_live._make_request("v2/icao/ABC123/")
 
@@ -267,9 +263,7 @@ class GetAircraftByIcaoTests(TestCase):
     def test_get_aircraft_by_icao_api_call(self, mock_enabled, mock_request):
         """Test API call when not cached."""
         mock_enabled.return_value = True
-        mock_request.return_value = {
-            "ac": [{"hex": "ABC123", "flight": "UAL456", "lat": 47.5, "lon": -122.0}]
-        }
+        mock_request.return_value = {"ac": [{"hex": "ABC123", "flight": "UAL456", "lat": 47.5, "lon": -122.0}]}
 
         result = adsbx_live.get_aircraft_by_icao("ABC123")
 
@@ -350,9 +344,7 @@ class GetAircraftByRegistrationTests(TestCase):
     def test_get_aircraft_by_registration_success(self, mock_enabled, mock_request):
         """Test successful registration lookup."""
         mock_enabled.return_value = True
-        mock_request.return_value = {
-            "ac": [{"hex": "ABC123", "r": "N12345", "lat": 47.5, "lon": -122.0}]
-        }
+        mock_request.return_value = {"ac": [{"hex": "ABC123", "r": "N12345", "lat": 47.5, "lon": -122.0}]}
 
         result = adsbx_live.get_aircraft_by_registration("n12345")
 
@@ -385,9 +377,7 @@ class GetAircraftBySquawkTests(TestCase):
     def test_get_aircraft_by_squawk_emergency(self, mock_enabled, mock_request):
         """Test finding aircraft with emergency squawk."""
         mock_enabled.return_value = True
-        mock_request.return_value = {
-            "ac": [{"hex": "ABC123", "squawk": "7700", "lat": 47.5, "lon": -122.0}]
-        }
+        mock_request.return_value = {"ac": [{"hex": "ABC123", "squawk": "7700", "lat": 47.5, "lon": -122.0}]}
 
         result = adsbx_live.get_aircraft_by_squawk("7700")
 
@@ -519,9 +509,7 @@ class GetLaddAircraftTests(TestCase):
     def test_get_ladd_aircraft_success(self, mock_enabled, mock_request):
         """Test finding LADD aircraft."""
         mock_enabled.return_value = True
-        mock_request.return_value = {
-            "ac": [{"hex": "ABC123", "ladd": True, "lat": 47.5, "lon": -122.0}]
-        }
+        mock_request.return_value = {"ac": [{"hex": "ABC123", "ladd": True, "lat": 47.5, "lon": -122.0}]}
 
         result = adsbx_live.get_ladd_aircraft()
 
@@ -545,9 +533,7 @@ class GetPiaAircraftTests(TestCase):
     def test_get_pia_aircraft_success(self, mock_enabled, mock_request):
         """Test finding PIA aircraft."""
         mock_enabled.return_value = True
-        mock_request.return_value = {
-            "ac": [{"hex": "ABC123", "pia": True, "lat": 47.5, "lon": -122.0}]
-        }
+        mock_request.return_value = {"ac": [{"hex": "ABC123", "pia": True, "lat": 47.5, "lon": -122.0}]}
 
         result = adsbx_live.get_pia_aircraft()
 

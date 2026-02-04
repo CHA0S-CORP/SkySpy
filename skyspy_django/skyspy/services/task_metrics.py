@@ -208,11 +208,7 @@ class CeleryMetricsCollector:
         with self._lock:
             for task_name, max_age in max_age_seconds.items():
                 metrics = self._metrics.get(task_name)
-                if (
-                    not metrics
-                    or not metrics.last_execution
-                    or now - metrics.last_execution > max_age
-                ):
+                if not metrics or not metrics.last_execution or now - metrics.last_execution > max_age:
                     stale.append(task_name)
 
         return stale

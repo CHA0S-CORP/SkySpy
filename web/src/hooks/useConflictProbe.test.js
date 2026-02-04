@@ -3,7 +3,7 @@
  *
  * Phase 3.4: Conflict Probe (Look-Ahead)
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useConflictProbe } from './useConflictProbe';
 

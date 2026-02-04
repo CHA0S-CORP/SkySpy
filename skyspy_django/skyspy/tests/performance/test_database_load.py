@@ -78,11 +78,15 @@ class TestBulkInsertPerformance:
             AircraftSighting.objects.bulk_create(sightings, batch_size=100)
 
         metrics.record(
-            type("Result", (), {
-                "duration_ms": timer["duration_ms"],
-                "success": True,
-                "error": None,
-            })()
+            type(
+                "Result",
+                (),
+                {
+                    "duration_ms": timer["duration_ms"],
+                    "success": True,
+                    "error": None,
+                },
+            )()
         )
         metrics.finalize()
 
@@ -198,17 +202,18 @@ class TestComplexQueryPerformance:
         for start, end in time_ranges:
             for _ in range(5):
                 with timed_operation() as timer:
-                    AircraftSighting.objects.filter(
-                        timestamp__gte=start,
-                        timestamp__lt=end
-                    ).count()
+                    AircraftSighting.objects.filter(timestamp__gte=start, timestamp__lt=end).count()
 
                 metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": True,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": True,
+                            "error": None,
+                        },
+                    )()
                 )
 
         metrics.finalize()
@@ -234,11 +239,15 @@ class TestComplexQueryPerformance:
                 )
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -267,11 +276,15 @@ class TestComplexQueryPerformance:
                 )
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -304,11 +317,15 @@ class TestComplexQueryPerformance:
                 )
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -337,11 +354,15 @@ class TestComplexQueryPerformance:
                     AircraftSighting.objects.filter(filter_q).count()
 
                 metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": True,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": True,
+                            "error": None,
+                        },
+                    )()
                 )
 
         metrics.finalize()
@@ -375,11 +396,15 @@ class TestIndexEffectiveness:
                 list(AircraftSighting.objects.filter(icao_hex=hex_code)[:10])
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -401,17 +426,18 @@ class TestIndexEffectiveness:
             end = now - timedelta(hours=offset_hours)
 
             with timed_operation() as timer:
-                AircraftSighting.objects.filter(
-                    timestamp__gte=start,
-                    timestamp__lt=end
-                ).count()
+                AircraftSighting.objects.filter(timestamp__gte=start, timestamp__lt=end).count()
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -433,17 +459,20 @@ class TestIndexEffectiveness:
             with timed_operation() as timer:
                 list(
                     AircraftSighting.objects.filter(
-                        icao_hex=hex_code,
-                        timestamp__gte=now - timedelta(hours=24)
+                        icao_hex=hex_code, timestamp__gte=now - timedelta(hours=24)
                     ).order_by("-timestamp")[:50]
                 )
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -473,7 +502,7 @@ class TestIndexEffectiveness:
                 ORDER BY timestamp DESC
                 LIMIT 10
                 """,
-                [hex_code]
+                [hex_code],
             )
             explain_output = cursor.fetchall()
 
@@ -506,9 +535,7 @@ class TestConnectionPoolBehavior:
 
         def run_query():
             # Each thread gets its own connection from pool
-            count = AircraftSighting.objects.filter(
-                altitude_baro__gt=random.randint(10000, 30000)
-            ).count()
+            count = AircraftSighting.objects.filter(altitude_baro__gt=random.randint(10000, 30000)).count()
             return count
 
         with ThreadPoolExecutor(max_workers=20) as executor:
@@ -520,19 +547,27 @@ class TestConnectionPoolBehavior:
                     future.result()
                     duration_ms = (time.perf_counter() - start) * 1000
                     metrics.record(
-                        type("Result", (), {
-                            "duration_ms": duration_ms,
-                            "success": True,
-                            "error": None,
-                        })()
+                        type(
+                            "Result",
+                            (),
+                            {
+                                "duration_ms": duration_ms,
+                                "success": True,
+                                "error": None,
+                            },
+                        )()
                     )
                 except Exception as e:
                     metrics.record(
-                        type("Result", (), {
-                            "duration_ms": 0,
-                            "success": False,
-                            "error": str(e),
-                        })()
+                        type(
+                            "Result",
+                            (),
+                            {
+                                "duration_ms": 0,
+                                "success": False,
+                                "error": str(e),
+                            },
+                        )()
                     )
 
         metrics.finalize()
@@ -549,15 +584,18 @@ class TestConnectionPoolBehavior:
         now = timezone.now()
 
         # Create some initial data
-        AircraftSighting.objects.bulk_create([
-            AircraftSighting(
-                timestamp=now,
-                icao_hex=f"{i:06X}",
-                latitude=47.0,
-                longitude=-122.0,
-            )
-            for i in range(100)
-        ], batch_size=50)
+        AircraftSighting.objects.bulk_create(
+            [
+                AircraftSighting(
+                    timestamp=now,
+                    icao_hex=f"{i:06X}",
+                    latitude=47.0,
+                    longitude=-122.0,
+                )
+                for i in range(100)
+            ],
+            batch_size=50,
+        )
 
         def read_operation():
             return AircraftSighting.objects.count()
@@ -587,19 +625,27 @@ class TestConnectionPoolBehavior:
                     future.result(timeout=10)
                     duration_ms = (time.perf_counter() - start) * 1000
                     metrics.record(
-                        type("Result", (), {
-                            "duration_ms": duration_ms,
-                            "success": True,
-                            "error": None,
-                        })()
+                        type(
+                            "Result",
+                            (),
+                            {
+                                "duration_ms": duration_ms,
+                                "success": True,
+                                "error": None,
+                            },
+                        )()
                     )
                 except Exception as e:
                     metrics.record(
-                        type("Result", (), {
-                            "duration_ms": 0,
-                            "success": False,
-                            "error": f"{op_type}: {e}",
-                        })()
+                        type(
+                            "Result",
+                            (),
+                            {
+                                "duration_ms": 0,
+                                "success": False,
+                                "error": f"{op_type}: {e}",
+                            },
+                        )()
                     )
 
         metrics.finalize()

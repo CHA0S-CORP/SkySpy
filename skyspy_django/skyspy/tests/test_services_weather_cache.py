@@ -454,9 +454,7 @@ class FetchAndStorePirepsTests(TestCase):
     @patch("skyspy.services.weather_cache._fetch_awc_data")
     def test_fetch_and_store_pireps_success(self, mock_fetch):
         """Test successful PIREP fetch and store."""
-        mock_fetch.return_value = [
-            {"rawOb": "UA /OV SEA", "lat": 47.5, "lon": -122.0, "obsTime": 1704067200}
-        ]
+        mock_fetch.return_value = [{"rawOb": "UA /OV SEA", "lat": 47.5, "lon": -122.0, "obsTime": 1704067200}]
 
         result = weather_cache.fetch_and_store_pireps()
 

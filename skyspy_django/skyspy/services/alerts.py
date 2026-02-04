@@ -110,7 +110,15 @@ class AlertService:
                                 is_military = bool(db_flags & 1) if isinstance(db_flags, int) else False
                             if not is_military:
                                 continue
-                        elif rule.requires_position and ac.get("distance_nm") is None or rule.requires_altitude and ac.get("alt") is None and ac.get("alt_baro") is None or rule.requires_speed and ac.get("gs") is None:
+                        elif (
+                            rule.requires_position
+                            and ac.get("distance_nm") is None
+                            or rule.requires_altitude
+                            and ac.get("alt") is None
+                            and ac.get("alt_baro") is None
+                            or rule.requires_speed
+                            and ac.get("gs") is None
+                        ):
                             continue
 
                         # Quick pre-filter using compiled hints (handles target_icao, target_squawk, etc.)
@@ -133,9 +141,7 @@ class AlertService:
             timer.set_rules_evaluated(rules_evaluated)
             return triggered
 
-    def _check_alerts_full_iteration(
-        self, aircraft_list: list, now, timer: "EvaluationTimer"
-    ) -> list:
+    def _check_alerts_full_iteration(self, aircraft_list: list, now, timer: "EvaluationTimer") -> list:
         """
         Fallback method: Check all rules against all aircraft.
 
@@ -152,9 +158,7 @@ class AlertService:
             elif rule.requires_position:
                 candidates = [ac for ac in aircraft_list if ac.get("distance_nm") is not None]
             elif rule.requires_altitude:
-                candidates = [
-                    ac for ac in aircraft_list if ac.get("alt") is not None or ac.get("alt_baro") is not None
-                ]
+                candidates = [ac for ac in aircraft_list if ac.get("alt") is not None or ac.get("alt_baro") is not None]
             elif rule.requires_speed:
                 candidates = [ac for ac in aircraft_list if ac.get("gs") is not None]
             else:

@@ -1081,9 +1081,7 @@ class DifferentialUpdateIntegrationTest(TestCase):
         update_state_and_broadcast(batch1)
 
         # Check that aircraft:update was called with full type
-        aircraft_update_calls = [
-            call for call in mock_emit.call_args_list if call[0][0] == "aircraft:update"
-        ]
+        aircraft_update_calls = [call for call in mock_emit.call_args_list if call[0][0] == "aircraft:update"]
         self.assertTrue(len(aircraft_update_calls) >= 1)
         first_update = aircraft_update_calls[0][0][1]
         self.assertEqual(first_update.get("type"), "full")
@@ -1098,9 +1096,7 @@ class DifferentialUpdateIntegrationTest(TestCase):
         update_state_and_broadcast(batch2)
 
         # Check that aircraft:update was called with delta type
-        aircraft_update_calls = [
-            call for call in mock_emit.call_args_list if call[0][0] == "aircraft:update"
-        ]
+        aircraft_update_calls = [call for call in mock_emit.call_args_list if call[0][0] == "aircraft:update"]
         self.assertTrue(len(aircraft_update_calls) >= 1)
         second_update = aircraft_update_calls[0][0][1]
         self.assertEqual(second_update.get("type"), "delta")

@@ -50,7 +50,9 @@ class TestAircraftAPILoad:
 
         print(f"\n{metrics}")
         assert metrics.success_rate == 100, f"Expected 100% success, got {metrics.success_rate}%"
-        assert metrics.p95 < thresholds["api_aircraft_list_p95"], f"p95 {metrics.p95}ms > {thresholds['api_aircraft_list_p95']}ms threshold"
+        assert metrics.p95 < thresholds["api_aircraft_list_p95"], (
+            f"p95 {metrics.p95}ms > {thresholds['api_aircraft_list_p95']}ms threshold"
+        )
 
     def test_aircraft_list_50_concurrent(self, large_aircraft_cache, load_generator, thresholds):
         """
@@ -110,11 +112,17 @@ class TestAircraftAPILoad:
                 response = client.get("/api/v1/aircraft/")
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": response.status_code == status.HTTP_200_OK,
-                    "error": None if response.status_code == status.HTTP_200_OK else f"Status {response.status_code}",
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": response.status_code == status.HTTP_200_OK,
+                        "error": None
+                        if response.status_code == status.HTTP_200_OK
+                        else f"Status {response.status_code}",
+                    },
+                )()
             )
 
             data = response.json()
@@ -138,11 +146,15 @@ class TestAircraftAPILoad:
                 response = client.get("/api/v1/aircraft/")
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": response.status_code == status.HTTP_200_OK,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": response.status_code == status.HTTP_200_OK,
+                        "error": None,
+                    },
+                )()
             )
 
             data = response.json()
@@ -180,11 +192,15 @@ class TestAircraftAPILoad:
                     response = client.get(f"/api/v1/aircraft/{param}")
 
                 metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": response.status_code == status.HTTP_200_OK,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": response.status_code == status.HTTP_200_OK,
+                            "error": None,
+                        },
+                    )()
                 )
 
         metrics.finalize()
@@ -213,11 +229,15 @@ class TestAircraftAPILoad:
                 response = client.get(f"/api/v1/aircraft/{hex_code}/")
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": response.status_code == status.HTTP_200_OK,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": response.status_code == status.HTTP_200_OK,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -238,7 +258,9 @@ class TestAircraftAPILoad:
             response = client.get(f"/api/v1/aircraft/{ac['hex']}/")
             return response.status_code == status.HTTP_200_OK
 
-        metrics = load_generator.run_concurrent(make_request, num_requests=50, operation_name="aircraft_detail_concurrent")
+        metrics = load_generator.run_concurrent(
+            make_request, num_requests=50, operation_name="aircraft_detail_concurrent"
+        )
 
         print(f"\n{metrics}")
         assert metrics.success_rate == 100
@@ -261,11 +283,15 @@ class TestAircraftAPILoad:
                 response = client.get("/api/v1/aircraft/top/")
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": response.status_code == status.HTTP_200_OK,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": response.status_code == status.HTTP_200_OK,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -289,11 +315,15 @@ class TestAircraftAPILoad:
                     response = client.get(f"/api/v1/aircraft/top/?limit={limit}")
 
                 metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": response.status_code == status.HTTP_200_OK,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": response.status_code == status.HTTP_200_OK,
+                            "error": None,
+                        },
+                    )()
                 )
 
         metrics.finalize()
@@ -318,11 +348,15 @@ class TestAircraftAPILoad:
                 response = client.get("/api/v1/aircraft/stats/")
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": response.status_code == status.HTTP_200_OK,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": response.status_code == status.HTTP_200_OK,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -341,7 +375,9 @@ class TestAircraftAPILoad:
             response = client.get("/api/v1/aircraft/stats/")
             return response.status_code == status.HTTP_200_OK
 
-        metrics = load_generator.run_concurrent(make_request, num_requests=30, operation_name="aircraft_stats_concurrent")
+        metrics = load_generator.run_concurrent(
+            make_request, num_requests=30, operation_name="aircraft_stats_concurrent"
+        )
 
         print(f"\n{metrics}")
         assert metrics.success_rate == 100
@@ -361,10 +397,10 @@ class TestAircraftAPILoad:
 
         # Test different page sizes and offsets
         page_configs = [
-            (0, 100),   # First 100
-            (0, 500),   # First 500
-            (500, 100), # 100 starting at 500
-            (1000, 100), # 100 starting at 1000
+            (0, 100),  # First 100
+            (0, 500),  # First 500
+            (500, 100),  # 100 starting at 500
+            (1000, 100),  # 100 starting at 1000
         ]
 
         for offset, limit in page_configs:
@@ -375,11 +411,15 @@ class TestAircraftAPILoad:
                     response = client.get(f"/api/v1/aircraft/?offset={offset}&limit={limit}")
 
                 metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": response.status_code == status.HTTP_200_OK,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": response.status_code == status.HTTP_200_OK,
+                            "error": None,
+                        },
+                    )()
                 )
 
             metrics.finalize()
@@ -388,7 +428,9 @@ class TestAircraftAPILoad:
 
         # Verify all pagination queries are reasonably fast
         for key, metrics in page_metrics.items():
-            assert metrics.p95 < thresholds["api_aircraft_list_p95"] * 2, f"Pagination {key} too slow: p95={metrics.p95}ms"
+            assert metrics.p95 < thresholds["api_aircraft_list_p95"] * 2, (
+                f"Pagination {key} too slow: p95={metrics.p95}ms"
+            )
 
 
 @pytest.mark.performance
@@ -410,11 +452,15 @@ class TestAlertAPILoad:
                 response = client.get("/api/v1/alerts/rules/")
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": response.status_code == status.HTTP_200_OK,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": response.status_code == status.HTTP_200_OK,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -435,11 +481,15 @@ class TestAlertAPILoad:
                 response = client.get("/api/v1/alerts/history/")
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": response.status_code == status.HTTP_200_OK,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": response.status_code == status.HTTP_200_OK,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -467,11 +517,15 @@ class TestAlertAPILoad:
                     response = client.get(f"/api/v1/alerts/history/{param}")
 
                 metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": response.status_code == status.HTTP_200_OK,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": response.status_code == status.HTTP_200_OK,
+                            "error": None,
+                        },
+                    )()
                 )
 
         metrics.finalize()
@@ -498,11 +552,15 @@ class TestSafetyAPILoad:
                 response = client.get("/api/v1/safety/events/")
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": response.status_code == status.HTTP_200_OK,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": response.status_code == status.HTTP_200_OK,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -521,7 +579,9 @@ class TestSafetyAPILoad:
             response = client.get("/api/v1/safety/events/")
             return response.status_code == status.HTTP_200_OK
 
-        metrics = load_generator.run_concurrent(make_request, num_requests=30, operation_name="safety_events_concurrent")
+        metrics = load_generator.run_concurrent(
+            make_request, num_requests=30, operation_name="safety_events_concurrent"
+        )
 
         print(f"\n{metrics}")
         assert metrics.success_rate == 100
@@ -548,11 +608,11 @@ class TestMixedWorkload:
 
         # Define workload mix (weighted by frequency)
         endpoints = [
-            ("/api/v1/aircraft/", 40),        # 40% - Most common
+            ("/api/v1/aircraft/", 40),  # 40% - Most common
             ("/api/v1/aircraft/stats/", 20),  # 20%
-            ("/api/v1/aircraft/top/", 15),    # 15%
-            ("/api/v1/alerts/rules/", 10),    # 10%
-            ("/api/v1/safety/events/", 10),   # 10%
+            ("/api/v1/aircraft/top/", 15),  # 15%
+            ("/api/v1/alerts/rules/", 10),  # 10%
+            ("/api/v1/safety/events/", 10),  # 10%
             (f"/api/v1/aircraft/{aircraft[0]['hex']}/", 5),  # 5% - Detail
         ]
 

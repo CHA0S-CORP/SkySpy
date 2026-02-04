@@ -69,23 +69,26 @@ class TestAlertEvaluationPerformance:
         metrics = PerformanceMetrics(operation_name="eval_100_rules")
 
         # Disable notifications for performance test
-        with patch("skyspy.services.alerts.sync_emit"), \
-             patch.object(service, "_send_notification"):
-
+        with patch("skyspy.services.alerts.sync_emit"), patch.object(service, "_send_notification"):
             for _ in range(10):
                 # Clear cooldowns before each run
                 from skyspy.services.alert_cooldowns import cooldown_manager
+
                 cooldown_manager.clear_all()
 
                 with timed_operation() as timer:
                     service.check_alerts(aircraft_list)
 
                 metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": True,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": True,
+                            "error": None,
+                        },
+                    )()
                 )
 
         metrics.finalize()
@@ -104,26 +107,29 @@ class TestAlertEvaluationPerformance:
         aircraft_counts = [50, 100, 250, 500]
         results = {}
 
-        with patch("skyspy.services.alerts.sync_emit"), \
-             patch.object(service, "_send_notification"):
-
+        with patch("skyspy.services.alerts.sync_emit"), patch.object(service, "_send_notification"):
             for count in aircraft_counts:
                 aircraft_list = generate_aircraft_data(count)
                 metrics = PerformanceMetrics(operation_name=f"eval_{count}_aircraft")
 
                 for _ in range(5):
                     from skyspy.services.alert_cooldowns import cooldown_manager
+
                     cooldown_manager.clear_all()
 
                     with timed_operation() as timer:
                         service.check_alerts(aircraft_list)
 
                     metrics.record(
-                        type("Result", (), {
-                            "duration_ms": timer["duration_ms"],
-                            "success": True,
-                            "error": None,
-                        })()
+                        type(
+                            "Result",
+                            (),
+                            {
+                                "duration_ms": timer["duration_ms"],
+                                "success": True,
+                                "error": None,
+                            },
+                        )()
                     )
 
                 metrics.finalize()
@@ -147,11 +153,10 @@ class TestAlertEvaluationPerformance:
         total_time_ms = 0
         iterations = 5
 
-        with patch("skyspy.services.alerts.sync_emit"), \
-             patch.object(service, "_send_notification"):
-
+        with patch("skyspy.services.alerts.sync_emit"), patch.object(service, "_send_notification"):
             for _ in range(iterations):
                 from skyspy.services.alert_cooldowns import cooldown_manager
+
                 cooldown_manager.clear_all()
 
                 with timed_operation() as timer:
@@ -200,7 +205,7 @@ class TestComplexConditionEvaluation:
                                 {"type": "distance", "operator": "lt", "value": "50"},
                                 {"type": "speed", "operator": "gt", "value": "400"},
                             ],
-                        }
+                        },
                     ],
                 },
                 {
@@ -222,22 +227,25 @@ class TestComplexConditionEvaluation:
         aircraft_list = generate_aircraft_data(200)
         metrics = PerformanceMetrics(operation_name="deep_nested_eval")
 
-        with patch("skyspy.services.alerts.sync_emit"), \
-             patch.object(service, "_send_notification"):
-
+        with patch("skyspy.services.alerts.sync_emit"), patch.object(service, "_send_notification"):
             for _ in range(10):
                 from skyspy.services.alert_cooldowns import cooldown_manager
+
                 cooldown_manager.clear_all()
 
                 with timed_operation() as timer:
                     service.check_alerts(aircraft_list)
 
                 metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": True,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": True,
+                            "error": None,
+                        },
+                    )()
                 )
 
         metrics.finalize()
@@ -260,14 +268,16 @@ class TestComplexConditionEvaluation:
         # Create rule with 10 condition groups
         groups = []
         for i in range(10):
-            groups.append({
-                "logic": "OR",
-                "conditions": [
-                    {"type": "icao", "operator": "startswith", "value": f"{i:02X}"},
-                    {"type": "callsign", "operator": "contains", "value": str(i)},
-                    {"type": "altitude", "operator": "gt", "value": str(20000 + i * 2000)},
-                ],
-            })
+            groups.append(
+                {
+                    "logic": "OR",
+                    "conditions": [
+                        {"type": "icao", "operator": "startswith", "value": f"{i:02X}"},
+                        {"type": "callsign", "operator": "contains", "value": str(i)},
+                        {"type": "altitude", "operator": "gt", "value": str(20000 + i * 2000)},
+                    ],
+                }
+            )
 
         rule = AlertRule.objects.create(
             name="Many Groups Rule",
@@ -278,22 +288,25 @@ class TestComplexConditionEvaluation:
         aircraft_list = generate_aircraft_data(200)
         metrics = PerformanceMetrics(operation_name="many_groups_eval")
 
-        with patch("skyspy.services.alerts.sync_emit"), \
-             patch.object(service, "_send_notification"):
-
+        with patch("skyspy.services.alerts.sync_emit"), patch.object(service, "_send_notification"):
             for _ in range(10):
                 from skyspy.services.alert_cooldowns import cooldown_manager
+
                 cooldown_manager.clear_all()
 
                 with timed_operation() as timer:
                     service.check_alerts(aircraft_list)
 
                 metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": True,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": True,
+                            "error": None,
+                        },
+                    )()
                 )
 
         metrics.finalize()
@@ -335,22 +348,25 @@ class TestComplexConditionEvaluation:
         aircraft_list = generate_aircraft_data(200)
         metrics = PerformanceMetrics(operation_name="regex_eval")
 
-        with patch("skyspy.services.alerts.sync_emit"), \
-             patch.object(service, "_send_notification"):
-
+        with patch("skyspy.services.alerts.sync_emit"), patch.object(service, "_send_notification"):
             for _ in range(10):
                 from skyspy.services.alert_cooldowns import cooldown_manager
+
                 cooldown_manager.clear_all()
 
                 with timed_operation() as timer:
                     service.check_alerts(aircraft_list)
 
                 metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": True,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": True,
+                            "error": None,
+                        },
+                    )()
                 )
 
         metrics.finalize()
@@ -400,22 +416,25 @@ class TestGeographicBoundaryChecks:
 
         metrics = PerformanceMetrics(operation_name="distance_eval")
 
-        with patch("skyspy.services.alerts.sync_emit"), \
-             patch.object(service, "_send_notification"):
-
+        with patch("skyspy.services.alerts.sync_emit"), patch.object(service, "_send_notification"):
             for _ in range(10):
                 from skyspy.services.alert_cooldowns import cooldown_manager
+
                 cooldown_manager.clear_all()
 
                 with timed_operation() as timer:
                     service.check_alerts(aircraft_list)
 
                 metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": True,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": True,
+                            "error": None,
+                        },
+                    )()
                 )
 
         metrics.finalize()
@@ -461,22 +480,25 @@ class TestGeographicBoundaryChecks:
         aircraft_list = generate_aircraft_data(300)
         metrics = PerformanceMetrics(operation_name="geo_alt_eval")
 
-        with patch("skyspy.services.alerts.sync_emit"), \
-             patch.object(service, "_send_notification"):
-
+        with patch("skyspy.services.alerts.sync_emit"), patch.object(service, "_send_notification"):
             for _ in range(10):
                 from skyspy.services.alert_cooldowns import cooldown_manager
+
                 cooldown_manager.clear_all()
 
                 with timed_operation() as timer:
                     service.check_alerts(aircraft_list)
 
                 metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": True,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": True,
+                            "error": None,
+                        },
+                    )()
                 )
 
         metrics.finalize()
@@ -539,22 +561,25 @@ class TestTimeBasedConditions:
         aircraft_list = generate_aircraft_data(100)
         metrics = PerformanceMetrics(operation_name="schedule_check")
 
-        with patch("skyspy.services.alerts.sync_emit"), \
-             patch.object(service, "_send_notification"):
-
+        with patch("skyspy.services.alerts.sync_emit"), patch.object(service, "_send_notification"):
             for _ in range(10):
                 from skyspy.services.alert_cooldowns import cooldown_manager
+
                 cooldown_manager.clear_all()
 
                 with timed_operation() as timer:
                     service.check_alerts(aircraft_list)
 
                 metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": True,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": True,
+                            "error": None,
+                        },
+                    )()
                 )
 
         metrics.finalize()
@@ -593,11 +618,10 @@ class TestTimeBasedConditions:
         aircraft_list = generate_aircraft_data(100)
         metrics = PerformanceMetrics(operation_name="cooldown_check")
 
-        with patch("skyspy.services.alerts.sync_emit"), \
-             patch.object(service, "_send_notification"):
-
+        with patch("skyspy.services.alerts.sync_emit"), patch.object(service, "_send_notification"):
             # First run - all will trigger (no cooldowns)
             from skyspy.services.alert_cooldowns import cooldown_manager
+
             cooldown_manager.clear_all()
 
             with timed_operation() as timer:
@@ -611,11 +635,15 @@ class TestTimeBasedConditions:
                     service.check_alerts(aircraft_list)
 
                 metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": True,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": True,
+                            "error": None,
+                        },
+                    )()
                 )
 
         metrics.finalize()
@@ -654,22 +682,25 @@ class TestRuleCachePerformance:
 
         metrics = PerformanceMetrics(operation_name="cache_hit")
 
-        with patch("skyspy.services.alerts.sync_emit"), \
-             patch.object(service, "_send_notification"):
-
+        with patch("skyspy.services.alerts.sync_emit"), patch.object(service, "_send_notification"):
             for _ in range(10):
                 from skyspy.services.alert_cooldowns import cooldown_manager
+
                 cooldown_manager.clear_all()
 
                 with timed_operation() as timer:
                     service.check_alerts(aircraft_list)
 
                 metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": True,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": True,
+                            "error": None,
+                        },
+                    )()
                 )
 
         metrics.finalize()
@@ -693,23 +724,26 @@ class TestRuleCachePerformance:
         # Cache miss metrics
         miss_metrics = PerformanceMetrics(operation_name="cache_miss")
 
-        with patch("skyspy.services.alerts.sync_emit"), \
-             patch.object(service, "_send_notification"):
-
+        with patch("skyspy.services.alerts.sync_emit"), patch.object(service, "_send_notification"):
             for _ in range(5):
                 rule_cache.invalidate()  # Force cache miss
                 from skyspy.services.alert_cooldowns import cooldown_manager
+
                 cooldown_manager.clear_all()
 
                 with timed_operation() as timer:
                     service.check_alerts(aircraft_list)
 
                 miss_metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": True,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": True,
+                            "error": None,
+                        },
+                    )()
                 )
 
         miss_metrics.finalize()
@@ -717,25 +751,28 @@ class TestRuleCachePerformance:
         # Cache hit metrics
         hit_metrics = PerformanceMetrics(operation_name="cache_hit")
 
-        with patch("skyspy.services.alerts.sync_emit"), \
-             patch.object(service, "_send_notification"):
-
+        with patch("skyspy.services.alerts.sync_emit"), patch.object(service, "_send_notification"):
             # Warm cache
             rule_cache.get_active_rules()
 
             for _ in range(5):
                 from skyspy.services.alert_cooldowns import cooldown_manager
+
                 cooldown_manager.clear_all()
 
                 with timed_operation() as timer:
                     service.check_alerts(aircraft_list)
 
                 hit_metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": True,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": True,
+                            "error": None,
+                        },
+                    )()
                 )
 
         hit_metrics.finalize()

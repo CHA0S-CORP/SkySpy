@@ -446,9 +446,7 @@ class DeduplicateMentionsTests(TestCase):
             {"callsign": "UAL1", "raw": "united one twenty three"},
         ]
 
-        result = deduplicate_mentions(
-            "united one two three descend... united one twenty three turn left", entries
-        )
+        result = deduplicate_mentions("united one two three descend... united one twenty three turn left", entries)
 
         # Second entry should be marked as linked to first
         for entry in result:
@@ -502,11 +500,7 @@ class EnhanceCallsignExtractionTests(TestCase):
             # Resolution response
             {"content": "[]"},
             # Validation response
-            {
-                "content": json.dumps(
-                    [{"callsign": "UAL123", "valid": True, "confidence": 0.9, "reason": "Valid"}]
-                )
-            },
+            {"content": json.dumps([{"callsign": "UAL123", "valid": True, "confidence": 0.9, "reason": "Valid"}])},
             # Deduplication response
             {"content": json.dumps({"groups": []})},
         ]

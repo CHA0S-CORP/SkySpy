@@ -276,7 +276,13 @@ export function AnalyticsPanel({ apiBase = '', hours = 24, wsRequest, wsConnecte
 
   return (
     <div className={`analytics-panel analytics-dock ${isExpanded ? 'expanded' : 'analytics-dock--collapsed'}`}>
-      <div className="analytics-dock__header" onClick={() => setIsExpanded(!isExpanded)}>
+      <div
+        className="analytics-dock__header"
+        role="button"
+        tabIndex={0}
+        onClick={() => setIsExpanded(!isExpanded)}
+        onKeyDown={(e) => e.key === 'Enter' && setIsExpanded(!isExpanded)}
+      >
         <div className="analytics-dock__title">
           <BarChart3 size={14} />
           <span>Analytics</span>

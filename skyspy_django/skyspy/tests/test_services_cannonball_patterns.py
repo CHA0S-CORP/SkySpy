@@ -37,8 +37,7 @@ def create_position(lat, lon, altitude=3000, speed=100, track=None, minutes_ago=
 
 
 def create_circular_positions(
-    center_lat, center_lon, radius_deg=0.005, num_positions=20,
-    duration_minutes=30, altitude=3000, speed=80
+    center_lat, center_lon, radius_deg=0.005, num_positions=20, duration_minutes=30, altitude=3000, speed=80
 ):
     """Create positions in a circular pattern."""
     positions = []
@@ -48,19 +47,15 @@ def create_circular_positions(
         lon = center_lon + radius_deg * math.sin(angle)
         track = (math.degrees(angle) + 90) % 360  # Tangent to circle
         minutes_ago = duration_minutes - (duration_minutes * i / num_positions)
-        positions.append(create_position(
-            lat, lon, altitude, speed, track, minutes_ago
-        ))
+        positions.append(create_position(lat, lon, altitude, speed, track, minutes_ago))
     return positions
 
 
-def create_stakeout_positions(
-    center_lat, center_lon, duration_minutes=30, num_positions=15,
-    altitude=2500, speed=50
-):
+def create_stakeout_positions(center_lat, center_lon, duration_minutes=30, num_positions=15, altitude=2500, speed=50):
     """Create positions for a stakeout pattern (tight cluster)."""
     positions = []
     import random
+
     random.seed(42)  # For reproducibility
 
     for i in range(num_positions):
@@ -68,20 +63,21 @@ def create_stakeout_positions(
         lat_offset = random.uniform(-0.003, 0.003)
         lon_offset = random.uniform(-0.003, 0.003)
         minutes_ago = duration_minutes - (duration_minutes * i / num_positions)
-        positions.append(create_position(
-            center_lat + lat_offset,
-            center_lon + lon_offset,
-            altitude + random.randint(-100, 100),
-            speed + random.randint(-10, 10),
-            random.randint(0, 359),
-            minutes_ago
-        ))
+        positions.append(
+            create_position(
+                center_lat + lat_offset,
+                center_lon + lon_offset,
+                altitude + random.randint(-100, 100),
+                speed + random.randint(-10, 10),
+                random.randint(0, 359),
+                minutes_ago,
+            )
+        )
     return positions
 
 
 def create_racetrack_positions(
-    center_lat, center_lon, length_deg=0.02, width_deg=0.005,
-    num_positions=20, duration_minutes=15
+    center_lat, center_lon, length_deg=0.02, width_deg=0.005, num_positions=20, duration_minutes=15
 ):
     """Create positions for a racetrack/figure-8 orbit pattern."""
     positions = []
@@ -96,31 +92,22 @@ def create_racetrack_positions(
         lon = center_lon + length_deg * math.cos(progress)
 
         # Track follows the oval tangent
-        track_angle = math.degrees(math.atan2(
-            width_deg * math.cos(progress),
-            -length_deg * math.sin(progress)
-        )) % 360
+        track_angle = math.degrees(math.atan2(width_deg * math.cos(progress), -length_deg * math.sin(progress))) % 360
 
         minutes_ago = duration_minutes - (duration_minutes * i / num_positions)
-        positions.append(create_position(
-            lat, lon, 3000, 100, track_angle, minutes_ago
-        ))
+        positions.append(create_position(lat, lon, 3000, 100, track_angle, minutes_ago))
 
     return positions
 
 
 def create_highway_positions(
-    start_lat, start_lon, end_lat, end_lon, num_positions=10,
-    duration_minutes=10, altitude=2000
+    start_lat, start_lon, end_lat, end_lon, num_positions=10, duration_minutes=10, altitude=2000
 ):
     """Create positions for highway parallel tracking."""
     positions = []
 
     # Calculate bearing
-    bearing = math.degrees(math.atan2(
-        end_lon - start_lon,
-        end_lat - start_lat
-    )) % 360
+    bearing = math.degrees(math.atan2(end_lon - start_lon, end_lat - start_lat)) % 360
 
     for i in range(num_positions):
         t = i / (num_positions - 1)
@@ -129,16 +116,12 @@ def create_highway_positions(
         minutes_ago = duration_minutes - (duration_minutes * i / num_positions)
         # Consistent heading with minor variation
         track = bearing + (i % 2) * 2 - 1  # +/- 1 degree variation
-        positions.append(create_position(
-            lat, lon, altitude, 90, track, minutes_ago
-        ))
+        positions.append(create_position(lat, lon, altitude, 90, track, minutes_ago))
 
     return positions
 
 
-def create_area_search_positions(
-    center_lat, center_lon, duration_minutes=20, num_positions=20
-):
+def create_area_search_positions(center_lat, center_lon, duration_minutes=20, num_positions=20):
     """Create positions for expanding area search pattern."""
     positions = []
 
@@ -160,9 +143,7 @@ def create_area_search_positions(
         track = 90 if row % 2 == 0 else 270
 
         minutes_ago = duration_minutes - (duration_minutes * i / num_positions)
-        positions.append(create_position(
-            lat, lon, 3000, 80, track, minutes_ago
-        ))
+        positions.append(create_position(lat, lon, 3000, 80, track, minutes_ago))
 
     return positions
 
@@ -334,11 +315,7 @@ class HighwayParallelPatternTests(TestCase):
         positions = []
         for i in range(10):
             track = (i * 40) % 360  # Varying heading
-            positions.append(create_position(
-                47.5 + i * 0.01,
-                -122.5 + i * 0.01,
-                2000, 90, track, 15 - i
-            ))
+            positions.append(create_position(47.5 + i * 0.01, -122.5 + i * 0.01, 2000, 90, track, 15 - i))
 
         result = self.service._detect_highway_parallel(positions)
 
@@ -566,7 +543,7 @@ class PatternDetectionIntegrationTests(TestCase):
         """Set up test fixtures."""
         self.service = CannonballService()
 
-    @patch.object(CannonballService, '_load_position_history')
+    @patch.object(CannonballService, "_load_position_history")
     def test_detect_patterns_runs_all_detectors(self, mock_load):
         """Test that _detect_patterns runs all pattern detectors."""
         # Create positions that could match multiple patterns
@@ -583,7 +560,7 @@ class PatternDetectionIntegrationTests(TestCase):
         # Should return list of detected patterns
         self.assertIsInstance(patterns, list)
 
-    @patch.object(CannonballService, '_load_position_history')
+    @patch.object(CannonballService, "_load_position_history")
     def test_detect_patterns_empty_history(self, mock_load):
         """Test pattern detection with empty position history."""
         mock_load.return_value = []
@@ -592,7 +569,7 @@ class PatternDetectionIntegrationTests(TestCase):
 
         self.assertEqual(patterns, [])
 
-    @patch.object(CannonballService, '_load_position_history')
+    @patch.object(CannonballService, "_load_position_history")
     def test_detect_patterns_insufficient_history(self, mock_load):
         """Test pattern detection with insufficient positions."""
         mock_load.return_value = [

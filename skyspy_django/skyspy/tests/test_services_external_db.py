@@ -521,9 +521,7 @@ class RouteCacheTests(TestCase):
         """Test successful route fetch."""
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "UAL456": {"origin": "KSFO", "destination": "KJFK", "aircraft_type": "B738"}
-        }
+        mock_response.json.return_value = {"UAL456": {"origin": "KSFO", "destination": "KJFK", "aircraft_type": "B738"}}
         mock_client = Mock()
         mock_client.post.return_value = mock_response
         mock_client.__enter__ = Mock(return_value=mock_client)
@@ -580,9 +578,7 @@ class FetchAircraftFromADSBLolTests(TestCase):
         """Test successful aircraft fetch from adsb.lol."""
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "ac": [{"hex": "ABC123", "flight": "UAL456", "alt_baro": 35000}]
-        }
+        mock_response.json.return_value = {"ac": [{"hex": "ABC123", "flight": "UAL456", "alt_baro": 35000}]}
         mock_client = Mock()
         mock_client.get.return_value = mock_response
         mock_client.__enter__ = Mock(return_value=mock_client)
@@ -830,9 +826,7 @@ class InitDatabasesTests(TestCase):
     @patch("skyspy.services.external_db.load_tar1090_database")
     @patch("skyspy.services.external_db.load_faa_database")
     @patch("skyspy.services.external_db.load_opensky_database")
-    def test_init_databases_calls_all_loaders(
-        self, mock_opensky, mock_faa, mock_tar1090, mock_adsbx
-    ):
+    def test_init_databases_calls_all_loaders(self, mock_opensky, mock_faa, mock_tar1090, mock_adsbx):
         """Test that init_databases calls all database loaders."""
         init_databases(auto_download=False)
 

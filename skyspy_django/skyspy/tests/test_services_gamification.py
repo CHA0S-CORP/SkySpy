@@ -810,9 +810,7 @@ class DailyStatsTests(TestCase):
     def test_update_daily_stats(self):
         """Test updating daily stats."""
         now = timezone.now()
-        day_start = timezone.make_aware(
-            timezone.datetime.combine(now.date(), timezone.datetime.min.time())
-        )
+        day_start = timezone.make_aware(timezone.datetime.combine(now.date(), timezone.datetime.min.time()))
 
         # Create some sessions for today
         AircraftSessionFactory(

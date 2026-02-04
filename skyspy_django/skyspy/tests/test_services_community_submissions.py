@@ -540,9 +540,7 @@ class CommunitySubmissionServiceTests(TestCase):
         """Test confidence calculation for new user."""
         reputation = SubmitterReputation.objects.create(user=self.user)
 
-        confidence = self.service._calculate_submission_confidence(
-            reputation, "flight_pattern"
-        )
+        confidence = self.service._calculate_submission_confidence(reputation, "flight_pattern")
 
         # New user (0.5 reputation) + flight_pattern (0.05) = ~0.35-0.5
         self.assertGreater(confidence, 0.3)
@@ -705,16 +703,25 @@ class CommunitySubmissionServiceTests(TestCase):
     def test_get_pending_submissions(self):
         """Test getting pending submissions."""
         CommunitySubmission.objects.create(
-            icao_hex="A11111", agency_name="FBI", evidence_type="news",
-            evidence_description="Test 1", status="pending",
+            icao_hex="A11111",
+            agency_name="FBI",
+            evidence_type="news",
+            evidence_description="Test 1",
+            status="pending",
         )
         CommunitySubmission.objects.create(
-            icao_hex="A22222", agency_name="DEA", evidence_type="news",
-            evidence_description="Test 2", status="pending",
+            icao_hex="A22222",
+            agency_name="DEA",
+            evidence_type="news",
+            evidence_description="Test 2",
+            status="pending",
         )
         CommunitySubmission.objects.create(
-            icao_hex="A33333", agency_name="DHS", evidence_type="news",
-            evidence_description="Test 3", status="approved",
+            icao_hex="A33333",
+            agency_name="DHS",
+            evidence_type="news",
+            evidence_description="Test 3",
+            status="approved",
         )
 
         pending = self.service.get_pending_submissions()
@@ -724,16 +731,25 @@ class CommunitySubmissionServiceTests(TestCase):
     def test_get_user_submissions(self):
         """Test getting user's submissions."""
         CommunitySubmission.objects.create(
-            icao_hex="A11111", agency_name="FBI", evidence_type="news",
-            evidence_description="Test 1", submitted_by=self.user,
+            icao_hex="A11111",
+            agency_name="FBI",
+            evidence_type="news",
+            evidence_description="Test 1",
+            submitted_by=self.user,
         )
         CommunitySubmission.objects.create(
-            icao_hex="A22222", agency_name="DEA", evidence_type="news",
-            evidence_description="Test 2", submitted_by=self.user,
+            icao_hex="A22222",
+            agency_name="DEA",
+            evidence_type="news",
+            evidence_description="Test 2",
+            submitted_by=self.user,
         )
         CommunitySubmission.objects.create(
-            icao_hex="A33333", agency_name="DHS", evidence_type="news",
-            evidence_description="Test 3", submitted_by=self.admin_user,
+            icao_hex="A33333",
+            agency_name="DHS",
+            evidence_type="news",
+            evidence_description="Test 3",
+            submitted_by=self.admin_user,
         )
 
         user_submissions = self.service.get_user_submissions(self.user)
@@ -743,20 +759,32 @@ class CommunitySubmissionServiceTests(TestCase):
     def test_get_submission_stats(self):
         """Test getting submission statistics."""
         CommunitySubmission.objects.create(
-            icao_hex="A11111", agency_name="FBI", evidence_type="news",
-            evidence_description="Test", status="pending",
+            icao_hex="A11111",
+            agency_name="FBI",
+            evidence_type="news",
+            evidence_description="Test",
+            status="pending",
         )
         CommunitySubmission.objects.create(
-            icao_hex="A22222", agency_name="DEA", evidence_type="news",
-            evidence_description="Test", status="pending",
+            icao_hex="A22222",
+            agency_name="DEA",
+            evidence_type="news",
+            evidence_description="Test",
+            status="pending",
         )
         CommunitySubmission.objects.create(
-            icao_hex="A33333", agency_name="DHS", evidence_type="news",
-            evidence_description="Test", status="approved",
+            icao_hex="A33333",
+            agency_name="DHS",
+            evidence_type="news",
+            evidence_description="Test",
+            status="approved",
         )
         CommunitySubmission.objects.create(
-            icao_hex="A44444", agency_name="ICE", evidence_type="news",
-            evidence_description="Test", status="rejected",
+            icao_hex="A44444",
+            agency_name="ICE",
+            evidence_type="news",
+            evidence_description="Test",
+            status="rejected",
         )
 
         stats = self.service.get_submission_stats()

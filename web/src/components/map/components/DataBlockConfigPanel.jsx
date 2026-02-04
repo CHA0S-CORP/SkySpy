@@ -91,7 +91,7 @@ export function DataBlockConfigPanel({
         <div className="datablock-section-title">Display Mode</div>
         <div className="datablock-mode-group">
           {MODE_DEFINITIONS.map((mode) => (
-            <label key={mode.key} className="datablock-mode-option">
+            <label key={mode.key} className="datablock-mode-option" aria-label={mode.label}>
               <input
                 type="radio"
                 name="datablock-mode"

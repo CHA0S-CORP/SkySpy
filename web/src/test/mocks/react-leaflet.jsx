@@ -11,7 +11,10 @@ export const Polyline = ({ eventHandlers, pathOptions }) => (
   <div
     data-testid="polyline"
     data-color={pathOptions?.color}
+    role="button"
+    tabIndex={0}
     onClick={eventHandlers?.click}
+    onKeyDown={(e) => e.key === 'Enter' && eventHandlers?.click?.(e)}
   />
 );
 

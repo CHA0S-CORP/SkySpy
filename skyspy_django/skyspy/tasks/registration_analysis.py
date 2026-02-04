@@ -41,9 +41,9 @@ def analyze_new_sightings(self, days: int = 1, batch_size: int = 100):
         cutoff = timezone.now() - timedelta(days=days)
 
         # Find recently seen aircraft without analysis
-        recent_icaos = CannonballSession.objects.filter(
-            first_seen__gte=cutoff
-        ).values_list("icao_hex", flat=True).distinct()
+        recent_icaos = (
+            CannonballSession.objects.filter(first_seen__gte=cutoff).values_list("icao_hex", flat=True).distinct()
+        )
 
         analyzed_icaos = RegistrationAnalysis.objects.values_list("icao_hex", flat=True)
 
@@ -176,10 +176,7 @@ def refresh_transfer_history(batch_size: int = 100):
                 logger.warning(f"Error refreshing {analysis.registration}: {e}")
                 stats["errors"] += 1
 
-        logger.info(
-            f"Refreshed transfer history: {stats['checked']} checked, "
-            f"{stats['updated']} updated"
-        )
+        logger.info(f"Refreshed transfer history: {stats['checked']} checked, {stats['updated']} updated")
 
         return stats
 
@@ -196,7 +193,6 @@ def generate_high_risk_report():
     Creates a summary of unreviewed high-risk aircraft for admin attention.
     """
     try:
-
         # Get high-risk unreviewed aircraft
         high_risk = RegistrationAnalysis.objects.filter(
             risk_level="high",
@@ -263,20 +259,22 @@ def cleanup_old_analyses(retention_days: int = 180):
         cutoff = timezone.now() - timedelta(days=retention_days)
 
         # Get ICAO hexes of aircraft seen recently or in known database
-        recent_sessions = CannonballSession.objects.filter(
-            last_seen__gte=cutoff
-        ).values_list("icao_hex", flat=True)
+        recent_sessions = CannonballSession.objects.filter(last_seen__gte=cutoff).values_list("icao_hex", flat=True)
 
         known_aircraft = CannonballKnownAircraft.objects.values_list("icao_hex", flat=True)
 
         keep_icaos = set(recent_sessions) | set(known_aircraft)
 
         # Delete old analyses for aircraft not in keep list
-        deleted, _ = RegistrationAnalysis.objects.filter(
-            created_at__lt=cutoff,
-            is_confirmed_le__isnull=True,  # Not confirmed
-            manually_reviewed=False,  # Not reviewed
-        ).exclude(icao_hex__in=keep_icaos).delete()
+        deleted, _ = (
+            RegistrationAnalysis.objects.filter(
+                created_at__lt=cutoff,
+                is_confirmed_le__isnull=True,  # Not confirmed
+                manually_reviewed=False,  # Not reviewed
+            )
+            .exclude(icao_hex__in=keep_icaos)
+            .delete()
+        )
 
         if deleted:
             logger.info(f"Cleaned up {deleted} old registration analyses")

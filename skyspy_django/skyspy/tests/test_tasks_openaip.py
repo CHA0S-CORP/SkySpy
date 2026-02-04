@@ -299,9 +299,7 @@ class OpenaipRegionCoverageTest(TestCase):
     @patch("skyspy.services.openaip.get_airspaces")
     @patch("skyspy.services.openaip.get_api_status")
     @patch("skyspy.services.openaip._is_enabled")
-    def test_covers_west_coast(
-        self, mock_enabled, mock_status, mock_airspaces, mock_airports, mock_navaids, mock_emit
-    ):
+    def test_covers_west_coast(self, mock_enabled, mock_status, mock_airspaces, mock_airports, mock_navaids, mock_emit):
         """Test that West Coast regions are covered."""
         mock_enabled.return_value = True
         mock_status.return_value = {"enabled": True}
@@ -325,9 +323,7 @@ class OpenaipRegionCoverageTest(TestCase):
     @patch("skyspy.services.openaip.get_airspaces")
     @patch("skyspy.services.openaip.get_api_status")
     @patch("skyspy.services.openaip._is_enabled")
-    def test_covers_east_coast(
-        self, mock_enabled, mock_status, mock_airspaces, mock_airports, mock_navaids, mock_emit
-    ):
+    def test_covers_east_coast(self, mock_enabled, mock_status, mock_airspaces, mock_airports, mock_navaids, mock_emit):
         """Test that East Coast regions are covered."""
         mock_enabled.return_value = True
         mock_status.return_value = {"enabled": True}
@@ -350,9 +346,7 @@ class OpenaipRegionCoverageTest(TestCase):
     @patch("skyspy.services.openaip.get_airspaces")
     @patch("skyspy.services.openaip.get_api_status")
     @patch("skyspy.services.openaip._is_enabled")
-    def test_covers_florida(
-        self, mock_enabled, mock_status, mock_airspaces, mock_airports, mock_navaids, mock_emit
-    ):
+    def test_covers_florida(self, mock_enabled, mock_status, mock_airspaces, mock_airports, mock_navaids, mock_emit):
         """Test that Florida is covered."""
         mock_enabled.return_value = True
         mock_status.return_value = {"enabled": True}
@@ -380,9 +374,7 @@ class OpenaipRadiusConfigTest(TestCase):
     @patch("skyspy.services.openaip.get_airspaces")
     @patch("skyspy.services.openaip.get_api_status")
     @patch("skyspy.services.openaip._is_enabled")
-    def test_uses_200nm_radius(
-        self, mock_enabled, mock_status, mock_airspaces, mock_airports, mock_navaids, mock_emit
-    ):
+    def test_uses_200nm_radius(self, mock_enabled, mock_status, mock_airspaces, mock_airports, mock_navaids, mock_emit):
         """Test that 200nm radius is used for prefetch."""
         mock_enabled.return_value = True
         mock_status.return_value = {"enabled": True}
@@ -407,9 +399,7 @@ class OpenaipApiStatusTest(TestCase):
     @patch("skyspy.services.openaip.get_airspaces")
     @patch("skyspy.services.openaip.get_api_status")
     @patch("skyspy.services.openaip._is_enabled")
-    def test_logs_api_status(
-        self, mock_enabled, mock_status, mock_airspaces, mock_airports, mock_navaids, mock_emit
-    ):
+    def test_logs_api_status(self, mock_enabled, mock_status, mock_airspaces, mock_airports, mock_navaids, mock_emit):
         """Test that API status is retrieved and logged."""
         mock_enabled.return_value = True
         mock_status.return_value = {

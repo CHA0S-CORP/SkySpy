@@ -1037,8 +1037,7 @@ class CannonballService:
         total_distance = 0
         for i in range(1, len(positions)):
             total_distance += haversine_distance(
-                positions[i - 1].lat, positions[i - 1].lon,
-                positions[i].lat, positions[i].lon
+                positions[i - 1].lat, positions[i - 1].lon, positions[i].lat, positions[i].lon
             )
 
         # Need at least 2nm of linear flight for highway tracking
@@ -1046,10 +1045,7 @@ class CannonballService:
             return None
 
         # Calculate linearity (ratio of direct distance to path distance)
-        direct_distance = haversine_distance(
-            positions[0].lat, positions[0].lon,
-            positions[-1].lat, positions[-1].lon
-        )
+        direct_distance = haversine_distance(positions[0].lat, positions[0].lon, positions[-1].lat, positions[-1].lon)
         linearity = direct_distance / max(0.1, total_distance)
 
         if linearity < 0.7:  # Too much deviation from straight line

@@ -34,9 +34,11 @@ function createWrapper() {
       },
     },
   });
-  return ({ children }) => (
+  const Wrapper = ({ children }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
+  Wrapper.displayName = 'QueryWrapper';
+  return Wrapper;
 }
 
 describe('useAlertQueries', () => {

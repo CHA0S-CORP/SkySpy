@@ -24,6 +24,8 @@ import pytest
 def unique_name(prefix: str = "test") -> str:
     """Generate a unique name to avoid constraint violations."""
     return f"{prefix}_{uuid.uuid4().hex[:8]}"
+
+
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
@@ -121,9 +123,7 @@ class TestSkyspyUser:
     def test_create_skyspy_user(self):
         """Test creating a SkyspyUser with basic fields."""
         user = User.objects.create_user(username=unique_name("testuser"), password="testpass123")
-        profile = SkyspyUser.objects.create(
-            user=user, display_name="Test User", auth_provider="local"
-        )
+        profile = SkyspyUser.objects.create(user=user, display_name="Test User", auth_provider="local")
 
         assert profile.user == user
         assert profile.display_name == "Test User"
@@ -204,7 +204,9 @@ class TestSkyspyUser:
         user = User.objects.create_user(username=unique_name("expireduser"), password="testpass123")
         profile = SkyspyUser.objects.create(user=user)
 
-        role = Role.objects.create(name=unique_name("expired_role"), display_name="Expired", permissions=["expired.perm"])
+        role = Role.objects.create(
+            name=unique_name("expired_role"), display_name="Expired", permissions=["expired.perm"]
+        )
         UserRole.objects.create(user=user, role=role, expires_at=timezone.now() - timedelta(days=1))
 
         assert profile.has_permission("expired.perm") is False
@@ -338,9 +340,7 @@ class TestAPIKey:
         user = User.objects.create_user(username=unique_name("apiuser"), password="pass")
         key, key_hash, key_prefix = APIKey.generate_key()
 
-        api_key = APIKey.objects.create(
-            user=user, name="Test Key", key_hash=key_hash, key_prefix=key_prefix
-        )
+        api_key = APIKey.objects.create(user=user, name="Test Key", key_hash=key_hash, key_prefix=key_prefix)
 
         assert api_key.name == "Test Key"
         assert api_key.is_active is True
@@ -349,18 +349,14 @@ class TestAPIKey:
     def test_str_representation(self):
         """Test __str__ format."""
         user = User.objects.create_user(username=unique_name("strapi"), password="pass")
-        api_key = APIKey.objects.create(
-            user=user, name="My API Key", key_hash="abc123", key_prefix="sk_abc123"
-        )
+        api_key = APIKey.objects.create(user=user, name="My API Key", key_hash="abc123", key_prefix="sk_abc123")
 
         assert str(api_key) == "My API Key (sk_abc123...)"
 
     def test_is_valid_method(self):
         """Test is_valid checks active and not expired."""
         user = User.objects.create_user(username=unique_name("validapi"), password="pass")
-        api_key = APIKey.objects.create(
-            user=user, name="Valid Key", key_hash="hash1", key_prefix="sk_pref"
-        )
+        api_key = APIKey.objects.create(user=user, name="Valid Key", key_hash="hash1", key_prefix="sk_pref")
 
         # Active and not expired
         assert api_key.is_valid() is True
@@ -394,9 +390,7 @@ class TestFeatureAccess:
 
     def test_str_representation(self):
         """Test __str__ format."""
-        feature = FeatureAccess.objects.create(
-            feature="alerts", read_access="authenticated", write_access="permission"
-        )
+        feature = FeatureAccess.objects.create(feature="alerts", read_access="authenticated", write_access="permission")
 
         # get_feature_display() returns "Alert Rules" for "alerts"
         assert "Alert Rules" in str(feature)
@@ -664,18 +658,14 @@ class TestConfigAuditLog:
     def test_str_representation(self):
         """Test __str__ format."""
         user = User.objects.create_user(username=unique_name("loguser"), password="pass")
-        log = ConfigAuditLog.objects.create(
-            config_key="log.key", old_value="a", new_value="b", changed_by=user
-        )
+        log = ConfigAuditLog.objects.create(config_key="log.key", old_value="a", new_value="b", changed_by=user)
 
         assert "log.key" in str(log)
         assert "loguser" in str(log)
 
     def test_str_without_user(self):
         """Test __str__ when no user (system change)."""
-        log = ConfigAuditLog.objects.create(
-            config_key="system.key", old_value="x", new_value="y"
-        )
+        log = ConfigAuditLog.objects.create(config_key="system.key", old_value="x", new_value="y")
 
         assert "system.key" in str(log)
         assert "system" in str(log).lower()
@@ -1520,9 +1510,7 @@ class TestAlertRule:
         rule = AlertRule.objects.create(
             name="Suppressed Rule",
             rule_type="test",
-            suppression_windows=[
-                {"day": current_day, "start": start_time, "end": end_time}
-            ],
+            suppression_windows=[{"day": current_day, "start": start_time, "end": end_time}],
         )
 
         assert rule.is_in_suppression_window() is True
@@ -1762,7 +1750,10 @@ class TestCachedGeoJSON:
             data_type="states",
             name="Washington",
             code="WA",
-            geometry={"type": "Polygon", "coordinates": [[[-124.7, 45.5], [-116.9, 45.5], [-116.9, 49.0], [-124.7, 49.0], [-124.7, 45.5]]]},
+            geometry={
+                "type": "Polygon",
+                "coordinates": [[[-124.7, 45.5], [-116.9, 45.5], [-116.9, 49.0], [-124.7, 49.0], [-124.7, 45.5]]],
+            },
         )
 
         assert geojson.data_type == "states"

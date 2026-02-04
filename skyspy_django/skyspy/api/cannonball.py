@@ -826,9 +826,7 @@ class RegistrationAnalysisViewSet(viewsets.ReadOnlyModelViewSet):
         search = self.request.query_params.get("search")
         if search:
             queryset = queryset.filter(
-                Q(icao_hex__icontains=search)
-                | Q(registration__icontains=search)
-                | Q(owner_name__icontains=search)
+                Q(icao_hex__icontains=search) | Q(registration__icontains=search) | Q(owner_name__icontains=search)
             )
 
         # Min score filter
@@ -858,7 +856,9 @@ class RegistrationAnalysisViewSet(viewsets.ReadOnlyModelViewSet):
             }
         )
 
-    @extend_schema(summary="Get high-risk unreviewed registrations", responses={200: RegistrationAnalysisListSerializer(many=True)})
+    @extend_schema(
+        summary="Get high-risk unreviewed registrations", responses={200: RegistrationAnalysisListSerializer(many=True)}
+    )
     @action(detail=False, methods=["get"])
     def high_risk(self, request):
         """Get high-risk registrations that need review."""
@@ -986,9 +986,11 @@ class CommunitySubmissionViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], permission_classes=[IsAdminUser])
     def pending(self, request):
         """Get all pending submissions for admin review."""
-        queryset = CommunitySubmission.objects.filter(status="pending").select_related(
-            "submitted_by"
-        ).order_by("-submitted_at")
+        queryset = (
+            CommunitySubmission.objects.filter(status="pending")
+            .select_related("submitted_by")
+            .order_by("-submitted_at")
+        )
 
         return Response(
             {

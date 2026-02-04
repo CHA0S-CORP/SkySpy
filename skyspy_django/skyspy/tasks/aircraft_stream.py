@@ -1241,10 +1241,7 @@ def start_aircraft_stream(self):
         worker = status.get("worker", "unknown")
         task_id = status.get("task_id", "unknown")
         source = status.get("source", "unknown")
-        logger.debug(
-            f"Aircraft stream already running on worker '{worker}' "
-            f"(task_id={task_id}, detected via {source})"
-        )
+        logger.debug(f"Aircraft stream already running on worker '{worker}' (task_id={task_id}, detected via {source})")
         return {
             "status": "already_running",
             "worker": worker,

@@ -492,7 +492,9 @@ class TemplateEngineEdgeCasesTests(TestCase):
 
     def test_render_complex_template(self):
         """Test rendering complex template."""
-        template = "Alert: {rule_name}\nAircraft {icao:upper} ({callsign|Unknown}) at {altitude:,} ft, {distance:.1f} NM away"
+        template = (
+            "Alert: {rule_name}\nAircraft {icao:upper} ({callsign|Unknown}) at {altitude:,} ft, {distance:.1f} NM away"
+        )
         context = {
             "rule_name": "Military Watch",
             "icao": "ae1234",

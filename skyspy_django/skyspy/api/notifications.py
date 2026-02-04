@@ -174,12 +174,7 @@ class NotificationChannelViewSet(viewsets.ModelViewSet):
         """Filter channels by ownership and global status."""
         from django.db.models import Count
 
-        queryset = (
-            super()
-            .get_queryset()
-            .select_related("owner")
-            .annotate(_alert_rule_count=Count("alert_rules"))
-        )
+        queryset = super().get_queryset().select_related("owner").annotate(_alert_rule_count=Count("alert_rules"))
         user = self.request.user
 
         if user.is_authenticated:

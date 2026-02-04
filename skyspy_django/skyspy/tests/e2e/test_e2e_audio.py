@@ -71,9 +71,7 @@ def completed_transmission(db):
         channel_name="SEA Tower",
         transcript="United four five six, Seattle Tower, cleared for takeoff runway one six right.",
         transcript_confidence=0.95,
-        identified_airframes=[
-            {"type": "airline", "airline": "UNITED", "raw_text": "UNITED 456", "callsign": "UAL456"}
-        ],
+        identified_airframes=[{"type": "airline", "airline": "UNITED", "raw_text": "UNITED 456", "callsign": "UAL456"}],
     )
 
 
@@ -391,7 +389,11 @@ class TestAudioFileServing:
         """Test that file serving requires a filename."""
         response = api_client.get("/api/v1/audio/file/")
         # Should return 404 or redirect
-        assert response.status_code in [status.HTTP_404_NOT_FOUND, status.HTTP_400_BAD_REQUEST, status.HTTP_301_MOVED_PERMANENTLY]
+        assert response.status_code in [
+            status.HTTP_404_NOT_FOUND,
+            status.HTTP_400_BAD_REQUEST,
+            status.HTTP_301_MOVED_PERMANENTLY,
+        ]
 
     def test_serve_nonexistent_file(self, api_client):
         """Test serving a nonexistent file returns 404."""

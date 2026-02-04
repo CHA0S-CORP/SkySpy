@@ -101,9 +101,7 @@ class AcarsMessageStatsTests(TestCase):
                 label="10",
                 text="Test message",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(hours=i)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(hours=i))
 
         # Create VDL2 messages
         for i in range(5):
@@ -113,9 +111,7 @@ class AcarsMessageStatsTests(TestCase):
                 label="H1",
                 text="VDL2 message",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(hours=i)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(hours=i))
 
         result = acars_stats.calculate_acars_message_stats(hours=24)
 
@@ -132,9 +128,7 @@ class AcarsMessageStatsTests(TestCase):
                 icao_hex=f"ABC{i:03d}",
                 label="10",  # OOOI Out
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(minutes=i)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(minutes=i))
 
         for i in range(3):
             msg = AcarsMessage.objects.create(
@@ -142,9 +136,7 @@ class AcarsMessageStatsTests(TestCase):
                 icao_hex=f"DEF{i:03d}",
                 label="H1",  # Position
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(minutes=i)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(minutes=i))
 
         result = acars_stats.calculate_acars_message_stats(hours=24)
 
@@ -164,9 +156,7 @@ class AcarsMessageStatsTests(TestCase):
                 icao_hex=f"ABC{i:03d}",
                 label="10",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(minutes=i)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(minutes=i))
 
         # Create weather messages
         for i in range(3):
@@ -175,9 +165,7 @@ class AcarsMessageStatsTests(TestCase):
                 icao_hex=f"DEF{i:03d}",
                 label="QA",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(minutes=i)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(minutes=i))
 
         result = acars_stats.calculate_acars_message_stats(hours=24)
 
@@ -195,9 +183,7 @@ class AcarsMessageStatsTests(TestCase):
                 icao_hex=f"ABC{i:03d}",
                 frequency=131.55,
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(minutes=i)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(minutes=i))
 
         for i in range(5):
             msg = AcarsMessage.objects.create(
@@ -205,9 +191,7 @@ class AcarsMessageStatsTests(TestCase):
                 icao_hex=f"DEF{i:03d}",
                 frequency=136.975,
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(minutes=i)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(minutes=i))
 
         result = acars_stats.calculate_acars_message_stats(hours=24)
 
@@ -224,9 +208,7 @@ class AcarsMessageStatsTests(TestCase):
                 icao_hex=f"ABC{i:03d}",
                 text="Message with content",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(minutes=i)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(minutes=i))
 
         # Create messages without text
         for i in range(2):
@@ -235,9 +217,7 @@ class AcarsMessageStatsTests(TestCase):
                 icao_hex=f"DEF{i:03d}",
                 text="",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(minutes=i)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(minutes=i))
 
         result = acars_stats.calculate_acars_message_stats(hours=24)
 
@@ -272,9 +252,7 @@ class AcarsAirlineStatsTests(TestCase):
                 icao_hex=f"ABC{i:03d}",
                 callsign=f"UAL{i:04d}",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(minutes=i)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(minutes=i))
 
         # Create messages with DAL callsigns
         for i in range(5):
@@ -283,9 +261,7 @@ class AcarsAirlineStatsTests(TestCase):
                 icao_hex=f"DEF{i:03d}",
                 callsign=f"DAL{i:04d}",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(minutes=i)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(minutes=i))
 
         result = acars_stats.calculate_acars_airline_stats(hours=24)
 
@@ -301,9 +277,7 @@ class AcarsAirlineStatsTests(TestCase):
                 icao_hex="ABC001",
                 callsign="UAL123",  # Same callsign
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(minutes=i)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(minutes=i))
 
         result = acars_stats.calculate_acars_airline_stats(hours=24)
 
@@ -324,9 +298,7 @@ class AcarsAirlineStatsTests(TestCase):
                     icao_hex=f"A{idx}{i:02d}",
                     callsign=f"{airline}{i:04d}",
                 )
-                AcarsMessage.objects.filter(pk=msg.pk).update(
-                    timestamp=self.now - timedelta(minutes=i + idx * 10)
-                )
+                AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(minutes=i + idx * 10))
 
         result = acars_stats.calculate_acars_airline_stats(hours=24, limit=3)
 
@@ -362,9 +334,7 @@ class AcarsTrendsTests(TestCase):
                     source="acars",
                     icao_hex=f"A{hours_back}{i:02d}",
                 )
-                AcarsMessage.objects.filter(pk=msg.pk).update(
-                    timestamp=target_timestamp
-                )
+                AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=target_timestamp)
 
         result = acars_stats.calculate_acars_trends(hours=24, interval="hour")
 
@@ -379,9 +349,7 @@ class AcarsTrendsTests(TestCase):
                 source="acars",
                 icao_hex=f"ABC{i:03d}",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(minutes=i)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(minutes=i))
 
         # Create VDL2 messages
         for i in range(5):
@@ -389,9 +357,7 @@ class AcarsTrendsTests(TestCase):
                 source="vdlm2",
                 icao_hex=f"DEF{i:03d}",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(minutes=i)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(minutes=i))
 
         result = acars_stats.calculate_acars_trends(hours=24, interval="hour")
 
@@ -408,9 +374,7 @@ class AcarsTrendsTests(TestCase):
                 source="acars",
                 icao_hex=f"ABC{i:03d}",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now)
 
         # Create fewer messages earlier
         for i in range(5):
@@ -418,9 +382,7 @@ class AcarsTrendsTests(TestCase):
                 source="acars",
                 icao_hex=f"DEF{i:03d}",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(hours=5)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(hours=5))
 
         result = acars_stats.calculate_acars_trends(hours=24, interval="hour")
 
@@ -436,9 +398,7 @@ class AcarsTrendsTests(TestCase):
                 source="acars",
                 icao_hex=f"ABC{i:03d}",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=base_time
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=base_time)
 
         result = acars_stats.calculate_acars_trends(hours=24)
 
@@ -454,9 +414,7 @@ class AcarsTrendsTests(TestCase):
                 source="acars",
                 icao_hex=f"P14{i:03d}",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=base_time_14
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=base_time_14)
 
         # Create messages at hour 3
         base_time_3 = self.now.replace(hour=3, minute=0, second=0, microsecond=0)
@@ -465,9 +423,7 @@ class AcarsTrendsTests(TestCase):
                 source="acars",
                 icao_hex=f"P03{i:03d}",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=base_time_3
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=base_time_3)
 
         result = acars_stats.calculate_acars_trends(hours=24)
 
@@ -504,9 +460,7 @@ class AcarsCategoryTrendsTests(TestCase):
                 icao_hex=f"OOO{i:03d}",
                 label="10",  # OOOI
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=base_time
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=base_time)
 
         # Create weather messages
         for i in range(3):
@@ -515,9 +469,7 @@ class AcarsCategoryTrendsTests(TestCase):
                 icao_hex=f"WEA{i:03d}",
                 label="QA",  # Weather
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=base_time
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=base_time)
 
         result = acars_stats.calculate_acars_category_trends(hours=24)
 
@@ -645,9 +597,7 @@ class AcarsSummaryStatsTests(TestCase):
                 callsign=f"UAL{i:04d}",
                 label="10",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(minutes=i * 3)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(minutes=i * 3))
 
         result = acars_stats.get_acars_summary_stats(hours=24)
 
@@ -666,9 +616,7 @@ class AcarsSummaryStatsTests(TestCase):
                 icao_hex=f"ABC{i:03d}",
             )
             # Update timestamp directly to bypass auto_now_add
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(minutes=i * 5)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(minutes=i * 5))
 
         # Create messages from 2 hours ago
         for i in range(5):
@@ -676,9 +624,7 @@ class AcarsSummaryStatsTests(TestCase):
                 source="acars",
                 icao_hex=f"DEF{i:03d}",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(hours=2)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(hours=2))
 
         result = acars_stats.get_acars_summary_stats(hours=24)
 
@@ -693,9 +639,7 @@ class AcarsSummaryStatsTests(TestCase):
                 icao_hex=f"ABC{i:03d}",
                 label="10",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(minutes=i)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(minutes=i))
 
         # Create messages with label H1
         for i in range(5):
@@ -704,9 +648,7 @@ class AcarsSummaryStatsTests(TestCase):
                 icao_hex=f"DEF{i:03d}",
                 label="H1",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(minutes=i)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(minutes=i))
 
         result = acars_stats.get_acars_summary_stats(hours=24)
 
@@ -866,9 +808,7 @@ class EdgeCaseTests(TestCase):
                 source="acars",
                 icao_hex=f"ABC{i:03d}",
             )
-            AcarsMessage.objects.filter(pk=msg.pk).update(
-                timestamp=self.now - timedelta(hours=i)
-            )
+            AcarsMessage.objects.filter(pk=msg.pk).update(timestamp=self.now - timedelta(hours=i))
 
         result = acars_stats.get_acars_summary_stats(hours=24)
 

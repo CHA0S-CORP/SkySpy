@@ -63,11 +63,15 @@ class TestWebSocketConnectionLoad:
                     }
 
                 metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": True,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": True,
+                            "error": None,
+                        },
+                    )()
                 )
 
         metrics.finalize()
@@ -119,11 +123,15 @@ class TestWebSocketConnectionLoad:
                 for future in as_completed(futures):
                     duration_ms = future.result()
                     metrics.record(
-                        type("Result", (), {
-                            "duration_ms": duration_ms,
-                            "success": True,
-                            "error": None,
-                        })()
+                        type(
+                            "Result",
+                            (),
+                            {
+                                "duration_ms": duration_ms,
+                                "success": True,
+                                "error": None,
+                            },
+                        )()
                     )
 
         metrics.finalize()
@@ -164,11 +172,15 @@ class TestWebSocketConnectionLoad:
                 del active_connections[sid]
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -216,11 +228,15 @@ class TestWebSocketBroadcastLoad:
                         pass
 
                 metrics.record(
-                    type("Result", (), {
-                        "duration_ms": timer["duration_ms"],
-                        "success": True,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": timer["duration_ms"],
+                            "success": True,
+                            "error": None,
+                        },
+                    )()
                 )
 
         metrics.finalize()
@@ -248,11 +264,15 @@ class TestWebSocketBroadcastLoad:
                     delivered_count += 1
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -278,6 +298,7 @@ class TestWebSocketBroadcastLoad:
             with timed_operation() as timer:
                 # Simulate serialization of large payload
                 import json
+
                 payload = json.dumps(aircraft_data)
                 payload_size_kb = len(payload) / 1024
 
@@ -286,11 +307,15 @@ class TestWebSocketBroadcastLoad:
                     pass  # Would send payload
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -332,11 +357,15 @@ class TestWebSocketSubscriptionChurn:
                 rooms[room].add(sid)
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -368,11 +397,15 @@ class TestWebSocketSubscriptionChurn:
                     rooms[room].discard(sid)
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -405,11 +438,15 @@ class TestWebSocketSubscriptionChurn:
                     rooms[room].discard(sid)
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()
@@ -456,8 +493,7 @@ class TestWebSocketMemoryUsage:
         # Simulate some message history per connection
         for sid in connections:
             connections[sid]["recent_messages"] = [
-                {"event": "aircraft:update", "size": 1024, "time": time.time()}
-                for _ in range(10)
+                {"event": "aircraft:update", "size": 1024, "time": time.time()} for _ in range(10)
             ]
 
         # Check memory footprint
@@ -559,11 +595,15 @@ class TestWebSocketReconnection:
             for future in as_completed(futures):
                 duration_ms = future.result()
                 metrics.record(
-                    type("Result", (), {
-                        "duration_ms": duration_ms,
-                        "success": True,
-                        "error": None,
-                    })()
+                    type(
+                        "Result",
+                        (),
+                        {
+                            "duration_ms": duration_ms,
+                            "success": True,
+                            "error": None,
+                        },
+                    )()
                 )
 
         metrics.finalize()
@@ -602,11 +642,15 @@ class TestWebSocketReconnection:
                     rooms[room].add(new_sid)
 
             metrics.record(
-                type("Result", (), {
-                    "duration_ms": timer["duration_ms"],
-                    "success": True,
-                    "error": None,
-                })()
+                type(
+                    "Result",
+                    (),
+                    {
+                        "duration_ms": timer["duration_ms"],
+                        "success": True,
+                        "error": None,
+                    },
+                )()
             )
 
         metrics.finalize()

@@ -183,10 +183,11 @@ export const HeatMapLayer = memo(function HeatMapLayer({
 
         {/* Time period selector */}
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '4px', color: dimTextColor }}>
+          <label htmlFor="heatmap-time-period" style={{ display: 'block', marginBottom: '4px', color: dimTextColor }}>
             Time Period
           </label>
           <select
+            id="heatmap-time-period"
             value={timePeriod}
             onChange={(e) => setTimePeriod(e.target.value)}
             style={{
@@ -211,10 +212,11 @@ export const HeatMapLayer = memo(function HeatMapLayer({
 
         {/* Grid resolution selector */}
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '4px', color: dimTextColor }}>
+          <label htmlFor="heatmap-resolution" style={{ display: 'block', marginBottom: '4px', color: dimTextColor }}>
             Resolution
           </label>
           <select
+            id="heatmap-resolution"
             value={gridSize}
             onChange={(e) => setGridSize(parseInt(e.target.value, 10))}
             style={{

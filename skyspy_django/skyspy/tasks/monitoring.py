@@ -34,7 +34,9 @@ def update_queue_metrics():
     try:
         import redis
 
-        redis_url = getattr(settings, "CELERY_BROKER_URL", None) or getattr(settings, "REDIS_URL", "redis://redis:6379/0")
+        redis_url = getattr(settings, "CELERY_BROKER_URL", None) or getattr(
+            settings, "REDIS_URL", "redis://redis:6379/0"
+        )
         r = redis.from_url(redis_url)
 
         # All configured Celery queues
@@ -191,8 +193,7 @@ def collect_worker_stats():
         worker_count = len(worker_stats)
 
         logger.debug(
-            f"Worker stats collected: {worker_count} workers, "
-            f"{total_active} active tasks, {total_reserved} reserved"
+            f"Worker stats collected: {worker_count} workers, {total_active} active tasks, {total_reserved} reserved"
         )
 
         return {
