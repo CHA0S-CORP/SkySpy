@@ -48,18 +48,9 @@ const alertDialogContentVariants = cva(
   {
     variants: {
       variant: {
-        default: [
-          'border-border',
-          'focus-visible:ring-accent-cyan/50',
-        ],
-        danger: [
-          'border-accent-red/30',
-          'focus-visible:ring-accent-red/50',
-        ],
-        warning: [
-          'border-accent-yellow/30',
-          'focus-visible:ring-accent-yellow/50',
-        ],
+        default: ['border-border', 'focus-visible:ring-accent-cyan/50'],
+        danger: ['border-accent-red/30', 'focus-visible:ring-accent-red/50'],
+        warning: ['border-accent-yellow/30', 'focus-visible:ring-accent-yellow/50'],
       },
     },
     defaultVariants: {
@@ -117,14 +108,20 @@ const AlertDialogTitle = forwardRef(function AlertDialogTitle({ className, ...pr
   return (
     <AlertDialogPrimitive.Title
       ref={ref}
-      className={cn('text-lg font-semibold text-text-primary leading-none tracking-tight', className)}
+      className={cn(
+        'text-lg font-semibold text-text-primary leading-none tracking-tight',
+        className
+      )}
       {...props}
     />
   );
 });
 AlertDialogTitle.displayName = 'AlertDialogTitle';
 
-const AlertDialogDescription = forwardRef(function AlertDialogDescription({ className, ...props }, ref) {
+const AlertDialogDescription = forwardRef(function AlertDialogDescription(
+  { className, ...props },
+  ref
+) {
   return (
     <AlertDialogPrimitive.Description
       ref={ref}

@@ -91,7 +91,12 @@ export const QUICK_FILTER_PRESETS = [
       const lePrefixes = ['N1', 'N2', 'CBP', 'ICE', 'FBI', 'DEA', 'ATF', 'DHS', 'USCG'];
       if (govPrefixes.some((p) => flight.startsWith(p))) return true;
       if (lePrefixes.some((p) => flight.startsWith(p))) return true;
-      if (operator.includes('government') || operator.includes('police') || operator.includes('sheriff')) return true;
+      if (
+        operator.includes('government') ||
+        operator.includes('police') ||
+        operator.includes('sheriff')
+      )
+        return true;
       // Check special registration patterns
       const registration = (ac.registration || ac.r || '').toUpperCase();
       // US government registrations often start with certain patterns
@@ -126,7 +131,12 @@ export const QUICK_FILTER_PRESETS = [
       // Also check type - jets typically have J in the engine type
       const type = (ac.type || ac.t || '').toUpperCase();
       // Check for common jet type codes
-      if (type.match(/^(A3[0-9]{2}|A220|B7[0-9]{2}|B73|B74|B75|B76|B77|B78|B78X|E[0-9]{3}|CRJ|ERJ|C[0-9]{3}|G[0-9]{3}|GL)/)) return true;
+      if (
+        type.match(
+          /^(A3[0-9]{2}|A220|B7[0-9]{2}|B73|B74|B75|B76|B77|B78|B78X|E[0-9]{3}|CRJ|ERJ|C[0-9]{3}|G[0-9]{3}|GL)/
+        )
+      )
+        return true;
       return false;
     },
     description: 'Show jets only (filter out props/turboprops)',

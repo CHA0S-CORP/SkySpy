@@ -20,7 +20,9 @@ const SEVERITY_ICONS = {
 function SeveritySelector({ value, onChange }) {
   return (
     <div className="form-group">
-      <span id="severity-label" className="form-label">Priority</span>
+      <span id="severity-label" className="form-label">
+        Priority
+      </span>
       <div className="severity-options" role="radiogroup" aria-labelledby="severity-label">
         {Object.entries(SEVERITY_CONFIG).map(([key, config]) => {
           const { label, iconName, color } = config;
@@ -375,7 +377,9 @@ export function RuleForm({
 
           {/* Conditions Builder */}
           <div className="form-group">
-            <span id="conditions-label" className="form-label">Conditions *</span>
+            <span id="conditions-label" className="form-label">
+              Conditions *
+            </span>
             <ConditionBuilder
               aria-labelledby="conditions-label"
               conditions={form.conditions}

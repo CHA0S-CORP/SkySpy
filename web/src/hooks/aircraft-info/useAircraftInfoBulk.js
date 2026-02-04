@@ -85,9 +85,7 @@ export function useAircraftInfoBulk({
           fetchSingle?.(icao);
         }
         // Remove completed timeout from array
-        staggeredTimeoutIds.current = staggeredTimeoutIds.current.filter(
-          (id) => id !== timeoutId
-        );
+        staggeredTimeoutIds.current = staggeredTimeoutIds.current.filter((id) => id !== timeoutId);
       }, i * staggerMs);
 
       staggeredTimeoutIds.current.push(timeoutId);

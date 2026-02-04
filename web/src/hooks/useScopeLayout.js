@@ -4,19 +4,17 @@ import { useState, useCallback, useEffect } from 'react';
  * Default scope configurations for different layout modes
  */
 const DEFAULT_SCOPE_CONFIGS = {
-  single: [
-    { id: 1, center: null, range: 50, panOffset: { x: 0, y: 0 } }
-  ],
+  single: [{ id: 1, center: null, range: 50, panOffset: { x: 0, y: 0 } }],
   'split-2': [
     { id: 1, center: null, range: 50, panOffset: { x: 0, y: 0 } },
-    { id: 2, center: null, range: 150, panOffset: { x: 0, y: 0 } }
+    { id: 2, center: null, range: 150, panOffset: { x: 0, y: 0 } },
   ],
   'split-4': [
     { id: 1, center: null, range: 25, panOffset: { x: 0, y: 0 } },
     { id: 2, center: null, range: 50, panOffset: { x: 0, y: 0 } },
     { id: 3, center: null, range: 100, panOffset: { x: 0, y: 0 } },
-    { id: 4, center: null, range: 250, panOffset: { x: 0, y: 0 } }
-  ]
+    { id: 4, center: null, range: 250, panOffset: { x: 0, y: 0 } },
+  ],
 };
 
 /**
@@ -34,10 +32,7 @@ const DEFAULT_SCOPE_CONFIGS = {
  * @returns {Object} Scope layout state and controls
  */
 export function useScopeLayout(options = {}) {
-  const {
-    initialLayout = 'single',
-    persistToStorage = true
-  } = options;
+  const { initialLayout = 'single', persistToStorage = true } = options;
 
   // Load initial state from localStorage if persisting
   const [layout, setLayout] = useState(() => {
@@ -61,11 +56,16 @@ export function useScopeLayout(options = {}) {
         if (saved) {
           const parsed = JSON.parse(saved);
           // Validate structure
-          if (Array.isArray(parsed) && parsed.every(s =>
-            typeof s.id === 'number' &&
-            typeof s.range === 'number' &&
-            s.panOffset && typeof s.panOffset.x === 'number'
-          )) {
+          if (
+            Array.isArray(parsed) &&
+            parsed.every(
+              (s) =>
+                typeof s.id === 'number' &&
+                typeof s.range === 'number' &&
+                s.panOffset &&
+                typeof s.panOffset.x === 'number'
+            )
+          ) {
             return parsed;
           }
         }
@@ -127,38 +127,45 @@ export function useScopeLayout(options = {}) {
    * Update a specific scope's configuration
    */
   const updateScope = useCallback((id, updates) => {
-    setScopes(prev => prev.map(s =>
-      s.id === id ? { ...s, ...updates } : s
-    ));
+    setScopes((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
   }, []);
 
   /**
    * Update the range for a specific scope
    */
-  const setScopeRange = useCallback((id, range) => {
-    updateScope(id, { range: Math.max(5, Math.min(500, range)) });
-  }, [updateScope]);
+  const setScopeRange = useCallback(
+    (id, range) => {
+      updateScope(id, { range: Math.max(5, Math.min(500, range)) });
+    },
+    [updateScope]
+  );
 
   /**
    * Update the pan offset for a specific scope
    */
-  const setScopePanOffset = useCallback((id, panOffset) => {
-    updateScope(id, { panOffset });
-  }, [updateScope]);
+  const setScopePanOffset = useCallback(
+    (id, panOffset) => {
+      updateScope(id, { panOffset });
+    },
+    [updateScope]
+  );
 
   /**
    * Reset a scope to default (center at feeder, default range)
    */
-  const resetScope = useCallback((id) => {
-    const defaultConfig = DEFAULT_SCOPE_CONFIGS[layout]?.find(s => s.id === id);
-    if (defaultConfig) {
-      updateScope(id, {
-        center: null,
-        panOffset: { x: 0, y: 0 },
-        range: defaultConfig.range
-      });
-    }
-  }, [layout, updateScope]);
+  const resetScope = useCallback(
+    (id) => {
+      const defaultConfig = DEFAULT_SCOPE_CONFIGS[layout]?.find((s) => s.id === id);
+      if (defaultConfig) {
+        updateScope(id, {
+          center: null,
+          panOffset: { x: 0, y: 0 },
+          range: defaultConfig.range,
+        });
+      }
+    },
+    [layout, updateScope]
+  );
 
   /**
    * Reset all scopes to defaults
@@ -182,10 +189,10 @@ export function useScopeLayout(options = {}) {
     const newScopes = DEFAULT_SCOPE_CONFIGS[mode];
 
     // Try to preserve existing scope settings where possible
-    setScopes(prev => {
-      return newScopes.map(newScope => {
+    setScopes((prev) => {
+      return newScopes.map((newScope) => {
         // Try to find existing scope with same id
-        const existing = prev.find(s => s.id === newScope.id);
+        const existing = prev.find((s) => s.id === newScope.id);
         if (existing) {
           // Preserve pan offset and custom center, but may need to adjust range
           return {
@@ -193,7 +200,7 @@ export function useScopeLayout(options = {}) {
             panOffset: existing.panOffset,
             center: existing.center,
             // Use existing range if reasonable, otherwise use default
-            range: existing.range || newScope.range
+            range: existing.range || newScope.range,
           };
         }
         return newScope;
@@ -202,7 +209,7 @@ export function useScopeLayout(options = {}) {
 
     // Ensure active scope is valid for new layout
     const maxScopeId = newScopes.length;
-    setActiveScope(prev => prev > maxScopeId ? 1 : prev);
+    setActiveScope((prev) => (prev > maxScopeId ? 1 : prev));
   }, []);
 
   /**
@@ -215,9 +222,12 @@ export function useScopeLayout(options = {}) {
   /**
    * Get the configuration for a specific scope
    */
-  const getScope = useCallback((id) => {
-    return scopes.find(s => s.id === id) || scopes[0];
-  }, [scopes]);
+  const getScope = useCallback(
+    (id) => {
+      return scopes.find((s) => s.id === id) || scopes[0];
+    },
+    [scopes]
+  );
 
   /**
    * Get the active scope configuration
@@ -293,7 +303,7 @@ export function useScopeLayout(options = {}) {
 
     // Constants
     LAYOUT_MODES: ['single', 'split-2', 'split-4'],
-    DEFAULT_CONFIGS: DEFAULT_SCOPE_CONFIGS
+    DEFAULT_CONFIGS: DEFAULT_SCOPE_CONFIGS,
   };
 }
 

@@ -68,12 +68,7 @@ export function ProSearchBar({
   const [selectedIndex, setSelectedIndex] = useState(-1);
 
   // Search history hook
-  const {
-    recentSearches,
-    addSearch,
-    removeSearch,
-    clearHistory,
-  } = useSearchHistory();
+  const { recentSearches, addSearch, removeSearch, clearHistory } = useSearchHistory();
 
   // Search results
   const searchResults = useMemo(() => {
@@ -93,7 +88,7 @@ export function ProSearchBar({
   useEffect(() => {
     if (setHighlightedHexes) {
       if (searchQuery && searchQuery.trim() && searchResults.length > 0) {
-        const hexes = searchResults.map(ac => ac.hex).filter(Boolean);
+        const hexes = searchResults.map((ac) => ac.hex).filter(Boolean);
         setHighlightedHexes(hexes);
       } else {
         setHighlightedHexes([]);
@@ -102,81 +97,86 @@ export function ProSearchBar({
   }, [searchResults, searchQuery, setHighlightedHexes]);
 
   // Handle keyboard navigation
-  const handleKeyDown = useCallback((e) => {
-    if (!isDropdownOpen) {
-      if (e.key === 'ArrowDown' || e.key === 'Enter') {
-        setIsDropdownOpen(true);
-        setSelectedIndex(0);
-        e.preventDefault();
-      }
-      return;
-    }
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setSelectedIndex(prev =>
-          prev < navigationItems.length - 1 ? prev + 1 : 0
-        );
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setSelectedIndex(prev =>
-          prev > 0 ? prev - 1 : navigationItems.length - 1
-        );
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (selectedIndex >= 0 && selectedIndex < navigationItems.length) {
-          const item = navigationItems[selectedIndex];
-          if (searchQuery && searchQuery.trim()) {
-            // Select search result
-            handleSelectResult(item);
-          } else {
-            // Select from history
-            handleSelectRecent(item.query);
-          }
+  const handleKeyDown = useCallback(
+    (e) => {
+      if (!isDropdownOpen) {
+        if (e.key === 'ArrowDown' || e.key === 'Enter') {
+          setIsDropdownOpen(true);
+          setSelectedIndex(0);
+          e.preventDefault();
         }
-        break;
-      case 'Escape':
-        e.preventDefault();
-        setIsDropdownOpen(false);
-        setSelectedIndex(-1);
-        inputRef.current?.blur();
-        break;
-      case 'Tab':
-        setIsDropdownOpen(false);
-        setSelectedIndex(-1);
-        break;
-      default:
-        break;
-    }
-  }, [isDropdownOpen, navigationItems, selectedIndex, searchQuery]);
+        return;
+      }
+
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          setSelectedIndex((prev) => (prev < navigationItems.length - 1 ? prev + 1 : 0));
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setSelectedIndex((prev) => (prev > 0 ? prev - 1 : navigationItems.length - 1));
+          break;
+        case 'Enter':
+          e.preventDefault();
+          if (selectedIndex >= 0 && selectedIndex < navigationItems.length) {
+            const item = navigationItems[selectedIndex];
+            if (searchQuery && searchQuery.trim()) {
+              // Select search result
+              handleSelectResult(item);
+            } else {
+              // Select from history
+              handleSelectRecent(item.query);
+            }
+          }
+          break;
+        case 'Escape':
+          e.preventDefault();
+          setIsDropdownOpen(false);
+          setSelectedIndex(-1);
+          inputRef.current?.blur();
+          break;
+        case 'Tab':
+          setIsDropdownOpen(false);
+          setSelectedIndex(-1);
+          break;
+        default:
+          break;
+      }
+    },
+    [isDropdownOpen, navigationItems, selectedIndex, searchQuery]
+  );
 
   // Handle selecting a search result
-  const handleSelectResult = useCallback((ac) => {
-    if (!ac) return;
+  const handleSelectResult = useCallback(
+    (ac) => {
+      if (!ac) return;
 
-    // Add to search history
-    addSearch(searchQuery, ac);
+      // Add to search history
+      addSearch(searchQuery, ac);
 
-    // Notify parent to select aircraft
-    if (onSelectAircraft) {
-      onSelectAircraft(ac);
-    }
+      // Notify parent to select aircraft
+      if (onSelectAircraft) {
+        onSelectAircraft(ac);
+      }
 
-    // Clear search and close dropdown
-    setSearchQuery('');
-    setIsDropdownOpen(false);
-    setSelectedIndex(-1);
-  }, [searchQuery, addSearch, onSelectAircraft, setSearchQuery]);
+      // Clear search and close dropdown
+      setSearchQuery('');
+      setIsDropdownOpen(false);
+      setSelectedIndex(-1);
+    },
+    [searchQuery, addSearch, onSelectAircraft, setSearchQuery]
+  );
 
   // Handle selecting from recent searches
-  const handleSelectRecent = useCallback((query) => {
-    setSearchQuery(query);
-    setSelectedIndex(-1);
-    // Keep dropdown open to show results
-  }, [setSearchQuery]);
+  const handleSelectRecent = useCallback(
+    (query) => {
+      setSearchQuery(query);
+      setSelectedIndex(-1);
+      // Keep dropdown open to show results
+    },
+    [setSearchQuery]
+  );
 
   // Handle input focus
   const handleFocus = useCallback(() => {
@@ -185,13 +185,16 @@ export function ProSearchBar({
   }, []);
 
   // Handle input change
-  const handleChange = useCallback((e) => {
-    setSearchQuery(e.target.value);
-    setSelectedIndex(-1);
-    if (!isDropdownOpen) {
-      setIsDropdownOpen(true);
-    }
-  }, [setSearchQuery, isDropdownOpen]);
+  const handleChange = useCallback(
+    (e) => {
+      setSearchQuery(e.target.value);
+      setSelectedIndex(-1);
+      if (!isDropdownOpen) {
+        setIsDropdownOpen(true);
+      }
+    },
+    [setSearchQuery, isDropdownOpen]
+  );
 
   // Handle closing dropdown
   const handleCloseDropdown = useCallback(() => {
@@ -352,7 +355,11 @@ export function ProSearchBar({
         </button>
         {showShortTracks && (
           /* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events */
-          <fieldset className="pro-track-length-slider" onClick={(e) => e.stopPropagation()} aria-label="Track length slider">
+          <fieldset
+            className="pro-track-length-slider"
+            onClick={(e) => e.stopPropagation()}
+            aria-label="Track length slider"
+          >
             <input
               type="range"
               min="5"

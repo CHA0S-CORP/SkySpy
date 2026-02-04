@@ -58,8 +58,7 @@ export function CommunicationsSection({
       items = items.filter((c) => {
         if (c.type === 'radio') {
           return (
-            c.transcript?.toLowerCase().includes(query) ||
-            c.frequency?.toString().includes(query)
+            c.transcript?.toLowerCase().includes(query) || c.frequency?.toString().includes(query)
           );
         } else {
           return (
@@ -104,9 +103,7 @@ export function CommunicationsSection({
           {item.transcript && (
             <button
               className="comm-expand-btn"
-              onClick={() =>
-                setRadioExpandedTranscript?.(isTranscriptExpanded ? null : item.id)
-              }
+              onClick={() => setRadioExpandedTranscript?.(isTranscriptExpanded ? null : item.id)}
               aria-expanded={isTranscriptExpanded}
             >
               {isTranscriptExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -182,19 +179,24 @@ export function CommunicationsSection({
 
         {/* Preview */}
         {!isExpanded && item.message && (
-          <p className="comm-preview">{item.message.slice(0, 100)}{item.message.length > 100 ? '...' : ''}</p>
+          <p className="comm-preview">
+            {item.message.slice(0, 100)}
+            {item.message.length > 100 ? '...' : ''}
+          </p>
         )}
 
         {/* Full message */}
         {isExpanded && (
           <div className="comm-acars-full">
-            {item.message && (
-              <pre className="comm-acars-message">{item.message}</pre>
-            )}
+            {item.message && <pre className="comm-acars-message">{item.message}</pre>}
             {item.decoded && (
               <div className="comm-acars-decoded">
                 <span className="comm-acars-decoded-label">Decoded:</span>
-                <pre>{typeof item.decoded === 'string' ? item.decoded : JSON.stringify(item.decoded, null, 2)}</pre>
+                <pre>
+                  {typeof item.decoded === 'string'
+                    ? item.decoded
+                    : JSON.stringify(item.decoded, null, 2)}
+                </pre>
               </div>
             )}
           </div>

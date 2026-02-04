@@ -53,7 +53,7 @@ export function HeatmapCalendar({
       if (dayIndex < 0 || dayIndex >= days) return;
 
       const hour = date.getHours();
-      const value = countField ? (item[countField] || 1) : 1;
+      const value = countField ? item[countField] || 1 : 1;
       mat[dayIndex][hour] += value;
     });
 
@@ -91,7 +91,9 @@ export function HeatmapCalendar({
     if (count === 0) return 'var(--bg-hover)';
     const normalized = count / maxCount;
     const scale = colorScales[colorScale] || colorScales.cyan;
-    const thresholds = Object.keys(scale).map(Number).sort((a, b) => a - b);
+    const thresholds = Object.keys(scale)
+      .map(Number)
+      .sort((a, b) => a - b);
 
     for (let i = thresholds.length - 1; i >= 0; i--) {
       if (normalized >= thresholds[i]) {
@@ -169,7 +171,9 @@ export function HeatmapCalendar({
                 role="button"
                 tabIndex={0}
                 onClick={() => onCellClick?.({ day: dayIndex, hour: hourIndex, count })}
-                onKeyDown={(e) => e.key === 'Enter' && onCellClick?.({ day: dayIndex, hour: hourIndex, count })}
+                onKeyDown={(e) =>
+                  e.key === 'Enter' && onCellClick?.({ day: dayIndex, hour: hourIndex, count })
+                }
                 title={`${dayLabels[dayIndex]} ${hourIndex}:00 - ${count} events`}
                 style={{
                   width: cellSize,

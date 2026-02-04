@@ -146,7 +146,12 @@ describe('SafetyTab', () => {
     });
 
     it('should render plural count for multiple events', () => {
-      render(<SafetyTab {...defaultProps} safetyEvents={[mockSafetyEvent, { ...mockSafetyEvent, id: 2 }]} />);
+      render(
+        <SafetyTab
+          {...defaultProps}
+          safetyEvents={[mockSafetyEvent, { ...mockSafetyEvent, id: 2 }]}
+        />
+      );
 
       expect(screen.getByText(/2 safety events/)).toBeInTheDocument();
     });
@@ -399,7 +404,9 @@ describe('SafetyTab', () => {
 
   describe('severity styling', () => {
     it('should apply correct class for warning severity', () => {
-      const { container } = render(<SafetyTab {...defaultProps} safetyEvents={[mockSafetyEvent]} />);
+      const { container } = render(
+        <SafetyTab {...defaultProps} safetyEvents={[mockSafetyEvent]} />
+      );
 
       expect(container.querySelector('.severity-warning')).toBeInTheDocument();
     });

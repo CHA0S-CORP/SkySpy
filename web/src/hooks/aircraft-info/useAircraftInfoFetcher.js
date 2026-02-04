@@ -142,10 +142,7 @@ export function useAircraftInfoFetcher({
       const toFetch = icaos
         .map((i) => i.toUpperCase())
         .filter(
-          (icao) =>
-            !icao.startsWith('~') &&
-            !getCached?.(icao) &&
-            !pendingFetches.current.has(icao)
+          (icao) => !icao.startsWith('~') && !getCached?.(icao) && !pendingFetches.current.has(icao)
         );
 
       if (toFetch.length === 0) return {};

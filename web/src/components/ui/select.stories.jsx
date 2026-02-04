@@ -336,7 +336,12 @@ export const FormIntegration = {
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label htmlFor="condition-type-select" className="text-sm font-medium text-text-primary">Condition Type</label>
+            <label
+              htmlFor="condition-type-select"
+              className="text-sm font-medium text-text-primary"
+            >
+              Condition Type
+            </label>
             <Select
               value={formData.conditionType}
               onValueChange={(value) => setFormData({ ...formData, conditionType: value })}
@@ -354,7 +359,9 @@ export const FormIntegration = {
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="operator-select" className="text-sm font-medium text-text-primary">Operator</label>
+            <label htmlFor="operator-select" className="text-sm font-medium text-text-primary">
+              Operator
+            </label>
             <Select
               value={formData.operator}
               onValueChange={(value) => setFormData({ ...formData, operator: value })}
@@ -373,7 +380,9 @@ export const FormIntegration = {
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="priority-select" className="text-sm font-medium text-text-primary">Priority Level</label>
+          <label htmlFor="priority-select" className="text-sm font-medium text-text-primary">
+            Priority Level
+          </label>
           <Select
             value={formData.priority}
             onValueChange={(value) => setFormData({ ...formData, priority: value })}

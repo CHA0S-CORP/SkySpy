@@ -192,9 +192,15 @@ export function getSeparationStatus(actual, required) {
 
   // Overall status is the worst of the two
   let overallStatus = SEPARATION_STATUS.ADEQUATE;
-  if (lateralStatus === SEPARATION_STATUS.VIOLATION || verticalStatus === SEPARATION_STATUS.VIOLATION) {
+  if (
+    lateralStatus === SEPARATION_STATUS.VIOLATION ||
+    verticalStatus === SEPARATION_STATUS.VIOLATION
+  ) {
     overallStatus = SEPARATION_STATUS.VIOLATION;
-  } else if (lateralStatus === SEPARATION_STATUS.MARGINAL || verticalStatus === SEPARATION_STATUS.MARGINAL) {
+  } else if (
+    lateralStatus === SEPARATION_STATUS.MARGINAL ||
+    verticalStatus === SEPARATION_STATUS.MARGINAL
+  ) {
     overallStatus = SEPARATION_STATUS.MARGINAL;
   }
 
@@ -277,10 +283,9 @@ export function checkSeparation(aircraft1, aircraft2, options = {}) {
   // Calculate bearing between aircraft
   const dLon = aircraft2.lon - aircraft1.lon;
   const dLat = aircraft2.lat - aircraft1.lat;
-  const bearing = ((Math.atan2(
-    dLon * Math.cos((aircraft1.lat * Math.PI) / 180),
-    dLat
-  ) * 180) / Math.PI + 360) % 360;
+  const bearing =
+    ((Math.atan2(dLon * Math.cos((aircraft1.lat * Math.PI) / 180), dLat) * 180) / Math.PI + 360) %
+    360;
 
   return {
     aircraft1: {

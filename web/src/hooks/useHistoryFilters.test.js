@@ -30,11 +30,67 @@ const EXPECTED_DEFAULT_FILTERS = {
 
 describe('useHistoryFilters', () => {
   const sampleSessions = [
-    { icao_hex: 'A12345', callsign: 'UAL123', type: 'A320', tail_number: 'N12345', is_military: false, safety_event_count: 0, min_distance_nm: 50, max_alt: 35000, duration_min: 45, max_rssi: -8 },
-    { icao_hex: 'B67890', callsign: 'MIL001', type: 'F16', tail_number: 'AF001', is_military: true, safety_event_count: 0, min_distance_nm: 100, max_alt: 40000, duration_min: 30, max_rssi: -15 },
-    { icao_hex: 'C11111', callsign: 'N456AB', type: 'C172', tail_number: 'N456AB', is_military: false, safety_event_count: 2, min_distance_nm: 25, max_alt: 5000, duration_min: 120, max_rssi: -5, squawk: '7700' },
-    { icao_hex: 'D22222', callsign: 'DAL789', type: 'B738', tail_number: 'N789DA', is_military: false, safety_event_count: 0, min_distance_nm: 150, max_alt: 38000, duration_min: 60, max_rssi: -12 },
-    { icao_hex: 'E33333', callsign: null, type: 'UNKNOWN', tail_number: null, is_military: false, safety_event_count: 0, min_distance_nm: 200, max_alt: 30000, duration_min: 15, max_rssi: -20 },
+    {
+      icao_hex: 'A12345',
+      callsign: 'UAL123',
+      type: 'A320',
+      tail_number: 'N12345',
+      is_military: false,
+      safety_event_count: 0,
+      min_distance_nm: 50,
+      max_alt: 35000,
+      duration_min: 45,
+      max_rssi: -8,
+    },
+    {
+      icao_hex: 'B67890',
+      callsign: 'MIL001',
+      type: 'F16',
+      tail_number: 'AF001',
+      is_military: true,
+      safety_event_count: 0,
+      min_distance_nm: 100,
+      max_alt: 40000,
+      duration_min: 30,
+      max_rssi: -15,
+    },
+    {
+      icao_hex: 'C11111',
+      callsign: 'N456AB',
+      type: 'C172',
+      tail_number: 'N456AB',
+      is_military: false,
+      safety_event_count: 2,
+      min_distance_nm: 25,
+      max_alt: 5000,
+      duration_min: 120,
+      max_rssi: -5,
+      squawk: '7700',
+    },
+    {
+      icao_hex: 'D22222',
+      callsign: 'DAL789',
+      type: 'B738',
+      tail_number: 'N789DA',
+      is_military: false,
+      safety_event_count: 0,
+      min_distance_nm: 150,
+      max_alt: 38000,
+      duration_min: 60,
+      max_rssi: -12,
+    },
+    {
+      icao_hex: 'E33333',
+      callsign: null,
+      type: 'UNKNOWN',
+      tail_number: null,
+      is_military: false,
+      safety_event_count: 0,
+      min_distance_nm: 200,
+      max_alt: 30000,
+      duration_min: 15,
+      max_rssi: -20,
+    },
   ];
 
   describe('initialization', () => {
@@ -68,9 +124,7 @@ describe('useHistoryFilters', () => {
 
     it('should update URL hash params when setHashParams provided', () => {
       const setHashParams = vi.fn();
-      const { result } = renderHook(() =>
-        useHistoryFilters({ setHashParams })
-      );
+      const { result } = renderHook(() => useHistoryFilters({ setHashParams }));
 
       act(() => {
         result.current.setFilters({ ...result.current.filters, search: 'test' });
@@ -81,9 +135,7 @@ describe('useHistoryFilters', () => {
 
     it('should include search in hash params', () => {
       const setHashParams = vi.fn((fn) => fn({}));
-      const { result } = renderHook(() =>
-        useHistoryFilters({ setHashParams })
-      );
+      const { result } = renderHook(() => useHistoryFilters({ setHashParams }));
 
       act(() => {
         result.current.setFilters({ ...result.current.filters, search: 'test' });
@@ -94,9 +146,7 @@ describe('useHistoryFilters', () => {
 
     it('should include types in hash params', () => {
       const setHashParams = vi.fn((fn) => fn({}));
-      const { result } = renderHook(() =>
-        useHistoryFilters({ setHashParams })
-      );
+      const { result } = renderHook(() => useHistoryFilters({ setHashParams }));
 
       act(() => {
         result.current.setFilters({ ...result.current.filters, types: ['A320', 'B738'] });
@@ -107,9 +157,7 @@ describe('useHistoryFilters', () => {
 
     it('should include military flag in hash params', () => {
       const setHashParams = vi.fn((fn) => fn({}));
-      const { result } = renderHook(() =>
-        useHistoryFilters({ setHashParams })
-      );
+      const { result } = renderHook(() => useHistoryFilters({ setHashParams }));
 
       act(() => {
         result.current.setFilters({ ...result.current.filters, militaryOnly: true });

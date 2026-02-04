@@ -80,10 +80,9 @@ export function getRadarTileUrl(bounds, width, height, source = 'mesonet') {
 async function fetchRadarTimestamp() {
   try {
     // Mesonet provides a JSON API for the latest radar time
-    const response = await fetch(
-      'https://mesonet.agron.iastate.edu/json/radar_time.py',
-      { cache: 'no-store' }
-    );
+    const response = await fetch('https://mesonet.agron.iastate.edu/json/radar_time.py', {
+      cache: 'no-store',
+    });
     if (!response.ok) return null;
     const data = await response.json();
     if (data?.utc_valid) {
@@ -196,7 +195,6 @@ export function useWeatherRadar({
       setRadarBounds(effectiveBounds);
       setTimestamp(radarTime || new Date());
       setLastFetch(now);
-
     } catch (err) {
       console.error('[WeatherRadar] Fetch error:', err);
       setError(err.message || 'Failed to load weather radar');
@@ -289,30 +287,33 @@ export function useWeatherRadar({
    * @param {Function} latLonToScreen - Function to convert lat/lon to screen coords
    * @param {number} opacity - Overlay opacity (0-1)
    */
-  const drawOnCanvas = useCallback((ctx, latLonToScreen, opacity = 0.5) => {
-    if (!radarImage || !radarBounds) return;
+  const drawOnCanvas = useCallback(
+    (ctx, latLonToScreen, opacity = 0.5) => {
+      if (!radarImage || !radarBounds) return;
 
-    // Calculate screen positions for image corners
-    const topLeft = latLonToScreen(radarBounds.north, radarBounds.west);
-    const bottomRight = latLonToScreen(radarBounds.south, radarBounds.east);
+      // Calculate screen positions for image corners
+      const topLeft = latLonToScreen(radarBounds.north, radarBounds.west);
+      const bottomRight = latLonToScreen(radarBounds.south, radarBounds.east);
 
-    const x = topLeft.x;
-    const y = topLeft.y;
-    const width = bottomRight.x - topLeft.x;
-    const height = bottomRight.y - topLeft.y;
+      const x = topLeft.x;
+      const y = topLeft.y;
+      const width = bottomRight.x - topLeft.x;
+      const height = bottomRight.y - topLeft.y;
 
-    // Draw with opacity
-    ctx.save();
-    ctx.globalAlpha = opacity;
+      // Draw with opacity
+      ctx.save();
+      ctx.globalAlpha = opacity;
 
-    try {
-      ctx.drawImage(radarImage, x, y, width, height);
-    } catch (err) {
-      console.warn('[WeatherRadar] Canvas draw error:', err);
-    }
+      try {
+        ctx.drawImage(radarImage, x, y, width, height);
+      } catch (err) {
+        console.warn('[WeatherRadar] Canvas draw error:', err);
+      }
 
-    ctx.restore();
-  }, [radarImage, radarBounds]);
+      ctx.restore();
+    },
+    [radarImage, radarBounds]
+  );
 
   /**
    * Get tile layer URL for Leaflet
@@ -330,15 +331,19 @@ export function useWeatherRadar({
   /**
    * Get WMS layer config for Leaflet WMS tile layer
    */
-  const wmsConfig = useMemo(() => ({
-    url: source === 'nws' ? NWS_RIDGE_URL : MESONET_BASE_URL,
-    layers: source === 'nws' ? 'conus_bref_qcd' : 'nexrad-n0q-900913',
-    format: 'image/png',
-    transparent: true,
-    attribution: source === 'nws'
-      ? 'NOAA/NWS'
-      : '<a href="https://mesonet.agron.iastate.edu/">Iowa State Mesonet</a>',
-  }), [source]);
+  const wmsConfig = useMemo(
+    () => ({
+      url: source === 'nws' ? NWS_RIDGE_URL : MESONET_BASE_URL,
+      layers: source === 'nws' ? 'conus_bref_qcd' : 'nexrad-n0q-900913',
+      format: 'image/png',
+      transparent: true,
+      attribution:
+        source === 'nws'
+          ? 'NOAA/NWS'
+          : '<a href="https://mesonet.agron.iastate.edu/">Iowa State Mesonet</a>',
+    }),
+    [source]
+  );
 
   /**
    * Format timestamp for display
@@ -356,7 +361,7 @@ export function useWeatherRadar({
     return timestamp.toLocaleTimeString([], {
       hour: '2-digit',
       minute: '2-digit',
-      timeZoneName: 'short'
+      timeZoneName: 'short',
     });
   }, [timestamp]);
 

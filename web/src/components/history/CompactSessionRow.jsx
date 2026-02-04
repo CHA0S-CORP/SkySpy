@@ -46,9 +46,10 @@ export function CompactSessionRow({
   const timeRange = `${formatTime(first_seen)} - ${formatTime(last_seen)}`;
 
   // Format distance range
-  const distanceRange = min_distance_nm === max_distance_nm
-    ? `${Math.round(min_distance_nm)}nm`
-    : `${Math.round(min_distance_nm)}-${Math.round(max_distance_nm)}nm`;
+  const distanceRange =
+    min_distance_nm === max_distance_nm
+      ? `${Math.round(min_distance_nm)}nm`
+      : `${Math.round(min_distance_nm)}-${Math.round(max_distance_nm)}nm`;
 
   return (
     <div
@@ -89,9 +90,7 @@ export function CompactSessionRow({
             </button>
           )}
         </div>
-        <div className="compact-session-row__type">
-          {type || 'Unknown type'}
-        </div>
+        <div className="compact-session-row__type">{type || 'Unknown type'}</div>
       </div>
 
       {/* Sparkline */}
@@ -110,9 +109,7 @@ export function CompactSessionRow({
       {/* Stats */}
       <div className="compact-session-row__stats">
         <div className="compact-session-row__stat">
-          <span className="compact-session-row__stat-value">
-            {formatDuration(duration_min)}
-          </span>
+          <span className="compact-session-row__stat-value">{formatDuration(duration_min)}</span>
           <span className="compact-session-row__stat-label">Duration</span>
         </div>
         <div className="compact-session-row__stat">
@@ -130,7 +127,10 @@ export function CompactSessionRow({
       </div>
 
       {/* Signal bars */}
-      <div className="compact-session-row__signal-bars" title={`Signal: ${max_rssi?.toFixed(1) || 'N/A'} dB`}>
+      <div
+        className="compact-session-row__signal-bars"
+        title={`Signal: ${max_rssi?.toFixed(1) || 'N/A'} dB`}
+      >
         {[1, 2, 3, 4].map((level) => (
           <div
             key={level}

@@ -27,7 +27,9 @@ describe('TabNavigation', () => {
     it('should render navigation element with correct aria label', () => {
       render(<TabNavigation {...defaultProps} />);
 
-      expect(screen.getByRole('navigation', { name: /aircraft information tabs/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole('navigation', { name: /aircraft information tabs/i })
+      ).toBeInTheDocument();
     });
 
     it('should render tablist', () => {
@@ -123,7 +125,9 @@ describe('TabNavigation', () => {
   describe('keyboard navigation', () => {
     it('should move to next tab on ArrowRight', () => {
       const mockOnTabChange = vi.fn();
-      render(<TabNavigation {...defaultProps} activeTab="overview" onTabChange={mockOnTabChange} />);
+      render(
+        <TabNavigation {...defaultProps} activeTab="overview" onTabChange={mockOnTabChange} />
+      );
 
       const tablist = screen.getByRole('tablist');
       fireEvent.keyDown(tablist, { key: 'ArrowRight' });
@@ -133,7 +137,9 @@ describe('TabNavigation', () => {
 
     it('should move to previous tab on ArrowLeft', () => {
       const mockOnTabChange = vi.fn();
-      render(<TabNavigation {...defaultProps} activeTab="communications" onTabChange={mockOnTabChange} />);
+      render(
+        <TabNavigation {...defaultProps} activeTab="communications" onTabChange={mockOnTabChange} />
+      );
 
       const tablist = screen.getByRole('tablist');
       fireEvent.keyDown(tablist, { key: 'ArrowLeft' });
@@ -153,7 +159,9 @@ describe('TabNavigation', () => {
 
     it('should wrap around from first to last on ArrowLeft', () => {
       const mockOnTabChange = vi.fn();
-      render(<TabNavigation {...defaultProps} activeTab="overview" onTabChange={mockOnTabChange} />);
+      render(
+        <TabNavigation {...defaultProps} activeTab="overview" onTabChange={mockOnTabChange} />
+      );
 
       const tablist = screen.getByRole('tablist');
       fireEvent.keyDown(tablist, { key: 'ArrowLeft' });
@@ -173,7 +181,9 @@ describe('TabNavigation', () => {
 
     it('should go to last tab on End', () => {
       const mockOnTabChange = vi.fn();
-      render(<TabNavigation {...defaultProps} activeTab="overview" onTabChange={mockOnTabChange} />);
+      render(
+        <TabNavigation {...defaultProps} activeTab="overview" onTabChange={mockOnTabChange} />
+      );
 
       const tablist = screen.getByRole('tablist');
       fireEvent.keyDown(tablist, { key: 'End' });
@@ -183,7 +193,9 @@ describe('TabNavigation', () => {
 
     it('should handle arrow key navigation', () => {
       const mockOnTabChange = vi.fn();
-      render(<TabNavigation {...defaultProps} activeTab="overview" onTabChange={mockOnTabChange} />);
+      render(
+        <TabNavigation {...defaultProps} activeTab="overview" onTabChange={mockOnTabChange} />
+      );
 
       const tablist = screen.getByRole('tablist');
       fireEvent.keyDown(tablist, { key: 'ArrowRight' });

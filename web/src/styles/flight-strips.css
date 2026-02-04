@@ -345,13 +345,23 @@
 }
 
 @keyframes strip-pulse-red {
-  0%, 100% { opacity: 0.9; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 @keyframes strip-pulse-yellow {
-  0%, 100% { opacity: 0.9; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 /* Strip content area */

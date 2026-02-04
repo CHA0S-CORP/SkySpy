@@ -52,8 +52,7 @@ export const QuickFilterBar = memo(function QuickFilterBar({
       <div className="quick-filter-bar__chips">
         {QUICK_FILTER_PRESETS.map((preset) => {
           const Icon = preset.icon;
-          const isActive =
-            preset.id === 'all' ? isShowingAll : activeFilters.includes(preset.id);
+          const isActive = preset.id === 'all' ? isShowingAll : activeFilters.includes(preset.id);
           const count = filterCounts[preset.id] ?? 0;
 
           return (

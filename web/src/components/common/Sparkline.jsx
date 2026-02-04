@@ -27,12 +27,13 @@ export function Sparkline({
   // Extract numeric values from data (handle arrays of numbers or objects)
   const values = useMemo(() => {
     if (!data || data.length === 0) return [];
-    return data.map((d) => (typeof d === 'number' ? d : d?.value ?? d?.y ?? 0));
+    return data.map((d) => (typeof d === 'number' ? d : (d?.value ?? d?.y ?? 0)));
   }, [data]);
 
   // Calculate min/max and normalized values
   const { min, max, normalizedValues, minIndex, maxIndex } = useMemo(() => {
-    if (values.length === 0) return { min: 0, max: 0, normalizedValues: [], minIndex: 0, maxIndex: 0 };
+    if (values.length === 0)
+      return { min: 0, max: 0, normalizedValues: [], minIndex: 0, maxIndex: 0 };
 
     const min = Math.min(...values);
     const max = Math.max(...values);
@@ -62,7 +63,13 @@ export function Sparkline({
     return (
       <div
         className={`sparkline sparkline--empty ${className}`}
-        style={{ width, height, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+        style={{
+          width,
+          height,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
       >
         <span style={{ color: 'var(--text-dim)', fontSize: '10px' }}>—</span>
       </div>
@@ -75,7 +82,8 @@ export function Sparkline({
 
   const primaryColor = color || 'var(--sparkline-line)';
   const negColor = negativeColor || 'var(--sparkline-bar-negative)';
-  const uniqueGradientId = gradientId || `sparkline-gradient-${Math.random().toString(36).slice(2, 9)}`;
+  const uniqueGradientId =
+    gradientId || `sparkline-gradient-${Math.random().toString(36).slice(2, 9)}`;
 
   const renderLine = () => {
     const points = normalizedValues.map((v, i) => {
@@ -132,7 +140,7 @@ export function Sparkline({
 
   const renderBars = () => {
     const barWidth = Math.max(2, (chartWidth - barGap * (values.length - 1)) / values.length);
-    const zeroY = values.some(v => v < 0)
+    const zeroY = values.some((v) => v < 0)
       ? padding + (max / (max - min)) * chartHeight
       : height - padding;
 
@@ -153,7 +161,7 @@ export function Sparkline({
           rx={1}
           opacity={isVisible ? 1 : 0}
           style={{
-            transition: animate ? `opacity 0.3s ease ${i * 20}ms` : 'none'
+            transition: animate ? `opacity 0.3s ease ${i * 20}ms` : 'none',
           }}
         />
       );

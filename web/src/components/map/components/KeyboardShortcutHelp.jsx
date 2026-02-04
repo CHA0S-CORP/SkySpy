@@ -119,8 +119,8 @@ const KeyboardShortcutHelp = ({ isOpen, onClose }) => {
 
           <div className="keyboard-help-footer">
             <p>
-              <strong>Tip:</strong> Use middle mouse button to pan the radar view.
-              Scroll wheel adjusts range. Double-click empty space to center view.
+              <strong>Tip:</strong> Use middle mouse button to pan the radar view. Scroll wheel
+              adjusts range. Double-click empty space to center view.
             </p>
           </div>
         </div>

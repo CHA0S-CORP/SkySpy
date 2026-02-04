@@ -98,13 +98,7 @@ describe('Sparkline', () => {
     });
 
     it('should format last value with custom formatter', () => {
-      render(
-        <Sparkline
-          data={[100, 200, 300]}
-          showLastValue
-          valueFormatter={(v) => `$${v}`}
-        />
-      );
+      render(<Sparkline data={[100, 200, 300]} showLastValue valueFormatter={(v) => `$${v}`} />);
       expect(screen.getByText('$300')).toBeInTheDocument();
     });
   });

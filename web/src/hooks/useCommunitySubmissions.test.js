@@ -38,9 +38,7 @@ describe('useCommunitySubmissions', () => {
     });
 
     it('should accept isAdmin option', () => {
-      const { result } = renderHook(() =>
-        useCommunitySubmissions({ isAdmin: true })
-      );
+      const { result } = renderHook(() => useCommunitySubmissions({ isAdmin: true }));
 
       expect(result.current.submissions).toEqual([]);
     });
@@ -216,16 +214,12 @@ describe('useCommunitySubmissions', () => {
   describe('fetchPendingSubmissions (admin only)', () => {
     it('should fetch pending submissions for admin', async () => {
       const mockPending = {
-        submissions: [
-          { id: 1, icao_hex: 'A12345', status: 'pending' },
-        ],
+        submissions: [{ id: 1, icao_hex: 'A12345', status: 'pending' }],
       };
 
       mockGet.mockResolvedValue(mockPending);
 
-      const { result } = renderHook(() =>
-        useCommunitySubmissions({ isAdmin: true })
-      );
+      const { result } = renderHook(() => useCommunitySubmissions({ isAdmin: true }));
 
       await act(async () => {
         await result.current.fetchPendingSubmissions();
@@ -236,9 +230,7 @@ describe('useCommunitySubmissions', () => {
     });
 
     it('should reject non-admin access', async () => {
-      const { result } = renderHook(() =>
-        useCommunitySubmissions({ isAdmin: false })
-      );
+      const { result } = renderHook(() => useCommunitySubmissions({ isAdmin: false }));
 
       let response;
       await act(async () => {
@@ -259,9 +251,7 @@ describe('useCommunitySubmissions', () => {
         json: () => Promise.resolve(mockUpdated),
       });
 
-      const { result } = renderHook(() =>
-        useCommunitySubmissions({ isAdmin: true })
-      );
+      const { result } = renderHook(() => useCommunitySubmissions({ isAdmin: true }));
 
       // Set up initial pending submissions
       act(() => {
@@ -284,9 +274,7 @@ describe('useCommunitySubmissions', () => {
     });
 
     it('should reject non-admin access', async () => {
-      const { result } = renderHook(() =>
-        useCommunitySubmissions({ isAdmin: false })
-      );
+      const { result } = renderHook(() => useCommunitySubmissions({ isAdmin: false }));
 
       let response;
       await act(async () => {
@@ -307,9 +295,7 @@ describe('useCommunitySubmissions', () => {
         json: () => Promise.resolve(mockUpdated),
       });
 
-      const { result } = renderHook(() =>
-        useCommunitySubmissions({ isAdmin: true })
-      );
+      const { result } = renderHook(() => useCommunitySubmissions({ isAdmin: true }));
 
       let response;
       await act(async () => {
@@ -327,9 +313,7 @@ describe('useCommunitySubmissions', () => {
     });
 
     it('should require rejection reason', async () => {
-      const { result } = renderHook(() =>
-        useCommunitySubmissions({ isAdmin: true })
-      );
+      const { result } = renderHook(() => useCommunitySubmissions({ isAdmin: true }));
 
       let response;
       await act(async () => {
@@ -341,9 +325,7 @@ describe('useCommunitySubmissions', () => {
     });
 
     it('should reject non-admin access', async () => {
-      const { result } = renderHook(() =>
-        useCommunitySubmissions({ isAdmin: false })
-      );
+      const { result } = renderHook(() => useCommunitySubmissions({ isAdmin: false }));
 
       let response;
       await act(async () => {
@@ -364,9 +346,7 @@ describe('useCommunitySubmissions', () => {
         json: () => Promise.resolve(mockUpdated),
       });
 
-      const { result } = renderHook(() =>
-        useCommunitySubmissions({ isAdmin: true })
-      );
+      const { result } = renderHook(() => useCommunitySubmissions({ isAdmin: true }));
 
       let response;
       await act(async () => {
@@ -381,9 +361,7 @@ describe('useCommunitySubmissions', () => {
     });
 
     it('should reject non-admin access', async () => {
-      const { result } = renderHook(() =>
-        useCommunitySubmissions({ isAdmin: false })
-      );
+      const { result } = renderHook(() => useCommunitySubmissions({ isAdmin: false }));
 
       let response;
       await act(async () => {
@@ -407,9 +385,7 @@ describe('useCommunitySubmissions', () => {
 
       mockGet.mockResolvedValue(mockStats);
 
-      const { result } = renderHook(() =>
-        useCommunitySubmissions({ isAdmin: true })
-      );
+      const { result } = renderHook(() => useCommunitySubmissions({ isAdmin: true }));
 
       await act(async () => {
         await result.current.fetchStats();
@@ -420,9 +396,7 @@ describe('useCommunitySubmissions', () => {
     });
 
     it('should reject non-admin access', async () => {
-      const { result } = renderHook(() =>
-        useCommunitySubmissions({ isAdmin: false })
-      );
+      const { result } = renderHook(() => useCommunitySubmissions({ isAdmin: false }));
 
       let response;
       await act(async () => {

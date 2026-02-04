@@ -202,7 +202,9 @@ function SeparationLine({ aircraft1, aircraft2, separationData, onClear }) {
             <span className="sep-value" style={{ color: color.text }}>
               {separationData.actual?.lateralFormatted || '--'}
             </span>
-            <span className="sep-required">({separationData.required?.lateral?.required} nm min)</span>
+            <span className="sep-required">
+              ({separationData.required?.lateral?.required} nm min)
+            </span>
           </div>
           <div className="sep-row">
             <span className="sep-label">Vertical:</span>
@@ -214,7 +216,10 @@ function SeparationLine({ aircraft1, aircraft2, separationData, onClear }) {
             </span>
           </div>
         </div>
-        <div className="separation-status" style={{ backgroundColor: color.fill, borderColor: color.stroke }}>
+        <div
+          className="separation-status"
+          style={{ backgroundColor: color.fill, borderColor: color.stroke }}
+        >
           <span style={{ color: color.text }}>
             {separationData.status?.overall?.toUpperCase() || 'UNKNOWN'}
           </span>

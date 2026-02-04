@@ -396,9 +396,7 @@ describe('StatsFilterBar', () => {
 
     it('should toggle advanced filters visibility', () => {
       const setShowAdvancedFilters = vi.fn();
-      render(
-        <StatsFilterBar {...defaultProps} setShowAdvancedFilters={setShowAdvancedFilters} />
-      );
+      render(<StatsFilterBar {...defaultProps} setShowAdvancedFilters={setShowAdvancedFilters} />);
 
       fireEvent.click(screen.getByText('Filters'));
       expect(setShowAdvancedFilters).toHaveBeenCalledWith(true);

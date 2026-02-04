@@ -446,9 +446,7 @@ describe('useAudioTones', () => {
   describe('volume control', () => {
     it('should apply global volume multiplier', async () => {
       const { useAudioTones } = await import('./useAudioTones');
-      const { result } = renderHook(() =>
-        useAudioTones({ enabled: true, volume: 0.5 })
-      );
+      const { result } = renderHook(() => useAudioTones({ enabled: true, volume: 0.5 }));
 
       await act(async () => {
         result.current.initialize();
@@ -475,9 +473,7 @@ describe('useAudioTones', () => {
       });
 
       const { useAudioTones } = await import('./useAudioTones');
-      const { result, unmount } = renderHook(() =>
-        useAudioTones({ enabled: true })
-      );
+      const { result, unmount } = renderHook(() => useAudioTones({ enabled: true }));
 
       await act(async () => {
         result.current.initialize();

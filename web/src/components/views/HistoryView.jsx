@@ -273,7 +273,12 @@ export function HistoryView({
 
   // Socket.IO connection for NOTAMs (only connect when NOTAMs tab is active)
   const notamsEnabled = viewType === 'notams';
-  const { connected: notamsConnected, emit: notamEmit, reconnect: notamReconnect, on: notamOn } = useSocketIO({
+  const {
+    connected: notamsConnected,
+    emit: notamEmit,
+    reconnect: notamReconnect,
+    on: notamOn,
+  } = useSocketIO({
     enabled: notamsEnabled,
     apiBase,
     namespace: '/',
@@ -329,7 +334,14 @@ export function HistoryView({
       }, 5000);
       return () => clearTimeout(timeout);
     }
-  }, [notamsEnabled, notamsConnected, notamsLoading, notams.length, httpFallbackAttempted, fetchNotamsHttp]);
+  }, [
+    notamsEnabled,
+    notamsConnected,
+    notamsLoading,
+    notams.length,
+    httpFallbackAttempted,
+    fetchNotamsHttp,
+  ]);
 
   // NOTAM request helper
   const notamRequest = useCallback(
@@ -535,12 +547,27 @@ export function HistoryView({
     };
 
     fetchArchiveData();
-  }, [apiBase, viewType, archiveDateRange, archiveSearchQuery, archiveTypeFilter, archiveIcaoFilter, archiveOffset]);
+  }, [
+    apiBase,
+    viewType,
+    archiveDateRange,
+    archiveSearchQuery,
+    archiveTypeFilter,
+    archiveIcaoFilter,
+    archiveOffset,
+  ]);
 
   // Reset archive offset when filters change
   useEffect(() => {
     setArchiveOffset(0);
-  }, [archiveSearchQuery, archiveTypeFilter, archiveIcaoFilter, archiveDateRange, archiveHazardFilter, archiveAltitudeFilter]);
+  }, [
+    archiveSearchQuery,
+    archiveTypeFilter,
+    archiveIcaoFilter,
+    archiveDateRange,
+    archiveHazardFilter,
+    archiveAltitudeFilter,
+  ]);
 
   // Apply client-side hazard and altitude filters to PIREPs
   const filteredArchivedPireps = useMemo(() => {
@@ -566,7 +593,8 @@ export function HistoryView({
   }, [archivedPireps, viewType, archiveHazardFilter, archiveAltitudeFilter]);
 
   const archiveCurrentData = viewType === 'archive' ? archivedNotams : filteredArchivedPireps;
-  const archiveTotalCount = viewType === 'archive' ? archivedNotamsTotalCount : filteredArchivedPireps.length;
+  const archiveTotalCount =
+    viewType === 'archive' ? archivedNotamsTotalCount : filteredArchivedPireps.length;
   const archiveHasMore = archiveOffset + archiveLimit < archiveTotalCount;
   const archiveHasPrev = archiveOffset > 0;
 
@@ -591,7 +619,10 @@ export function HistoryView({
   // Use Socket.IO for data fetching with polling for real-time updates
   // Sessions poll every 30s, other views poll every 60s
   const pollingInterval = viewType === 'sessions' ? POLLING_INTERVAL : 60000;
-  const { data, loading, refetch } = useSocketApi(endpoint, pollingInterval, apiBase, { wsRequest, wsConnected });
+  const { data, loading, refetch } = useSocketApi(endpoint, pollingInterval, apiBase, {
+    wsRequest,
+    wsConnected,
+  });
 
   // Handle navigation to a specific safety event
   useEffect(() => {
@@ -749,17 +780,51 @@ export function HistoryView({
   ];
 
   // Table columns for sessions table view
-  const sessionTableColumns = useMemo(() => [
-    { field: 'callsign', label: 'Callsign', width: '100px', mono: true, highlight: true },
-    { field: 'icao_hex', label: 'ICAO', width: '80px', mono: true },
-    { field: 'type', label: 'Type', width: '70px' },
-    { field: 'duration_min', label: 'Duration', width: '70px', type: 'number', align: 'right', format: (v) => `${Math.round(v || 0)}m` },
-    { field: 'min_distance_nm', label: 'Dist', width: '70px', type: 'number', align: 'right', format: (v) => v?.toFixed(1) || '--', unit: 'nm' },
-    { field: 'max_alt', label: 'Max Alt', width: '80px', type: 'number', align: 'right', colorScale: 'altitude', format: (v) => v ? `${(v / 1000).toFixed(0)}k` : '--' },
-    { field: 'max_rssi', label: 'Signal', width: '60px', type: 'number', align: 'right', colorScale: 'signal', format: (v) => v?.toFixed(0) || '--' },
-    { field: 'first_seen', label: 'First Seen', width: '90px', type: 'time' },
-    { field: 'last_seen', label: 'Last Seen', width: '90px', type: 'time' },
-  ], []);
+  const sessionTableColumns = useMemo(
+    () => [
+      { field: 'callsign', label: 'Callsign', width: '100px', mono: true, highlight: true },
+      { field: 'icao_hex', label: 'ICAO', width: '80px', mono: true },
+      { field: 'type', label: 'Type', width: '70px' },
+      {
+        field: 'duration_min',
+        label: 'Duration',
+        width: '70px',
+        type: 'number',
+        align: 'right',
+        format: (v) => `${Math.round(v || 0)}m`,
+      },
+      {
+        field: 'min_distance_nm',
+        label: 'Dist',
+        width: '70px',
+        type: 'number',
+        align: 'right',
+        format: (v) => v?.toFixed(1) || '--',
+        unit: 'nm',
+      },
+      {
+        field: 'max_alt',
+        label: 'Max Alt',
+        width: '80px',
+        type: 'number',
+        align: 'right',
+        colorScale: 'altitude',
+        format: (v) => (v ? `${(v / 1000).toFixed(0)}k` : '--'),
+      },
+      {
+        field: 'max_rssi',
+        label: 'Signal',
+        width: '60px',
+        type: 'number',
+        align: 'right',
+        colorScale: 'signal',
+        format: (v) => v?.toFixed(0) || '--',
+      },
+      { field: 'first_seen', label: 'First Seen', width: '90px', type: 'time' },
+      { field: 'last_seen', label: 'Last Seen', width: '90px', type: 'time' },
+    ],
+    []
+  );
 
   // Handle saved view loading
   const handleLoadView = (view) => {
@@ -778,7 +843,8 @@ export function HistoryView({
           safetyEvents={data?.events || []}
           timeRange={TIME_RANGE_HOURS[timeRange]}
           onTimeRangeChange={(hours) => {
-            const range = Object.entries(TIME_RANGE_HOURS).find(([, h]) => h === hours)?.[0] || '24h';
+            const range =
+              Object.entries(TIME_RANGE_HOURS).find(([, h]) => h === hours)?.[0] || '24h';
             setTimeRange(range);
           }}
           viewMode={viewMode}
@@ -1049,7 +1115,9 @@ export function HistoryView({
             <div className="header-title">
               <FileWarning size={24} />
               <h2>NOTAMs & TFRs</h2>
-              <div className={`connection-indicator ${notamsConnected ? 'connected' : 'disconnected'}`}>
+              <div
+                className={`connection-indicator ${notamsConnected ? 'connected' : 'disconnected'}`}
+              >
                 {notamsConnected ? 'Live' : 'Offline'}
               </div>
             </div>
@@ -1179,7 +1247,9 @@ export function HistoryView({
                       notam={notam}
                       expanded={notamExpandedId === notam.notam_id}
                       onToggle={() =>
-                        setNotamExpandedId(notamExpandedId === notam.notam_id ? null : notam.notam_id)
+                        setNotamExpandedId(
+                          notamExpandedId === notam.notam_id ? null : notam.notam_id
+                        )
                       }
                     />
                   ))
@@ -1313,20 +1383,30 @@ export function HistoryView({
                       pirep={pirep}
                       expanded={archiveExpandedId === pirep.pirep_id}
                       onToggle={() =>
-                        setArchiveExpandedId(archiveExpandedId === pirep.pirep_id ? null : pirep.pirep_id)
+                        setArchiveExpandedId(
+                          archiveExpandedId === pirep.pirep_id ? null : pirep.pirep_id
+                        )
                       }
                     />
                   ))}
                 </div>
 
                 <div className="archive-pagination">
-                  <button disabled={!archiveHasPrev} onClick={() => setArchiveOffset(Math.max(0, archiveOffset - archiveLimit))}>
+                  <button
+                    disabled={!archiveHasPrev}
+                    onClick={() => setArchiveOffset(Math.max(0, archiveOffset - archiveLimit))}
+                  >
                     Previous
                   </button>
                   <span className="pagination-info">
-                    Showing {archiveOffset + 1}-{Math.min(archiveOffset + archiveLimit, archiveTotalCount)} of {archiveTotalCount}
+                    Showing {archiveOffset + 1}-
+                    {Math.min(archiveOffset + archiveLimit, archiveTotalCount)} of{' '}
+                    {archiveTotalCount}
                   </span>
-                  <button disabled={!archiveHasMore} onClick={() => setArchiveOffset(archiveOffset + archiveLimit)}>
+                  <button
+                    disabled={!archiveHasMore}
+                    onClick={() => setArchiveOffset(archiveOffset + archiveLimit)}
+                  >
                     Next
                   </button>
                 </div>
@@ -1432,20 +1512,30 @@ export function HistoryView({
                       notam={notam}
                       expanded={archiveExpandedId === notam.notam_id}
                       onToggle={() =>
-                        setArchiveExpandedId(archiveExpandedId === notam.notam_id ? null : notam.notam_id)
+                        setArchiveExpandedId(
+                          archiveExpandedId === notam.notam_id ? null : notam.notam_id
+                        )
                       }
                     />
                   ))}
                 </div>
 
                 <div className="archive-pagination">
-                  <button disabled={!archiveHasPrev} onClick={() => setArchiveOffset(Math.max(0, archiveOffset - archiveLimit))}>
+                  <button
+                    disabled={!archiveHasPrev}
+                    onClick={() => setArchiveOffset(Math.max(0, archiveOffset - archiveLimit))}
+                  >
                     Previous
                   </button>
                   <span className="pagination-info">
-                    Showing {archiveOffset + 1}-{Math.min(archiveOffset + archiveLimit, archiveTotalCount)} of {archiveTotalCount}
+                    Showing {archiveOffset + 1}-
+                    {Math.min(archiveOffset + archiveLimit, archiveTotalCount)} of{' '}
+                    {archiveTotalCount}
                   </span>
-                  <button disabled={!archiveHasMore} onClick={() => setArchiveOffset(archiveOffset + archiveLimit)}>
+                  <button
+                    disabled={!archiveHasMore}
+                    onClick={() => setArchiveOffset(archiveOffset + archiveLimit)}
+                  >
                     Next
                   </button>
                 </div>

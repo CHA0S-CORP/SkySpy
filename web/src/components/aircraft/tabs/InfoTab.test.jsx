@@ -23,14 +23,10 @@ vi.mock('lucide-react', () => ({
 // Mock the card components
 vi.mock('./info', () => ({
   AirframeCard: ({ data }) => (
-    <div data-testid="airframe-card">
-      AirframeCard - {data?.type_name || 'Unknown'}
-    </div>
+    <div data-testid="airframe-card">AirframeCard - {data?.type_name || 'Unknown'}</div>
   ),
   OperatorCard: ({ data }) => (
-    <div data-testid="operator-card">
-      OperatorCard - {data?.operator || 'Unknown'}
-    </div>
+    <div data-testid="operator-card">OperatorCard - {data?.operator || 'Unknown'}</div>
   ),
   RegistrationCard: ({ data, hex }) => (
     <div data-testid="registration-card">
@@ -38,9 +34,7 @@ vi.mock('./info', () => ({
     </div>
   ),
   PhotoCard: ({ photoInfo }) => (
-    <div data-testid="photo-card">
-      PhotoCard - {photoInfo?.photographer || 'Unknown'}
-    </div>
+    <div data-testid="photo-card">PhotoCard - {photoInfo?.photographer || 'Unknown'}</div>
   ),
   DataSourcesAccordion: ({ sourceData }) => (
     <div data-testid="data-sources-accordion">
@@ -64,9 +58,7 @@ describe('InfoTab', () => {
     registration: 'N12345',
     is_military: false,
     category: 'A3',
-    source_data: [
-      { source: 'FAA', last_updated: '2024-01-01' },
-    ],
+    source_data: [{ source: 'FAA', last_updated: '2024-01-01' }],
   };
 
   const mockPhotoInfo = {

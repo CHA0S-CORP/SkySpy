@@ -22,13 +22,19 @@ export function AltitudeFilterPanel({
   resetFilter,
 }) {
   // Hooks must be called unconditionally (before any early returns)
-  const handlePresetClick = useCallback((presetKey) => {
-    setAltitudePreset(presetKey);
-  }, [setAltitudePreset]);
+  const handlePresetClick = useCallback(
+    (presetKey) => {
+      setAltitudePreset(presetKey);
+    },
+    [setAltitudePreset]
+  );
 
-  const handleRangeChange = useCallback(([min, max]) => {
-    setCustomRange(min, max);
-  }, [setCustomRange]);
+  const handleRangeChange = useCallback(
+    ([min, max]) => {
+      setCustomRange(min, max);
+    },
+    [setCustomRange]
+  );
 
   // Early return after hooks
   if (!show) return null;
@@ -52,10 +58,7 @@ export function AltitudeFilterPanel({
 
   return (
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
-    <div
-      className="altitude-filter-panel overlay-menu"
-      onClick={(e) => e.stopPropagation()}
-    >
+    <div className="altitude-filter-panel overlay-menu" onClick={(e) => e.stopPropagation()}>
       <div className="overlay-menu-header">
         <span>
           <MountainSnow size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} />

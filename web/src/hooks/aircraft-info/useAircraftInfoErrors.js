@@ -31,10 +31,7 @@ import { useState, useCallback } from 'react';
  * @param {UseAircraftInfoErrorsOptions} options
  * @returns {UseAircraftInfoErrorsReturn}
  */
-export function useAircraftInfoErrors({
-  getAirframeError,
-  clearAirframeError,
-} = {}) {
+export function useAircraftInfoErrors({ getAirframeError, clearAirframeError } = {}) {
   // Errors: { [icao]: { error_type, error_message, source, timestamp } }
   const [errors, setErrors] = useState({});
 

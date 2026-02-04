@@ -72,31 +72,34 @@ export function useApi(endpoint, interval = null, apiBase = '') {
   const [error, setError] = useState(null);
   const abortControllerRef = useRef(null);
 
-  const fetchData = useCallback(async (signal) => {
-    try {
-      const baseUrl = apiBase || '';
-      const res = await fetch(`${baseUrl}${endpoint}`, { signal });
-      const { ok, data: json, status } = await safeJson(res);
+  const fetchData = useCallback(
+    async (signal) => {
+      try {
+        const baseUrl = apiBase || '';
+        const res = await fetch(`${baseUrl}${endpoint}`, { signal });
+        const { ok, data: json, status } = await safeJson(res);
 
-      if (!ok) {
-        // Parse Django REST Framework error response
-        const errorMessage = json ? parseDRFError(json) : `HTTP ${status}`;
-        throw new Error(errorMessage);
+        if (!ok) {
+          // Parse Django REST Framework error response
+          const errorMessage = json ? parseDRFError(json) : `HTTP ${status}`;
+          throw new Error(errorMessage);
+        }
+
+        if (json === null) {
+          throw new Error('Invalid response format');
+        }
+
+        setData(json);
+        setError(null);
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        setError(err.message);
+      } finally {
+        setLoading(false);
       }
-
-      if (json === null) {
-        throw new Error('Invalid response format');
-      }
-
-      setData(json);
-      setError(null);
-    } catch (err) {
-      if (err.name === 'AbortError') return;
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [endpoint, apiBase]);
+    },
+    [endpoint, apiBase]
+  );
 
   useEffect(() => {
     // Create a new AbortController for this effect lifecycle

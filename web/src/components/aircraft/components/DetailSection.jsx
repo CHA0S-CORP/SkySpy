@@ -56,7 +56,11 @@ export function DetailSection({
     .join(' ');
 
   return (
-    <section id={`section-${id}`} className={sectionClasses} aria-labelledby={`section-header-${id}`}>
+    <section
+      id={`section-${id}`}
+      className={sectionClasses}
+      aria-labelledby={`section-header-${id}`}
+    >
       <div
         className="detail-section-header"
         id={`section-header-${id}`}

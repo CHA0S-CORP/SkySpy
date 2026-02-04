@@ -4,10 +4,38 @@ import { FlightStatsPanel } from './FlightStatsPanel';
 
 describe('FlightStatsPanel', () => {
   const sampleSightings = [
-    { timestamp: '2024-01-15T10:00:00Z', altitude: 5000, gs: 200, vr: 1500, distance_nm: 50, rssi: -5 },
-    { timestamp: '2024-01-15T10:15:00Z', altitude: 15000, gs: 350, vr: 2000, distance_nm: 45, rssi: -8 },
-    { timestamp: '2024-01-15T10:30:00Z', altitude: 30000, gs: 450, vr: -500, distance_nm: 35, rssi: -12 },
-    { timestamp: '2024-01-15T10:45:00Z', altitude: 35000, gs: 460, vr: -1500, distance_nm: 30, rssi: -15 },
+    {
+      timestamp: '2024-01-15T10:00:00Z',
+      altitude: 5000,
+      gs: 200,
+      vr: 1500,
+      distance_nm: 50,
+      rssi: -5,
+    },
+    {
+      timestamp: '2024-01-15T10:15:00Z',
+      altitude: 15000,
+      gs: 350,
+      vr: 2000,
+      distance_nm: 45,
+      rssi: -8,
+    },
+    {
+      timestamp: '2024-01-15T10:30:00Z',
+      altitude: 30000,
+      gs: 450,
+      vr: -500,
+      distance_nm: 35,
+      rssi: -12,
+    },
+    {
+      timestamp: '2024-01-15T10:45:00Z',
+      altitude: 35000,
+      gs: 460,
+      vr: -1500,
+      distance_nm: 30,
+      rssi: -15,
+    },
   ];
 
   const defaultProps = {
@@ -65,24 +93,24 @@ describe('FlightStatsPanel', () => {
       const { container } = render(<FlightStatsPanel {...defaultProps} />);
       // 5000 ft formatted as 5.0k - there may be multiple "k" values
       const statValues = container.querySelectorAll('.flight-stats-panel__stat-value');
-      const altValues = Array.from(statValues).map(v => v.textContent);
-      expect(altValues.some(v => v.includes('5.0k'))).toBe(true);
+      const altValues = Array.from(statValues).map((v) => v.textContent);
+      expect(altValues.some((v) => v.includes('5.0k'))).toBe(true);
     });
 
     it('should display max altitude', () => {
       const { container } = render(<FlightStatsPanel {...defaultProps} />);
       // 35000 ft formatted as 35.0k
       const statValues = container.querySelectorAll('.flight-stats-panel__stat-value');
-      const altValues = Array.from(statValues).map(v => v.textContent);
-      expect(altValues.some(v => v.includes('35.0k'))).toBe(true);
+      const altValues = Array.from(statValues).map((v) => v.textContent);
+      expect(altValues.some((v) => v.includes('35.0k'))).toBe(true);
     });
 
     it('should display average altitude', () => {
       const { container } = render(<FlightStatsPanel {...defaultProps} />);
       // Average of 5000, 15000, 30000, 35000 = 21250
       const statValues = container.querySelectorAll('.flight-stats-panel__stat-value');
-      const altValues = Array.from(statValues).map(v => v.textContent);
-      expect(altValues.some(v => v.includes('21.'))).toBe(true);
+      const altValues = Array.from(statValues).map((v) => v.textContent);
+      expect(altValues.some((v) => v.includes('21.'))).toBe(true);
     });
 
     it('should show -- for missing altitude data', () => {
@@ -92,8 +120,8 @@ describe('FlightStatsPanel', () => {
       ];
       const { container } = render(<FlightStatsPanel sightings={sightingsNoAlt} />);
       const statValues = container.querySelectorAll('.flight-stats-panel__stat-value');
-      const altValues = Array.from(statValues).map(v => v.textContent);
-      expect(altValues.some(v => v.includes('--'))).toBe(true);
+      const altValues = Array.from(statValues).map((v) => v.textContent);
+      expect(altValues.some((v) => v.includes('--'))).toBe(true);
     });
   });
 
@@ -275,9 +303,7 @@ describe('FlightStatsPanel', () => {
 
   describe('styling', () => {
     it('should apply custom className', () => {
-      const { container } = render(
-        <FlightStatsPanel {...defaultProps} className="custom-stats" />
-      );
+      const { container } = render(<FlightStatsPanel {...defaultProps} className="custom-stats" />);
       expect(container.querySelector('.custom-stats')).toBeInTheDocument();
     });
   });

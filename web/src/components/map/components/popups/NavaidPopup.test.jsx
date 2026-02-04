@@ -109,10 +109,7 @@ describe('NavaidPopup', () => {
   describe('navaid types', () => {
     it('should display VOR type', () => {
       const { container } = render(
-        <NavaidPopup
-          {...defaultProps}
-          navaid={{ ...mockNavaid, type: 'VOR' }}
-        />
+        <NavaidPopup {...defaultProps} navaid={{ ...mockNavaid, type: 'VOR' }} />
       );
 
       const badge = container.querySelector('.navaid-type-badge');
@@ -121,10 +118,7 @@ describe('NavaidPopup', () => {
 
     it('should display NDB type', () => {
       const { container } = render(
-        <NavaidPopup
-          {...defaultProps}
-          navaid={{ ...mockNavaid, type: 'NDB' }}
-        />
+        <NavaidPopup {...defaultProps} navaid={{ ...mockNavaid, type: 'NDB' }} />
       );
 
       const badge = container.querySelector('.navaid-type-badge');
@@ -133,10 +127,7 @@ describe('NavaidPopup', () => {
 
     it('should display VOR/DME type', () => {
       const { container } = render(
-        <NavaidPopup
-          {...defaultProps}
-          navaid={{ ...mockNavaid, type: 'VOR/DME' }}
-        />
+        <NavaidPopup {...defaultProps} navaid={{ ...mockNavaid, type: 'VOR/DME' }} />
       );
 
       const badge = container.querySelector('.navaid-type-badge');
@@ -145,10 +136,7 @@ describe('NavaidPopup', () => {
 
     it('should display DME type', () => {
       const { container } = render(
-        <NavaidPopup
-          {...defaultProps}
-          navaid={{ ...mockNavaid, type: 'DME' }}
-        />
+        <NavaidPopup {...defaultProps} navaid={{ ...mockNavaid, type: 'DME' }} />
       );
 
       const badge = container.querySelector('.navaid-type-badge');
@@ -157,10 +145,7 @@ describe('NavaidPopup', () => {
 
     it('should display TACAN type', () => {
       const { container } = render(
-        <NavaidPopup
-          {...defaultProps}
-          navaid={{ ...mockNavaid, type: 'TACAN' }}
-        />
+        <NavaidPopup {...defaultProps} navaid={{ ...mockNavaid, type: 'TACAN' }} />
       );
 
       const badge = container.querySelector('.navaid-type-badge');
@@ -168,12 +153,7 @@ describe('NavaidPopup', () => {
     });
 
     it('should show Unknown when type is not available', () => {
-      render(
-        <NavaidPopup
-          {...defaultProps}
-          navaid={{ ...mockNavaid, type: undefined }}
-        />
-      );
+      render(<NavaidPopup {...defaultProps} navaid={{ ...mockNavaid, type: undefined }} />);
 
       // Type row should show "Unknown"
       expect(screen.getAllByText('Unknown').length).toBeGreaterThan(0);
@@ -181,10 +161,7 @@ describe('NavaidPopup', () => {
 
     it('should show NAV badge when type is not available', () => {
       const { container } = render(
-        <NavaidPopup
-          {...defaultProps}
-          navaid={{ ...mockNavaid, type: undefined }}
-        />
+        <NavaidPopup {...defaultProps} navaid={{ ...mockNavaid, type: undefined }} />
       );
 
       const badge = container.querySelector('.navaid-type-badge');
@@ -283,46 +260,26 @@ describe('NavaidPopup', () => {
 
   describe('optional fields', () => {
     it('should not display name row when name is not available', () => {
-      render(
-        <NavaidPopup
-          {...defaultProps}
-          navaid={{ ...mockNavaid, name: undefined }}
-        />
-      );
+      render(<NavaidPopup {...defaultProps} navaid={{ ...mockNavaid, name: undefined }} />);
 
       // Should not crash and name field should be absent
       expect(screen.queryByText('Seattle')).not.toBeInTheDocument();
     });
 
     it('should not display frequency row when freq is not available', () => {
-      render(
-        <NavaidPopup
-          {...defaultProps}
-          navaid={{ ...mockNavaid, freq: undefined }}
-        />
-      );
+      render(<NavaidPopup {...defaultProps} navaid={{ ...mockNavaid, freq: undefined }} />);
 
       expect(screen.queryByText(/MHz/)).not.toBeInTheDocument();
     });
 
     it('should not display channel row when channel is not available', () => {
-      render(
-        <NavaidPopup
-          {...defaultProps}
-          navaid={{ ...mockNavaid, channel: undefined }}
-        />
-      );
+      render(<NavaidPopup {...defaultProps} navaid={{ ...mockNavaid, channel: undefined }} />);
 
       expect(screen.queryByText('115X')).not.toBeInTheDocument();
     });
 
     it('should not display elevation row when elev is not available', () => {
-      render(
-        <NavaidPopup
-          {...defaultProps}
-          navaid={{ ...mockNavaid, elev: undefined }}
-        />
-      );
+      render(<NavaidPopup {...defaultProps} navaid={{ ...mockNavaid, elev: undefined }} />);
 
       // Should not show elevation row but still render
       expect(screen.queryByText('350')).not.toBeInTheDocument();
@@ -347,12 +304,7 @@ describe('NavaidPopup', () => {
     });
 
     it('should handle navaid with zero elevation', () => {
-      render(
-        <NavaidPopup
-          {...defaultProps}
-          navaid={{ ...mockNavaid, elev: 0 }}
-        />
-      );
+      render(<NavaidPopup {...defaultProps} navaid={{ ...mockNavaid, elev: 0 }} />);
 
       // Zero elevation should not show (falsy check in component)
       expect(screen.queryByText('0 ft')).not.toBeInTheDocument();
@@ -371,20 +323,14 @@ describe('NavaidPopup', () => {
       render(<NavaidPopup {...defaultProps} />);
 
       // Verify getDistanceNm was called with navaid coordinates
-      expect(defaultProps.getDistanceNm).toHaveBeenCalledWith(
-        mockNavaid.lat,
-        mockNavaid.lon
-      );
+      expect(defaultProps.getDistanceNm).toHaveBeenCalledWith(mockNavaid.lat, mockNavaid.lon);
     });
 
     it('should handle bearing calculation', () => {
       render(<NavaidPopup {...defaultProps} />);
 
       // Verify getBearing was called with navaid coordinates
-      expect(defaultProps.getBearing).toHaveBeenCalledWith(
-        mockNavaid.lat,
-        mockNavaid.lon
-      );
+      expect(defaultProps.getBearing).toHaveBeenCalledWith(mockNavaid.lat, mockNavaid.lon);
     });
   });
 });

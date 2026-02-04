@@ -72,29 +72,41 @@ export function useAccessibility() {
   });
 
   // Setters that persist to localStorage
-  const setHighContrastMode = useCallback((value) => {
-    const newValue = typeof value === 'function' ? value(highContrastMode) : value;
-    setHighContrastModeState(newValue);
-    localStorage.setItem(STORAGE_KEYS.HIGH_CONTRAST, String(newValue));
-  }, [highContrastMode]);
+  const setHighContrastMode = useCallback(
+    (value) => {
+      const newValue = typeof value === 'function' ? value(highContrastMode) : value;
+      setHighContrastModeState(newValue);
+      localStorage.setItem(STORAGE_KEYS.HIGH_CONTRAST, String(newValue));
+    },
+    [highContrastMode]
+  );
 
-  const setReducedMotion = useCallback((value) => {
-    const newValue = typeof value === 'function' ? value(reducedMotion) : value;
-    setReducedMotionState(newValue);
-    localStorage.setItem(STORAGE_KEYS.REDUCED_MOTION, String(newValue));
-  }, [reducedMotion]);
+  const setReducedMotion = useCallback(
+    (value) => {
+      const newValue = typeof value === 'function' ? value(reducedMotion) : value;
+      setReducedMotionState(newValue);
+      localStorage.setItem(STORAGE_KEYS.REDUCED_MOTION, String(newValue));
+    },
+    [reducedMotion]
+  );
 
-  const setScreenReaderEnabled = useCallback((value) => {
-    const newValue = typeof value === 'function' ? value(screenReaderEnabled) : value;
-    setScreenReaderEnabledState(newValue);
-    localStorage.setItem(STORAGE_KEYS.SCREEN_READER, String(newValue));
-  }, [screenReaderEnabled]);
+  const setScreenReaderEnabled = useCallback(
+    (value) => {
+      const newValue = typeof value === 'function' ? value(screenReaderEnabled) : value;
+      setScreenReaderEnabledState(newValue);
+      localStorage.setItem(STORAGE_KEYS.SCREEN_READER, String(newValue));
+    },
+    [screenReaderEnabled]
+  );
 
-  const setShapeMarkers = useCallback((value) => {
-    const newValue = typeof value === 'function' ? value(shapeMarkers) : value;
-    setShapeMarkersState(newValue);
-    localStorage.setItem(STORAGE_KEYS.SHAPE_MARKERS, String(newValue));
-  }, [shapeMarkers]);
+  const setShapeMarkers = useCallback(
+    (value) => {
+      const newValue = typeof value === 'function' ? value(shapeMarkers) : value;
+      setShapeMarkersState(newValue);
+      localStorage.setItem(STORAGE_KEYS.SHAPE_MARKERS, String(newValue));
+    },
+    [shapeMarkers]
+  );
 
   // Listen for system preference changes
   useEffect(() => {
@@ -189,9 +201,7 @@ export function useAccessibility() {
     localStorage.removeItem(STORAGE_KEYS.SHAPE_MARKERS);
 
     // Reset to system preferences
-    setHighContrastModeState(
-      window.matchMedia?.('(prefers-contrast: more)')?.matches || false
-    );
+    setHighContrastModeState(window.matchMedia?.('(prefers-contrast: more)')?.matches || false);
     setReducedMotionState(
       window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches || false
     );

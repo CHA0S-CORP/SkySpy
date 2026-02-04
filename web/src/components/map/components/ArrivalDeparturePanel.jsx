@@ -66,12 +66,7 @@ function formatDistance(dist) {
 /**
  * AircraftRow component - single row in the traffic table
  */
-const AircraftRow = memo(function AircraftRow({
-  aircraft,
-  isInbound,
-  onSelect,
-  isSelected,
-}) {
+const AircraftRow = memo(function AircraftRow({ aircraft, isInbound, onSelect, isSelected }) {
   const callsign = aircraft.flight?.trim() || aircraft.hex?.toUpperCase() || '--';
   const altitude = aircraft.alt_baro || aircraft.alt_geom || aircraft.alt;
   const distance = isInbound ? aircraft.distanceToAirport : aircraft.distanceFromAirport;
@@ -90,14 +85,10 @@ const AircraftRow = memo(function AircraftRow({
       </td>
       <td className="col-type">{aircraft.type || '--'}</td>
       <td className="col-origin">
-        {isInbound ? (aircraft.origin || '--') : (aircraft.destination || '--')}
+        {isInbound ? aircraft.origin || '--' : aircraft.destination || '--'}
       </td>
-      <td className="col-altitude">
-        {aircraft.outOfRange ? '--' : formatAltitude(altitude)}
-      </td>
-      <td className="col-distance">
-        {aircraft.outOfRange ? '--' : formatDistance(distance)}
-      </td>
+      <td className="col-altitude">{aircraft.outOfRange ? '--' : formatAltitude(altitude)}</td>
+      <td className="col-distance">{aircraft.outOfRange ? '--' : formatDistance(distance)}</td>
       <td className={`col-time ${isInbound ? 'eta' : 'departure'}`}>
         {isInbound ? formatETA(timeValue) : formatDepartureTime(timeValue)}
       </td>
@@ -351,12 +342,7 @@ export function ArrivalDeparturePanel({
         </div>
 
         <div className="panel-actions">
-          <button
-            className="panel-btn"
-            onClick={onRefresh}
-            disabled={loading}
-            title="Refresh"
-          >
+          <button className="panel-btn" onClick={onRefresh} disabled={loading} title="Refresh">
             <RefreshCw size={14} className={loading ? 'spinning' : ''} />
           </button>
           <button className="panel-btn close" onClick={onClose} title="Close">
@@ -411,7 +397,10 @@ export function ArrivalDeparturePanel({
           <div className="no-airports-selected">
             <MapPin size={24} />
             <span>Select airports to monitor</span>
-            <p>Choose one or more airports from the dropdown above to see arrival and departure traffic.</p>
+            <p>
+              Choose one or more airports from the dropdown above to see arrival and departure
+              traffic.
+            </p>
           </div>
         ) : (
           monitoredAirports.map((airport) => {

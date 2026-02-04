@@ -1,5 +1,16 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { X, Share2, Check, Plane, MapPin, Radio, AlertTriangle, Database, Radar, RefreshCw } from 'lucide-react';
+import {
+  X,
+  Share2,
+  Check,
+  Plane,
+  MapPin,
+  Radio,
+  AlertTriangle,
+  Database,
+  Radar,
+  RefreshCw,
+} from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 
 import { useAircraftDetailV2 } from './hooks/useAircraftDetailV2';
@@ -56,11 +67,7 @@ function CompactHeader({ hex, aircraft, info, tailInfo, shareSuccess, onShare, o
         >
           {shareSuccess ? <Check size={16} /> : <Share2 size={16} />}
         </button>
-        <button
-          className="detail-v2-header-btn close"
-          onClick={onClose}
-          aria-label="Close"
-        >
+        <button className="detail-v2-header-btn close" onClick={onClose} aria-label="Close">
           <X size={18} />
         </button>
       </div>
@@ -230,11 +237,7 @@ export function AircraftDetailV2({
   // Error state
   if (error) {
     return (
-      <div
-        className="aircraft-detail-v2"
-        role="dialog"
-        aria-label="Aircraft details"
-      >
+      <div className="aircraft-detail-v2" role="dialog" aria-label="Aircraft details">
         <CompactHeader
           hex={hex}
           aircraft={aircraft}

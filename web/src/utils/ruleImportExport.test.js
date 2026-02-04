@@ -151,9 +151,7 @@ describe('downloadAsCsv', () => {
   });
 
   it('should escape CSV fields with commas', () => {
-    const rules = [
-      { name: 'Rule, with comma', conditions: [] },
-    ];
+    const rules = [{ name: 'Rule, with comma', conditions: [] }];
 
     downloadAsCsv(rules, 'test.csv');
 
@@ -162,9 +160,7 @@ describe('downloadAsCsv', () => {
   });
 
   it('should escape CSV fields with quotes', () => {
-    const rules = [
-      { name: 'Rule "with" quotes', conditions: [] },
-    ];
+    const rules = [{ name: 'Rule "with" quotes', conditions: [] }];
 
     downloadAsCsv(rules, 'test.csv');
     expect(URL.createObjectURL).toHaveBeenCalled();
@@ -252,15 +248,13 @@ describe('validateImportedRules', () => {
     it('should add version warning but still be valid', () => {
       const data = {
         version: '2.0',
-        rules: [
-          { name: 'Test', conditions: [{ type: 'callsign', value: 'TEST' }] },
-        ],
+        rules: [{ name: 'Test', conditions: [{ type: 'callsign', value: 'TEST' }] }],
       };
 
       const result = validateImportedRules(data);
 
       expect(result.valid).toBe(true);
-      expect(result.errors.some(e => e.includes('Warning'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('Warning'))).toBe(true);
     });
   });
 
@@ -296,7 +290,7 @@ describe('validateImportedRules', () => {
       };
       const result = validateImportedRules(data);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('Name is required'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('Name is required'))).toBe(true);
     });
 
     it('should require name minimum length', () => {
@@ -305,7 +299,7 @@ describe('validateImportedRules', () => {
       };
       const result = validateImportedRules(data);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('at least 3'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('at least 3'))).toBe(true);
     });
 
     it('should validate priority values', () => {
@@ -320,7 +314,7 @@ describe('validateImportedRules', () => {
       };
       const result = validateImportedRules(data);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('Invalid priority'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('Invalid priority'))).toBe(true);
     });
 
     it('should require conditions', () => {
@@ -329,7 +323,7 @@ describe('validateImportedRules', () => {
       };
       const result = validateImportedRules(data);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('Conditions are required'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('Conditions are required'))).toBe(true);
     });
 
     it('should require conditions to be array', () => {
@@ -338,7 +332,7 @@ describe('validateImportedRules', () => {
       };
       const result = validateImportedRules(data);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('must be an array'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('must be an array'))).toBe(true);
     });
 
     it('should require at least one condition', () => {
@@ -347,7 +341,7 @@ describe('validateImportedRules', () => {
       };
       const result = validateImportedRules(data);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('At least one condition'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('At least one condition'))).toBe(true);
     });
 
     it('should validate cooldown is non-negative', () => {
@@ -362,7 +356,7 @@ describe('validateImportedRules', () => {
       };
       const result = validateImportedRules(data);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('Cooldown'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('Cooldown'))).toBe(true);
     });
   });
 
@@ -378,7 +372,7 @@ describe('validateImportedRules', () => {
       };
       const result = validateImportedRules(data);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('Invalid type'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('Invalid type'))).toBe(true);
     });
 
     it('should validate operator', () => {
@@ -392,7 +386,7 @@ describe('validateImportedRules', () => {
       };
       const result = validateImportedRules(data);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('Invalid operator'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('Invalid operator'))).toBe(true);
     });
 
     it('should require value for non-boolean types', () => {
@@ -406,7 +400,7 @@ describe('validateImportedRules', () => {
       };
       const result = validateImportedRules(data);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('Value is required'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('Value is required'))).toBe(true);
     });
 
     it('should not require value for military type', () => {
@@ -453,9 +447,7 @@ describe('parseImportFile', () => {
 
   it('should parse valid JSON file', async () => {
     const data = {
-      rules: [
-        { name: 'Test', conditions: [{ type: 'callsign', value: 'TEST' }] },
-      ],
+      rules: [{ name: 'Test', conditions: [{ type: 'callsign', value: 'TEST' }] }],
     };
     const file = new File([JSON.stringify(data)], 'test.json', {
       type: 'application/json',
@@ -547,17 +539,10 @@ describe('convertToApiFormat', () => {
 });
 
 describe('findDuplicates', () => {
-  const existingRules = [
-    { name: 'Rule 1' },
-    { name: 'Rule 2' },
-    { name: 'Existing Rule' },
-  ];
+  const existingRules = [{ name: 'Rule 1' }, { name: 'Rule 2' }, { name: 'Existing Rule' }];
 
   it('should identify duplicate rules', () => {
-    const imported = [
-      { name: 'Rule 1' },
-      { name: 'New Rule' },
-    ];
+    const imported = [{ name: 'Rule 1' }, { name: 'New Rule' }];
 
     const result = findDuplicates(imported, existingRules);
 
@@ -576,10 +561,7 @@ describe('findDuplicates', () => {
   });
 
   it('should handle all unique rules', () => {
-    const imported = [
-      { name: 'Brand New Rule' },
-      { name: 'Another New Rule' },
-    ];
+    const imported = [{ name: 'Brand New Rule' }, { name: 'Another New Rule' }];
 
     const result = findDuplicates(imported, existingRules);
 
@@ -588,10 +570,7 @@ describe('findDuplicates', () => {
   });
 
   it('should handle all duplicate rules', () => {
-    const imported = [
-      { name: 'Rule 1' },
-      { name: 'Rule 2' },
-    ];
+    const imported = [{ name: 'Rule 1' }, { name: 'Rule 2' }];
 
     const result = findDuplicates(imported, existingRules);
 

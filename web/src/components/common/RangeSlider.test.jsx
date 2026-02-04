@@ -50,9 +50,7 @@ describe('RangeSlider', () => {
   describe('interactions', () => {
     it('should call onChange when value changes', () => {
       const onChange = vi.fn();
-      const { container } = render(
-        <RangeSlider {...defaultProps} onChange={onChange} />
-      );
+      const { container } = render(<RangeSlider {...defaultProps} onChange={onChange} />);
 
       const slider = container.querySelector('[role="slider"]');
       fireEvent.keyDown(slider, { key: 'ArrowRight' });
@@ -60,9 +58,7 @@ describe('RangeSlider', () => {
     });
 
     it('should be disabled when disabled prop is true', () => {
-      const { container } = render(
-        <RangeSlider {...defaultProps} disabled />
-      );
+      const { container } = render(<RangeSlider {...defaultProps} disabled />);
       expect(container.querySelector('.range-slider--disabled')).toBeInTheDocument();
     });
   });
@@ -130,16 +126,12 @@ describe('RangeSlider', () => {
 
   describe('styling', () => {
     it('should apply custom color', () => {
-      const { container } = render(
-        <RangeSlider {...defaultProps} color="#ff0000" />
-      );
+      const { container } = render(<RangeSlider {...defaultProps} color="#ff0000" />);
       expect(container.querySelector('.range-slider')).toBeInTheDocument();
     });
 
     it('should apply custom className', () => {
-      const { container } = render(
-        <RangeSlider {...defaultProps} className="custom-slider" />
-      );
+      const { container } = render(<RangeSlider {...defaultProps} className="custom-slider" />);
       expect(container.querySelector('.custom-slider')).toBeInTheDocument();
     });
   });
@@ -154,9 +146,7 @@ describe('RangeSlider', () => {
 
     it('should be keyboard navigable', () => {
       const onChange = vi.fn();
-      const { container } = render(
-        <RangeSlider {...defaultProps} onChange={onChange} />
-      );
+      const { container } = render(<RangeSlider {...defaultProps} onChange={onChange} />);
 
       const slider = container.querySelector('[role="slider"]');
       fireEvent.keyDown(slider, { key: 'ArrowUp' });

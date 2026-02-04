@@ -109,9 +109,7 @@ describe('AlertHistory', () => {
 
     it('should render search input', () => {
       render(<AlertHistory apiBase="http://localhost:8000" onToast={mockOnToast} />);
-      expect(
-        screen.getByPlaceholderText(/search alerts/i)
-      ).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/search alerts/i)).toBeInTheDocument();
     });
 
     it('should render severity filter', () => {
@@ -121,9 +119,7 @@ describe('AlertHistory', () => {
 
     it('should render acknowledged filter', () => {
       render(<AlertHistory apiBase="http://localhost:8000" onToast={mockOnToast} />);
-      expect(
-        screen.getByLabelText(/filter by acknowledged status/i)
-      ).toBeInTheDocument();
+      expect(screen.getByLabelText(/filter by acknowledged status/i)).toBeInTheDocument();
     });
 
     it('should render alert count', () => {
@@ -243,9 +239,7 @@ describe('AlertHistory', () => {
       render(<AlertHistory apiBase="http://localhost:8000" onToast={mockOnToast} />);
 
       expect(screen.getByText(/no alerts found/i)).toBeInTheDocument();
-      expect(
-        screen.getByText(/triggered alerts will appear here/i)
-      ).toBeInTheDocument();
+      expect(screen.getByText(/triggered alerts will appear here/i)).toBeInTheDocument();
     });
 
     it('should show filter hint when filters are applied', () => {
@@ -259,9 +253,7 @@ describe('AlertHistory', () => {
       render(<AlertHistory apiBase="http://localhost:8000" onToast={mockOnToast} />);
 
       // No filters applied yet, so no filter hint
-      expect(
-        screen.queryByText(/try adjusting your filters/i)
-      ).not.toBeInTheDocument();
+      expect(screen.queryByText(/try adjusting your filters/i)).not.toBeInTheDocument();
     });
   });
 
@@ -315,9 +307,7 @@ describe('AlertHistory', () => {
       const user = userEvent.setup();
       render(<AlertHistory apiBase="http://localhost:8000" onToast={mockOnToast} />);
 
-      const acknowledgedFilter = screen.getByLabelText(
-        /filter by acknowledged status/i
-      );
+      const acknowledgedFilter = screen.getByLabelText(/filter by acknowledged status/i);
       await user.selectOptions(acknowledgedFilter, 'unacknowledged');
 
       expect(acknowledgedFilter.value).toBe('unacknowledged');
@@ -337,9 +327,7 @@ describe('AlertHistory', () => {
       const severityFilter = screen.getByLabelText(/filter by severity/i);
       await user.selectOptions(severityFilter, 'critical');
 
-      expect(
-        screen.getByRole('button', { name: /clear filters/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /clear filters/i })).toBeInTheDocument();
     });
   });
 
@@ -377,10 +365,7 @@ describe('AlertHistory', () => {
       await user.click(ackButtons[0]);
 
       await waitFor(() => {
-        expect(mockOnToast).toHaveBeenCalledWith(
-          'Failed to acknowledge alert',
-          'error'
-        );
+        expect(mockOnToast).toHaveBeenCalledWith('Failed to acknowledge alert', 'error');
       });
     });
   });
@@ -426,9 +411,7 @@ describe('AlertHistory', () => {
     it('should show clear all button when alerts exist', () => {
       render(<AlertHistory apiBase="http://localhost:8000" onToast={mockOnToast} />);
 
-      expect(
-        screen.getByRole('button', { name: /clear all alert history/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /clear all alert history/i })).toBeInTheDocument();
     });
 
     it('should show confirm modal when clear all is clicked', async () => {
@@ -600,9 +583,7 @@ describe('AlertHistory', () => {
     });
 
     it('should handle alert with priority instead of severity', () => {
-      const alertsWithPriority = [
-        { ...mockAlerts[0], severity: undefined, priority: 'critical' },
-      ];
+      const alertsWithPriority = [{ ...mockAlerts[0], severity: undefined, priority: 'critical' }];
 
       useSocketApi.mockReturnValue({
         data: { results: alertsWithPriority, count: 1 },
@@ -617,9 +598,7 @@ describe('AlertHistory', () => {
     });
 
     it('should handle alert with icao instead of hex', () => {
-      const alertsWithIcao = [
-        { ...mockAlerts[0], callsign: '', hex: '', icao: 'ICAO123' },
-      ];
+      const alertsWithIcao = [{ ...mockAlerts[0], callsign: '', hex: '', icao: 'ICAO123' }];
 
       useSocketApi.mockReturnValue({
         data: { results: alertsWithIcao, count: 1 },
@@ -638,9 +617,7 @@ describe('AlertHistory', () => {
     it('should have proper feed role on list', () => {
       render(<AlertHistory apiBase="http://localhost:8000" onToast={mockOnToast} />);
 
-      expect(
-        screen.getByRole('feed', { name: /alert history items/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('feed', { name: /alert history items/i })).toBeInTheDocument();
     });
 
     it('should have aria-busy on list during loading', () => {
@@ -683,9 +660,7 @@ describe('AlertHistory', () => {
 
       render(<AlertHistory apiBase="http://localhost:8000" onToast={mockOnToast} />);
 
-      expect(
-        screen.getByRole('navigation', { name: /alert history pages/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('navigation', { name: /alert history pages/i })).toBeInTheDocument();
     });
   });
 });

@@ -65,17 +65,12 @@ describe('FacetedFilterBar', () => {
       const searchInput = screen.getByPlaceholderText(/search/i);
       fireEvent.change(searchInput, { target: { value: 'UAL' } });
 
-      expect(onFiltersChange).toHaveBeenCalledWith(
-        expect.objectContaining({ search: 'UAL' })
-      );
+      expect(onFiltersChange).toHaveBeenCalledWith(expect.objectContaining({ search: 'UAL' }));
     });
 
     it('should display current search value', () => {
       render(
-        <FacetedFilterBar
-          {...defaultProps}
-          filters={{ ...defaultFilters, search: 'test' }}
-        />
+        <FacetedFilterBar {...defaultProps} filters={{ ...defaultFilters, search: 'test' }} />
       );
 
       const searchInput = screen.getByPlaceholderText(/search/i);
@@ -91,17 +86,12 @@ describe('FacetedFilterBar', () => {
       const militaryButton = screen.getByText(/military/i);
       fireEvent.click(militaryButton);
 
-      expect(onFiltersChange).toHaveBeenCalledWith(
-        expect.objectContaining({ militaryOnly: true })
-      );
+      expect(onFiltersChange).toHaveBeenCalledWith(expect.objectContaining({ militaryOnly: true }));
     });
 
     it('should show active state when military filter is on', () => {
       const { container } = render(
-        <FacetedFilterBar
-          {...defaultProps}
-          filters={{ ...defaultFilters, militaryOnly: true }}
-        />
+        <FacetedFilterBar {...defaultProps} filters={{ ...defaultFilters, militaryOnly: true }} />
       );
 
       // Just verify the filter bar renders with military filter active
@@ -117,9 +107,7 @@ describe('FacetedFilterBar', () => {
       const safetyButton = screen.getByText(/safety/i);
       fireEvent.click(safetyButton);
 
-      expect(onFiltersChange).toHaveBeenCalledWith(
-        expect.objectContaining({ safetyOnly: true })
-      );
+      expect(onFiltersChange).toHaveBeenCalledWith(expect.objectContaining({ safetyOnly: true }));
     });
   });
 
@@ -160,9 +148,7 @@ describe('FacetedFilterBar', () => {
 
     it('should call onLoadView when loading a view', () => {
       const onLoadView = vi.fn();
-      const savedViews = [
-        { id: '1', name: 'My View', filters: defaultFilters },
-      ];
+      const savedViews = [{ id: '1', name: 'My View', filters: defaultFilters }];
       render(
         <FacetedFilterBar
           {...defaultProps}
@@ -182,10 +168,7 @@ describe('FacetedFilterBar', () => {
   describe('clear all', () => {
     it('should show clear all button when filters are active', () => {
       render(
-        <FacetedFilterBar
-          {...defaultProps}
-          filters={{ ...defaultFilters, militaryOnly: true }}
-        />
+        <FacetedFilterBar {...defaultProps} filters={{ ...defaultFilters, militaryOnly: true }} />
       );
 
       expect(screen.getByText(/clear all/i)).toBeInTheDocument();

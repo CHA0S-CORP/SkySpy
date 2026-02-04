@@ -44,9 +44,27 @@ describe('SessionAnalyticsStats', () => {
       aircraft_type_pct: 82,
     },
     most_watched: [
-      { icao_hex: 'abc123', callsign: 'UAL123', aircraft_type: 'B738', total_duration_min: 120, session_count: 8 },
-      { icao_hex: 'def456', callsign: 'DAL456', aircraft_type: 'A320', total_duration_min: 95, session_count: 6 },
-      { icao_hex: 'ghi789', callsign: 'AAL789', aircraft_type: 'B77W', total_duration_min: 85, session_count: 5 },
+      {
+        icao_hex: 'abc123',
+        callsign: 'UAL123',
+        aircraft_type: 'B738',
+        total_duration_min: 120,
+        session_count: 8,
+      },
+      {
+        icao_hex: 'def456',
+        callsign: 'DAL456',
+        aircraft_type: 'A320',
+        total_duration_min: 95,
+        session_count: 6,
+      },
+      {
+        icao_hex: 'ghi789',
+        callsign: 'AAL789',
+        aircraft_type: 'B77W',
+        total_duration_min: 85,
+        session_count: 5,
+      },
     ],
     return_visitors: {
       total_return: 156,
@@ -105,7 +123,9 @@ describe('SessionAnalyticsStats', () => {
       });
 
       render(<SessionAnalyticsStats {...defaultProps} />);
-      expect(screen.getByText(/Error loading data: Failed to fetch session data/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Error loading data: Failed to fetch session data/)
+      ).toBeInTheDocument();
     });
 
     it('should call refetch when retry is clicked', () => {

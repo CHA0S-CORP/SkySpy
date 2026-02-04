@@ -142,60 +142,62 @@ export function PolarPlotEnhanced({
         />
 
         {/* Grid circles */}
-        {showGrid && gridCircles.map((circle, i) => (
-          <g key={`circle-${i}`}>
-            <circle
-              cx={center}
-              cy={center}
-              r={circle.radius}
-              fill="none"
-              stroke="var(--border)"
-              strokeWidth="1"
-              strokeDasharray={i < gridCircles.length - 1 ? '2,4' : 'none'}
-              opacity={0.5}
-            />
-            {showLabels && (
-              <text
-                x={center + 4}
-                y={center - circle.radius + 3}
-                fontSize="9"
-                fill="var(--text-dim)"
-                fontFamily="'JetBrains Mono', monospace"
-              >
-                {circle.label}
-              </text>
-            )}
-          </g>
-        ))}
+        {showGrid &&
+          gridCircles.map((circle, i) => (
+            <g key={`circle-${i}`}>
+              <circle
+                cx={center}
+                cy={center}
+                r={circle.radius}
+                fill="none"
+                stroke="var(--border)"
+                strokeWidth="1"
+                strokeDasharray={i < gridCircles.length - 1 ? '2,4' : 'none'}
+                opacity={0.5}
+              />
+              {showLabels && (
+                <text
+                  x={center + 4}
+                  y={center - circle.radius + 3}
+                  fontSize="9"
+                  fill="var(--text-dim)"
+                  fontFamily="'JetBrains Mono', monospace"
+                >
+                  {circle.label}
+                </text>
+              )}
+            </g>
+          ))}
 
         {/* Bearing lines */}
-        {showGrid && bearingLines.map((line, i) => (
-          <g key={`bearing-${i}`}>
-            <line
-              x1={line.x1}
-              y1={line.y1}
-              x2={line.x2}
-              y2={line.y2}
-              stroke="var(--border)"
-              strokeWidth="1"
-              strokeDasharray="2,4"
-              opacity={0.3}
-            />
-            {showLabels && (
-              <text
-                x={line.labelX}
-                y={line.labelY}
-                fontSize="10"
-                fill="var(--text-secondary)"
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fontWeight={line.label === 'N' ? '600' : '400'}
-              >
-                {line.label}
-              </text>
-            )}
-          </g>
-        ))}
+        {showGrid &&
+          bearingLines.map((line, i) => (
+            <g key={`bearing-${i}`}>
+              <line
+                x1={line.x1}
+                y1={line.y1}
+                x2={line.x2}
+                y2={line.y2}
+                stroke="var(--border)"
+                strokeWidth="1"
+                strokeDasharray="2,4"
+                opacity={0.3}
+              />
+              {showLabels && (
+                <text
+                  x={line.labelX}
+                  y={line.labelY}
+                  fontSize="10"
+                  fill="var(--text-secondary)"
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fontWeight={line.label === 'N' ? '600' : '400'}
+                >
+                  {line.label}
+                </text>
+              )}
+            </g>
+          ))}
 
         {/* Center point (feeder location) */}
         <circle
@@ -275,15 +277,36 @@ export function PolarPlotEnhanced({
           {colorByAltitude && (
             <>
               <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--viz-altitude-low)' }} />
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: 'var(--viz-altitude-low)',
+                  }}
+                />
                 &lt;10k
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--viz-altitude-mid)' }} />
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: 'var(--viz-altitude-mid)',
+                  }}
+                />
                 10-30k
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--viz-altitude-high)' }} />
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: 'var(--viz-altitude-high)',
+                  }}
+                />
                 &gt;30k
               </span>
             </>
@@ -291,19 +314,47 @@ export function PolarPlotEnhanced({
           {colorBySignal && (
             <>
               <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--viz-signal-excellent)' }} />
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: 'var(--viz-signal-excellent)',
+                  }}
+                />
                 Excellent
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--viz-signal-good)' }} />
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: 'var(--viz-signal-good)',
+                  }}
+                />
                 Good
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--viz-signal-fair)' }} />
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: 'var(--viz-signal-fair)',
+                  }}
+                />
                 Fair
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--viz-signal-weak)' }} />
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: 'var(--viz-signal-weak)',
+                  }}
+                />
                 Weak
               </span>
             </>

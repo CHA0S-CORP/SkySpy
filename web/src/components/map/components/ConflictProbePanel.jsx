@@ -300,9 +300,7 @@ export function ConflictProbePanel({
             </div>
           )}
 
-          {conflicts.length === 0 && (
-            <span className="conflict-probe-clear">CLEAR</span>
-          )}
+          {conflicts.length === 0 && <span className="conflict-probe-clear">CLEAR</span>}
 
           <div className="conflict-toggle-icon">
             {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
@@ -333,7 +331,9 @@ export function ConflictProbePanel({
           {conflicts.length === 0 ? (
             <div className="conflict-probe-empty">
               <span>No predicted conflicts</span>
-              <span className="conflict-probe-subtitle">Monitoring {enabled ? 'active' : 'paused'}</span>
+              <span className="conflict-probe-subtitle">
+                Monitoring {enabled ? 'active' : 'paused'}
+              </span>
             </div>
           ) : (
             <div className="conflict-probe-list" role="list">

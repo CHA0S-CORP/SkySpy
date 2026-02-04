@@ -115,7 +115,10 @@ describe('useAcarsData', () => {
       renderHook(() => useAcarsData({ ...defaultProps, viewType: 'sessions' }));
 
       await new Promise((r) => setTimeout(r, 100));
-      expect(mockFetch).not.toHaveBeenCalledWith(expect.stringContaining('/api/v1/acars'), expect.anything());
+      expect(mockFetch).not.toHaveBeenCalledWith(
+        expect.stringContaining('/api/v1/acars'),
+        expect.anything()
+      );
     });
 
     it('should fetch ACARS messages via HTTP when viewType is acars', async () => {
@@ -436,10 +439,7 @@ describe('useAcarsData', () => {
       });
 
       await waitFor(() => {
-        expect(window.localStorage.setItem).toHaveBeenCalledWith(
-          'acars-compact-mode',
-          'true'
-        );
+        expect(window.localStorage.setItem).toHaveBeenCalledWith('acars-compact-mode', 'true');
       });
     });
   });

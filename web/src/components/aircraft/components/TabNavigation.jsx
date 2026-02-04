@@ -109,37 +109,37 @@ export function TabNavigation({
           onKeyDown={handleKeyDown}
           className="detail-tabs-inner"
         >
-        {TAB_CONFIG.map((tab, index) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          const badge = getTabBadge(tab.id);
-          const isAlertBadge = tab.isAlert && badge > 0;
+          {TAB_CONFIG.map((tab, index) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            const badge = getTabBadge(tab.id);
+            const isAlertBadge = tab.isAlert && badge > 0;
 
-          return (
-            <button
-              key={tab.id}
-              id={`tab-${tab.id}`}
-              role="tab"
-              aria-selected={isActive}
-              aria-controls={`panel-${tab.id}`}
-              tabIndex={isActive ? 0 : -1}
-              className={`detail-tab ${isActive ? 'active' : ''}`}
-              onClick={() => onTabChange(tab.id)}
-            >
-              <Icon size={16} aria-hidden="true" className="tab-icon" />
-              <span className="tab-label">{tab.label}</span>
-              {badge !== null && (
-                <span
-                  className={`tab-badge ${isAlertBadge ? 'alert' : ''}`}
-                  aria-label={`${badge} ${tab.label.toLowerCase()}`}
-                >
-                  {badge}
-                </span>
-              )}
-              {isActive && <span className="tab-indicator" aria-hidden="true" />}
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={tab.id}
+                id={`tab-${tab.id}`}
+                role="tab"
+                aria-selected={isActive}
+                aria-controls={`panel-${tab.id}`}
+                tabIndex={isActive ? 0 : -1}
+                className={`detail-tab ${isActive ? 'active' : ''}`}
+                onClick={() => onTabChange(tab.id)}
+              >
+                <Icon size={16} aria-hidden="true" className="tab-icon" />
+                <span className="tab-label">{tab.label}</span>
+                {badge !== null && (
+                  <span
+                    className={`tab-badge ${isAlertBadge ? 'alert' : ''}`}
+                    aria-label={`${badge} ${tab.label.toLowerCase()}`}
+                  >
+                    {badge}
+                  </span>
+                )}
+                {isActive && <span className="tab-indicator" aria-hidden="true" />}
+              </button>
+            );
+          })}
         </div>
       </nav>
     </div>

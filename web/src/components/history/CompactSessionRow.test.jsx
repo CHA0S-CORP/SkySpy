@@ -43,10 +43,7 @@ describe('CompactSessionRow', () => {
 
     it('should display ICAO when no callsign', () => {
       render(
-        <CompactSessionRow
-          {...defaultProps}
-          session={{ ...sampleSession, callsign: null }}
-        />
+        <CompactSessionRow {...defaultProps} session={{ ...sampleSession, callsign: null }} />
       );
       expect(screen.getByText('A12345')).toBeInTheDocument();
     });
@@ -60,9 +57,7 @@ describe('CompactSessionRow', () => {
 
     it('should call onSelectByTail when tail number is clicked', () => {
       const onSelectByTail = vi.fn();
-      render(
-        <CompactSessionRow {...defaultProps} onSelectByTail={onSelectByTail} />
-      );
+      render(<CompactSessionRow {...defaultProps} onSelectByTail={onSelectByTail} />);
 
       fireEvent.click(screen.getByText('N12345'));
       expect(onSelectByTail).toHaveBeenCalledWith('N12345');
@@ -72,11 +67,7 @@ describe('CompactSessionRow', () => {
       const onClick = vi.fn();
       const onSelectByTail = vi.fn();
       render(
-        <CompactSessionRow
-          {...defaultProps}
-          onClick={onClick}
-          onSelectByTail={onSelectByTail}
-        />
+        <CompactSessionRow {...defaultProps} onClick={onClick} onSelectByTail={onSelectByTail} />
       );
 
       fireEvent.click(screen.getByText('N12345'));
@@ -121,10 +112,7 @@ describe('CompactSessionRow', () => {
 
     it('should show correct number of filled bars for good signal', () => {
       const { container } = render(
-        <CompactSessionRow
-          {...defaultProps}
-          session={{ ...sampleSession, max_rssi: -5 }}
-        />
+        <CompactSessionRow {...defaultProps} session={{ ...sampleSession, max_rssi: -5 }} />
       );
       const filledBars = container.querySelectorAll('.compact-session-row__signal-bar--filled');
       expect(filledBars.length).toBe(4);
@@ -132,10 +120,7 @@ describe('CompactSessionRow', () => {
 
     it('should show fewer bars for weak signal', () => {
       const { container } = render(
-        <CompactSessionRow
-          {...defaultProps}
-          session={{ ...sampleSession, max_rssi: -25 }}
-        />
+        <CompactSessionRow {...defaultProps} session={{ ...sampleSession, max_rssi: -25 }} />
       );
       const filledBars = container.querySelectorAll('.compact-session-row__signal-bar--filled');
       expect(filledBars.length).toBe(1);
@@ -145,10 +130,7 @@ describe('CompactSessionRow', () => {
   describe('badges', () => {
     it('should show military badge when is_military is true', () => {
       render(
-        <CompactSessionRow
-          {...defaultProps}
-          session={{ ...sampleSession, is_military: true }}
-        />
+        <CompactSessionRow {...defaultProps} session={{ ...sampleSession, is_military: true }} />
       );
       expect(screen.getByText('MIL')).toBeInTheDocument();
     });
@@ -170,7 +152,9 @@ describe('CompactSessionRow', () => {
 
     it('should not show safety badge when safety_event_count is 0', () => {
       const { container } = render(<CompactSessionRow {...defaultProps} />);
-      expect(container.querySelector('.compact-session-row__badge--safety')).not.toBeInTheDocument();
+      expect(
+        container.querySelector('.compact-session-row__badge--safety')
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -181,9 +165,7 @@ describe('CompactSessionRow', () => {
     });
 
     it('should not render sparkline when showSparkline is false', () => {
-      const { container } = render(
-        <CompactSessionRow {...defaultProps} showSparkline={false} />
-      );
+      const { container } = render(<CompactSessionRow {...defaultProps} showSparkline={false} />);
       expect(container.querySelector('.compact-session-row__sparkline')).not.toBeInTheDocument();
     });
 
@@ -195,7 +177,9 @@ describe('CompactSessionRow', () => {
           session={{ ...sampleSession, altitude_history: [] }}
         />
       );
-      expect(container.querySelector('.compact-session-row__sparkline svg')).not.toBeInTheDocument();
+      expect(
+        container.querySelector('.compact-session-row__sparkline svg')
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -226,9 +210,7 @@ describe('CompactSessionRow', () => {
     });
 
     it('should show selected state', () => {
-      const { container } = render(
-        <CompactSessionRow {...defaultProps} selected />
-      );
+      const { container } = render(<CompactSessionRow {...defaultProps} selected />);
       expect(container.querySelector('.compact-session-row--selected')).toBeInTheDocument();
     });
   });
@@ -236,10 +218,7 @@ describe('CompactSessionRow', () => {
   describe('styling', () => {
     it('should apply military class when is_military', () => {
       const { container } = render(
-        <CompactSessionRow
-          {...defaultProps}
-          session={{ ...sampleSession, is_military: true }}
-        />
+        <CompactSessionRow {...defaultProps} session={{ ...sampleSession, is_military: true }} />
       );
       expect(container.querySelector('.compact-session-row--military')).toBeInTheDocument();
     });
@@ -255,9 +234,7 @@ describe('CompactSessionRow', () => {
     });
 
     it('should apply custom className', () => {
-      const { container } = render(
-        <CompactSessionRow {...defaultProps} className="custom-row" />
-      );
+      const { container } = render(<CompactSessionRow {...defaultProps} className="custom-row" />);
       expect(container.querySelector('.custom-row')).toBeInTheDocument();
     });
   });

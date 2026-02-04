@@ -54,7 +54,10 @@ export function useAltitudeFilter() {
           min: typeof parsed.min === 'number' ? parsed.min : DEFAULT_STATE.min,
           max: typeof parsed.max === 'number' ? parsed.max : DEFAULT_STATE.max,
           preset: parsed.preset || DEFAULT_STATE.preset,
-          hideFiltered: typeof parsed.hideFiltered === 'boolean' ? parsed.hideFiltered : DEFAULT_STATE.hideFiltered,
+          hideFiltered:
+            typeof parsed.hideFiltered === 'boolean'
+              ? parsed.hideFiltered
+              : DEFAULT_STATE.hideFiltered,
         };
       }
     } catch {
@@ -118,12 +121,10 @@ export function useAltitudeFilter() {
    */
   const setCustomRange = useCallback((newMin, newMax) => {
     setAltitudeFilter((prev) => {
-      const min = newMin !== undefined
-        ? Math.max(MIN_ALTITUDE, Math.min(MAX_ALTITUDE, newMin))
-        : prev.min;
-      const max = newMax !== undefined
-        ? Math.max(MIN_ALTITUDE, Math.min(MAX_ALTITUDE, newMax))
-        : prev.max;
+      const min =
+        newMin !== undefined ? Math.max(MIN_ALTITUDE, Math.min(MAX_ALTITUDE, newMin)) : prev.min;
+      const max =
+        newMax !== undefined ? Math.max(MIN_ALTITUDE, Math.min(MAX_ALTITUDE, newMax)) : prev.max;
 
       return {
         ...prev,
@@ -167,39 +168,45 @@ export function useAltitudeFilter() {
    * @param {number|string|null|undefined} altitude - Aircraft altitude in feet
    * @returns {boolean} True if aircraft should be visible
    */
-  const isAircraftVisible = useCallback((altitude) => {
-    if (!altitudeFilter.enabled) return true;
+  const isAircraftVisible = useCallback(
+    (altitude) => {
+      if (!altitudeFilter.enabled) return true;
 
-    // Handle ground aircraft
-    if (altitude === 'ground' || altitude === null || altitude === undefined) {
-      // Ground aircraft are visible if min is 0 (includes surface)
-      return altitudeFilter.min === 0;
-    }
+      // Handle ground aircraft
+      if (altitude === 'ground' || altitude === null || altitude === undefined) {
+        // Ground aircraft are visible if min is 0 (includes surface)
+        return altitudeFilter.min === 0;
+      }
 
-    // Parse string altitudes
-    const alt = typeof altitude === 'string' ? parseFloat(altitude) : altitude;
-    if (isNaN(alt)) {
-      return altitudeFilter.min === 0;
-    }
+      // Parse string altitudes
+      const alt = typeof altitude === 'string' ? parseFloat(altitude) : altitude;
+      if (isNaN(alt)) {
+        return altitudeFilter.min === 0;
+      }
 
-    // Check if within range
-    return alt >= altitudeFilter.min && alt <= altitudeFilter.max;
-  }, [altitudeFilter.enabled, altitudeFilter.min, altitudeFilter.max]);
+      // Check if within range
+      return alt >= altitudeFilter.min && alt <= altitudeFilter.max;
+    },
+    [altitudeFilter.enabled, altitudeFilter.min, altitudeFilter.max]
+  );
 
   /**
    * Get the opacity for an aircraft based on filter state
    * @param {number|string|null|undefined} altitude - Aircraft altitude in feet
    * @returns {number} Opacity value (1 for visible, 0.15 for dimmed, 0 for hidden)
    */
-  const getAircraftOpacity = useCallback((altitude) => {
-    if (!altitudeFilter.enabled) return 1;
+  const getAircraftOpacity = useCallback(
+    (altitude) => {
+      if (!altitudeFilter.enabled) return 1;
 
-    const visible = isAircraftVisible(altitude);
-    if (visible) return 1;
+      const visible = isAircraftVisible(altitude);
+      if (visible) return 1;
 
-    // Return 0 if hiding, dimmed opacity otherwise
-    return altitudeFilter.hideFiltered ? 0 : DIM_OPACITY;
-  }, [altitudeFilter.enabled, altitudeFilter.hideFiltered, isAircraftVisible]);
+      // Return 0 if hiding, dimmed opacity otherwise
+      return altitudeFilter.hideFiltered ? 0 : DIM_OPACITY;
+    },
+    [altitudeFilter.enabled, altitudeFilter.hideFiltered, isAircraftVisible]
+  );
 
   /**
    * Get a label describing the current filter

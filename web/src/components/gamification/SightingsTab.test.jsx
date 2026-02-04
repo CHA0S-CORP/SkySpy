@@ -238,7 +238,13 @@ describe('SightingsTab', () => {
   describe('sighting without optional fields', () => {
     it('should render sighting without reason', () => {
       const sightingWithoutReason = [
-        { icao_hex: 'test', aircraft_type: 'Test', callsign: 'TST123', rarity: 'rare', date: '2024-01-01' },
+        {
+          icao_hex: 'test',
+          aircraft_type: 'Test',
+          callsign: 'TST123',
+          rarity: 'rare',
+          date: '2024-01-01',
+        },
       ];
       render(<SightingsTab rare_sightings={sightingWithoutReason} />);
       expect(screen.getByText('Test')).toBeInTheDocument();

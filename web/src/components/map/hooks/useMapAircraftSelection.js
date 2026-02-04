@@ -61,18 +61,21 @@ export function useMapAircraftSelection({ setHashParams, hashParams } = {}) {
   }, []);
 
   // Select aircraft and update URL hash
-  const selectAircraft = useCallback((aircraft) => {
-    if (!aircraft) return;
+  const selectAircraft = useCallback(
+    (aircraft) => {
+      if (!aircraft) return;
 
-    userDeselectedRef.current = false;
-    setSelectedAircraftState(aircraft);
-    setPopupPosition({ x: 16, y: 16 });
+      userDeselectedRef.current = false;
+      setSelectedAircraftState(aircraft);
+      setPopupPosition({ x: 16, y: 16 });
 
-    // Update URL hash if function provided
-    if (setHashParams && aircraft.hex) {
-      setHashParams({ selected: aircraft.hex });
-    }
-  }, [setHashParams]);
+      // Update URL hash if function provided
+      if (setHashParams && aircraft.hex) {
+        setHashParams({ selected: aircraft.hex });
+      }
+    },
+    [setHashParams]
+  );
 
   // Deselect aircraft and update URL hash
   const deselectAircraft = useCallback(() => {
@@ -92,15 +95,18 @@ export function useMapAircraftSelection({ setHashParams, hashParams } = {}) {
   }, []);
 
   // Open aircraft in full detail modal
-  const openInDetail = useCallback((hex) => {
-    setAircraftDetailHex(hex);
-    setSidebarAircraftHex(null); // Close sidebar if open
+  const openInDetail = useCallback(
+    (hex) => {
+      setAircraftDetailHex(hex);
+      setSidebarAircraftHex(null); // Close sidebar if open
 
-    // Update URL hash if function provided
-    if (setHashParams) {
-      setHashParams({ aircraft: hex });
-    }
-  }, [setHashParams]);
+      // Update URL hash if function provided
+      if (setHashParams) {
+        setHashParams({ aircraft: hex });
+      }
+    },
+    [setHashParams]
+  );
 
   // Close sidebar
   const closeSidebar = useCallback(() => {

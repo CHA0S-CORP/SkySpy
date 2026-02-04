@@ -12,7 +12,12 @@ describe('SavedViewsManager', () => {
 
   const sampleViews = [
     { id: '1', name: 'Heavy Aircraft', filters: sampleFilters, createdAt: '2024-01-15T10:00:00Z' },
-    { id: '2', name: 'Military Only', filters: { ...sampleFilters, militaryOnly: true }, createdAt: '2024-01-15T11:00:00Z' },
+    {
+      id: '2',
+      name: 'Military Only',
+      filters: { ...sampleFilters, militaryOnly: true },
+      createdAt: '2024-01-15T11:00:00Z',
+    },
   ];
 
   const defaultProps = {
@@ -78,16 +83,12 @@ describe('SavedViewsManager', () => {
   describe('loading views', () => {
     it('should call onLoad when view is clicked', () => {
       const onLoad = vi.fn();
-      render(
-        <SavedViewsManager {...defaultProps} savedViews={sampleViews} onLoad={onLoad} />
-      );
+      render(<SavedViewsManager {...defaultProps} savedViews={sampleViews} onLoad={onLoad} />);
 
       fireEvent.click(screen.getByText('Views'));
       fireEvent.click(screen.getByText('Heavy Aircraft'));
 
-      expect(onLoad).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'Heavy Aircraft' })
-      );
+      expect(onLoad).toHaveBeenCalledWith(expect.objectContaining({ name: 'Heavy Aircraft' }));
     });
   });
 

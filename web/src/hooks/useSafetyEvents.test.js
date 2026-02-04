@@ -46,10 +46,9 @@ describe('useSafetyEvents', () => {
         { id: 'event-1', event_type: 'proximity', timestamp: new Date().toISOString() },
       ];
 
-      const { result, rerender } = renderHook(
-        (props) => useSafetyEvents(props.wsSafetyEvents),
-        { initialProps: { wsSafetyEvents } }
-      );
+      const { result, rerender } = renderHook((props) => useSafetyEvents(props.wsSafetyEvents), {
+        initialProps: { wsSafetyEvents },
+      });
 
       expect(result.current.safetyEvents).toHaveLength(1);
 
@@ -72,10 +71,9 @@ describe('useSafetyEvents', () => {
     });
 
     it('should add new events to beginning', () => {
-      const { result, rerender } = renderHook(
-        (props) => useSafetyEvents(props.wsSafetyEvents),
-        { initialProps: { wsSafetyEvents: [{ id: 'event-1', timestamp: new Date().toISOString() }] } }
-      );
+      const { result, rerender } = renderHook((props) => useSafetyEvents(props.wsSafetyEvents), {
+        initialProps: { wsSafetyEvents: [{ id: 'event-1', timestamp: new Date().toISOString() }] },
+      });
 
       rerender({ wsSafetyEvents: [{ id: 'event-2', timestamp: new Date().toISOString() }] });
 
@@ -92,9 +90,7 @@ describe('useSafetyEvents', () => {
 
       mockWsRequest.mockResolvedValue({ events: mockEvents });
 
-      const { result } = renderHook(() =>
-        useSafetyEvents([], [], mockWsRequest, true)
-      );
+      const { result } = renderHook(() => useSafetyEvents([], [], mockWsRequest, true));
 
       // Wait for initial delay + fetch
       await act(async () => {
@@ -110,9 +106,7 @@ describe('useSafetyEvents', () => {
         results: [{ id: 'event-1' }],
       });
 
-      const { result } = renderHook(() =>
-        useSafetyEvents([], [], mockWsRequest, true)
-      );
+      const { result } = renderHook(() => useSafetyEvents([], [], mockWsRequest, true));
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(600);
@@ -126,9 +120,7 @@ describe('useSafetyEvents', () => {
         data: { events: [{ id: 'event-1' }] },
       });
 
-      const { result } = renderHook(() =>
-        useSafetyEvents([], [], mockWsRequest, true)
-      );
+      const { result } = renderHook(() => useSafetyEvents([], [], mockWsRequest, true));
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(600);
@@ -140,9 +132,7 @@ describe('useSafetyEvents', () => {
     it('should handle array response', async () => {
       mockWsRequest.mockResolvedValue([{ id: 'event-1' }]);
 
-      const { result } = renderHook(() =>
-        useSafetyEvents([], [], mockWsRequest, true)
-      );
+      const { result } = renderHook(() => useSafetyEvents([], [], mockWsRequest, true));
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(600);
@@ -327,8 +317,18 @@ describe('useSafetyEvents', () => {
 
     it('should acknowledge events by severity', () => {
       const events = [
-        { id: 'event-1', severity: 'critical', timestamp: new Date().toISOString(), icao: 'ABC123' },
-        { id: 'event-2', severity: 'critical', timestamp: new Date().toISOString(), icao: 'DEF456' },
+        {
+          id: 'event-1',
+          severity: 'critical',
+          timestamp: new Date().toISOString(),
+          icao: 'ABC123',
+        },
+        {
+          id: 'event-2',
+          severity: 'critical',
+          timestamp: new Date().toISOString(),
+          icao: 'DEF456',
+        },
         { id: 'event-3', severity: 'warning', timestamp: new Date().toISOString(), icao: 'GHI789' },
       ];
 

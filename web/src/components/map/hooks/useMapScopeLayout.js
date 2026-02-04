@@ -78,19 +78,10 @@ export function useMapScopeLayout({
 
     // When active scope's pan offset differs, update MapView
     const scopePan = activeScopeConfig.panOffset || { x: 0, y: 0 };
-    if (
-      (scopePan.x !== currentPanOffset.x || scopePan.y !== currentPanOffset.y) &&
-      setPanOffset
-    ) {
+    if ((scopePan.x !== currentPanOffset.x || scopePan.y !== currentPanOffset.y) && setPanOffset) {
       setPanOffset(scopePan);
     }
-  }, [
-    isEnabled,
-    isMultiScope,
-    activeScopeConfig.panOffset,
-    currentPanOffset,
-    setPanOffset,
-  ]);
+  }, [isEnabled, isMultiScope, activeScopeConfig.panOffset, currentPanOffset, setPanOffset]);
 
   // Handle range changes - update both MapView and scope config
   const handleRangeChange = useCallback(

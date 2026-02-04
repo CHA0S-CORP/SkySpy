@@ -250,7 +250,7 @@ describe('useMSAW', () => {
       const aircraft = [
         createAircraft({ hex: 'alert1', alt_baro: 400 }), // Alert (< 500ft)
         createAircraft({ hex: 'alert2', alt_baro: 300 }), // Alert
-        createAircraft({ hex: 'warn1', alt_baro: 800 }),  // Warning (500-1000ft)
+        createAircraft({ hex: 'warn1', alt_baro: 800 }), // Warning (500-1000ft)
         createAircraft({ hex: 'safe1', alt_baro: 5000 }), // Safe (> 1000ft)
       ];
 
@@ -275,8 +275,8 @@ describe('useMSAW', () => {
       const { result } = renderHook(() => useMSAW(aircraft, airports));
 
       expect(result.current.affectedAircraft).toHaveLength(2);
-      expect(result.current.affectedAircraft.map(a => a.hex)).toContain('low1');
-      expect(result.current.affectedAircraft.map(a => a.hex)).toContain('low2');
+      expect(result.current.affectedAircraft.map((a) => a.hex)).toContain('low1');
+      expect(result.current.affectedAircraft.map((a) => a.hex)).toContain('low2');
     });
   });
 
@@ -304,7 +304,9 @@ describe('useMSAW', () => {
     it('should handle aircraft without altitude data', () => {
       localStorageMock.getItem.mockReturnValue('true');
 
-      const aircraft = [createAircraft({ hex: 'noalt', alt_baro: null, alt_geom: null, alt: null })];
+      const aircraft = [
+        createAircraft({ hex: 'noalt', alt_baro: null, alt_geom: null, alt: null }),
+      ];
       const airports = [createAirport()];
 
       const { result } = renderHook(() => useMSAW(aircraft, airports));

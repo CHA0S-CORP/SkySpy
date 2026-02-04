@@ -10,9 +10,7 @@ vi.mock('./hooks/useAircraftDetail', () => ({
 // Mock lazy-loaded components
 vi.mock('./tabs/OverviewTab', () => ({
   OverviewTab: ({ info, aircraft }) => (
-    <div data-testid="overview-tab">
-      OverviewTab - {info?.type_name || 'No info'}
-    </div>
+    <div data-testid="overview-tab">OverviewTab - {info?.type_name || 'No info'}</div>
   ),
 }));
 

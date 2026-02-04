@@ -1,5 +1,8 @@
 import { useEffect, useCallback } from 'react';
-import { getGlobalAudioState, setAutoplay as setGlobalAutoplay } from '../components/views/AudioView';
+import {
+  getGlobalAudioState,
+  setAutoplay as setGlobalAutoplay,
+} from '../components/views/AudioView';
 
 /**
  * Hook for global keyboard shortcuts for audio playback control.

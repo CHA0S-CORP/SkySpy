@@ -51,13 +51,19 @@ describe('useReducedMotion', () => {
 
   it('should add event listener on mount', () => {
     renderHook(() => useReducedMotion());
-    expect(mockMediaQueryList.addEventListener).toHaveBeenCalledWith('change', expect.any(Function));
+    expect(mockMediaQueryList.addEventListener).toHaveBeenCalledWith(
+      'change',
+      expect.any(Function)
+    );
   });
 
   it('should remove event listener on unmount', () => {
     const { unmount } = renderHook(() => useReducedMotion());
     unmount();
-    expect(mockMediaQueryList.removeEventListener).toHaveBeenCalledWith('change', expect.any(Function));
+    expect(mockMediaQueryList.removeEventListener).toHaveBeenCalledWith(
+      'change',
+      expect.any(Function)
+    );
   });
 
   it('should update when media query changes', () => {

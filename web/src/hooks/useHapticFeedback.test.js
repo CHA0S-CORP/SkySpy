@@ -237,7 +237,9 @@ describe('useHapticFeedback', () => {
         result.current.vibrateNewThreat('critical');
       });
 
-      expect(vibrateMock).toHaveBeenCalledWith([100, 50, 100, 50, 300, 200, 200, 100, 200, 100, 200]);
+      expect(vibrateMock).toHaveBeenCalledWith([
+        100, 50, 100, 50, 300, 200, 200, 100, 200, 100, 200,
+      ]);
     });
   });
 

@@ -100,9 +100,7 @@ describe('useApi', () => {
         json: () => Promise.resolve({ data: 'test' }),
       });
 
-      const { result } = renderHook(() =>
-        useApi('/api/v1/test', null, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useApi('/api/v1/test', null, 'http://localhost:8000'));
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
@@ -429,10 +427,9 @@ describe('useApi', () => {
         json: () => Promise.resolve({ data: 'test' }),
       });
 
-      const { result, rerender } = renderHook(
-        ({ endpoint }) => useApi(endpoint),
-        { initialProps: { endpoint: '/api/v1/test1' } }
-      );
+      const { result, rerender } = renderHook(({ endpoint }) => useApi(endpoint), {
+        initialProps: { endpoint: '/api/v1/test1' },
+      });
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);

@@ -79,9 +79,21 @@ describe('useAviationData', () => {
 
       // Should have called for navaids, airports, airspace, and airspace advisories
       expect(mockWsRequest).toHaveBeenCalledWith('navaids', expect.any(Object), expect.any(Number));
-      expect(mockWsRequest).toHaveBeenCalledWith('airports', expect.any(Object), expect.any(Number));
-      expect(mockWsRequest).toHaveBeenCalledWith('airspace-boundaries', expect.any(Object), expect.any(Number));
-      expect(mockWsRequest).toHaveBeenCalledWith('airspaces', expect.any(Object), expect.any(Number));
+      expect(mockWsRequest).toHaveBeenCalledWith(
+        'airports',
+        expect.any(Object),
+        expect.any(Number)
+      );
+      expect(mockWsRequest).toHaveBeenCalledWith(
+        'airspace-boundaries',
+        expect.any(Object),
+        expect.any(Number)
+      );
+      expect(mockWsRequest).toHaveBeenCalledWith(
+        'airspaces',
+        expect.any(Object),
+        expect.any(Number)
+      );
     });
 
     it('should include metars when overlay enabled', async () => {
@@ -94,7 +106,11 @@ describe('useAviationData', () => {
       );
 
       await waitFor(() => {
-        expect(mockWsRequest).toHaveBeenCalledWith('metars', expect.any(Object), expect.any(Number));
+        expect(mockWsRequest).toHaveBeenCalledWith(
+          'metars',
+          expect.any(Object),
+          expect.any(Number)
+        );
       });
     });
 
@@ -108,7 +124,11 @@ describe('useAviationData', () => {
       );
 
       await waitFor(() => {
-        expect(mockWsRequest).toHaveBeenCalledWith('pireps', expect.any(Object), expect.any(Number));
+        expect(mockWsRequest).toHaveBeenCalledWith(
+          'pireps',
+          expect.any(Object),
+          expect.any(Number)
+        );
       });
     });
 
@@ -373,9 +393,7 @@ describe('useAviationData', () => {
 
   describe('error handling', () => {
     it('should set error when socket not connected', () => {
-      const { result } = renderHook(() =>
-        useAviationData(null, false, 40.0, -74.0, 100, {})
-      );
+      const { result } = renderHook(() => useAviationData(null, false, 40.0, -74.0, 100, {}));
 
       expect(result.current.error).toBeNull();
     });

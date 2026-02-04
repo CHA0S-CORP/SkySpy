@@ -59,9 +59,7 @@ describe('useSystemConfig', () => {
             categories: [
               {
                 name: 'General',
-                configs: [
-                  { key: 'SITE_NAME', value: 'SkySpy', data_type: 'str' },
-                ],
+                configs: [{ key: 'SITE_NAME', value: 'SkySpy', data_type: 'str' }],
               },
             ],
           }),
@@ -112,10 +110,7 @@ describe('useSystemConfig', () => {
       });
 
       expect(result.current.error).toBe('Forbidden');
-      expect(mockOnToast).toHaveBeenCalledWith(
-        'Failed to load configuration: Forbidden',
-        'error'
-      );
+      expect(mockOnToast).toHaveBeenCalledWith('Failed to load configuration: Forbidden', 'error');
     });
   });
 
@@ -532,10 +527,7 @@ describe('useSystemConfig', () => {
 
       await result.current.saveAllPendingChanges();
 
-      expect(mockOnToast).toHaveBeenCalledWith(
-        'Some configs failed to save: DEBUG',
-        'warning'
-      );
+      expect(mockOnToast).toHaveBeenCalledWith('Some configs failed to save: DEBUG', 'warning');
     });
 
     it('should show warning when restart required', async () => {
@@ -675,8 +667,7 @@ describe('useSystemConfig', () => {
     it('should return validation errors', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () =>
-          Promise.resolve({ valid: false, errors: ['Value too short'] }),
+        json: () => Promise.resolve({ valid: false, errors: ['Value too short'] }),
       });
 
       const { result } = renderHook(() =>
@@ -735,9 +726,7 @@ describe('useSystemConfig', () => {
         ok: true,
         json: () =>
           Promise.resolve({
-            audit_log: [
-              { id: 1, config_key: 'SITE_NAME', old_value: 'Old', new_value: 'New' },
-            ],
+            audit_log: [{ id: 1, config_key: 'SITE_NAME', old_value: 'Old', new_value: 'New' }],
           }),
       });
 

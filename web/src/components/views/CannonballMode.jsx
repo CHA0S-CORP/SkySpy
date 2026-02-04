@@ -382,7 +382,16 @@ export function CannonballMode({ apiBase, onExit, aircraft = [] }) {
         role="button"
         tabIndex={selectedThreat ? 0 : -1}
         onClick={selectedThreat ? () => setSelectedThreat(null) : undefined}
-        onKeyDown={selectedThreat ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedThreat(null); } } : undefined}
+        onKeyDown={
+          selectedThreat
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setSelectedThreat(null);
+                }
+              }
+            : undefined
+        }
       >
         {renderMainContent()}
       </div>

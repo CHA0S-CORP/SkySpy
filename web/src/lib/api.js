@@ -106,7 +106,13 @@ export function parseDRFError(data) {
  * @throws {ApiError} On HTTP error responses, timeout, or CORS failures
  */
 async function apiRequest(endpoint, options = {}) {
-  const { method = 'GET', body, params, headers: customHeaders = {}, timeout = DEFAULT_TIMEOUT } = options;
+  const {
+    method = 'GET',
+    body,
+    params,
+    headers: customHeaders = {},
+    timeout = DEFAULT_TIMEOUT,
+  } = options;
 
   // Build URL with query parameters
   let url = `${API_BASE}${endpoint}`;
@@ -154,13 +160,7 @@ async function apiRequest(endpoint, options = {}) {
 
     // Handle timeout
     if (err.name === 'AbortError') {
-      throw new ApiError(
-        `Request timeout after ${timeout}ms`,
-        0,
-        null,
-        false,
-        true
-      );
+      throw new ApiError(`Request timeout after ${timeout}ms`, 0, null, false, true);
     }
 
     // Detect CORS errors (typically show as TypeError: Failed to fetch)
@@ -306,8 +306,7 @@ export const api = {
    * @param {Object} data - Alert rule data
    * @returns {Promise<Object>} Created alert rule
    */
-  createAlertRule: (data) =>
-    apiRequest('/alerts/rules/', { method: 'POST', body: data }),
+  createAlertRule: (data) => apiRequest('/alerts/rules/', { method: 'POST', body: data }),
 
   /**
    * Update an existing alert rule
@@ -323,16 +322,14 @@ export const api = {
    * @param {number|string} id - Alert rule ID
    * @returns {Promise<void>}
    */
-  deleteAlertRule: (id) =>
-    apiRequest(`/alerts/rules/${id}/`, { method: 'DELETE' }),
+  deleteAlertRule: (id) => apiRequest(`/alerts/rules/${id}/`, { method: 'DELETE' }),
 
   /**
    * Toggle alert rule enabled status
    * @param {number|string} id - Alert rule ID
    * @returns {Promise<Object>} Updated alert rule
    */
-  toggleAlertRule: (id) =>
-    apiRequest(`/alerts/rules/${id}/toggle/`, { method: 'POST' }),
+  toggleAlertRule: (id) => apiRequest(`/alerts/rules/${id}/toggle/`, { method: 'POST' }),
 
   /**
    * Get alert history
@@ -346,8 +343,7 @@ export const api = {
    * @param {number|string} id - Alert history entry ID
    * @returns {Promise<Object>} Updated alert entry
    */
-  acknowledgeAlert: (id) =>
-    apiRequest(`/alerts/history/${id}/acknowledge/`, { method: 'POST' }),
+  acknowledgeAlert: (id) => apiRequest(`/alerts/history/${id}/acknowledge/`, { method: 'POST' }),
 
   /**
    * Get alert service metrics
@@ -471,8 +467,7 @@ export const api = {
    * @param {Object} [params] - Query parameters (active_only)
    * @returns {Promise<Object>} NOTAMs for airport
    */
-  getAirportNotams: (icao, params) =>
-    apiRequest(`/notams/airport/${icao}/`, { params }),
+  getAirportNotams: (icao, params) => apiRequest(`/notams/airport/${icao}/`, { params }),
 
   /**
    * Get NOTAM statistics
@@ -596,8 +591,7 @@ export const api = {
    * @param {string} icao - ICAO hex code
    * @returns {Promise<Object>} Toggle result
    */
-  toggleFavorite: (icao) =>
-    apiRequest(`/stats/favorites/toggle/${icao}/`, { method: 'POST' }),
+  toggleFavorite: (icao) => apiRequest(`/stats/favorites/toggle/${icao}/`, { method: 'POST' }),
 
   /**
    * Check if aircraft is a favorite
@@ -674,8 +668,7 @@ export const api = {
      * @param {Object} data - Configuration data to import
      * @returns {Promise<Object>} Import result
      */
-    importConfigs: (data) =>
-      apiRequest('/admin/import/', { method: 'POST', body: data }),
+    importConfigs: (data) => apiRequest('/admin/import/', { method: 'POST', body: data }),
   },
 };
 

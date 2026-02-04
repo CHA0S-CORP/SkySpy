@@ -13,9 +13,7 @@ export function SidebarInfoRow({ label, value, mono = false }) {
   return (
     <div className="sidebar-info-row">
       <span className="sidebar-info-label">{label}</span>
-      <span className={`sidebar-info-value ${mono ? 'mono' : ''}`}>
-        {value}
-      </span>
+      <span className={`sidebar-info-value ${mono ? 'mono' : ''}`}>{value}</span>
     </div>
   );
 }

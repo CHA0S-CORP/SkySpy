@@ -221,15 +221,15 @@ describe('SortControls', () => {
     it('should apply custom className', () => {
       const { container } = render(<SortControls {...defaultProps} className="my-custom-class" />);
 
-      expect(container.querySelector('.sort-controls-container.my-custom-class')).toBeInTheDocument();
+      expect(
+        container.querySelector('.sort-controls-container.my-custom-class')
+      ).toBeInTheDocument();
     });
   });
 
   describe('edge cases', () => {
     it('should handle empty fields array', () => {
-      const { container } = render(
-        <SortControls {...defaultProps} fields={[]} activeField="" />
-      );
+      const { container } = render(<SortControls {...defaultProps} fields={[]} activeField="" />);
 
       const pills = container.querySelectorAll('.sort-pill');
       expect(pills).toHaveLength(0);
@@ -250,9 +250,7 @@ describe('SortControls', () => {
     });
 
     it('should handle field not found in fields array', () => {
-      const { container } = render(
-        <SortControls {...defaultProps} activeField="nonexistent" />
-      );
+      const { container } = render(<SortControls {...defaultProps} activeField="nonexistent" />);
 
       // Should still render, using the key as label fallback
       const dropdownValue = container.querySelector('.sort-dropdown-value');

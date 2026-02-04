@@ -49,9 +49,7 @@ vi.mock('./LivePreview', () => ({
 }));
 
 vi.mock('./NotificationChannelSelector', () => ({
-  NotificationChannelSelector: () => (
-    <div data-testid="channel-selector">Channel Selector</div>
-  ),
+  NotificationChannelSelector: () => <div data-testid="channel-selector">Channel Selector</div>,
 }));
 
 vi.mock('./RuleTemplates', () => ({
@@ -371,9 +369,7 @@ describe('RuleForm', () => {
       await user.click(submitBtn);
 
       await waitFor(() => {
-        expect(screen.getByRole('alert')).toHaveTextContent(
-          'Invalid rule configuration'
-        );
+        expect(screen.getByRole('alert')).toHaveTextContent('Invalid rule configuration');
       });
     });
 

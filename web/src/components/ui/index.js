@@ -68,11 +68,4 @@ export {
   PopoverClose,
 } from './popover';
 export { ScrollArea, ScrollAreaViewport, ScrollBar, ScrollAreaThumb } from './scroll-area';
-export {
-  FormField,
-  FormLabel,
-  FormInput,
-  FormTextarea,
-  FormError,
-  FormDescription,
-} from './form';
+export { FormField, FormLabel, FormInput, FormTextarea, FormError, FormDescription } from './form';

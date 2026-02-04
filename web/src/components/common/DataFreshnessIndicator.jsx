@@ -60,7 +60,10 @@ export const DataFreshnessIndicator = memo(function DataFreshnessIndicator({
  * DataFreshnessBadge - Compact badge variant with status text
  * Memoized to prevent parent re-renders from the internal timer updates
  */
-export const DataFreshnessBadge = memo(function DataFreshnessBadge({ lastUpdated, label = 'Data' }) {
+export const DataFreshnessBadge = memo(function DataFreshnessBadge({
+  lastUpdated,
+  label = 'Data',
+}) {
   const [age, setAge] = useState(0);
 
   useEffect(() => {

@@ -5,13 +5,13 @@ import { EnhancedFlightMap } from './EnhancedFlightMap';
 
 describe('EnhancedFlightMap', () => {
   const sampleSightings = [
-    { lat: 40.7128, lon: -74.0060, altitude: 5000, gs: 200, timestamp: '2024-01-15T10:00:00Z' },
-    { lat: 40.7500, lon: -73.9500, altitude: 15000, gs: 350, timestamp: '2024-01-15T10:05:00Z' },
-    { lat: 40.8000, lon: -73.9000, altitude: 25000, gs: 420, timestamp: '2024-01-15T10:10:00Z' },
-    { lat: 40.8500, lon: -73.8500, altitude: 35000, gs: 450, timestamp: '2024-01-15T10:15:00Z' },
+    { lat: 40.7128, lon: -74.006, altitude: 5000, gs: 200, timestamp: '2024-01-15T10:00:00Z' },
+    { lat: 40.75, lon: -73.95, altitude: 15000, gs: 350, timestamp: '2024-01-15T10:05:00Z' },
+    { lat: 40.8, lon: -73.9, altitude: 25000, gs: 420, timestamp: '2024-01-15T10:10:00Z' },
+    { lat: 40.85, lon: -73.85, altitude: 35000, gs: 450, timestamp: '2024-01-15T10:15:00Z' },
   ];
 
-  const feederLocation = { lat: 40.7000, lon: -74.0100 };
+  const feederLocation = { lat: 40.7, lon: -74.01 };
 
   const defaultProps = {
     sightings: sampleSightings,
@@ -50,10 +50,7 @@ describe('EnhancedFlightMap', () => {
     });
 
     it('should show empty message when sightings have no lat/lon', () => {
-      const invalidSightings = [
-        { altitude: 5000 },
-        { altitude: 10000 },
-      ];
+      const invalidSightings = [{ altitude: 5000 }, { altitude: 10000 }];
       render(<EnhancedFlightMap sightings={invalidSightings} />);
       expect(screen.getByText('No position data available')).toBeInTheDocument();
     });
@@ -110,11 +107,7 @@ describe('EnhancedFlightMap', () => {
   describe('range rings', () => {
     it('should render range rings when showRangeRings is true', () => {
       render(
-        <EnhancedFlightMap
-          {...defaultProps}
-          showRangeRings
-          feederLocation={feederLocation}
-        />
+        <EnhancedFlightMap {...defaultProps} showRangeRings feederLocation={feederLocation} />
       );
       // Range rings are rendered as circle markers
       expect(screen.getAllByTestId('circle-marker').length).toBeGreaterThan(0);
@@ -133,11 +126,7 @@ describe('EnhancedFlightMap', () => {
 
     it('should not render range rings without feederLocation', () => {
       render(
-        <EnhancedFlightMap
-          sightings={sampleSightings}
-          showRangeRings
-          feederLocation={null}
-        />
+        <EnhancedFlightMap sightings={sampleSightings} showRangeRings feederLocation={null} />
       );
       // No range rings without feeder location
     });
@@ -146,9 +135,7 @@ describe('EnhancedFlightMap', () => {
   describe('interactions', () => {
     it('should call onPositionClick when track segment is clicked', () => {
       const onPositionClick = vi.fn();
-      render(
-        <EnhancedFlightMap {...defaultProps} onPositionClick={onPositionClick} />
-      );
+      render(<EnhancedFlightMap {...defaultProps} onPositionClick={onPositionClick} />);
 
       const polylines = screen.getAllByTestId('polyline');
       fireEvent.click(polylines[0]);
@@ -159,16 +146,12 @@ describe('EnhancedFlightMap', () => {
 
   describe('replay position', () => {
     it('should render replay marker when replayPosition is provided', () => {
-      const replayPosition = { lat: 40.7800, lon: -73.9200 };
-      render(
-        <EnhancedFlightMap {...defaultProps} replayPosition={replayPosition} />
-      );
+      const replayPosition = { lat: 40.78, lon: -73.92 };
+      render(<EnhancedFlightMap {...defaultProps} replayPosition={replayPosition} />);
 
       const markers = screen.getAllByTestId('marker');
       const replayMarker = markers.find(
-        (m) =>
-          m.getAttribute('data-lat') === '40.78' &&
-          m.getAttribute('data-lon') === '-73.92'
+        (m) => m.getAttribute('data-lat') === '40.78' && m.getAttribute('data-lon') === '-73.92'
       );
       // Replay marker should be present
     });
@@ -195,9 +178,7 @@ describe('EnhancedFlightMap', () => {
 
   describe('height configuration', () => {
     it('should apply custom height', () => {
-      const { container } = render(
-        <EnhancedFlightMap {...defaultProps} height={500} />
-      );
+      const { container } = render(<EnhancedFlightMap {...defaultProps} height={500} />);
       const mapWrapper = container.querySelector('.enhanced-flight-map');
       expect(mapWrapper.style.height).toBe('500px');
     });
@@ -211,9 +192,7 @@ describe('EnhancedFlightMap', () => {
 
   describe('styling', () => {
     it('should apply custom className', () => {
-      const { container } = render(
-        <EnhancedFlightMap {...defaultProps} className="custom-map" />
-      );
+      const { container } = render(<EnhancedFlightMap {...defaultProps} className="custom-map" />);
       expect(container.querySelector('.custom-map')).toBeInTheDocument();
     });
 
@@ -239,8 +218,8 @@ describe('EnhancedFlightMap', () => {
   describe('data handling', () => {
     it('should handle sightings with missing altitude', () => {
       const sightingsNoAlt = [
-        { lat: 40.7128, lon: -74.0060 },
-        { lat: 40.7500, lon: -73.9500 },
+        { lat: 40.7128, lon: -74.006 },
+        { lat: 40.75, lon: -73.95 },
       ];
       render(<EnhancedFlightMap sightings={sightingsNoAlt} />);
       expect(screen.getByTestId('map-container')).toBeInTheDocument();
@@ -248,8 +227,8 @@ describe('EnhancedFlightMap', () => {
 
     it('should handle sightings with missing speed', () => {
       const sightingsNoSpeed = [
-        { lat: 40.7128, lon: -74.0060, altitude: 5000 },
-        { lat: 40.7500, lon: -73.9500, altitude: 15000 },
+        { lat: 40.7128, lon: -74.006, altitude: 5000 },
+        { lat: 40.75, lon: -73.95, altitude: 15000 },
       ];
       render(<EnhancedFlightMap sightings={sightingsNoSpeed} colorBy="speed" />);
       expect(screen.getByTestId('map-container')).toBeInTheDocument();
@@ -257,9 +236,9 @@ describe('EnhancedFlightMap', () => {
 
     it('should filter out invalid sightings', () => {
       const mixedSightings = [
-        { lat: 40.7128, lon: -74.0060, altitude: 5000 },
+        { lat: 40.7128, lon: -74.006, altitude: 5000 },
         { lat: null, lon: null },
-        { lat: 40.7500, lon: -73.9500, altitude: 15000 },
+        { lat: 40.75, lon: -73.95, altitude: 15000 },
       ];
       render(<EnhancedFlightMap sightings={mixedSightings} />);
       // Should still render with valid sightings

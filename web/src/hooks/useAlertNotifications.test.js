@@ -90,7 +90,10 @@ describe('useAlertNotifications', () => {
     });
 
     it('should limit recentAlerts to 20 items from localStorage', () => {
-      const storedAlerts = Array.from({ length: 30 }, (_, i) => ({ id: i, rule_name: `Alert ${i}` }));
+      const storedAlerts = Array.from({ length: 30 }, (_, i) => ({
+        id: i,
+        rule_name: `Alert ${i}`,
+      }));
       window.localStorage.getItem.mockImplementation((key) => {
         if (key === 'unacknowledged-alerts') return JSON.stringify(storedAlerts);
         return null;
@@ -198,9 +201,7 @@ describe('useAlertNotifications', () => {
 
   describe('handling alert triggered events', () => {
     it('should update count when alert is triggered', () => {
-      const { result } = renderHook(() =>
-        useAlertNotifications({ toast: mockToast })
-      );
+      const { result } = renderHook(() => useAlertNotifications({ toast: mockToast }));
 
       expect(result.current.unacknowledgedCount).toBe(0);
 
@@ -218,9 +219,7 @@ describe('useAlertNotifications', () => {
     });
 
     it('should show toast notification for triggered alert', () => {
-      const { result } = renderHook(() =>
-        useAlertNotifications({ toast: mockToast })
-      );
+      const { result } = renderHook(() => useAlertNotifications({ toast: mockToast }));
 
       act(() => {
         result.current.handleAlertTriggered({
@@ -274,9 +273,7 @@ describe('useAlertNotifications', () => {
     });
 
     it('should show browser notification when permission granted', () => {
-      const { result } = renderHook(() =>
-        useAlertNotifications({ toast: mockToast })
-      );
+      const { result } = renderHook(() => useAlertNotifications({ toast: mockToast }));
 
       act(() => {
         result.current.handleAlertTriggered({
@@ -296,9 +293,7 @@ describe('useAlertNotifications', () => {
     });
 
     it('should persist alerts to localStorage', () => {
-      const { result } = renderHook(() =>
-        useAlertNotifications({ toast: mockToast })
-      );
+      const { result } = renderHook(() => useAlertNotifications({ toast: mockToast }));
 
       act(() => {
         result.current.handleAlertTriggered({
@@ -317,9 +312,7 @@ describe('useAlertNotifications', () => {
     it('should listen for custom window events', async () => {
       vi.useRealTimers();
 
-      const { result } = renderHook(() =>
-        useAlertNotifications({ toast: mockToast })
-      );
+      const { result } = renderHook(() => useAlertNotifications({ toast: mockToast }));
 
       act(() => {
         window.dispatchEvent(
@@ -499,9 +492,7 @@ describe('useAlertNotifications', () => {
 
   describe('severity mapping', () => {
     it('should map critical severity to error toast', () => {
-      const { result } = renderHook(() =>
-        useAlertNotifications({ toast: mockToast })
-      );
+      const { result } = renderHook(() => useAlertNotifications({ toast: mockToast }));
 
       act(() => {
         result.current.handleAlertTriggered({
@@ -520,9 +511,7 @@ describe('useAlertNotifications', () => {
     });
 
     it('should map high severity to warning toast', () => {
-      const { result } = renderHook(() =>
-        useAlertNotifications({ toast: mockToast })
-      );
+      const { result } = renderHook(() => useAlertNotifications({ toast: mockToast }));
 
       act(() => {
         result.current.handleAlertTriggered({
@@ -541,9 +530,7 @@ describe('useAlertNotifications', () => {
     });
 
     it('should map low severity to info toast', () => {
-      const { result } = renderHook(() =>
-        useAlertNotifications({ toast: mockToast })
-      );
+      const { result } = renderHook(() => useAlertNotifications({ toast: mockToast }));
 
       act(() => {
         result.current.handleAlertTriggered({
@@ -568,9 +555,7 @@ describe('useAlertNotifications', () => {
 
       const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
 
-      const { unmount } = renderHook(() =>
-        useAlertNotifications({ toast: mockToast })
-      );
+      const { unmount } = renderHook(() => useAlertNotifications({ toast: mockToast }));
 
       unmount();
 

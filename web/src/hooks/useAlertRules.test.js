@@ -142,9 +142,27 @@ describe('useAlertRules', () => {
       useSocketApi.mockReturnValue({
         data: {
           rules: [
-            { id: 1, name: 'Alpha Rule', priority: 'critical', enabled: true, created_at: '2024-01-01' },
-            { id: 2, name: 'Beta Rule', priority: 'warning', enabled: false, created_at: '2024-01-02' },
-            { id: 3, name: 'Gamma Rule', priority: 'info', enabled: true, created_at: '2024-01-03' },
+            {
+              id: 1,
+              name: 'Alpha Rule',
+              priority: 'critical',
+              enabled: true,
+              created_at: '2024-01-01',
+            },
+            {
+              id: 2,
+              name: 'Beta Rule',
+              priority: 'warning',
+              enabled: false,
+              created_at: '2024-01-02',
+            },
+            {
+              id: 3,
+              name: 'Gamma Rule',
+              priority: 'info',
+              enabled: true,
+              created_at: '2024-01-03',
+            },
           ],
         },
         refetch: mockRefetch,
@@ -603,9 +621,7 @@ describe('useAlertRules', () => {
 
       parseImportFile.mockResolvedValue({
         valid: true,
-        rules: [
-          { id: 1, name: 'Imported Rule' },
-        ],
+        rules: [{ id: 1, name: 'Imported Rule' }],
       });
 
       findDuplicates.mockReturnValue({

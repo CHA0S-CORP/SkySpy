@@ -69,11 +69,14 @@ export function useAircraftNotes() {
    * @param {string} hex - Aircraft ICAO hex code
    * @returns {string|null} The note, or null if none exists
    */
-  const getNote = useCallback((hex) => {
-    if (!hex) return null;
-    const normalizedHex = hex.toUpperCase();
-    return notes[normalizedHex] || null;
-  }, [notes]);
+  const getNote = useCallback(
+    (hex) => {
+      if (!hex) return null;
+      const normalizedHex = hex.toUpperCase();
+      return notes[normalizedHex] || null;
+    },
+    [notes]
+  );
 
   /**
    * Set/update the note for a specific aircraft
@@ -118,11 +121,14 @@ export function useAircraftNotes() {
    * @param {string} hex - Aircraft ICAO hex code
    * @returns {boolean} True if the aircraft has a note
    */
-  const hasNote = useCallback((hex) => {
-    if (!hex) return false;
-    const normalizedHex = hex.toUpperCase();
-    return normalizedHex in notes && notes[normalizedHex]?.trim().length > 0;
-  }, [notes]);
+  const hasNote = useCallback(
+    (hex) => {
+      if (!hex) return false;
+      const normalizedHex = hex.toUpperCase();
+      return normalizedHex in notes && notes[normalizedHex]?.trim().length > 0;
+    },
+    [notes]
+  );
 
   /**
    * Get an abbreviated version of the note for display in data blocks
@@ -131,16 +137,19 @@ export function useAircraftNotes() {
    * @param {number} maxLength - Maximum length before truncation (default: 10)
    * @returns {string|null} Abbreviated note, or null if none exists
    */
-  const getAbbreviatedNote = useCallback((hex, maxLength = 10) => {
-    const note = getNote(hex);
-    if (!note) return null;
+  const getAbbreviatedNote = useCallback(
+    (hex, maxLength = 10) => {
+      const note = getNote(hex);
+      if (!note) return null;
 
-    if (note.length <= maxLength) {
-      return note;
-    }
+      if (note.length <= maxLength) {
+        return note;
+      }
 
-    return note.substring(0, maxLength) + '...';
-  }, [getNote]);
+      return note.substring(0, maxLength) + '...';
+    },
+    [getNote]
+  );
 
   /**
    * Get all notes (for debugging or export)

@@ -319,9 +319,7 @@ describe('useAirspaceAdvisories', () => {
     it('should auto-refresh at specified interval', async () => {
       mockWsRequest.mockResolvedValue({ advisories: [] });
 
-      renderHook(() =>
-        useAirspaceAdvisories(mockWsRequest, true, { refreshInterval: 10000 })
-      );
+      renderHook(() => useAirspaceAdvisories(mockWsRequest, true, { refreshInterval: 10000 }));
 
       // Initial fetch with delay
       await act(async () => {
@@ -345,9 +343,7 @@ describe('useAirspaceAdvisories', () => {
     it('should not refresh when interval is 0 or falsy', async () => {
       mockWsRequest.mockResolvedValue({ advisories: [] });
 
-      renderHook(() =>
-        useAirspaceAdvisories(mockWsRequest, true, { refreshInterval: 0 })
-      );
+      renderHook(() => useAirspaceAdvisories(mockWsRequest, true, { refreshInterval: 0 }));
 
       // Initial fetch with delay
       await act(async () => {

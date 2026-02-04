@@ -27,13 +27,7 @@ describe('MetricCard', () => {
     });
 
     it('should use custom value formatter', () => {
-      render(
-        <MetricCard
-          label="Price"
-          value={99.99}
-          valueFormatter={(v) => `$${v.toFixed(2)}`}
-        />
-      );
+      render(<MetricCard label="Price" value={99.99} valueFormatter={(v) => `$${v.toFixed(2)}`} />);
       expect(screen.getByText('$99.99')).toBeInTheDocument();
     });
   });
@@ -135,9 +129,7 @@ describe('MetricCard', () => {
 
   describe('custom styling', () => {
     it('should apply custom color', () => {
-      const { container } = render(
-        <MetricCard label="Custom" value={10} color="#ff0000" />
-      );
+      const { container } = render(<MetricCard label="Custom" value={10} color="#ff0000" />);
       expect(container.querySelector('.metric-card')).toBeInTheDocument();
     });
 

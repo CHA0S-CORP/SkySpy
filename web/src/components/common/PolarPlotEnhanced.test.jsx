@@ -66,16 +66,12 @@ describe('PolarPlotEnhanced', () => {
 
   describe('color modes', () => {
     it('should color by altitude when colorByAltitude is true', () => {
-      const { container } = render(
-        <PolarPlotEnhanced data={sampleData} colorByAltitude />
-      );
+      const { container } = render(<PolarPlotEnhanced data={sampleData} colorByAltitude />);
       expect(container.querySelector('svg')).toBeInTheDocument();
     });
 
     it('should color by signal when colorBySignal is true', () => {
-      const { container } = render(
-        <PolarPlotEnhanced data={sampleData} colorBySignal />
-      );
+      const { container } = render(<PolarPlotEnhanced data={sampleData} colorBySignal />);
       expect(container.querySelector('svg')).toBeInTheDocument();
     });
 
@@ -99,8 +95,8 @@ describe('PolarPlotEnhanced', () => {
 
       const circles = container.querySelectorAll('circle');
       // Find a data point circle (not grid circles)
-      const dataCircles = Array.from(circles).filter(c =>
-        c.getAttribute('cx') !== '100' || c.getAttribute('cy') !== '100'
+      const dataCircles = Array.from(circles).filter(
+        (c) => c.getAttribute('cx') !== '100' || c.getAttribute('cy') !== '100'
       );
       if (dataCircles.length > 0) {
         fireEvent.click(dataCircles[0]);
@@ -115,8 +111,8 @@ describe('PolarPlotEnhanced', () => {
       );
 
       const circles = container.querySelectorAll('circle');
-      const dataCircles = Array.from(circles).filter(c =>
-        c.getAttribute('cx') !== '100' || c.getAttribute('cy') !== '100'
+      const dataCircles = Array.from(circles).filter(
+        (c) => c.getAttribute('cx') !== '100' || c.getAttribute('cy') !== '100'
       );
       if (dataCircles.length > 0) {
         fireEvent.mouseEnter(dataCircles[0]);
@@ -128,7 +124,7 @@ describe('PolarPlotEnhanced', () => {
       const { container } = render(<PolarPlotEnhanced data={sampleData} />);
 
       const circles = container.querySelectorAll('circle');
-      const dataCircles = Array.from(circles).filter(c => {
+      const dataCircles = Array.from(circles).filter((c) => {
         const cx = c.getAttribute('cx');
         const cy = c.getAttribute('cy');
         return cx !== '100' || cy !== '100';
@@ -152,18 +148,14 @@ describe('PolarPlotEnhanced', () => {
 
   describe('maxRange', () => {
     it('should use custom maxRange', () => {
-      const { container } = render(
-        <PolarPlotEnhanced data={sampleData} maxRange={300} />
-      );
+      const { container } = render(<PolarPlotEnhanced data={sampleData} maxRange={300} />);
       expect(container.querySelector('svg')).toBeInTheDocument();
     });
   });
 
   describe('dot size', () => {
     it('should apply custom dot size', () => {
-      const { container } = render(
-        <PolarPlotEnhanced data={sampleData} dotSize={5} />
-      );
+      const { container } = render(<PolarPlotEnhanced data={sampleData} dotSize={5} />);
       const circles = container.querySelectorAll('circle');
       expect(circles.length).toBeGreaterThan(0);
     });
@@ -178,28 +170,20 @@ describe('PolarPlotEnhanced', () => {
 
   describe('data formats', () => {
     it('should handle data with track instead of bearing', () => {
-      const dataWithTrack = [
-        { track: 45, distance: 50, altitude: 30000 },
-      ];
+      const dataWithTrack = [{ track: 45, distance: 50, altitude: 30000 }];
       const { container } = render(<PolarPlotEnhanced data={dataWithTrack} />);
       expect(container.querySelector('svg')).toBeInTheDocument();
     });
 
     it('should handle data with distance instead of range', () => {
-      const dataWithDistance = [
-        { bearing: 90, distance: 100, altitude: 25000 },
-      ];
+      const dataWithDistance = [{ bearing: 90, distance: 100, altitude: 25000 }];
       const { container } = render(<PolarPlotEnhanced data={dataWithDistance} />);
       expect(container.querySelector('svg')).toBeInTheDocument();
     });
 
     it('should handle data with signal instead of rssi', () => {
-      const dataWithSignal = [
-        { bearing: 180, range: 75, signal: -12 },
-      ];
-      const { container } = render(
-        <PolarPlotEnhanced data={dataWithSignal} colorBySignal />
-      );
+      const dataWithSignal = [{ bearing: 180, range: 75, signal: -12 }];
+      const { container } = render(<PolarPlotEnhanced data={dataWithSignal} colorBySignal />);
       expect(container.querySelector('svg')).toBeInTheDocument();
     });
   });

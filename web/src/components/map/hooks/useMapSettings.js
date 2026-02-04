@@ -1,10 +1,5 @@
 import { useState, useCallback } from 'react';
-import {
-  getOverlays,
-  saveOverlays,
-  getLayerOpacities,
-  saveLayerOpacities,
-} from '../../../utils';
+import { getOverlays, saveOverlays, getLayerOpacities, saveLayerOpacities } from '../../../utils';
 
 /**
  * @typedef {Object} TrafficFilters
@@ -198,53 +193,56 @@ export function useMapSettings() {
 
   // Setters with persistence
 
-  const setTrafficFilters = useCallback((filters) => {
-    const newFilters = typeof filters === 'function'
-      ? filters(trafficFilters)
-      : filters;
-    setTrafficFiltersState(newFilters);
-    saveToStorage(STORAGE_KEYS.trafficFilters, newFilters);
-  }, [trafficFilters]);
+  const setTrafficFilters = useCallback(
+    (filters) => {
+      const newFilters = typeof filters === 'function' ? filters(trafficFilters) : filters;
+      setTrafficFiltersState(newFilters);
+      saveToStorage(STORAGE_KEYS.trafficFilters, newFilters);
+    },
+    [trafficFilters]
+  );
 
   const setOverlays = useCallback((overlays) => {
-    const newOverlays = typeof overlays === 'function'
-      ? overlays(overlays)
-      : overlays;
+    const newOverlays = typeof overlays === 'function' ? overlays(overlays) : overlays;
     setOverlaysState(newOverlays);
     saveOverlays(newOverlays);
   }, []);
 
-  const setLayerOpacities = useCallback((opacities) => {
-    const newOpacities = typeof opacities === 'function'
-      ? opacities(layerOpacities)
-      : opacities;
-    setLayerOpacitiesState(newOpacities);
-    saveLayerOpacities(newOpacities);
-  }, [layerOpacities]);
+  const setLayerOpacities = useCallback(
+    (opacities) => {
+      const newOpacities = typeof opacities === 'function' ? opacities(layerOpacities) : opacities;
+      setLayerOpacitiesState(newOpacities);
+      saveLayerOpacities(newOpacities);
+    },
+    [layerOpacities]
+  );
 
-  const setAcarsFilters = useCallback((filters) => {
-    const newFilters = typeof filters === 'function'
-      ? filters(acarsFilters)
-      : filters;
-    setAcarsFiltersState(newFilters);
-    saveToStorage(STORAGE_KEYS.acarsFilters, newFilters);
-  }, [acarsFilters]);
+  const setAcarsFilters = useCallback(
+    (filters) => {
+      const newFilters = typeof filters === 'function' ? filters(acarsFilters) : filters;
+      setAcarsFiltersState(newFilters);
+      saveToStorage(STORAGE_KEYS.acarsFilters, newFilters);
+    },
+    [acarsFilters]
+  );
 
-  const setAirspaceTypeFilters = useCallback((filters) => {
-    const newFilters = typeof filters === 'function'
-      ? filters(airspaceTypeFilters)
-      : filters;
-    setAirspaceTypeFiltersState(newFilters);
-    saveToStorage(STORAGE_KEYS.airspaceTypeFilters, newFilters);
-  }, [airspaceTypeFilters]);
+  const setAirspaceTypeFilters = useCallback(
+    (filters) => {
+      const newFilters = typeof filters === 'function' ? filters(airspaceTypeFilters) : filters;
+      setAirspaceTypeFiltersState(newFilters);
+      saveToStorage(STORAGE_KEYS.airspaceTypeFilters, newFilters);
+    },
+    [airspaceTypeFilters]
+  );
 
-  const setWeatherAdvisoryFilters = useCallback((filters) => {
-    const newFilters = typeof filters === 'function'
-      ? filters(weatherAdvisoryFilters)
-      : filters;
-    setWeatherAdvisoryFiltersState(newFilters);
-    saveToStorage(STORAGE_KEYS.weatherAdvisoryFilters, newFilters);
-  }, [weatherAdvisoryFilters]);
+  const setWeatherAdvisoryFilters = useCallback(
+    (filters) => {
+      const newFilters = typeof filters === 'function' ? filters(weatherAdvisoryFilters) : filters;
+      setWeatherAdvisoryFiltersState(newFilters);
+      saveToStorage(STORAGE_KEYS.weatherAdvisoryFilters, newFilters);
+    },
+    [weatherAdvisoryFilters]
+  );
 
   const setShowAirspaceLabels = useCallback((value) => {
     setShowAirspaceLabelsState(value);
@@ -262,22 +260,28 @@ export function useMapSettings() {
   }, []);
 
   // Toggle a specific overlay
-  const toggleOverlay = useCallback((name) => {
-    setOverlays((prev) => {
-      const next = { ...prev, [name]: !prev[name] };
-      saveOverlays(next);
-      return next;
-    });
-  }, [setOverlays]);
+  const toggleOverlay = useCallback(
+    (name) => {
+      setOverlays((prev) => {
+        const next = { ...prev, [name]: !prev[name] };
+        saveOverlays(next);
+        return next;
+      });
+    },
+    [setOverlays]
+  );
 
   // Toggle a traffic filter
-  const toggleTrafficFilter = useCallback((name) => {
-    setTrafficFilters((prev) => {
-      const next = { ...prev, [name]: !prev[name] };
-      saveToStorage(STORAGE_KEYS.trafficFilters, next);
-      return next;
-    });
-  }, [setTrafficFilters]);
+  const toggleTrafficFilter = useCallback(
+    (name) => {
+      setTrafficFilters((prev) => {
+        const next = { ...prev, [name]: !prev[name] };
+        saveToStorage(STORAGE_KEYS.trafficFilters, next);
+        return next;
+      });
+    },
+    [setTrafficFilters]
+  );
 
   // Toggle sound
   const toggleSound = useCallback(() => {

@@ -188,8 +188,7 @@ describe('ErrorBoundary', () => {
       const errorCalls = consoleErrorSpy.mock.calls;
       const hasErrorLogged = errorCalls.some(
         (call) =>
-          call[0] === 'ErrorBoundary caught an error:' ||
-          call[0]?.message === 'Console log test'
+          call[0] === 'ErrorBoundary caught an error:' || call[0]?.message === 'Console log test'
       );
       expect(hasErrorLogged).toBe(true);
     });

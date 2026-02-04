@@ -106,7 +106,16 @@ export function TopPerformersTab({ topPerformersData, onSelectAircraft }) {
               role={onSelectAircraft ? 'button' : undefined}
               tabIndex={onSelectAircraft ? 0 : undefined}
               onClick={() => onSelectAircraft?.(ac.icao_hex)}
-              onKeyDown={onSelectAircraft ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectAircraft(ac.icao_hex); } } : undefined}
+              onKeyDown={
+                onSelectAircraft
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onSelectAircraft(ac.icao_hex);
+                      }
+                    }
+                  : undefined
+              }
             >
               <span className="performer-rank">{i + 1}</span>
               <div className="performer-info">
@@ -211,7 +220,16 @@ export function SpeedTab({ speedAnalytics, onSelectAircraft }) {
               role={onSelectAircraft ? 'button' : undefined}
               tabIndex={onSelectAircraft ? 0 : undefined}
               onClick={() => onSelectAircraft?.(ac.icao_hex)}
-              onKeyDown={onSelectAircraft ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectAircraft(ac.icao_hex); } } : undefined}
+              onKeyDown={
+                onSelectAircraft
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onSelectAircraft(ac.icao_hex);
+                      }
+                    }
+                  : undefined
+              }
             >
               <span className="fastest-rank">{i + 1}</span>
               <span className="fastest-callsign">{ac.callsign || ac.icao_hex}</span>

@@ -12,12 +12,7 @@ import { ScrollArea } from '../ui';
  * @param {Function} props.onLoadMore - Callback to load more entries
  * @param {boolean} props.hasMore - Whether more entries are available
  */
-export function AdminAuditLog({
-  entries = [],
-  loading = false,
-  onLoadMore,
-  hasMore = false,
-}) {
+export function AdminAuditLog({ entries = [], loading = false, onLoadMore, hasMore = false }) {
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [showFilters, setShowFilters] = useState(false);
 
@@ -46,7 +41,11 @@ export function AdminAuditLog({
     if (actionLower.includes('delete') || actionLower.includes('remove')) {
       return 'admin-audit-action-delete';
     }
-    if (actionLower.includes('update') || actionLower.includes('change') || actionLower.includes('modify')) {
+    if (
+      actionLower.includes('update') ||
+      actionLower.includes('change') ||
+      actionLower.includes('modify')
+    ) {
       return 'admin-audit-action-update';
     }
     return 'admin-audit-action-default';
@@ -175,7 +174,14 @@ export function AdminAuditLog({
                         </span>
                       </td>
                       <td className="admin-audit-col-details">
-                        <span className="admin-audit-details" title={typeof entry.details === 'object' ? JSON.stringify(entry.details) : entry.details}>
+                        <span
+                          className="admin-audit-details"
+                          title={
+                            typeof entry.details === 'object'
+                              ? JSON.stringify(entry.details)
+                              : entry.details
+                          }
+                        >
                           {formatDetails(entry.details)}
                         </span>
                       </td>

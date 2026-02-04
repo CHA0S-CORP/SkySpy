@@ -187,9 +187,7 @@ export const FlightStrip = memo(function FlightStrip({
           <div className="strip-callsign">
             <Plane size={12} className="strip-icon" aria-hidden="true" />
             <span className="callsign-text">{strip.callsign || strip.hex?.toUpperCase()}</span>
-            {strip.registration && (
-              <span className="strip-reg">{strip.registration}</span>
-            )}
+            {strip.registration && <span className="strip-reg">{strip.registration}</span>}
           </div>
 
           <div className="strip-type-info">
@@ -198,7 +196,10 @@ export const FlightStrip = memo(function FlightStrip({
                 {strip.typeName}
               </span>
             )}
-            <span className={`strip-wake ${wakeCategoryClass}`} title={`Wake category: ${strip.wakeCategory}`}>
+            <span
+              className={`strip-wake ${wakeCategoryClass}`}
+              title={`Wake category: ${strip.wakeCategory}`}
+            >
               {strip.wakeCategory}
             </span>
           </div>

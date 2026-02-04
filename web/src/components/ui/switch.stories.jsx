@@ -251,12 +251,13 @@ export const FormIntegration = {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <label htmlFor="push" className="text-sm font-medium text-text-primary cursor-pointer">
+              <label
+                htmlFor="push"
+                className="text-sm font-medium text-text-primary cursor-pointer"
+              >
                 Push Notifications
               </label>
-              <p className="text-xs text-text-secondary">
-                Receive alerts directly on your device
-              </p>
+              <p className="text-xs text-text-secondary">Receive alerts directly on your device</p>
             </div>
             <Switch
               id="push"
@@ -270,7 +271,10 @@ export const FormIntegration = {
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <label htmlFor="email" className="text-sm font-medium text-text-primary cursor-pointer">
+              <label
+                htmlFor="email"
+                className="text-sm font-medium text-text-primary cursor-pointer"
+              >
                 Email Alerts
               </label>
               <p className="text-xs text-text-secondary">
@@ -289,12 +293,13 @@ export const FormIntegration = {
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <label htmlFor="sound" className="text-sm font-medium text-text-primary cursor-pointer">
+              <label
+                htmlFor="sound"
+                className="text-sm font-medium text-text-primary cursor-pointer"
+              >
                 Sound Effects
               </label>
-              <p className="text-xs text-text-secondary">
-                Play audio when alerts trigger
-              </p>
+              <p className="text-xs text-text-secondary">Play audio when alerts trigger</p>
             </div>
             <Switch
               id="sound"
@@ -308,12 +313,13 @@ export const FormIntegration = {
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <label htmlFor="refresh" className="text-sm font-medium text-text-primary cursor-pointer">
+              <label
+                htmlFor="refresh"
+                className="text-sm font-medium text-text-primary cursor-pointer"
+              >
                 Auto Refresh
               </label>
-              <p className="text-xs text-text-secondary">
-                Automatically update aircraft positions
-              </p>
+              <p className="text-xs text-text-secondary">Automatically update aircraft positions</p>
             </div>
             <Switch
               id="refresh"
@@ -327,12 +333,13 @@ export const FormIntegration = {
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <label htmlFor="dark" className="text-sm font-medium text-text-primary cursor-pointer">
+              <label
+                htmlFor="dark"
+                className="text-sm font-medium text-text-primary cursor-pointer"
+              >
                 Dark Mode
               </label>
-              <p className="text-xs text-text-secondary">
-                Use dark theme for the interface
-              </p>
+              <p className="text-xs text-text-secondary">Use dark theme for the interface</p>
             </div>
             <Switch
               id="dark"
@@ -401,7 +408,10 @@ export const LayoutVariations = {
         <span className="text-xs text-text-dim font-medium">Justified with description</span>
         <div className="flex items-center justify-between p-3 bg-bg-card border border-border rounded-lg">
           <div className="space-y-0.5">
-            <label htmlFor="justified" className="text-sm font-medium text-text-primary cursor-pointer">
+            <label
+              htmlFor="justified"
+              className="text-sm font-medium text-text-primary cursor-pointer"
+            >
               Advanced Mode
             </label>
             <p className="text-xs text-text-secondary">Show additional controls</p>

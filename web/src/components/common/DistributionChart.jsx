@@ -36,14 +36,10 @@ export function DistributionChart({
 
     // Sort
     if (sortBy === 'value') {
-      items.sort((a, b) =>
-        sortDirection === 'desc' ? b.value - a.value : a.value - b.value
-      );
+      items.sort((a, b) => (sortDirection === 'desc' ? b.value - a.value : a.value - b.value));
     } else if (sortBy === 'label') {
       items.sort((a, b) =>
-        sortDirection === 'desc'
-          ? b.label.localeCompare(a.label)
-          : a.label.localeCompare(b.label)
+        sortDirection === 'desc' ? b.label.localeCompare(a.label) : a.label.localeCompare(b.label)
       );
     }
 
@@ -54,7 +50,12 @@ export function DistributionChart({
       const othersValue = others.reduce((sum, item) => sum + item.value, 0);
       items = [
         ...shown,
-        { label: `${others.length} others`, value: othersValue, color: 'var(--text-dim)', id: 'others' },
+        {
+          label: `${others.length} others`,
+          value: othersValue,
+          color: 'var(--text-dim)',
+          id: 'others',
+        },
       ];
     }
 
@@ -103,7 +104,13 @@ export function DistributionChart({
               role={onClick ? 'button' : undefined}
               tabIndex={onClick ? 0 : undefined}
               onClick={() => onClick?.(item)}
-              onKeyDown={onClick ? (e) => { if (e.key === 'Enter') onClick?.(item); } : undefined}
+              onKeyDown={
+                onClick
+                  ? (e) => {
+                      if (e.key === 'Enter') onClick?.(item);
+                    }
+                  : undefined
+              }
               style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -170,7 +177,13 @@ export function DistributionChart({
             role={onClick ? 'button' : undefined}
             tabIndex={onClick ? 0 : undefined}
             onClick={() => onClick?.(item)}
-            onKeyDown={onClick ? (e) => { if (e.key === 'Enter') onClick?.(item); } : undefined}
+            onKeyDown={
+              onClick
+                ? (e) => {
+                    if (e.key === 'Enter') onClick?.(item);
+                  }
+                : undefined
+            }
             className="distribution-chart__bar-container"
             style={{
               display: 'flex',

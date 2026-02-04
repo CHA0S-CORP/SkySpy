@@ -14,7 +14,8 @@ export function HeatmapGrid({
   showLegend = true,
   onCellClick,
   onCellHover,
-  tooltipFormatter = (value, row, col) => `${rowLabels[row] || row}: ${columnLabels[col] || col} = ${value}`,
+  tooltipFormatter = (value, row, col) =>
+    `${rowLabels[row] || row}: ${columnLabels[col] || col} = ${value}`,
   className = '',
 }) {
   // Calculate min/max for color scaling
@@ -34,9 +35,7 @@ export function HeatmapGrid({
     });
 
     const range = maxVal - minVal || 1;
-    const normalized = data.map((row) =>
-      row.map((val) => (val - minVal) / range)
-    );
+    const normalized = data.map((row) => row.map((val) => (val - minVal) / range));
 
     return { min: minVal, max: maxVal, normalizedData: normalized };
   }, [data]);
@@ -68,7 +67,9 @@ export function HeatmapGrid({
 
   const getColor = (normalizedValue) => {
     const scale = colorScales[colorScale] || colorScales.cyan;
-    const thresholds = Object.keys(scale).map(Number).sort((a, b) => a - b);
+    const thresholds = Object.keys(scale)
+      .map(Number)
+      .sort((a, b) => a - b);
 
     for (let i = thresholds.length - 1; i >= 0; i--) {
       if (normalizedValue >= thresholds[i]) {
@@ -218,9 +219,7 @@ export function HeatmapGrid({
             marginLeft: labelWidth,
           }}
         >
-          <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>
-            {min.toLocaleString()}
-          </span>
+          <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>{min.toLocaleString()}</span>
           <div
             style={{
               display: 'flex',
@@ -239,9 +238,7 @@ export function HeatmapGrid({
               />
             ))}
           </div>
-          <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>
-            {max.toLocaleString()}
-          </span>
+          <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>{max.toLocaleString()}</span>
         </div>
       )}
     </div>

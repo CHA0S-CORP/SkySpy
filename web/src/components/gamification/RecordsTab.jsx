@@ -28,7 +28,11 @@ export function RecordsTab({ personal_records, onSelectAircraft }) {
                   role={onSelectAircraft && record.icao_hex ? 'button' : undefined}
                   tabIndex={onSelectAircraft && record.icao_hex ? 0 : undefined}
                   onKeyDown={(e) => {
-                    if ((e.key === 'Enter' || e.key === ' ') && record.icao_hex && onSelectAircraft) {
+                    if (
+                      (e.key === 'Enter' || e.key === ' ') &&
+                      record.icao_hex &&
+                      onSelectAircraft
+                    ) {
                       e.preventDefault();
                       onSelectAircraft(record.icao_hex);
                     }

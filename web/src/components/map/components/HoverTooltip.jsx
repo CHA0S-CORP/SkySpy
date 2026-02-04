@@ -1,6 +1,13 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import PropTypes from 'prop-types';
-import { Plane, ArrowUpRight, ArrowDownRight, ArrowRight, Shield, AlertTriangle } from 'lucide-react';
+import {
+  Plane,
+  ArrowUpRight,
+  ArrowDownRight,
+  ArrowRight,
+  Shield,
+  AlertTriangle,
+} from 'lucide-react';
 
 /**
  * Phase 6.2: Quick Info Panel / Hover Tooltip
@@ -74,7 +81,8 @@ function HoverTooltip({ aircraft, info, x, y, containerWidth, containerHeight })
   };
 
   // Get type name from various sources
-  const typeName = info?.type_name || info?.model || aircraft?.t || aircraft?.type || aircraft?.desc;
+  const typeName =
+    info?.type_name || info?.model || aircraft?.t || aircraft?.type || aircraft?.desc;
 
   // Get registration
   const registration = info?.registration || aircraft?.r;
@@ -104,7 +112,11 @@ function HoverTooltip({ aircraft, info, x, y, containerWidth, containerHeight })
         {isEmergency && (
           <span className="tooltip-emergency-badge">
             <AlertTriangle size={12} />
-            {aircraft?.squawk === '7500' ? 'HIJACK' : aircraft?.squawk === '7600' ? 'RADIO' : 'EMER'}
+            {aircraft?.squawk === '7500'
+              ? 'HIJACK'
+              : aircraft?.squawk === '7600'
+                ? 'RADIO'
+                : 'EMER'}
           </span>
         )}
         {isMilitary && (
@@ -124,9 +136,7 @@ function HoverTooltip({ aircraft, info, x, y, containerWidth, containerHeight })
       )}
 
       {/* Operator */}
-      {operator && (
-        <div className="tooltip-operator">{operator}</div>
-      )}
+      {operator && <div className="tooltip-operator">{operator}</div>}
 
       {/* Data grid */}
       <div className="tooltip-data">

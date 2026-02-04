@@ -49,6 +49,7 @@ import {
   Building2,
   Loader2,
   FileWarning,
+  Settings2,
 } from 'lucide-react';
 
 // Import utilities
@@ -110,7 +111,14 @@ import { useWeatherRadarOverlay } from './components/WeatherRadarOverlay';
 import { useScopeLayout } from '../../hooks/useScopeLayout';
 import { LayoutToggle } from './components/MultiScopeContainer';
 import { useMapAircraftNotes } from './hooks';
-import { NoteInputModal, AircraftContextMenu, SeparationLine, drawSeparationLine, DataBlockConfigPanel } from './components';
+import {
+  NoteInputModal,
+  AircraftContextMenu,
+  SeparationLine,
+  drawSeparationLine,
+  DataBlockConfigPanel,
+  ETASection,
+} from './components';
 import { useSeparationTool } from '../../hooks/useSeparationTool';
 import { useAltitudeFilter } from '../../hooks/useAltitudeFilter';
 import { AltitudeFilterPanel } from './components/AltitudeFilterPanel';
@@ -231,7 +239,9 @@ function MapView({
   const feederLat =
     feederLocation?.lat != null && !Number.isNaN(feederLocation.lat) ? feederLocation.lat : 47.9377;
   const feederLon =
-    feederLocation?.lon != null && !Number.isNaN(feederLocation.lon) ? feederLocation.lon : -121.9687;
+    feederLocation?.lon != null && !Number.isNaN(feederLocation.lon)
+      ? feederLocation.lon
+      : -121.9687;
 
   const [selectedAircraft, setSelectedAircraft] = useState(null);
   const [selectedMetar, setSelectedMetar] = useState(null);
@@ -588,7 +598,20 @@ function MapView({
   });
 
   // Phase 14.3: Data Block Leader Lines - allows Shift+drag to reposition data blocks
-  const { getOffset: getDataBlockOffset, setOffset: setDataBlockOffset, resetOffset: resetDataBlockOffset, resetAllOffsets: resetAllDataBlockOffsets, handleMouseDown: handleDataBlockDragStart, handleMouseMove: handleDataBlockDragMove, handleMouseUp: handleDataBlockDragEnd, isDragging: isDataBlockDragging, hasCustomOffset: hasCustomDataBlockOffset, hitTestDataBlock, pruneStaleAircraft: pruneStaleDataBlockPositions, customPositionCount: dataBlockCustomPositionCount } = useDataBlockPositions();
+  const {
+    getOffset: getDataBlockOffset,
+    setOffset: setDataBlockOffset,
+    resetOffset: resetDataBlockOffset,
+    resetAllOffsets: resetAllDataBlockOffsets,
+    handleMouseDown: handleDataBlockDragStart,
+    handleMouseMove: handleDataBlockDragMove,
+    handleMouseUp: handleDataBlockDragEnd,
+    isDragging: isDataBlockDragging,
+    hasCustomOffset: hasCustomDataBlockOffset,
+    hitTestDataBlock,
+    pruneStaleAircraft: pruneStaleDataBlockPositions,
+    customPositionCount: dataBlockCustomPositionCount,
+  } = useDataBlockPositions();
 
   // Toast context for notifications (gracefully handles if not in provider)
   const toastContext = useToastContextSafe();
@@ -727,7 +750,9 @@ function MapView({
     getAircraftOpacity,
     filterLabel: altitudeFilterLabel,
   } = useAltitudeFilter();
-  const sessionStats = useSessionStats(aircraft, { enabled: config.mapMode === 'pro' || config.mapMode === 'crt' });
+  const sessionStats = useSessionStats(aircraft, {
+    enabled: config.mapMode === 'pro' || config.mapMode === 'crt',
+  });
   const [proPhotoError, setProPhotoError] = useState(false); // Track photo loading errors for Pro panel
   const [proPhotoRetry, setProPhotoRetry] = useState(0); // Retry counter for pro panel photo
   const [proPhotoUrl, setProPhotoUrl] = useState(null); // S3 URL for pro panel photo
@@ -817,6 +842,10 @@ function MapView({
 
   // Phase 5: Theme & Customization
   const [proTheme, setProTheme] = useState(() => localStorage.getItem('adsb-pro-theme') || 'cyan'); // cyan, amber, green, high-contrast
+  // Theme colors for Pro mode - computed from proTheme for use in render
+  const themeColors = useMemo(() => {
+    return config.mapMode === 'pro' ? getThemeColors(proTheme) : null;
+  }, [config.mapMode, proTheme]);
   const [dataBlockConfig, setDataBlockConfig] = useState(() => {
     const defaults = {
       showCallsign: true,
@@ -2271,7 +2300,33 @@ function MapView({
   const handleProPanStart = useCallback(
     (e) => {
       // Phase 14.3: Handle Shift+left-click for data block dragging
-      if (e.button === 0 && e.shiftKey && config.mapMode === 'pro' && canvasRef.current) { const rect = canvasRef.current.getBoundingClientRect(); const mouseX = e.clientX - rect.left; const mouseY = e.clientY - rect.top; const centerX = rect.width / 2; const centerY = rect.height / 2; const maxRadius = Math.min(rect.width, rect.height) * 0.45; const pixelsPerNm = maxRadius / radarRange; const aircraftPositions = aircraft.filter(ac => ac.lat && ac.lon).map(ac => { const acNmX = (ac.lon - feederLon) * 60 * Math.cos((feederLat * Math.PI) / 180); const acNmY = (ac.lat - feederLat) * 60; return { hex: ac.hex, screenX: centerX + acNmX * pixelsPerNm + proPanOffset.x, screenY: centerY - acNmY * pixelsPerNm + proPanOffset.y, blockWidth: 100, blockHeight: 40 }; }); const hitHex = hitTestDataBlock(mouseX, mouseY, aircraftPositions); if (hitHex && handleDataBlockDragStart(e, hitHex)) { e.preventDefault(); return; } }
+      if (e.button === 0 && e.shiftKey && config.mapMode === 'pro' && canvasRef.current) {
+        const rect = canvasRef.current.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        const maxRadius = Math.min(rect.width, rect.height) * 0.45;
+        const pixelsPerNm = maxRadius / radarRange;
+        const aircraftPositions = aircraft
+          .filter((ac) => ac.lat && ac.lon)
+          .map((ac) => {
+            const acNmX = (ac.lon - feederLon) * 60 * Math.cos((feederLat * Math.PI) / 180);
+            const acNmY = (ac.lat - feederLat) * 60;
+            return {
+              hex: ac.hex,
+              screenX: centerX + acNmX * pixelsPerNm + proPanOffset.x,
+              screenY: centerY - acNmY * pixelsPerNm + proPanOffset.y,
+              blockWidth: 100,
+              blockHeight: 40,
+            };
+          });
+        const hitHex = hitTestDataBlock(mouseX, mouseY, aircraftPositions);
+        if (hitHex && handleDataBlockDragStart(e, hitHex)) {
+          e.preventDefault();
+          return;
+        }
+      }
       // Middle mouse button (button 1) or auxiliary button
       if (e.button !== 1 || config.mapMode !== 'pro') return;
       e.preventDefault();
@@ -2643,7 +2698,16 @@ function MapView({
         }
       }
     },
-    [config.mapMode, radarRange, proPanOffset, feederLat, feederLon, aircraft, isDataBlockDragging, handleDataBlockDragMove]
+    [
+      config.mapMode,
+      radarRange,
+      proPanOffset,
+      feederLat,
+      feederLon,
+      aircraft,
+      isDataBlockDragging,
+      handleDataBlockDragMove,
+    ]
   );
 
   const handleContainerMouseLeave = useCallback(() => {
@@ -4995,7 +5059,11 @@ function MapView({
           let aptMetar = null;
 
           // Check for METAR-based flight category coloring (Pro mode feature)
-          if (overlays.airportFlightCategory && aviationData.metars && aviationData.metars.length > 0) {
+          if (
+            overlays.airportFlightCategory &&
+            aviationData.metars &&
+            aviationData.metars.length > 0
+          ) {
             aptMetar = findMetarForAirport(apt, aviationData.metars);
             if (aptMetar) {
               hasMetar = true;
@@ -6197,8 +6265,7 @@ function MapView({
           const pos = latLonToScreen(ac.lat, ac.lon);
           if (isPro) {
             // Pro mode: viewport-based visibility
-            return pos.x >= -30 && pos.x <= width + 30 &&
-                   pos.y >= -30 && pos.y <= height + 30;
+            return pos.x >= -30 && pos.x <= width + 30 && pos.y >= -30 && pos.y <= height + 30;
           } else {
             // CRT mode: distance-based visibility
             const dist = ac.distance_nm || getDistanceNm(ac.lat, ac.lon);
@@ -6247,7 +6314,9 @@ function MapView({
               const hasAcars = acarsMessages.some(
                 (msg) =>
                   (msg.icao_hex && msg.icao_hex.toUpperCase() === hex) ||
-                  (msg.callsign && ac.flight && msg.callsign.toUpperCase() === ac.flight.trim().toUpperCase())
+                  (msg.callsign &&
+                    ac.flight &&
+                    msg.callsign.toUpperCase() === ac.flight.trim().toUpperCase())
               );
               if (hasAcars) score += 2000;
 
@@ -6301,8 +6370,13 @@ function MapView({
 
           if (isPro) {
             // Pro mode: strict viewport culling with margins
-            if (x < -margin || x > width + dataBlockMarginRight ||
-                y < -margin || y > height + dataBlockMarginBottom) return;
+            if (
+              x < -margin ||
+              x > width + dataBlockMarginRight ||
+              y < -margin ||
+              y > height + dataBlockMarginBottom
+            )
+              return;
           } else {
             // CRT mode: use distance-based culling
             const dist = ac.distance_nm || getDistanceNm(ac.lat, ac.lon);
@@ -6613,13 +6687,15 @@ function MapView({
                 ctx.beginPath();
 
                 const stepSec = 2;
-                let startX = 0, startY = -symSize - 20;
+                let startX = 0,
+                  startY = -symSize - 20;
                 let totalDist = 0;
 
                 // Calculate starting position from previous segments
                 if (startSec > 0) {
                   let headingRad = 0;
-                  let posX = 0, posY = 0;
+                  let posX = 0,
+                    posY = 0;
                   for (let t = 0; t < startSec; t += stepSec) {
                     const dt = Math.min(stepSec, startSec - t);
                     headingRad += (turnRate * dt * Math.PI) / 180;
@@ -6633,7 +6709,8 @@ function MapView({
                 ctx.moveTo(startX, startY);
 
                 let headingRad = (turnRate * startSec * Math.PI) / 180;
-                let posX = startX, posY = startY;
+                let posX = startX,
+                  posY = startY;
 
                 for (let t = startSec; t < endSec; t += stepSec) {
                   const dt = Math.min(stepSec, endSec - t);
@@ -6738,7 +6815,21 @@ function MapView({
           const hasCustomPosition = hasCustomDataBlockOffset(ac.hex);
           const blockX = x + DATA_BLOCK_DEFAULT_X + dataBlockOffset.x;
           const blockY = y + DATA_BLOCK_DEFAULT_Y + dataBlockOffset.y;
-          if (hasCustomPosition && isPro) { const leaderDist = Math.sqrt(dataBlockOffset.x ** 2 + dataBlockOffset.y ** 2); if (leaderDist > 20) { ctx.save(); ctx.strokeStyle = themeColors.rgba('vector', 0.4); ctx.lineWidth = 1; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(blockX - 2, blockY + 10); ctx.stroke(); ctx.setLineDash([]); ctx.restore(); } }
+          if (hasCustomPosition && isPro) {
+            const leaderDist = Math.sqrt(dataBlockOffset.x ** 2 + dataBlockOffset.y ** 2);
+            if (leaderDist > 20) {
+              ctx.save();
+              ctx.strokeStyle = themeColors.rgba('vector', 0.4);
+              ctx.lineWidth = 1;
+              ctx.setLineDash([3, 3]);
+              ctx.beginPath();
+              ctx.moveTo(x, y);
+              ctx.lineTo(blockX - 2, blockY + 10);
+              ctx.stroke();
+              ctx.setLineDash([]);
+              ctx.restore();
+            }
+          }
 
           // Draw data block (callsign, speed, altitude, etc.) - respects showDataBlocks toggle, performance mode, and dataBlockConfig
           // Debug: Log data block thinning info (only once per draw cycle)
@@ -6794,7 +6885,8 @@ function MapView({
               if (dataBlockConfig.showVerticalSpeed && verticalSpeed)
                 compactParts.push(verticalSpeed);
               if (dataBlockConfig.showAircraftType && aircraftType) compactParts.push(aircraftType);
-              if (dataBlockConfig.showWakeCategory && wakeCategory) compactParts.push(`[${wakeCategory}]`);
+              if (dataBlockConfig.showWakeCategory && wakeCategory)
+                compactParts.push(`[${wakeCategory}]`);
 
               const compactLine = compactParts.join(' ');
               labelLines = [{ text: compactLine, isCallsign: true }];
@@ -8080,7 +8172,9 @@ function MapView({
                 >
                   <Plane size={16} />
                   {hasAircraftNote(ac.hex) && (
-                    <span className="aircraft-note-indicator" title="Has note" aria-hidden="true">*</span>
+                    <span className="aircraft-note-indicator" title="Has note" aria-hidden="true">
+                      *
+                    </span>
                   )}
                 </div>
               );
@@ -9206,7 +9300,17 @@ function MapView({
                 />
                 <span className="toggle-label">Compact Mode</span>
               </label>
-              <button className="legend-toggle-btn" onClick={() => { setShowDataBlockConfigPanel(true); setShowOverlayMenu(false); }} style={{ marginTop: '8px' }}><Settings2 size={14} /><span>Advanced Config...</span></button>
+              <button
+                className="legend-toggle-btn"
+                onClick={() => {
+                  setShowDataBlockConfigPanel(true);
+                  setShowOverlayMenu(false);
+                }}
+                style={{ marginTop: '8px' }}
+              >
+                <Settings2 size={14} />
+                <span>Advanced Config...</span>
+              </button>
               <div className="overlay-divider" />
               <div className="overlay-section-title">Layer Opacity</div>
               {/* Phase 4.4: Layer Opacity Controls */}
@@ -12056,7 +12160,9 @@ function MapView({
         onSave={handleSaveNote}
         onDelete={handleDeleteNote}
         aircraftId={noteModalState.aircraft?.flight?.trim() || noteModalState.aircraft?.hex}
-        existingNote={noteModalState.aircraft?.hex ? getAircraftNote(noteModalState.aircraft.hex) : ''}
+        existingNote={
+          noteModalState.aircraft?.hex ? getAircraftNote(noteModalState.aircraft.hex) : ''
+        }
       />
 
       {/* Phase 13.1: Track Playback Controls for Pro Mode */}
@@ -12094,10 +12200,7 @@ function MapView({
       )}
 
       {/* Phase 6: Keyboard Shortcut Help Overlay */}
-      <KeyboardShortcutHelp
-        isOpen={showKeyboardHelp}
-        onClose={() => setShowKeyboardHelp(false)}
-      />
+      <KeyboardShortcutHelp isOpen={showKeyboardHelp} onClose={() => setShowKeyboardHelp(false)} />
     </div>
   );
 }

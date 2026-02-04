@@ -14,15 +14,7 @@ import { SidebarInfoRow } from './SidebarInfoRow';
 export function AircraftSection({ data, isExpanded, onToggle }) {
   if (!data) return null;
 
-  const {
-    type_name,
-    type_code,
-    manufacturer,
-    model,
-    serial_number,
-    year_built,
-    age_years,
-  } = data;
+  const { type_name, type_code, manufacturer, model, serial_number, year_built, age_years } = data;
 
   // Check if we have any data to show
   const hasData = type_name || type_code || manufacturer || model || serial_number || year_built;

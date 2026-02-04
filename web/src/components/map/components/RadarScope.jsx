@@ -1,4 +1,11 @@
-import React, { useRef, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
+import React, {
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+  forwardRef,
+  useImperativeHandle,
+} from 'react';
 import PropTypes from 'prop-types';
 
 /**
@@ -14,57 +21,64 @@ import PropTypes from 'prop-types';
  * In a future refactor, the drawing logic from MapView's useEffect (lines ~3917-6800)
  * can be extracted into this component for cleaner separation.
  */
-const RadarScope = forwardRef(function RadarScope({
-  // Scope configuration
-  scopeId = 1,
-  range = 50,
-  panOffset = { x: 0, y: 0 },
-  center = null, // Custom center point { lat, lon } - null means use feeder location
+const RadarScope = forwardRef(function RadarScope(
+  {
+    // Scope configuration
+    scopeId = 1,
+    range = 50,
+    panOffset = { x: 0, y: 0 },
+    center = null, // Custom center point { lat, lon } - null means use feeder location
 
-  // Data
-  aircraft = [],
-  feederLocation,
-  selectedAircraft = null,
+    // Data
+    aircraft = [],
+    feederLocation,
+    selectedAircraft = null,
 
-  // Display settings
-  isPro = true,
-  themeColors = null,
-  showGrid = true,
-  showCompassRose = true,
-  showRangeRings = true,
-  showDataBlocks = true,
-  showPredictionVectors = true,
-  showShortTracks = false,
+    // Display settings
+    isPro = true,
+    themeColors = null,
+    showGrid = true,
+    showCompassRose = true,
+    showRangeRings = true,
+    showDataBlocks = true,
+    showPredictionVectors = true,
+    showShortTracks = false,
 
-  // Event handlers
-  onAircraftClick,
-  onAircraftHover,
-  onPanChange,
-  onRangeChange,
-  onCanvasClick,
-  onCanvasDoubleClick,
+    // Event handlers
+    onAircraftClick,
+    onAircraftHover,
+    onPanChange,
+    onRangeChange,
+    onCanvasClick,
+    onCanvasDoubleClick,
 
-  // Additional props
-  className = '',
-  style = {},
+    // Additional props
+    className = '',
+    style = {},
 
-  // Debug
-  debug = false
-}, ref) {
+    // Debug
+    debug = false,
+  },
+  ref
+) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const animationRef = useRef(null);
 
   // Expose canvas ref and methods to parent
-  useImperativeHandle(ref, () => ({
-    getCanvas: () => canvasRef.current,
-    getContainer: () => containerRef.current,
-    getContext: () => canvasRef.current?.getContext('2d'),
-    getScopeId: () => scopeId,
-    getRange: () => range,
-    getPanOffset: () => panOffset,
-    getCenter: () => center
-  }), [scopeId, range, panOffset, center]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      getCanvas: () => canvasRef.current,
+      getContainer: () => containerRef.current,
+      getContext: () => canvasRef.current?.getContext('2d'),
+      getScopeId: () => scopeId,
+      getRange: () => range,
+      getPanOffset: () => panOffset,
+      getCenter: () => center,
+    }),
+    [scopeId, range, panOffset, center]
+  );
 
   // Calculate effective center (custom center or feeder location)
   const effectiveCenter = useMemo(() => {
@@ -100,45 +114,54 @@ const RadarScope = forwardRef(function RadarScope({
   }, []);
 
   // Mouse wheel zoom handler
-  const handleWheel = useCallback((e) => {
-    if (!onRangeChange) return;
+  const handleWheel = useCallback(
+    (e) => {
+      if (!onRangeChange) return;
 
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 1 : -1;
-    const step = range >= 100 ? 25 : 10;
-    const newRange = Math.max(5, Math.min(500, range + delta * step));
-    onRangeChange(scopeId, newRange);
-  }, [range, scopeId, onRangeChange]);
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 1 : -1;
+      const step = range >= 100 ? 25 : 10;
+      const newRange = Math.max(5, Math.min(500, range + delta * step));
+      onRangeChange(scopeId, newRange);
+    },
+    [range, scopeId, onRangeChange]
+  );
 
   // Pan handling
   const isPanning = useRef(false);
   const panStart = useRef({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
 
-  const handleMouseDown = useCallback((e) => {
-    // Middle mouse button or Ctrl+left click for panning
-    if (e.button === 1 || (e.button === 0 && (e.ctrlKey || e.metaKey))) {
-      e.preventDefault();
-      isPanning.current = true;
-      panStart.current = {
-        x: e.clientX,
-        y: e.clientY,
-        offsetX: panOffset.x,
-        offsetY: panOffset.y
-      };
-    }
-  }, [panOffset]);
+  const handleMouseDown = useCallback(
+    (e) => {
+      // Middle mouse button or Ctrl+left click for panning
+      if (e.button === 1 || (e.button === 0 && (e.ctrlKey || e.metaKey))) {
+        e.preventDefault();
+        isPanning.current = true;
+        panStart.current = {
+          x: e.clientX,
+          y: e.clientY,
+          offsetX: panOffset.x,
+          offsetY: panOffset.y,
+        };
+      }
+    },
+    [panOffset]
+  );
 
-  const handleMouseMove = useCallback((e) => {
-    if (!isPanning.current || !onPanChange) return;
+  const handleMouseMove = useCallback(
+    (e) => {
+      if (!isPanning.current || !onPanChange) return;
 
-    const dx = e.clientX - panStart.current.x;
-    const dy = e.clientY - panStart.current.y;
+      const dx = e.clientX - panStart.current.x;
+      const dy = e.clientY - panStart.current.y;
 
-    onPanChange(scopeId, {
-      x: panStart.current.offsetX + dx,
-      y: panStart.current.offsetY + dy
-    });
-  }, [scopeId, onPanChange]);
+      onPanChange(scopeId, {
+        x: panStart.current.offsetX + dx,
+        y: panStart.current.offsetY + dy,
+      });
+    },
+    [scopeId, onPanChange]
+  );
 
   const handleMouseUp = useCallback(() => {
     isPanning.current = false;
@@ -163,47 +186,53 @@ const RadarScope = forwardRef(function RadarScope({
   }, [handleWheel, handleMouseDown, handleMouseMove, handleMouseUp]);
 
   // Handle click events
-  const handleClick = useCallback((e) => {
-    if (!canvasRef.current) return;
+  const handleClick = useCallback(
+    (e) => {
+      if (!canvasRef.current) return;
 
-    const rect = canvasRef.current.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
+      const rect = canvasRef.current.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
 
-    // Calculate position relative to center with pan offset
-    const adjustedX = clickX - panOffset.x;
-    const adjustedY = clickY - panOffset.y;
+      // Calculate position relative to center with pan offset
+      const adjustedX = clickX - panOffset.x;
+      const adjustedY = clickY - panOffset.y;
 
-    if (onCanvasClick) {
-      onCanvasClick({
+      if (onCanvasClick) {
+        onCanvasClick({
+          scopeId,
+          x: clickX,
+          y: clickY,
+          centerX,
+          centerY,
+          adjustedX: adjustedX - centerX,
+          adjustedY: adjustedY - centerY,
+          range,
+        });
+      }
+    },
+    [scopeId, panOffset, range, onCanvasClick]
+  );
+
+  const handleDoubleClick = useCallback(
+    (e) => {
+      if (!canvasRef.current || !onCanvasDoubleClick) return;
+
+      const rect = canvasRef.current.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+
+      onCanvasDoubleClick({
         scopeId,
         x: clickX,
         y: clickY,
-        centerX,
-        centerY,
-        adjustedX: adjustedX - centerX,
-        adjustedY: adjustedY - centerY,
-        range
+        range,
       });
-    }
-  }, [scopeId, panOffset, range, onCanvasClick]);
-
-  const handleDoubleClick = useCallback((e) => {
-    if (!canvasRef.current || !onCanvasDoubleClick) return;
-
-    const rect = canvasRef.current.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-
-    onCanvasDoubleClick({
-      scopeId,
-      x: clickX,
-      y: clickY,
-      range
-    });
-  }, [scopeId, range, onCanvasDoubleClick]);
+    },
+    [scopeId, range, onCanvasDoubleClick]
+  );
 
   // Debug overlay
   const renderDebugInfo = () => {
@@ -213,8 +242,12 @@ const RadarScope = forwardRef(function RadarScope({
       <div className="scope-debug-overlay">
         <div>Scope: {scopeId}</div>
         <div>Range: {range}nm</div>
-        <div>Pan: {panOffset.x.toFixed(0)}, {panOffset.y.toFixed(0)}</div>
-        <div>Center: {effectiveCenter?.lat?.toFixed(4)}, {effectiveCenter?.lon?.toFixed(4)}</div>
+        <div>
+          Pan: {panOffset.x.toFixed(0)}, {panOffset.y.toFixed(0)}
+        </div>
+        <div>
+          Center: {effectiveCenter?.lat?.toFixed(4)}, {effectiveCenter?.lon?.toFixed(4)}
+        </div>
         <div>Aircraft: {aircraft.length}</div>
       </div>
     );
@@ -233,7 +266,7 @@ const RadarScope = forwardRef(function RadarScope({
         onDoubleClick={handleDoubleClick}
         onContextMenu={(e) => e.preventDefault()}
         style={{
-          cursor: isPanning.current ? 'grabbing' : 'grab'
+          cursor: isPanning.current ? 'grabbing' : 'grab',
         }}
       />
 
@@ -254,18 +287,18 @@ RadarScope.propTypes = {
   range: PropTypes.number,
   panOffset: PropTypes.shape({
     x: PropTypes.number,
-    y: PropTypes.number
+    y: PropTypes.number,
   }),
   center: PropTypes.shape({
     lat: PropTypes.number,
-    lon: PropTypes.number
+    lon: PropTypes.number,
   }),
 
   // Data
   aircraft: PropTypes.array,
   feederLocation: PropTypes.shape({
     lat: PropTypes.number,
-    lon: PropTypes.number
+    lon: PropTypes.number,
   }),
   selectedAircraft: PropTypes.object,
 
@@ -292,18 +325,14 @@ RadarScope.propTypes = {
   style: PropTypes.object,
 
   // Debug
-  debug: PropTypes.bool
+  debug: PropTypes.bool,
 };
 
 /**
  * Hook to coordinate multiple RadarScope instances
  * Manages shared state like selected aircraft across synced scopes
  */
-export function useRadarScopeCoordinator({
-  scopes,
-  syncSelection = true,
-  onScopeChange
-}) {
+export function useRadarScopeCoordinator({ scopes, syncSelection = true, onScopeChange }) {
   const scopeRefs = useRef({});
 
   const registerScope = useCallback((scopeId, ref) => {
@@ -314,21 +343,24 @@ export function useRadarScopeCoordinator({
     delete scopeRefs.current[scopeId];
   }, []);
 
-  const broadcastSelection = useCallback((selectedAircraft) => {
-    if (!syncSelection) return;
+  const broadcastSelection = useCallback(
+    (selectedAircraft) => {
+      if (!syncSelection) return;
 
-    Object.values(scopeRefs.current).forEach(ref => {
-      if (ref?.setSelectedAircraft) {
-        ref.setSelectedAircraft(selectedAircraft);
-      }
-    });
-  }, [syncSelection]);
+      Object.values(scopeRefs.current).forEach((ref) => {
+        if (ref?.setSelectedAircraft) {
+          ref.setSelectedAircraft(selectedAircraft);
+        }
+      });
+    },
+    [syncSelection]
+  );
 
   return {
     registerScope,
     unregisterScope,
     broadcastSelection,
-    scopeRefs: scopeRefs.current
+    scopeRefs: scopeRefs.current,
   };
 }
 

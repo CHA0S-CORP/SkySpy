@@ -91,7 +91,12 @@ export function NotamPanel({
   return (
     <aside className="notam-panel pro-style" style={panelStyle} aria-label="NOTAMs panel">
       {/* Drag handle header */}
-      <div className="notam-panel-header" onMouseDown={handleMouseDown} role="toolbar" aria-label="NOTAM panel controls">
+      <div
+        className="notam-panel-header"
+        onMouseDown={handleMouseDown}
+        role="toolbar"
+        aria-label="NOTAM panel controls"
+      >
         <div className="notam-panel-drag-handle">
           <GripHorizontal size={16} />
         </div>

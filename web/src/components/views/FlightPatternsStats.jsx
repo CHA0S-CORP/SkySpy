@@ -20,7 +20,12 @@ import { useStats } from '../../hooks';
  * - Aircraft types breakdown
  * - Average flight duration by type
  */
-export function FlightPatternsStats({ apiBase, wsRequest, wsConnected, onSelectAircraft: _onSelectAircraft }) {
+export function FlightPatternsStats({
+  apiBase,
+  wsRequest,
+  wsConnected,
+  onSelectAircraft: _onSelectAircraft,
+}) {
   const [timeRange, setTimeRange] = useState('24h');
   const [showFilters, setShowFilters] = useState(false);
   const [typeFilter, setTypeFilter] = useState('');

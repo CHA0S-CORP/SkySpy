@@ -415,9 +415,7 @@ describe('LivePreview', () => {
         vi.advanceTimersByTime(300);
       });
 
-      expect(
-        screen.getByText(/no aircraft currently match these conditions/i)
-      ).toBeInTheDocument();
+      expect(screen.getByText(/no aircraft currently match these conditions/i)).toBeInTheDocument();
     });
   });
 
@@ -440,9 +438,7 @@ describe('LivePreview', () => {
         groups: [
           {
             logic: 'AND',
-            conditions: [
-              { type: 'altitude_above', operator: 'gt', value: '10000' },
-            ],
+            conditions: [{ type: 'altitude_above', operator: 'gt', value: '10000' }],
           },
         ],
       };
@@ -460,9 +456,7 @@ describe('LivePreview', () => {
         groups: [
           {
             logic: 'AND',
-            conditions: [
-              { type: 'altitude_above', operator: 'gt', value: '20000' },
-            ],
+            conditions: [{ type: 'altitude_above', operator: 'gt', value: '20000' }],
           },
         ],
       };
@@ -521,9 +515,7 @@ describe('LivePreview', () => {
       });
 
       // Should have been called after debounce
-      expect(findMatchingAircraft.mock.calls.length).toBeGreaterThanOrEqual(
-        callCount
-      );
+      expect(findMatchingAircraft.mock.calls.length).toBeGreaterThanOrEqual(callCount);
     });
   });
 
@@ -613,22 +605,14 @@ describe('LivePreview', () => {
       findMatchingAircraft.mockReturnValue([]);
 
       render(
-        <LivePreview
-          conditions={defaultConditions}
-          aircraft={mockAircraft}
-          feederLocation={null}
-        />
+        <LivePreview conditions={defaultConditions} aircraft={mockAircraft} feederLocation={null} />
       );
 
       act(() => {
         vi.advanceTimersByTime(300);
       });
 
-      expect(findMatchingAircraft).toHaveBeenCalledWith(
-        expect.any(Object),
-        mockAircraft,
-        null
-      );
+      expect(findMatchingAircraft).toHaveBeenCalledWith(expect.any(Object), mockAircraft, null);
     });
   });
 

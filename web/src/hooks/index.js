@@ -105,8 +105,4 @@ export { useSessionStats } from './useSessionStats';
 export { useSeparationTool } from './useSeparationTool';
 
 // Data Block Configuration (Phase 5.2)
-export {
-  useDataBlockConfig,
-  FIELD_DEFINITIONS,
-  MODE_DEFINITIONS,
-} from './useDataBlockConfig';
+export { useDataBlockConfig, FIELD_DEFINITIONS, MODE_DEFINITIONS } from './useDataBlockConfig';

@@ -387,7 +387,9 @@ export function SearchAutocomplete({
         <div className="search-empty recent">
           <Clock size={24} />
           <span>No recent searches</span>
-          <span className="search-hint">Search by callsign, registration, squawk, type, or operator</span>
+          <span className="search-hint">
+            Search by callsign, registration, squawk, type, or operator
+          </span>
         </div>
       )}
 

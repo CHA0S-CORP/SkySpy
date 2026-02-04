@@ -20,14 +20,61 @@ export function LinkedGraphPanel({
   const [dragStart, setDragStart] = useState(null);
 
   // Graph configurations
-  const graphConfigs = useMemo(() => [
-    { key: 'altitude', label: 'Altitude', unit: 'ft', color: '#3b82f6', field: 'altitude', formatter: (v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v },
-    { key: 'speed', label: 'Speed', unit: 'kts', color: '#22c55e', field: 'gs', formatter: (v) => Math.round(v) },
-    { key: 'vs', label: 'V/S', unit: 'fpm', color: '#f59e0b', field: 'vr', formatter: (v) => v > 0 ? `+${v}` : v, baseline: true },
-    { key: 'distance', label: 'Distance', unit: 'nm', color: '#8b5cf6', field: 'distance_nm', formatter: (v) => v.toFixed(1) },
-    { key: 'rssi', label: 'Signal', unit: 'dB', color: '#ef4444', field: 'rssi', formatter: (v) => v.toFixed(1) },
-    { key: 'track', label: 'Track', unit: '°', color: '#06b6d4', field: 'track', formatter: (v) => Math.round(v), circular: true },
-  ], []);
+  const graphConfigs = useMemo(
+    () => [
+      {
+        key: 'altitude',
+        label: 'Altitude',
+        unit: 'ft',
+        color: '#3b82f6',
+        field: 'altitude',
+        formatter: (v) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v),
+      },
+      {
+        key: 'speed',
+        label: 'Speed',
+        unit: 'kts',
+        color: '#22c55e',
+        field: 'gs',
+        formatter: (v) => Math.round(v),
+      },
+      {
+        key: 'vs',
+        label: 'V/S',
+        unit: 'fpm',
+        color: '#f59e0b',
+        field: 'vr',
+        formatter: (v) => (v > 0 ? `+${v}` : v),
+        baseline: true,
+      },
+      {
+        key: 'distance',
+        label: 'Distance',
+        unit: 'nm',
+        color: '#8b5cf6',
+        field: 'distance_nm',
+        formatter: (v) => v.toFixed(1),
+      },
+      {
+        key: 'rssi',
+        label: 'Signal',
+        unit: 'dB',
+        color: '#ef4444',
+        field: 'rssi',
+        formatter: (v) => v.toFixed(1),
+      },
+      {
+        key: 'track',
+        label: 'Track',
+        unit: '°',
+        color: '#06b6d4',
+        field: 'track',
+        formatter: (v) => Math.round(v),
+        circular: true,
+      },
+    ],
+    []
+  );
 
   // Process data for each graph
   const graphData = useMemo(() => {
@@ -97,32 +144,43 @@ export function LinkedGraphPanel({
       return {
         index: closestIdx,
         event,
-        color: event.severity === 'critical' ? '#ef4444' : event.severity === 'warning' ? '#f59e0b' : '#3b82f6',
+        color:
+          event.severity === 'critical'
+            ? '#ef4444'
+            : event.severity === 'warning'
+              ? '#f59e0b'
+              : '#3b82f6',
       };
     });
   }, [safetyEvents, sightings]);
 
   // Handle mouse interactions
-  const getIndexFromEvent = useCallback((e, graphElement) => {
-    if (!graphElement || !sightings.length) return null;
-    const rect = graphElement.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const percent = x / rect.width;
-    const totalPoints = graphData[graphConfigs[0].key]?.values?.length || 0;
-    const idx = Math.round(percent * (totalPoints - 1));
-    const startIdx = graphData[graphConfigs[0].key]?.startIdx || 0;
-    return Math.max(0, Math.min(sightings.length - 1, startIdx + idx));
-  }, [sightings, graphData, graphConfigs]);
+  const getIndexFromEvent = useCallback(
+    (e, graphElement) => {
+      if (!graphElement || !sightings.length) return null;
+      const rect = graphElement.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const percent = x / rect.width;
+      const totalPoints = graphData[graphConfigs[0].key]?.values?.length || 0;
+      const idx = Math.round(percent * (totalPoints - 1));
+      const startIdx = graphData[graphConfigs[0].key]?.startIdx || 0;
+      return Math.max(0, Math.min(sightings.length - 1, startIdx + idx));
+    },
+    [sightings, graphData, graphConfigs]
+  );
 
-  const handleMouseMove = useCallback((e) => {
-    const graphEl = e.currentTarget;
-    const idx = getIndexFromEvent(e, graphEl);
-    if (idx !== null) {
-      setHoveredIndex(idx);
-    }
+  const handleMouseMove = useCallback(
+    (e) => {
+      const graphEl = e.currentTarget;
+      const idx = getIndexFromEvent(e, graphEl);
+      if (idx !== null) {
+        setHoveredIndex(idx);
+      }
 
-    // Handle brush selection (visual update, actual zoom on mouse up)
-  }, [getIndexFromEvent, isDragging, dragStart]);
+      // Handle brush selection (visual update, actual zoom on mouse up)
+    },
+    [getIndexFromEvent, isDragging, dragStart]
+  );
 
   const handleMouseDown = useCallback((e) => {
     const graphEl = e.currentTarget;
@@ -133,34 +191,40 @@ export function LinkedGraphPanel({
     setDragStart(percent);
   }, []);
 
-  const handleMouseUp = useCallback((e) => {
-    if (isDragging && dragStart !== null) {
-      const graphEl = e.currentTarget;
-      const rect = graphEl.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const endPercent = Math.max(0, Math.min(1, x / rect.width));
+  const handleMouseUp = useCallback(
+    (e) => {
+      if (isDragging && dragStart !== null) {
+        const graphEl = e.currentTarget;
+        const rect = graphEl.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const endPercent = Math.max(0, Math.min(1, x / rect.width));
 
-      // Only apply zoom if drag was significant
-      if (Math.abs(endPercent - dragStart) > 0.05) {
-        const start = Math.min(dragStart, endPercent);
-        const end = Math.max(dragStart, endPercent);
-        onGraphZoom?.({
-          start: graphZoom.start + start * (graphZoom.end - graphZoom.start),
-          end: graphZoom.start + end * (graphZoom.end - graphZoom.start),
-        });
+        // Only apply zoom if drag was significant
+        if (Math.abs(endPercent - dragStart) > 0.05) {
+          const start = Math.min(dragStart, endPercent);
+          const end = Math.max(dragStart, endPercent);
+          onGraphZoom?.({
+            start: graphZoom.start + start * (graphZoom.end - graphZoom.start),
+            end: graphZoom.start + end * (graphZoom.end - graphZoom.start),
+          });
+        }
       }
-    }
-    setIsDragging(false);
-    setDragStart(null);
-  }, [isDragging, dragStart, graphZoom, onGraphZoom]);
+      setIsDragging(false);
+      setDragStart(null);
+    },
+    [isDragging, dragStart, graphZoom, onGraphZoom]
+  );
 
-  const handleClick = useCallback((e) => {
-    const graphEl = e.currentTarget;
-    const idx = getIndexFromEvent(e, graphEl);
-    if (idx !== null) {
-      onSelectIndex?.(idx);
-    }
-  }, [getIndexFromEvent, onSelectIndex]);
+  const handleClick = useCallback(
+    (e) => {
+      const graphEl = e.currentTarget;
+      const idx = getIndexFromEvent(e, graphEl);
+      if (idx !== null) {
+        onSelectIndex?.(idx);
+      }
+    },
+    [getIndexFromEvent, onSelectIndex]
+  );
 
   const handleDoubleClick = useCallback(() => {
     // Reset zoom
@@ -174,7 +238,16 @@ export function LinkedGraphPanel({
       return (
         <div className="linked-graphs-panel__graph" key={config.key}>
           <span className="linked-graphs-panel__graph-label">{config.label}</span>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-dim)', fontSize: '11px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              color: 'var(--text-dim)',
+              fontSize: '11px',
+            }}
+          >
             No data
           </div>
         </div>
@@ -187,12 +260,14 @@ export function LinkedGraphPanel({
     const graphHeight = height - 30;
 
     // Generate path
-    const points = values.map((v, i) => {
-      if (v === null || v === undefined) return null;
-      const x = (i / (values.length - 1)) * width;
-      const y = graphHeight - ((v - min) / range) * graphHeight;
-      return { x, y, value: v };
-    }).filter(Boolean);
+    const points = values
+      .map((v, i) => {
+        if (v === null || v === undefined) return null;
+        const x = (i / (values.length - 1)) * width;
+        const y = graphHeight - ((v - min) / range) * graphHeight;
+        return { x, y, value: v };
+      })
+      .filter(Boolean);
 
     const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
 
@@ -211,7 +286,7 @@ export function LinkedGraphPanel({
       <div
         className="linked-graphs-panel__graph"
         key={config.key}
-        role="application"
+        role="button"
         aria-label={`${config.label} graph - interactive chart`}
         tabIndex={0}
         style={{ height }}
@@ -227,7 +302,12 @@ export function LinkedGraphPanel({
       >
         <span className="linked-graphs-panel__graph-label">{config.label}</span>
 
-        <svg width="100%" height={graphHeight} viewBox={`0 0 ${width} ${graphHeight}`} preserveAspectRatio="none">
+        <svg
+          width="100%"
+          height={graphHeight}
+          viewBox={`0 0 ${width} ${graphHeight}`}
+          preserveAspectRatio="none"
+        >
           {/* Baseline for V/S */}
           {config.baseline && (
             <line
@@ -296,14 +376,8 @@ export function LinkedGraphPanel({
         {/* Cursor line and tooltip */}
         {cursorVisible && (
           <>
-            <div
-              className="linked-graphs-panel__cursor-line"
-              style={{ left: `${cursorX}%` }}
-            />
-            <div
-              className="linked-graphs-panel__cursor-tooltip"
-              style={{ left: `${cursorX}%` }}
-            >
+            <div className="linked-graphs-panel__cursor-line" style={{ left: `${cursorX}%` }} />
+            <div className="linked-graphs-panel__cursor-tooltip" style={{ left: `${cursorX}%` }}>
               {config.formatter(cursorValue)} {config.unit}
             </div>
           </>

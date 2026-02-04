@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useWeatherRadar, getRadarColor, getRadarTileUrl, RADAR_COLOR_SCALE } from './useWeatherRadar';
+import {
+  useWeatherRadar,
+  getRadarColor,
+  getRadarTileUrl,
+  RADAR_COLOR_SCALE,
+} from './useWeatherRadar';
 
 // Mock Image
 class MockImage {

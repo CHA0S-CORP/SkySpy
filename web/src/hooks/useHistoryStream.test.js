@@ -65,9 +65,7 @@ describe('useHistoryStream', () => {
 
   describe('message subscription', () => {
     it('should subscribe to messages on mount', () => {
-      renderHook(() =>
-        useHistoryStream({ subscribeMessages: mockSubscribeMessages })
-      );
+      renderHook(() => useHistoryStream({ subscribeMessages: mockSubscribeMessages }));
 
       expect(mockSubscribeMessages).toHaveBeenCalled();
     });
@@ -653,10 +651,9 @@ describe('useHistoryStream', () => {
 
 describe('useLiveIndicator', () => {
   it('should show indicator when count exceeds threshold', () => {
-    const { result, rerender } = renderHook(
-      ({ count }) => useLiveIndicator(count, 5),
-      { initialProps: { count: 0 } }
-    );
+    const { result, rerender } = renderHook(({ count }) => useLiveIndicator(count, 5), {
+      initialProps: { count: 0 },
+    });
 
     expect(result.current.showIndicator).toBe(false);
 
@@ -674,10 +671,9 @@ describe('useLiveIndicator', () => {
   });
 
   it('should use default threshold of 1', () => {
-    const { result, rerender } = renderHook(
-      ({ count }) => useLiveIndicator(count),
-      { initialProps: { count: 0 } }
-    );
+    const { result, rerender } = renderHook(({ count }) => useLiveIndicator(count), {
+      initialProps: { count: 0 },
+    });
 
     expect(result.current.showIndicator).toBe(false);
 

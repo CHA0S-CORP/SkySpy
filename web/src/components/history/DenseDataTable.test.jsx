@@ -4,9 +4,36 @@ import { DenseDataTable } from './DenseDataTable';
 
 describe('DenseDataTable', () => {
   const sampleData = [
-    { id: '1', icao_hex: 'A12345', callsign: 'UAL123', altitude: 35000, gs: 450, rssi: -5, is_military: false, safety_event_count: 0 },
-    { id: '2', icao_hex: 'B67890', callsign: 'MIL001', altitude: 25000, gs: 380, rssi: -12, is_military: true, safety_event_count: 0 },
-    { id: '3', icao_hex: 'C11111', callsign: 'DAL456', altitude: 8000, gs: 250, rssi: -18, is_military: false, safety_event_count: 2 },
+    {
+      id: '1',
+      icao_hex: 'A12345',
+      callsign: 'UAL123',
+      altitude: 35000,
+      gs: 450,
+      rssi: -5,
+      is_military: false,
+      safety_event_count: 0,
+    },
+    {
+      id: '2',
+      icao_hex: 'B67890',
+      callsign: 'MIL001',
+      altitude: 25000,
+      gs: 380,
+      rssi: -12,
+      is_military: true,
+      safety_event_count: 0,
+    },
+    {
+      id: '3',
+      icao_hex: 'C11111',
+      callsign: 'DAL456',
+      altitude: 8000,
+      gs: 250,
+      rssi: -18,
+      is_military: false,
+      safety_event_count: 2,
+    },
   ];
 
   const sampleColumns = [
@@ -53,9 +80,7 @@ describe('DenseDataTable', () => {
     });
 
     it('should show custom empty message', () => {
-      render(
-        <DenseDataTable {...defaultProps} data={[]} emptyMessage="No sessions found" />
-      );
+      render(<DenseDataTable {...defaultProps} data={[]} emptyMessage="No sessions found" />);
       expect(screen.getByText('No sessions found')).toBeInTheDocument();
     });
   });
@@ -113,24 +138,16 @@ describe('DenseDataTable', () => {
 
   describe('color scales', () => {
     it('should apply altitude color scale', () => {
-      const columnsWithColor = [
-        { field: 'altitude', label: 'Altitude', colorScale: 'altitude' },
-      ];
-      const { container } = render(
-        <DenseDataTable data={sampleData} columns={columnsWithColor} />
-      );
+      const columnsWithColor = [{ field: 'altitude', label: 'Altitude', colorScale: 'altitude' }];
+      const { container } = render(<DenseDataTable data={sampleData} columns={columnsWithColor} />);
       // Color scale classes are applied to span inside cell
       const coloredSpans = container.querySelectorAll('[class*="altitude"]');
       expect(coloredSpans.length).toBeGreaterThan(0);
     });
 
     it('should apply signal color scale', () => {
-      const columnsWithColor = [
-        { field: 'rssi', label: 'Signal', colorScale: 'signal' },
-      ];
-      const { container } = render(
-        <DenseDataTable data={sampleData} columns={columnsWithColor} />
-      );
+      const columnsWithColor = [{ field: 'rssi', label: 'Signal', colorScale: 'signal' }];
+      const { container } = render(<DenseDataTable data={sampleData} columns={columnsWithColor} />);
       // Color scale classes are applied to span inside cell
       const coloredSpans = container.querySelectorAll('[class*="signal"]');
       expect(coloredSpans.length).toBeGreaterThan(0);
@@ -161,9 +178,7 @@ describe('DenseDataTable', () => {
     });
 
     it('should show descending indicator', () => {
-      render(
-        <DenseDataTable {...defaultProps} sortField="callsign" sortDirection="desc" />
-      );
+      render(<DenseDataTable {...defaultProps} sortField="callsign" sortDirection="desc" />);
       expect(screen.getByText('↓')).toBeInTheDocument();
     });
 
@@ -192,12 +207,8 @@ describe('DenseDataTable', () => {
 
     it('should not sort when column.sortable is false', () => {
       const onSort = vi.fn();
-      const columnsNotSortable = [
-        { field: 'callsign', label: 'Callsign', sortable: false },
-      ];
-      render(
-        <DenseDataTable data={sampleData} columns={columnsNotSortable} onSort={onSort} />
-      );
+      const columnsNotSortable = [{ field: 'callsign', label: 'Callsign', sortable: false }];
+      render(<DenseDataTable data={sampleData} columns={columnsNotSortable} onSort={onSort} />);
 
       fireEvent.click(screen.getByText('Callsign'));
       expect(onSort).not.toHaveBeenCalled();
@@ -214,16 +225,12 @@ describe('DenseDataTable', () => {
     });
 
     it('should highlight selected row', () => {
-      const { container } = render(
-        <DenseDataTable {...defaultProps} selectedRow="1" />
-      );
+      const { container } = render(<DenseDataTable {...defaultProps} selectedRow="1" />);
       expect(container.querySelector('.dense-data-table__row--selected')).toBeInTheDocument();
     });
 
     it('should highlight selected row by icao_hex', () => {
-      const { container } = render(
-        <DenseDataTable {...defaultProps} selectedRow="A12345" />
-      );
+      const { container } = render(<DenseDataTable {...defaultProps} selectedRow="A12345" />);
       expect(container.querySelector('.dense-data-table__row--selected')).toBeInTheDocument();
     });
   });
@@ -280,19 +287,13 @@ describe('DenseDataTable', () => {
     });
 
     it('should apply mono class when specified', () => {
-      const columnsWithMono = [
-        { field: 'icao_hex', label: 'ICAO', mono: true },
-      ];
-      const { container } = render(
-        <DenseDataTable data={sampleData} columns={columnsWithMono} />
-      );
+      const columnsWithMono = [{ field: 'icao_hex', label: 'ICAO', mono: true }];
+      const { container } = render(<DenseDataTable data={sampleData} columns={columnsWithMono} />);
       expect(container.querySelector('.dense-data-table__cell--mono')).toBeInTheDocument();
     });
 
     it('should apply highlight class when specified', () => {
-      const columnsWithHighlight = [
-        { field: 'callsign', label: 'Callsign', highlight: true },
-      ];
+      const columnsWithHighlight = [{ field: 'callsign', label: 'Callsign', highlight: true }];
       const { container } = render(
         <DenseDataTable data={sampleData} columns={columnsWithHighlight} />
       );
@@ -302,9 +303,7 @@ describe('DenseDataTable', () => {
 
   describe('row height', () => {
     it('should apply custom row height', () => {
-      const { container } = render(
-        <DenseDataTable {...defaultProps} rowHeight={40} />
-      );
+      const { container } = render(<DenseDataTable {...defaultProps} rowHeight={40} />);
       const row = container.querySelector('.dense-data-table__row');
       expect(row.style.height).toBe('40px');
     });
@@ -312,9 +311,7 @@ describe('DenseDataTable', () => {
 
   describe('max height', () => {
     it('should apply max height to scroll container', () => {
-      const { container } = render(
-        <DenseDataTable {...defaultProps} maxHeight={300} />
-      );
+      const { container } = render(<DenseDataTable {...defaultProps} maxHeight={300} />);
       const scrollContainer = container.querySelector('.virtual-scroll-container');
       expect(scrollContainer.style.height).toBe('300px');
     });
@@ -322,9 +319,7 @@ describe('DenseDataTable', () => {
 
   describe('styling', () => {
     it('should apply custom className', () => {
-      const { container } = render(
-        <DenseDataTable {...defaultProps} className="custom-table" />
-      );
+      const { container } = render(<DenseDataTable {...defaultProps} className="custom-table" />);
       expect(container.querySelector('.custom-table')).toBeInTheDocument();
     });
   });

@@ -101,9 +101,7 @@ describe('ConditionBuilder', () => {
       expect(options.length).toBe(CONDITION_TYPES.length);
       expect(within(typeSelect).getByText('ICAO Hex')).toBeInTheDocument();
       expect(within(typeSelect).getByText('Callsign')).toBeInTheDocument();
-      expect(
-        within(typeSelect).getByText('Military Aircraft')
-      ).toBeInTheDocument();
+      expect(within(typeSelect).getByText('Military Aircraft')).toBeInTheDocument();
     });
 
     it('should show logic select between groups', () => {
@@ -162,9 +160,7 @@ describe('ConditionBuilder', () => {
         groups: [
           {
             logic: 'AND',
-            conditions: [
-              { type: 'altitude_above', operator: 'gt', value: '10000' },
-            ],
+            conditions: [{ type: 'altitude_above', operator: 'gt', value: '10000' }],
           },
         ],
       };
@@ -201,9 +197,7 @@ describe('ConditionBuilder', () => {
         expect.objectContaining({
           groups: expect.arrayContaining([
             expect.objectContaining({
-              conditions: expect.arrayContaining([
-                expect.objectContaining({ type: 'callsign' }),
-              ]),
+              conditions: expect.arrayContaining([expect.objectContaining({ type: 'callsign' })]),
             }),
           ]),
         })
@@ -253,9 +247,7 @@ describe('ConditionBuilder', () => {
 
       // String operators
       expect(within(operatorSelect).getByText('equals')).toBeInTheDocument();
-      expect(
-        within(operatorSelect).getByText('not equals')
-      ).toBeInTheDocument();
+      expect(within(operatorSelect).getByText('not equals')).toBeInTheDocument();
       expect(within(operatorSelect).getByText('contains')).toBeInTheDocument();
     });
 
@@ -265,9 +257,7 @@ describe('ConditionBuilder', () => {
         groups: [
           {
             logic: 'AND',
-            conditions: [
-              { type: 'altitude_above', operator: 'gt', value: '10000' },
-            ],
+            conditions: [{ type: 'altitude_above', operator: 'gt', value: '10000' }],
           },
         ],
       };
@@ -357,7 +347,7 @@ describe('ConditionBuilder', () => {
 
       // Get the "Add Condition" button by its class (add-condition-btn, not add-group-btn)
       const addBtns = screen.getAllByRole('button', { name: /add condition/i });
-      const addConditionBtn = addBtns.find(btn => btn.classList.contains('add-condition-btn'));
+      const addConditionBtn = addBtns.find((btn) => btn.classList.contains('add-condition-btn'));
       await user.click(addConditionBtn);
 
       expect(mockOnChange).toHaveBeenCalledWith(
@@ -394,9 +384,7 @@ describe('ConditionBuilder', () => {
         expect.objectContaining({
           groups: [
             expect.objectContaining({
-              conditions: [
-                expect.objectContaining({ type: 'callsign', value: 'UAL' }),
-              ],
+              conditions: [expect.objectContaining({ type: 'callsign', value: 'UAL' })],
             }),
           ],
         })
@@ -519,9 +507,7 @@ describe('ConditionBuilder', () => {
         />
       );
 
-      expect(
-        screen.getByText('At least one condition is required')
-      ).toBeInTheDocument();
+      expect(screen.getByText('At least one condition is required')).toBeInTheDocument();
     });
 
     it('should mark value input as invalid when has error', () => {
@@ -546,27 +532,17 @@ describe('ConditionBuilder', () => {
         />
       );
 
-      const conditionRow = screen
-        .getByLabelText('Value')
-        .closest('.condition-row');
+      const conditionRow = screen.getByLabelText('Value').closest('.condition-row');
       expect(conditionRow).toHaveClass('has-error');
     });
   });
 
   describe('empty conditions', () => {
     it('should handle null conditions', () => {
-      render(
-        <ConditionBuilder
-          conditions={null}
-          validationErrors={{}}
-          onChange={mockOnChange}
-        />
-      );
+      render(<ConditionBuilder conditions={null} validationErrors={{}} onChange={mockOnChange} />);
 
       // Should render without crashing
-      expect(
-        screen.getByRole('button', { name: /add condition group/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /add condition group/i })).toBeInTheDocument();
     });
 
     it('should handle conditions without groups', () => {
@@ -579,9 +555,7 @@ describe('ConditionBuilder', () => {
       );
 
       // Should render without crashing
-      expect(
-        screen.getByRole('button', { name: /add condition group/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /add condition group/i })).toBeInTheDocument();
     });
   });
 });

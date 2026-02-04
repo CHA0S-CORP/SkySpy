@@ -115,27 +115,39 @@ export function MultiSelectFacet({
         }}
       >
         {label && (
-          <span style={{
-            color: 'var(--text-dim)',
-            fontSize: '10px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
-          }}>
+          <span
+            style={{
+              color: 'var(--text-dim)',
+              fontSize: '10px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+            }}
+          >
             {label}:
           </span>
         )}
-        <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span
+          style={{
+            flex: 1,
+            textAlign: 'left',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
           {getDisplayText()}
         </span>
         {selectedCount > 0 && showCounts && (
-          <span style={{
-            background: 'var(--accent-cyan)',
-            color: 'var(--bg-dark)',
-            padding: '1px 5px',
-            borderRadius: '10px',
-            fontSize: '10px',
-            fontWeight: 600,
-          }}>
+          <span
+            style={{
+              background: 'var(--accent-cyan)',
+              color: 'var(--bg-dark)',
+              padding: '1px 5px',
+              borderRadius: '10px',
+              fontSize: '10px',
+              fontWeight: 600,
+            }}
+          >
             {selectedCount}
           </span>
         )}
@@ -237,11 +249,13 @@ export function MultiSelectFacet({
               Clear
             </button>
             {showCounts && (
-              <span style={{
-                marginLeft: 'auto',
-                color: 'var(--text-dim)',
-                fontSize: '10px',
-              }}>
+              <span
+                style={{
+                  marginLeft: 'auto',
+                  color: 'var(--text-dim)',
+                  fontSize: '10px',
+                }}
+              >
                 {totalCount.toLocaleString()} total
               </span>
             )}
@@ -255,12 +269,14 @@ export function MultiSelectFacet({
             }}
           >
             {filteredOptions.length === 0 ? (
-              <div style={{
-                padding: '12px',
-                textAlign: 'center',
-                color: 'var(--text-dim)',
-                fontSize: '12px',
-              }}>
+              <div
+                style={{
+                  padding: '12px',
+                  textAlign: 'center',
+                  color: 'var(--text-dim)',
+                  fontSize: '12px',
+                }}
+              >
                 No options found
               </div>
             ) : (
@@ -329,9 +345,7 @@ export function MultiSelectFacet({
 
                     {/* Icon */}
                     {option.icon && (
-                      <span style={{ fontSize: '14px', flexShrink: 0 }}>
-                        {option.icon}
-                      </span>
+                      <span style={{ fontSize: '14px', flexShrink: 0 }}>{option.icon}</span>
                     )}
 
                     {/* Label */}

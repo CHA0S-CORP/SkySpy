@@ -13,37 +13,56 @@ vi.mock('../../../../utils', () => ({
       time: '14:53 Local',
       flightCategory: metar.fltCat || 'VFR',
       flightCategoryDesc: 'Visual Flight Rules - Good visibility (>5mi), ceiling >3000ft',
-      wind: metar.wspd !== undefined ? {
-        text: `${metar.wdir || 0}° at ${metar.wspd}kt`,
-        direction: metar.wdir || 0,
-        speed: metar.wspd,
-        description: 'Moderate winds',
-      } : null,
-      visibility: metar.visib !== undefined ? {
-        value: metar.visib,
-        unit: 'SM',
-        description: 'Good visibility',
-      } : null,
-      temperature: metar.temp !== undefined ? {
-        celsius: metar.temp,
-        fahrenheit: Math.round((metar.temp * 9) / 5 + 32),
-        description: 'Warm',
-      } : null,
-      dewpoint: metar.dewp !== undefined ? {
-        celsius: metar.dewp,
-        spread: metar.temp - metar.dewp,
-        fogRisk: 'Low fog risk',
-      } : null,
-      altimeter: metar.altim !== undefined ? {
-        inhg: (metar.altim / 100).toFixed(2),
-        mb: Math.round(metar.altim * 0.338639),
-        description: 'Normal pressure',
-      } : null,
+      wind:
+        metar.wspd !== undefined
+          ? {
+              text: `${metar.wdir || 0}° at ${metar.wspd}kt`,
+              direction: metar.wdir || 0,
+              speed: metar.wspd,
+              description: 'Moderate winds',
+            }
+          : null,
+      visibility:
+        metar.visib !== undefined
+          ? {
+              value: metar.visib,
+              unit: 'SM',
+              description: 'Good visibility',
+            }
+          : null,
+      temperature:
+        metar.temp !== undefined
+          ? {
+              celsius: metar.temp,
+              fahrenheit: Math.round((metar.temp * 9) / 5 + 32),
+              description: 'Warm',
+            }
+          : null,
+      dewpoint:
+        metar.dewp !== undefined
+          ? {
+              celsius: metar.dewp,
+              spread: metar.temp - metar.dewp,
+              fogRisk: 'Low fog risk',
+            }
+          : null,
+      altimeter:
+        metar.altim !== undefined
+          ? {
+              inhg: (metar.altim / 100).toFixed(2),
+              mb: Math.round(metar.altim * 0.338639),
+              description: 'Normal pressure',
+            }
+          : null,
       clouds: metar.clouds || [],
-      weather: metar.wxString ? [{
-        code: metar.wxString,
-        description: 'Rain',
-      }] : [],
+      weather: metar.wxString
+        ? [
+            {
+              code: metar.wxString,
+              description: 'Rain',
+            },
+          ]
+        : [],
     };
   },
   windDirToCardinal: (deg) => {
@@ -338,22 +357,14 @@ describe('MetarPopup', () => {
 
   describe('alternate field names', () => {
     it('should use icaoId when stationId is not available', () => {
-      render(
-        <MetarPopup
-          {...defaultProps}
-          metar={{ ...mockMetar, stationId: undefined }}
-        />
-      );
+      render(<MetarPopup {...defaultProps} metar={{ ...mockMetar, stationId: undefined }} />);
 
       expect(screen.getByText('KSEA')).toBeInTheDocument();
     });
 
     it('should default flight category to VFR when not provided', () => {
       const { container } = render(
-        <MetarPopup
-          {...defaultProps}
-          metar={{ ...mockMetar, fltCat: undefined }}
-        />
+        <MetarPopup {...defaultProps} metar={{ ...mockMetar, fltCat: undefined }} />
       );
 
       const badge = container.querySelector('.flt-cat-badge');
@@ -364,10 +375,7 @@ describe('MetarPopup', () => {
   describe('edge cases', () => {
     it('should handle metar without temperature', () => {
       const { container } = render(
-        <MetarPopup
-          {...defaultProps}
-          metar={{ ...mockMetar, temp: undefined }}
-        />
+        <MetarPopup {...defaultProps} metar={{ ...mockMetar, temp: undefined }} />
       );
 
       const popup = container.querySelector('.weather-popup');
@@ -376,10 +384,7 @@ describe('MetarPopup', () => {
 
     it('should handle metar without wind', () => {
       const { container } = render(
-        <MetarPopup
-          {...defaultProps}
-          metar={{ ...mockMetar, wspd: undefined, wdir: undefined }}
-        />
+        <MetarPopup {...defaultProps} metar={{ ...mockMetar, wspd: undefined, wdir: undefined }} />
       );
 
       const popup = container.querySelector('.weather-popup');
@@ -388,10 +393,7 @@ describe('MetarPopup', () => {
 
     it('should handle metar without visibility', () => {
       const { container } = render(
-        <MetarPopup
-          {...defaultProps}
-          metar={{ ...mockMetar, visib: undefined }}
-        />
+        <MetarPopup {...defaultProps} metar={{ ...mockMetar, visib: undefined }} />
       );
 
       const popup = container.querySelector('.weather-popup');
@@ -400,10 +402,7 @@ describe('MetarPopup', () => {
 
     it('should handle metar without clouds', () => {
       const { container } = render(
-        <MetarPopup
-          {...defaultProps}
-          metar={{ ...mockMetar, clouds: [] }}
-        />
+        <MetarPopup {...defaultProps} metar={{ ...mockMetar, clouds: [] }} />
       );
 
       const popup = container.querySelector('.weather-popup');
@@ -412,10 +411,7 @@ describe('MetarPopup', () => {
 
     it('should handle metar without raw observation', () => {
       const { container } = render(
-        <MetarPopup
-          {...defaultProps}
-          metar={{ ...mockMetar, rawOb: undefined }}
-        />
+        <MetarPopup {...defaultProps} metar={{ ...mockMetar, rawOb: undefined }} />
       );
 
       const popup = container.querySelector('.weather-popup');

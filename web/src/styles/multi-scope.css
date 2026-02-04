@@ -185,8 +185,13 @@
 }
 
 @keyframes scope-border-pulse {
-  0%, 100% { border-color: rgba(100, 200, 255, 0.6); }
-  50% { border-color: rgba(100, 200, 255, 0.3); }
+  0%,
+  100% {
+    border-color: rgba(100, 200, 255, 0.6);
+  }
+  50% {
+    border-color: rgba(100, 200, 255, 0.3);
+  }
 }
 
 /* Scope content wrapper */
@@ -465,70 +470,70 @@
    ======================================== */
 
 /* Amber theme */
-.scope-container[data-theme="amber"] .scope-layout-toggle,
-.scope-container[data-theme="amber"] .scope-controls {
+.scope-container[data-theme='amber'] .scope-layout-toggle,
+.scope-container[data-theme='amber'] .scope-controls {
   border-color: rgba(200, 150, 60, 0.3);
 }
 
-.scope-container[data-theme="amber"] .layout-btn,
-.scope-container[data-theme="amber"] .scope-btn {
+.scope-container[data-theme='amber'] .layout-btn,
+.scope-container[data-theme='amber'] .scope-btn {
   color: rgba(255, 200, 100, 0.7);
 }
 
-.scope-container[data-theme="amber"] .layout-btn:hover,
-.scope-container[data-theme="amber"] .scope-btn:hover {
+.scope-container[data-theme='amber'] .layout-btn:hover,
+.scope-container[data-theme='amber'] .scope-btn:hover {
   background: rgba(200, 150, 60, 0.2);
   color: rgba(255, 220, 150, 1);
 }
 
-.scope-container[data-theme="amber"] .scope-range-display {
+.scope-container[data-theme='amber'] .scope-range-display {
   color: rgba(255, 200, 100, 0.9);
 }
 
-.scope-container[data-theme="amber"] .scope-active-indicator.active {
+.scope-container[data-theme='amber'] .scope-active-indicator.active {
   background: rgba(255, 200, 100, 0.8);
   box-shadow: 0 0 6px rgba(255, 200, 100, 0.5);
 }
 
-.scope-container[data-theme="amber"] .scope-pane.active {
+.scope-container[data-theme='amber'] .scope-pane.active {
   box-shadow: inset 0 0 0 2px rgba(255, 200, 100, 0.5);
 }
 
-.scope-container[data-theme="amber"] .scope-active-border {
+.scope-container[data-theme='amber'] .scope-active-border {
   border-color: rgba(255, 200, 100, 0.6);
 }
 
 /* Green theme */
-.scope-container[data-theme="green"] .scope-layout-toggle,
-.scope-container[data-theme="green"] .scope-controls {
+.scope-container[data-theme='green'] .scope-layout-toggle,
+.scope-container[data-theme='green'] .scope-controls {
   border-color: rgba(60, 150, 80, 0.3);
 }
 
-.scope-container[data-theme="green"] .layout-btn,
-.scope-container[data-theme="green"] .scope-btn {
+.scope-container[data-theme='green'] .layout-btn,
+.scope-container[data-theme='green'] .scope-btn {
   color: rgba(100, 255, 150, 0.7);
 }
 
-.scope-container[data-theme="green"] .layout-btn:hover,
-.scope-container[data-theme="green"] .scope-btn:hover {
+.scope-container[data-theme='green'] .layout-btn:hover,
+.scope-container[data-theme='green'] .scope-btn:hover {
   background: rgba(60, 150, 80, 0.2);
   color: rgba(150, 255, 180, 1);
 }
 
-.scope-container[data-theme="green"] .scope-range-display {
+.scope-container[data-theme='green'] .scope-range-display {
   color: rgba(100, 255, 150, 0.9);
 }
 
-.scope-container[data-theme="green"] .scope-active-indicator.active {
+.scope-container[data-theme='green'] .scope-active-indicator.active {
   background: rgba(100, 255, 150, 0.8);
   box-shadow: 0 0 6px rgba(100, 255, 150, 0.5);
 }
 
-.scope-container[data-theme="green"] .scope-pane.active {
+.scope-container[data-theme='green'] .scope-pane.active {
   box-shadow: inset 0 0 0 2px rgba(100, 255, 150, 0.5);
 }
 
-.scope-container[data-theme="green"] .scope-active-border {
+.scope-container[data-theme='green'] .scope-active-border {
   border-color: rgba(100, 255, 150, 0.6);
 }
 

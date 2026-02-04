@@ -67,13 +67,7 @@ export const HeatMapLayer = memo(function HeatMapLayer({
     ctx.save();
     ctx.filter = 'blur(8px)';
     ctx.globalCompositeOperation = 'screen';
-    ctx.drawImage(
-      offscreen,
-      topLeft.x,
-      topLeft.y,
-      screenWidth,
-      screenHeight
-    );
+    ctx.drawImage(offscreen, topLeft.x, topLeft.y, screenWidth, screenHeight);
     ctx.restore();
 
     // Draw a second pass with less blur for sharper hot spots
@@ -81,13 +75,7 @@ export const HeatMapLayer = memo(function HeatMapLayer({
     ctx.filter = 'blur(2px)';
     ctx.globalAlpha = 0.5;
     ctx.globalCompositeOperation = 'screen';
-    ctx.drawImage(
-      offscreen,
-      topLeft.x,
-      topLeft.y,
-      screenWidth,
-      screenHeight
-    );
+    ctx.drawImage(offscreen, topLeft.x, topLeft.y, screenWidth, screenHeight);
     ctx.restore();
   }, [enabled, heatMapData, bounds, width, height, latLonToScreen]);
 
@@ -157,33 +145,38 @@ export const HeatMapLayer = memo(function HeatMapLayer({
           color: textColor,
         }}
       >
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '12px',
-          borderBottom: `1px solid ${borderColor}`,
-          paddingBottom: '8px',
-        }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '12px',
+            borderBottom: `1px solid ${borderColor}`,
+            paddingBottom: '8px',
+          }}
+        >
           <span style={{ fontWeight: 'bold' }}>Heat Map</span>
-          {loading && (
-            <span style={{ color: dimTextColor }}>Loading...</span>
-          )}
+          {loading && <span style={{ color: dimTextColor }}>Loading...</span>}
         </div>
 
         {error && (
-          <div style={{
-            color: '#ff6b6b',
-            marginBottom: '8px',
-            fontSize: '11px',
-          }}>
+          <div
+            style={{
+              color: '#ff6b6b',
+              marginBottom: '8px',
+              fontSize: '11px',
+            }}
+          >
             {error}
           </div>
         )}
 
         {/* Time period selector */}
         <div style={{ marginBottom: '10px' }}>
-          <label htmlFor="heatmap-time-period" style={{ display: 'block', marginBottom: '4px', color: dimTextColor }}>
+          <label
+            htmlFor="heatmap-time-period"
+            style={{ display: 'block', marginBottom: '4px', color: dimTextColor }}
+          >
             Time Period
           </label>
           <select
@@ -212,7 +205,10 @@ export const HeatMapLayer = memo(function HeatMapLayer({
 
         {/* Grid resolution selector */}
         <div style={{ marginBottom: '10px' }}>
-          <label htmlFor="heatmap-resolution" style={{ display: 'block', marginBottom: '4px', color: dimTextColor }}>
+          <label
+            htmlFor="heatmap-resolution"
+            style={{ display: 'block', marginBottom: '4px', color: dimTextColor }}
+          >
             Resolution
           </label>
           <select
@@ -241,11 +237,13 @@ export const HeatMapLayer = memo(function HeatMapLayer({
 
         {/* Statistics */}
         {stats && stats.totalPositions > 0 && (
-          <div style={{
-            borderTop: `1px solid ${borderColor}`,
-            paddingTop: '10px',
-            marginTop: '10px',
-          }}>
+          <div
+            style={{
+              borderTop: `1px solid ${borderColor}`,
+              paddingTop: '10px',
+              marginTop: '10px',
+            }}
+          >
             <div style={{ marginBottom: '6px' }}>
               <span style={{ color: dimTextColor }}>Positions:</span>{' '}
               <span>{stats.totalPositions.toLocaleString()}</span>
@@ -258,7 +256,8 @@ export const HeatMapLayer = memo(function HeatMapLayer({
               <div style={{ marginBottom: '6px' }}>
                 <span style={{ color: dimTextColor }}>Peak:</span>{' '}
                 <span>
-                  {stats.peakCell.count} @ {stats.peakCell.distanceNm}nm / {stats.peakCell.bearing}&deg;
+                  {stats.peakCell.count} @ {stats.peakCell.distanceNm}nm / {stats.peakCell.bearing}
+                  &deg;
                 </span>
               </div>
             )}
@@ -271,13 +270,15 @@ export const HeatMapLayer = memo(function HeatMapLayer({
         )}
 
         {/* Actions */}
-        <div style={{
-          display: 'flex',
-          gap: '8px',
-          marginTop: '12px',
-          borderTop: `1px solid ${borderColor}`,
-          paddingTop: '10px',
-        }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: '8px',
+            marginTop: '12px',
+            borderTop: `1px solid ${borderColor}`,
+            paddingTop: '10px',
+          }}
+        >
           <button
             onClick={onRefresh}
             disabled={loading}
@@ -315,30 +316,39 @@ export const HeatMapLayer = memo(function HeatMapLayer({
         </div>
 
         {/* Color legend */}
-        <div style={{
-          marginTop: '12px',
-          borderTop: `1px solid ${borderColor}`,
-          paddingTop: '10px',
-        }}>
-          <div style={{
-            color: dimTextColor,
-            marginBottom: '6px',
-            fontSize: '10px',
-          }}>
+        <div
+          style={{
+            marginTop: '12px',
+            borderTop: `1px solid ${borderColor}`,
+            paddingTop: '10px',
+          }}
+        >
+          <div
+            style={{
+              color: dimTextColor,
+              marginBottom: '6px',
+              fontSize: '10px',
+            }}
+          >
             Density Legend
           </div>
-          <div style={{
-            height: '12px',
-            borderRadius: '3px',
-            background: 'linear-gradient(to right, rgba(0, 100, 255, 0.3), rgba(0, 255, 255, 0.6), rgba(255, 255, 0, 0.7), rgba(255, 100, 0, 0.8))',
-          }} />
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            fontSize: '9px',
-            color: dimTextColor,
-            marginTop: '2px',
-          }}>
+          <div
+            style={{
+              height: '12px',
+              borderRadius: '3px',
+              background:
+                'linear-gradient(to right, rgba(0, 100, 255, 0.3), rgba(0, 255, 255, 0.6), rgba(255, 255, 0, 0.7), rgba(255, 100, 0, 0.8))',
+            }}
+          />
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: '9px',
+              color: dimTextColor,
+              marginTop: '2px',
+            }}
+          >
             <span>Low</span>
             <span>High</span>
           </div>

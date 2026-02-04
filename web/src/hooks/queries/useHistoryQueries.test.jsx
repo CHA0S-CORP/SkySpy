@@ -41,11 +41,7 @@ describe('useHistoryQueries', () => {
     it('should generate correct query keys', () => {
       expect(historyKeys.all).toEqual(['history']);
       expect(historyKeys.flights()).toEqual(['history', 'flights']);
-      expect(historyKeys.flight({ hours: 24 })).toEqual([
-        'history',
-        'flights',
-        { hours: 24 },
-      ]);
+      expect(historyKeys.flight({ hours: 24 })).toEqual(['history', 'flights', { hours: 24 }]);
       expect(historyKeys.flight({ page: 1, limit: 10 })).toEqual([
         'history',
         'flights',
@@ -148,10 +144,9 @@ describe('useHistoryQueries', () => {
     it('should accept custom options', async () => {
       api.get.mockResolvedValue({ count: 0, results: [] });
 
-      const { result } = renderHook(
-        () => useHistoryFlights({}, { enabled: false }),
-        { wrapper: createWrapper() }
-      );
+      const { result } = renderHook(() => useHistoryFlights({}, { enabled: false }), {
+        wrapper: createWrapper(),
+      });
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.isFetched).toBe(false);
@@ -205,9 +200,7 @@ describe('useHistoryQueries', () => {
     it('should filter by military_only', async () => {
       const mockFlights = {
         count: 2,
-        results: [
-          { id: 1, icao_hex: 'AE1234', callsign: 'EVAC01', is_military: true },
-        ],
+        results: [{ id: 1, icao_hex: 'AE1234', callsign: 'EVAC01', is_military: true }],
       };
       api.get.mockResolvedValue(mockFlights);
 
@@ -245,13 +238,10 @@ describe('useHistoryQueries', () => {
 
       api.get.mockResolvedValueOnce(initialData).mockResolvedValueOnce(newData);
 
-      const { result, rerender } = renderHook(
-        ({ params }) => useHistoryFlights(params),
-        {
-          wrapper: createWrapper(),
-          initialProps: { params: { page: 1 } },
-        }
-      );
+      const { result, rerender } = renderHook(({ params }) => useHistoryFlights(params), {
+        wrapper: createWrapper(),
+        initialProps: { params: { page: 1 } },
+      });
 
       await waitFor(() => {
         expect(result.current.isSuccess).toBe(true);
@@ -277,13 +267,10 @@ describe('useHistoryQueries', () => {
 
       api.get.mockResolvedValueOnce(data1).mockResolvedValueOnce(data2);
 
-      const { result, rerender } = renderHook(
-        ({ params }) => useHistoryFlights(params),
-        {
-          wrapper: createWrapper(),
-          initialProps: { params: { hours: 24 } },
-        }
-      );
+      const { result, rerender } = renderHook(({ params }) => useHistoryFlights(params), {
+        wrapper: createWrapper(),
+        initialProps: { params: { hours: 24 } },
+      });
 
       await waitFor(() => {
         expect(result.current.isSuccess).toBe(true);

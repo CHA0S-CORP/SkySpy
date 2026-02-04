@@ -79,9 +79,7 @@ describe('useCannonballGPS', () => {
       const { result } = renderHook(() => useCannonballGPS());
 
       // Initially enabled
-      expect(useDeviceGPS).toHaveBeenLastCalledWith(
-        expect.objectContaining({ enabled: true })
-      );
+      expect(useDeviceGPS).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: true }));
 
       // Disable GPS
       act(() => {

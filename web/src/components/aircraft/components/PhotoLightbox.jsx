@@ -50,7 +50,11 @@ export function PhotoLightbox({ isOpen, photoUrl, photoInfo, info, hex, onClose 
           <X size={24} />
         </button>
 
-        <img src={photoUrl} alt={`Aircraft ${info?.registration || hex}`} className="photo-lightbox-image" />
+        <img
+          src={photoUrl}
+          alt={`Aircraft ${info?.registration || hex}`}
+          className="photo-lightbox-image"
+        />
 
         <div className="photo-lightbox-info">
           <div className="photo-lightbox-details">

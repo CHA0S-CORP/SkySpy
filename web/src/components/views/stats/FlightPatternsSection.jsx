@@ -1,12 +1,5 @@
 import React, { useMemo } from 'react';
-import {
-  Navigation2,
-  Clock,
-  Plane,
-  Timer,
-  ArrowRight,
-  Loader2,
-} from 'lucide-react';
+import { Navigation2, Clock, Plane, Timer, ArrowRight, Loader2 } from 'lucide-react';
 
 /**
  * FlightPatternsSection - Displays flight pattern analytics

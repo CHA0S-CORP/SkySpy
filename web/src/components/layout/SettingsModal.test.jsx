@@ -106,12 +106,7 @@ describe('SettingsModal', () => {
     });
 
     it('should display Light Mode for mapDarkMode=false', () => {
-      render(
-        <SettingsModal
-          {...defaultProps}
-          config={{ ...defaultConfig, mapDarkMode: false }}
-        />
-      );
+      render(<SettingsModal {...defaultProps} config={{ ...defaultConfig, mapDarkMode: false }} />);
       const select = screen.getByLabelText('Map Theme');
       expect(select.value).toBe('light');
     });

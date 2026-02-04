@@ -42,50 +42,35 @@ describe('ExternalLinks', () => {
       render(<ExternalLinks {...defaultProps} />);
 
       const flightAwareLink = screen.getByRole('link', { name: /flightaware/i });
-      expect(flightAwareLink).toHaveAttribute(
-        'href',
-        'https://flightaware.com/live/flight/UAL123'
-      );
+      expect(flightAwareLink).toHaveAttribute('href', 'https://flightaware.com/live/flight/UAL123');
     });
 
     it('should use hex in FlightAware URL when callsign is not available', () => {
       render(<ExternalLinks hex="abc123" callsign={null} />);
 
       const flightAwareLink = screen.getByRole('link', { name: /flightaware/i });
-      expect(flightAwareLink).toHaveAttribute(
-        'href',
-        'https://flightaware.com/live/flight/abc123'
-      );
+      expect(flightAwareLink).toHaveAttribute('href', 'https://flightaware.com/live/flight/abc123');
     });
 
     it('should use hex in ADSBexchange URL', () => {
       render(<ExternalLinks {...defaultProps} />);
 
       const adsbLink = screen.getByRole('link', { name: /adsbexchange/i });
-      expect(adsbLink).toHaveAttribute(
-        'href',
-        'https://globe.adsbexchange.com/?icao=abc123'
-      );
+      expect(adsbLink).toHaveAttribute('href', 'https://globe.adsbexchange.com/?icao=abc123');
     });
 
     it('should use hex in Flightradar24 URL', () => {
       render(<ExternalLinks {...defaultProps} />);
 
       const fr24Link = screen.getByRole('link', { name: /flightradar24/i });
-      expect(fr24Link).toHaveAttribute(
-        'href',
-        'https://www.flightradar24.com/abc123'
-      );
+      expect(fr24Link).toHaveAttribute('href', 'https://www.flightradar24.com/abc123');
     });
 
     it('should use hex in Planespotters URL', () => {
       render(<ExternalLinks {...defaultProps} />);
 
       const planespottersLink = screen.getByRole('link', { name: /planespotters/i });
-      expect(planespottersLink).toHaveAttribute(
-        'href',
-        'https://planespotters.net/hex/abc123'
-      );
+      expect(planespottersLink).toHaveAttribute('href', 'https://planespotters.net/hex/abc123');
     });
   });
 
@@ -104,10 +89,7 @@ describe('ExternalLinks', () => {
       render(<ExternalLinks hex="ab&c123" callsign={null} />);
 
       const adsbLink = screen.getByRole('link', { name: /adsbexchange/i });
-      expect(adsbLink).toHaveAttribute(
-        'href',
-        'https://globe.adsbexchange.com/?icao=ab%26c123'
-      );
+      expect(adsbLink).toHaveAttribute('href', 'https://globe.adsbexchange.com/?icao=ab%26c123');
     });
   });
 
@@ -163,10 +145,7 @@ describe('ExternalLinks', () => {
       render(<ExternalLinks hex="abc123" callsign={undefined} />);
 
       const flightAwareLink = screen.getByRole('link', { name: /flightaware/i });
-      expect(flightAwareLink).toHaveAttribute(
-        'href',
-        'https://flightaware.com/live/flight/abc123'
-      );
+      expect(flightAwareLink).toHaveAttribute('href', 'https://flightaware.com/live/flight/abc123');
     });
 
     it('should handle empty callsign string', () => {
@@ -174,20 +153,14 @@ describe('ExternalLinks', () => {
 
       const flightAwareLink = screen.getByRole('link', { name: /flightaware/i });
       // Empty string is falsy, so should use hex
-      expect(flightAwareLink).toHaveAttribute(
-        'href',
-        'https://flightaware.com/live/flight/abc123'
-      );
+      expect(flightAwareLink).toHaveAttribute('href', 'https://flightaware.com/live/flight/abc123');
     });
 
     it('should render with uppercase hex', () => {
       render(<ExternalLinks hex="ABC123" callsign={null} />);
 
       const planespottersLink = screen.getByRole('link', { name: /planespotters/i });
-      expect(planespottersLink).toHaveAttribute(
-        'href',
-        'https://planespotters.net/hex/ABC123'
-      );
+      expect(planespottersLink).toHaveAttribute('href', 'https://planespotters.net/hex/ABC123');
     });
   });
 

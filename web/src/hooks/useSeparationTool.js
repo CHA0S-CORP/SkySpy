@@ -19,7 +19,12 @@ import { checkSeparation, getSeparationColor, SEPARATION_STATUS } from '../utils
  * @param {number} options.feederLon - Feeder station longitude
  * @returns {Object} Separation tool state and handlers
  */
-export function useSeparationTool({ aircraft = [], selectedAircraft = null, feederLat, feederLon }) {
+export function useSeparationTool({
+  aircraft = [],
+  selectedAircraft = null,
+  feederLat,
+  feederLon,
+}) {
   // State for separation pair
   const [separationPair, setSeparationPair] = useState(null); // { aircraft1: hex, aircraft2: hex }
 

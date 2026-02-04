@@ -8,21 +8,14 @@ import { LayoutGrid, Maximize2, Minus, Plus, RotateCcw, Link2, Link2Off } from '
 const GRID_CLASSES = {
   single: 'scope-grid-single',
   'split-2': 'scope-grid-split-2',
-  'split-4': 'scope-grid-split-4'
+  'split-4': 'scope-grid-split-4',
 };
 
 /**
  * Scope pane controls component
  * Mini controls for each individual scope pane
  */
-function ScopeControls({
-  scope,
-  isActive,
-  onRangeChange,
-  onReset,
-  onActivate,
-  isPro = true
-}) {
+function ScopeControls({ scope, isActive, onRangeChange, onReset, onActivate, isPro = true }) {
   const rangePresets = [10, 25, 50, 100, 150, 250];
 
   return (
@@ -79,8 +72,10 @@ function ScopeControls({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {rangePresets.map(r => (
-          <option key={r} value={r}>{r}nm</option>
+        {rangePresets.map((r) => (
+          <option key={r} value={r}>
+            {r}nm
+          </option>
         ))}
         {!rangePresets.includes(scope.range) && (
           <option value={scope.range}>{scope.range}nm</option>
@@ -100,9 +95,7 @@ function ScopeControls({
       </button>
 
       {/* Scope ID label */}
-      <div className="scope-id-label">
-        S{scope.id}
-      </div>
+      <div className="scope-id-label">S{scope.id}</div>
     </div>
   );
 }
@@ -113,31 +106,25 @@ ScopeControls.propTypes = {
     range: PropTypes.number.isRequired,
     panOffset: PropTypes.shape({
       x: PropTypes.number,
-      y: PropTypes.number
+      y: PropTypes.number,
     }),
     center: PropTypes.shape({
       lat: PropTypes.number,
-      lon: PropTypes.number
-    })
+      lon: PropTypes.number,
+    }),
   }).isRequired,
   isActive: PropTypes.bool,
   onRangeChange: PropTypes.func.isRequired,
   onReset: PropTypes.func.isRequired,
   onActivate: PropTypes.func.isRequired,
-  isPro: PropTypes.bool
+  isPro: PropTypes.bool,
 };
 
 /**
  * Layout toggle button component
  * Allows switching between single, split-2, and split-4 layouts
  */
-function LayoutToggle({
-  layout,
-  onLayoutChange,
-  syncSelection,
-  onSyncToggle,
-  isPro = true
-}) {
+function LayoutToggle({ layout, onLayoutChange, syncSelection, onSyncToggle, isPro = true }) {
   return (
     <div className={`scope-layout-toggle ${isPro ? 'pro-style' : ''}`}>
       {/* Layout buttons */}
@@ -173,7 +160,9 @@ function LayoutToggle({
         <button
           className={`sync-btn ${syncSelection ? 'active' : ''}`}
           onClick={onSyncToggle}
-          title={syncSelection ? 'Selection synced across scopes' : 'Selection independent per scope'}
+          title={
+            syncSelection ? 'Selection synced across scopes' : 'Selection independent per scope'
+          }
         >
           {syncSelection ? <Link2 size={14} /> : <Link2Off size={14} />}
           <span className="sync-label">{syncSelection ? 'Synced' : 'Independent'}</span>
@@ -188,7 +177,7 @@ LayoutToggle.propTypes = {
   onLayoutChange: PropTypes.func.isRequired,
   syncSelection: PropTypes.bool.isRequired,
   onSyncToggle: PropTypes.func.isRequired,
-  isPro: PropTypes.bool
+  isPro: PropTypes.bool,
 };
 
 /**
@@ -209,7 +198,7 @@ function MultiScopeContainer({
   onScopeActivate,
   children,
   isPro = true,
-  className = ''
+  className = '',
 }) {
   const gridClass = GRID_CLASSES[layout] || GRID_CLASSES.single;
 
@@ -230,8 +219,7 @@ function MultiScopeContainer({
         <div className="scope-pane single">
           {typeof children === 'function'
             ? children({ scope: scopes[0], isActive: true, index: 0 })
-            : children
-          }
+            : children}
         </div>
       </div>
     );
@@ -272,10 +260,7 @@ function MultiScopeContainer({
 
               {/* Scope content - render function or element */}
               <div className="scope-content">
-                {typeof children === 'function'
-                  ? children({ scope, isActive, index })
-                  : children
-                }
+                {typeof children === 'function' ? children({ scope, isActive, index }) : children}
               </div>
 
               {/* Active border indicator */}
@@ -296,12 +281,12 @@ MultiScopeContainer.propTypes = {
       range: PropTypes.number.isRequired,
       panOffset: PropTypes.shape({
         x: PropTypes.number,
-        y: PropTypes.number
+        y: PropTypes.number,
       }),
       center: PropTypes.shape({
         lat: PropTypes.number,
-        lon: PropTypes.number
-      })
+        lon: PropTypes.number,
+      }),
     })
   ).isRequired,
   activeScope: PropTypes.number.isRequired,
@@ -313,7 +298,7 @@ MultiScopeContainer.propTypes = {
   onScopeActivate: PropTypes.func.isRequired,
   children: PropTypes.oneOfType([PropTypes.node, PropTypes.func]).isRequired,
   isPro: PropTypes.bool,
-  className: PropTypes.string
+  className: PropTypes.string,
 };
 
 export { MultiScopeContainer, ScopeControls, LayoutToggle };

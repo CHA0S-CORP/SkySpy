@@ -69,11 +69,14 @@ describe('safeFetchJson', () => {
       vi.runAllTimers();
       await promise;
 
-      expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/data', expect.objectContaining({
-        method: 'POST',
-        headers: { 'X-Custom': 'header' },
-        body: JSON.stringify({ key: 'value' }),
-      }));
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://api.example.com/data',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'X-Custom': 'header' },
+          body: JSON.stringify({ key: 'value' }),
+        })
+      );
     });
   });
 

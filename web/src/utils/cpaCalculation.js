@@ -22,13 +22,13 @@
 export function calculateCPA(ac1, ac2) {
   // Relative position in nautical miles
   // Using spherical approximation for short distances
-  const dx = (ac2.lon - ac1.lon) * 60 * Math.cos(((ac1.lat + ac2.lat) / 2) * Math.PI / 180);
+  const dx = (ac2.lon - ac1.lon) * 60 * Math.cos((((ac1.lat + ac2.lat) / 2) * Math.PI) / 180);
   const dy = (ac2.lat - ac1.lat) * 60;
 
   // Convert track (heading in degrees) and groundspeed to velocity components
   // Track: 0 = North, 90 = East, 180 = South, 270 = West
-  const track1 = (ac1.track || 0) * Math.PI / 180;
-  const track2 = (ac2.track || 0) * Math.PI / 180;
+  const track1 = ((ac1.track || 0) * Math.PI) / 180;
+  const track2 = ((ac2.track || 0) * Math.PI) / 180;
   const gs1 = ac1.gs || 0;
   const gs2 = ac2.gs || 0;
 
@@ -58,7 +58,7 @@ export function calculateCPA(ac1, ac2) {
       cpa2: { lat: ac2.lat, lon: ac2.lon },
       distanceAtCPA: currentDistance,
       isPast: false,
-      isParallel: true
+      isParallel: true,
     };
   }
 
@@ -76,7 +76,7 @@ export function calculateCPA(ac1, ac2) {
       cpa2: { lat: ac2.lat, lon: ac2.lon },
       distanceAtCPA: currentDistance,
       isPast: true,
-      isParallel: false
+      isParallel: false,
     };
   }
 
@@ -84,12 +84,12 @@ export function calculateCPA(ac1, ac2) {
   // Position = current + velocity * time
   // Convert velocity (nm/hour) to degrees for lat/lon update
   const cpa1Lat = ac1.lat + (v1y * tCPA) / 60;
-  const cpa1Lon = ac1.lon + (v1x * tCPA) / (60 * Math.cos(ac1.lat * Math.PI / 180));
+  const cpa1Lon = ac1.lon + (v1x * tCPA) / (60 * Math.cos((ac1.lat * Math.PI) / 180));
   const cpa2Lat = ac2.lat + (v2y * tCPA) / 60;
-  const cpa2Lon = ac2.lon + (v2x * tCPA) / (60 * Math.cos(ac2.lat * Math.PI / 180));
+  const cpa2Lon = ac2.lon + (v2x * tCPA) / (60 * Math.cos((ac2.lat * Math.PI) / 180));
 
   // Calculate distance at CPA
-  const cpaDx = (cpa2Lon - cpa1Lon) * 60 * Math.cos(((cpa1Lat + cpa2Lat) / 2) * Math.PI / 180);
+  const cpaDx = (cpa2Lon - cpa1Lon) * 60 * Math.cos((((cpa1Lat + cpa2Lat) / 2) * Math.PI) / 180);
   const cpaDy = (cpa2Lat - cpa1Lat) * 60;
   const distanceAtCPA = Math.sqrt(cpaDx * cpaDx + cpaDy * cpaDy);
 
@@ -99,7 +99,7 @@ export function calculateCPA(ac1, ac2) {
     cpa2: { lat: cpa2Lat, lon: cpa2Lon },
     distanceAtCPA,
     isPast: false,
-    isParallel: false
+    isParallel: false,
   };
 }
 
@@ -139,7 +139,7 @@ export function isCriticalCPA(tCPASeconds, threshold = 30) {
 export function getCPAMidpoint(cpa1, cpa2) {
   return {
     lat: (cpa1.lat + cpa2.lat) / 2,
-    lon: (cpa1.lon + cpa2.lon) / 2
+    lon: (cpa1.lon + cpa2.lon) / 2,
   };
 }
 
@@ -147,5 +147,5 @@ export default {
   calculateCPA,
   formatTimeToCPA,
   isCriticalCPA,
-  getCPAMidpoint
+  getCPAMidpoint,
 };

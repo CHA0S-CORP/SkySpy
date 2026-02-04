@@ -161,10 +161,7 @@ describe('AudioControls', () => {
       render(<AudioControls {...defaultProps} autoplay={false} />);
 
       const autoplayBtn = screen.getByText('Auto').closest('button');
-      expect(autoplayBtn).toHaveAttribute(
-        'title',
-        'Enable autoplay for new transmissions'
-      );
+      expect(autoplayBtn).toHaveAttribute('title', 'Enable autoplay for new transmissions');
     });
 
     it('should have correct title when autoplay is enabled', () => {

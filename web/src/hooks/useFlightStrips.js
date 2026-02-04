@@ -179,7 +179,20 @@ function getWakeCategory(type, category) {
   ];
   if (medium.some((t) => type?.toUpperCase()?.includes(t))) return 'M';
 
-  const light = ['C172', 'C182', 'C152', 'PA28', 'PA32', 'PA34', 'DA40', 'DA42', 'SR22', 'BE36', 'BE58', 'M20'];
+  const light = [
+    'C172',
+    'C182',
+    'C152',
+    'PA28',
+    'PA32',
+    'PA34',
+    'DA40',
+    'DA42',
+    'SR22',
+    'BE36',
+    'BE58',
+    'M20',
+  ];
   if (light.some((t) => type?.toUpperCase()?.includes(t))) return 'L';
 
   // Default to Medium if we don't know
@@ -356,9 +369,7 @@ export function useFlightStrips({ enableAudio = true } = {}) {
     if (!hex) return;
 
     const upperHex = hex.toUpperCase();
-    setStrips((prev) =>
-      prev.map((s) => (s.hex === upperHex ? { ...s, note: note || '' } : s))
-    );
+    setStrips((prev) => prev.map((s) => (s.hex === upperHex ? { ...s, note: note || '' } : s)));
   }, []);
 
   // Clear all strips
@@ -428,18 +439,14 @@ export function useFlightStrips({ enableAudio = true } = {}) {
       });
 
       return strips.map((strip) => {
-        const liveAircraft = aircraftList?.find(
-          (ac) => ac.hex?.toUpperCase() === strip.hex
-        );
+        const liveAircraft = aircraftList?.find((ac) => ac.hex?.toUpperCase() === strip.hex);
 
         // Update last seen time if aircraft is live
         if (liveAircraft) {
           lastSeenRef.current[strip.hex] = now;
         }
 
-        const isEmergency = ['7500', '7600', '7700'].includes(
-          liveAircraft?.squawk || strip.squawk
-        );
+        const isEmergency = ['7500', '7600', '7700'].includes(liveAircraft?.squawk || strip.squawk);
         const isConflict = conflictHexes.has(strip.hex);
         const isWatched = watchSet.has(strip.hex);
 
@@ -453,9 +460,11 @@ export function useFlightStrips({ enableAudio = true } = {}) {
           // Update with live data
           callsign: liveAircraft?.flight?.trim() || strip.callsign,
           squawk: liveAircraft?.squawk || strip.squawk,
-          altitude: liveAircraft?.alt_baro || liveAircraft?.alt_geom || liveAircraft?.alt || strip.altitude,
+          altitude:
+            liveAircraft?.alt_baro || liveAircraft?.alt_geom || liveAircraft?.alt || strip.altitude,
           speed: liveAircraft?.gs || liveAircraft?.tas || strip.speed,
-          verticalSpeed: liveAircraft?.vr || liveAircraft?.baro_rate || liveAircraft?.geom_rate || 0,
+          verticalSpeed:
+            liveAircraft?.vr || liveAircraft?.baro_rate || liveAircraft?.geom_rate || 0,
           track: liveAircraft?.track || liveAircraft?.true_heading || 0,
           // Status
           isLive: !!liveAircraft,

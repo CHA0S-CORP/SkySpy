@@ -112,10 +112,7 @@ describe('useSocketIO', () => {
         })
       );
 
-      expect(io).toHaveBeenCalledWith(
-        'http://localhost:8000/alerts',
-        expect.any(Object)
-      );
+      expect(io).toHaveBeenCalledWith('http://localhost:8000/alerts', expect.any(Object));
     });
 
     it('should use current origin when no apiBase provided', () => {
@@ -133,10 +130,7 @@ describe('useSocketIO', () => {
         })
       );
 
-      expect(io).toHaveBeenCalledWith(
-        'http://test.example.com',
-        expect.any(Object)
-      );
+      expect(io).toHaveBeenCalledWith('http://test.example.com', expect.any(Object));
 
       window.location.origin = originalOrigin;
     });

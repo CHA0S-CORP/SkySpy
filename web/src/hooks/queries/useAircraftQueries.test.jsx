@@ -52,16 +52,8 @@ describe('useAircraftQueries', () => {
         { type: 'military' },
       ]);
       expect(aircraftKeys.details()).toEqual(['aircraft', 'detail']);
-      expect(aircraftKeys.detail('ABC123')).toEqual([
-        'aircraft',
-        'detail',
-        'ABC123',
-      ]);
-      expect(aircraftKeys.history('ABC123')).toEqual([
-        'aircraft',
-        'history',
-        'ABC123',
-      ]);
+      expect(aircraftKeys.detail('ABC123')).toEqual(['aircraft', 'detail', 'ABC123']);
+      expect(aircraftKeys.history('ABC123')).toEqual(['aircraft', 'history', 'ABC123']);
     });
   });
 
@@ -230,14 +222,12 @@ describe('useAircraftQueries', () => {
       const mockDetail1 = { hex: 'ABC123', callsign: 'UAL123' };
       const mockDetail2 = { hex: 'DEF456', callsign: 'DAL456' };
 
-      api.get
-        .mockResolvedValueOnce(mockDetail1)
-        .mockResolvedValueOnce(mockDetail2);
+      api.get.mockResolvedValueOnce(mockDetail1).mockResolvedValueOnce(mockDetail2);
 
-      const { result, rerender } = renderHook(
-        ({ hex }) => useAircraftDetail(hex),
-        { wrapper: createWrapper(), initialProps: { hex: 'ABC123' } }
-      );
+      const { result, rerender } = renderHook(({ hex }) => useAircraftDetail(hex), {
+        wrapper: createWrapper(),
+        initialProps: { hex: 'ABC123' },
+      });
 
       await waitFor(() => {
         expect(result.current.isSuccess).toBe(true);

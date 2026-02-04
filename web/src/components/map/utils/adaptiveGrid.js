@@ -49,16 +49,8 @@ export function getAdaptiveGridSpacing(radarRange) {
  * @param {Object} params.themeColors - Theme color helper object with rgba() method
  */
 export function drawAdaptiveGrid(ctx, params) {
-  const {
-    width,
-    height,
-    centerX,
-    centerY,
-    radarRange,
-    gridAlpha,
-    proPanOffset,
-    themeColors,
-  } = params;
+  const { width, height, centerX, centerY, radarRange, gridAlpha, proPanOffset, themeColors } =
+    params;
 
   if (gridAlpha <= 0) return;
 

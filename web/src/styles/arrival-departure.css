@@ -223,7 +223,7 @@
   background: rgba(100, 200, 150, 0.15);
 }
 
-.airport-option input[type="checkbox"] {
+.airport-option input[type='checkbox'] {
   accent-color: rgba(100, 200, 150, 1);
 }
 

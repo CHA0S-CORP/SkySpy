@@ -239,7 +239,14 @@ describe('apiHelpers', () => {
 
       // Result should only have standard fields
       expect(result.extraField).toBeUndefined();
-      expect(Object.keys(result)).toEqual(['id', 'username', 'email', 'displayName', 'permissions', 'roles']);
+      expect(Object.keys(result)).toEqual([
+        'id',
+        'username',
+        'email',
+        'displayName',
+        'permissions',
+        'roles',
+      ]);
     });
 
     it('should handle id as 0', () => {

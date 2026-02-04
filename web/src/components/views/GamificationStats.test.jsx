@@ -34,9 +34,7 @@ vi.mock('../gamification/StreaksTab', () => ({
 }));
 
 vi.mock('../gamification/BadgesTab', () => ({
-  BadgesTab: ({ badges }) => (
-    <div data-testid="badges-tab">Badges: {badges.length}</div>
-  ),
+  BadgesTab: ({ badges }) => <div data-testid="badges-tab">Badges: {badges.length}</div>,
 }));
 
 import { useStats } from '../../hooks';
@@ -45,7 +43,12 @@ describe('GamificationStats', () => {
   const mockAchievements = {
     personal_records: [
       { type: 'furthest_distance', title: 'Furthest Distance', value: '250nm', icao_hex: 'abc123' },
-      { type: 'highest_altitude', title: 'Highest Altitude', value: '45,000ft', icao_hex: 'def456' },
+      {
+        type: 'highest_altitude',
+        title: 'Highest Altitude',
+        value: '45,000ft',
+        icao_hex: 'def456',
+      },
     ],
     rare_sightings: [
       { icao_hex: 'rare1', aircraft_type: 'A380', rarity: 'epic' },
@@ -68,8 +71,20 @@ describe('GamificationStats', () => {
       best_daily: 14,
     },
     milestones: [
-      { id: 1, title: '100 Aircraft', description: 'Track 100 unique aircraft', achieved: true, date: '2024-01-15' },
-      { id: 2, title: '1000 Aircraft', description: 'Track 1000 unique aircraft', achieved: false, progress: 45 },
+      {
+        id: 1,
+        title: '100 Aircraft',
+        description: 'Track 100 unique aircraft',
+        achieved: true,
+        date: '2024-01-15',
+      },
+      {
+        id: 2,
+        title: '1000 Aircraft',
+        description: 'Track 1000 unique aircraft',
+        achieved: false,
+        progress: 45,
+      },
     ],
     badges: [
       { id: 1, name: 'First Flight', unlocked: true, icon: 'plane', color: '#00c8ff' },
@@ -257,9 +272,9 @@ describe('GamificationStats', () => {
     it('should switch to Sightings tab when clicked', () => {
       render(<GamificationStats {...defaultProps} />);
       // Click the tab button specifically (has view-tab class)
-      const sightingsTab = screen.getAllByText('Rare Sightings').find(
-        el => el.closest('.view-tab')
-      );
+      const sightingsTab = screen
+        .getAllByText('Rare Sightings')
+        .find((el) => el.closest('.view-tab'));
       fireEvent.click(sightingsTab);
       expect(screen.getByTestId('sightings-tab')).toBeInTheDocument();
     });
@@ -273,9 +288,7 @@ describe('GamificationStats', () => {
     it('should switch to Badges tab when clicked', () => {
       render(<GamificationStats {...defaultProps} />);
       // Click the Badges tab button (find the one inside view-tab)
-      const badgesTab = screen.getAllByText('Badges').find(
-        el => el.closest('.view-tab')
-      );
+      const badgesTab = screen.getAllByText('Badges').find((el) => el.closest('.view-tab'));
       fireEvent.click(badgesTab);
       expect(screen.getByTestId('badges-tab')).toBeInTheDocument();
     });

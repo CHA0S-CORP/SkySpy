@@ -193,8 +193,8 @@ function PermissionUnavailableContent({ onContinueWithout }) {
       <h2 className="gps-modal-title">Location Not Available</h2>
 
       <p className="gps-modal-description">
-        Your browser or device doesn&apos;t support location services. Cannonball Mode will work without
-        GPS, but distance and direction features will be unavailable.
+        Your browser or device doesn&apos;t support location services. Cannonball Mode will work
+        without GPS, but distance and direction features will be unavailable.
       </p>
 
       <div className="gps-modal-actions">

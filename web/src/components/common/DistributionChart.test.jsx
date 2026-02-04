@@ -17,9 +17,7 @@ describe('DistributionChart', () => {
     });
 
     it('should render vertical chart when specified', () => {
-      const { container } = render(
-        <DistributionChart data={sampleData} orientation="vertical" />
-      );
+      const { container } = render(<DistributionChart data={sampleData} orientation="vertical" />);
       expect(container.querySelector('.distribution-chart--vertical')).toBeInTheDocument();
     });
 
@@ -67,23 +65,13 @@ describe('DistributionChart', () => {
 
   describe('formatting', () => {
     it('should use custom value formatter', () => {
-      render(
-        <DistributionChart
-          data={sampleData}
-          showValues
-          formatValue={(v) => `${v}x`}
-        />
-      );
+      render(<DistributionChart data={sampleData} showValues formatValue={(v) => `${v}x`} />);
       expect(screen.getByText('100x')).toBeInTheDocument();
     });
 
     it('should use custom label formatter', () => {
       render(
-        <DistributionChart
-          data={sampleData}
-          showLabels
-          formatLabel={(l) => l.toUpperCase()}
-        />
+        <DistributionChart data={sampleData} showLabels formatLabel={(l) => l.toUpperCase()} />
       );
       expect(screen.getByText('0-50NM')).toBeInTheDocument();
     });
@@ -107,16 +95,12 @@ describe('DistributionChart', () => {
     });
 
     it('should sort by label', () => {
-      render(
-        <DistributionChart data={sampleData} sortBy="label" sortDirection="asc" />
-      );
+      render(<DistributionChart data={sampleData} sortBy="label" sortDirection="asc" />);
       expect(screen.getByText('0-50nm')).toBeInTheDocument();
     });
 
     it('should not sort when sortBy is none', () => {
-      const { container } = render(
-        <DistributionChart data={sampleData} sortBy="none" />
-      );
+      const { container } = render(<DistributionChart data={sampleData} sortBy="none" />);
       const labels = container.querySelectorAll('.distribution-chart__label');
       expect(labels[0].textContent).toBe('0-50nm');
     });
@@ -124,9 +108,7 @@ describe('DistributionChart', () => {
 
   describe('maxBars', () => {
     it('should limit number of bars', () => {
-      const { container } = render(
-        <DistributionChart data={sampleData} maxBars={2} />
-      );
+      const { container } = render(<DistributionChart data={sampleData} maxBars={2} />);
       const bars = container.querySelectorAll('.distribution-chart__bar');
       expect(bars.length).toBe(2);
     });
@@ -159,24 +141,18 @@ describe('DistributionChart', () => {
 
   describe('styling', () => {
     it('should apply custom color', () => {
-      const { container } = render(
-        <DistributionChart data={sampleData} color="#ff0000" />
-      );
+      const { container } = render(<DistributionChart data={sampleData} color="#ff0000" />);
       const bars = container.querySelectorAll('.distribution-chart__bar');
       expect(bars.length).toBeGreaterThan(0);
     });
 
     it('should apply custom bar height', () => {
-      const { container } = render(
-        <DistributionChart data={sampleData} barHeight={20} />
-      );
+      const { container } = render(<DistributionChart data={sampleData} barHeight={20} />);
       expect(container.querySelector('.distribution-chart')).toBeInTheDocument();
     });
 
     it('should apply custom bar gap', () => {
-      const { container } = render(
-        <DistributionChart data={sampleData} barGap={10} />
-      );
+      const { container } = render(<DistributionChart data={sampleData} barGap={10} />);
       expect(container.querySelector('.distribution-chart')).toBeInTheDocument();
     });
 
@@ -190,9 +166,7 @@ describe('DistributionChart', () => {
 
   describe('animation', () => {
     it('should animate bars when animate is true', () => {
-      const { container } = render(
-        <DistributionChart data={sampleData} animate />
-      );
+      const { container } = render(<DistributionChart data={sampleData} animate />);
       const bars = container.querySelectorAll('.distribution-chart__bar');
       expect(bars.length).toBeGreaterThan(0);
     });
@@ -200,16 +174,12 @@ describe('DistributionChart', () => {
 
   describe('vertical orientation', () => {
     it('should render bars vertically', () => {
-      const { container } = render(
-        <DistributionChart data={sampleData} orientation="vertical" />
-      );
+      const { container } = render(<DistributionChart data={sampleData} orientation="vertical" />);
       expect(container.querySelector('.distribution-chart--vertical')).toBeInTheDocument();
     });
 
     it('should show labels at bottom for vertical', () => {
-      render(
-        <DistributionChart data={sampleData} orientation="vertical" showLabels />
-      );
+      render(<DistributionChart data={sampleData} orientation="vertical" showLabels />);
       expect(screen.getByText('0-50nm')).toBeInTheDocument();
     });
   });

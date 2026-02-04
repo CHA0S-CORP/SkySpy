@@ -28,17 +28,8 @@ export function SettingsModal({ config, setConfig, onClose }) {
   };
 
   return (
-    <div
-      className="modal-overlay"
-      onClick={handleOverlayClick}
-      role="presentation"
-    >
-      <div
-        className="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="settings-modal-title"
-      >
+    <div className="modal-overlay" onClick={handleOverlayClick} role="presentation">
+      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
         <div className="modal-header">
           <h3 id="settings-modal-title">Settings</h3>
           <button onClick={onClose}>

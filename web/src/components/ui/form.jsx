@@ -70,11 +70,7 @@ const FormInput = forwardRef(function FormInput(
         // Disabled state
         'disabled:cursor-not-allowed disabled:opacity-50',
         // Error state
-        hasError && [
-          'border-accent-red',
-          'hover:border-accent-red',
-          'focus:ring-accent-red/50',
-        ],
+        hasError && ['border-accent-red', 'hover:border-accent-red', 'focus:ring-accent-red/50'],
         className
       )}
       {...props}
@@ -87,10 +83,7 @@ FormInput.displayName = 'FormInput';
  * FormTextarea - accessible textarea with error state support
  * @param {boolean} hasError - toggles error styling and aria-invalid
  */
-const FormTextarea = forwardRef(function FormTextarea(
-  { className, hasError, ...props },
-  ref
-) {
+const FormTextarea = forwardRef(function FormTextarea({ className, hasError, ...props }, ref) {
   return (
     <textarea
       ref={ref}
@@ -112,11 +105,7 @@ const FormTextarea = forwardRef(function FormTextarea(
         // Resize behavior
         'resize-y',
         // Error state
-        hasError && [
-          'border-accent-red',
-          'hover:border-accent-red',
-          'focus:ring-accent-red/50',
-        ],
+        hasError && ['border-accent-red', 'hover:border-accent-red', 'focus:ring-accent-red/50'],
         className
       )}
       {...props}
@@ -156,22 +145,11 @@ const FormDescription = forwardRef(function FormDescription(
   ref
 ) {
   return (
-    <p
-      ref={ref}
-      className={cn('text-sm text-text-secondary', className)}
-      {...props}
-    >
+    <p ref={ref} className={cn('text-sm text-text-secondary', className)} {...props}>
       {children}
     </p>
   );
 });
 FormDescription.displayName = 'FormDescription';
 
-export {
-  FormField,
-  FormLabel,
-  FormInput,
-  FormTextarea,
-  FormError,
-  FormDescription,
-};
+export { FormField, FormLabel, FormInput, FormTextarea, FormError, FormDescription };

@@ -101,7 +101,9 @@ export function DenseDataTable({
       return (
         <span className="dense-data-table__cell--numeric">
           {formatted}
-          {column.unit && <span style={{ color: 'var(--text-dim)', marginLeft: '2px' }}>{column.unit}</span>}
+          {column.unit && (
+            <span style={{ color: 'var(--text-dim)', marginLeft: '2px' }}>{column.unit}</span>
+          )}
         </span>
       );
     }
@@ -209,11 +211,11 @@ export function DenseDataTable({
           <div style={{ transform: `translateY(${offsetY}px)` }}>
             {visibleRows.map((row, idx) => {
               const actualIndex = startIndex + idx;
-              const isSelected = selectedRow && (
-                selectedRow === row.id ||
-                selectedRow === row.icao_hex ||
-                selectedRow === actualIndex
-              );
+              const isSelected =
+                selectedRow &&
+                (selectedRow === row.id ||
+                  selectedRow === row.icao_hex ||
+                  selectedRow === actualIndex);
 
               return (
                 <div

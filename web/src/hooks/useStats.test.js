@@ -102,9 +102,7 @@ describe('useStats', () => {
       });
 
       // The fetch call uses only the URL, no options object
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('hours=48')
-      );
+      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('hours=48'));
     });
   });
 
@@ -115,9 +113,7 @@ describe('useStats', () => {
         engagement: { views: 50 },
       });
 
-      const { result } = renderHook(() =>
-        useStats('', { wsRequest, wsConnected: true })
-      );
+      const { result } = renderHook(() => useStats('', { wsRequest, wsConnected: true }));
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);

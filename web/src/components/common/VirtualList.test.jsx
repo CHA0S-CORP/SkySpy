@@ -10,9 +10,7 @@ describe('VirtualList', () => {
       name: `Item ${i}`,
     }));
 
-  const defaultRenderItem = (item, index) => (
-    <div data-testid={`item-${index}`}>{item.name}</div>
-  );
+  const defaultRenderItem = (item, index) => <div data-testid={`item-${index}`}>{item.name}</div>;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -242,12 +240,7 @@ describe('VirtualList', () => {
       ];
 
       const { container } = render(
-        <VirtualList
-          items={items}
-          itemHeight={50}
-          renderItem={defaultRenderItem}
-          height={200}
-        />
+        <VirtualList items={items} itemHeight={50} renderItem={defaultRenderItem} height={200} />
       );
 
       // Items should render without key warnings
@@ -277,12 +270,7 @@ describe('VirtualList', () => {
       const items = [{ name: 'Item 1' }, { name: 'Item 2' }];
 
       const { container } = render(
-        <VirtualList
-          items={items}
-          itemHeight={50}
-          renderItem={defaultRenderItem}
-          height={200}
-        />
+        <VirtualList items={items} itemHeight={50} renderItem={defaultRenderItem} height={200} />
       );
 
       expect(container.querySelectorAll('.virtual-list-item')).toHaveLength(2);
@@ -292,12 +280,7 @@ describe('VirtualList', () => {
   describe('empty state', () => {
     it('should render empty container when items is empty', () => {
       const { container } = render(
-        <VirtualList
-          items={[]}
-          itemHeight={50}
-          renderItem={defaultRenderItem}
-          height={200}
-        />
+        <VirtualList items={[]} itemHeight={50} renderItem={defaultRenderItem} height={200} />
       );
 
       expect(container.querySelector('.virtual-list')).toBeInTheDocument();

@@ -22,82 +22,104 @@ export function EnhancedFlightMap({
   const mapRef = useRef(null);
 
   // Process sightings into track segments with colors
-  const { trackSegments, bounds, startPos, endPos, minAlt, maxAlt, minSpeed, maxSpeed } = useMemo(() => {
-    if (!sightings.length) {
-      return { trackSegments: [], bounds: null, startPos: null, endPos: null, minAlt: 0, maxAlt: 45000, minSpeed: 0, maxSpeed: 500 };
-    }
-
-    const validSightings = sightings.filter((s) => s.lat && s.lon);
-    if (!validSightings.length) {
-      return { trackSegments: [], bounds: null, startPos: null, endPos: null, minAlt: 0, maxAlt: 45000, minSpeed: 0, maxSpeed: 500 };
-    }
-
-    // Calculate bounds
-    const lats = validSightings.map((s) => s.lat);
-    const lons = validSightings.map((s) => s.lon);
-    const boundsObj = [
-      [Math.min(...lats) - 0.05, Math.min(...lons) - 0.05],
-      [Math.max(...lats) + 0.05, Math.max(...lons) + 0.05],
-    ];
-
-    // Include feeder location in bounds
-    if (feederLocation) {
-      boundsObj[0][0] = Math.min(boundsObj[0][0], feederLocation.lat - 0.05);
-      boundsObj[0][1] = Math.min(boundsObj[0][1], feederLocation.lon - 0.05);
-      boundsObj[1][0] = Math.max(boundsObj[1][0], feederLocation.lat + 0.05);
-      boundsObj[1][1] = Math.max(boundsObj[1][1], feederLocation.lon + 0.05);
-    }
-
-    // Calculate min/max values
-    const altitudes = validSightings.map((s) => s.altitude || 0).filter((a) => a > 0);
-    const speeds = validSightings.map((s) => s.gs || 0).filter((s) => s > 0);
-    const minA = altitudes.length ? Math.min(...altitudes) : 0;
-    const maxA = altitudes.length ? Math.max(...altitudes) : 45000;
-    const minS = speeds.length ? Math.min(...speeds) : 0;
-    const maxS = speeds.length ? Math.max(...speeds) : 500;
-
-    // Create colored segments
-    const segments = [];
-    for (let i = 0; i < validSightings.length - 1; i++) {
-      const current = validSightings[i];
-      const next = validSightings[i + 1];
-
-      let color;
-      if (colorBy === 'altitude') {
-        const alt = current.altitude || 0;
-        const normalizedAlt = maxA > minA ? (alt - minA) / (maxA - minA) : 0.5;
-        color = getAltitudeColor(normalizedAlt);
-      } else if (colorBy === 'speed') {
-        const speed = current.gs || 0;
-        const normalizedSpeed = maxS > minS ? (speed - minS) / (maxS - minS) : 0.5;
-        color = getSpeedColor(normalizedSpeed);
-      } else {
-        // Color by time (gradient from start to end)
-        const normalizedTime = i / (validSightings.length - 1);
-        color = getTimeColor(normalizedTime);
+  const { trackSegments, bounds, startPos, endPos, minAlt, maxAlt, minSpeed, maxSpeed } =
+    useMemo(() => {
+      if (!sightings.length) {
+        return {
+          trackSegments: [],
+          bounds: null,
+          startPos: null,
+          endPos: null,
+          minAlt: 0,
+          maxAlt: 45000,
+          minSpeed: 0,
+          maxSpeed: 500,
+        };
       }
 
-      segments.push({
-        positions: [[current.lat, current.lon], [next.lat, next.lon]],
-        color,
-        index: i,
-        timestamp: current.timestamp,
-        altitude: current.altitude,
-        speed: current.gs,
-      });
-    }
+      const validSightings = sightings.filter((s) => s.lat && s.lon);
+      if (!validSightings.length) {
+        return {
+          trackSegments: [],
+          bounds: null,
+          startPos: null,
+          endPos: null,
+          minAlt: 0,
+          maxAlt: 45000,
+          minSpeed: 0,
+          maxSpeed: 500,
+        };
+      }
 
-    return {
-      trackSegments: segments,
-      bounds: boundsObj,
-      startPos: validSightings[0],
-      endPos: validSightings[validSightings.length - 1],
-      minAlt: minA,
-      maxAlt: maxA,
-      minSpeed: minS,
-      maxSpeed: maxS,
-    };
-  }, [sightings, colorBy, feederLocation]);
+      // Calculate bounds
+      const lats = validSightings.map((s) => s.lat);
+      const lons = validSightings.map((s) => s.lon);
+      const boundsObj = [
+        [Math.min(...lats) - 0.05, Math.min(...lons) - 0.05],
+        [Math.max(...lats) + 0.05, Math.max(...lons) + 0.05],
+      ];
+
+      // Include feeder location in bounds
+      if (feederLocation) {
+        boundsObj[0][0] = Math.min(boundsObj[0][0], feederLocation.lat - 0.05);
+        boundsObj[0][1] = Math.min(boundsObj[0][1], feederLocation.lon - 0.05);
+        boundsObj[1][0] = Math.max(boundsObj[1][0], feederLocation.lat + 0.05);
+        boundsObj[1][1] = Math.max(boundsObj[1][1], feederLocation.lon + 0.05);
+      }
+
+      // Calculate min/max values
+      const altitudes = validSightings.map((s) => s.altitude || 0).filter((a) => a > 0);
+      const speeds = validSightings.map((s) => s.gs || 0).filter((s) => s > 0);
+      const minA = altitudes.length ? Math.min(...altitudes) : 0;
+      const maxA = altitudes.length ? Math.max(...altitudes) : 45000;
+      const minS = speeds.length ? Math.min(...speeds) : 0;
+      const maxS = speeds.length ? Math.max(...speeds) : 500;
+
+      // Create colored segments
+      const segments = [];
+      for (let i = 0; i < validSightings.length - 1; i++) {
+        const current = validSightings[i];
+        const next = validSightings[i + 1];
+
+        let color;
+        if (colorBy === 'altitude') {
+          const alt = current.altitude || 0;
+          const normalizedAlt = maxA > minA ? (alt - minA) / (maxA - minA) : 0.5;
+          color = getAltitudeColor(normalizedAlt);
+        } else if (colorBy === 'speed') {
+          const speed = current.gs || 0;
+          const normalizedSpeed = maxS > minS ? (speed - minS) / (maxS - minS) : 0.5;
+          color = getSpeedColor(normalizedSpeed);
+        } else {
+          // Color by time (gradient from start to end)
+          const normalizedTime = i / (validSightings.length - 1);
+          color = getTimeColor(normalizedTime);
+        }
+
+        segments.push({
+          positions: [
+            [current.lat, current.lon],
+            [next.lat, next.lon],
+          ],
+          color,
+          index: i,
+          timestamp: current.timestamp,
+          altitude: current.altitude,
+          speed: current.gs,
+        });
+      }
+
+      return {
+        trackSegments: segments,
+        bounds: boundsObj,
+        startPos: validSightings[0],
+        endPos: validSightings[validSightings.length - 1],
+        minAlt: minA,
+        maxAlt: maxA,
+        minSpeed: minS,
+        maxSpeed: maxS,
+      };
+    }, [sightings, colorBy, feederLocation]);
 
   // Color helper functions
   function getAltitudeColor(normalized) {
@@ -228,24 +250,25 @@ export function EnhancedFlightMap({
         <FitBounds bounds={bounds} />
 
         {/* Range rings */}
-        {feederLocation && rangeRings.map((ring, i) => (
-          <CircleMarker
-            key={i}
-            center={[feederLocation.lat, feederLocation.lon]}
-            radius={0}
-            pathOptions={{ color: 'transparent' }}
-          >
-            <circle
-              cx="50%"
-              cy="50%"
-              r={ring.radius}
-              stroke="rgba(90, 122, 154, 0.3)"
-              strokeWidth="1"
-              strokeDasharray="4,4"
-              fill="none"
-            />
-          </CircleMarker>
-        ))}
+        {feederLocation &&
+          rangeRings.map((ring, i) => (
+            <CircleMarker
+              key={i}
+              center={[feederLocation.lat, feederLocation.lon]}
+              radius={0}
+              pathOptions={{ color: 'transparent' }}
+            >
+              <circle
+                cx="50%"
+                cy="50%"
+                r={ring.radius}
+                stroke="rgba(90, 122, 154, 0.3)"
+                strokeWidth="1"
+                strokeDasharray="4,4"
+                fill="none"
+              />
+            </CircleMarker>
+          ))}
 
         {/* Track segments with color gradient */}
         {trackSegments.map((segment, i) => (
@@ -264,14 +287,10 @@ export function EnhancedFlightMap({
         ))}
 
         {/* Start marker */}
-        {startPos && (
-          <Marker position={[startPos.lat, startPos.lon]} icon={startIcon} />
-        )}
+        {startPos && <Marker position={[startPos.lat, startPos.lon]} icon={startIcon} />}
 
         {/* End marker */}
-        {endPos && (
-          <Marker position={[endPos.lat, endPos.lon]} icon={endIcon} />
-        )}
+        {endPos && <Marker position={[endPos.lat, endPos.lon]} icon={endIcon} />}
 
         {/* Feeder location */}
         {feederLocation && (
@@ -292,7 +311,13 @@ export function EnhancedFlightMap({
           title="Fit to track"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M1 5V1H5M9 1H13V5M13 9V13H9M5 13H1V9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M1 5V1H5M9 1H13V5M13 9V13H9M5 13H1V9"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         </button>
       </div>
@@ -317,17 +342,21 @@ export function EnhancedFlightMap({
           <div
             className="enhanced-flight-map__legend-color"
             style={{
-              background: colorBy === 'altitude'
-                ? 'linear-gradient(90deg, #3b82f6, #22c55e, #ef4444)'
-                : colorBy === 'speed'
-                  ? 'linear-gradient(90deg, #60a5fa, #facc15, #f97316)'
-                  : 'linear-gradient(90deg, #00d4ff, #a855f7)',
+              background:
+                colorBy === 'altitude'
+                  ? 'linear-gradient(90deg, #3b82f6, #22c55e, #ef4444)'
+                  : colorBy === 'speed'
+                    ? 'linear-gradient(90deg, #60a5fa, #facc15, #f97316)'
+                    : 'linear-gradient(90deg, #00d4ff, #a855f7)',
               width: '40px',
             }}
           />
           <span>
-            {colorBy === 'altitude' ? `${(minAlt / 1000).toFixed(0)}-${(maxAlt / 1000).toFixed(0)}k ft` :
-              colorBy === 'speed' ? `${minSpeed}-${maxSpeed} kts` : 'Time'}
+            {colorBy === 'altitude'
+              ? `${(minAlt / 1000).toFixed(0)}-${(maxAlt / 1000).toFixed(0)}k ft`
+              : colorBy === 'speed'
+                ? `${minSpeed}-${maxSpeed} kts`
+                : 'Time'}
           </span>
         </div>
       </div>

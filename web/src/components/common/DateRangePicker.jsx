@@ -170,7 +170,12 @@ export function DateRangePicker({ value = '24h', customRange, onChange }) {
               <div className="date-input-group">
                 <label htmlFor="date-range-end-date">End</label>
                 <div className="date-time-inputs">
-                  <input id="date-range-end-date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                  <input
+                    id="date-range-end-date"
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                  />
                   <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
                 </div>
               </div>

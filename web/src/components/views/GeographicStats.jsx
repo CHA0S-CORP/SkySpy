@@ -19,7 +19,12 @@ import { useStats } from '../../hooks';
  * - Connected airports
  * - Regional distribution
  */
-export function GeographicStats({ apiBase, wsRequest, wsConnected, onSelectAircraft: _onSelectAircraft }) {
+export function GeographicStats({
+  apiBase,
+  wsRequest,
+  wsConnected,
+  onSelectAircraft: _onSelectAircraft,
+}) {
   const [timeRange, setTimeRange] = useState('24h');
   const [showFilters, setShowFilters] = useState(false);
   const [countryFilter, setCountryFilter] = useState('');

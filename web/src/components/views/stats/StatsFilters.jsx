@@ -34,7 +34,12 @@ export function MilitaryToggle({ showMilitaryOnly, onToggle }) {
       role="button"
       tabIndex={0}
       onClick={onToggle}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onToggle();
+        }
+      }}
     >
       <span className="toggle-indicator" />
       <span>Military Only</span>
@@ -81,7 +86,11 @@ export function AdvancedFiltersPanel({
       <div className="filter-row">
         <div className="filter-field">
           <label htmlFor="stats-category-filter">Category</label>
-          <select id="stats-category-filter" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+          <select
+            id="stats-category-filter"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+          >
             <option value="">All Categories</option>
             <option value="A0">A0 - No ADS-B</option>
             <option value="A1">A1 - Light</option>

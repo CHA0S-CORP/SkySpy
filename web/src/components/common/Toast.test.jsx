@@ -222,10 +222,7 @@ describe('Toast', () => {
     it('should render action button when actionLabel and onAction provided', () => {
       const onAction = vi.fn();
       render(
-        <Toast
-          toast={{ ...defaultToast, actionLabel: 'Undo', onAction }}
-          onRemove={mockOnRemove}
-        />
+        <Toast toast={{ ...defaultToast, actionLabel: 'Undo', onAction }} onRemove={mockOnRemove} />
       );
 
       expect(screen.getByText('Undo')).toBeInTheDocument();
@@ -234,10 +231,7 @@ describe('Toast', () => {
     it('should call onAction when action button is clicked', async () => {
       const onAction = vi.fn();
       render(
-        <Toast
-          toast={{ ...defaultToast, actionLabel: 'Undo', onAction }}
-          onRemove={mockOnRemove}
-        />
+        <Toast toast={{ ...defaultToast, actionLabel: 'Undo', onAction }} onRemove={mockOnRemove} />
       );
 
       const actionButton = screen.getByText('Undo');
@@ -260,9 +254,7 @@ describe('Toast', () => {
     });
 
     it('should not render action button without onAction', () => {
-      render(
-        <Toast toast={{ ...defaultToast, actionLabel: 'Undo' }} onRemove={mockOnRemove} />
-      );
+      render(<Toast toast={{ ...defaultToast, actionLabel: 'Undo' }} onRemove={mockOnRemove} />);
 
       expect(screen.queryByText('Undo')).not.toBeInTheDocument();
     });
@@ -346,7 +338,9 @@ describe('ToastContainer', () => {
     it('should render toast container with correct class', () => {
       const toasts = [{ id: 1, message: 'Toast 1', type: 'info', duration: 3000 }];
 
-      const { container } = render(<ToastContainer toasts={toasts} removeToast={mockRemoveToast} />);
+      const { container } = render(
+        <ToastContainer toasts={toasts} removeToast={mockRemoveToast} />
+      );
 
       expect(container.querySelector('.toast-container')).toBeInTheDocument();
     });
@@ -354,7 +348,9 @@ describe('ToastContainer', () => {
     it('should have aria-live polite attribute', () => {
       const toasts = [{ id: 1, message: 'Toast 1', type: 'info', duration: 3000 }];
 
-      const { container } = render(<ToastContainer toasts={toasts} removeToast={mockRemoveToast} />);
+      const { container } = render(
+        <ToastContainer toasts={toasts} removeToast={mockRemoveToast} />
+      );
 
       expect(container.querySelector('.toast-container')).toHaveAttribute('aria-live', 'polite');
     });
@@ -362,7 +358,9 @@ describe('ToastContainer', () => {
     it('should have aria-label for accessibility', () => {
       const toasts = [{ id: 1, message: 'Toast 1', type: 'info', duration: 3000 }];
 
-      const { container } = render(<ToastContainer toasts={toasts} removeToast={mockRemoveToast} />);
+      const { container } = render(
+        <ToastContainer toasts={toasts} removeToast={mockRemoveToast} />
+      );
 
       expect(container.querySelector('.toast-container')).toHaveAttribute(
         'aria-label',
@@ -394,7 +392,9 @@ describe('ToastContainer', () => {
         { id: 3, message: 'Toast 3', type: 'warning', duration: 3000 },
       ];
 
-      const { container } = render(<ToastContainer toasts={toasts} removeToast={mockRemoveToast} />);
+      const { container } = render(
+        <ToastContainer toasts={toasts} removeToast={mockRemoveToast} />
+      );
 
       const toastElements = container.querySelectorAll('.toast');
       expect(toastElements).toHaveLength(3);

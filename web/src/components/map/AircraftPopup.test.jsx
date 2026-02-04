@@ -186,21 +186,27 @@ describe('AircraftPopup', () => {
 
   describe('emergency display', () => {
     it('should show emergency badge for squawk 7700', () => {
-      const { container } = render(<AircraftPopup {...defaultProps} aircraft={{ ...mockAircraft, squawk: '7700' }} />);
+      const { container } = render(
+        <AircraftPopup {...defaultProps} aircraft={{ ...mockAircraft, squawk: '7700' }} />
+      );
 
       // Emergency text should appear somewhere in the component
       expect(container.textContent).toMatch(/EMER|7700/i);
     });
 
     it('should show hijack badge for squawk 7500', () => {
-      const { container } = render(<AircraftPopup {...defaultProps} aircraft={{ ...mockAircraft, squawk: '7500' }} />);
+      const { container } = render(
+        <AircraftPopup {...defaultProps} aircraft={{ ...mockAircraft, squawk: '7500' }} />
+      );
 
       // Hijack text should appear somewhere in the component
       expect(container.textContent).toMatch(/HIJACK|7500/i);
     });
 
     it('should show radio badge for squawk 7600', () => {
-      const { container } = render(<AircraftPopup {...defaultProps} aircraft={{ ...mockAircraft, squawk: '7600' }} />);
+      const { container } = render(
+        <AircraftPopup {...defaultProps} aircraft={{ ...mockAircraft, squawk: '7600' }} />
+      );
 
       // Radio text should appear somewhere in the component
       expect(container.textContent).toMatch(/RADIO|7600/i);
@@ -347,7 +353,10 @@ describe('AircraftPopup', () => {
       render(<AircraftPopup {...defaultProps} />);
 
       const popup = screen.getByRole('dialog');
-      expect(popup).toHaveAttribute('aria-labelledby', expect.stringContaining('aircraft-popup-title'));
+      expect(popup).toHaveAttribute(
+        'aria-labelledby',
+        expect.stringContaining('aircraft-popup-title')
+      );
     });
   });
 
@@ -368,10 +377,7 @@ describe('AircraftPopup', () => {
   describe('edge cases', () => {
     it('should handle aircraft without flight callsign', () => {
       const { container } = render(
-        <AircraftPopup
-          {...defaultProps}
-          aircraft={{ ...mockAircraft, flight: undefined }}
-        />
+        <AircraftPopup {...defaultProps} aircraft={{ ...mockAircraft, flight: undefined }} />
       );
 
       // Should show hex as fallback - it appears in multiple places

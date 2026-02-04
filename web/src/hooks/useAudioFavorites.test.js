@@ -315,7 +315,8 @@ describe('useAudioFavorites', () => {
         result.current.clearFavorites();
       });
 
-      const lastCall = mockLocalStorage.setItem.mock.calls[mockLocalStorage.setItem.mock.calls.length - 1];
+      const lastCall =
+        mockLocalStorage.setItem.mock.calls[mockLocalStorage.setItem.mock.calls.length - 1];
       expect(JSON.parse(lastCall[1])).toEqual([]);
     });
   });
@@ -399,7 +400,9 @@ describe('useAudioFavorites', () => {
         result.current.addFavorite(transmission);
       });
 
-      expect(result.current.favorites[0].identified_airframes).toEqual(transmission.identified_airframes);
+      expect(result.current.favorites[0].identified_airframes).toEqual(
+        transmission.identified_airframes
+      );
     });
 
     it('should handle missing identified_airframes', () => {

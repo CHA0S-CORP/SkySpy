@@ -83,7 +83,9 @@ describe('GeographicStats', () => {
       });
 
       render(<GeographicStats {...defaultProps} />);
-      expect(screen.getByText(/Error loading data: Failed to fetch geographic data/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Error loading data: Failed to fetch geographic data/)
+      ).toBeInTheDocument();
     });
 
     it('should display retry button on error', () => {

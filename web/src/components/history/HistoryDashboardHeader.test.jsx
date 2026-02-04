@@ -103,10 +103,7 @@ describe('HistoryDashboardHeader', () => {
     it('should call onTimeRangeChange when time range is clicked', () => {
       const onTimeRangeChange = vi.fn();
       render(
-        <HistoryDashboardHeader
-          sessions={sampleSessions}
-          onTimeRangeChange={onTimeRangeChange}
-        />
+        <HistoryDashboardHeader sessions={sampleSessions} onTimeRangeChange={onTimeRangeChange} />
       );
 
       fireEvent.click(screen.getByText('6h'));
@@ -126,10 +123,7 @@ describe('HistoryDashboardHeader', () => {
     it('should call onViewModeChange when view mode is clicked', () => {
       const onViewModeChange = vi.fn();
       const { container } = render(
-        <HistoryDashboardHeader
-          sessions={sampleSessions}
-          onViewModeChange={onViewModeChange}
-        />
+        <HistoryDashboardHeader sessions={sampleSessions} onViewModeChange={onViewModeChange} />
       );
 
       const toggleButtons = container.querySelectorAll('.view-toggle__option');
@@ -140,9 +134,7 @@ describe('HistoryDashboardHeader', () => {
 
   describe('loading state', () => {
     it('should show loading state on metric cards', () => {
-      const { container } = render(
-        <HistoryDashboardHeader sessions={[]} loading />
-      );
+      const { container } = render(<HistoryDashboardHeader sessions={[]} loading />);
       expect(container.querySelector('.metric-card--loading')).toBeInTheDocument();
     });
   });
@@ -156,9 +148,7 @@ describe('HistoryDashboardHeader', () => {
 
   describe('activity sparkline', () => {
     it('should render activity sparkline when sessions have data', () => {
-      const { container } = render(
-        <HistoryDashboardHeader sessions={sampleSessions} />
-      );
+      const { container } = render(<HistoryDashboardHeader sessions={sampleSessions} />);
       // Sparkline should be present
       expect(container.querySelector('svg')).toBeInTheDocument();
     });

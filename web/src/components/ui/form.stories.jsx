@@ -1,12 +1,5 @@
 import React from 'react';
-import {
-  FormField,
-  FormLabel,
-  FormInput,
-  FormTextarea,
-  FormError,
-  FormDescription,
-} from './form';
+import { FormField, FormLabel, FormInput, FormTextarea, FormError, FormDescription } from './form';
 
 /**
  * The Form component suite provides accessible form elements with consistent
@@ -142,7 +135,12 @@ export const WithDescription = {
   render: () => (
     <FormField className="w-80">
       <FormLabel htmlFor="squawk">Squawk Code</FormLabel>
-      <FormInput id="squawk" placeholder="e.g., 7700" maxLength={4} aria-describedby="squawk-desc" />
+      <FormInput
+        id="squawk"
+        placeholder="e.g., 7700"
+        maxLength={4}
+        aria-describedby="squawk-desc"
+      />
       <FormDescription id="squawk-desc">
         Enter a 4-digit octal code (0-7 only). Common codes: 7500 (hijack), 7600 (radio failure),
         7700 (emergency).
@@ -362,7 +360,9 @@ export const AllComponents = {
   render: () => (
     <div className="w-96 space-y-8">
       <div>
-        <h3 className="text-sm font-medium text-text-dim mb-4">FormField + FormLabel + FormInput</h3>
+        <h3 className="text-sm font-medium text-text-dim mb-4">
+          FormField + FormLabel + FormInput
+        </h3>
         <FormField>
           <FormLabel htmlFor="demo-1">Standard Label</FormLabel>
           <FormInput id="demo-1" placeholder="Standard input" />
@@ -419,8 +419,7 @@ export const AllComponents = {
     layout: 'padded',
     docs: {
       description: {
-        story:
-          'Visual reference showing all form components and their variants side by side.',
+        story: 'Visual reference showing all form components and their variants side by side.',
       },
     },
   },

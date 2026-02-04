@@ -30,14 +30,8 @@ export function useMapAircraftNotes({ toastContext } = {}) {
   });
 
   // Use the core aircraft notes hook
-  const {
-    getNote,
-    setNote,
-    deleteNote,
-    hasNote,
-    getAbbreviatedNote,
-    getAllNotesCount,
-  } = useAircraftNotes();
+  const { getNote, setNote, deleteNote, hasNote, getAbbreviatedNote, getAllNotesCount } =
+    useAircraftNotes();
 
   // Context menu handlers
   const handleAircraftContextMenu = useCallback((e, aircraft) => {

@@ -210,12 +210,16 @@ export const DisabledTab = {
       </TabsContent>
       <TabsContent value="disabled">
         <div className="p-4 bg-bg-card rounded-lg">
-          <p className="text-text-secondary">This content is not accessible because the tab is disabled.</p>
+          <p className="text-text-secondary">
+            This content is not accessible because the tab is disabled.
+          </p>
         </div>
       </TabsContent>
       <TabsContent value="another">
         <div className="p-4 bg-bg-card rounded-lg">
-          <p className="text-text-secondary">This is another accessible tab with its own content.</p>
+          <p className="text-text-secondary">
+            This is another accessible tab with its own content.
+          </p>
         </div>
       </TabsContent>
     </Tabs>
@@ -251,13 +255,17 @@ export const VerticalOrientation = {
           <TabsContent value="profile" className="mt-0">
             <div className="p-4 bg-bg-card rounded-lg">
               <h3 className="text-text-primary font-medium mb-2">Profile Settings</h3>
-              <p className="text-text-secondary">Manage your display name, avatar, and public profile.</p>
+              <p className="text-text-secondary">
+                Manage your display name, avatar, and public profile.
+              </p>
             </div>
           </TabsContent>
           <TabsContent value="account" className="mt-0">
             <div className="p-4 bg-bg-card rounded-lg">
               <h3 className="text-text-primary font-medium mb-2">Account Settings</h3>
-              <p className="text-text-secondary">Update your email, password, and account preferences.</p>
+              <p className="text-text-secondary">
+                Update your email, password, and account preferences.
+              </p>
             </div>
           </TabsContent>
           <TabsContent value="notifications" className="mt-0">
@@ -372,15 +380,22 @@ export const RichContent = {
       <TabsContent value="form">
         <div className="p-4 bg-bg-card rounded-lg space-y-3">
           <div>
-            <label htmlFor="refresh-rate-select" className="text-text-secondary text-sm block mb-1">Refresh Rate</label>
-            <select id="refresh-rate-select" className="w-full bg-bg-hover text-text-primary rounded px-3 py-2 text-sm">
+            <label htmlFor="refresh-rate-select" className="text-text-secondary text-sm block mb-1">
+              Refresh Rate
+            </label>
+            <select
+              id="refresh-rate-select"
+              className="w-full bg-bg-hover text-text-primary rounded px-3 py-2 text-sm"
+            >
               <option>1 second</option>
               <option>5 seconds</option>
               <option>10 seconds</option>
             </select>
           </div>
           <div>
-            <label htmlFor="max-range-input" className="text-text-secondary text-sm block mb-1">Max Range (nm)</label>
+            <label htmlFor="max-range-input" className="text-text-secondary text-sm block mb-1">
+              Max Range (nm)
+            </label>
             <input
               id="max-range-input"
               type="number"
@@ -424,7 +439,9 @@ export const ManualActivation = {
       </TabsContent>
       <TabsContent value="tab3">
         <div className="p-4 bg-bg-card rounded-lg">
-          <p className="text-text-secondary">Useful when tab changes trigger expensive operations.</p>
+          <p className="text-text-secondary">
+            Useful when tab changes trigger expensive operations.
+          </p>
         </div>
       </TabsContent>
     </Tabs>

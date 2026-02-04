@@ -36,7 +36,8 @@ export function HistoryDashboardHeader({
     const uniqueIcaos = new Set(sessions.map((s) => s.icao_hex));
 
     // Average duration
-    const avgDuration = sessions.reduce((sum, s) => sum + (s.duration_min || 0), 0) / sessions.length;
+    const avgDuration =
+      sessions.reduce((sum, s) => sum + (s.duration_min || 0), 0) / sessions.length;
 
     // Max distance
     const maxDistance = Math.max(...sessions.map((s) => s.max_distance_nm || 0), 0);
@@ -177,10 +178,42 @@ export function HistoryDashboardHeader({
               title="Grid view"
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
-                <rect x="8" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
-                <rect x="1" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
-                <rect x="8" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+                <rect
+                  x="1"
+                  y="1"
+                  width="5"
+                  height="5"
+                  rx="1"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                />
+                <rect
+                  x="8"
+                  y="1"
+                  width="5"
+                  height="5"
+                  rx="1"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                />
+                <rect
+                  x="1"
+                  y="8"
+                  width="5"
+                  height="5"
+                  rx="1"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                />
+                <rect
+                  x="8"
+                  y="8"
+                  width="5"
+                  height="5"
+                  rx="1"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                />
               </svg>
             </button>
             <button
@@ -189,9 +222,33 @@ export function HistoryDashboardHeader({
               title="List view"
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <line x1="1" y1="3" x2="13" y2="3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                <line x1="1" y1="7" x2="13" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                <line x1="1" y1="11" x2="13" y2="11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <line
+                  x1="1"
+                  y1="3"
+                  x2="13"
+                  y2="3"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+                <line
+                  x1="1"
+                  y1="7"
+                  x2="13"
+                  y2="7"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+                <line
+                  x1="1"
+                  y1="11"
+                  x2="13"
+                  y2="11"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
               </svg>
             </button>
             <button
@@ -200,9 +257,33 @@ export function HistoryDashboardHeader({
               title="Table view"
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <rect x="1" y="1" width="12" height="3" rx="1" stroke="currentColor" strokeWidth="1.5" />
-                <rect x="1" y="5.5" width="12" height="3" rx="1" stroke="currentColor" strokeWidth="1.5" />
-                <rect x="1" y="10" width="12" height="3" rx="1" stroke="currentColor" strokeWidth="1.5" />
+                <rect
+                  x="1"
+                  y="1"
+                  width="12"
+                  height="3"
+                  rx="1"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                />
+                <rect
+                  x="1"
+                  y="5.5"
+                  width="12"
+                  height="3"
+                  rx="1"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                />
+                <rect
+                  x="1"
+                  y="10"
+                  width="12"
+                  height="3"
+                  rx="1"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                />
               </svg>
             </button>
           </div>

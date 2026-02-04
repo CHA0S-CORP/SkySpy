@@ -18,7 +18,13 @@ const THREAT_COLORS = {
   info: '#22c55e',
 };
 
-const ThreatCell = memo(function ThreatCell({ threat, userHeading, onSelect, isSelected, showEta = false }) {
+const ThreatCell = memo(function ThreatCell({
+  threat,
+  userHeading,
+  onSelect,
+  isSelected,
+  showEta = false,
+}) {
   if (!threat) {
     return (
       <div className="threat-cell empty">

@@ -178,9 +178,12 @@ export function processAircraftUpdate(data, setAircraft) {
     if (import.meta.env.DEV) {
       console.log(
         '[processAircraftUpdate] Delta update:',
-        added.length, 'added,',
-        updated.length, 'updated,',
-        removed.length, 'removed'
+        added.length,
+        'added,',
+        updated.length,
+        'updated,',
+        removed.length,
+        'removed'
       );
     }
 
@@ -215,11 +218,7 @@ export function processAircraftUpdate(data, setAircraft) {
   // Handle full updates and legacy format
   const aircraftData = payload?.aircraft || (payload ? [payload] : []);
   if (import.meta.env.DEV) {
-    console.log(
-      '[processAircraftUpdate] Full update with',
-      aircraftData?.length ?? 0,
-      'aircraft'
-    );
+    console.log('[processAircraftUpdate] Full update with', aircraftData?.length ?? 0, 'aircraft');
   }
   if (Array.isArray(aircraftData) && aircraftData.length > 0) {
     const updates = {};

@@ -75,8 +75,16 @@ describe('useAircraftInfoErrors', () => {
       const { result } = renderHook(() => useAircraftInfoErrors());
 
       act(() => {
-        result.current.recordError('ABC123', { error_type: 'error1', error_message: 'Error 1', source: 'test' });
-        result.current.recordError('DEF456', { error_type: 'error2', error_message: 'Error 2', source: 'test' });
+        result.current.recordError('ABC123', {
+          error_type: 'error1',
+          error_message: 'Error 1',
+          source: 'test',
+        });
+        result.current.recordError('DEF456', {
+          error_type: 'error2',
+          error_message: 'Error 2',
+          source: 'test',
+        });
       });
 
       expect(result.current.errorCount).toBe(2);
@@ -94,9 +102,21 @@ describe('useAircraftInfoErrors', () => {
       const { result } = renderHook(() => useAircraftInfoErrors());
 
       act(() => {
-        result.current.recordError('ABC123', { error_type: 'error1', error_message: 'Error 1', source: 'test' });
-        result.current.recordError('DEF456', { error_type: 'error2', error_message: 'Error 2', source: 'test' });
-        result.current.recordError('GHI789', { error_type: 'error3', error_message: 'Error 3', source: 'test' });
+        result.current.recordError('ABC123', {
+          error_type: 'error1',
+          error_message: 'Error 1',
+          source: 'test',
+        });
+        result.current.recordError('DEF456', {
+          error_type: 'error2',
+          error_message: 'Error 2',
+          source: 'test',
+        });
+        result.current.recordError('GHI789', {
+          error_type: 'error3',
+          error_message: 'Error 3',
+          source: 'test',
+        });
       });
 
       expect(result.current.errorCount).toBe(3);
@@ -153,9 +173,7 @@ describe('useAircraftInfoErrors', () => {
         source: 'websocket',
       });
 
-      const { result } = renderHook(() =>
-        useAircraftInfoErrors({ getAirframeError })
-      );
+      const { result } = renderHook(() => useAircraftInfoErrors({ getAirframeError }));
 
       // Local error should take precedence
       act(() => {
@@ -177,9 +195,7 @@ describe('useAircraftInfoErrors', () => {
     it('should call external clearAirframeError when clearing', () => {
       const clearAirframeError = vi.fn();
 
-      const { result } = renderHook(() =>
-        useAircraftInfoErrors({ clearAirframeError })
-      );
+      const { result } = renderHook(() => useAircraftInfoErrors({ clearAirframeError }));
 
       act(() => {
         result.current.recordError('ABC123', {
@@ -213,8 +229,16 @@ describe('useAircraftInfoErrors', () => {
       const { result } = renderHook(() => useAircraftInfoErrors());
 
       act(() => {
-        result.current.recordError(null, { error_type: 'test', error_message: 'Test', source: 'test' });
-        result.current.recordError(undefined, { error_type: 'test', error_message: 'Test', source: 'test' });
+        result.current.recordError(null, {
+          error_type: 'test',
+          error_message: 'Test',
+          source: 'test',
+        });
+        result.current.recordError(undefined, {
+          error_type: 'test',
+          error_message: 'Test',
+          source: 'test',
+        });
       });
 
       expect(result.current.errorCount).toBe(0);

@@ -112,11 +112,7 @@ export function DataBlockConfigPanel({
       <div className="datablock-config-section">
         <div className="datablock-section-title">
           <span>Fields ({enabledCount} enabled)</span>
-          <button
-            className="datablock-field-action"
-            onClick={onReset}
-            title="Reset to defaults"
-          >
+          <button className="datablock-field-action" onClick={onReset} title="Reset to defaults">
             <RotateCcw size={12} />
           </button>
         </div>

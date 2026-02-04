@@ -29,7 +29,8 @@ const MODAL_VARIANTS = {
     Icon: AlertTriangle,
     iconColor: 'text-accent-yellow',
     contentVariant: 'warning',
-    actionClass: 'bg-accent-yellow hover:bg-accent-yellow/90 focus-visible:ring-accent-yellow/50 text-black',
+    actionClass:
+      'bg-accent-yellow hover:bg-accent-yellow/90 focus-visible:ring-accent-yellow/50 text-black',
   },
   info: {
     Icon: Info,

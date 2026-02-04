@@ -49,7 +49,7 @@ export function StickyTelemetryBar({ aircraft, calculateDistance, isScrolled = f
   const altitude =
     aircraft.alt_baro !== 'ground' && aircraft.alt_baro
       ? aircraft.alt_baro
-      : aircraft.alt_geom ?? aircraft.alt;
+      : (aircraft.alt_geom ?? aircraft.alt);
 
   const speed = aircraft.gs ?? aircraft.tas ?? aircraft.ias;
   const verticalRate = aircraft.vr ?? aircraft.baro_rate ?? aircraft.geom_rate ?? null;
@@ -62,11 +62,7 @@ export function StickyTelemetryBar({ aircraft, calculateDistance, isScrolled = f
   const isDescending = verticalRate !== null && verticalRate < 0;
   const isExtremeVS = verticalRate !== null && Math.abs(verticalRate) > 3000;
 
-  const vsClass = [
-    isClimbing && 'climbing',
-    isDescending && 'descending',
-    isExtremeVS && 'extreme',
-  ]
+  const vsClass = [isClimbing && 'climbing', isDescending && 'descending', isExtremeVS && 'extreme']
     .filter(Boolean)
     .join(' ');
 

@@ -133,7 +133,9 @@ describe('RecordsTab', () => {
       const onSelectAircraft = vi.fn();
       const recordWithoutHex = [{ type: 'test', title: 'Test Record', value: '100' }];
 
-      render(<RecordsTab personal_records={recordWithoutHex} onSelectAircraft={onSelectAircraft} />);
+      render(
+        <RecordsTab personal_records={recordWithoutHex} onSelectAircraft={onSelectAircraft} />
+      );
       fireEvent.click(screen.getByText('Test Record'));
       expect(onSelectAircraft).not.toHaveBeenCalled();
     });
@@ -177,9 +179,7 @@ describe('RecordsTab', () => {
 
   describe('icon mapping', () => {
     it('should use correct icon for furthest_distance', () => {
-      const { container } = render(
-        <RecordsTab personal_records={[mockRecords[0]]} />
-      );
+      const { container } = render(<RecordsTab personal_records={[mockRecords[0]]} />);
       // Target icon is rendered as SVG
       expect(container.querySelector('svg')).toBeInTheDocument();
     });

@@ -61,9 +61,7 @@ describe('useSafetyEventData', () => {
     it('should set error when no event ID provided', async () => {
       vi.useRealTimers();
 
-      const { result } = renderHook(() =>
-        useSafetyEventData({ ...defaultProps, eventId: null })
-      );
+      const { result } = renderHook(() => useSafetyEventData({ ...defaultProps, eventId: null }));
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
@@ -246,9 +244,7 @@ describe('useSafetyEventData', () => {
         ],
       };
 
-      mockWsRequest
-        .mockResolvedValueOnce(mockEvent)
-        .mockResolvedValueOnce(mockSightings);
+      mockWsRequest.mockResolvedValueOnce(mockEvent).mockResolvedValueOnce(mockSightings);
 
       const { result } = renderHook(() =>
         useSafetyEventData({
@@ -300,9 +296,7 @@ describe('useSafetyEventData', () => {
         icao: 'ABC123',
       };
 
-      mockWsRequest
-        .mockResolvedValueOnce(mockEvent)
-        .mockResolvedValueOnce({ sightings: [] }); // Empty sightings
+      mockWsRequest.mockResolvedValueOnce(mockEvent).mockResolvedValueOnce({ sightings: [] }); // Empty sightings
 
       const { result } = renderHook(() =>
         useSafetyEventData({
@@ -329,9 +323,7 @@ describe('useSafetyEventData', () => {
         acknowledged: false,
       };
 
-      mockWsRequest
-        .mockResolvedValueOnce(mockEvent)
-        .mockResolvedValueOnce({ success: true });
+      mockWsRequest.mockResolvedValueOnce(mockEvent).mockResolvedValueOnce({ success: true });
 
       const { result } = renderHook(() =>
         useSafetyEventData({
@@ -474,7 +466,10 @@ describe('useSafetyEventData', () => {
       });
 
       expect(result.current.acknowledged).toBe(false);
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to acknowledge event:', 'Failed to acknowledge');
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Failed to acknowledge event:',
+        'Failed to acknowledge'
+      );
       consoleSpy.mockRestore();
     });
   });
@@ -608,17 +603,14 @@ describe('useSafetyEventData', () => {
             })
         );
 
-      const { result, rerender } = renderHook(
-        (props) => useSafetyEventData(props),
-        {
-          initialProps: {
-            ...defaultProps,
-            eventId: 'event-1',
-            wsRequest: mockWsRequest,
-            wsConnected: true,
-          },
-        }
-      );
+      const { result, rerender } = renderHook((props) => useSafetyEventData(props), {
+        initialProps: {
+          ...defaultProps,
+          eventId: 'event-1',
+          wsRequest: mockWsRequest,
+          wsConnected: true,
+        },
+      });
 
       // Change eventId before first request completes
       rerender({

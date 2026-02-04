@@ -133,9 +133,7 @@ describe('useNotams', () => {
     });
 
     it('should include permanent NOTAMs regardless of date', async () => {
-      const mockNotams = [
-        { notam_id: 'notam-1', is_permanent: true },
-      ];
+      const mockNotams = [{ notam_id: 'notam-1', is_permanent: true }];
 
       mockWsRequest.mockResolvedValue({ notams: mockNotams });
 
@@ -227,9 +225,7 @@ describe('useNotams', () => {
     it('should include type filter when provided', async () => {
       mockWsRequest.mockResolvedValue({ notams: [] });
 
-      renderHook(() =>
-        useNotams(mockWsRequest, true, { typeFilter: 'TFR' })
-      );
+      renderHook(() => useNotams(mockWsRequest, true, { typeFilter: 'TFR' }));
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1000);
@@ -386,9 +382,7 @@ describe('useNotams', () => {
 
       mockWsRequest.mockResolvedValue({ notams: mockNotams });
 
-      const { result } = renderHook(() =>
-        useNotams(mockWsRequest, true, { typeFilter: 'TFR' })
-      );
+      const { result } = renderHook(() => useNotams(mockWsRequest, true, { typeFilter: 'TFR' }));
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1500);
@@ -403,9 +397,7 @@ describe('useNotams', () => {
     it('should auto-refresh at specified interval', async () => {
       mockWsRequest.mockResolvedValue({ notams: [] });
 
-      renderHook(() =>
-        useNotams(mockWsRequest, true, { refreshInterval: 60000 })
-      );
+      renderHook(() => useNotams(mockWsRequest, true, { refreshInterval: 60000 }));
 
       // Initial fetch with delay
       await act(async () => {
@@ -449,9 +441,7 @@ describe('useNotams', () => {
     it('should not refresh when interval is 0 or falsy', async () => {
       mockWsRequest.mockResolvedValue({ notams: [] });
 
-      renderHook(() =>
-        useNotams(mockWsRequest, true, { refreshInterval: 0 })
-      );
+      renderHook(() => useNotams(mockWsRequest, true, { refreshInterval: 0 }));
 
       // Initial fetch
       await act(async () => {

@@ -27,8 +27,7 @@ function calculateBearing(lat1, lon1, lat2, lon2) {
 
   const y = Math.sin(dLon) * Math.cos(lat2Rad);
   const x =
-    Math.cos(lat1Rad) * Math.sin(lat2Rad) -
-    Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+    Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
 
   const bearing = (Math.atan2(y, x) * 180) / Math.PI;
   return (bearing + 360) % 360;
@@ -51,12 +50,7 @@ function isHeadingTowards(aircraft, airport, threshold = 45) {
   if (!aircraft.lat || !aircraft.lon || !airport.lat || !airport.lon) return false;
   if (!aircraft.track && aircraft.track !== 0) return false;
 
-  const bearingToAirport = calculateBearing(
-    aircraft.lat,
-    aircraft.lon,
-    airport.lat,
-    airport.lon
-  );
+  const bearingToAirport = calculateBearing(aircraft.lat, aircraft.lon, airport.lat, airport.lon);
 
   const diff = Math.abs(normalizeAngleDiff(aircraft.track - bearingToAirport));
   return diff <= threshold;
@@ -153,8 +147,7 @@ export function useAirportTraffic(aircraft = [], airports = [], options = {}) {
         // 1. Heading towards airport AND descending, OR
         // 2. Heading towards airport AND below 10000ft AND within 30nm
         const isInbound =
-          (headingTowards && descending) ||
-          (headingTowards && altitude < 10000 && distance < 30);
+          (headingTowards && descending) || (headingTowards && altitude < 10000 && distance < 30);
 
         if (isInbound) {
           const eta = calculateETA(distance, speed);
@@ -288,14 +281,8 @@ export function useAirportTraffic(aircraft = [], airports = [], options = {}) {
 
   // Get combined counts
   const counts = useMemo(() => {
-    const inboundCount = Object.values(inboundAircraft).reduce(
-      (sum, arr) => sum + arr.length,
-      0
-    );
-    const outboundCount = Object.values(outboundAircraft).reduce(
-      (sum, arr) => sum + arr.length,
-      0
-    );
+    const inboundCount = Object.values(inboundAircraft).reduce((sum, arr) => sum + arr.length, 0);
+    const outboundCount = Object.values(outboundAircraft).reduce((sum, arr) => sum + arr.length, 0);
 
     return {
       inbound: inboundCount,

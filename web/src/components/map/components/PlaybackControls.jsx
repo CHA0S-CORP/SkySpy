@@ -154,11 +154,7 @@ export const PlaybackControls = memo(function PlaybackControls({
           <span className="playback-stat">{historyStats?.totalSightings || 0} positions</span>
         </div>
 
-        <button
-          className="playback-exit-btn"
-          onClick={onExitPlayback}
-          title="Exit playback mode"
-        >
+        <button className="playback-exit-btn" onClick={onExitPlayback} title="Exit playback mode">
           <X size={16} />
           <span>Exit</span>
         </button>
@@ -192,19 +188,12 @@ export const PlaybackControls = memo(function PlaybackControls({
 
         <div className="playback-timeline-track">
           {/* Progress fill */}
-          <div
-            className="playback-timeline-progress"
-            style={{ width: `${playbackPercent}%` }}
-          />
+          <div className="playback-timeline-progress" style={{ width: `${playbackPercent}%` }} />
 
           {/* Timeline ticks */}
           <div className="playback-timeline-ticks">
             {[0, 25, 50, 75, 100].map((tick) => (
-              <div
-                key={tick}
-                className="playback-tick"
-                style={{ left: `${tick}%` }}
-              />
+              <div key={tick} className="playback-tick" style={{ left: `${tick}%` }} />
             ))}
           </div>
 

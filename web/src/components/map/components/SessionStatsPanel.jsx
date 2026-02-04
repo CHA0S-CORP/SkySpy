@@ -112,9 +112,7 @@ export function SessionStatsPanel({
               <Clock size={12} />
               <span>Session Duration</span>
             </div>
-            <div className="session-stats-value large">
-              {sessionDurationFormatted || '0s'}
-            </div>
+            <div className="session-stats-value large">{sessionDurationFormatted || '0s'}</div>
           </div>
 
           {/* Aircraft Counts */}
@@ -181,9 +179,7 @@ export function SessionStatsPanel({
               <Activity size={12} />
               <span>Position Updates</span>
             </div>
-            <div className="session-stats-value">
-              {totalPositionUpdates?.toLocaleString() || 0}
-            </div>
+            <div className="session-stats-value">{totalPositionUpdates?.toLocaleString() || 0}</div>
           </div>
 
           {/* Category Breakdown */}

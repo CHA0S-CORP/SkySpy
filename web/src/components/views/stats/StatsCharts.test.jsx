@@ -119,13 +119,7 @@ describe('HorizontalBarChart', () => {
 });
 
 describe('LiveSparkline', () => {
-  const mockData = [
-    { count: 10 },
-    { count: 15 },
-    { count: 12 },
-    { count: 18 },
-    { count: 20 },
-  ];
+  const mockData = [{ count: 10 }, { count: 15 }, { count: 12 }, { count: 18 }, { count: 20 }];
 
   describe('rendering', () => {
     it('should render empty state when data is empty', () => {
@@ -167,9 +161,7 @@ describe('LiveSparkline', () => {
     });
 
     it('should display last value from data when currentValue is not provided', () => {
-      render(
-        <LiveSparkline data={mockData} valueKey="count" color="#00c8ff" label="Test" />
-      );
+      render(<LiveSparkline data={mockData} valueKey="count" color="#00c8ff" label="Test" />);
       // Last value is 20
       expect(screen.getByText('20')).toBeInTheDocument();
     });
@@ -204,9 +196,7 @@ describe('LiveSparkline', () => {
 
     it('should display value for single data point', () => {
       const singleData = [{ count: 50 }];
-      render(
-        <LiveSparkline data={singleData} valueKey="count" color="#00c8ff" label="Test" />
-      );
+      render(<LiveSparkline data={singleData} valueKey="count" color="#00c8ff" label="Test" />);
       expect(screen.getByText('50')).toBeInTheDocument();
     });
   });
@@ -253,9 +243,7 @@ describe('LiveSparkline', () => {
   describe('custom valueKey', () => {
     it('should extract values using custom valueKey', () => {
       const customData = [{ messages: 100 }, { messages: 200 }];
-      render(
-        <LiveSparkline data={customData} valueKey="messages" color="#00c8ff" label="Test" />
-      );
+      render(<LiveSparkline data={customData} valueKey="messages" color="#00c8ff" label="Test" />);
       expect(screen.getByText('200')).toBeInTheDocument();
     });
 

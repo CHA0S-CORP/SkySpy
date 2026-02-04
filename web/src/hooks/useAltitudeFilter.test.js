@@ -94,11 +94,31 @@ describe('useAltitudeFilter', () => {
 
     it('should have correct altitude ranges', () => {
       expect(ALTITUDE_PRESETS.all).toEqual({ label: 'All', min: 0, max: 60000 });
-      expect(ALTITUDE_PRESETS.low).toEqual({ label: 'Low (Surface - 10,000ft)', min: 0, max: 10000 });
-      expect(ALTITUDE_PRESETS.transition).toEqual({ label: 'Transition (10,000 - 18,000ft)', min: 10000, max: 18000 });
-      expect(ALTITUDE_PRESETS.high).toEqual({ label: 'High (18,000 - 29,000ft)', min: 18000, max: 29000 });
-      expect(ALTITUDE_PRESETS.upper).toEqual({ label: 'Upper (29,000 - 45,000ft)', min: 29000, max: 45000 });
-      expect(ALTITUDE_PRESETS.superHigh).toEqual({ label: 'Super High (45,000ft+)', min: 45000, max: 60000 });
+      expect(ALTITUDE_PRESETS.low).toEqual({
+        label: 'Low (Surface - 10,000ft)',
+        min: 0,
+        max: 10000,
+      });
+      expect(ALTITUDE_PRESETS.transition).toEqual({
+        label: 'Transition (10,000 - 18,000ft)',
+        min: 10000,
+        max: 18000,
+      });
+      expect(ALTITUDE_PRESETS.high).toEqual({
+        label: 'High (18,000 - 29,000ft)',
+        min: 18000,
+        max: 29000,
+      });
+      expect(ALTITUDE_PRESETS.upper).toEqual({
+        label: 'Upper (29,000 - 45,000ft)',
+        min: 29000,
+        max: 45000,
+      });
+      expect(ALTITUDE_PRESETS.superHigh).toEqual({
+        label: 'Super High (45,000ft+)',
+        min: 45000,
+        max: 60000,
+      });
     });
   });
 

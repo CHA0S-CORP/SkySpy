@@ -65,9 +65,7 @@ describe('AlertRuleCard', () => {
 
     it('should render rule description', () => {
       render(<AlertRuleCard rule={mockRule} {...mockHandlers} />);
-      expect(
-        screen.getByText('Alert when military aircraft are detected')
-      ).toBeInTheDocument();
+      expect(screen.getByText('Alert when military aircraft are detected')).toBeInTheDocument();
     });
 
     it('should render priority badge', () => {
@@ -323,20 +321,14 @@ describe('AlertRuleCard', () => {
         'aria-label',
         expect.stringContaining('Military Aircraft Alert')
       );
-      expect(article).toHaveAttribute(
-        'aria-label',
-        expect.stringContaining('Warning priority')
-      );
+      expect(article).toHaveAttribute('aria-label', expect.stringContaining('Warning priority'));
     });
 
     it('should include disabled in aria-label for disabled rules', () => {
       const disabledRule = { ...mockRule, enabled: false };
       render(<AlertRuleCard rule={disabledRule} {...mockHandlers} />);
       const article = screen.getByRole('listitem');
-      expect(article).toHaveAttribute(
-        'aria-label',
-        expect.stringContaining('disabled')
-      );
+      expect(article).toHaveAttribute('aria-label', expect.stringContaining('disabled'));
     });
 
     it('should have proper button labels', () => {
@@ -346,12 +338,8 @@ describe('AlertRuleCard', () => {
         screen.getByRole('button', { name: /test.*against current aircraft/i })
       ).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /edit/i })).toBeInTheDocument();
-      expect(
-        screen.getByRole('button', { name: /duplicate/i })
-      ).toBeInTheDocument();
-      expect(
-        screen.getByRole('button', { name: /delete/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /duplicate/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument();
     });
   });
 });

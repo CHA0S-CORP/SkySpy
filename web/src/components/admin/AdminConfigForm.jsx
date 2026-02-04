@@ -13,11 +13,14 @@ function ConfigItem({ config, onUpdate, disabled = false }) {
   const [error, setError] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
 
-  const handleValueChange = useCallback((newValue) => {
-    setLocalValue(newValue);
-    setIsDirty(newValue !== config.value);
-    setError(null);
-  }, [config.value]);
+  const handleValueChange = useCallback(
+    (newValue) => {
+      setLocalValue(newValue);
+      setIsDirty(newValue !== config.value);
+      setError(null);
+    },
+    [config.value]
+  );
 
   const handleSave = useCallback(async () => {
     if (!isDirty || saving) return;
@@ -44,12 +47,20 @@ function ConfigItem({ config, onUpdate, disabled = false }) {
           <div className="flex items-center gap-3">
             <Switch
               id={`config-${config.key}`}
-              checked={localValue === true || localValue === 'true' || localValue === 'True' || localValue === '1'}
+              checked={
+                localValue === true ||
+                localValue === 'true' ||
+                localValue === 'True' ||
+                localValue === '1'
+              }
               onCheckedChange={(checked) => handleValueChange(checked)}
               disabled={disabled || config.is_readonly}
             />
             <span className="text-sm text-text-secondary">
-              {localValue === true || localValue === 'true' || localValue === 'True' || localValue === '1'
+              {localValue === true ||
+              localValue === 'true' ||
+              localValue === 'True' ||
+              localValue === '1'
                 ? 'Enabled'
                 : 'Disabled'}
             </span>
@@ -63,7 +74,11 @@ function ConfigItem({ config, onUpdate, disabled = false }) {
             id={`config-${config.key}`}
             type="number"
             value={localValue ?? ''}
-            onChange={(e) => handleValueChange(value_type === 'integer' ? parseInt(e.target.value, 10) : parseFloat(e.target.value))}
+            onChange={(e) =>
+              handleValueChange(
+                value_type === 'integer' ? parseInt(e.target.value, 10) : parseFloat(e.target.value)
+              )
+            }
             disabled={disabled || config.is_readonly}
             min={validation_rules.min}
             max={validation_rules.max}
@@ -174,9 +189,7 @@ function ConfigItem({ config, onUpdate, disabled = false }) {
           )}
         </div>
 
-        <div className="mt-3">
-          {renderControl()}
-        </div>
+        <div className="mt-3">{renderControl()}</div>
 
         {/* Save button for boolean switches - placed below the switch */}
         {config.value_type === 'boolean' && isDirty && (
@@ -209,9 +222,11 @@ function ConfigItem({ config, onUpdate, disabled = false }) {
 
         {/* Show validation range info */}
         {config.validation_rules &&
-          (config.validation_rules.min !== undefined || config.validation_rules.max !== undefined) && (
+          (config.validation_rules.min !== undefined ||
+            config.validation_rules.max !== undefined) && (
             <p className="mt-1.5 text-xs text-text-secondary">
-              Range: {config.validation_rules.min ?? '-\u221E'} to {config.validation_rules.max ?? '\u221E'}
+              Range: {config.validation_rules.min ?? '-\u221E'} to{' '}
+              {config.validation_rules.max ?? '\u221E'}
             </p>
           )}
       </FormField>
@@ -222,7 +237,13 @@ function ConfigItem({ config, onUpdate, disabled = false }) {
 /**
  * CategorySection - Collapsible category group
  */
-function CategorySection({ category, configs, onUpdate, disabled = false, defaultExpanded = false }) {
+function CategorySection({
+  category,
+  configs,
+  onUpdate,
+  disabled = false,
+  defaultExpanded = false,
+}) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
   const toggleExpanded = useCallback(() => {
@@ -244,21 +265,22 @@ function CategorySection({ category, configs, onUpdate, disabled = false, defaul
         aria-expanded={expanded}
       >
         <span className="text-text-secondary">
-          {expanded ? <ChevronDown size={18} aria-hidden="true" /> : <ChevronRight size={18} aria-hidden="true" />}
+          {expanded ? (
+            <ChevronDown size={18} aria-hidden="true" />
+          ) : (
+            <ChevronRight size={18} aria-hidden="true" />
+          )}
         </span>
-        <span className="flex-1 font-medium text-text-primary">{category.display_name || category.name}</span>
+        <span className="flex-1 font-medium text-text-primary">
+          {category.display_name || category.name}
+        </span>
         <span className="text-sm text-text-secondary">{configs.length} settings</span>
       </button>
 
       {expanded && (
         <div className="p-4 space-y-4 bg-bg-dark">
           {configs.map((config) => (
-            <ConfigItem
-              key={config.key}
-              config={config}
-              onUpdate={onUpdate}
-              disabled={disabled}
-            />
+            <ConfigItem key={config.key} config={config} onUpdate={onUpdate} disabled={disabled} />
           ))}
         </div>
       )}

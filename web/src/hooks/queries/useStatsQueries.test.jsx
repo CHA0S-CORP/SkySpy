@@ -1,12 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import {
-  useStats,
-  useSessionStats,
-  useRecordStats,
-  statsKeys,
-} from './useStatsQueries';
+import { useStats, useSessionStats, useRecordStats, statsKeys } from './useStatsQueries';
 import api from '../../lib/api';
 
 // Mock the api module
@@ -26,9 +21,11 @@ function createWrapper() {
       },
     },
   });
-  return ({ children }) => (
+  const Wrapper = ({ children }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
+  Wrapper.displayName = 'QueryWrapper';
+  return Wrapper;
 }
 
 describe('useStatsQueries', () => {
@@ -182,10 +179,9 @@ describe('useStatsQueries', () => {
     it('should accept custom options', async () => {
       api.get.mockResolvedValue({});
 
-      const { result } = renderHook(
-        () => useSessionStats({ enabled: false }),
-        { wrapper: createWrapper() }
-      );
+      const { result } = renderHook(() => useSessionStats({ enabled: false }), {
+        wrapper: createWrapper(),
+      });
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.isFetched).toBe(false);

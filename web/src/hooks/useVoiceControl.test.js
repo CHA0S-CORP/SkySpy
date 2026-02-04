@@ -180,9 +180,7 @@ describe('useVoiceControl', () => {
   describe('command recognition', () => {
     it('should recognize mute command', () => {
       const onCommand = vi.fn();
-      const { result } = renderHook(() =>
-        useVoiceControl({ enabled: true, onCommand })
-      );
+      const { result } = renderHook(() => useVoiceControl({ enabled: true, onCommand }));
 
       act(() => {
         mockRecognitionInstance.onresult({
@@ -381,9 +379,7 @@ describe('useVoiceControl', () => {
 
     it('should handle unrecognized speech', () => {
       const onCommand = vi.fn();
-      const { result } = renderHook(() =>
-        useVoiceControl({ enabled: true, onCommand })
-      );
+      const { result } = renderHook(() => useVoiceControl({ enabled: true, onCommand }));
 
       act(() => {
         mockRecognitionInstance.onresult({
@@ -427,9 +423,7 @@ describe('useVoiceControl', () => {
 
     it('should ignore non-final results', () => {
       const onCommand = vi.fn();
-      const { result } = renderHook(() =>
-        useVoiceControl({ enabled: true, onCommand })
-      );
+      const { result } = renderHook(() => useVoiceControl({ enabled: true, onCommand }));
 
       act(() => {
         mockRecognitionInstance.onresult({
@@ -477,9 +471,7 @@ describe('useVoiceControl', () => {
     });
 
     it('should clear restart timeout on stopListening', () => {
-      const { result } = renderHook(() =>
-        useVoiceControl({ enabled: true, continuous: true })
-      );
+      const { result } = renderHook(() => useVoiceControl({ enabled: true, continuous: true }));
 
       act(() => {
         mockRecognitionInstance.onend();
@@ -506,9 +498,7 @@ describe('useVoiceControl', () => {
     });
 
     it('should clear timeouts on unmount', () => {
-      const { unmount } = renderHook(() =>
-        useVoiceControl({ enabled: true, continuous: true })
-      );
+      const { unmount } = renderHook(() => useVoiceControl({ enabled: true, continuous: true }));
 
       act(() => {
         mockRecognitionInstance.onend();

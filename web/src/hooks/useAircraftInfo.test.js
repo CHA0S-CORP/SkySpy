@@ -317,10 +317,7 @@ describe('useAircraftInfo', () => {
         })
       );
 
-      const aircraftList = [
-        { hex: 'ABC123' },
-        { hex: 'DEF456' },
-      ];
+      const aircraftList = [{ hex: 'ABC123' }, { hex: 'DEF456' }];
 
       result.current.prefetchForAircraft(aircraftList);
 

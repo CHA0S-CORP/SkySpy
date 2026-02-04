@@ -47,10 +47,7 @@ const PopoverContent = forwardRef(function PopoverContent(
 });
 PopoverContent.displayName = 'PopoverContent';
 
-const PopoverClose = forwardRef(function PopoverClose(
-  { className, children, ...props },
-  ref
-) {
+const PopoverClose = forwardRef(function PopoverClose({ className, children, ...props }, ref) {
   return (
     <PopoverPrimitive.Close
       ref={ref}
@@ -72,11 +69,4 @@ const PopoverClose = forwardRef(function PopoverClose(
 });
 PopoverClose.displayName = 'PopoverClose';
 
-export {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-  PopoverAnchor,
-  PopoverPortal,
-  PopoverClose,
-};
+export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor, PopoverPortal, PopoverClose };

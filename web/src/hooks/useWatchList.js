@@ -23,7 +23,7 @@ function loadWatchList() {
       const parsed = JSON.parse(saved);
       // Ensure it's an array of valid objects
       if (Array.isArray(parsed)) {
-        return parsed.filter(item => item && typeof item.hex === 'string');
+        return parsed.filter((item) => item && typeof item.hex === 'string');
       }
     }
   } catch (e) {
@@ -153,66 +153,78 @@ export function useWatchList({ enableAudio = true } = {}) {
   }, [panelVisible]);
 
   // Check if an aircraft is in the watch list
-  const isWatched = useCallback((hex) => {
-    if (!hex) return false;
-    return watchList.some(item => item.hex?.toUpperCase() === hex?.toUpperCase());
-  }, [watchList]);
+  const isWatched = useCallback(
+    (hex) => {
+      if (!hex) return false;
+      return watchList.some((item) => item.hex?.toUpperCase() === hex?.toUpperCase());
+    },
+    [watchList]
+  );
 
   // Add an aircraft to the watch list
-  const addToWatchList = useCallback((aircraft) => {
-    if (!aircraft?.hex) return false;
+  const addToWatchList = useCallback(
+    (aircraft) => {
+      if (!aircraft?.hex) return false;
 
-    const hex = aircraft.hex.toUpperCase();
+      const hex = aircraft.hex.toUpperCase();
 
-    // Don't add if already in list
-    if (watchList.some(item => item.hex === hex)) {
-      return false;
-    }
+      // Don't add if already in list
+      if (watchList.some((item) => item.hex === hex)) {
+        return false;
+      }
 
-    const entry = {
-      hex,
-      callsign: aircraft.flight?.trim() || null,
-      type: aircraft.type || null,
-      addedAt: Date.now(),
-    };
+      const entry = {
+        hex,
+        callsign: aircraft.flight?.trim() || null,
+        type: aircraft.type || null,
+        addedAt: Date.now(),
+      };
 
-    setWatchList(prev => [...prev, entry]);
-    playAddSound();
+      setWatchList((prev) => [...prev, entry]);
+      playAddSound();
 
-    // Auto-show panel when first aircraft is added
-    if (watchList.length === 0) {
-      setPanelVisible(true);
-    }
+      // Auto-show panel when first aircraft is added
+      if (watchList.length === 0) {
+        setPanelVisible(true);
+      }
 
-    return true;
-  }, [watchList, playAddSound]);
+      return true;
+    },
+    [watchList, playAddSound]
+  );
 
   // Remove an aircraft from the watch list
-  const removeFromWatchList = useCallback((hex) => {
-    if (!hex) return false;
+  const removeFromWatchList = useCallback(
+    (hex) => {
+      if (!hex) return false;
 
-    const upperHex = hex.toUpperCase();
-    const exists = watchList.some(item => item.hex === upperHex);
+      const upperHex = hex.toUpperCase();
+      const exists = watchList.some((item) => item.hex === upperHex);
 
-    if (exists) {
-      setWatchList(prev => prev.filter(item => item.hex !== upperHex));
-      playRemoveSound();
-      return true;
-    }
+      if (exists) {
+        setWatchList((prev) => prev.filter((item) => item.hex !== upperHex));
+        playRemoveSound();
+        return true;
+      }
 
-    return false;
-  }, [watchList, playRemoveSound]);
+      return false;
+    },
+    [watchList, playRemoveSound]
+  );
 
   // Toggle an aircraft in the watch list
-  const toggleWatchList = useCallback((aircraft) => {
-    if (!aircraft?.hex) return;
+  const toggleWatchList = useCallback(
+    (aircraft) => {
+      if (!aircraft?.hex) return;
 
-    if (isWatched(aircraft.hex)) {
-      removeFromWatchList(aircraft.hex);
-    } else {
-      addToWatchList(aircraft);
-    }
-  }, [isWatched, addToWatchList, removeFromWatchList]);
+      if (isWatched(aircraft.hex)) {
+        removeFromWatchList(aircraft.hex);
+      } else {
+        addToWatchList(aircraft);
+      }
+    },
+    [isWatched, addToWatchList, removeFromWatchList]
+  );
 
   // Clear the entire watch list
   const clearWatchList = useCallback(() => {
@@ -221,7 +233,7 @@ export function useWatchList({ enableAudio = true } = {}) {
 
   // Toggle panel visibility
   const togglePanel = useCallback(() => {
-    setPanelVisible(prev => !prev);
+    setPanelVisible((prev) => !prev);
   }, []);
 
   // Show panel
@@ -235,24 +247,25 @@ export function useWatchList({ enableAudio = true } = {}) {
   }, []);
 
   // Get watch list with live aircraft data merged in
-  const getWatchListWithLiveData = useCallback((aircraftList) => {
-    return watchList.map(entry => {
-      const liveAircraft = aircraftList?.find(
-        ac => ac.hex?.toUpperCase() === entry.hex
-      );
+  const getWatchListWithLiveData = useCallback(
+    (aircraftList) => {
+      return watchList.map((entry) => {
+        const liveAircraft = aircraftList?.find((ac) => ac.hex?.toUpperCase() === entry.hex);
 
-      return {
-        ...entry,
-        // Update callsign if we have live data and it's different
-        callsign: liveAircraft?.flight?.trim() || entry.callsign,
-        // Include live data if available
-        live: liveAircraft || null,
-        isLive: !!liveAircraft,
-        // Calculate time since added
-        addedAgo: Date.now() - entry.addedAt,
-      };
-    });
-  }, [watchList]);
+        return {
+          ...entry,
+          // Update callsign if we have live data and it's different
+          callsign: liveAircraft?.flight?.trim() || entry.callsign,
+          // Include live data if available
+          live: liveAircraft || null,
+          isLive: !!liveAircraft,
+          // Calculate time since added
+          addedAgo: Date.now() - entry.addedAt,
+        };
+      });
+    },
+    [watchList]
+  );
 
   return {
     // State

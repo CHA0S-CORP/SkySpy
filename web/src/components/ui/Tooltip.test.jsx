@@ -357,9 +357,7 @@ describe('Tooltip', () => {
       await waitFor(() => {
         const contents = screen.getAllByText('Z-Index Content');
         // Find the styled content element
-        const styledContent = contents.find(
-          (el) => el.style && el.style.zIndex
-        );
+        const styledContent = contents.find((el) => el.style && el.style.zIndex);
         expect(styledContent).toBeDefined();
       });
     });

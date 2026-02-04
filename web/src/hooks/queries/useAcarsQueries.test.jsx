@@ -104,10 +104,9 @@ describe('useAcarsQueries', () => {
     it('should accept custom options', async () => {
       api.get.mockResolvedValue({ count: 0, results: [] });
 
-      const { result } = renderHook(
-        () => useAcarsMessages({ enabled: false }),
-        { wrapper: createWrapper() }
-      );
+      const { result } = renderHook(() => useAcarsMessages({ enabled: false }), {
+        wrapper: createWrapper(),
+      });
 
       // Should not fetch when disabled
       expect(result.current.isLoading).toBe(false);
@@ -176,10 +175,9 @@ describe('useAcarsQueries', () => {
     it('should accept custom options', async () => {
       api.get.mockResolvedValue({});
 
-      const { result } = renderHook(
-        () => useAcarsStats({ enabled: false }),
-        { wrapper: createWrapper() }
-      );
+      const { result } = renderHook(() => useAcarsStats({ enabled: false }), {
+        wrapper: createWrapper(),
+      });
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.isFetched).toBe(false);

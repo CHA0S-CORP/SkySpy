@@ -129,9 +129,7 @@ describe('HeatmapCalendar', () => {
   describe('interactions', () => {
     it('should call onCellClick when cell is clicked', () => {
       const onCellClick = vi.fn();
-      const { container } = render(
-        <HeatmapCalendar data={sampleData} onCellClick={onCellClick} />
-      );
+      const { container } = render(<HeatmapCalendar data={sampleData} onCellClick={onCellClick} />);
 
       const cell = container.querySelector('.heatmap-calendar__cell');
       fireEvent.click(cell);
@@ -205,9 +203,7 @@ describe('HeatmapCalendar', () => {
         { timestamp: '2024-01-15T10:00:00Z', count: 5 },
         { timestamp: '2024-01-15T10:30:00Z', count: 3 },
       ];
-      const { container } = render(
-        <HeatmapCalendar data={dataWithCounts} countField="count" />
-      );
+      const { container } = render(<HeatmapCalendar data={dataWithCounts} countField="count" />);
       expect(container.querySelector('.heatmap-calendar')).toBeInTheDocument();
     });
 
@@ -242,9 +238,7 @@ describe('HeatmapCalendar', () => {
 
   describe('cursor style', () => {
     it('should show pointer cursor when onCellClick is provided', () => {
-      const { container } = render(
-        <HeatmapCalendar data={sampleData} onCellClick={() => {}} />
-      );
+      const { container } = render(<HeatmapCalendar data={sampleData} onCellClick={() => {}} />);
       const cell = container.querySelector('.heatmap-calendar__cell');
       expect(cell.style.cursor).toBe('pointer');
     });

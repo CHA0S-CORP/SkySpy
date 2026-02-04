@@ -18,9 +18,7 @@ describe('useTrackHistory', () => {
 
   describe('initial state', () => {
     it('should initialize with empty track history', () => {
-      const { result } = renderHook(() =>
-        useTrackHistory([], feederLat, feederLon)
-      );
+      const { result } = renderHook(() => useTrackHistory([], feederLat, feederLon));
 
       expect(result.current.trackHistory).toEqual({});
     });
@@ -28,9 +26,7 @@ describe('useTrackHistory', () => {
 
   describe('distance calculation', () => {
     it('should calculate distance from feeder', () => {
-      const { result } = renderHook(() =>
-        useTrackHistory([], feederLat, feederLon)
-      );
+      const { result } = renderHook(() => useTrackHistory([], feederLat, feederLon));
 
       // Same position as feeder
       expect(result.current.getDistanceNm(feederLat, feederLon)).toBe(0);
@@ -41,9 +37,7 @@ describe('useTrackHistory', () => {
     });
 
     it('should account for longitude compression at latitude', () => {
-      const { result } = renderHook(() =>
-        useTrackHistory([], feederLat, feederLon)
-      );
+      const { result } = renderHook(() => useTrackHistory([], feederLat, feederLon));
 
       // 1 degree east at our latitude
       const dist = result.current.getDistanceNm(feederLat, feederLon + 1);
@@ -60,9 +54,7 @@ describe('useTrackHistory', () => {
         { hex: 'ABC123', lat: 37.6, lon: -122.4, alt_baro: 5000, gs: 250, track: 90 },
       ];
 
-      const { result } = renderHook(() =>
-        useTrackHistory(aircraft, feederLat, feederLon)
-      );
+      const { result } = renderHook(() => useTrackHistory(aircraft, feederLat, feederLon));
 
       expect(result.current.trackHistory['ABC123']).toBeDefined();
       expect(result.current.trackHistory['ABC123']).toHaveLength(1);
@@ -79,9 +71,7 @@ describe('useTrackHistory', () => {
     it('should use alt_geom when alt_baro not available', () => {
       const aircraft = [{ hex: 'ABC123', lat: 37.6, lon: -122.4, alt_geom: 5500 }];
 
-      const { result } = renderHook(() =>
-        useTrackHistory(aircraft, feederLat, feederLon)
-      );
+      const { result } = renderHook(() => useTrackHistory(aircraft, feederLat, feederLon));
 
       expect(result.current.trackHistory['ABC123'][0].alt).toBe(5500);
     });
@@ -89,9 +79,7 @@ describe('useTrackHistory', () => {
     it('should use fallback alt field', () => {
       const aircraft = [{ hex: 'ABC123', lat: 37.6, lon: -122.4, alt: 5200 }];
 
-      const { result } = renderHook(() =>
-        useTrackHistory(aircraft, feederLat, feederLon)
-      );
+      const { result } = renderHook(() => useTrackHistory(aircraft, feederLat, feederLon));
 
       expect(result.current.trackHistory['ABC123'][0].alt).toBe(5200);
     });
@@ -99,55 +87,41 @@ describe('useTrackHistory', () => {
     it('should use various speed fields', () => {
       // Test gs
       const aircraft1 = [{ hex: 'A1', lat: 37.6, lon: -122.4, gs: 300 }];
-      const { result: r1 } = renderHook(() =>
-        useTrackHistory(aircraft1, feederLat, feederLon)
-      );
+      const { result: r1 } = renderHook(() => useTrackHistory(aircraft1, feederLat, feederLon));
       expect(r1.current.trackHistory['A1'][0].spd).toBe(300);
 
       // Test tas
       const aircraft2 = [{ hex: 'A2', lat: 37.6, lon: -122.4, tas: 280 }];
-      const { result: r2 } = renderHook(() =>
-        useTrackHistory(aircraft2, feederLat, feederLon)
-      );
+      const { result: r2 } = renderHook(() => useTrackHistory(aircraft2, feederLat, feederLon));
       expect(r2.current.trackHistory['A2'][0].spd).toBe(280);
 
       // Test ias
       const aircraft3 = [{ hex: 'A3', lat: 37.6, lon: -122.4, ias: 260 }];
-      const { result: r3 } = renderHook(() =>
-        useTrackHistory(aircraft3, feederLat, feederLon)
-      );
+      const { result: r3 } = renderHook(() => useTrackHistory(aircraft3, feederLat, feederLon));
       expect(r3.current.trackHistory['A3'][0].spd).toBe(260);
     });
 
     it('should use various heading fields', () => {
       // Test track
       const aircraft1 = [{ hex: 'A1', lat: 37.6, lon: -122.4, track: 90 }];
-      const { result: r1 } = renderHook(() =>
-        useTrackHistory(aircraft1, feederLat, feederLon)
-      );
+      const { result: r1 } = renderHook(() => useTrackHistory(aircraft1, feederLat, feederLon));
       expect(r1.current.trackHistory['A1'][0].trk).toBe(90);
 
       // Test true_heading
       const aircraft2 = [{ hex: 'A2', lat: 37.6, lon: -122.4, true_heading: 180 }];
-      const { result: r2 } = renderHook(() =>
-        useTrackHistory(aircraft2, feederLat, feederLon)
-      );
+      const { result: r2 } = renderHook(() => useTrackHistory(aircraft2, feederLat, feederLon));
       expect(r2.current.trackHistory['A2'][0].trk).toBe(180);
 
       // Test mag_heading
       const aircraft3 = [{ hex: 'A3', lat: 37.6, lon: -122.4, mag_heading: 270 }];
-      const { result: r3 } = renderHook(() =>
-        useTrackHistory(aircraft3, feederLat, feederLon)
-      );
+      const { result: r3 } = renderHook(() => useTrackHistory(aircraft3, feederLat, feederLon));
       expect(r3.current.trackHistory['A3'][0].trk).toBe(270);
     });
 
     it('should record vertical speed', () => {
       const aircraft = [{ hex: 'ABC123', lat: 37.6, lon: -122.4, baro_rate: -500 }];
 
-      const { result } = renderHook(() =>
-        useTrackHistory(aircraft, feederLat, feederLon)
-      );
+      const { result } = renderHook(() => useTrackHistory(aircraft, feederLat, feederLon));
 
       expect(result.current.trackHistory['ABC123'][0].vs).toBe(-500);
     });
@@ -155,9 +129,7 @@ describe('useTrackHistory', () => {
     it('should use geom_rate when baro_rate not available', () => {
       const aircraft = [{ hex: 'ABC123', lat: 37.6, lon: -122.4, geom_rate: 1000 }];
 
-      const { result } = renderHook(() =>
-        useTrackHistory(aircraft, feederLat, feederLon)
-      );
+      const { result } = renderHook(() => useTrackHistory(aircraft, feederLat, feederLon));
 
       expect(result.current.trackHistory['ABC123'][0].vs).toBe(1000);
     });
@@ -167,9 +139,7 @@ describe('useTrackHistory', () => {
         { hex: 'ABC123', alt: 5000 }, // No lat/lon
       ];
 
-      const { result } = renderHook(() =>
-        useTrackHistory(aircraft, feederLat, feederLon)
-      );
+      const { result } = renderHook(() => useTrackHistory(aircraft, feederLat, feederLon));
 
       expect(result.current.trackHistory['ABC123']).toBeUndefined();
     });
@@ -179,9 +149,7 @@ describe('useTrackHistory', () => {
         { lat: 37.6, lon: -122.4, alt: 5000 }, // No hex
       ];
 
-      const { result } = renderHook(() =>
-        useTrackHistory(aircraft, feederLat, feederLon)
-      );
+      const { result } = renderHook(() => useTrackHistory(aircraft, feederLat, feederLon));
 
       expect(Object.keys(result.current.trackHistory)).toHaveLength(0);
     });
@@ -343,9 +311,7 @@ describe('useTrackHistory', () => {
         { hex: 'GHI789', lat: 37.8, lon: -122.2 },
       ];
 
-      const { result } = renderHook(() =>
-        useTrackHistory(aircraft, feederLat, feederLon)
-      );
+      const { result } = renderHook(() => useTrackHistory(aircraft, feederLat, feederLon));
 
       expect(Object.keys(result.current.trackHistory)).toHaveLength(3);
       expect(result.current.trackHistory['ABC123']).toBeDefined();
@@ -361,9 +327,7 @@ describe('useTrackHistory', () => {
         { hex: 'DEF456', lat: 37.7, lon: -122.3 },
       ];
 
-      const { result } = renderHook(() =>
-        useTrackHistory(aircraft, feederLat, feederLon)
-      );
+      const { result } = renderHook(() => useTrackHistory(aircraft, feederLat, feederLon));
 
       const history = result.current.getHistory('ABC123');
       expect(history).toHaveLength(1);
@@ -371,9 +335,7 @@ describe('useTrackHistory', () => {
     });
 
     it('should return empty array for unknown aircraft', () => {
-      const { result } = renderHook(() =>
-        useTrackHistory([], feederLat, feederLon)
-      );
+      const { result } = renderHook(() => useTrackHistory([], feederLat, feederLon));
 
       expect(result.current.getHistory('UNKNOWN')).toEqual([]);
     });
@@ -386,9 +348,7 @@ describe('useTrackHistory', () => {
         { hex: 'DEF456', lat: 37.7, lon: -122.3 },
       ];
 
-      const { result } = renderHook(() =>
-        useTrackHistory(aircraft, feederLat, feederLon)
-      );
+      const { result } = renderHook(() => useTrackHistory(aircraft, feederLat, feederLon));
 
       const allHistory = result.current.getAllHistory();
       expect(Object.keys(allHistory)).toHaveLength(2);
@@ -402,9 +362,7 @@ describe('useTrackHistory', () => {
         { hex: 'DEF456', lat: 37.7, lon: -122.3 },
       ];
 
-      const { result } = renderHook(() =>
-        useTrackHistory(aircraft, feederLat, feederLon)
-      );
+      const { result } = renderHook(() => useTrackHistory(aircraft, feederLat, feederLon));
 
       expect(result.current.trackHistory['ABC123']).toBeDefined();
 
@@ -424,9 +382,7 @@ describe('useTrackHistory', () => {
         { hex: 'DEF456', lat: 37.7, lon: -122.3 },
       ];
 
-      const { result } = renderHook(() =>
-        useTrackHistory(aircraft, feederLat, feederLon)
-      );
+      const { result } = renderHook(() => useTrackHistory(aircraft, feederLat, feederLon));
 
       expect(Object.keys(result.current.trackHistory)).toHaveLength(2);
 

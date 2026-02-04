@@ -54,11 +54,7 @@ const EMERGENCY_SQUAWKS = ['7500', '7600', '7700'];
 /**
  * useHistoryFilters - Hook to manage history filter state with URL sync
  */
-export function useHistoryFilters({
-  hashParams,
-  setHashParams,
-  initialFilters = {},
-} = {}) {
+export function useHistoryFilters({ hashParams, setHashParams, initialFilters = {} } = {}) {
   const [filters, setFilters] = useState(() => ({
     ...DEFAULT_FILTERS,
     ...initialFilters,
@@ -142,19 +138,31 @@ export function useHistoryFilters({
         if (newFilters.airlines?.length > 0) {
           params.airlines = newFilters.airlines.join(',');
         }
-        if (newFilters.distanceRange && (newFilters.distanceRange[0] > 0 || newFilters.distanceRange[1] < 300)) {
+        if (
+          newFilters.distanceRange &&
+          (newFilters.distanceRange[0] > 0 || newFilters.distanceRange[1] < 300)
+        ) {
           params.distMin = newFilters.distanceRange[0];
           params.distMax = newFilters.distanceRange[1];
         }
-        if (newFilters.altitudeRange && (newFilters.altitudeRange[0] > 0 || newFilters.altitudeRange[1] < 45000)) {
+        if (
+          newFilters.altitudeRange &&
+          (newFilters.altitudeRange[0] > 0 || newFilters.altitudeRange[1] < 45000)
+        ) {
           params.altMin = newFilters.altitudeRange[0];
           params.altMax = newFilters.altitudeRange[1];
         }
-        if (newFilters.durationRange && (newFilters.durationRange[0] > 0 || newFilters.durationRange[1] < 240)) {
+        if (
+          newFilters.durationRange &&
+          (newFilters.durationRange[0] > 0 || newFilters.durationRange[1] < 240)
+        ) {
           params.durMin = newFilters.durationRange[0];
           params.durMax = newFilters.durationRange[1];
         }
-        if (newFilters.signalRange && (newFilters.signalRange[0] > -30 || newFilters.signalRange[1] < 0)) {
+        if (
+          newFilters.signalRange &&
+          (newFilters.signalRange[0] > -30 || newFilters.signalRange[1] < 0)
+        ) {
           params.sigMin = newFilters.signalRange[0];
           params.sigMax = newFilters.signalRange[1];
         }
@@ -239,7 +247,10 @@ export function useHistoryFilters({
         // Signal strength range filter
         if (filters.signalRange) {
           const signal = session.max_rssi;
-          if (signal != null && (signal < filters.signalRange[0] || signal > filters.signalRange[1])) {
+          if (
+            signal != null &&
+            (signal < filters.signalRange[0] || signal > filters.signalRange[1])
+          ) {
             return false;
           }
         }
@@ -306,7 +317,8 @@ export function useHistoryFilters({
       filters.categories?.length > 0 ||
       filters.airlines?.length > 0 ||
       (filters.distanceRange && (filters.distanceRange[0] > 0 || filters.distanceRange[1] < 300)) ||
-      (filters.altitudeRange && (filters.altitudeRange[0] > 0 || filters.altitudeRange[1] < 45000)) ||
+      (filters.altitudeRange &&
+        (filters.altitudeRange[0] > 0 || filters.altitudeRange[1] < 45000)) ||
       (filters.durationRange && (filters.durationRange[0] > 0 || filters.durationRange[1] < 240)) ||
       (filters.signalRange && (filters.signalRange[0] > -30 || filters.signalRange[1] < 0)) ||
       filters.militaryOnly ||

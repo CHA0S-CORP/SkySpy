@@ -180,9 +180,7 @@ describe('Skeleton', () => {
     });
 
     it('should merge custom style with default dimensions', () => {
-      const { container } = render(
-        <Skeleton width={100} height={50} style={{ opacity: 0.5 }} />
-      );
+      const { container } = render(<Skeleton width={100} height={50} style={{ opacity: 0.5 }} />);
 
       const skeleton = container.querySelector('.skeleton');
       expect(skeleton).toHaveStyle({ width: '100px', height: '50px', opacity: '0.5' });
@@ -323,9 +321,7 @@ describe('SkeletonAircraftInfo', () => {
   it('should apply custom className', () => {
     const { container } = render(<SkeletonAircraftInfo className="custom-aircraft" />);
 
-    expect(
-      container.querySelector('.skeleton-aircraft-info.custom-aircraft')
-    ).toBeInTheDocument();
+    expect(container.querySelector('.skeleton-aircraft-info.custom-aircraft')).toBeInTheDocument();
   });
 });
 
@@ -359,9 +355,7 @@ describe('SkeletonLeaderboard', () => {
   it('should apply custom className', () => {
     const { container } = render(<SkeletonLeaderboard className="custom-leaderboard" />);
 
-    expect(
-      container.querySelector('.skeleton-leaderboard.custom-leaderboard')
-    ).toBeInTheDocument();
+    expect(container.querySelector('.skeleton-leaderboard.custom-leaderboard')).toBeInTheDocument();
   });
 });
 
@@ -432,8 +426,6 @@ describe('SkeletonSessionCard', () => {
   it('should apply custom className', () => {
     const { container } = render(<SkeletonSessionCard className="custom-session" />);
 
-    expect(
-      container.querySelector('.skeleton-session-card.custom-session')
-    ).toBeInTheDocument();
+    expect(container.querySelector('.skeleton-session-card.custom-session')).toBeInTheDocument();
   });
 });

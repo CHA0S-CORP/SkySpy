@@ -1,5 +1,13 @@
 // Valid data types for the history view
-export const VALID_DATA_TYPES = ['sessions', 'sightings', 'acars', 'safety', 'notams', 'pireps', 'archive'];
+export const VALID_DATA_TYPES = [
+  'sessions',
+  'sightings',
+  'acars',
+  'safety',
+  'notams',
+  'pireps',
+  'archive',
+];
 
 // Time range options with their hour values
 export const TIME_RANGES = ['1h', '6h', '24h', '48h', '7d'];
@@ -417,12 +425,21 @@ export const getAircraftIcon = (aircraftType, isMilitary) => {
   const t = aircraftType.toUpperCase();
 
   // Helicopters
-  if (AIRCRAFT_TYPE_CATEGORIES.helicopter?.some((h) => t.includes(h) || t.startsWith('H') || t.startsWith('EC') || t.startsWith('AS'))) {
+  if (
+    AIRCRAFT_TYPE_CATEGORIES.helicopter?.some(
+      (h) => t.includes(h) || t.startsWith('H') || t.startsWith('EC') || t.startsWith('AS')
+    )
+  ) {
     return '🚁';
   }
 
   // Light aircraft
-  if (AIRCRAFT_TYPE_CATEGORIES.light?.includes(t) || t.startsWith('C1') || t.startsWith('PA') || t.startsWith('SR')) {
+  if (
+    AIRCRAFT_TYPE_CATEGORIES.light?.includes(t) ||
+    t.startsWith('C1') ||
+    t.startsWith('PA') ||
+    t.startsWith('SR')
+  ) {
     return '🛩️';
   }
 

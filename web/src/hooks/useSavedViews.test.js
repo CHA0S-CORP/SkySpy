@@ -34,9 +34,7 @@ describe('useSavedViews', () => {
     });
 
     it('should load saved views from localStorage', () => {
-      const storedViews = [
-        { id: '1', name: 'Test View', filters: {} },
-      ];
+      const storedViews = [{ id: '1', name: 'Test View', filters: {} }];
       localStorageMock.store['skyspy_saved_views_history'] = JSON.stringify(storedViews);
 
       const { result } = renderHook(() => useSavedViews('history'));
@@ -119,7 +117,11 @@ describe('useSavedViews', () => {
       const { result } = renderHook(() => useSavedViews());
 
       act(() => {
-        result.current.saveView({ name: 'My View', filters: {}, createdAt: '2024-01-01T00:00:00Z' });
+        result.current.saveView({
+          name: 'My View',
+          filters: {},
+          createdAt: '2024-01-01T00:00:00Z',
+        });
       });
 
       act(() => {
@@ -284,10 +286,7 @@ describe('useSavedViews', () => {
         result.current.clearAllViews();
       });
 
-      expect(localStorageMock.setItem).toHaveBeenLastCalledWith(
-        'skyspy_saved_views_history',
-        '[]'
-      );
+      expect(localStorageMock.setItem).toHaveBeenLastCalledWith('skyspy_saved_views_history', '[]');
     });
   });
 

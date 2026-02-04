@@ -47,7 +47,11 @@ export { HeatMapLayer } from './HeatMapLayer';
 export { ETAOverlay, ETASection, getETALineData } from './ETAOverlay';
 
 // Phase 10.1: Weather Radar
-export { WeatherRadarOverlay, WeatherRadarLegend, useWeatherRadarOverlay } from './WeatherRadarOverlay';
+export {
+  WeatherRadarOverlay,
+  WeatherRadarLegend,
+  useWeatherRadarOverlay,
+} from './WeatherRadarOverlay';
 
 // Phase 7: Accessibility
 export { ScreenReaderAnnouncements } from './ScreenReaderAnnouncements';

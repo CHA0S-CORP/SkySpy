@@ -64,9 +64,9 @@ export function WatchListPanel({
 }) {
   // Merge watch list with live aircraft data
   const watchedAircraft = useMemo(() => {
-    return watchList.map(entry => {
+    return watchList.map((entry) => {
       const liveAircraft = aircraft.find(
-        ac => ac.hex?.toUpperCase() === entry.hex?.toUpperCase()
+        (ac) => ac.hex?.toUpperCase() === entry.hex?.toUpperCase()
       );
 
       return {
@@ -80,7 +80,7 @@ export function WatchListPanel({
   }, [watchList, aircraft]);
 
   // Count of currently live/visible watched aircraft
-  const liveCount = watchedAircraft.filter(w => w.isLive).length;
+  const liveCount = watchedAircraft.filter((w) => w.isLive).length;
 
   if (!panelVisible) return null;
 
@@ -271,12 +271,7 @@ function WatchListItem({ item, onRemove, onCenter, onSelect, isProMode }) {
 /**
  * Show Watch List Button (when panel is hidden)
  */
-export function WatchListShowButton({
-  count = 0,
-  liveCount = 0,
-  onClick,
-  isProMode = false,
-}) {
+export function WatchListShowButton({ count = 0, liveCount = 0, onClick, isProMode = false }) {
   return (
     <button
       className={`watch-list-show-btn ${isProMode ? 'pro-style' : ''}`}

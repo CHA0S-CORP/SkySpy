@@ -46,8 +46,7 @@ describe('useNotificationChannels', () => {
 
     it('should track connection state', () => {
       const { result, rerender } = renderHook(
-        ({ wsConnected }) =>
-          useNotificationChannels({ wsRequest: mockWsRequest, wsConnected }),
+        ({ wsConnected }) => useNotificationChannels({ wsRequest: mockWsRequest, wsConnected }),
         { initialProps: { wsConnected: false } }
       );
 
@@ -146,9 +145,7 @@ describe('useNotificationChannels', () => {
 
     it('should handle types as array response', async () => {
       const types = ['email', 'sms'];
-      mockWsRequest
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce(types);
+      mockWsRequest.mockResolvedValueOnce([]).mockResolvedValueOnce(types);
 
       const { result } = renderHook(() =>
         useNotificationChannels({ wsRequest: mockWsRequest, wsConnected: true })
@@ -193,9 +190,9 @@ describe('useNotificationChannels', () => {
         useNotificationChannels({ wsRequest: mockWsRequest, wsConnected: false })
       );
 
-      await expect(
-        result.current.createChannel({ name: 'Test' })
-      ).rejects.toThrow('Socket not connected');
+      await expect(result.current.createChannel({ name: 'Test' })).rejects.toThrow(
+        'Socket not connected'
+      );
     });
 
     it('should throw on error response', async () => {
@@ -212,9 +209,9 @@ describe('useNotificationChannels', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      await expect(
-        result.current.createChannel({ name: 'Test' })
-      ).rejects.toThrow('Validation failed');
+      await expect(result.current.createChannel({ name: 'Test' })).rejects.toThrow(
+        'Validation failed'
+      );
     });
   });
 
@@ -249,9 +246,9 @@ describe('useNotificationChannels', () => {
         useNotificationChannels({ wsRequest: mockWsRequest, wsConnected: false })
       );
 
-      await expect(
-        result.current.updateChannel(1, { name: 'Test' })
-      ).rejects.toThrow('Socket not connected');
+      await expect(result.current.updateChannel(1, { name: 'Test' })).rejects.toThrow(
+        'Socket not connected'
+      );
     });
   });
 

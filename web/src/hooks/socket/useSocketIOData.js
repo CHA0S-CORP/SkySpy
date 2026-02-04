@@ -567,7 +567,12 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
         if (staleHexes.length === 0) return prev;
 
         if (import.meta.env.DEV) {
-          console.log('[useSocketIOData] Removing', staleHexes.length, 'stale aircraft:', staleHexes);
+          console.log(
+            '[useSocketIOData] Removing',
+            staleHexes.length,
+            'stale aircraft:',
+            staleHexes
+          );
         }
 
         const next = { ...prev };

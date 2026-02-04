@@ -93,10 +93,7 @@ export const getFlightCategory = (metar) => {
   // Note: More restrictive condition wins (e.g., if visibility is VFR but ceiling is IFR, result is IFR)
 
   // Check for LIFR first (most restrictive)
-  if (
-    (visibility !== null && visibility < 1) ||
-    (ceiling !== null && ceiling < 500)
-  ) {
+  if ((visibility !== null && visibility < 1) || (ceiling !== null && ceiling < 500)) {
     return 'LIFR';
   }
 
@@ -228,9 +225,7 @@ export const formatMetarCeiling = (metar) => {
 
   // Find the ceiling layer
   const ceilingLayer = metar.clouds.find(
-    (c) =>
-      (c.cover === 'BKN' || c.cover === 'OVC' || c.cover === 'VV') &&
-      c.base === ceiling
+    (c) => (c.cover === 'BKN' || c.cover === 'OVC' || c.cover === 'VV') && c.base === ceiling
   );
 
   const cover = ceilingLayer?.cover || 'CLG';
@@ -304,12 +299,7 @@ export const findMetarForAirport = (airport, metars) => {
   }
 
   // Get all possible identifiers for the airport
-  const airportIds = [
-    airport.icao,
-    airport.icaoId,
-    airport.faaId,
-    airport.id,
-  ]
+  const airportIds = [airport.icao, airport.icaoId, airport.faaId, airport.id]
     .filter(Boolean)
     .map((id) => id.toUpperCase());
 

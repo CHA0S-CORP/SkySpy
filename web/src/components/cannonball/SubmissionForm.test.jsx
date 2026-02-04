@@ -17,13 +17,7 @@ describe('SubmissionForm', () => {
   });
 
   const renderForm = (props = {}) => {
-    return render(
-      <SubmissionForm
-        onSubmit={mockOnSubmit}
-        onCancel={mockOnCancel}
-        {...props}
-      />
-    );
+    return render(<SubmissionForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} {...props} />);
   };
 
   describe('initial rendering', () => {

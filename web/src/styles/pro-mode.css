@@ -5481,7 +5481,6 @@
   }
 }
 
-
 /* ============================================================================
    Phase 7: Accessibility Improvements - Extended
    ============================================================================ */
@@ -6506,7 +6505,8 @@ mark.search-highlight {
 }
 
 @keyframes searchMatchPulse {
-  0%, 100% {
+  0%,
+  100% {
     filter: drop-shadow(0 0 4px rgba(255, 235, 59, 0.6));
   }
   50% {
@@ -6515,7 +6515,8 @@ mark.search-highlight {
 }
 
 @keyframes searchRingPulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.8;
     transform: translate(-50%, -50%) scale(1);
   }
@@ -6716,7 +6717,10 @@ mark.search-highlight {
   border: 1px solid rgba(90, 122, 154, 0.3);
   color: rgba(138, 148, 158, 0.9);
   font-size: 12px;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family:
+    'Inter',
+    -apple-system,
+    sans-serif;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -6983,8 +6987,12 @@ mark.search-highlight {
 }
 
 @keyframes keyboardHelpFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .keyboard-help-modal {
@@ -6997,13 +7005,21 @@ mark.search-highlight {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(80, 140, 200, 0.1);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 0 40px rgba(80, 140, 200, 0.1);
   animation: keyboardHelpSlideIn 0.2s ease-out;
 }
 
 @keyframes keyboardHelpSlideIn {
-  from { transform: translateY(-20px) scale(0.98); opacity: 0; }
-  to { transform: translateY(0) scale(1); opacity: 1; }
+  from {
+    transform: translateY(-20px) scale(0.98);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
 }
 
 .keyboard-help-header {
@@ -7116,7 +7132,9 @@ mark.search-highlight {
   font-size: 11px;
   font-weight: 600;
   color: rgba(180, 210, 240, 1);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
   flex-shrink: 0;
 }
 

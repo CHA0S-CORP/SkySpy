@@ -150,9 +150,7 @@ describe('useSocketIOData', () => {
 
   describe('initialization', () => {
     it('should start with empty state', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       expect(result.current.aircraft).toEqual([]);
       expect(result.current.aircraftMap).toEqual({});
@@ -198,9 +196,7 @@ describe('useSocketIOData', () => {
         isReady: true,
       });
 
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       expect(result.current.connected).toBe(true);
       expect(result.current.connecting).toBe(false);
@@ -220,9 +216,7 @@ describe('useSocketIOData', () => {
         isReady: false,
       });
 
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       expect(result.current.error).toBe(error);
     });
@@ -255,9 +249,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should process aircraft:snapshot events', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       const aircraftData = {
         aircraft: [
@@ -278,9 +270,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should process aircraft:update events', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       const updateData = {
         aircraft: { hex: 'ABC123', lat: 40.5, lon: -74.5 },
@@ -297,9 +287,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should process aircraft:new events', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       const newData = {
         aircraft: { hex: 'NEW123', lat: 42.0, lon: -76.0 },
@@ -316,9 +304,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should process aircraft:remove events', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       const removeData = { hex: 'ABC123' };
 
@@ -333,9 +319,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should process aircraft:heartbeat events', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       const heartbeatData = { count: 42, timestamp: '2024-01-01T00:00:00Z' };
 
@@ -348,9 +332,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should process safety events', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       const eventData = {
         id: 1,
@@ -369,9 +351,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should process alert events', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       const alertData = {
         id: 1,
@@ -390,9 +370,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should process ACARS messages', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       const acarsData = {
         id: 1,
@@ -411,9 +389,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should process audio transmissions', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       const audioData = {
         id: 1,
@@ -432,9 +408,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should process airspace data', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       const airspaceData = {
         advisories: [{ id: 1, type: 'TFR' }],
@@ -509,9 +483,7 @@ describe('useSocketIOData', () => {
         return true;
       });
 
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       // Start request
       const requestPromise = result.current.request('test-request', { param: 'value' });
@@ -544,9 +516,7 @@ describe('useSocketIOData', () => {
         isReady: false,
       });
 
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       await expect(result.current.request('test-request', {})).rejects.toThrow(
         'Socket.IO not connected'
@@ -565,9 +535,7 @@ describe('useSocketIOData', () => {
         return true;
       });
 
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       const requestPromise = result.current.request('test-request', {});
 
@@ -587,9 +555,7 @@ describe('useSocketIOData', () => {
     it('should timeout requests', async () => {
       vi.useFakeTimers();
 
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       let requestPromise;
       await act(async () => {
@@ -613,9 +579,7 @@ describe('useSocketIOData', () => {
 
       mockEmit.mockReturnValue(false);
 
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       await expect(result.current.request('test-request', {})).rejects.toThrow(
         'Socket.IO emit failed'
@@ -637,9 +601,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should subscribe to topics', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       result.current.subscribe('new-topic');
 
@@ -649,9 +611,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should subscribe to multiple topics', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       result.current.subscribe(['topic1', 'topic2']);
 
@@ -661,9 +621,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should unsubscribe from topics', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       result.current.unsubscribe('old-topic');
 
@@ -683,9 +641,7 @@ describe('useSocketIOData', () => {
         isReady: false,
       });
 
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       mockEmit.mockClear();
       result.current.subscribe('topic');
@@ -706,9 +662,7 @@ describe('useSocketIOData', () => {
         isReady: true,
       });
 
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       result.current.send('custom-event', { data: 'test' });
 
@@ -726,9 +680,7 @@ describe('useSocketIOData', () => {
         isReady: false,
       });
 
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       mockEmit.mockClear();
       result.current.send('custom-event', { data: 'test' });
@@ -739,9 +691,7 @@ describe('useSocketIOData', () => {
 
   describe('reconnect', () => {
     it('should expose reconnect function', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       result.current.reconnect();
 
@@ -763,9 +713,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should track airframe errors', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       act(() => {
         eventHandlers['airframe:error']({
@@ -782,9 +730,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should normalize ICAO to uppercase', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       act(() => {
         eventHandlers['airframe:error']({
@@ -800,9 +746,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should clear airframe errors', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       act(() => {
         eventHandlers['airframe:error']({
@@ -823,9 +767,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should get all airframe errors', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       act(() => {
         eventHandlers['airframe:error']({
@@ -863,9 +805,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should process notam:snapshot events', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       act(() => {
         eventHandlers['notam:snapshot']({
@@ -881,9 +821,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should handle notam:new events', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       act(() => {
         eventHandlers['notam:new']({ notam_id: '1', text: 'New NOTAM' });
@@ -893,9 +831,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should handle notam:expired events', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       // First add a NOTAM
       act(() => {
@@ -931,9 +867,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should process stats:update events', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       act(() => {
         eventHandlers['stats:update']({
@@ -946,9 +880,7 @@ describe('useSocketIOData', () => {
     });
 
     it('should update antenna analytics from stats', () => {
-      const { result } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       act(() => {
         eventHandlers['stats:update']({
@@ -963,9 +895,7 @@ describe('useSocketIOData', () => {
 
   describe('cleanup', () => {
     it('should clean up on unmount', () => {
-      const { unmount } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { unmount } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       unmount();
 
@@ -975,9 +905,7 @@ describe('useSocketIOData', () => {
 
   describe('aircraft array memoization', () => {
     it('should return same array reference when aircraft map unchanged', () => {
-      const { result, rerender } = renderHook(() =>
-        useSocketIOData(true, 'http://localhost:8000')
-      );
+      const { result, rerender } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       const aircraft1 = result.current.aircraft;
       rerender();

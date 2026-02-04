@@ -27,11 +27,57 @@ const AGENCY_TYPES = [
 ];
 
 const US_STATES = [
-  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
-  'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
-  'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
-  'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
-  'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC',
+  'AL',
+  'AK',
+  'AZ',
+  'AR',
+  'CA',
+  'CO',
+  'CT',
+  'DE',
+  'FL',
+  'GA',
+  'HI',
+  'ID',
+  'IL',
+  'IN',
+  'IA',
+  'KS',
+  'KY',
+  'LA',
+  'ME',
+  'MD',
+  'MA',
+  'MI',
+  'MN',
+  'MS',
+  'MO',
+  'MT',
+  'NE',
+  'NV',
+  'NH',
+  'NJ',
+  'NM',
+  'NY',
+  'NC',
+  'ND',
+  'OH',
+  'OK',
+  'OR',
+  'PA',
+  'RI',
+  'SC',
+  'SD',
+  'TN',
+  'TX',
+  'UT',
+  'VT',
+  'VA',
+  'WA',
+  'WV',
+  'WI',
+  'WY',
+  'DC',
 ];
 
 /**
@@ -76,15 +122,18 @@ export function SubmissionForm({
   const [validationErrors, setValidationErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
 
-  const handleChange = useCallback((e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  const handleChange = useCallback(
+    (e) => {
+      const { name, value } = e.target;
+      setFormData((prev) => ({ ...prev, [name]: value }));
 
-    // Clear validation error for this field
-    if (validationErrors[name]) {
-      setValidationErrors((prev) => ({ ...prev, [name]: null }));
-    }
-  }, [validationErrors]);
+      // Clear validation error for this field
+      if (validationErrors[name]) {
+        setValidationErrors((prev) => ({ ...prev, [name]: null }));
+      }
+    },
+    [validationErrors]
+  );
 
   const validate = useCallback(() => {
     const errors = {};
@@ -150,12 +199,10 @@ export function SubmissionForm({
   if (submitted) {
     return (
       <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-6 text-center">
-        <div className="text-green-400 text-lg font-medium mb-2">
-          Submission Received
-        </div>
+        <div className="text-green-400 text-lg font-medium mb-2">Submission Received</div>
         <p className="text-gray-400 mb-4">
-          Thank you for your submission. Our team will review it and you'll be
-          notified of the outcome.
+          Thank you for your submission. Our team will review it and you'll be notified of the
+          outcome.
         </p>
         <button
           type="button"
@@ -448,8 +495,8 @@ export function SubmissionForm({
       </div>
 
       <p className="text-gray-500 text-xs text-center">
-        Submissions are reviewed by our team. Providing accurate, verifiable evidence
-        helps build your reputation and speeds up the review process
+        Submissions are reviewed by our team. Providing accurate, verifiable evidence helps build
+        your reputation and speeds up the review process
       </p>
     </form>
   );

@@ -2,7 +2,9 @@
 import React from 'react';
 
 export const MapContainer = ({ children, ...props }) => (
-  <div data-testid="map-container" {...props}>{children}</div>
+  <div data-testid="map-container" {...props}>
+    {children}
+  </div>
 );
 
 export const TileLayer = () => <div data-testid="tile-layer" />;
@@ -18,16 +20,10 @@ export const Polyline = ({ eventHandlers, pathOptions }) => (
   />
 );
 
-export const CircleMarker = ({ children }) => (
-  <div data-testid="circle-marker">{children}</div>
-);
+export const CircleMarker = ({ children }) => <div data-testid="circle-marker">{children}</div>;
 
 export const Marker = ({ position }) => (
-  <div
-    data-testid="marker"
-    data-lat={position?.[0]}
-    data-lon={position?.[1]}
-  />
+  <div data-testid="marker" data-lat={position?.[0]} data-lon={position?.[1]} />
 );
 
 export const useMap = () => ({

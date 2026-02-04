@@ -21,7 +21,9 @@
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
   overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .highlight-groups-panel.dragging {

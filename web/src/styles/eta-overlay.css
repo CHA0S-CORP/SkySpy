@@ -425,7 +425,8 @@
 }
 
 @keyframes eta-target-pulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 0 0 rgba(100, 200, 255, 0.4);
   }
   50% {

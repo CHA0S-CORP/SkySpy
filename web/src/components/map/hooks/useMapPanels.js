@@ -118,39 +118,42 @@ export function useMapPanels() {
   }, []);
 
   // Toggle a specific panel by name
-  const togglePanel = useCallback((panelName) => {
-    switch (panelName) {
-      case 'aircraftList':
-        setShowAircraftList((prev) => !prev);
-        break;
-      case 'legend':
-        setShowLegend((prev) => !prev);
-        break;
-      case 'acars':
-        setShowAcarsPanel((prev) => !prev);
-        break;
-      case 'filter':
-        setShowFilterMenu((prev) => !prev);
-        break;
-      case 'overlay':
-        setShowOverlayMenu((prev) => !prev);
-        break;
-      case 'mobile':
-        setShowMobileControls((prev) => !prev);
-        break;
-      case 'advisory':
-        setShowAdvisoryPanel((prev) => !prev);
-        break;
-      case 'notam':
-        setShowNotamPanel((prev) => !prev);
-        break;
-      case 'range':
-        setShowRangeControl((prev) => !prev);
-        break;
-      default:
-        console.warn(`Unknown panel: ${panelName}`);
-    }
-  }, [setShowAircraftList]);
+  const togglePanel = useCallback(
+    (panelName) => {
+      switch (panelName) {
+        case 'aircraftList':
+          setShowAircraftList((prev) => !prev);
+          break;
+        case 'legend':
+          setShowLegend((prev) => !prev);
+          break;
+        case 'acars':
+          setShowAcarsPanel((prev) => !prev);
+          break;
+        case 'filter':
+          setShowFilterMenu((prev) => !prev);
+          break;
+        case 'overlay':
+          setShowOverlayMenu((prev) => !prev);
+          break;
+        case 'mobile':
+          setShowMobileControls((prev) => !prev);
+          break;
+        case 'advisory':
+          setShowAdvisoryPanel((prev) => !prev);
+          break;
+        case 'notam':
+          setShowNotamPanel((prev) => !prev);
+          break;
+        case 'range':
+          setShowRangeControl((prev) => !prev);
+          break;
+        default:
+          console.warn(`Unknown panel: ${panelName}`);
+      }
+    },
+    [setShowAircraftList]
+  );
 
   return {
     // Aircraft list

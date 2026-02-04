@@ -7,14 +7,36 @@ const mockAudioItemProps = [];
 
 // Mock AudioItem to isolate AudioList testing
 vi.mock('./AudioItem', () => ({
-  default: vi.fn(({ transmission, isPlaying, progress, duration, isExpanded, onPlay, onSeek, onToggleExpand, onSelectAircraft }) => {
-    mockAudioItemProps.push({ transmission, isPlaying, progress, duration, isExpanded, onPlay, onSeek, onToggleExpand, onSelectAircraft });
-    return (
-      <div data-testid={`audio-item-${transmission.id}`} data-playing={isPlaying}>
-        {transmission.channel_name}
-      </div>
-    );
-  }),
+  default: vi.fn(
+    ({
+      transmission,
+      isPlaying,
+      progress,
+      duration,
+      isExpanded,
+      onPlay,
+      onSeek,
+      onToggleExpand,
+      onSelectAircraft,
+    }) => {
+      mockAudioItemProps.push({
+        transmission,
+        isPlaying,
+        progress,
+        duration,
+        isExpanded,
+        onPlay,
+        onSeek,
+        onToggleExpand,
+        onSelectAircraft,
+      });
+      return (
+        <div data-testid={`audio-item-${transmission.id}`} data-playing={isPlaying}>
+          {transmission.channel_name}
+        </div>
+      );
+    }
+  ),
 }));
 
 describe('AudioList', () => {
@@ -86,21 +108,15 @@ describe('AudioList', () => {
     it('should not show loading indicator when not loading', () => {
       render(<AudioList {...defaultProps} loading={false} transmissions={[]} />);
 
-      expect(
-        screen.queryByText('Loading transmissions...')
-      ).not.toBeInTheDocument();
+      expect(screen.queryByText('Loading transmissions...')).not.toBeInTheDocument();
     });
 
     it('should not show loading indicator when has transmissions even if loading', () => {
       const transmissions = [createTransmission('1')];
 
-      render(
-        <AudioList {...defaultProps} loading={true} transmissions={transmissions} />
-      );
+      render(<AudioList {...defaultProps} loading={true} transmissions={transmissions} />);
 
-      expect(
-        screen.queryByText('Loading transmissions...')
-      ).not.toBeInTheDocument();
+      expect(screen.queryByText('Loading transmissions...')).not.toBeInTheDocument();
     });
   });
 
@@ -130,25 +146,15 @@ describe('AudioList', () => {
     it('should not show empty state when loading', () => {
       render(<AudioList {...defaultProps} loading={true} transmissions={[]} />);
 
-      expect(
-        screen.queryByText('No audio transmissions found')
-      ).not.toBeInTheDocument();
+      expect(screen.queryByText('No audio transmissions found')).not.toBeInTheDocument();
     });
 
     it('should not show empty state when has transmissions', () => {
       const transmissions = [createTransmission('1')];
 
-      render(
-        <AudioList
-          {...defaultProps}
-          loading={false}
-          transmissions={transmissions}
-        />
-      );
+      render(<AudioList {...defaultProps} loading={false} transmissions={transmissions} />);
 
-      expect(
-        screen.queryByText('No audio transmissions found')
-      ).not.toBeInTheDocument();
+      expect(screen.queryByText('No audio transmissions found')).not.toBeInTheDocument();
     });
   });
 
@@ -170,9 +176,7 @@ describe('AudioList', () => {
     it('should mark playing transmission as playing', () => {
       const transmissions = [createTransmission('1'), createTransmission('2')];
 
-      render(
-        <AudioList {...defaultProps} transmissions={transmissions} playingId="1" />
-      );
+      render(<AudioList {...defaultProps} transmissions={transmissions} playingId="1" />);
 
       const playingItem = screen.getByTestId('audio-item-1');
       expect(playingItem).toHaveAttribute('data-playing', 'true');
@@ -193,9 +197,7 @@ describe('AudioList', () => {
 
   describe('lazy loading / infinite scroll', () => {
     it('should initially render only first 20 transmissions', () => {
-      const transmissions = Array.from({ length: 30 }, (_, i) =>
-        createTransmission(String(i + 1))
-      );
+      const transmissions = Array.from({ length: 30 }, (_, i) => createTransmission(String(i + 1)));
 
       render(<AudioList {...defaultProps} transmissions={transmissions} />);
 
@@ -208,9 +210,7 @@ describe('AudioList', () => {
     });
 
     it('should show load more sentinel when more items available', () => {
-      const transmissions = Array.from({ length: 30 }, (_, i) =>
-        createTransmission(String(i + 1))
-      );
+      const transmissions = Array.from({ length: 30 }, (_, i) => createTransmission(String(i + 1)));
 
       render(<AudioList {...defaultProps} transmissions={transmissions} />);
 
@@ -220,9 +220,7 @@ describe('AudioList', () => {
     });
 
     it('should not show load more sentinel when all items visible', () => {
-      const transmissions = Array.from({ length: 10 }, (_, i) =>
-        createTransmission(String(i + 1))
-      );
+      const transmissions = Array.from({ length: 10 }, (_, i) => createTransmission(String(i + 1)));
 
       render(<AudioList {...defaultProps} transmissions={transmissions} />);
 
@@ -231,9 +229,7 @@ describe('AudioList', () => {
     });
 
     it('should create IntersectionObserver for infinite scroll', () => {
-      const transmissions = Array.from({ length: 30 }, (_, i) =>
-        createTransmission(String(i + 1))
-      );
+      const transmissions = Array.from({ length: 30 }, (_, i) => createTransmission(String(i + 1)));
 
       render(<AudioList {...defaultProps} transmissions={transmissions} />);
 
@@ -241,9 +237,7 @@ describe('AudioList', () => {
     });
 
     it('should load more items when intersection observer triggers', async () => {
-      const transmissions = Array.from({ length: 50 }, (_, i) =>
-        createTransmission(String(i + 1))
-      );
+      const transmissions = Array.from({ length: 50 }, (_, i) => createTransmission(String(i + 1)));
 
       render(<AudioList {...defaultProps} transmissions={transmissions} />);
 
@@ -265,35 +259,25 @@ describe('AudioList', () => {
 
   describe('footer count', () => {
     it('should display correct count when all items visible', () => {
-      const transmissions = Array.from({ length: 5 }, (_, i) =>
-        createTransmission(String(i + 1))
-      );
+      const transmissions = Array.from({ length: 5 }, (_, i) => createTransmission(String(i + 1)));
 
       render(<AudioList {...defaultProps} transmissions={transmissions} />);
 
-      expect(
-        screen.getByText('Showing 5 of 5 transmissions')
-      ).toBeInTheDocument();
+      expect(screen.getByText('Showing 5 of 5 transmissions')).toBeInTheDocument();
     });
 
     it('should display limited count when not all items visible', () => {
-      const transmissions = Array.from({ length: 30 }, (_, i) =>
-        createTransmission(String(i + 1))
-      );
+      const transmissions = Array.from({ length: 30 }, (_, i) => createTransmission(String(i + 1)));
 
       render(<AudioList {...defaultProps} transmissions={transmissions} />);
 
-      expect(
-        screen.getByText('Showing 20 of 30 transmissions')
-      ).toBeInTheDocument();
+      expect(screen.getByText('Showing 20 of 30 transmissions')).toBeInTheDocument();
     });
 
     it('should display zero count when no transmissions', () => {
       render(<AudioList {...defaultProps} transmissions={[]} />);
 
-      expect(
-        screen.getByText('Showing 0 of 0 transmissions')
-      ).toBeInTheDocument();
+      expect(screen.getByText('Showing 0 of 0 transmissions')).toBeInTheDocument();
     });
 
     it('should render footer with correct class', () => {
@@ -309,14 +293,10 @@ describe('AudioList', () => {
   describe('props passed to AudioItem', () => {
     it('should pass correct progress value to AudioItem', () => {
       const transmissions = [createTransmission('1')];
-      const audioProgress = { '1': 50 };
+      const audioProgress = { 1: 50 };
 
       render(
-        <AudioList
-          {...defaultProps}
-          transmissions={transmissions}
-          audioProgress={audioProgress}
-        />
+        <AudioList {...defaultProps} transmissions={transmissions} audioProgress={audioProgress} />
       );
 
       const lastProps = mockAudioItemProps[mockAudioItemProps.length - 1];
@@ -325,7 +305,7 @@ describe('AudioList', () => {
 
     it('should pass duration from audioDurations when available', () => {
       const transmissions = [createTransmission('1', { duration_seconds: 10 })];
-      const audioDurations = { '1': 15 };
+      const audioDurations = { 1: 15 };
 
       render(
         <AudioList
@@ -342,13 +322,7 @@ describe('AudioList', () => {
     it('should fall back to transmission duration_seconds when audioDurations not set', () => {
       const transmissions = [createTransmission('1', { duration_seconds: 20 })];
 
-      render(
-        <AudioList
-          {...defaultProps}
-          transmissions={transmissions}
-          audioDurations={{}}
-        />
-      );
+      render(<AudioList {...defaultProps} transmissions={transmissions} audioDurations={{}} />);
 
       const lastProps = mockAudioItemProps[mockAudioItemProps.length - 1];
       expect(lastProps.duration).toBe(20);
@@ -356,7 +330,7 @@ describe('AudioList', () => {
 
     it('should pass expandedTranscript state to AudioItem', () => {
       const transmissions = [createTransmission('1')];
-      const expandedTranscript = { '1': true };
+      const expandedTranscript = { 1: true };
 
       render(
         <AudioList
@@ -389,9 +363,7 @@ describe('AudioList', () => {
         createTransmission(String(i + 1))
       );
 
-      const { rerender } = render(
-        <AudioList {...defaultProps} transmissions={transmissions1} />
-      );
+      const { rerender } = render(<AudioList {...defaultProps} transmissions={transmissions1} />);
 
       // Trigger load more - wrap in act
       await act(async () => {

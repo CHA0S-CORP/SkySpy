@@ -81,13 +81,34 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
 
       const [statusRes, healthRes, infoRes, dbRes, safetyRes, acarsRes, notifRes] =
         await Promise.all([
-          fetch(`${apiBase}/api/v1/system/status`).catch((err) => { console.error('Failed to fetch system status:', err); return null; }),
-          fetch(`${apiBase}/api/v1/system/health`).catch((err) => { console.error('Failed to fetch system health:', err); return null; }),
-          fetch(`${apiBase}/api/v1/system/info`).catch((err) => { console.error('Failed to fetch system info:', err); return null; }),
-          fetch(`${apiBase}/api/v1/system/databases`).catch((err) => { console.error('Failed to fetch database stats:', err); return null; }),
-          fetch(`${apiBase}/api/v1/safety/monitor/status`).catch((err) => { console.error('Failed to fetch safety status:', err); return null; }),
-          fetch(`${apiBase}/api/v1/acars/stats?hours=1`).catch((err) => { console.error('Failed to fetch ACARS stats:', err); return null; }),
-          fetch(`${apiBase}/api/v1/notifications/config`).catch((err) => { console.error('Failed to fetch notification config:', err); return null; }),
+          fetch(`${apiBase}/api/v1/system/status`).catch((err) => {
+            console.error('Failed to fetch system status:', err);
+            return null;
+          }),
+          fetch(`${apiBase}/api/v1/system/health`).catch((err) => {
+            console.error('Failed to fetch system health:', err);
+            return null;
+          }),
+          fetch(`${apiBase}/api/v1/system/info`).catch((err) => {
+            console.error('Failed to fetch system info:', err);
+            return null;
+          }),
+          fetch(`${apiBase}/api/v1/system/databases`).catch((err) => {
+            console.error('Failed to fetch database stats:', err);
+            return null;
+          }),
+          fetch(`${apiBase}/api/v1/safety/monitor/status`).catch((err) => {
+            console.error('Failed to fetch safety status:', err);
+            return null;
+          }),
+          fetch(`${apiBase}/api/v1/acars/stats?hours=1`).catch((err) => {
+            console.error('Failed to fetch ACARS stats:', err);
+            return null;
+          }),
+          fetch(`${apiBase}/api/v1/notifications/config`).catch((err) => {
+            console.error('Failed to fetch notification config:', err);
+            return null;
+          }),
         ]);
 
       const [statusData, healthData, infoData, dbData, safetyData, acarsData, notifData] =
@@ -514,7 +535,12 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
           role="button"
           tabIndex={0}
           onClick={() => toggleServiceExpand(name)}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleServiceExpand(name); } }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              toggleServiceExpand(name);
+            }
+          }}
         >
           <span className="service-name">
             {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -627,7 +653,12 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
                 role="button"
                 tabIndex={0}
                 onClick={() => toggleServiceExpand('client')}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleServiceExpand('client'); } }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleServiceExpand('client');
+                  }
+                }}
               >
                 <span className="service-name">
                   {expandedService === 'client' ? (

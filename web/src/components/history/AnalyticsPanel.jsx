@@ -1,5 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronDown, ChevronUp, BarChart3, Compass, Signal, Ruler, Activity, Calendar } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  BarChart3,
+  Compass,
+  Signal,
+  Ruler,
+  Activity,
+  Calendar,
+} from 'lucide-react';
 import { DistributionChart } from '../common/DistributionChart';
 import { PolarPlotEnhanced } from '../common/PolarPlotEnhanced';
 import { HeatmapCalendar } from './HeatmapCalendar';
@@ -14,7 +23,14 @@ import { HeatmapCalendar } from './HeatmapCalendar';
  * @param {Function} props.wsRequest - WebSocket request function
  * @param {boolean} props.wsConnected - WebSocket connection status
  */
-export function AnalyticsPanel({ apiBase = '', hours = 24, wsRequest, wsConnected, sessions = [], useEnhancedVisuals = true }) {
+export function AnalyticsPanel({
+  apiBase = '',
+  hours = 24,
+  wsRequest,
+  wsConnected,
+  sessions = [],
+  useEnhancedVisuals = true,
+}) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [loading, setLoading] = useState({});
   const [data, setData] = useState({
@@ -275,7 +291,9 @@ export function AnalyticsPanel({ apiBase = '', hours = 24, wsRequest, wsConnecte
   }, [sessions]);
 
   return (
-    <div className={`analytics-panel analytics-dock ${isExpanded ? 'expanded' : 'analytics-dock--collapsed'}`}>
+    <div
+      className={`analytics-panel analytics-dock ${isExpanded ? 'expanded' : 'analytics-dock--collapsed'}`}
+    >
       <div
         className="analytics-dock__header"
         role="button"

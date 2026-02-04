@@ -80,7 +80,9 @@ describe('api', () => {
     });
 
     it('should parse { non_field_errors: ["error"] } format', () => {
-      expect(parseDRFError({ non_field_errors: ['Invalid credentials'] })).toBe('Invalid credentials');
+      expect(parseDRFError({ non_field_errors: ['Invalid credentials'] })).toBe(
+        'Invalid credentials'
+      );
     });
 
     it('should join multiple non_field_errors', () => {
@@ -199,10 +201,7 @@ describe('api', () => {
 
         const result = await api.getAircraftDetail('ABC123');
 
-        expect(global.fetch).toHaveBeenCalledWith(
-          '/api/v1/aircraft/ABC123/',
-          expect.any(Object)
-        );
+        expect(global.fetch).toHaveBeenCalledWith('/api/v1/aircraft/ABC123/', expect.any(Object));
         expect(result).toEqual(mockData);
       });
     });
@@ -214,10 +213,7 @@ describe('api', () => {
 
         const result = await api.getAlertRules();
 
-        expect(global.fetch).toHaveBeenCalledWith(
-          '/api/v1/alerts/rules/',
-          expect.any(Object)
-        );
+        expect(global.fetch).toHaveBeenCalledWith('/api/v1/alerts/rules/', expect.any(Object));
         expect(result).toEqual(mockData);
       });
 
@@ -385,10 +381,7 @@ describe('api', () => {
 
         await api.getAircraft({ limit: undefined, offset: 0 });
 
-        expect(global.fetch).toHaveBeenCalledWith(
-          '/api/v1/aircraft/?offset=0',
-          expect.any(Object)
-        );
+        expect(global.fetch).toHaveBeenCalledWith('/api/v1/aircraft/?offset=0', expect.any(Object));
       });
 
       it('should include boolean false params', async () => {
@@ -410,10 +403,7 @@ describe('api', () => {
 
         const result = await api.admin.getConfigs();
 
-        expect(global.fetch).toHaveBeenCalledWith(
-          '/api/v1/admin/configs/',
-          expect.any(Object)
-        );
+        expect(global.fetch).toHaveBeenCalledWith('/api/v1/admin/configs/', expect.any(Object));
         expect(result).toEqual(mockData);
       });
 
@@ -530,18 +520,12 @@ describe('api', () => {
 
     it('should call lookupRoute', async () => {
       await api.lookupRoute('UAL123');
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/v1/lookup/route/UAL123',
-        expect.any(Object)
-      );
+      expect(global.fetch).toHaveBeenCalledWith('/api/v1/lookup/route/UAL123', expect.any(Object));
     });
 
     it('should call getMapGeoJson', async () => {
       await api.getMapGeoJson();
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/v1/map/geojson/',
-        expect.any(Object)
-      );
+      expect(global.fetch).toHaveBeenCalledWith('/api/v1/map/geojson/', expect.any(Object));
     });
 
     it('should call toggleFavorite', async () => {

@@ -75,26 +75,35 @@ export function useAircraftInfo({
     maxRetries,
     bulkBatchSize,
     getCached: cache.getCached,
-    onSuccess: useCallback((icao, data) => {
-      cache.setCacheEntry(icao, data);
-      errors.clearError(icao);
-    }, [cache.setCacheEntry, errors.clearError]),
-    onError: useCallback((icao, errorInfo) => {
-      cache.deleteCacheEntry(icao);
-      errors.recordError(icao, errorInfo);
-    }, [cache.deleteCacheEntry, errors.recordError]),
-    onCacheUpdate: useCallback((results) => {
-      // Normalize all keys to uppercase before caching
-      const normalizedResults = {};
-      for (const [icao, data] of Object.entries(results)) {
-        normalizedResults[icao.toUpperCase()] = data;
-      }
-      cache.setCacheEntries(normalizedResults);
-      // Clear errors for successful fetches (already normalized)
-      for (const icao of Object.keys(normalizedResults)) {
+    onSuccess: useCallback(
+      (icao, data) => {
+        cache.setCacheEntry(icao, data);
         errors.clearError(icao);
-      }
-    }, [cache.setCacheEntries, errors.clearError]),
+      },
+      [cache.setCacheEntry, errors.clearError]
+    ),
+    onError: useCallback(
+      (icao, errorInfo) => {
+        cache.deleteCacheEntry(icao);
+        errors.recordError(icao, errorInfo);
+      },
+      [cache.deleteCacheEntry, errors.recordError]
+    ),
+    onCacheUpdate: useCallback(
+      (results) => {
+        // Normalize all keys to uppercase before caching
+        const normalizedResults = {};
+        for (const [icao, data] of Object.entries(results)) {
+          normalizedResults[icao.toUpperCase()] = data;
+        }
+        cache.setCacheEntries(normalizedResults);
+        // Clear errors for successful fetches (already normalized)
+        for (const icao of Object.keys(normalizedResults)) {
+          errors.clearError(icao);
+        }
+      },
+      [cache.setCacheEntries, errors.clearError]
+    ),
   });
 
   // Bulk queue management

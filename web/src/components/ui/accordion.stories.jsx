@@ -83,7 +83,7 @@ const faqItems = [
     value: 'item-2',
     title: 'How accurate is the position data?',
     content:
-      'Position data is typically accurate within 30 meters when using GPS. The update rate depends on the aircraft\'s transponder, usually between 1-2 seconds.',
+      "Position data is typically accurate within 30 meters when using GPS. The update rate depends on the aircraft's transponder, usually between 1-2 seconds.",
   },
   {
     value: 'item-3',
@@ -400,7 +400,12 @@ export const WithAnimatedContent = {
                 viewBox="0 0 24 24"
                 stroke="currentColor"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
               </svg>
             </button>
             <AnimatedAccordionContent isOpen={openItem === item.value}>

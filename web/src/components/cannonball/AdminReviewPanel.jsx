@@ -31,13 +31,7 @@ const EVIDENCE_TYPE_LABELS = {
 /**
  * SubmissionCard - Individual submission display
  */
-function SubmissionCard({
-  submission,
-  onApprove,
-  onReject,
-  onMarkDuplicate,
-  loading,
-}) {
+function SubmissionCard({ submission, onApprove, onReject, onMarkDuplicate, loading }) {
   const [showDetails, setShowDetails] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectForm, setShowRejectForm] = useState(false);
@@ -69,7 +63,9 @@ function SubmissionCard({
               <span className="ml-2 text-gray-400">({submission.registration})</span>
             )}
           </div>
-          <span className={`px-2 py-0.5 text-xs rounded border ${STATUS_COLORS[submission.status]}`}>
+          <span
+            className={`px-2 py-0.5 text-xs rounded border ${STATUS_COLORS[submission.status]}`}
+          >
             {submission.status}
           </span>
         </div>
@@ -97,7 +93,9 @@ function SubmissionCard({
           </div>
           <div>
             <span className="text-gray-500">Confidence:</span>
-            <span className="ml-2 text-white">{(submission.confidence_score * 100).toFixed(0)}%</span>
+            <span className="ml-2 text-white">
+              {(submission.confidence_score * 100).toFixed(0)}%
+            </span>
           </div>
           <div>
             <span className="text-gray-500">Submitted:</span>
@@ -295,11 +293,7 @@ export function AdminReviewPanel({
           disabled={loading}
           className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded flex items-center gap-2 disabled:opacity-50"
         >
-          {loading ? (
-            <span className="animate-spin">&#9696;</span>
-          ) : (
-            <span>&#x21bb;</span>
-          )}
+          {loading ? <span className="animate-spin">&#9696;</span> : <span>&#x21bb;</span>}
           Refresh
         </button>
       </div>

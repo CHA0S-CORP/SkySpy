@@ -1,10 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import AudioItem, {
-  formatDuration,
-  formatFileSize,
-  getStatusInfo,
-} from './AudioItem';
+import AudioItem, { formatDuration, formatFileSize, getStatusInfo } from './AudioItem';
 
 // Mock hasEmergencyKeyword from useAudioState
 vi.mock('../../hooks/useAudioState', () => ({
@@ -247,10 +243,7 @@ describe('AudioItem', () => {
       const progressContainer = document.querySelector('.audio-progress-container');
       fireEvent.click(progressContainer);
 
-      expect(defaultProps.onSeek).toHaveBeenCalledWith(
-        'trans-1',
-        expect.any(Object)
-      );
+      expect(defaultProps.onSeek).toHaveBeenCalledWith('trans-1', expect.any(Object));
     });
 
     it('should call onSeek when Enter key is pressed on progress bar', () => {
@@ -332,9 +325,7 @@ describe('AudioItem', () => {
 
       render(<AudioItem {...defaultProps} transmission={transmission} />);
 
-      expect(
-        screen.queryByText('No transcript available')
-      ).not.toBeInTheDocument();
+      expect(screen.queryByText('No transcript available')).not.toBeInTheDocument();
     });
 
     it('should not show "No transcript available" when queued', () => {
@@ -345,9 +336,7 @@ describe('AudioItem', () => {
 
       render(<AudioItem {...defaultProps} transmission={transmission} />);
 
-      expect(
-        screen.queryByText('No transcript available')
-      ).not.toBeInTheDocument();
+      expect(screen.queryByText('No transcript available')).not.toBeInTheDocument();
     });
   });
 
@@ -429,9 +418,7 @@ describe('AudioItem', () => {
 
     it('should call onSelectAircraft when flight tag is clicked', () => {
       const transmission = createTransmission({
-        identified_airframes: [
-          { callsign: 'UAL123', airline_name: 'United Airlines' },
-        ],
+        identified_airframes: [{ callsign: 'UAL123', airline_name: 'United Airlines' }],
       });
 
       render(<AudioItem {...defaultProps} transmission={transmission} />);
@@ -602,9 +589,7 @@ describe('AudioItem', () => {
       render(<AudioItem {...defaultProps} isExpanded={true} />);
 
       const transcriptText = document.querySelector('.transcript-text');
-      expect(transcriptText).toHaveTextContent(
-        'United 123 cleared for takeoff runway 27'
-      );
+      expect(transcriptText).toHaveTextContent('United 123 cleared for takeoff runway 27');
     });
 
     it('should display transcript language when available', () => {
@@ -614,13 +599,7 @@ describe('AudioItem', () => {
         transcript_language: 'en',
       });
 
-      render(
-        <AudioItem
-          {...defaultProps}
-          transmission={transmission}
-          isExpanded={true}
-        />
-      );
+      render(<AudioItem {...defaultProps} transmission={transmission} isExpanded={true} />);
 
       // Language is uppercased in the component and shown in expanded section
       const languageElement = document.querySelector('.transcript-language');
@@ -631,17 +610,9 @@ describe('AudioItem', () => {
     it('should not display language when not available', () => {
       const transmission = createTransmission({ transcript_language: null });
 
-      render(
-        <AudioItem
-          {...defaultProps}
-          transmission={transmission}
-          isExpanded={true}
-        />
-      );
+      render(<AudioItem {...defaultProps} transmission={transmission} isExpanded={true} />);
 
-      expect(
-        document.querySelector('.transcript-language')
-      ).not.toBeInTheDocument();
+      expect(document.querySelector('.transcript-language')).not.toBeInTheDocument();
     });
 
     it('should show error in expanded section when present', () => {
@@ -650,13 +621,7 @@ describe('AudioItem', () => {
         transcription_error: 'Transcription failed',
       });
 
-      render(
-        <AudioItem
-          {...defaultProps}
-          transmission={transmission}
-          isExpanded={true}
-        />
-      );
+      render(<AudioItem {...defaultProps} transmission={transmission} isExpanded={true} />);
 
       const errorSection = document.querySelector('.audio-error');
       expect(errorSection).toBeInTheDocument();

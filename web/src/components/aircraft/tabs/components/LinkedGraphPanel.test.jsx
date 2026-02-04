@@ -4,11 +4,51 @@ import { LinkedGraphPanel } from './LinkedGraphPanel';
 
 describe('LinkedGraphPanel', () => {
   const sampleSightings = [
-    { timestamp: '2024-01-15T10:00:00Z', altitude: 5000, gs: 200, vr: 1500, distance_nm: 50, rssi: -5, track: 90 },
-    { timestamp: '2024-01-15T10:01:00Z', altitude: 10000, gs: 300, vr: 2000, distance_nm: 45, rssi: -8, track: 92 },
-    { timestamp: '2024-01-15T10:02:00Z', altitude: 20000, gs: 400, vr: 1000, distance_nm: 40, rssi: -10, track: 95 },
-    { timestamp: '2024-01-15T10:03:00Z', altitude: 30000, gs: 450, vr: 500, distance_nm: 38, rssi: -12, track: 100 },
-    { timestamp: '2024-01-15T10:04:00Z', altitude: 35000, gs: 460, vr: 0, distance_nm: 35, rssi: -15, track: 105 },
+    {
+      timestamp: '2024-01-15T10:00:00Z',
+      altitude: 5000,
+      gs: 200,
+      vr: 1500,
+      distance_nm: 50,
+      rssi: -5,
+      track: 90,
+    },
+    {
+      timestamp: '2024-01-15T10:01:00Z',
+      altitude: 10000,
+      gs: 300,
+      vr: 2000,
+      distance_nm: 45,
+      rssi: -8,
+      track: 92,
+    },
+    {
+      timestamp: '2024-01-15T10:02:00Z',
+      altitude: 20000,
+      gs: 400,
+      vr: 1000,
+      distance_nm: 40,
+      rssi: -10,
+      track: 95,
+    },
+    {
+      timestamp: '2024-01-15T10:03:00Z',
+      altitude: 30000,
+      gs: 450,
+      vr: 500,
+      distance_nm: 38,
+      rssi: -12,
+      track: 100,
+    },
+    {
+      timestamp: '2024-01-15T10:04:00Z',
+      altitude: 35000,
+      gs: 460,
+      vr: 0,
+      distance_nm: 35,
+      rssi: -15,
+      track: 105,
+    },
   ];
 
   const defaultProps = {
@@ -171,9 +211,7 @@ describe('LinkedGraphPanel', () => {
 
   describe('selected index marker', () => {
     it('should show selected position marker', () => {
-      const { container } = render(
-        <LinkedGraphPanel {...defaultProps} selectedIndex={2} />
-      );
+      const { container } = render(<LinkedGraphPanel {...defaultProps} selectedIndex={2} />);
       // Should render a vertical line at the selected position
       const svgs = container.querySelectorAll('svg');
       // Each svg should have a line element for selected position
@@ -195,9 +233,7 @@ describe('LinkedGraphPanel', () => {
     });
 
     it('should use correct color for event severity', () => {
-      const safetyEvents = [
-        { timestamp: '2024-01-15T10:02:00Z', severity: 'critical' },
-      ];
+      const safetyEvents = [{ timestamp: '2024-01-15T10:02:00Z', severity: 'critical' }];
       render(<LinkedGraphPanel {...defaultProps} safetyEvents={safetyEvents} />);
       // Critical events should be red
     });
@@ -206,10 +242,7 @@ describe('LinkedGraphPanel', () => {
   describe('graph zoom', () => {
     it('should apply graph zoom to data', () => {
       const { container } = render(
-        <LinkedGraphPanel
-          {...defaultProps}
-          graphZoom={{ start: 0.2, end: 0.8 }}
-        />
+        <LinkedGraphPanel {...defaultProps} graphZoom={{ start: 0.2, end: 0.8 }} />
       );
       // Should only show portion of data
       expect(container.querySelector('.linked-graphs-panel')).toBeInTheDocument();
@@ -217,10 +250,7 @@ describe('LinkedGraphPanel', () => {
 
     it('should handle full zoom range', () => {
       const { container } = render(
-        <LinkedGraphPanel
-          {...defaultProps}
-          graphZoom={{ start: 0, end: 1 }}
-        />
+        <LinkedGraphPanel {...defaultProps} graphZoom={{ start: 0, end: 1 }} />
       );
       expect(container.querySelector('.linked-graphs-panel')).toBeInTheDocument();
     });
@@ -228,9 +258,7 @@ describe('LinkedGraphPanel', () => {
 
   describe('height configuration', () => {
     it('should apply custom height', () => {
-      const { container } = render(
-        <LinkedGraphPanel {...defaultProps} height={200} />
-      );
+      const { container } = render(<LinkedGraphPanel {...defaultProps} height={200} />);
       const graph = container.querySelector('.linked-graphs-panel__graph');
       expect(graph.style.height).toBe('200px');
     });

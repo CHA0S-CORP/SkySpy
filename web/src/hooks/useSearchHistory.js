@@ -41,38 +41,41 @@ export function useSearchHistory({ maxSize = MAX_HISTORY_SIZE } = {}) {
    * @param {string} query - The search query
    * @param {Object} result - Optional result metadata (callsign, hex, etc.)
    */
-  const addSearch = useCallback((query, result = null) => {
-    if (!query || !query.trim()) return;
+  const addSearch = useCallback(
+    (query, result = null) => {
+      if (!query || !query.trim()) return;
 
-    const trimmedQuery = query.trim();
+      const trimmedQuery = query.trim();
 
-    setRecentSearches(prev => {
-      // Remove existing entry with same query (case-insensitive)
-      const filtered = prev.filter(
-        item => item.query.toLowerCase() !== trimmedQuery.toLowerCase()
-      );
+      setRecentSearches((prev) => {
+        // Remove existing entry with same query (case-insensitive)
+        const filtered = prev.filter(
+          (item) => item.query.toLowerCase() !== trimmedQuery.toLowerCase()
+        );
 
-      // Create new entry
-      const newEntry = {
-        query: trimmedQuery,
-        timestamp: Date.now(),
-        callsign: result?.flight?.trim() || result?.callsign || null,
-        hex: result?.hex || null,
-        type: result?._matchType || null,
-      };
+        // Create new entry
+        const newEntry = {
+          query: trimmedQuery,
+          timestamp: Date.now(),
+          callsign: result?.flight?.trim() || result?.callsign || null,
+          hex: result?.hex || null,
+          type: result?._matchType || null,
+        };
 
-      // Add to front and limit size
-      return [newEntry, ...filtered].slice(0, maxSize);
-    });
-  }, [maxSize]);
+        // Add to front and limit size
+        return [newEntry, ...filtered].slice(0, maxSize);
+      });
+    },
+    [maxSize]
+  );
 
   /**
    * Remove a specific search from history
    * @param {string} query - The query to remove
    */
   const removeSearch = useCallback((query) => {
-    setRecentSearches(prev =>
-      prev.filter(item => item.query.toLowerCase() !== query.toLowerCase())
+    setRecentSearches((prev) =>
+      prev.filter((item) => item.query.toLowerCase() !== query.toLowerCase())
     );
   }, []);
 
@@ -93,14 +96,15 @@ export function useSearchHistory({ maxSize = MAX_HISTORY_SIZE } = {}) {
    * @param {string} prefix - Prefix to match
    * @returns {Array} Matching recent searches
    */
-  const getMatchingHistory = useCallback((prefix) => {
-    if (!prefix || !prefix.trim()) return recentSearches;
+  const getMatchingHistory = useCallback(
+    (prefix) => {
+      if (!prefix || !prefix.trim()) return recentSearches;
 
-    const lower = prefix.toLowerCase().trim();
-    return recentSearches.filter(item =>
-      item.query.toLowerCase().startsWith(lower)
-    );
-  }, [recentSearches]);
+      const lower = prefix.toLowerCase().trim();
+      return recentSearches.filter((item) => item.query.toLowerCase().startsWith(lower));
+    },
+    [recentSearches]
+  );
 
   return {
     recentSearches,

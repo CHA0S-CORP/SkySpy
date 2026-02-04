@@ -199,7 +199,12 @@ export function ActivityHeatmap({
                   role="button"
                   tabIndex={0}
                   onClick={() => handleCellClick(dayIdx, hourOrBlock)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCellClick(dayIdx, hourOrBlock); } }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleCellClick(dayIdx, hourOrBlock);
+                    }
+                  }}
                   onMouseEnter={() => setHoveredCell(key)}
                   onMouseLeave={() => setHoveredCell(null)}
                   title={`${day} ${variant === 'full' ? `${hourOrBlock}:00` : hourLabels[hourOrBlock].label}: ${count} events`}

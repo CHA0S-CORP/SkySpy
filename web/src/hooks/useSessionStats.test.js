@@ -252,9 +252,7 @@ describe('useSessionStats', () => {
       });
 
       await waitFor(() => {
-        const hasUnknown = result.current.topAircraftTypes.some(
-          (item) => item.type === 'Unknown'
-        );
+        const hasUnknown = result.current.topAircraftTypes.some((item) => item.type === 'Unknown');
         expect(hasUnknown).toBe(false);
       });
     });

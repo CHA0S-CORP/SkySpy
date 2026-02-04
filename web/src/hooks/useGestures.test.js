@@ -131,9 +131,7 @@ describe('useGestures', () => {
     it('should prioritize horizontal swipe when x > y movement', () => {
       const onSwipeRight = vi.fn();
       const onSwipeDown = vi.fn();
-      const { result } = renderHook(() =>
-        useGestures({ onSwipeRight, onSwipeDown })
-      );
+      const { result } = renderHook(() => useGestures({ onSwipeRight, onSwipeDown }));
 
       act(() => {
         result.current.onTouchStart(createTouchEvent(100, 100));
@@ -151,9 +149,7 @@ describe('useGestures', () => {
     it('should prioritize vertical swipe when y > x movement', () => {
       const onSwipeRight = vi.fn();
       const onSwipeDown = vi.fn();
-      const { result } = renderHook(() =>
-        useGestures({ onSwipeRight, onSwipeDown })
-      );
+      const { result } = renderHook(() => useGestures({ onSwipeRight, onSwipeDown }));
 
       act(() => {
         result.current.onTouchStart(createTouchEvent(100, 100));
@@ -335,9 +331,7 @@ describe('useGestures', () => {
     it('should prevent swipe after long press', () => {
       const onLongPress = vi.fn();
       const onSwipeRight = vi.fn();
-      const { result } = renderHook(() =>
-        useGestures({ onLongPress, onSwipeRight })
-      );
+      const { result } = renderHook(() => useGestures({ onLongPress, onSwipeRight }));
 
       act(() => {
         result.current.onTouchStart(createTouchEvent(100, 100));

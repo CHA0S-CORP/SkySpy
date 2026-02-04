@@ -82,9 +82,7 @@ describe('TestRuleModal', () => {
         />
       );
 
-      expect(
-        screen.getByText(/test rule: military aircraft alert/i)
-      ).toBeInTheDocument();
+      expect(screen.getByText(/test rule: military aircraft alert/i)).toBeInTheDocument();
     });
 
     it('should render close button', () => {
@@ -97,9 +95,7 @@ describe('TestRuleModal', () => {
         />
       );
 
-      expect(
-        screen.getByRole('button', { name: /close test results/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /close test results/i })).toBeInTheDocument();
     });
 
     it('should have proper dialog role and aria attributes', () => {
@@ -147,12 +143,8 @@ describe('TestRuleModal', () => {
       );
 
       expect(screen.getByText(/0 of 3 aircraft match/i)).toBeInTheDocument();
-      expect(
-        screen.getByText(/no aircraft currently match this rule/i)
-      ).toBeInTheDocument();
-      expect(
-        screen.getByText(/try adjusting the conditions/i)
-      ).toBeInTheDocument();
+      expect(screen.getByText(/no aircraft currently match this rule/i)).toBeInTheDocument();
+      expect(screen.getByText(/try adjusting the conditions/i)).toBeInTheDocument();
     });
 
     it('should display matching aircraft list', () => {
@@ -421,7 +413,7 @@ describe('TestRuleModal', () => {
 
       // Get the footer close button (btn-secondary class)
       const closeButtons = screen.getAllByRole('button', { name: /close/i });
-      const footerCloseBtn = closeButtons.find(btn => btn.classList.contains('btn-secondary'));
+      const footerCloseBtn = closeButtons.find((btn) => btn.classList.contains('btn-secondary'));
       await user.click(footerCloseBtn);
 
       expect(mockOnClose).toHaveBeenCalled();
@@ -524,11 +516,7 @@ describe('TestRuleModal', () => {
         />
       );
 
-      expect(findMatchingAircraft).toHaveBeenCalledWith(
-        mockRule,
-        mockAircraft,
-        null
-      );
+      expect(findMatchingAircraft).toHaveBeenCalledWith(mockRule, mockAircraft, null);
     });
 
     it('should handle aircraft with whitespace-only flight', () => {
@@ -574,9 +562,7 @@ describe('TestRuleModal', () => {
         />
       );
 
-      expect(
-        screen.getByRole('list', { name: /matching aircraft/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('list', { name: /matching aircraft/i })).toBeInTheDocument();
       expect(screen.getByRole('listitem')).toBeInTheDocument();
     });
 
@@ -594,7 +580,9 @@ describe('TestRuleModal', () => {
 
       const statusRegions = screen.getAllByRole('status');
       // At least one should have aria-live="polite" for the summary
-      const summaryStatus = statusRegions.find(el => el.classList.contains('test-results-summary'));
+      const summaryStatus = statusRegions.find((el) =>
+        el.classList.contains('test-results-summary')
+      );
       expect(summaryStatus).toHaveAttribute('aria-live', 'polite');
     });
 
@@ -610,9 +598,9 @@ describe('TestRuleModal', () => {
         />
       );
 
-      const emptyMessage = screen.getByText(
-        /no aircraft currently match this rule/i
-      ).closest('[role="status"]');
+      const emptyMessage = screen
+        .getByText(/no aircraft currently match this rule/i)
+        .closest('[role="status"]');
       expect(emptyMessage).toBeInTheDocument();
     });
   });

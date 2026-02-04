@@ -1,12 +1,5 @@
 import React from 'react';
-import {
-  ArrowUp,
-  Gauge,
-  TrendingUp,
-  Compass,
-  MapPin,
-  Radio,
-} from 'lucide-react';
+import { ArrowUp, Gauge, TrendingUp, Compass, MapPin, Radio } from 'lucide-react';
 import { getCardinalDirection } from '../../../../utils';
 
 /**
@@ -103,9 +96,7 @@ export function LiveStatusBar({ aircraft, calculateDistance }) {
         </div>
         <div className="status-metric-content">
           <span className="status-metric-label">VS</span>
-          <span className={`status-metric-value ${vsClass}`}>
-            {formatVS(verticalRate)} fpm
-          </span>
+          <span className={`status-metric-value ${vsClass}`}>{formatVS(verticalRate)} fpm</span>
         </div>
       </div>
 

@@ -21,7 +21,14 @@ const DEFAULT_TIMEOUT = 30000;
  * @param {number} options.timeout - Request timeout in ms (default: 30000)
  */
 export function useSocketApi(endpoint, interval = null, apiBase = '', options = {}) {
-  const { wsRequest, wsConnected, socketEvent, socketParams = {}, disableSocket = false, timeout = DEFAULT_TIMEOUT } = options;
+  const {
+    wsRequest,
+    wsConnected,
+    socketEvent,
+    socketParams = {},
+    disableSocket = false,
+    timeout = DEFAULT_TIMEOUT,
+  } = options;
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -74,7 +81,9 @@ export function useSocketApi(endpoint, interval = null, apiBase = '', options = 
       if (!response.ok) {
         // Check for CORS issues
         if (response.type === 'opaque' || response.status === 0) {
-          throw new Error('CORS error: Unable to access the API. Check that the server allows requests from this origin.');
+          throw new Error(
+            'CORS error: Unable to access the API. Check that the server allows requests from this origin.'
+          );
         }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -91,7 +100,9 @@ export function useSocketApi(endpoint, interval = null, apiBase = '', options = 
       }
       // Detect CORS errors (typically show as TypeError: Failed to fetch)
       if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
-        throw new Error('CORS error: Unable to access the API. Check that the server allows requests from this origin with credentials.');
+        throw new Error(
+          'CORS error: Unable to access the API. Check that the server allows requests from this origin with credentials.'
+        );
       }
       throw err;
     }
@@ -106,10 +117,13 @@ export function useSocketApi(endpoint, interval = null, apiBase = '', options = 
     lastFetchRef.current = now;
 
     // Determine if we should use socket or HTTP
-    const useSocket = !disableSocket && wsRequestRef.current && wsConnectedRef.current && derivedSocketEvent;
+    const useSocket =
+      !disableSocket && wsRequestRef.current && wsConnectedRef.current && derivedSocketEvent;
 
     if (import.meta.env.DEV) {
-      console.log(`[useSocketApi] ${endpoint} -> ${derivedSocketEvent || 'HTTP'} (socket: ${useSocket}, connected: ${wsConnectedRef.current})`);
+      console.log(
+        `[useSocketApi] ${endpoint} -> ${derivedSocketEvent || 'HTTP'} (socket: ${useSocket}, connected: ${wsConnectedRef.current})`
+      );
     }
 
     if (useSocket) {
@@ -126,7 +140,10 @@ export function useSocketApi(endpoint, interval = null, apiBase = '', options = 
         }
 
         if (import.meta.env.DEV) {
-          console.log(`[useSocketApi] Socket response for ${derivedSocketEvent}:`, result ? 'received' : 'empty');
+          console.log(
+            `[useSocketApi] Socket response for ${derivedSocketEvent}:`,
+            result ? 'received' : 'empty'
+          );
         }
 
         if (mountedRef.current) {
@@ -134,7 +151,10 @@ export function useSocketApi(endpoint, interval = null, apiBase = '', options = 
           setError(null);
         }
       } catch (err) {
-        console.warn(`[useSocketApi] Socket request failed for ${derivedSocketEvent}:`, err.message);
+        console.warn(
+          `[useSocketApi] Socket request failed for ${derivedSocketEvent}:`,
+          err.message
+        );
         if (mountedRef.current) {
           setError(err.message || 'Socket request failed');
         }

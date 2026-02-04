@@ -271,7 +271,14 @@ export function ScreenReaderAnnouncements({
     }
 
     setPoliteAnnouncement(message);
-  }, [selectedAircraft, enabled, formatAltitude, formatDistance, getAircraftDisplayName, feederLocation]);
+  }, [
+    selectedAircraft,
+    enabled,
+    formatAltitude,
+    formatDistance,
+    getAircraftDisplayName,
+    feederLocation,
+  ]);
 
   // Calculate distance in nautical miles
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -315,31 +322,17 @@ export function ScreenReaderAnnouncements({
   return (
     <>
       {/* Polite announcements - for general updates */}
-      <div
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        className="sr-only"
-      >
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {politeAnnouncement}
       </div>
 
       {/* Assertive announcements - for emergencies */}
-      <div
-        role="alert"
-        aria-live="assertive"
-        aria-atomic="true"
-        className="sr-only"
-      >
+      <div role="alert" aria-live="assertive" aria-atomic="true" className="sr-only">
         {assertiveAnnouncement}
       </div>
 
       {/* Status region - updated periodically */}
-      <div
-        role="status"
-        aria-label="Radar status"
-        className="sr-only"
-      >
+      <div role="status" aria-label="Radar status" className="sr-only">
         {statusSummary}
       </div>
     </>

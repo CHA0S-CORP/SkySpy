@@ -283,22 +283,14 @@ describe('AirportPopup', () => {
 
   describe('edge cases', () => {
     it('should handle airport without class', () => {
-      render(
-        <AirportPopup
-          {...defaultProps}
-          airport={{ ...mockAirport, class: undefined }}
-        />
-      );
+      render(<AirportPopup {...defaultProps} airport={{ ...mockAirport, class: undefined }} />);
 
       expect(screen.queryByText(/Class/)).not.toBeInTheDocument();
     });
 
     it('should handle airport without runway length', () => {
       render(
-        <AirportPopup
-          {...defaultProps}
-          airport={{ ...mockAirport, rwy_length: undefined }}
-        />
+        <AirportPopup {...defaultProps} airport={{ ...mockAirport, rwy_length: undefined }} />
       );
 
       expect(screen.queryByText('Longest Runway')).not.toBeInTheDocument();
@@ -306,10 +298,7 @@ describe('AirportPopup', () => {
 
     it('should handle airport with zero elevation', () => {
       const { container } = render(
-        <AirportPopup
-          {...defaultProps}
-          airport={{ ...mockAirport, elev: 0 }}
-        />
+        <AirportPopup {...defaultProps} airport={{ ...mockAirport, elev: 0 }} />
       );
 
       // Zero elevation should be displayed

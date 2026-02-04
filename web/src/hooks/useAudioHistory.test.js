@@ -266,7 +266,8 @@ describe('useAudioHistory', () => {
         result.current.clearHistory();
       });
 
-      const lastCall = mockLocalStorage.setItem.mock.calls[mockLocalStorage.setItem.mock.calls.length - 1];
+      const lastCall =
+        mockLocalStorage.setItem.mock.calls[mockLocalStorage.setItem.mock.calls.length - 1];
       expect(JSON.parse(lastCall[1])).toEqual([]);
     });
   });

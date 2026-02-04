@@ -88,7 +88,9 @@ describe('FlightPatternsStats', () => {
       });
 
       render(<FlightPatternsStats {...defaultProps} />);
-      expect(screen.getByText(/Error loading data: Failed to fetch flight patterns/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Error loading data: Failed to fetch flight patterns/)
+      ).toBeInTheDocument();
     });
 
     it('should call refetch when retry is clicked', () => {

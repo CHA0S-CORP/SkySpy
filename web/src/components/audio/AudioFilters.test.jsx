@@ -160,9 +160,7 @@ describe('AudioFilters', () => {
       const select = screen.getByDisplayValue('All Transmissions');
       fireEvent.change(select, { target: { value: 'matched' } });
 
-      expect(defaultProps.onFlightMatchFilterChange).toHaveBeenCalledWith(
-        'matched'
-      );
+      expect(defaultProps.onFlightMatchFilterChange).toHaveBeenCalledWith('matched');
     });
   });
 
@@ -217,12 +215,8 @@ describe('AudioFilters', () => {
       const select = screen.getByDisplayValue('All Types');
       expect(select.querySelector('option[value="all"]')).toBeInTheDocument();
       expect(select.querySelector('option[value="airline"]')).toBeInTheDocument();
-      expect(
-        select.querySelector('option[value="general_aviation"]')
-      ).toBeInTheDocument();
-      expect(
-        select.querySelector('option[value="military"]')
-      ).toBeInTheDocument();
+      expect(select.querySelector('option[value="general_aviation"]')).toBeInTheDocument();
+      expect(select.querySelector('option[value="military"]')).toBeInTheDocument();
     });
 
     it('should call onFlightTypeFilterChange when type is selected', () => {
@@ -231,9 +225,7 @@ describe('AudioFilters', () => {
       const select = screen.getByDisplayValue('All Types');
       fireEvent.change(select, { target: { value: 'military' } });
 
-      expect(defaultProps.onFlightTypeFilterChange).toHaveBeenCalledWith(
-        'military'
-      );
+      expect(defaultProps.onFlightTypeFilterChange).toHaveBeenCalledWith('military');
     });
   });
 

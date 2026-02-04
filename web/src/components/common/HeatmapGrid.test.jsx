@@ -48,11 +48,7 @@ describe('HeatmapGrid', () => {
     });
 
     it('should not render labels when no labels are provided', () => {
-      const { container } = render(
-        <HeatmapGrid
-          data={sampleData}
-        />
-      );
+      const { container } = render(<HeatmapGrid data={sampleData} />);
       // Labels are only rendered when rowLabels/columnLabels are passed
       expect(screen.queryByText('Mon')).not.toBeInTheDocument();
       expect(container.querySelector('.heatmap-grid')).toBeInTheDocument();
@@ -104,9 +100,7 @@ describe('HeatmapGrid', () => {
   describe('interactions', () => {
     it('should call onCellClick when cell is clicked', () => {
       const onCellClick = vi.fn();
-      const { container } = render(
-        <HeatmapGrid data={sampleData} onCellClick={onCellClick} />
-      );
+      const { container } = render(<HeatmapGrid data={sampleData} onCellClick={onCellClick} />);
 
       // Find and click a cell
       const cells = container.querySelectorAll('[role="button"]');
@@ -118,9 +112,7 @@ describe('HeatmapGrid', () => {
 
     it('should call onCellHover when hovering over cell', () => {
       const onCellHover = vi.fn();
-      const { container } = render(
-        <HeatmapGrid data={sampleData} onCellHover={onCellHover} />
-      );
+      const { container } = render(<HeatmapGrid data={sampleData} onCellHover={onCellHover} />);
 
       const cells = container.querySelectorAll('.heatmap-grid div div div div');
       if (cells.length > 0) {
@@ -144,12 +136,7 @@ describe('HeatmapGrid', () => {
   describe('tooltip formatting', () => {
     it('should use custom tooltip formatter for cell titles', () => {
       const tooltipFormatter = vi.fn((value, row, col) => `Value: ${value}`);
-      render(
-        <HeatmapGrid
-          data={sampleData}
-          tooltipFormatter={tooltipFormatter}
-        />
-      );
+      render(<HeatmapGrid data={sampleData} tooltipFormatter={tooltipFormatter} />);
       // Formatter is called during render to set title attributes on cells
       // 3 rows x 4 cols = 12 cells
       expect(tooltipFormatter).toHaveBeenCalledTimes(12);
@@ -158,18 +145,14 @@ describe('HeatmapGrid', () => {
 
   describe('accessibility', () => {
     it('should have proper role for interactive cells', () => {
-      const { container } = render(
-        <HeatmapGrid data={sampleData} onCellClick={() => {}} />
-      );
+      const { container } = render(<HeatmapGrid data={sampleData} onCellClick={() => {}} />);
       const buttons = container.querySelectorAll('[role="button"]');
       expect(buttons.length).toBeGreaterThan(0);
     });
 
     it('should be keyboard accessible', () => {
       const onCellClick = vi.fn();
-      const { container } = render(
-        <HeatmapGrid data={sampleData} onCellClick={onCellClick} />
-      );
+      const { container } = render(<HeatmapGrid data={sampleData} onCellClick={onCellClick} />);
 
       const cells = container.querySelectorAll('[role="button"]');
       if (cells.length > 0) {
@@ -181,9 +164,7 @@ describe('HeatmapGrid', () => {
 
   describe('styling', () => {
     it('should apply custom className', () => {
-      const { container } = render(
-        <HeatmapGrid data={sampleData} className="custom-heatmap" />
-      );
+      const { container } = render(<HeatmapGrid data={sampleData} className="custom-heatmap" />);
       expect(container.querySelector('.custom-heatmap')).toBeInTheDocument();
     });
   });

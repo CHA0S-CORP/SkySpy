@@ -162,9 +162,11 @@ describe('AuthContext', () => {
         expect(result.current.status).toBe('authenticated');
       });
 
-      expect(result.current.user).toEqual(expect.objectContaining({
-        username: 'testuser',
-      }));
+      expect(result.current.user).toEqual(
+        expect.objectContaining({
+          username: 'testuser',
+        })
+      );
     });
 
     it('should fetch profile when token valid but no stored user', async () => {
@@ -367,9 +369,7 @@ describe('AuthContext', () => {
       // Catch the error to prevent unhandled rejection
       networkError.catch(() => {});
 
-      global.fetch
-        .mockReturnValueOnce(setupAuthConfigResponse())
-        .mockReturnValueOnce(networkError);
+      global.fetch.mockReturnValueOnce(setupAuthConfigResponse()).mockReturnValueOnce(networkError);
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 

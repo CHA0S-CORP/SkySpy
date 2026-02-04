@@ -61,13 +61,16 @@ export function SavedViewsManager({
 
   return (
     <div ref={containerRef} className={`saved-views-manager ${className}`}>
-      <button
-        className="saved-views-manager__trigger"
-        onClick={() => setIsOpen(!isOpen)}
-      >
+      <button className="saved-views-manager__trigger" onClick={() => setIsOpen(!isOpen)}>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
           <rect x="2" y="2" width="10" height="10" rx="1" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M5 6L7 8L9 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path
+            d="M5 6L7 8L9 6"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
         <span>Views</span>
         {savedViews.length > 0 && (

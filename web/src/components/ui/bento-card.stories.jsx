@@ -176,9 +176,7 @@ export const GridLayout = {
         <p className="text-2xl font-bold text-text-primary">5</p>
       </BentoCard>
       <BentoCard icon={MapPin} title="Wide Card" colSpan={2} variant="hero">
-        <p className="text-text-primary">
-          This card spans two columns using colSpan=2
-        </p>
+        <p className="text-text-primary">This card spans two columns using colSpan=2</p>
       </BentoCard>
     </div>
   ),
@@ -199,9 +197,7 @@ export const Playground = {
     children: (
       <div>
         <p className="text-xl font-semibold text-text-primary">Customize me!</p>
-        <p className="text-sm text-text-secondary">
-          Use the controls panel to adjust properties
-        </p>
+        <p className="text-sm text-text-secondary">Use the controls panel to adjust properties</p>
       </div>
     ),
   },

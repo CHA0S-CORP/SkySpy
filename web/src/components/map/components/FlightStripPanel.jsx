@@ -138,7 +138,10 @@ export const FlightStripPanel = memo(function FlightStripPanel({
       {strips.length > 0 && (
         <div className="strip-status-summary">
           {statusCounts.emergency > 0 && (
-            <span className="status-count emergency" title={`${statusCounts.emergency} emergencies`}>
+            <span
+              className="status-count emergency"
+              title={`${statusCounts.emergency} emergencies`}
+            >
               {statusCounts.emergency} EMG
             </span>
           )}
@@ -166,7 +169,8 @@ export const FlightStripPanel = memo(function FlightStripPanel({
           <div className="strip-panel-empty">
             <p>No flight strips</p>
             <p className="empty-hint">
-              Right-click an aircraft and select &quot;Add Flight Strip&quot; or use the <kbd>S</kbd> key
+              Right-click an aircraft and select &quot;Add Flight Strip&quot; or use the{' '}
+              <kbd>S</kbd> key
             </p>
           </div>
         ) : (

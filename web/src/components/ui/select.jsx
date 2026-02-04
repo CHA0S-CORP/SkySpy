@@ -12,10 +12,7 @@ SelectGroup.displayName = 'SelectGroup';
 const SelectValue = SelectPrimitive.Value;
 SelectValue.displayName = 'SelectValue';
 
-const SelectTrigger = forwardRef(function SelectTrigger(
-  { className, children, ...props },
-  ref
-) {
+const SelectTrigger = forwardRef(function SelectTrigger({ className, children, ...props }, ref) {
   return (
     <SelectPrimitive.Trigger
       ref={ref}
@@ -140,10 +137,7 @@ const SelectLabel = forwardRef(function SelectLabel({ className, ...props }, ref
 });
 SelectLabel.displayName = 'SelectLabel';
 
-const SelectItem = forwardRef(function SelectItem(
-  { className, children, ...props },
-  ref
-) {
+const SelectItem = forwardRef(function SelectItem({ className, children, ...props }, ref) {
   return (
     <SelectPrimitive.Item
       ref={ref}
@@ -173,10 +167,7 @@ const SelectItem = forwardRef(function SelectItem(
 });
 SelectItem.displayName = 'SelectItem';
 
-const SelectSeparator = forwardRef(function SelectSeparator(
-  { className, ...props },
-  ref
-) {
+const SelectSeparator = forwardRef(function SelectSeparator({ className, ...props }, ref) {
   return (
     <SelectPrimitive.Separator
       ref={ref}

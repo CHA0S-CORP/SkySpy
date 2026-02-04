@@ -285,44 +285,34 @@ describe('SquawkWatchlist', () => {
 
   describe('emergency squawk detection', () => {
     it('should detect 7700 emergency squawk', () => {
-      const emergencyAircraft = [
-        { hex: 'emer123', flight: 'EMR123', squawk: '7700' },
-      ];
+      const emergencyAircraft = [{ hex: 'emer123', flight: 'EMR123', squawk: '7700' }];
       render(<SquawkWatchlist aircraftData={emergencyAircraft} />);
       expect(screen.getByText('7700')).toBeInTheDocument();
       expect(screen.getByText('EMERGENCY')).toBeInTheDocument();
     });
 
     it('should detect 7600 radio failure squawk', () => {
-      const radioFailAircraft = [
-        { hex: 'radio123', flight: 'RAD123', squawk: '7600' },
-      ];
+      const radioFailAircraft = [{ hex: 'radio123', flight: 'RAD123', squawk: '7600' }];
       render(<SquawkWatchlist aircraftData={radioFailAircraft} />);
       expect(screen.getByText('7600')).toBeInTheDocument();
       expect(screen.getByText('RADIO FAIL')).toBeInTheDocument();
     });
 
     it('should detect 7500 hijack squawk', () => {
-      const hijackAircraft = [
-        { hex: 'hijack123', flight: 'HIJ123', squawk: '7500' },
-      ];
+      const hijackAircraft = [{ hex: 'hijack123', flight: 'HIJ123', squawk: '7500' }];
       render(<SquawkWatchlist aircraftData={hijackAircraft} />);
       expect(screen.getByText('7500')).toBeInTheDocument();
       expect(screen.getByText('HIJACK')).toBeInTheDocument();
     });
 
     it('should display callsign for emergency aircraft', () => {
-      const emergencyAircraft = [
-        { hex: 'emer123', flight: 'UAL911', squawk: '7700' },
-      ];
+      const emergencyAircraft = [{ hex: 'emer123', flight: 'UAL911', squawk: '7700' }];
       render(<SquawkWatchlist aircraftData={emergencyAircraft} />);
       expect(screen.getByText('UAL911')).toBeInTheDocument();
     });
 
     it('should display hex when flight is not available', () => {
-      const emergencyAircraft = [
-        { hex: 'emer123', squawk: '7700' },
-      ];
+      const emergencyAircraft = [{ hex: 'emer123', squawk: '7700' }];
       render(<SquawkWatchlist aircraftData={emergencyAircraft} />);
       expect(screen.getByText('emer123')).toBeInTheDocument();
     });

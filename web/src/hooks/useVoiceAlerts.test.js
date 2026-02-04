@@ -116,9 +116,7 @@ describe('useVoiceAlerts', () => {
 
     it('should select preferred voice by name', async () => {
       const { useVoiceAlerts } = await import('./useVoiceAlerts');
-      const { result } = renderHook(() =>
-        useVoiceAlerts({ voiceName: 'UK English' })
-      );
+      const { result } = renderHook(() => useVoiceAlerts({ voiceName: 'UK English' }));
 
       expect(result.current.selectedVoice).toEqual(mockVoices[1]);
     });
@@ -150,9 +148,7 @@ describe('useVoiceAlerts', () => {
 
     it('should apply rate, pitch, and volume options', async () => {
       const { useVoiceAlerts } = await import('./useVoiceAlerts');
-      const { result } = renderHook(() =>
-        useVoiceAlerts({ rate: 1.5, pitch: 0.8, volume: 0.9 })
-      );
+      const { result } = renderHook(() => useVoiceAlerts({ rate: 1.5, pitch: 0.8, volume: 0.9 }));
 
       act(() => {
         result.current.speak('Test message');

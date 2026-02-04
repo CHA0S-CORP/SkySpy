@@ -227,7 +227,8 @@ export const AllPositions = {
   parameters: {
     docs: {
       description: {
-        story: 'All four tooltip positions shown together. Hover over each button to see the tooltip.',
+        story:
+          'All four tooltip positions shown together. Hover over each button to see the tooltip.',
       },
     },
   },
@@ -295,7 +296,8 @@ export const OnButton = {
   parameters: {
     docs: {
       description: {
-        story: 'Tooltip on a button element. Commonly used to show keyboard shortcuts or additional context.',
+        story:
+          'Tooltip on a button element. Commonly used to show keyboard shortcuts or additional context.',
       },
     },
   },
@@ -421,7 +423,8 @@ export const OnText = {
           </span>
         </TooltipTrigger>
         <TooltipContent>
-          Automatic Dependent Surveillance-Broadcast: A surveillance technology for tracking aircraft
+          Automatic Dependent Surveillance-Broadcast: A surveillance technology for tracking
+          aircraft
         </TooltipContent>
       </Tooltip>{' '}
       at an altitude of{' '}

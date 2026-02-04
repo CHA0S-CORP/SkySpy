@@ -1,13 +1,5 @@
 import React, { memo, useMemo, useCallback } from 'react';
-import {
-  Clock,
-  MapPin,
-  Navigation,
-  Plane,
-  X,
-  Building2,
-  ArrowRight,
-} from 'lucide-react';
+import { Clock, MapPin, Navigation, Plane, X, Building2, ArrowRight } from 'lucide-react';
 import {
   calculateETAToPoint,
   calculateETAToNearbyAirports,
@@ -20,11 +12,7 @@ import {
 /**
  * ETATargetInfo - Shows ETA to a clicked map point
  */
-const ETATargetInfo = memo(function ETATargetInfo({
-  aircraft,
-  target,
-  onClear,
-}) {
+const ETATargetInfo = memo(function ETATargetInfo({ aircraft, target, onClear }) {
   const eta = useMemo(() => {
     if (!aircraft || !target) return null;
     return calculateETAToPoint(aircraft, target);
@@ -131,9 +119,7 @@ const ETAAirportList = memo(function ETAAirportList({
                 {apt.isApproaching ? (
                   <>
                     <Clock size={10} aria-hidden="true" />
-                    <span className={`eta-time ${urgency || ''}`}>
-                      {formatETA(apt.etaSeconds)}
-                    </span>
+                    <span className={`eta-time ${urgency || ''}`}>{formatETA(apt.etaSeconds)}</span>
                   </>
                 ) : (
                   <span className="eta-not-approaching-badge">--</span>
@@ -189,20 +175,12 @@ export const ETAOverlay = memo(function ETAOverlay({
     <div className={`eta-overlay ${className}`}>
       {/* ETA to clicked point */}
       {hasTarget && (
-        <ETATargetInfo
-          aircraft={aircraft}
-          target={etaTarget}
-          onClear={onClearTarget}
-        />
+        <ETATargetInfo aircraft={aircraft} target={etaTarget} onClear={onClearTarget} />
       )}
 
       {/* ETA to nearby airports */}
       {hasAirports && (
-        <ETAAirportList
-          aircraft={aircraft}
-          airports={airports}
-          onSelectAirport={onSelectAirport}
-        />
+        <ETAAirportList aircraft={aircraft} airports={airports} onSelectAirport={onSelectAirport} />
       )}
     </div>
   );
@@ -250,11 +228,7 @@ export const ETASection = memo(function ETASection({
               <MapPin size={12} aria-hidden="true" /> Target
             </span>
             <span className="eta-panel-value">{targetETA.distanceNm} nm</span>
-            <button
-              className="eta-panel-clear"
-              onClick={onClearTarget}
-              title="Clear target"
-            >
+            <button className="eta-panel-clear" onClick={onClearTarget} title="Clear target">
               <X size={12} />
             </button>
           </div>
@@ -295,9 +269,7 @@ export const ETASection = memo(function ETASection({
               <span className="eta-panel-airport-code">{apt.icao || apt.id}</span>
               <span className="eta-panel-airport-dist">{apt.distanceNm} nm</span>
               {apt.isApproaching ? (
-                <span
-                  className={`eta-panel-airport-eta ${getETAUrgency(apt.etaSeconds) || ''}`}
-                >
+                <span className={`eta-panel-airport-eta ${getETAUrgency(apt.etaSeconds) || ''}`}>
                   {formatETA(apt.etaSeconds)}
                 </span>
               ) : (

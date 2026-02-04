@@ -38,9 +38,7 @@ describe('useAircraftNotes', () => {
     });
 
     it('should load existing notes from localStorage', () => {
-      localStorageMock.getItem.mockReturnValueOnce(
-        JSON.stringify({ ABC123: 'Test note' })
-      );
+      localStorageMock.getItem.mockReturnValueOnce(JSON.stringify({ ABC123: 'Test note' }));
 
       const { result } = renderHook(() => useAircraftNotes());
 

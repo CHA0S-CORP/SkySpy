@@ -290,9 +290,7 @@ export function useConflictProbe({
     // Filter to aircraft with valid position data
     const validAircraft = aircraft.filter(
       (ac) =>
-        ac.lat != null &&
-        ac.lon != null &&
-        (ac.alt_baro || ac.alt_geom || ac.alt) >= MIN_ALTITUDE
+        ac.lat != null && ac.lon != null && (ac.alt_baro || ac.alt_geom || ac.alt) >= MIN_ALTITUDE
     );
 
     // O(n^2) comparison - consider spatial indexing for large numbers of aircraft
@@ -336,8 +334,7 @@ export function useConflictProbe({
       const upperHex = hex.toUpperCase();
       return conflicts.find(
         (c) =>
-          c.aircraft1.hex?.toUpperCase() === upperHex ||
-          c.aircraft2.hex?.toUpperCase() === upperHex
+          c.aircraft1.hex?.toUpperCase() === upperHex || c.aircraft2.hex?.toUpperCase() === upperHex
       );
     },
     [conflicts]
@@ -350,8 +347,7 @@ export function useConflictProbe({
       const upperHex = hex.toUpperCase();
       return conflicts.filter(
         (c) =>
-          c.aircraft1.hex?.toUpperCase() === upperHex ||
-          c.aircraft2.hex?.toUpperCase() === upperHex
+          c.aircraft1.hex?.toUpperCase() === upperHex || c.aircraft2.hex?.toUpperCase() === upperHex
       );
     },
     [conflicts]

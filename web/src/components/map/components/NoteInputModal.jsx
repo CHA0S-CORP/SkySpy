@@ -96,9 +96,7 @@ export function NoteInputModal({
         <DialogHeader>
           <div className="flex items-center gap-2">
             <StickyNote size={20} className="text-accent-yellow" />
-            <DialogTitle>
-              {isEditing ? 'Edit Note' : 'Add Note'}
-            </DialogTitle>
+            <DialogTitle>{isEditing ? 'Edit Note' : 'Add Note'}</DialogTitle>
           </div>
           <DialogDescription>
             {aircraftId ? (
@@ -138,11 +136,7 @@ export function NoteInputModal({
             `}
           >
             {charCount}/{MAX_LENGTH}
-            {charCount > 0 && (
-              <span className="ml-2 text-text-muted">
-                (Ctrl+Enter to save)
-              </span>
-            )}
+            {charCount > 0 && <span className="ml-2 text-text-muted">(Ctrl+Enter to save)</span>}
           </div>
         </div>
 

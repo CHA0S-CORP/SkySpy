@@ -434,7 +434,8 @@
 }
 
 @keyframes conflict-pulse-red {
-  0%, 100% {
+  0%,
+  100% {
     filter: drop-shadow(0 0 6px rgba(255, 80, 80, 0.8));
     transform: scale(1);
   }
@@ -445,7 +446,8 @@
 }
 
 @keyframes conflict-pulse-orange {
-  0%, 100% {
+  0%,
+  100% {
     filter: drop-shadow(0 0 5px rgba(255, 140, 50, 0.7));
     transform: scale(1);
   }
@@ -456,7 +458,8 @@
 }
 
 @keyframes conflict-pulse-yellow {
-  0%, 100% {
+  0%,
+  100% {
     filter: drop-shadow(0 0 4px rgba(255, 220, 50, 0.6));
     transform: scale(1);
   }

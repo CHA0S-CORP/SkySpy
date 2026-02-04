@@ -280,7 +280,11 @@ export function useDeviceGPS({
           try {
             const orientationPermState = await DeviceOrientationEvent.requestPermission();
             if (orientationPermState === 'granted' && orientationHandlerRef.current) {
-              window.addEventListener('deviceorientationabsolute', orientationHandlerRef.current, true);
+              window.addEventListener(
+                'deviceorientationabsolute',
+                orientationHandlerRef.current,
+                true
+              );
               window.addEventListener('deviceorientation', orientationHandlerRef.current, true);
             }
           } catch (err) {
@@ -379,19 +383,16 @@ export function useDeviceGPS({
       }
       // Use inline cleanup to avoid dependency on cleanupOrientationListeners
       if (orientationHandlerRef.current) {
-        window.removeEventListener('deviceorientationabsolute', orientationHandlerRef.current, true);
+        window.removeEventListener(
+          'deviceorientationabsolute',
+          orientationHandlerRef.current,
+          true
+        );
         window.removeEventListener('deviceorientation', orientationHandlerRef.current, true);
         orientationHandlerRef.current = null;
       }
     };
-  }, [
-    enabled,
-    isTracking,
-    autoRequest,
-    permissionState,
-    startTracking,
-    stopTracking,
-  ]);
+  }, [enabled, isTracking, autoRequest, permissionState, startTracking, stopTracking]);
 
   // Retry tracking after permission change
   useEffect(() => {

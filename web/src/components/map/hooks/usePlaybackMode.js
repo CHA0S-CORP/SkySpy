@@ -209,16 +209,19 @@ export function usePlaybackMode({
           ...before,
           lat: before.lat + (after.lat - before.lat) * ratio,
           lon: before.lon + (after.lon - before.lon) * ratio,
-          altitude: before.altitude != null && after.altitude != null
-            ? Math.round(before.altitude + (after.altitude - before.altitude) * ratio)
-            : before.altitude,
-          gs: before.gs != null && after.gs != null
-            ? Math.round(before.gs + (after.gs - before.gs) * ratio)
-            : before.gs,
+          altitude:
+            before.altitude != null && after.altitude != null
+              ? Math.round(before.altitude + (after.altitude - before.altitude) * ratio)
+              : before.altitude,
+          gs:
+            before.gs != null && after.gs != null
+              ? Math.round(before.gs + (after.gs - before.gs) * ratio)
+              : before.gs,
           track: interpolateHeading(before.track, after.track, ratio),
-          vr: before.vr != null && after.vr != null
-            ? Math.round(before.vr + (after.vr - before.vr) * ratio)
-            : before.vr,
+          vr:
+            before.vr != null && after.vr != null
+              ? Math.round(before.vr + (after.vr - before.vr) * ratio)
+              : before.vr,
         };
       }
 

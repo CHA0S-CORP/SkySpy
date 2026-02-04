@@ -223,7 +223,8 @@ export const MultipleSections = {
   parameters: {
     docs: {
       description: {
-        story: 'Multiple CollapsibleSection components can be stacked to create a sidebar or settings panel.',
+        story:
+          'Multiple CollapsibleSection components can be stacked to create a sidebar or settings panel.',
       },
     },
   },
@@ -252,8 +253,8 @@ export const LazyLoaded = {
             <span className="text-accent-cyan">{renderCount}</span>
           </p>
           <p className="text-text-dim text-xs">
-            Open and close the section - the render count only increments once because the content persists after
-            first render.
+            Open and close the section - the render count only increments once because the content
+            persists after first render.
           </p>
         </div>
       );
@@ -324,8 +325,8 @@ export const Controlled = {
           onOpenChange={setIsOpen}
         >
           <p className="text-text-secondary text-sm">
-            This section&apos;s state is controlled by the parent component. Use the buttons above or click the
-            header to toggle.
+            This section&apos;s state is controlled by the parent component. Use the buttons above
+            or click the header to toggle.
           </p>
         </CollapsibleSection>
 
@@ -356,9 +357,13 @@ export const Uncontrolled = {
 
     return (
       <div className="space-y-4">
-        <CollapsibleSection {...args} onOpenChange={(open) => setLastChange(open ? 'opened' : 'closed')}>
+        <CollapsibleSection
+          {...args}
+          onOpenChange={(open) => setLastChange(open ? 'opened' : 'closed')}
+        >
           <p className="text-text-secondary text-sm">
-            This section manages its own state internally. The parent is notified of changes via onOpenChange.
+            This section manages its own state internally. The parent is notified of changes via
+            onOpenChange.
           </p>
         </CollapsibleSection>
 
@@ -504,7 +509,10 @@ export const StandaloneHeader = {
       <div className="px-3 pb-3">
         <div className="space-y-2">
           {['N12345 - Boeing 737', 'N67890 - Airbus A320', 'N11111 - Cessna 172'].map((item) => (
-            <div key={item} className="flex justify-between text-sm py-1.5 border-b border-white/[0.05] last:border-0">
+            <div
+              key={item}
+              className="flex justify-between text-sm py-1.5 border-b border-white/[0.05] last:border-0"
+            >
               <span className="text-text-primary">{item}</span>
               <span className="text-text-dim">In range</span>
             </div>

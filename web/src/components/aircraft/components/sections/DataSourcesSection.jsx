@@ -51,9 +51,7 @@ export function DataSourcesSection({ sourceData, isExpanded, onToggle }) {
           <div className="sidebar-section-icon">
             <Database size={14} />
           </div>
-          <span className="sidebar-section-title">
-            Data Sources ({sourceData.length})
-          </span>
+          <span className="sidebar-section-title">Data Sources ({sourceData.length})</span>
         </div>
         <div className="sidebar-section-chevron">
           <ChevronDown size={16} />
@@ -64,11 +62,7 @@ export function DataSourcesSection({ sourceData, isExpanded, onToggle }) {
         <div id="section-sources-content" className="sidebar-section-content">
           <div className="sidebar-sources-badges">
             {sourceData.map((source, idx) => (
-              <Badge
-                key={source.source || idx}
-                variant={getSourceVariant(source.source)}
-                size="sm"
-              >
+              <Badge key={source.source || idx} variant={getSourceVariant(source.source)} size="sm">
                 {formatSourceName(source.source)}
               </Badge>
             ))}

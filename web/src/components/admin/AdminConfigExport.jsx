@@ -31,12 +31,7 @@ import { cn } from '../ui/cn';
  * - Confirmation dialog before applying imported settings
  * - Success/error feedback display
  */
-export function AdminConfigExport({
-  onExport,
-  onImport,
-  exporting = false,
-  importing = false,
-}) {
+export function AdminConfigExport({ onExport, onImport, exporting = false, importing = false }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewData, setPreviewData] = useState(null);
   const [parseError, setParseError] = useState(null);
@@ -152,7 +147,10 @@ export function AdminConfigExport({
 
     try {
       await onImport(previewData.rawData);
-      showFeedback('success', `Successfully imported ${previewData.configCount} configuration settings`);
+      showFeedback(
+        'success',
+        `Successfully imported ${previewData.configCount} configuration settings`
+      );
       handleClearFile();
     } catch (error) {
       showFeedback('error', error.message || 'Failed to import configuration');
@@ -173,7 +171,8 @@ export function AdminConfigExport({
         <div
           className={cn(
             'flex items-center gap-3 p-4 rounded-lg border',
-            feedback.type === 'success' && 'bg-accent-green/10 border-accent-green/30 text-accent-green',
+            feedback.type === 'success' &&
+              'bg-accent-green/10 border-accent-green/30 text-accent-green',
             feedback.type === 'error' && 'bg-accent-red/10 border-accent-red/30 text-accent-red'
           )}
           role="alert"
@@ -282,10 +281,7 @@ export function AdminConfigExport({
 
             {/* Parse Error */}
             {parseError && (
-              <div
-                className="mt-3 flex items-center gap-2 text-accent-red text-sm"
-                role="alert"
-              >
+              <div className="mt-3 flex items-center gap-2 text-accent-red text-sm" role="alert">
                 <AlertTriangle size={16} aria-hidden="true" />
                 <span>{parseError}</span>
               </div>
@@ -336,7 +332,9 @@ export function AdminConfigExport({
                       'disabled:opacity-50 disabled:cursor-not-allowed'
                     )}
                     aria-busy={importing}
-                    aria-label={importing ? 'Importing configuration' : 'Apply imported configuration'}
+                    aria-label={
+                      importing ? 'Importing configuration' : 'Apply imported configuration'
+                    }
                   >
                     {importing ? (
                       <>
@@ -399,10 +397,7 @@ export function AdminConfigExport({
             <AlertDialogAction
               onClick={handleConfirmImport}
               disabled={importing}
-              className={cn(
-                'bg-accent-yellow text-bg-dark',
-                'hover:bg-accent-yellow/90'
-              )}
+              className={cn('bg-accent-yellow text-bg-dark', 'hover:bg-accent-yellow/90')}
             >
               {importing ? (
                 <>

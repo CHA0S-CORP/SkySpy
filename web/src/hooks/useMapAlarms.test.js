@@ -202,11 +202,7 @@ describe('useMapAlarms', () => {
     it('should return critical if any event is critical', () => {
       const { result } = renderHook(() => useMapAlarms());
 
-      const events = [
-        { severity: 'low' },
-        { severity: 'critical' },
-        { severity: 'warning' },
-      ];
+      const events = [{ severity: 'low' }, { severity: 'critical' }, { severity: 'warning' }];
 
       expect(result.current.getHighestSeverity(events)).toBe('critical');
     });

@@ -172,8 +172,9 @@ describe('AircraftSidebar', () => {
       // Find and click a section toggle button
       const sectionButtons = screen.getAllByRole('button');
       // Click the first collapsible section button (not close/share buttons)
-      const collapsibleButton = sectionButtons.find((btn) =>
-        btn.className?.includes('section-header') || btn.getAttribute('aria-expanded') !== null
+      const collapsibleButton = sectionButtons.find(
+        (btn) =>
+          btn.className?.includes('section-header') || btn.getAttribute('aria-expanded') !== null
       );
 
       if (collapsibleButton) {
@@ -191,18 +192,12 @@ describe('AircraftSidebar', () => {
       const planespottersLink = screen.getByRole('link', { name: /planespotters/i });
       const adsbExchangeLink = screen.getByRole('link', { name: /ads-b exchange/i });
 
-      expect(flightAwareLink).toHaveAttribute(
-        'href',
-        expect.stringContaining('flightaware.com')
-      );
+      expect(flightAwareLink).toHaveAttribute('href', expect.stringContaining('flightaware.com'));
       expect(planespottersLink).toHaveAttribute(
         'href',
         expect.stringContaining('planespotters.net')
       );
-      expect(adsbExchangeLink).toHaveAttribute(
-        'href',
-        expect.stringContaining('adsbexchange.com')
-      );
+      expect(adsbExchangeLink).toHaveAttribute('href', expect.stringContaining('adsbexchange.com'));
     });
 
     it('should open links in new tab', () => {

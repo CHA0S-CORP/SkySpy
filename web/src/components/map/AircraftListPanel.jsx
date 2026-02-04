@@ -76,7 +76,13 @@ export const AircraftListPanel = memo(
         style={listStyle}
         aria-label="Aircraft list panel"
       >
-        <div className="list-panel-header" role="toolbar" aria-label="Aircraft list controls" onMouseDown={handleMouseDown} onTouchStart={handleMouseDown}>
+        <div
+          className="list-panel-header"
+          role="toolbar"
+          aria-label="Aircraft list controls"
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleMouseDown}
+        >
           <Move size={14} className="drag-handle" />
           <List size={16} />
           <span>Aircraft ({filteredAircraft.length})</span>

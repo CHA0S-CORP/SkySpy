@@ -556,11 +556,7 @@ export function getWakeCategoryInfo(category) {
 export function determineWakeCategory(aircraft, aircraftInfo) {
   // Try aircraft type code first (most reliable)
   const typeCode =
-    aircraftInfo?.type_code ||
-    aircraft?.t ||
-    aircraft?.type ||
-    aircraft?.desc ||
-    null;
+    aircraftInfo?.type_code || aircraft?.t || aircraft?.type || aircraft?.desc || null;
 
   if (typeCode) {
     const category = getWakeCategory(typeCode);

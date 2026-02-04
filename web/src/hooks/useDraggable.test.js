@@ -17,12 +17,14 @@ describe('useDraggable', () => {
     touchMoveCb = null;
     touchEndCb = null;
 
-    addEventListenerSpy = vi.spyOn(window, 'addEventListener').mockImplementation((event, handler) => {
-      if (event === 'mousemove') mouseMoveCb = handler;
-      if (event === 'mouseup') mouseUpCb = handler;
-      if (event === 'touchmove') touchMoveCb = handler;
-      if (event === 'touchend') touchEndCb = handler;
-    });
+    addEventListenerSpy = vi
+      .spyOn(window, 'addEventListener')
+      .mockImplementation((event, handler) => {
+        if (event === 'mousemove') mouseMoveCb = handler;
+        if (event === 'mouseup') mouseUpCb = handler;
+        if (event === 'touchmove') touchMoveCb = handler;
+        if (event === 'touchend') touchEndCb = handler;
+      });
 
     removeEventListenerSpy = vi.spyOn(window, 'removeEventListener').mockImplementation(() => {});
 
@@ -266,14 +268,20 @@ describe('useDraggable', () => {
         result.current.handleMouseDown(createMouseEvent(200, 200));
       });
 
-      expect(addEventListenerSpy).toHaveBeenCalledWith('touchmove', expect.any(Function), { passive: true });
-      expect(addEventListenerSpy).toHaveBeenCalledWith('touchend', expect.any(Function), { passive: true });
+      expect(addEventListenerSpy).toHaveBeenCalledWith('touchmove', expect.any(Function), {
+        passive: true,
+      });
+      expect(addEventListenerSpy).toHaveBeenCalledWith('touchend', expect.any(Function), {
+        passive: true,
+      });
     });
   });
 
   describe('bounds checking', () => {
     it('should constrain position to viewport bounds', () => {
-      const { result } = renderHook(() => useDraggable({ x: 100, y: 100 }, { width: 300, height: 400 }));
+      const { result } = renderHook(() =>
+        useDraggable({ x: 100, y: 100 }, { width: 300, height: 400 })
+      );
 
       act(() => {
         result.current.handleMouseDown(createMouseEvent(200, 200));

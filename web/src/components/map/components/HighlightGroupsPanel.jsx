@@ -49,10 +49,7 @@ export function HighlightGroupsPanel({
   const [showAddForm, setShowAddForm] = useState(false);
 
   // Count enabled groups
-  const enabledCount = useMemo(
-    () => groups.filter(g => g.enabled).length,
-    [groups]
-  );
+  const enabledCount = useMemo(() => groups.filter((g) => g.enabled).length, [groups]);
 
   // Handle drag-and-drop reorder
   const [draggedIndex, setDraggedIndex] = useState(null);
@@ -112,9 +109,7 @@ export function HighlightGroupsPanel({
           <Highlighter size={14} className="highlight-icon" />
           <span>
             Highlight Groups
-            {enabledCount > 0 && (
-              <span className="enabled-badge">{enabledCount}</span>
-            )}
+            {enabledCount > 0 && <span className="enabled-badge">{enabledCount}</span>}
           </span>
           {expanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
         </button>
@@ -141,11 +136,7 @@ export function HighlightGroupsPanel({
           </button>
 
           {/* Close */}
-          <button
-            className="highlight-close-btn"
-            onClick={onClose}
-            title="Hide highlight panel"
-          >
+          <button className="highlight-close-btn" onClick={onClose} title="Hide highlight panel">
             <X size={14} />
           </button>
         </div>
@@ -188,10 +179,7 @@ export function HighlightGroupsPanel({
               isProMode={isProMode}
             />
           ) : (
-            <button
-              className="highlight-add-btn"
-              onClick={() => setShowAddForm(true)}
-            >
+            <button className="highlight-add-btn" onClick={() => setShowAddForm(true)}>
               <Plus size={14} />
               <span>Add Custom Group</span>
             </button>
@@ -259,11 +247,7 @@ function HighlightGroupItem({
 
           {/* Actions */}
           <div className="highlight-group-actions">
-            <button
-              className="highlight-group-action edit"
-              onClick={onEdit}
-              title="Edit group"
-            >
+            <button className="highlight-group-action edit" onClick={onEdit} title="Edit group">
               <Edit2 size={12} />
             </button>
             <button
@@ -302,17 +286,17 @@ function EditGroupForm({ group, onSave, onCancel, isProMode }) {
   );
   const [showColorPicker, setShowColorPicker] = useState(false);
 
-  const fieldDef = RULE_FIELDS.find(f => f.value === field);
+  const fieldDef = RULE_FIELDS.find((f) => f.value === field);
   const fieldType = fieldDef?.type || 'string';
   const operators = RULE_OPERATORS[fieldType] || RULE_OPERATORS.string;
 
   // Reset operator if it doesn't apply to new field type
   const handleFieldChange = (newField) => {
     setField(newField);
-    const newFieldDef = RULE_FIELDS.find(f => f.value === newField);
+    const newFieldDef = RULE_FIELDS.find((f) => f.value === newField);
     const newFieldType = newFieldDef?.type || 'string';
     const newOperators = RULE_OPERATORS[newFieldType];
-    if (!newOperators.find(o => o.value === operator)) {
+    if (!newOperators.find((o) => o.value === operator)) {
       setOperator(newOperators[0].value);
     }
     // Reset value for boolean fields
@@ -327,8 +311,8 @@ function EditGroupForm({ group, onSave, onCancel, isProMode }) {
     // Parse value based on field type and operator
     if (fieldType === 'number') {
       if (operator === 'between') {
-        const parts = value.split(',').map(v => parseFloat(v.trim()));
-        parsedValue = parts.filter(n => !isNaN(n));
+        const parts = value.split(',').map((v) => parseFloat(v.trim()));
+        parsedValue = parts.filter((n) => !isNaN(n));
       } else {
         parsedValue = parseFloat(value);
       }
@@ -370,7 +354,7 @@ function EditGroupForm({ group, onSave, onCancel, isProMode }) {
           </button>
           {showColorPicker && (
             <div className="highlight-color-dropdown">
-              {COLOR_PALETTE.map(c => (
+              {COLOR_PALETTE.map((c) => (
                 <button
                   key={c}
                   className={`highlight-color-option ${c === color ? 'selected' : ''}`}
@@ -404,8 +388,10 @@ function EditGroupForm({ group, onSave, onCancel, isProMode }) {
           onChange={(e) => handleFieldChange(e.target.value)}
           className="highlight-select highlight-field-select"
         >
-          {RULE_FIELDS.map(f => (
-            <option key={f.value} value={f.value}>{f.label}</option>
+          {RULE_FIELDS.map((f) => (
+            <option key={f.value} value={f.value}>
+              {f.label}
+            </option>
           ))}
         </select>
 
@@ -415,8 +401,10 @@ function EditGroupForm({ group, onSave, onCancel, isProMode }) {
           onChange={(e) => setOperator(e.target.value)}
           className="highlight-select highlight-operator-select"
         >
-          {operators.map(o => (
-            <option key={o.value} value={o.value}>{o.label}</option>
+          {operators.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
           ))}
         </select>
 
@@ -446,11 +434,7 @@ function EditGroupForm({ group, onSave, onCancel, isProMode }) {
         <button className="highlight-form-btn cancel" onClick={onCancel}>
           Cancel
         </button>
-        <button
-          className="highlight-form-btn save"
-          onClick={handleSave}
-          disabled={!name.trim()}
-        >
+        <button className="highlight-form-btn save" onClick={handleSave} disabled={!name.trim()}>
           Save
         </button>
       </div>
@@ -463,22 +447,24 @@ function EditGroupForm({ group, onSave, onCancel, isProMode }) {
  */
 function AddGroupForm({ onAdd, onCancel, isProMode }) {
   const [name, setName] = useState('');
-  const [color, setColor] = useState(COLOR_PALETTE[Math.floor(Math.random() * COLOR_PALETTE.length)]);
+  const [color, setColor] = useState(
+    COLOR_PALETTE[Math.floor(Math.random() * COLOR_PALETTE.length)]
+  );
   const [field, setField] = useState('operator');
   const [operator, setOperator] = useState('contains');
   const [value, setValue] = useState('');
   const [showColorPicker, setShowColorPicker] = useState(false);
 
-  const fieldDef = RULE_FIELDS.find(f => f.value === field);
+  const fieldDef = RULE_FIELDS.find((f) => f.value === field);
   const fieldType = fieldDef?.type || 'string';
   const operators = RULE_OPERATORS[fieldType] || RULE_OPERATORS.string;
 
   const handleFieldChange = (newField) => {
     setField(newField);
-    const newFieldDef = RULE_FIELDS.find(f => f.value === newField);
+    const newFieldDef = RULE_FIELDS.find((f) => f.value === newField);
     const newFieldType = newFieldDef?.type || 'string';
     const newOperators = RULE_OPERATORS[newFieldType];
-    if (!newOperators.find(o => o.value === operator)) {
+    if (!newOperators.find((o) => o.value === operator)) {
       setOperator(newOperators[0].value);
     }
     if (newFieldType === 'boolean') {
@@ -493,8 +479,8 @@ function AddGroupForm({ onAdd, onCancel, isProMode }) {
 
     if (fieldType === 'number') {
       if (operator === 'between') {
-        const parts = value.split(',').map(v => parseFloat(v.trim()));
-        parsedValue = parts.filter(n => !isNaN(n));
+        const parts = value.split(',').map((v) => parseFloat(v.trim()));
+        parsedValue = parts.filter((n) => !isNaN(n));
       } else {
         parsedValue = parseFloat(value);
       }
@@ -529,6 +515,7 @@ function AddGroupForm({ onAdd, onCancel, isProMode }) {
           onChange={(e) => setName(e.target.value)}
           placeholder="Group name (e.g., 'FedEx Aircraft')"
           className="highlight-input highlight-name-input"
+          /* eslint-disable-next-line jsx-a11y/no-autofocus */
           autoFocus
         />
 
@@ -544,7 +531,7 @@ function AddGroupForm({ onAdd, onCancel, isProMode }) {
           </button>
           {showColorPicker && (
             <div className="highlight-color-dropdown">
-              {COLOR_PALETTE.map(c => (
+              {COLOR_PALETTE.map((c) => (
                 <button
                   key={c}
                   className={`highlight-color-option ${c === color ? 'selected' : ''}`}
@@ -577,8 +564,10 @@ function AddGroupForm({ onAdd, onCancel, isProMode }) {
           onChange={(e) => handleFieldChange(e.target.value)}
           className="highlight-select highlight-field-select"
         >
-          {RULE_FIELDS.map(f => (
-            <option key={f.value} value={f.value}>{f.label}</option>
+          {RULE_FIELDS.map((f) => (
+            <option key={f.value} value={f.value}>
+              {f.label}
+            </option>
           ))}
         </select>
 
@@ -587,8 +576,10 @@ function AddGroupForm({ onAdd, onCancel, isProMode }) {
           onChange={(e) => setOperator(e.target.value)}
           className="highlight-select highlight-operator-select"
         >
-          {operators.map(o => (
-            <option key={o.value} value={o.value}>{o.label}</option>
+          {operators.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
           ))}
         </select>
 

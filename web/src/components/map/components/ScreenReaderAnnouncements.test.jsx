@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { ScreenReaderAnnouncements } from './ScreenReaderAnnouncements';
 
@@ -62,9 +62,7 @@ describe('ScreenReaderAnnouncements', () => {
 
   describe('safety event announcements', () => {
     it('should announce emergency alerts assertively', async () => {
-      const { rerender } = render(
-        <ScreenReaderAnnouncements aircraft={[]} safetyEvents={[]} />
-      );
+      const { rerender } = render(<ScreenReaderAnnouncements aircraft={[]} safetyEvents={[]} />);
 
       const emergencyEvent = {
         id: 'emerg-1',
@@ -75,9 +73,7 @@ describe('ScreenReaderAnnouncements', () => {
         message: 'General emergency declared',
       };
 
-      rerender(
-        <ScreenReaderAnnouncements aircraft={[]} safetyEvents={[emergencyEvent]} />
-      );
+      rerender(<ScreenReaderAnnouncements aircraft={[]} safetyEvents={[emergencyEvent]} />);
 
       // Should have an alert region for emergencies
       const alertRegion = screen.getByRole('alert');
@@ -93,9 +89,7 @@ describe('ScreenReaderAnnouncements', () => {
         squawk: '7500',
       };
 
-      render(
-        <ScreenReaderAnnouncements aircraft={[]} safetyEvents={[hijackEvent]} />
-      );
+      render(<ScreenReaderAnnouncements aircraft={[]} safetyEvents={[hijackEvent]} />);
 
       const alertRegion = screen.getByRole('alert');
       expect(alertRegion).toHaveTextContent('7500');
@@ -113,7 +107,10 @@ describe('ScreenReaderAnnouncements', () => {
       };
 
       render(
-        <ScreenReaderAnnouncements aircraft={[selectedAircraft]} selectedAircraft={selectedAircraft} />
+        <ScreenReaderAnnouncements
+          aircraft={[selectedAircraft]}
+          selectedAircraft={selectedAircraft}
+        />
       );
 
       // First polite status region should have announcement content
@@ -133,9 +130,7 @@ describe('ScreenReaderAnnouncements', () => {
         },
       ];
 
-      const { rerender } = render(
-        <ScreenReaderAnnouncements aircraft={[]} conflicts={[]} />
-      );
+      const { rerender } = render(<ScreenReaderAnnouncements aircraft={[]} conflicts={[]} />);
 
       rerender(<ScreenReaderAnnouncements aircraft={[]} conflicts={conflicts} />);
 
@@ -149,9 +144,7 @@ describe('ScreenReaderAnnouncements', () => {
     it('should format ground altitude correctly', () => {
       const aircraft = { hex: 'abc123', alt_baro: 'ground' };
 
-      render(
-        <ScreenReaderAnnouncements aircraft={[aircraft]} selectedAircraft={aircraft} />
-      );
+      render(<ScreenReaderAnnouncements aircraft={[aircraft]} selectedAircraft={aircraft} />);
 
       // The component should render without error
       expect(screen.getAllByRole('status').length).toBeGreaterThan(0);
@@ -160,9 +153,7 @@ describe('ScreenReaderAnnouncements', () => {
     it('should round large altitudes to nearest 100', () => {
       const aircraft = { hex: 'abc123', alt_baro: 35275 };
 
-      render(
-        <ScreenReaderAnnouncements aircraft={[aircraft]} selectedAircraft={aircraft} />
-      );
+      render(<ScreenReaderAnnouncements aircraft={[aircraft]} selectedAircraft={aircraft} />);
 
       // Should render without error
       expect(screen.getAllByRole('status').length).toBeGreaterThan(0);

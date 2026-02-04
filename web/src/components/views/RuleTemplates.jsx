@@ -156,7 +156,9 @@ export function RuleTemplates({ onClose, onSelectTemplate }) {
       className="rule-templates-overlay"
       role="presentation"
       onClick={handleOverlayClick}
-      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
+      }}
     >
       <div
         className="rule-templates-modal"

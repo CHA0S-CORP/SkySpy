@@ -126,9 +126,7 @@ export const RULE_OPERATORS = {
     { value: 'lessThan', label: 'Less Than' },
     { value: 'between', label: 'Between' },
   ],
-  boolean: [
-    { value: 'equals', label: 'Is' },
-  ],
+  boolean: [{ value: 'equals', label: 'Is' }],
 };
 
 /**
@@ -198,9 +196,7 @@ export function matchesRule(aircraft, info, rule) {
     case 'in':
       if (!Array.isArray(rule.value)) return false;
       if (typeof value === 'string') {
-        return rule.value.some(v =>
-          String(v).toLowerCase() === value.toLowerCase()
-        );
+        return rule.value.some((v) => String(v).toLowerCase() === value.toLowerCase());
       }
       return rule.value.includes(value);
 
@@ -225,7 +221,10 @@ export function matchesRule(aircraft, info, rule) {
 export function parseInValue(value) {
   if (Array.isArray(value)) return value;
   if (typeof value !== 'string') return [];
-  return value.split(',').map(v => v.trim()).filter(Boolean);
+  return value
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
 }
 
 /**
@@ -294,27 +293,21 @@ export function useHighlightGroups(aircraftInfo = {}) {
    * Toggle a group on/off
    */
   const toggleGroup = useCallback((id) => {
-    setGroups(prev => prev.map(g =>
-      g.id === id ? { ...g, enabled: !g.enabled } : g
-    ));
+    setGroups((prev) => prev.map((g) => (g.id === id ? { ...g, enabled: !g.enabled } : g)));
   }, []);
 
   /**
    * Enable a specific group
    */
   const enableGroup = useCallback((id) => {
-    setGroups(prev => prev.map(g =>
-      g.id === id ? { ...g, enabled: true } : g
-    ));
+    setGroups((prev) => prev.map((g) => (g.id === id ? { ...g, enabled: true } : g)));
   }, []);
 
   /**
    * Disable a specific group
    */
   const disableGroup = useCallback((id) => {
-    setGroups(prev => prev.map(g =>
-      g.id === id ? { ...g, enabled: false } : g
-    ));
+    setGroups((prev) => prev.map((g) => (g.id === id ? { ...g, enabled: false } : g)));
   }, []);
 
   /**
@@ -326,7 +319,7 @@ export function useHighlightGroups(aircraftInfo = {}) {
       id: group.id || `custom-${Date.now()}`,
       enabled: group.enabled !== undefined ? group.enabled : true,
     };
-    setGroups(prev => [...prev, newGroup]);
+    setGroups((prev) => [...prev, newGroup]);
     return newGroup.id;
   }, []);
 
@@ -334,23 +327,21 @@ export function useHighlightGroups(aircraftInfo = {}) {
    * Remove a highlight group
    */
   const removeGroup = useCallback((id) => {
-    setGroups(prev => prev.filter(g => g.id !== id));
+    setGroups((prev) => prev.filter((g) => g.id !== id));
   }, []);
 
   /**
    * Update an existing group
    */
   const updateGroup = useCallback((id, updates) => {
-    setGroups(prev => prev.map(g =>
-      g.id === id ? { ...g, ...updates } : g
-    ));
+    setGroups((prev) => prev.map((g) => (g.id === id ? { ...g, ...updates } : g)));
   }, []);
 
   /**
    * Reorder groups (for drag-and-drop)
    */
   const reorderGroups = useCallback((fromIndex, toIndex) => {
-    setGroups(prev => {
+    setGroups((prev) => {
       const newGroups = [...prev];
       const [moved] = newGroups.splice(fromIndex, 1);
       newGroups.splice(toIndex, 0, moved);
@@ -369,74 +360,80 @@ export function useHighlightGroups(aircraftInfo = {}) {
    * Disable all groups
    */
   const disableAll = useCallback(() => {
-    setGroups(prev => prev.map(g => ({ ...g, enabled: false })));
+    setGroups((prev) => prev.map((g) => ({ ...g, enabled: false })));
   }, []);
 
   /**
    * Get the highlight color for an aircraft (first matching enabled group)
    */
-  const getAircraftHighlight = useCallback((aircraft) => {
-    if (!aircraft) return null;
+  const getAircraftHighlight = useCallback(
+    (aircraft) => {
+      if (!aircraft) return null;
 
-    const info = aircraftInfo?.[aircraft.hex] || {};
+      const info = aircraftInfo?.[aircraft.hex] || {};
 
-    // Check each enabled group in order (first match wins)
-    for (const group of groups) {
-      if (!group.enabled) continue;
-      if (matchesRule(aircraft, info, group.rule)) {
-        return {
-          color: group.color,
-          groupId: group.id,
-          groupName: group.name,
-        };
+      // Check each enabled group in order (first match wins)
+      for (const group of groups) {
+        if (!group.enabled) continue;
+        if (matchesRule(aircraft, info, group.rule)) {
+          return {
+            color: group.color,
+            groupId: group.id,
+            groupName: group.name,
+          };
+        }
       }
-    }
-    return null;
-  }, [groups, aircraftInfo]);
+      return null;
+    },
+    [groups, aircraftInfo]
+  );
 
   /**
    * Get all matching groups for an aircraft
    */
-  const getMatchingGroups = useCallback((aircraft) => {
-    if (!aircraft) return [];
+  const getMatchingGroups = useCallback(
+    (aircraft) => {
+      if (!aircraft) return [];
 
-    const info = aircraftInfo?.[aircraft.hex] || {};
-    const matches = [];
+      const info = aircraftInfo?.[aircraft.hex] || {};
+      const matches = [];
 
-    for (const group of groups) {
-      if (matchesRule(aircraft, info, group.rule)) {
-        matches.push(group);
+      for (const group of groups) {
+        if (matchesRule(aircraft, info, group.rule)) {
+          matches.push(group);
+        }
       }
-    }
-    return matches;
-  }, [groups, aircraftInfo]);
+      return matches;
+    },
+    [groups, aircraftInfo]
+  );
 
   /**
    * Count aircraft matching each group
    */
-  const getGroupCounts = useCallback((aircraftList) => {
-    if (!Array.isArray(aircraftList)) return {};
+  const getGroupCounts = useCallback(
+    (aircraftList) => {
+      if (!Array.isArray(aircraftList)) return {};
 
-    const counts = {};
-    for (const group of groups) {
-      counts[group.id] = 0;
-      for (const aircraft of aircraftList) {
-        const info = aircraftInfo?.[aircraft.hex] || {};
-        if (matchesRule(aircraft, info, group.rule)) {
-          counts[group.id]++;
+      const counts = {};
+      for (const group of groups) {
+        counts[group.id] = 0;
+        for (const aircraft of aircraftList) {
+          const info = aircraftInfo?.[aircraft.hex] || {};
+          if (matchesRule(aircraft, info, group.rule)) {
+            counts[group.id]++;
+          }
         }
       }
-    }
-    return counts;
-  }, [groups, aircraftInfo]);
+      return counts;
+    },
+    [groups, aircraftInfo]
+  );
 
   /**
    * Get enabled groups count
    */
-  const enabledCount = useMemo(() =>
-    groups.filter(g => g.enabled).length,
-    [groups]
-  );
+  const enabledCount = useMemo(() => groups.filter((g) => g.enabled).length, [groups]);
 
   /**
    * Check if any groups are enabled
@@ -447,14 +444,14 @@ export function useHighlightGroups(aircraftInfo = {}) {
    * Toggle panel visibility
    */
   const togglePanel = useCallback(() => {
-    setPanelVisible(prev => !prev);
+    setPanelVisible((prev) => !prev);
   }, []);
 
   /**
    * Toggle panel expanded state
    */
   const togglePanelExpanded = useCallback(() => {
-    setPanelExpanded(prev => !prev);
+    setPanelExpanded((prev) => !prev);
   }, []);
 
   return {

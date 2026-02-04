@@ -61,17 +61,12 @@ export function useSavedViews(namespace = 'history') {
     setSavedViews((prev) => prev.filter((v) => v.id !== viewId));
   }, []);
 
-  const getView = useCallback(
-    (viewId) => savedViews.find((v) => v.id === viewId),
-    [savedViews]
-  );
+  const getView = useCallback((viewId) => savedViews.find((v) => v.id === viewId), [savedViews]);
 
   const renameView = useCallback((viewId, newName) => {
     setSavedViews((prev) =>
       prev.map((v) =>
-        v.id === viewId
-          ? { ...v, name: newName, updatedAt: new Date().toISOString() }
-          : v
+        v.id === viewId ? { ...v, name: newName, updatedAt: new Date().toISOString() } : v
       )
     );
   }, []);

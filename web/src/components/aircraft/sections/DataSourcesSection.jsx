@@ -60,9 +60,7 @@ export function DataSourcesSection({ sourceData = [] }) {
                     </span>
                   ))}
                   {source.fields.length > 5 && (
-                    <span className="data-source-field-more">
-                      +{source.fields.length - 5} more
-                    </span>
+                    <span className="data-source-field-more">+{source.fields.length - 5} more</span>
                   )}
                 </div>
               )}

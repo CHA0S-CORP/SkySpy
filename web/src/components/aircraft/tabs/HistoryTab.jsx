@@ -286,12 +286,20 @@ export function HistoryTab({
   const handleExportCSV = useCallback(() => {
     if (!sightings || sightings.length === 0) return;
 
-    const headers = ['timestamp', 'lat', 'lon', 'altitude', 'gs', 'track', 'vr', 'distance_nm', 'rssi'];
+    const headers = [
+      'timestamp',
+      'lat',
+      'lon',
+      'altitude',
+      'gs',
+      'track',
+      'vr',
+      'distance_nm',
+      'rssi',
+    ];
     const csvContent = [
       headers.join(','),
-      ...sightings.map((s) =>
-        headers.map((h) => s[h] ?? '').join(',')
-      ),
+      ...sightings.map((s) => headers.map((h) => s[h] ?? '').join(',')),
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -324,9 +332,14 @@ export function HistoryTab({
   // Enhanced layout with linked graphs and stats panel
   if (useEnhancedLayout) {
     const validSightings = sightings.filter((s) => s.lat && s.lon);
-    const duration = sightings.length > 1
-      ? Math.round((new Date(sightings[0].timestamp) - new Date(sightings[sightings.length - 1].timestamp)) / 60000)
-      : 0;
+    const duration =
+      sightings.length > 1
+        ? Math.round(
+            (new Date(sightings[0].timestamp) -
+              new Date(sightings[sightings.length - 1].timestamp)) /
+              60000
+          )
+        : 0;
 
     return (
       <div
@@ -463,10 +476,7 @@ export function HistoryTab({
             </div>
 
             {/* Stats panel (sidebar) */}
-            <FlightStatsPanel
-              sightings={sightings}
-              className="flight-stats-panel--sidebar"
-            />
+            <FlightStatsPanel sightings={sightings} className="flight-stats-panel--sidebar" />
           </div>
         )}
 
@@ -493,7 +503,12 @@ export function HistoryTab({
           </button>
 
           {showPositionTable && (
-            <div className="history-table" role="table" aria-label="Position history" style={{ maxHeight: '300px', overflow: 'auto' }}>
+            <div
+              className="history-table"
+              role="table"
+              aria-label="Position history"
+              style={{ maxHeight: '300px', overflow: 'auto' }}
+            >
               <div className="history-row header" role="row">
                 <span role="columnheader">Time</span>
                 <span role="columnheader">Alt (ft)</span>
@@ -529,7 +544,17 @@ export function HistoryTab({
                   <span role="cell">{new Date(s.timestamp).toLocaleTimeString()}</span>
                   <span role="cell">{s.altitude?.toLocaleString() || '--'}</span>
                   <span role="cell">{s.gs?.toFixed(0) || '--'}</span>
-                  <span role="cell" style={{ color: s.vr > 0 ? 'var(--accent-green)' : s.vr < 0 ? 'var(--accent-red)' : undefined }}>
+                  <span
+                    role="cell"
+                    style={{
+                      color:
+                        s.vr > 0
+                          ? 'var(--accent-green)'
+                          : s.vr < 0
+                            ? 'var(--accent-red)'
+                            : undefined,
+                    }}
+                  >
                     {s.vr != null ? (s.vr > 0 ? '+' : '') + s.vr : '--'}
                   </span>
                   <span role="cell">{s.distance_nm?.toFixed(1) || '--'}</span>

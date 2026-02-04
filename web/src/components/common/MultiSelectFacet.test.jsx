@@ -113,9 +113,7 @@ describe('MultiSelectFacet', () => {
 
     it('should clear all selections', () => {
       const onChange = vi.fn();
-      render(
-        <MultiSelectFacet {...defaultProps} value={['a320', 'b737']} onChange={onChange} />
-      );
+      render(<MultiSelectFacet {...defaultProps} value={['a320', 'b737']} onChange={onChange} />);
 
       fireEvent.click(screen.getByRole('button'));
       fireEvent.click(screen.getByText('Clear'));
@@ -182,9 +180,7 @@ describe('MultiSelectFacet', () => {
 
   describe('option rendering', () => {
     it('should render option with icon', () => {
-      const optionsWithIcons = [
-        { value: 'military', label: 'Military', icon: '🎖️', count: 5 },
-      ];
+      const optionsWithIcons = [{ value: 'military', label: 'Military', icon: '🎖️', count: 5 }];
       render(<MultiSelectFacet {...defaultProps} options={optionsWithIcons} />);
       fireEvent.click(screen.getByRole('button'));
 

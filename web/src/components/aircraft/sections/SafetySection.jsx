@@ -55,9 +55,7 @@ export function SafetySection({
                   {event.details.altitude && (
                     <span>Alt: {event.details.altitude?.toLocaleString()}ft</span>
                   )}
-                  {event.details.distance_nm && (
-                    <span>Dist: {event.details.distance_nm}nm</span>
-                  )}
+                  {event.details.distance_nm && <span>Dist: {event.details.distance_nm}nm</span>}
                   {event.details.altitude_diff_ft && (
                     <span>ΔAlt: {event.details.altitude_diff_ft}ft</span>
                   )}
@@ -107,9 +105,7 @@ export function SafetySection({
         })}
 
         {safetyEvents.length > 10 && (
-          <p className="safety-more-text">
-            +{safetyEvents.length - 10} more events
-          </p>
+          <p className="safety-more-text">+{safetyEvents.length - 10} more events</p>
         )}
       </div>
     </div>

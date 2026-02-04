@@ -118,7 +118,16 @@ export function AchievementsSection({ data, loading, onSelectAircraft }) {
                     role={onSelectAircraft && record.icao_hex ? 'button' : undefined}
                     tabIndex={onSelectAircraft && record.icao_hex ? 0 : undefined}
                     onClick={() => record.icao_hex && onSelectAircraft?.(record.icao_hex)}
-                    onKeyDown={onSelectAircraft && record.icao_hex ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectAircraft(record.icao_hex); } } : undefined}
+                    onKeyDown={
+                      onSelectAircraft && record.icao_hex
+                        ? (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              onSelectAircraft(record.icao_hex);
+                            }
+                          }
+                        : undefined
+                    }
                   >
                     <div className="record-icon">
                       <IconComponent size={24} />
@@ -155,7 +164,16 @@ export function AchievementsSection({ data, loading, onSelectAircraft }) {
                   role={onSelectAircraft ? 'button' : undefined}
                   tabIndex={onSelectAircraft ? 0 : undefined}
                   onClick={() => onSelectAircraft?.(sighting.icao_hex)}
-                  onKeyDown={onSelectAircraft ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectAircraft(sighting.icao_hex); } } : undefined}
+                  onKeyDown={
+                    onSelectAircraft
+                      ? (e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            onSelectAircraft(sighting.icao_hex);
+                          }
+                        }
+                      : undefined
+                  }
                 >
                   <div
                     className="sighting-rarity"

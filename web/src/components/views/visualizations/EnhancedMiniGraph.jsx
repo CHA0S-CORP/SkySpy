@@ -228,7 +228,12 @@ export function EnhancedMiniGraph({
             role="button"
             tabIndex={0}
             onClick={handleReset}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleReset(); } }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleReset();
+              }
+            }}
           >
             {zoom.toFixed(1)}x
           </span>
@@ -260,7 +265,12 @@ export function EnhancedMiniGraph({
         onTouchMove={handleDragMove}
         onTouchEnd={handleDragEnd}
         onClick={handleClick}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(e); } }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleClick(e);
+          }
+        }}
       >
         <svg width={width} height={height} className="mini-graph-svg">
           {/* Grid lines (optional for large size) */}

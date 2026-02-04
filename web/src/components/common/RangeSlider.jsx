@@ -32,43 +32,52 @@ export function RangeSlider({
   const clamp = (val, minV, maxV) => Math.min(Math.max(val, minV), maxV);
   const snapToStep = (val) => Math.round(val / step) * step;
 
-  const getValueFromPosition = useCallback((clientX) => {
-    if (!trackRef.current) return 0;
-    const rect = trackRef.current.getBoundingClientRect();
-    const percent = (clientX - rect.left) / rect.width;
-    const rawValue = min + percent * (max - min);
-    return snapToStep(clamp(rawValue, min, max));
-  }, [min, max, step]);
+  const getValueFromPosition = useCallback(
+    (clientX) => {
+      if (!trackRef.current) return 0;
+      const rect = trackRef.current.getBoundingClientRect();
+      const percent = (clientX - rect.left) / rect.width;
+      const rawValue = min + percent * (max - min);
+      return snapToStep(clamp(rawValue, min, max));
+    },
+    [min, max, step]
+  );
 
-  const handleMouseDown = useCallback((e, handle) => {
-    if (disabled) return;
-    e.preventDefault();
-    setDragging(handle);
-  }, [disabled]);
+  const handleMouseDown = useCallback(
+    (e, handle) => {
+      if (disabled) return;
+      e.preventDefault();
+      setDragging(handle);
+    },
+    [disabled]
+  );
 
-  const handleMouseMove = useCallback((e) => {
-    if (!dragging || disabled) return;
+  const handleMouseMove = useCallback(
+    (e) => {
+      if (!dragging || disabled) return;
 
-    const newValue = getValueFromPosition(e.clientX);
+      const newValue = getValueFromPosition(e.clientX);
 
-    setLocalValue((prev) => {
-      let [minVal, maxVal] = prev;
+      setLocalValue((prev) => {
+        let [minVal, maxVal] = prev;
 
-      if (dragging === 'min') {
-        minVal = clamp(newValue, min, maxVal - step);
-      } else if (dragging === 'max') {
-        maxVal = clamp(newValue, minVal + step, max);
-      } else if (dragging === 'range') {
-        // Move entire range
-        const range = maxVal - minVal;
-        const center = newValue;
-        minVal = clamp(center - range / 2, min, max - range);
-        maxVal = minVal + range;
-      }
+        if (dragging === 'min') {
+          minVal = clamp(newValue, min, maxVal - step);
+        } else if (dragging === 'max') {
+          maxVal = clamp(newValue, minVal + step, max);
+        } else if (dragging === 'range') {
+          // Move entire range
+          const range = maxVal - minVal;
+          const center = newValue;
+          minVal = clamp(center - range / 2, min, max - range);
+          maxVal = minVal + range;
+        }
 
-      return [minVal, maxVal];
-    });
-  }, [dragging, disabled, getValueFromPosition, min, max, step]);
+        return [minVal, maxVal];
+      });
+    },
+    [dragging, disabled, getValueFromPosition, min, max, step]
+  );
 
   const handleMouseUp = useCallback(() => {
     if (dragging) {
@@ -137,17 +146,19 @@ export function RangeSlider({
     const maxCount = Math.max(...histogramData);
 
     return (
-      <div style={{
-        position: 'absolute',
-        bottom: '16px',
-        left: 0,
-        right: 0,
-        height: '24px',
-        display: 'flex',
-        alignItems: 'flex-end',
-        gap: '1px',
-        padding: '0 6px',
-      }}>
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '16px',
+          left: 0,
+          right: 0,
+          height: '24px',
+          display: 'flex',
+          alignItems: 'flex-end',
+          gap: '1px',
+          padding: '0 6px',
+        }}
+      >
         {histogramData.map((count, i) => {
           const percent = (i / (histogramData.length - 1)) * 100;
           const inRange = percent >= minPercent && percent <= maxPercent;
@@ -179,25 +190,31 @@ export function RangeSlider({
       }}
     >
       {label && (
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '8px',
-        }}>
-          <span style={{
-            fontSize: '11px',
-            color: 'var(--text-secondary)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
-          }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '8px',
+          }}
+        >
+          <span
+            style={{
+              fontSize: '11px',
+              color: 'var(--text-secondary)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+            }}
+          >
             {label}
           </span>
-          <span style={{
-            fontSize: '11px',
-            color: 'var(--text-primary)',
-            fontFamily: "'JetBrains Mono', monospace",
-          }}>
+          <span
+            style={{
+              fontSize: '11px',
+              color: 'var(--text-primary)',
+              fontFamily: "'JetBrains Mono', monospace",
+            }}
+          >
             {formatValue(localValue[0])} – {formatValue(localValue[1])} {unit}
           </span>
         </div>
@@ -235,15 +252,17 @@ export function RangeSlider({
         {renderHistogram()}
 
         {/* Track background */}
-        <div style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: '4px',
-          background: 'var(--bg-hover)',
-          borderRadius: '2px',
-        }} />
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: '4px',
+            background: 'var(--bg-hover)',
+            borderRadius: '2px',
+          }}
+        />
 
         {/* Active range */}
         <div
@@ -303,11 +322,13 @@ export function RangeSlider({
 
       {/* Number inputs */}
       {showInputs && (
-        <div style={{
-          display: 'flex',
-          gap: '8px',
-          marginTop: '8px',
-        }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: '8px',
+            marginTop: '8px',
+          }}
+        >
           <input
             type="number"
             value={localValue[0]}

@@ -200,11 +200,10 @@ export function useHeatMap({
       if (peakCell) {
         peakCell.lat = maxLat - ((peakCell.y + 0.5) / gridSize) * (maxLat - minLat);
         peakCell.lon = minLon + ((peakCell.x + 0.5) / gridSize) * (maxLon - minLon);
-        peakCell.distanceNm =
-          Math.sqrt(
-            Math.pow((peakCell.lat - feederLat) * 60, 2) +
-              Math.pow((peakCell.lon - feederLon) * 60 * lonScale, 2)
-          ).toFixed(1);
+        peakCell.distanceNm = Math.sqrt(
+          Math.pow((peakCell.lat - feederLat) * 60, 2) +
+            Math.pow((peakCell.lon - feederLon) * 60 * lonScale, 2)
+        ).toFixed(1);
         peakCell.bearing = (
           ((Math.atan2(
             (peakCell.lon - feederLon) * 60 * lonScale,
@@ -308,9 +307,7 @@ export function useHeatMap({
       });
 
       // Trim old positions
-      livePositionsRef.current = livePositionsRef.current.filter(
-        (p) => p.timestamp >= cutoff
-      );
+      livePositionsRef.current = livePositionsRef.current.filter((p) => p.timestamp >= cutoff);
 
       // Limit memory usage
       if (livePositionsRef.current.length > 50000) {

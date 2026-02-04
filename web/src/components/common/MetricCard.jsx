@@ -20,7 +20,7 @@ export function MetricCard({
   loading = false,
   className = '',
   onClick,
-  valueFormatter = (v) => typeof v === 'number' ? v.toLocaleString() : v,
+  valueFormatter = (v) => (typeof v === 'number' ? v.toLocaleString() : v),
 }) {
   // Calculate trend from current vs previous if not provided
   const calculatedTrend = useMemo(() => {
@@ -30,11 +30,12 @@ export function MetricCard({
   }, [value, previousValue, trend]);
 
   const trendDirection = calculatedTrend > 0 ? 'up' : calculatedTrend < 0 ? 'down' : 'neutral';
-  const trendColor = trendDirection === 'up'
-    ? 'var(--accent-green)'
-    : trendDirection === 'down'
-      ? 'var(--accent-red)'
-      : 'var(--text-dim)';
+  const trendColor =
+    trendDirection === 'up'
+      ? 'var(--accent-green)'
+      : trendDirection === 'down'
+        ? 'var(--accent-red)'
+        : 'var(--text-dim)';
 
   const sizeStyles = {
     compact: {
@@ -77,19 +78,23 @@ export function MetricCard({
           minWidth: size === 'compact' ? '100px' : '140px',
         }}
       >
-        <div style={{
-          height: s.labelSize,
-          width: '60%',
-          background: 'var(--bg-hover)',
-          borderRadius: '4px',
-          marginBottom: '8px',
-        }} />
-        <div style={{
-          height: s.valueSize,
-          width: '80%',
-          background: 'var(--bg-hover)',
-          borderRadius: '4px',
-        }} />
+        <div
+          style={{
+            height: s.labelSize,
+            width: '60%',
+            background: 'var(--bg-hover)',
+            borderRadius: '4px',
+            marginBottom: '8px',
+          }}
+        />
+        <div
+          style={{
+            height: s.valueSize,
+            width: '80%',
+            background: 'var(--bg-hover)',
+            borderRadius: '4px',
+          }}
+        />
       </div>
     );
   }
@@ -114,66 +119,80 @@ export function MetricCard({
       }}
     >
       {/* Accent glow on left edge */}
-      <div style={{
-        position: 'absolute',
-        left: 0,
-        top: 0,
-        bottom: 0,
-        width: '3px',
-        background: color,
-        opacity: 0.6,
-      }} />
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: '3px',
+          background: color,
+          opacity: 0.6,
+        }}
+      />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           {/* Label row */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            marginBottom: '4px',
-          }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              marginBottom: '4px',
+            }}
+          >
             {icon && (
-              <span style={{
-                fontSize: s.labelSize,
-                color: color,
-                display: 'flex',
-                alignItems: 'center',
-              }}>
+              <span
+                style={{
+                  fontSize: s.labelSize,
+                  color: color,
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
                 {icon}
               </span>
             )}
-            <span style={{
-              fontSize: s.labelSize,
-              color: 'var(--text-secondary)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
-              fontWeight: 500,
-            }}>
+            <span
+              style={{
+                fontSize: s.labelSize,
+                color: 'var(--text-secondary)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                fontWeight: 500,
+              }}
+            >
               {label}
             </span>
           </div>
 
           {/* Value row */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'baseline',
-            gap: '4px',
-          }}>
-            <span style={{
-              fontSize: s.valueSize,
-              fontWeight: 600,
-              color: 'var(--text-primary)',
-              fontFamily: "'JetBrains Mono', monospace",
-              lineHeight: 1.1,
-            }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: '4px',
+            }}
+          >
+            <span
+              style={{
+                fontSize: s.valueSize,
+                fontWeight: 600,
+                color: 'var(--text-primary)',
+                fontFamily: "'JetBrains Mono', monospace",
+                lineHeight: 1.1,
+              }}
+            >
               {valueFormatter(value)}
             </span>
             {unit && (
-              <span style={{
-                fontSize: s.trendSize,
-                color: 'var(--text-dim)',
-              }}>
+              <span
+                style={{
+                  fontSize: s.trendSize,
+                  color: 'var(--text-dim)',
+                }}
+              >
                 {unit}
               </span>
             )}
@@ -181,18 +200,22 @@ export function MetricCard({
 
           {/* Trend indicator */}
           {calculatedTrend !== null && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              marginTop: '4px',
-            }}>
-              <span style={{
-                fontSize: s.trendSize,
-                color: trendColor,
+            <div
+              style={{
                 display: 'flex',
                 alignItems: 'center',
-              }}>
+                gap: '4px',
+                marginTop: '4px',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: s.trendSize,
+                  color: trendColor,
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
                 {trendDirection === 'up' && '↑'}
                 {trendDirection === 'down' && '↓'}
                 {trendDirection === 'neutral' && '→'}

@@ -133,9 +133,7 @@ describe('useDeviceGPS', () => {
     it('should update position when watchPosition succeeds', async () => {
       mockPermissionStatus.state = 'granted';
 
-      const { result } = renderHook(() =>
-        useDeviceGPS({ enabled: true, autoRequest: true })
-      );
+      const { result } = renderHook(() => useDeviceGPS({ enabled: true, autoRequest: true }));
 
       await waitFor(() => {
         expect(result.current.permissionState).toBe(GPS_PERMISSION_STATES.GRANTED);
@@ -175,9 +173,7 @@ describe('useDeviceGPS', () => {
     it('should clear error when position update succeeds', async () => {
       mockPermissionStatus.state = 'granted';
 
-      const { result } = renderHook(() =>
-        useDeviceGPS({ enabled: true, autoRequest: true })
-      );
+      const { result } = renderHook(() => useDeviceGPS({ enabled: true, autoRequest: true }));
 
       await waitFor(() => {
         expect(result.current.isTracking).toBe(true);
@@ -225,9 +221,7 @@ describe('useDeviceGPS', () => {
     it('should handle permission denied error', async () => {
       mockPermissionStatus.state = 'granted';
 
-      const { result } = renderHook(() =>
-        useDeviceGPS({ enabled: true, autoRequest: true })
-      );
+      const { result } = renderHook(() => useDeviceGPS({ enabled: true, autoRequest: true }));
 
       await waitFor(() => {
         expect(result.current.isTracking).toBe(true);
@@ -253,9 +247,7 @@ describe('useDeviceGPS', () => {
     it('should handle position unavailable error', async () => {
       mockPermissionStatus.state = 'granted';
 
-      const { result } = renderHook(() =>
-        useDeviceGPS({ enabled: true, autoRequest: true })
-      );
+      const { result } = renderHook(() => useDeviceGPS({ enabled: true, autoRequest: true }));
 
       await waitFor(() => {
         expect(result.current.isTracking).toBe(true);
@@ -281,9 +273,7 @@ describe('useDeviceGPS', () => {
     it('should handle timeout error', async () => {
       mockPermissionStatus.state = 'granted';
 
-      const { result } = renderHook(() =>
-        useDeviceGPS({ enabled: true, autoRequest: true })
-      );
+      const { result } = renderHook(() => useDeviceGPS({ enabled: true, autoRequest: true }));
 
       await waitFor(() => {
         expect(result.current.isTracking).toBe(true);
@@ -487,9 +477,7 @@ describe('useDeviceGPS', () => {
     it('should auto-start tracking when enabled and autoRequest is true', async () => {
       mockPermissionStatus.state = 'granted';
 
-      const { result } = renderHook(() =>
-        useDeviceGPS({ enabled: true, autoRequest: true })
-      );
+      const { result } = renderHook(() => useDeviceGPS({ enabled: true, autoRequest: true }));
 
       await waitFor(() => {
         expect(result.current.isTracking).toBe(true);
@@ -501,9 +489,7 @@ describe('useDeviceGPS', () => {
     it('should not auto-start when autoRequest is false and permission is not granted', async () => {
       mockPermissionStatus.state = 'prompt';
 
-      const { result } = renderHook(() =>
-        useDeviceGPS({ enabled: true, autoRequest: false })
-      );
+      const { result } = renderHook(() => useDeviceGPS({ enabled: true, autoRequest: false }));
 
       await waitFor(() => {
         expect(result.current.permissionState).toBe(GPS_PERMISSION_STATES.PROMPT);

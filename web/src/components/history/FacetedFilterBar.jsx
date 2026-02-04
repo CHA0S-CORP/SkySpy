@@ -66,7 +66,13 @@ export function FacetedFilterBar({
     });
 
     return [
-      { value: 'military', label: 'Military', count: categoryCounts.military, icon: '🎖️', color: 'var(--viz-military)' },
+      {
+        value: 'military',
+        label: 'Military',
+        count: categoryCounts.military,
+        icon: '🎖️',
+        color: 'var(--viz-military)',
+      },
       { value: 'helicopter', label: 'Helicopter', count: categoryCounts.helicopter, icon: '🚁' },
       { value: 'heavy', label: 'Heavy', count: categoryCounts.heavy, icon: '✈️' },
       { value: 'medium', label: 'Medium', count: categoryCounts.medium },
@@ -175,9 +181,9 @@ export function FacetedFilterBar({
   // Check if any filters are active
   const hasActiveFilters =
     filters.search ||
-    (filters.types?.length > 0) ||
-    (filters.categories?.length > 0) ||
-    (filters.airlines?.length > 0) ||
+    filters.types?.length > 0 ||
+    filters.categories?.length > 0 ||
+    filters.airlines?.length > 0 ||
     (filters.distanceRange && (filters.distanceRange[0] > 0 || filters.distanceRange[1] < 300)) ||
     (filters.altitudeRange && (filters.altitudeRange[0] > 0 || filters.altitudeRange[1] < 45000)) ||
     (filters.durationRange && (filters.durationRange[0] > 0 || filters.durationRange[1] < 240)) ||
@@ -225,7 +231,15 @@ export function FacetedFilterBar({
           fill="none"
         >
           <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.5" />
-          <line x1="9.5" y1="9.5" x2="13" y2="13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <line
+            x1="9.5"
+            y1="9.5"
+            x2="13"
+            y2="13"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
         </svg>
         <input
           type="text"
@@ -351,11 +365,17 @@ export function FacetedFilterBar({
           onClick={() => setShowAdvanced(!showAdvanced)}
           style={{
             padding: '6px 10px',
-            background: showAdvanced || advancedFilterCount > 0 ? 'rgba(0, 212, 255, 0.1)' : 'var(--bg-hover)',
+            background:
+              showAdvanced || advancedFilterCount > 0
+                ? 'rgba(0, 212, 255, 0.1)'
+                : 'var(--bg-hover)',
             border: `1px solid ${showAdvanced || advancedFilterCount > 0 ? 'var(--accent-cyan)' : 'var(--border)'}`,
             borderRadius: '6px',
             fontSize: '11px',
-            color: showAdvanced || advancedFilterCount > 0 ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+            color:
+              showAdvanced || advancedFilterCount > 0
+                ? 'var(--accent-cyan)'
+                : 'var(--text-secondary)',
             cursor: 'pointer',
             transition: 'all 0.15s ease',
             display: 'flex',
@@ -365,14 +385,16 @@ export function FacetedFilterBar({
         >
           <span>⚙️ More</span>
           {advancedFilterCount > 0 && (
-            <span style={{
-              background: 'var(--accent-cyan)',
-              color: 'var(--bg-dark)',
-              padding: '1px 5px',
-              borderRadius: '10px',
-              fontSize: '10px',
-              fontWeight: 600,
-            }}>
+            <span
+              style={{
+                background: 'var(--accent-cyan)',
+                color: 'var(--bg-dark)',
+                padding: '1px 5px',
+                borderRadius: '10px',
+                fontSize: '10px',
+                fontWeight: 600,
+              }}
+            >
               {advancedFilterCount}
             </span>
           )}
@@ -427,7 +449,7 @@ export function FacetedFilterBar({
               onChange={(altitudeRange) => onFiltersChange?.({ ...filters, altitudeRange })}
               label="Altitude"
               unit="ft"
-              formatValue={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
+              formatValue={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)}
               showHistogram
               histogramData={altitudeHistogram}
             />
@@ -450,7 +472,7 @@ export function FacetedFilterBar({
                   onChange={(durationRange) => onFiltersChange?.({ ...filters, durationRange })}
                   label="Duration"
                   unit="min"
-                  formatValue={(v) => v >= 60 ? `${(v / 60).toFixed(1)}h` : `${v}m`}
+                  formatValue={(v) => (v >= 60 ? `${(v / 60).toFixed(1)}h` : `${v}m`)}
                   showHistogram
                   histogramData={durationHistogram}
                 />

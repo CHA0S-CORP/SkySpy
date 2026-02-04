@@ -146,7 +146,9 @@ export function SessionCard({ session, onSelectAircraft, showSparkline = true, c
       {/* Altitude sparkline visualization */}
       {showSparkline && altitudeData.length > 2 && (
         <div className="session-card__sparkline-row">
-          <span style={{ fontSize: '10px', color: 'var(--text-dim)', marginRight: '8px' }}>Alt Profile</span>
+          <span style={{ fontSize: '10px', color: 'var(--text-dim)', marginRight: '8px' }}>
+            Alt Profile
+          </span>
           <Sparkline
             data={altitudeData}
             type="area"

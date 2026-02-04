@@ -59,9 +59,7 @@ describe('useDataCache', () => {
 
   describe('TTL behavior', () => {
     it('should mark data as expired after TTL', () => {
-      const { result } = renderHook(() =>
-        useDataCache('default', { ttl: 5000 })
-      );
+      const { result } = renderHook(() => useDataCache('default', { ttl: 5000 }));
 
       act(() => {
         result.current.set('key1', { value: 'test' });
@@ -263,9 +261,7 @@ describe('useDataCache', () => {
 
   describe('getStats', () => {
     it('should return cache statistics', () => {
-      const { result } = renderHook(() =>
-        useDataCache('sessions', { ttl: 30000 })
-      );
+      const { result } = renderHook(() => useDataCache('sessions', { ttl: 30000 }));
 
       act(() => {
         result.current.set('key1', { value: 'test1' });

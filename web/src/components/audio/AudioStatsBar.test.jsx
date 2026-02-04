@@ -35,12 +35,7 @@ describe('AudioStatsBar', () => {
     });
 
     it('should display 0 when total_transmissions is undefined', () => {
-      render(
-        <AudioStatsBar
-          statsData={{}}
-          statusData={defaultProps.statusData}
-        />
-      );
+      render(<AudioStatsBar statsData={{}} statusData={defaultProps.statusData} />);
 
       const stats = document.querySelectorAll('.stat-value');
       expect(stats[0].textContent).toBe('0');
@@ -170,10 +165,7 @@ describe('AudioStatsBar', () => {
 
     it('should display Disabled when radio is not enabled', () => {
       render(
-        <AudioStatsBar
-          statsData={defaultProps.statsData}
-          statusData={{ radio_enabled: false }}
-        />
+        <AudioStatsBar statsData={defaultProps.statsData} statusData={{ radio_enabled: false }} />
       );
 
       expect(screen.getByText('Disabled')).toBeInTheDocument();
@@ -190,10 +182,7 @@ describe('AudioStatsBar', () => {
 
     it('should have red text class when radio is disabled', () => {
       render(
-        <AudioStatsBar
-          statsData={defaultProps.statsData}
-          statusData={{ radio_enabled: false }}
-        />
+        <AudioStatsBar statsData={defaultProps.statsData} statusData={{ radio_enabled: false }} />
       );
 
       const stats = document.querySelectorAll('.audio-stat');

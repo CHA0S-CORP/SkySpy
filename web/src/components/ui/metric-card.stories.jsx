@@ -254,13 +254,7 @@ export const MetricsGridExample = {
       <MetricsGrid columns={2} gap={3}>
         <MetricCard label="Altitude" value="35,000" unit="ft" />
         <MetricCard label="Speed" value="450" unit="kts" />
-        <MetricCard
-          label="V/S"
-          value="+1,500"
-          unit="fpm"
-          trend="climbing"
-          trendIcon={TrendingUp}
-        />
+        <MetricCard label="V/S" value="+1,500" unit="fpm" trend="climbing" trendIcon={TrendingUp} />
         <MetricCard label="Distance" value="8.2" unit="nm" />
       </MetricsGrid>
     </div>

@@ -99,8 +99,8 @@ describe('useAircraftInfoCache', () => {
 
   describe('cache TTL', () => {
     it('should return null for expired entries', () => {
-      const { result } = renderHook(() =>
-        useAircraftInfoCache({ cacheTTL: 1000 }) // 1 second TTL
+      const { result } = renderHook(
+        () => useAircraftInfoCache({ cacheTTL: 1000 }) // 1 second TTL
       );
 
       act(() => {
@@ -118,9 +118,7 @@ describe('useAircraftInfoCache', () => {
     });
 
     it('should validate cache with isCacheValid', () => {
-      const { result } = renderHook(() =>
-        useAircraftInfoCache({ cacheTTL: 1000 })
-      );
+      const { result } = renderHook(() => useAircraftInfoCache({ cacheTTL: 1000 }));
 
       // Valid entry
       const validEntry = { data: {}, fetchedAt: Date.now() };
@@ -139,9 +137,7 @@ describe('useAircraftInfoCache', () => {
     });
 
     it('should check cache using ref for async callbacks', () => {
-      const { result } = renderHook(() =>
-        useAircraftInfoCache({ cacheTTL: 1000 })
-      );
+      const { result } = renderHook(() => useAircraftInfoCache({ cacheTTL: 1000 }));
 
       act(() => {
         result.current.setCacheEntry('ABC123', { icao_hex: 'ABC123' });
@@ -161,9 +157,7 @@ describe('useAircraftInfoCache', () => {
 
   describe('LRU eviction', () => {
     it('should evict oldest entries when max size exceeded', () => {
-      const { result } = renderHook(() =>
-        useAircraftInfoCache({ maxCacheSize: 3 })
-      );
+      const { result } = renderHook(() => useAircraftInfoCache({ maxCacheSize: 3 }));
 
       // Add 3 entries
       act(() => {
@@ -194,9 +188,7 @@ describe('useAircraftInfoCache', () => {
     });
 
     it('should enforce max size correctly', () => {
-      const { result } = renderHook(() =>
-        useAircraftInfoCache({ maxCacheSize: 5 })
-      );
+      const { result } = renderHook(() => useAircraftInfoCache({ maxCacheSize: 5 }));
 
       const cache = { A: { data: {}, fetchedAt: 1 }, B: { data: {}, fetchedAt: 2 } };
       expect(result.current.enforceMaxCacheSize(cache)).toEqual(cache);
@@ -240,9 +232,7 @@ describe('useAircraftInfoCache', () => {
 
   describe('allCached computed property', () => {
     it('should return only valid entries', () => {
-      const { result } = renderHook(() =>
-        useAircraftInfoCache({ cacheTTL: 1000 })
-      );
+      const { result } = renderHook(() => useAircraftInfoCache({ cacheTTL: 1000 }));
 
       act(() => {
         result.current.setCacheEntry('A', { icao_hex: 'A' });

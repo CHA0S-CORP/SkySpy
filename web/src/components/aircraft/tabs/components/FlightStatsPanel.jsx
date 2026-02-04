@@ -38,16 +38,22 @@ export function FlightStatsPanel({
     const durationMin = Math.round(durationMs / 60000);
 
     // Altitude stats
-    const altitudes = sightings.map((s) => s.altitude).filter((a) => a !== null && a !== undefined && a > 0);
+    const altitudes = sightings
+      .map((s) => s.altitude)
+      .filter((a) => a !== null && a !== undefined && a > 0);
     const minAlt = altitudes.length ? Math.min(...altitudes) : null;
     const maxAlt = altitudes.length ? Math.max(...altitudes) : null;
-    const avgAlt = altitudes.length ? Math.round(altitudes.reduce((a, b) => a + b, 0) / altitudes.length) : null;
+    const avgAlt = altitudes.length
+      ? Math.round(altitudes.reduce((a, b) => a + b, 0) / altitudes.length)
+      : null;
 
     // Speed stats
     const speeds = sightings.map((s) => s.gs).filter((s) => s !== null && s !== undefined && s > 0);
     const minSpeed = speeds.length ? Math.min(...speeds) : null;
     const maxSpeed = speeds.length ? Math.max(...speeds) : null;
-    const avgSpeed = speeds.length ? Math.round(speeds.reduce((a, b) => a + b, 0) / speeds.length) : null;
+    const avgSpeed = speeds.length
+      ? Math.round(speeds.reduce((a, b) => a + b, 0) / speeds.length)
+      : null;
 
     // Vertical speed stats
     const vSpeeds = sightings.map((s) => s.vr).filter((v) => v !== null && v !== undefined);
@@ -55,7 +61,9 @@ export function FlightStatsPanel({
     const minVS = vSpeeds.length ? Math.min(...vSpeeds) : null;
 
     // Distance stats
-    const distances = sightings.map((s) => s.distance_nm).filter((d) => d !== null && d !== undefined);
+    const distances = sightings
+      .map((s) => s.distance_nm)
+      .filter((d) => d !== null && d !== undefined);
     const minDistance = distances.length ? Math.min(...distances) : null;
     const maxDistance = distances.length ? Math.max(...distances) : null;
 
@@ -63,7 +71,9 @@ export function FlightStatsPanel({
     const signals = sightings.map((s) => s.rssi).filter((r) => r !== null && r !== undefined);
     const signalMin = signals.length ? Math.min(...signals) : null;
     const signalMax = signals.length ? Math.max(...signals) : null;
-    const signalAvg = signals.length ? (signals.reduce((a, b) => a + b, 0) / signals.length).toFixed(1) : null;
+    const signalAvg = signals.length
+      ? (signals.reduce((a, b) => a + b, 0) / signals.length).toFixed(1)
+      : null;
 
     return {
       duration: durationMin,
@@ -120,11 +130,16 @@ export function FlightStatsPanel({
       </div>
       <div className="flight-stats-panel__stat">
         <span className="flight-stats-panel__stat-label">Positions</span>
-        <span className="flight-stats-panel__stat-value">{stats.positionCount.toLocaleString()}</span>
+        <span className="flight-stats-panel__stat-value">
+          {stats.positionCount.toLocaleString()}
+        </span>
       </div>
 
       {/* Altitude section */}
-      <div className="flight-stats-panel__title" style={{ marginTop: '12px', color: 'var(--viz-altitude-low)' }}>
+      <div
+        className="flight-stats-panel__title"
+        style={{ marginTop: '12px', color: 'var(--viz-altitude-low)' }}
+      >
         Altitude
       </div>
       <div className="flight-stats-panel__stat">
@@ -141,7 +156,10 @@ export function FlightStatsPanel({
       </div>
 
       {/* Speed section */}
-      <div className="flight-stats-panel__title" style={{ marginTop: '12px', color: 'var(--viz-speed-mid)' }}>
+      <div
+        className="flight-stats-panel__title"
+        style={{ marginTop: '12px', color: 'var(--viz-speed-mid)' }}
+      >
         Speed
       </div>
       <div className="flight-stats-panel__stat">
@@ -158,37 +176,56 @@ export function FlightStatsPanel({
       </div>
 
       {/* Vertical speed section */}
-      <div className="flight-stats-panel__title" style={{ marginTop: '12px', color: 'var(--accent-yellow)' }}>
+      <div
+        className="flight-stats-panel__title"
+        style={{ marginTop: '12px', color: 'var(--accent-yellow)' }}
+      >
         Vertical Speed
       </div>
       <div className="flight-stats-panel__stat">
         <span className="flight-stats-panel__stat-label">Max Climb</span>
-        <span className="flight-stats-panel__stat-value" style={{ color: stats.maxVS > 0 ? 'var(--accent-green)' : undefined }}>
+        <span
+          className="flight-stats-panel__stat-value"
+          style={{ color: stats.maxVS > 0 ? 'var(--accent-green)' : undefined }}
+        >
           {formatVS(stats.maxVS)} fpm
         </span>
       </div>
       <div className="flight-stats-panel__stat">
         <span className="flight-stats-panel__stat-label">Max Desc</span>
-        <span className="flight-stats-panel__stat-value" style={{ color: stats.minVS < 0 ? 'var(--accent-red)' : undefined }}>
+        <span
+          className="flight-stats-panel__stat-value"
+          style={{ color: stats.minVS < 0 ? 'var(--accent-red)' : undefined }}
+        >
           {formatVS(stats.minVS)} fpm
         </span>
       </div>
 
       {/* Distance section */}
-      <div className="flight-stats-panel__title" style={{ marginTop: '12px', color: 'var(--viz-military)' }}>
+      <div
+        className="flight-stats-panel__title"
+        style={{ marginTop: '12px', color: 'var(--viz-military)' }}
+      >
         Distance
       </div>
       <div className="flight-stats-panel__stat">
         <span className="flight-stats-panel__stat-label">Closest</span>
-        <span className="flight-stats-panel__stat-value">{formatDistance(stats.minDistance)} nm</span>
+        <span className="flight-stats-panel__stat-value">
+          {formatDistance(stats.minDistance)} nm
+        </span>
       </div>
       <div className="flight-stats-panel__stat">
         <span className="flight-stats-panel__stat-label">Farthest</span>
-        <span className="flight-stats-panel__stat-value">{formatDistance(stats.maxDistance)} nm</span>
+        <span className="flight-stats-panel__stat-value">
+          {formatDistance(stats.maxDistance)} nm
+        </span>
       </div>
 
       {/* Signal section */}
-      <div className="flight-stats-panel__title" style={{ marginTop: '12px', color: 'var(--viz-signal-excellent)' }}>
+      <div
+        className="flight-stats-panel__title"
+        style={{ marginTop: '12px', color: 'var(--viz-signal-excellent)' }}
+      >
         Signal Strength
       </div>
       <div className="flight-stats-panel__stat">

@@ -81,10 +81,7 @@ export const ColumnSelector = memo(function ColumnSelector({
             {columns.map((column) => {
               const isVisible = visibleColumns.includes(column.id);
               return (
-                <label
-                  key={column.id}
-                  className={`al-column-item ${isVisible ? 'active' : ''}`}
-                >
+                <label key={column.id} className={`al-column-item ${isVisible ? 'active' : ''}`}>
                   <input
                     type="checkbox"
                     checked={isVisible}

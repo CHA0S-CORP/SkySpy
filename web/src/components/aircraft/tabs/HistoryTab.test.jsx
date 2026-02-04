@@ -135,7 +135,9 @@ describe('HistoryTab', () => {
       render(<HistoryTab {...defaultProps} sightings={[]} />);
 
       expect(screen.getByText('No sighting history')).toBeInTheDocument();
-      expect(screen.getByText('No position reports recorded in the last 24 hours')).toBeInTheDocument();
+      expect(
+        screen.getByText('No position reports recorded in the last 24 hours')
+      ).toBeInTheDocument();
       expect(screen.getByTestId('history-icon')).toBeInTheDocument();
     });
 
@@ -277,9 +279,7 @@ describe('HistoryTab', () => {
   describe('replay controls interaction', () => {
     it('should call setIsPlaying when play button is clicked', () => {
       const mockSetIsPlaying = vi.fn();
-      render(
-        <HistoryTab {...defaultProps} showTrackMap={true} setIsPlaying={mockSetIsPlaying} />
-      );
+      render(<HistoryTab {...defaultProps} showTrackMap={true} setIsPlaying={mockSetIsPlaying} />);
 
       const playBtn = screen.getByTestId('play-btn');
       fireEvent.click(playBtn);
@@ -384,9 +384,7 @@ describe('HistoryTab', () => {
     });
 
     it('should handle missing altitude gracefully', () => {
-      const sightingsWithNullAlt = [
-        { ...mockSightings[0], altitude: null },
-      ];
+      const sightingsWithNullAlt = [{ ...mockSightings[0], altitude: null }];
 
       render(<HistoryTab {...defaultProps} sightings={sightingsWithNullAlt} />);
 
@@ -394,9 +392,7 @@ describe('HistoryTab', () => {
     });
 
     it('should handle missing distance gracefully', () => {
-      const sightingsWithNullDist = [
-        { ...mockSightings[0], distance_nm: null },
-      ];
+      const sightingsWithNullDist = [{ ...mockSightings[0], distance_nm: null }];
 
       render(<HistoryTab {...defaultProps} sightings={sightingsWithNullDist} />);
 

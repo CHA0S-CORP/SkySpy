@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
  */
 export const MSAW_THRESHOLDS = {
   WARNING: 1000, // Yellow warning when within 1000ft of terrain
-  ALERT: 500,    // Red alert when within 500ft of terrain
+  ALERT: 500, // Red alert when within 500ft of terrain
 };
 
 /**
@@ -13,7 +13,7 @@ export const MSAW_THRESHOLDS = {
  * Aircraft near airports are excluded from MSAW warnings
  */
 export const AIRPORT_EXCLUSION = {
-  RADIUS_NM: 5,      // Exclude aircraft within 5nm of airport
+  RADIUS_NM: 5, // Exclude aircraft within 5nm of airport
   MAX_ALTITUDE: 3000, // Only exclude if below 3000ft (likely approach/departure)
 };
 
@@ -40,7 +40,10 @@ const calculateDistanceNm = (lat1, lon1, lat2, lon2) => {
 const findNearestAirport = (aircraft, airports) => {
   if (!aircraft?.lat || !aircraft?.lon || !airports?.length) return null;
 
-  const alt = aircraft.alt_baro === 'ground' ? 0 : (aircraft.alt_baro || aircraft.alt_geom || aircraft.alt || 0);
+  const alt =
+    aircraft.alt_baro === 'ground'
+      ? 0
+      : aircraft.alt_baro || aircraft.alt_geom || aircraft.alt || 0;
 
   // Only check exclusion for aircraft below the altitude threshold
   if (alt > AIRPORT_EXCLUSION.MAX_ALTITUDE) return null;
@@ -71,7 +74,10 @@ const findNearestAirport = (aircraft, airports) => {
 const calculateAGL = (aircraft, airports) => {
   if (!aircraft) return Infinity;
 
-  const alt = aircraft.alt_baro === 'ground' ? 0 : (aircraft.alt_baro || aircraft.alt_geom || aircraft.alt || 0);
+  const alt =
+    aircraft.alt_baro === 'ground'
+      ? 0
+      : aircraft.alt_baro || aircraft.alt_geom || aircraft.alt || 0;
 
   // Find nearest airport to use its elevation as terrain reference
   let terrainElevation = DEFAULT_TERRAIN_ELEVATION;
@@ -157,7 +163,7 @@ export function useMSAW(aircraft = [], airports = []) {
     for (const ac of aircraft) {
       if (!ac?.hex || !ac?.lat || !ac?.lon) continue;
 
-      const alt = ac.alt_baro === 'ground' ? 0 : (ac.alt_baro || ac.alt_geom || ac.alt || null);
+      const alt = ac.alt_baro === 'ground' ? 0 : ac.alt_baro || ac.alt_geom || ac.alt || null;
 
       // Skip aircraft with no altitude data or on ground
       if (alt === null || alt === 0 || ac.alt_baro === 'ground' || ac.on_ground) continue;
@@ -188,25 +194,34 @@ export function useMSAW(aircraft = [], airports = []) {
    * @param {string} hex - Aircraft ICAO hex
    * @returns {Object|null} - Warning info or null
    */
-  const getWarning = useCallback((hex) => {
-    return msawWarnings.get(hex) || null;
-  }, [msawWarnings]);
+  const getWarning = useCallback(
+    (hex) => {
+      return msawWarnings.get(hex) || null;
+    },
+    [msawWarnings]
+  );
 
   /**
    * Check if a specific aircraft has MSAW alert (red, < 500ft)
    */
-  const hasAlert = useCallback((hex) => {
-    const warning = msawWarnings.get(hex);
-    return warning?.status === 'alert';
-  }, [msawWarnings]);
+  const hasAlert = useCallback(
+    (hex) => {
+      const warning = msawWarnings.get(hex);
+      return warning?.status === 'alert';
+    },
+    [msawWarnings]
+  );
 
   /**
    * Check if a specific aircraft has MSAW warning (yellow, < 1000ft)
    */
-  const hasWarning = useCallback((hex) => {
-    const warning = msawWarnings.get(hex);
-    return warning?.status === 'warning' || warning?.status === 'alert';
-  }, [msawWarnings]);
+  const hasWarning = useCallback(
+    (hex) => {
+      const warning = msawWarnings.get(hex);
+      return warning?.status === 'warning' || warning?.status === 'alert';
+    },
+    [msawWarnings]
+  );
 
   /**
    * Get counts of warnings and alerts

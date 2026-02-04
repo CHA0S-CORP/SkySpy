@@ -195,11 +195,7 @@ describe('useSortState', () => {
     });
 
     it('should sort dates correctly', () => {
-      const data = [
-        { date: '2024-03-15' },
-        { date: '2024-01-01' },
-        { date: '2024-02-20' },
-      ];
+      const data = [{ date: '2024-03-15' }, { date: '2024-01-01' }, { date: '2024-02-20' }];
       const { result } = renderHook(() =>
         useSortState({
           defaultField: 'date',

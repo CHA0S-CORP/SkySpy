@@ -138,11 +138,12 @@ export function AircraftContextMenu({
         text-sm text-left
         transition-colors duration-150
         disabled:opacity-50 disabled:cursor-not-allowed
-        ${variant === 'highlight'
-          ? 'text-accent-yellow hover:bg-accent-yellow/10'
-          : variant === 'accent'
-            ? 'text-accent-cyan hover:bg-accent-cyan/10'
-            : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated'
+        ${
+          variant === 'highlight'
+            ? 'text-accent-yellow hover:bg-accent-yellow/10'
+            : variant === 'accent'
+              ? 'text-accent-cyan hover:bg-accent-cyan/10'
+              : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated'
         }
       `}
     >
@@ -151,9 +152,7 @@ export function AircraftContextMenu({
     </button>
   );
 
-  const Separator = () => (
-    <div className="my-1 border-t border-border" />
-  );
+  const Separator = () => <div className="my-1 border-t border-border" />;
 
   return (
     <div
@@ -175,13 +174,9 @@ export function AircraftContextMenu({
     >
       {/* Header */}
       <div className="px-3 py-2 border-b border-border bg-bg-elevated/50">
-        <div className="font-mono font-medium text-text-primary truncate">
-          {displayId}
-        </div>
+        <div className="font-mono font-medium text-text-primary truncate">{displayId}</div>
         {aircraft.flight?.trim() && (
-          <div className="text-xs text-text-muted font-mono">
-            {aircraft.hex?.toUpperCase()}
-          </div>
+          <div className="text-xs text-text-muted font-mono">{aircraft.hex?.toUpperCase()}</div>
         )}
       </div>
 
@@ -213,11 +208,7 @@ export function AircraftContextMenu({
         )}
 
         {onViewHistory && (
-          <MenuItem
-            icon={History}
-            label="View History"
-            onClick={handleAction(onViewHistory)}
-          />
+          <MenuItem icon={History} label="View History" onClick={handleAction(onViewHistory)} />
         )}
 
         {/* Phase 14.3: Reset data block position */}

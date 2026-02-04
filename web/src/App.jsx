@@ -589,7 +589,9 @@ export default function App() {
               }
 
               // Choose V1 or V2 based on feature flag
-              const DetailComponent = config.useAircraftDetailV2 ? AircraftDetailV2 : AircraftDetailPage;
+              const DetailComponent = config.useAircraftDetailV2
+                ? AircraftDetailV2
+                : AircraftDetailPage;
 
               return hex ? (
                 <DetailComponent

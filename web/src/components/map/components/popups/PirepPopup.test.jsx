@@ -13,39 +13,51 @@ vi.mock('../../../../utils', () => ({
       typeDesc: pirep.report_type === 'UUA' ? 'URGENT Pilot Report' : 'Routine Pilot Report',
       time: '14:30 Local',
       aircraft: pirep.aircraft_type || null,
-      altitude: pirep.flight_level ? {
-        flightLevel: pirep.flight_level,
-        feet: pirep.flight_level * 100,
-        text: `FL${pirep.flight_level} (${(pirep.flight_level * 100).toLocaleString()}ft)`,
-      } : null,
+      altitude: pirep.flight_level
+        ? {
+            flightLevel: pirep.flight_level,
+            feet: pirep.flight_level * 100,
+            text: `FL${pirep.flight_level} (${(pirep.flight_level * 100).toLocaleString()}ft)`,
+          }
+        : null,
       location: pirep.location || null,
-      turbulence: pirep.turbulence_type ? {
-        raw: pirep.turbulence_type,
-        intensity: 'Moderate',
-        level: 3,
-        detail: 'Greater intensity, aircraft remains in positive control',
-        type: 'Clear Air Turbulence',
-        warning: 'Use caution',
-      } : null,
-      icing: pirep.icing_type ? {
-        raw: pirep.icing_type,
-        intensity: 'Light',
-        level: 2,
-        detail: 'May create problem with prolonged exposure',
-        type: 'Rime ice',
-        warning: 'Use caution, check anti-ice',
-      } : null,
+      turbulence: pirep.turbulence_type
+        ? {
+            raw: pirep.turbulence_type,
+            intensity: 'Moderate',
+            level: 3,
+            detail: 'Greater intensity, aircraft remains in positive control',
+            type: 'Clear Air Turbulence',
+            warning: 'Use caution',
+          }
+        : null,
+      icing: pirep.icing_type
+        ? {
+            raw: pirep.icing_type,
+            intensity: 'Light',
+            level: 2,
+            detail: 'May create problem with prolonged exposure',
+            type: 'Rime ice',
+            warning: 'Use caution, check anti-ice',
+          }
+        : null,
       windshear: null,
-      temperature: pirep.temperature_c !== undefined ? {
-        celsius: pirep.temperature_c,
-        fahrenheit: Math.round((pirep.temperature_c * 9) / 5 + 32),
-        isaDeviation: null,
-      } : null,
-      wind: pirep.wind_dir !== undefined ? {
-        direction: pirep.wind_dir,
-        speed: pirep.wind_speed_kt,
-        text: `${pirep.wind_dir}° at ${pirep.wind_speed_kt}kt`,
-      } : null,
+      temperature:
+        pirep.temperature_c !== undefined
+          ? {
+              celsius: pirep.temperature_c,
+              fahrenheit: Math.round((pirep.temperature_c * 9) / 5 + 32),
+              isaDeviation: null,
+            }
+          : null,
+      wind:
+        pirep.wind_dir !== undefined
+          ? {
+              direction: pirep.wind_dir,
+              speed: pirep.wind_speed_kt,
+              text: `${pirep.wind_dir}° at ${pirep.wind_speed_kt}kt`,
+            }
+          : null,
       sky: null,
       weather: null,
       remarks: pirep.remarks || null,
@@ -170,23 +182,13 @@ describe('PirepPopup', () => {
 
   describe('UUA (Urgent) PIREPs', () => {
     it('should display UUA badge for urgent reports', () => {
-      render(
-        <PirepPopup
-          {...defaultProps}
-          pirep={{ ...mockPirep, report_type: 'UUA' }}
-        />
-      );
+      render(<PirepPopup {...defaultProps} pirep={{ ...mockPirep, report_type: 'UUA' }} />);
 
       expect(screen.getByText('UUA')).toBeInTheDocument();
     });
 
     it('should apply urgent class for UUA reports', () => {
-      render(
-        <PirepPopup
-          {...defaultProps}
-          pirep={{ ...mockPirep, report_type: 'UUA' }}
-        />
-      );
+      render(<PirepPopup {...defaultProps} pirep={{ ...mockPirep, report_type: 'UUA' }} />);
 
       const popup = screen.getByRole('dialog');
       expect(popup).toHaveClass('urgent-pirep');
@@ -372,7 +374,9 @@ describe('PirepPopup', () => {
     });
 
     it('should apply popup position from props', () => {
-      const { container } = render(<PirepPopup {...defaultProps} popupPosition={{ x: 150, y: 250 }} />);
+      const { container } = render(
+        <PirepPopup {...defaultProps} popupPosition={{ x: 150, y: 250 }} />
+      );
 
       const popup = container.querySelector('.weather-popup');
       expect(popup).toHaveStyle({ left: '150px', top: '250px' });
@@ -421,10 +425,7 @@ describe('PirepPopup', () => {
   describe('edge cases', () => {
     it('should handle pirep without turbulence', () => {
       const { container } = render(
-        <PirepPopup
-          {...defaultProps}
-          pirep={{ ...mockPirep, turbulence_type: undefined }}
-        />
+        <PirepPopup {...defaultProps} pirep={{ ...mockPirep, turbulence_type: undefined }} />
       );
 
       const popup = container.querySelector('.weather-popup');
@@ -433,10 +434,7 @@ describe('PirepPopup', () => {
 
     it('should handle pirep without icing', () => {
       const { container } = render(
-        <PirepPopup
-          {...defaultProps}
-          pirep={{ ...mockPirep, icing_type: undefined }}
-        />
+        <PirepPopup {...defaultProps} pirep={{ ...mockPirep, icing_type: undefined }} />
       );
 
       const popup = container.querySelector('.weather-popup');
@@ -445,10 +443,7 @@ describe('PirepPopup', () => {
 
     it('should handle pirep without location', () => {
       const { container } = render(
-        <PirepPopup
-          {...defaultProps}
-          pirep={{ ...mockPirep, location: undefined }}
-        />
+        <PirepPopup {...defaultProps} pirep={{ ...mockPirep, location: undefined }} />
       );
 
       const popup = container.querySelector('.weather-popup');
@@ -457,10 +452,7 @@ describe('PirepPopup', () => {
 
     it('should handle pirep without altitude', () => {
       const { container } = render(
-        <PirepPopup
-          {...defaultProps}
-          pirep={{ ...mockPirep, flight_level: undefined }}
-        />
+        <PirepPopup {...defaultProps} pirep={{ ...mockPirep, flight_level: undefined }} />
       );
 
       const popup = container.querySelector('.weather-popup');
@@ -469,10 +461,7 @@ describe('PirepPopup', () => {
 
     it('should handle pirep without aircraft type', () => {
       const { container } = render(
-        <PirepPopup
-          {...defaultProps}
-          pirep={{ ...mockPirep, aircraft_type: undefined }}
-        />
+        <PirepPopup {...defaultProps} pirep={{ ...mockPirep, aircraft_type: undefined }} />
       );
 
       const popup = container.querySelector('.weather-popup');

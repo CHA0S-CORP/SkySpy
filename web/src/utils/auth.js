@@ -104,7 +104,10 @@ export function parseJwt(token) {
   try {
     decoded = atob(base64);
   } catch (err) {
-    console.warn('JWT parsing error: failed to decode base64 payload - token may be malformed', err);
+    console.warn(
+      'JWT parsing error: failed to decode base64 payload - token may be malformed',
+      err
+    );
     return null;
   }
 
