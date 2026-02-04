@@ -41,6 +41,9 @@ export const DEFAULT_OVERLAYS = {
   metars: false,
   pireps: false,
   advisories: false, // Weather advisories (SIGMETs, AIRMETs, G-AIRMETs)
+  radar: false, // NEXRAD weather radar overlay
+  // Airport weather coloring (Pro mode)
+  airportFlightCategory: true, // Color airports by METAR flight category (VFR/MVFR/IFR/LIFR)
   // Terrain overlays (pro mode only)
   water: false,
   counties: false,
@@ -52,6 +55,10 @@ export const DEFAULT_OVERLAYS = {
   ukMilZones: false, // UK military zones (AWACS, AAR, RC)
   euMilAwacs: false, // EU military AWACS orbits (DE, NL, PL)
   trainingAreas: false, // IFT/USAFA training areas
+  // Phase 11.4: Approach path visualization (pro mode)
+  approachPaths: false, // Extended runway centerlines with glideslope markers
+  // Pro mode analytics
+  heatMap: false, // Traffic density heat map
 };
 
 export const getConfig = () => {

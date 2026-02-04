@@ -1,0 +1,551 @@
+/* Multi-Scope View Styles */
+/* Phase 14.1: Split/Multi-Scope View for Pro Mode */
+
+/* ========================================
+   Scope Container
+   ======================================== */
+
+.scope-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #0a0d12;
+  overflow: hidden;
+}
+
+.scope-container.pro-mode {
+  background: var(--pro-bg, #0a0d12);
+}
+
+/* ========================================
+   Layout Toggle
+   ======================================== */
+
+.scope-layout-toggle {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(10, 13, 18, 0.9);
+  border: 1px solid rgba(80, 140, 200, 0.3);
+  border-radius: 6px;
+  padding: 4px;
+  backdrop-filter: blur(8px);
+}
+
+.scope-layout-toggle.pro-style {
+  background: rgba(10, 20, 30, 0.95);
+  border-color: rgba(100, 180, 255, 0.25);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(100, 180, 255, 0.1);
+}
+
+.layout-buttons {
+  display: flex;
+  gap: 2px;
+}
+
+.layout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: rgba(150, 210, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.layout-btn:hover {
+  background: rgba(100, 180, 255, 0.15);
+  color: rgba(150, 210, 255, 0.9);
+}
+
+.layout-btn.active {
+  background: rgba(100, 180, 255, 0.2);
+  border-color: rgba(100, 180, 255, 0.4);
+  color: rgba(150, 210, 255, 1);
+}
+
+/* Split-2 icon */
+.layout-icon-split-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  width: 12px;
+  height: 12px;
+}
+
+.layout-icon-split-2 .layout-cell {
+  background: currentColor;
+  border-radius: 1px;
+}
+
+/* Sync toggle button */
+.sync-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid rgba(80, 140, 200, 0.2);
+  border-radius: 4px;
+  color: rgba(150, 210, 255, 0.5);
+  font-size: 10px;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sync-btn:hover {
+  background: rgba(100, 180, 255, 0.1);
+  color: rgba(150, 210, 255, 0.8);
+}
+
+.sync-btn.active {
+  background: rgba(80, 200, 120, 0.15);
+  border-color: rgba(80, 200, 120, 0.3);
+  color: rgba(120, 255, 160, 0.9);
+}
+
+.sync-label {
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ========================================
+   Scope Grid Layouts
+   ======================================== */
+
+.scope-grid {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  gap: 2px;
+  background: rgba(40, 60, 80, 0.3);
+}
+
+/* Single scope - full width */
+.scope-grid-single {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+}
+
+/* Split 2 - side by side */
+.scope-grid-split-2 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
+}
+
+/* Split 4 - 2x2 grid */
+.scope-grid-split-4 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+/* ========================================
+   Scope Pane
+   ======================================== */
+
+.scope-pane {
+  position: relative;
+  background: #0a0d12;
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+
+.scope-pane:hover {
+  box-shadow: inset 0 0 0 1px rgba(100, 180, 255, 0.2);
+}
+
+.scope-pane.active {
+  box-shadow: inset 0 0 0 2px rgba(100, 200, 255, 0.5);
+}
+
+.scope-pane.single {
+  cursor: default;
+}
+
+/* Active border indicator */
+.scope-active-border {
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(100, 200, 255, 0.6);
+  pointer-events: none;
+  z-index: 10;
+  animation: scope-border-pulse 2s ease-in-out infinite;
+}
+
+@keyframes scope-border-pulse {
+  0%, 100% { border-color: rgba(100, 200, 255, 0.6); }
+  50% { border-color: rgba(100, 200, 255, 0.3); }
+}
+
+/* Scope content wrapper */
+.scope-content {
+  width: 100%;
+  height: 100%;
+}
+
+/* ========================================
+   Scope Controls (Mini Controls Per Scope)
+   ======================================== */
+
+.scope-controls {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: rgba(10, 13, 18, 0.85);
+  border: 1px solid rgba(80, 140, 200, 0.25);
+  border-radius: 4px;
+  backdrop-filter: blur(8px);
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+
+.scope-controls:hover,
+.scope-controls.active {
+  opacity: 1;
+}
+
+.scope-controls.pro-style {
+  background: rgba(10, 20, 30, 0.9);
+  border-color: rgba(100, 180, 255, 0.2);
+}
+
+/* Active indicator dot */
+.scope-active-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(100, 150, 200, 0.3);
+  transition: all 0.15s ease;
+}
+
+.scope-active-indicator.active {
+  background: rgba(100, 255, 180, 0.8);
+  box-shadow: 0 0 6px rgba(100, 255, 180, 0.5);
+}
+
+/* Range display */
+.scope-range-display {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  color: rgba(150, 210, 255, 0.9);
+}
+
+.scope-range-value {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.scope-range-unit {
+  font-size: 9px;
+  color: rgba(100, 160, 200, 0.7);
+  text-transform: lowercase;
+}
+
+/* Range buttons */
+.scope-range-buttons {
+  display: flex;
+  gap: 2px;
+}
+
+.scope-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: rgba(60, 100, 140, 0.2);
+  border: 1px solid rgba(80, 140, 200, 0.2);
+  border-radius: 3px;
+  color: rgba(150, 210, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.scope-btn:hover {
+  background: rgba(100, 180, 255, 0.2);
+  border-color: rgba(100, 180, 255, 0.4);
+  color: rgba(150, 210, 255, 1);
+}
+
+.scope-btn:active {
+  background: rgba(100, 180, 255, 0.3);
+  transform: scale(0.95);
+}
+
+/* Range preset dropdown */
+.scope-range-select {
+  padding: 2px 4px;
+  background: rgba(20, 30, 40, 0.8);
+  border: 1px solid rgba(80, 140, 200, 0.2);
+  border-radius: 3px;
+  color: rgba(150, 210, 255, 0.8);
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 10px;
+  cursor: pointer;
+  outline: none;
+}
+
+.scope-range-select:hover {
+  border-color: rgba(100, 180, 255, 0.4);
+}
+
+.scope-range-select:focus {
+  border-color: rgba(100, 180, 255, 0.6);
+}
+
+.scope-range-select option {
+  background: #0a1520;
+  color: rgba(150, 210, 255, 0.9);
+}
+
+/* Scope ID label */
+.scope-id-label {
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  color: rgba(100, 160, 200, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ========================================
+   RadarScope Component Styles
+   ======================================== */
+
+.radar-scope-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.radar-scope-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Scope label (visible in multi-scope mode) */
+.scope-label {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 3px 6px;
+  background: rgba(10, 13, 18, 0.8);
+  border: 1px solid rgba(80, 140, 200, 0.2);
+  border-radius: 3px;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.scope-label-id {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(100, 160, 200, 0.8);
+}
+
+.scope-label-range {
+  font-size: 9px;
+  color: rgba(150, 210, 255, 0.7);
+}
+
+/* Debug overlay */
+.scope-debug-overlay {
+  position: absolute;
+  top: 40px;
+  left: 8px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(255, 100, 100, 0.3);
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 9px;
+  color: rgba(255, 200, 200, 0.9);
+  pointer-events: none;
+  z-index: 50;
+}
+
+.scope-debug-overlay div {
+  margin: 2px 0;
+}
+
+/* ========================================
+   Responsive Adjustments
+   ======================================== */
+
+@media (max-width: 1024px) {
+  .scope-layout-toggle {
+    top: 8px;
+    right: 8px;
+    padding: 3px;
+  }
+
+  .layout-btn {
+    width: 24px;
+    height: 24px;
+  }
+
+  .sync-btn {
+    padding: 3px 6px;
+    font-size: 9px;
+  }
+
+  .scope-controls {
+    padding: 3px 6px;
+    gap: 4px;
+  }
+
+  .scope-range-value {
+    font-size: 11px;
+  }
+
+  .scope-btn {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  /* On mobile, split-4 becomes 2x2 with smaller panes */
+  .scope-grid-split-4 {
+    gap: 1px;
+  }
+
+  .scope-controls {
+    top: 4px;
+    left: 4px;
+    padding: 2px 4px;
+  }
+
+  .scope-range-display {
+    display: none;
+  }
+
+  .scope-range-buttons {
+    display: none;
+  }
+
+  .scope-range-select {
+    font-size: 9px;
+  }
+
+  /* Hide sync label on mobile */
+  .sync-label {
+    display: none;
+  }
+}
+
+/* ========================================
+   Color Theme Variants
+   ======================================== */
+
+/* Amber theme */
+.scope-container[data-theme="amber"] .scope-layout-toggle,
+.scope-container[data-theme="amber"] .scope-controls {
+  border-color: rgba(200, 150, 60, 0.3);
+}
+
+.scope-container[data-theme="amber"] .layout-btn,
+.scope-container[data-theme="amber"] .scope-btn {
+  color: rgba(255, 200, 100, 0.7);
+}
+
+.scope-container[data-theme="amber"] .layout-btn:hover,
+.scope-container[data-theme="amber"] .scope-btn:hover {
+  background: rgba(200, 150, 60, 0.2);
+  color: rgba(255, 220, 150, 1);
+}
+
+.scope-container[data-theme="amber"] .scope-range-display {
+  color: rgba(255, 200, 100, 0.9);
+}
+
+.scope-container[data-theme="amber"] .scope-active-indicator.active {
+  background: rgba(255, 200, 100, 0.8);
+  box-shadow: 0 0 6px rgba(255, 200, 100, 0.5);
+}
+
+.scope-container[data-theme="amber"] .scope-pane.active {
+  box-shadow: inset 0 0 0 2px rgba(255, 200, 100, 0.5);
+}
+
+.scope-container[data-theme="amber"] .scope-active-border {
+  border-color: rgba(255, 200, 100, 0.6);
+}
+
+/* Green theme */
+.scope-container[data-theme="green"] .scope-layout-toggle,
+.scope-container[data-theme="green"] .scope-controls {
+  border-color: rgba(60, 150, 80, 0.3);
+}
+
+.scope-container[data-theme="green"] .layout-btn,
+.scope-container[data-theme="green"] .scope-btn {
+  color: rgba(100, 255, 150, 0.7);
+}
+
+.scope-container[data-theme="green"] .layout-btn:hover,
+.scope-container[data-theme="green"] .scope-btn:hover {
+  background: rgba(60, 150, 80, 0.2);
+  color: rgba(150, 255, 180, 1);
+}
+
+.scope-container[data-theme="green"] .scope-range-display {
+  color: rgba(100, 255, 150, 0.9);
+}
+
+.scope-container[data-theme="green"] .scope-active-indicator.active {
+  background: rgba(100, 255, 150, 0.8);
+  box-shadow: 0 0 6px rgba(100, 255, 150, 0.5);
+}
+
+.scope-container[data-theme="green"] .scope-pane.active {
+  box-shadow: inset 0 0 0 2px rgba(100, 255, 150, 0.5);
+}
+
+.scope-container[data-theme="green"] .scope-active-border {
+  border-color: rgba(100, 255, 150, 0.6);
+}
+
+/* ========================================
+   Animation & Transitions
+   ======================================== */
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .scope-active-border {
+    animation: none;
+  }
+
+  .scope-btn,
+  .layout-btn,
+  .scope-controls,
+  .scope-pane {
+    transition: none;
+  }
+}

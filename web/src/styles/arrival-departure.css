@@ -1,0 +1,593 @@
+/* ============================================================================
+   Arrival/Departure Panel - Airport Traffic Lists (Phase 11.1)
+   ============================================================================ */
+
+.arrival-departure-panel {
+  position: absolute;
+  top: 70px;
+  right: 360px;
+  width: 420px;
+  max-height: calc(100vh - 160px);
+  background: rgba(15, 25, 35, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(80, 140, 200, 0.4);
+  border-radius: 8px;
+  z-index: 950;
+  font-family: 'JetBrains Mono', monospace;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.arrival-departure-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(20, 40, 60, 0.8);
+  border-bottom: 1px solid rgba(80, 140, 200, 0.3);
+  cursor: grab;
+  user-select: none;
+}
+
+.arrival-departure-header:active {
+  cursor: grabbing;
+}
+
+.arrival-departure-panel .panel-drag-handle {
+  color: rgba(100, 160, 200, 0.5);
+  display: flex;
+  align-items: center;
+}
+
+.arrival-departure-panel .panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  color: rgba(100, 180, 255, 0.9);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.arrival-departure-panel .panel-title svg {
+  color: rgba(100, 200, 150, 0.9);
+}
+
+.traffic-count-badge {
+  background: rgba(100, 200, 150, 0.3);
+  color: rgba(150, 255, 200, 1);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid rgba(100, 200, 150, 0.5);
+}
+
+.arrival-departure-panel .panel-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.arrival-departure-panel .panel-btn {
+  background: transparent;
+  border: none;
+  padding: 6px;
+  border-radius: 4px;
+  color: rgba(100, 160, 200, 0.7);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.arrival-departure-panel .panel-btn:hover {
+  background: rgba(80, 140, 200, 0.2);
+  color: rgba(150, 210, 255, 1);
+}
+
+.arrival-departure-panel .panel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.arrival-departure-panel .panel-btn.close:hover {
+  background: rgba(255, 100, 100, 0.2);
+  color: rgba(255, 150, 150, 1);
+}
+
+.arrival-departure-panel .panel-btn .spinning {
+  animation: spin 1s linear infinite;
+}
+
+/* Controls bar */
+.arrival-departure-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(15, 30, 45, 0.6);
+  border-bottom: 1px solid rgba(80, 140, 200, 0.2);
+}
+
+/* Airport selector dropdown */
+.airport-selector {
+  flex: 1;
+  position: relative;
+}
+
+.airport-selector-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  background: rgba(20, 40, 60, 0.8);
+  border: 1px solid rgba(80, 140, 200, 0.3);
+  border-radius: 4px;
+  color: rgba(150, 210, 255, 0.9);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.airport-selector-trigger:hover {
+  border-color: rgba(100, 180, 255, 0.5);
+}
+
+.airport-selector-trigger svg.rotated {
+  transform: rotate(180deg);
+}
+
+.airport-selector-trigger svg:last-child {
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+
+.airport-selector-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: rgba(20, 35, 50, 0.98);
+  border: 1px solid rgba(80, 140, 200, 0.4);
+  border-radius: 6px;
+  z-index: 1000;
+  max-height: 250px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.airport-selector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(80, 140, 200, 0.2);
+  font-size: 10px;
+  color: rgba(100, 160, 200, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.clear-all-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 150, 150, 0.8);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: all 0.2s;
+}
+
+.clear-all-btn:hover {
+  background: rgba(255, 100, 100, 0.2);
+  color: rgba(255, 180, 180, 1);
+}
+
+.airport-selector-list {
+  overflow-y: auto;
+  max-height: 200px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(80, 140, 200, 0.3) transparent;
+}
+
+.no-airports {
+  padding: 12px;
+  text-align: center;
+  color: rgba(100, 160, 200, 0.5);
+  font-size: 11px;
+}
+
+.airport-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.airport-option:hover {
+  background: rgba(80, 140, 200, 0.15);
+}
+
+.airport-option.selected {
+  background: rgba(100, 200, 150, 0.15);
+}
+
+.airport-option input[type="checkbox"] {
+  accent-color: rgba(100, 200, 150, 1);
+}
+
+.airport-option .airport-code {
+  font-weight: 600;
+  color: rgba(150, 220, 255, 0.95);
+  min-width: 45px;
+}
+
+.airport-option .airport-name {
+  color: rgba(100, 160, 200, 0.7);
+  font-size: 10px;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Time window selector */
+.time-window-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(100, 160, 200, 0.7);
+}
+
+.time-window-selector select {
+  background: rgba(20, 40, 60, 0.8);
+  border: 1px solid rgba(80, 140, 200, 0.3);
+  border-radius: 4px;
+  padding: 6px 8px;
+  color: rgba(150, 210, 255, 0.9);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.time-window-selector select:focus {
+  outline: none;
+  border-color: rgba(100, 180, 255, 0.6);
+}
+
+.time-window-selector select option {
+  background: rgba(20, 35, 50, 1);
+  color: rgba(200, 220, 240, 1);
+}
+
+/* Summary bar */
+.arrival-departure-summary {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  padding: 8px 12px;
+  background: rgba(15, 30, 45, 0.4);
+  border-bottom: 1px solid rgba(80, 140, 200, 0.15);
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.summary-item.inbound {
+  color: rgba(100, 200, 150, 0.9);
+}
+
+.summary-item.inbound svg {
+  color: rgba(100, 200, 150, 0.7);
+}
+
+.summary-item.outbound {
+  color: rgba(150, 180, 255, 0.9);
+}
+
+.summary-item.outbound svg {
+  color: rgba(150, 180, 255, 0.7);
+}
+
+.summary-count {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.summary-label {
+  color: rgba(100, 160, 200, 0.6);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+/* Content area */
+.arrival-departure-content {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(80, 140, 200, 0.3) transparent;
+}
+
+/* Empty state */
+.no-airports-selected {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  text-align: center;
+  color: rgba(100, 160, 200, 0.6);
+}
+
+.no-airports-selected svg {
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.no-airports-selected span {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.no-airports-selected p {
+  font-size: 11px;
+  line-height: 1.5;
+  max-width: 280px;
+  margin: 0;
+  opacity: 0.7;
+}
+
+/* Airport section */
+.arrival-departure-airport-section {
+  border-bottom: 1px solid rgba(80, 140, 200, 0.15);
+}
+
+.arrival-departure-airport-section:last-child {
+  border-bottom: none;
+}
+
+.airport-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  color: rgba(150, 210, 255, 0.9);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.airport-section-header:hover {
+  background: rgba(80, 140, 200, 0.1);
+}
+
+.airport-section-header .airport-icon {
+  color: rgba(100, 200, 150, 0.7);
+  display: flex;
+}
+
+.airport-section-header .airport-code {
+  font-weight: 700;
+  color: rgba(150, 220, 255, 0.95);
+}
+
+.airport-section-header .airport-name {
+  color: rgba(100, 160, 200, 0.6);
+  font-size: 11px;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.airport-section-header .airport-counts {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  margin-right: 8px;
+}
+
+.airport-section-header .count-inbound,
+.airport-section-header .count-outbound {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.airport-section-header .count-inbound {
+  background: rgba(100, 200, 150, 0.2);
+  color: rgba(150, 255, 200, 0.9);
+}
+
+.airport-section-header .count-outbound {
+  background: rgba(150, 180, 255, 0.2);
+  color: rgba(180, 200, 255, 0.9);
+}
+
+.airport-section-content {
+  padding: 0;
+}
+
+/* Traffic tabs */
+.traffic-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(80, 140, 200, 0.2);
+}
+
+.traffic-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: rgba(100, 160, 200, 0.7);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+  border-bottom: 2px solid transparent;
+}
+
+.traffic-tab:hover {
+  background: rgba(80, 140, 200, 0.1);
+  color: rgba(150, 210, 255, 0.9);
+}
+
+.traffic-tab.active {
+  color: rgba(150, 220, 255, 1);
+  border-bottom-color: rgba(100, 200, 150, 0.8);
+}
+
+.traffic-tab.active svg {
+  color: rgba(100, 200, 150, 0.9);
+}
+
+/* Traffic table */
+.traffic-table-container {
+  overflow-x: auto;
+}
+
+.traffic-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: rgba(100, 160, 200, 0.5);
+  font-size: 11px;
+  gap: 8px;
+}
+
+.traffic-empty svg {
+  opacity: 0.4;
+}
+
+.traffic-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.traffic-table thead th {
+  padding: 6px 8px;
+  text-align: left;
+  color: rgba(100, 160, 200, 0.6);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  background: rgba(15, 30, 45, 0.4);
+  border-bottom: 1px solid rgba(80, 140, 200, 0.2);
+  white-space: nowrap;
+}
+
+.traffic-table tbody tr {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.traffic-table tbody tr:hover {
+  background: rgba(80, 140, 200, 0.15);
+}
+
+.traffic-table tbody tr.selected {
+  background: rgba(100, 200, 150, 0.2);
+}
+
+.traffic-table tbody tr.out-of-range {
+  opacity: 0.5;
+}
+
+.traffic-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(80, 140, 200, 0.1);
+  white-space: nowrap;
+}
+
+.traffic-table .col-callsign {
+  font-weight: 600;
+  color: rgba(150, 220, 255, 0.95);
+}
+
+.traffic-table .col-type {
+  color: rgba(100, 160, 200, 0.7);
+}
+
+.traffic-table .col-origin,
+.traffic-table .col-dest {
+  color: rgba(100, 160, 200, 0.7);
+}
+
+.traffic-table .col-altitude {
+  text-align: right;
+  color: rgba(100, 200, 150, 0.9);
+}
+
+.traffic-table .col-distance {
+  text-align: right;
+  color: rgba(150, 180, 255, 0.9);
+}
+
+.traffic-table .col-time {
+  text-align: right;
+  font-weight: 600;
+}
+
+.traffic-table .col-time.eta {
+  color: rgba(100, 200, 150, 0.95);
+}
+
+.traffic-table .col-time.departure {
+  color: rgba(150, 180, 255, 0.9);
+}
+
+/* Responsive adjustments for arrival/departure panel */
+@media (max-width: 768px) {
+  .arrival-departure-panel {
+    width: calc(100vw - 32px);
+    right: 16px;
+    left: 16px;
+    max-height: 60vh;
+  }
+
+  .arrival-departure-controls {
+    flex-wrap: wrap;
+  }
+
+  .airport-selector {
+    flex-basis: 100%;
+    margin-bottom: 4px;
+  }
+
+  .traffic-table .col-origin,
+  .traffic-table .col-type {
+    display: none;
+  }
+}

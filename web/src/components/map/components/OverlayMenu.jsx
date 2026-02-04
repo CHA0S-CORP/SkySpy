@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, HelpCircle, Compass } from 'lucide-react';
+import { X, HelpCircle, Compass, Navigation, Flame } from 'lucide-react';
 
 /**
  * OverlayMenu component - map layers/overlays configuration menu
@@ -213,6 +213,32 @@ export function OverlayMenu({
               }
             />
             <span className="toggle-label">Training Areas</span>
+          </label>
+
+          <label className="overlay-toggle">
+            <input
+              type="checkbox"
+              checked={overlays.approachPaths}
+              onChange={() =>
+                updateOverlays({ ...overlays, approachPaths: !overlays.approachPaths })
+              }
+            />
+            <span className="toggle-label">
+              <Navigation size={12} /> Approach Paths
+            </span>
+          </label>
+
+          <div className="overlay-divider" />
+          <div className="overlay-section-title">Analytics</div>
+
+          <label className="overlay-toggle">
+            <input
+              type="checkbox"
+              checked={overlays.heatMap}
+              onChange={() => updateOverlays({ ...overlays, heatMap: !overlays.heatMap })}
+            />
+            <Flame size={12} />
+            <span className="toggle-label">Heat Map (Shift+H)</span>
           </label>
 
           <div className="overlay-divider" />

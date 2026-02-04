@@ -1,0 +1,37 @@
+# Phase 6 Keyboard Shortcuts Implementation Guide
+#
+# This patch file documents the changes needed to implement keyboard shortcuts
+# for Pro Mode in MapView.jsx
+#
+# The following shortcuts are implemented:
+# | Key | Action |
+# |-----|--------|
+# | ? | Show keyboard shortcut help overlay |
+# | F | Toggle filter menu |
+# | D | Toggle FPS counter (debug) |
+# | M | Toggle MSAW (Minimum Safe Altitude Warning) |
+# | W | Toggle watch list panel |
+# | N | Add selected aircraft to watch list |
+# | J | Toggle J-rings |
+# | Escape | Also closes help overlay |
+#
+# Components created:
+# - /web/src/components/map/components/KeyboardShortcutHelp.jsx
+# - CSS added to /web/src/styles/pro-mode.css
+#
+# Existing hooks that can be used:
+# - /web/src/hooks/useWatchList.js
+# - /web/src/hooks/useMSAW.js
+# - /web/src/components/map/components/WatchListPanel.jsx
+#
+# Changes needed in keyboard shortcuts switch statement:
+# 1. Add case '?' for help overlay
+# 2. Change case 'f' from FPS to filter menu
+# 3. Add case 'd' for FPS counter
+# 4. Change case 'm' from reduced motion to MSAW
+# 5. Add case 'w' for watch list panel
+# 6. Add case 'n' for adding to watch list
+# 7. Add case 'j' for J-rings
+# 8. Modify escape to also close help overlay
+# 9. Update dependency array to include selectedAircraft
+# 10. Add KeyboardShortcutHelp component render

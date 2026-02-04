@@ -69,6 +69,10 @@ import {
   formatPirepAltitude,
   windDirToCardinal,
   callsignsMatch,
+  determineWakeCategory,
+  getWakeCategoryColor,
+  findMetarForAirport,
+  getFlightCategoryColor,
 } from '../../utils';
 
 // Helper to safely parse JSON from fetch response
@@ -91,6 +95,29 @@ import { useAirspaceAdvisories, HAZARD_CONFIG } from '../../hooks/useAirspaceAdv
 import { AirspaceAdvisoryPanel } from './components/AirspaceAdvisoryPanel';
 import { useNotams, NOTAM_TYPE_CONFIG } from '../../hooks/useNotams';
 import { NotamPanel } from './components/NotamPanel';
+import { KeyboardShortcutHelp } from './components/KeyboardShortcutHelp';
+import { useDataBlockPositions, DATA_BLOCK_DEFAULT_X, DATA_BLOCK_DEFAULT_Y } from './hooks';
+import { useHeatMap } from '../../hooks/useHeatMap';
+import { HeatMapLayer } from './components/HeatMapLayer';
+import { useWatchList } from '../../hooks/useWatchList';
+import { WatchListPanel, WatchListShowButton } from './components/WatchListPanel';
+import { useHighlightGroups } from '../../hooks/useHighlightGroups';
+import { HighlightGroupsPanel, HighlightGroupsShowButton } from './components/HighlightGroupsPanel';
+import { useConflictProbe } from '../../hooks/useConflictProbe';
+import { ConflictProbePanel } from './components/ConflictProbePanel';
+import { useDraggable } from '../../hooks/useDraggable';
+import { useWeatherRadarOverlay } from './components/WeatherRadarOverlay';
+import { useScopeLayout } from '../../hooks/useScopeLayout';
+import { LayoutToggle } from './components/MultiScopeContainer';
+import { useMapAircraftNotes } from './hooks';
+import { NoteInputModal, AircraftContextMenu, SeparationLine, drawSeparationLine, DataBlockConfigPanel } from './components';
+import { useSeparationTool } from '../../hooks/useSeparationTool';
+import { useAltitudeFilter } from '../../hooks/useAltitudeFilter';
+import { AltitudeFilterPanel } from './components/AltitudeFilterPanel';
+import { useSessionStats } from '../../hooks/useSessionStats';
+import { SessionStatsPanel, SessionStatsButton } from './components/SessionStatsPanel';
+import { usePlaybackMode } from './hooks/usePlaybackMode';
+import { PlaybackControls, PlaybackIndicator } from './components/PlaybackControls';
 
 // Phase 5.1: Pro Radar Theme Color Presets
 const PRO_THEME_COLORS = {
@@ -300,6 +327,7 @@ function MapView({
   });
   const [showLegend, setShowLegend] = useState(false); // Legend panel visibility
   const [legendCollapsed, setLegendCollapsed] = useState(false); // Legend content collapsed
+  const [showSessionStats, setShowSessionStats] = useState(false); // Session stats panel visibility
   const [listDisplayCount, setListDisplayCount] = useState(20); // Lazy load count for aircraft list
   const [showRangeControl, setShowRangeControl] = useState(false); // Show range control when cursor near
   const [soundMuted, setSoundMuted] = useState(() => {
@@ -356,6 +384,7 @@ function MapView({
   const [aircraftDetailHex, setAircraftDetailHex] = useState(null); // Aircraft for full detail modal
   const [sidebarAircraftHex, setSidebarAircraftHex] = useState(null); // Aircraft for sidebar quick view
   const [callsignHexCache, setCallsignHexCache] = useState({}); // Callsign → ICAO hex cache for ACARS linking
+  const [etaTarget, setEtaTarget] = useState(null); // ETA target point {lat, lon} for Phase 11.2
 
   // Use robust aircraft info hook with bulk lookups and retry logic
   const {
@@ -406,8 +435,184 @@ function MapView({
     radius: radarRange,
   });
 
+  // Heat map hook for traffic density visualization (Pro mode)
+  const {
+    heatMapData,
+    timePeriod: heatMapTimePeriod,
+    setTimePeriod: setHeatMapTimePeriod,
+    gridSize: heatMapGridSize,
+    setGridSize: setHeatMapGridSize,
+    loading: heatMapLoading,
+    error: heatMapError,
+    stats: heatMapStats,
+    bounds: heatMapBounds,
+    addLivePosition: addHeatMapPosition,
+    clearHeatMap,
+    refresh: refreshHeatMap,
+  } = useHeatMap({
+    enabled: overlays.heatMap && config.mapMode === 'pro',
+    feederLocation: { lat: feederLat, lon: feederLon },
+    radarRange,
+    wsRequest,
+    wsConnected,
+    apiBaseUrl: config.apiBaseUrl,
+  });
+
+  // Memoized latLonToScreen for HeatMapLayer
+  const latLonToScreenMemo = useCallback(
+    (lat, lon) => {
+      const container = containerRef.current;
+      if (!container) return { x: 0, y: 0 };
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const dLat = lat - feederLat;
+      const dLon = lon - feederLon;
+      const nmY = dLat * 60;
+      const nmX = dLon * 60 * Math.cos((feederLat * Math.PI) / 180);
+      const pixelsPerNm = (Math.min(width, height) * 0.45) / radarRange;
+      return {
+        x: centerX + nmX * pixelsPerNm + proPanOffset.x,
+        y: centerY - nmY * pixelsPerNm + proPanOffset.y,
+      };
+    },
+    [feederLat, feederLon, radarRange, proPanOffset]
+  );
+
+  // Phase 12.3: Highlight Groups Hook for aircraft grouping/highlighting
+  const {
+    groups: highlightGroups,
+    panelVisible: highlightPanelVisible,
+    panelExpanded: highlightPanelExpanded,
+    enabledCount: highlightEnabledCount,
+    hasEnabledGroups: hasHighlightGroups,
+    toggleGroup: toggleHighlightGroup,
+    addGroup: addHighlightGroup,
+    removeGroup: removeHighlightGroup,
+    updateGroup: updateHighlightGroup,
+    reorderGroups: reorderHighlightGroups,
+    resetToDefaults: resetHighlightDefaults,
+    disableAll: disableAllHighlights,
+    getAircraftHighlight,
+    getGroupCounts: getHighlightGroupCounts,
+    togglePanel: toggleHighlightPanel,
+    togglePanelExpanded: toggleHighlightPanelExpanded,
+    setPanelVisible: setHighlightPanelVisible,
+  } = useHighlightGroups(aircraftInfo);
+
+  // Phase 6: Watch List Hook for tracking aircraft
+  const {
+    watchList,
+    panelVisible: watchListPanelVisible,
+    toggleWatchList,
+    isWatched,
+    togglePanel: toggleWatchListPanel,
+    clearWatchList,
+    removeFromWatchList,
+    initializeAudio: initializeWatchListAudio,
+  } = useWatchList({ enableAudio: true });
+
+  // Phase 6: Keyboard Shortcut Help state
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+
+  // Phase 6: J-Rings toggle state
+  const [showJRings, setShowJRings] = useState(
+    () => localStorage.getItem('adsb-pro-j-rings') === 'true'
+  );
+
+  // Phase 3.4: Conflict Probe (Look-Ahead)
+  const {
+    conflicts: predictedConflicts,
+    conflictCount: predictedConflictCount,
+    stats: conflictProbeStats,
+    getConflictForAircraft,
+    getConflictsForAircraft,
+  } = useConflictProbe({
+    aircraft,
+    feederLocation: { lat: feederLat, lon: feederLon },
+    enabled: showConflictProbe && config.mapMode === 'pro',
+    maxDistance: radarRange * 2,
+  });
+
+  // Draggable position for highlight groups panel
+  const {
+    position: highlightPanelPosition,
+    isDragging: isHighlightPanelDragging,
+    onMouseDown: onHighlightPanelMouseDown,
+  } = useDraggable('highlight-groups-panel');
+
+  // Phase 10.1: Weather Radar Overlay Hook (NEXRAD via Iowa State Mesonet)
+  const {
+    radarImage: weatherRadarImage,
+    radarBounds: weatherRadarBounds,
+    loading: weatherRadarLoading,
+    timestampDisplay: weatherRadarTimestamp,
+    drawOnCanvas: drawWeatherRadar,
+  } = useWeatherRadarOverlay({
+    enabled: overlays.radar,
+    feederLocation: { lat: feederLat, lon: feederLon },
+    radarRange: radarRange,
+  });
+
+  // Phase 13.1: Track Playback Mode Hook
+  const {
+    isPlayback,
+    isPlaying,
+    playbackSpeed,
+    playbackPercent,
+    playbackTime,
+    timeRange: playbackTimeRange,
+    formattedTime: playbackFormattedTime,
+    formattedDate: playbackFormattedDate,
+    duration: playbackDuration,
+    isLoading: playbackLoading,
+    error: playbackError,
+    historyStats: playbackStats,
+    getPlaybackAircraft,
+    enterPlayback,
+    exitPlayback,
+    togglePlayPause,
+    setSpeed: setPlaybackSpeed,
+    seekPercent: seekPlaybackPercent,
+    skipToStart: skipPlaybackToStart,
+    skipToEnd: skipPlaybackToEnd,
+    timeRangePresets: playbackTimeRangePresets,
+  } = usePlaybackMode({
+    apiBaseUrl: config.apiBaseUrl,
+    wsRequest,
+    wsConnected,
+    feederLat,
+    feederLon,
+    radarRange,
+  });
+
+  // Phase 14.3: Data Block Leader Lines - allows Shift+drag to reposition data blocks
+  const { getOffset: getDataBlockOffset, setOffset: setDataBlockOffset, resetOffset: resetDataBlockOffset, resetAllOffsets: resetAllDataBlockOffsets, handleMouseDown: handleDataBlockDragStart, handleMouseMove: handleDataBlockDragMove, handleMouseUp: handleDataBlockDragEnd, isDragging: isDataBlockDragging, hasCustomOffset: hasCustomDataBlockOffset, hitTestDataBlock, pruneStaleAircraft: pruneStaleDataBlockPositions, customPositionCount: dataBlockCustomPositionCount } = useDataBlockPositions();
+
   // Toast context for notifications (gracefully handles if not in provider)
   const toastContext = useToastContextSafe();
+
+  // Phase 9.3: Aircraft Notes/Scratchpad
+  const {
+    contextMenuState,
+    noteModalState,
+    handleAircraftContextMenu,
+    closeContextMenu,
+    openNoteModal,
+    closeNoteModal,
+    handleSaveNote,
+    handleDeleteNote,
+    hasNote: hasAircraftNote,
+    getNote: getAircraftNote,
+    getAbbreviatedNote: getAbbreviatedAircraftNote,
+  } = useMapAircraftNotes({ toastContext });
+
+  // Phase 14.1: Multi-Scope Layout for Pro Mode
+  const scopeLayout = useScopeLayout({
+    initialLayout: 'single',
+    persistToStorage: true,
+  });
 
   // Quick alert creation state for pro panel
   const [quickAlertLoading, setQuickAlertLoading] = useState(null); // 'callsign' | 'registration' | null
@@ -509,6 +714,20 @@ function MapView({
   });
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showMobileControls, setShowMobileControls] = useState(false); // Mobile controls dropdown
+  const [showAltitudeFilterPanel, setShowAltitudeFilterPanel] = useState(false); // Phase 8.3: Altitude filter
+
+  // Phase 8.3: Altitude filter for Pro Mode
+  const {
+    altitudeFilter,
+    setAltitudePreset,
+    setCustomRange,
+    toggleHideFiltered,
+    resetFilter: resetAltitudeFilter,
+    isAircraftVisible: isAltitudeVisible,
+    getAircraftOpacity,
+    filterLabel: altitudeFilterLabel,
+  } = useAltitudeFilter();
+  const sessionStats = useSessionStats(aircraft, { enabled: config.mapMode === 'pro' || config.mapMode === 'crt' });
   const [proPhotoError, setProPhotoError] = useState(false); // Track photo loading errors for Pro panel
   const [proPhotoRetry, setProPhotoRetry] = useState(0); // Retry counter for pro panel photo
   const [proPhotoUrl, setProPhotoUrl] = useState(null); // S3 URL for pro panel photo
@@ -575,6 +794,14 @@ function MapView({
     () => localStorage.getItem('adsb-pro-conflict-viz') !== 'false'
   ); // default on
 
+  // Phase 3.4: Conflict Probe (Look-Ahead)
+  const [showConflictProbe, setShowConflictProbe] = useState(
+    () => localStorage.getItem('adsb-pro-conflict-probe') !== 'false'
+  ); // default on
+  const [conflictProbeCollapsed, setConflictProbeCollapsed] = useState(
+    () => localStorage.getItem('adsb-pro-conflict-probe-collapsed') === 'true'
+  ); // default expanded
+
   // VS trend triangles (climb/descend indicators)
   const [showVsTrend, setShowVsTrend] = useState(
     () => localStorage.getItem('adsb-pro-vs-trend') !== 'false'
@@ -598,6 +825,7 @@ function MapView({
       showHeading: false,
       showVerticalSpeed: false,
       showAircraftType: false,
+      showWakeCategory: false, // Phase 8.4: Wake Turbulence Category
       compact: false,
     };
     try {
@@ -624,9 +852,17 @@ function MapView({
     return stored !== 'false';
   });
 
+  // Phase 5.2: Data Block Configuration Panel visibility
+  const [showDataBlockConfigPanel, setShowDataBlockConfigPanel] = useState(false);
+
   // Phase 6: Hover tooltip
   const [hoverInfo, setHoverInfo] = useState(null); // { aircraft, x, y }
   const hoverTimeoutRef = useRef(null);
+
+  // Phase 5.1: Update theme CSS variables when proTheme changes
+  useEffect(() => {
+    document.documentElement.setAttribute('data-pro-theme', proTheme);
+  }, [proTheme]);
 
   // Bug fix #7: Clean up hover timeout on component unmount
   useEffect(() => {
@@ -2034,6 +2270,8 @@ function MapView({
   // Pro mode pan handlers (middle mouse button)
   const handleProPanStart = useCallback(
     (e) => {
+      // Phase 14.3: Handle Shift+left-click for data block dragging
+      if (e.button === 0 && e.shiftKey && config.mapMode === 'pro' && canvasRef.current) { const rect = canvasRef.current.getBoundingClientRect(); const mouseX = e.clientX - rect.left; const mouseY = e.clientY - rect.top; const centerX = rect.width / 2; const centerY = rect.height / 2; const maxRadius = Math.min(rect.width, rect.height) * 0.45; const pixelsPerNm = maxRadius / radarRange; const aircraftPositions = aircraft.filter(ac => ac.lat && ac.lon).map(ac => { const acNmX = (ac.lon - feederLon) * 60 * Math.cos((feederLat * Math.PI) / 180); const acNmY = (ac.lat - feederLat) * 60; return { hex: ac.hex, screenX: centerX + acNmX * pixelsPerNm + proPanOffset.x, screenY: centerY - acNmY * pixelsPerNm + proPanOffset.y, blockWidth: 100, blockHeight: 40 }; }); const hitHex = hitTestDataBlock(mouseX, mouseY, aircraftPositions); if (hitHex && handleDataBlockDragStart(e, hitHex)) { e.preventDefault(); return; } }
       // Middle mouse button (button 1) or auxiliary button
       if (e.button !== 1 || config.mapMode !== 'pro') return;
       e.preventDefault();
@@ -2215,6 +2453,9 @@ function MapView({
             return newVal;
           });
           break;
+        case 'H': // Toggle heat map (Shift+H)
+          updateOverlays({ ...overlays, heatMap: !overlays.heatMap });
+          break;
         case '+':
         case '=': // Zoom in (decrease range)
           e.preventDefault();
@@ -2256,12 +2497,18 @@ function MapView({
             return newVal;
           });
           break;
-        case 'a': // Toggle altitude-colored trails
-          setShowAltitudeTrails((prev) => {
-            const newVal = !prev;
-            localStorage.setItem('adsb-pro-altitude-trails', String(newVal));
-            return newVal;
-          });
+        case 'a': // Toggle altitude-colored trails OR altitude filter panel (Shift+A)
+          if (e.shiftKey) {
+            // Shift+A: Toggle altitude filter panel
+            setShowAltitudeFilterPanel((prev) => !prev);
+          } else {
+            // A: Toggle altitude-colored trails
+            setShowAltitudeTrails((prev) => {
+              const newVal = !prev;
+              localStorage.setItem('adsb-pro-altitude-trails', String(newVal));
+              return newVal;
+            });
+          }
           break;
         case 'm': // Toggle reduced motion
           setReducedMotion((prev) => {
@@ -2270,16 +2517,51 @@ function MapView({
             return newVal;
           });
           break;
+        case 'x': // Toggle weather radar overlay
+          setOverlays((prev) => {
+            const next = { ...prev, radar: !prev.radar };
+            saveOverlays(next);
+            return next;
+          });
+          break;
+        case 'w': // Toggle watch list panel
+          toggleWatchListPanel();
+          break;
+        case 'n': // Add selected aircraft to watch list
+          if (selectedAircraft) {
+            toggleWatchList(selectedAircraft);
+          }
+          break;
+        case 'j': // Toggle J-rings
+          setShowJRings((prev) => {
+            const newVal = !prev;
+            localStorage.setItem('adsb-pro-j-rings', String(newVal));
+            return newVal;
+          });
+          break;
+        case 'i': // Toggle session stats panel
+          setShowSessionStats((prev) => !prev);
+          break;
+        case '?': // Show keyboard shortcuts help
+          e.preventDefault();
+          setShowKeyboardHelp((prev) => !prev);
+          break;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [config.mapMode, panelPinned]);
+  }, [config.mapMode, panelPinned, selectedAircraft, toggleWatchList, toggleWatchListPanel]);
 
   // Handle mouse move on radar container to show/hide range control and track cursor
   const handleContainerMouseMove = useCallback(
     (e) => {
+      // Phase 14.3: Handle data block dragging
+      if (isDataBlockDragging) {
+        handleDataBlockDragMove(e);
+        return; // Don't process other move logic while dragging
+      }
+
       const container = e.currentTarget;
       const rect = container.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
@@ -2361,7 +2643,7 @@ function MapView({
         }
       }
     },
-    [config.mapMode, radarRange, proPanOffset, feederLat, feederLon, aircraft]
+    [config.mapMode, radarRange, proPanOffset, feederLat, feederLon, aircraft, isDataBlockDragging, handleDataBlockDragMove]
   );
 
   const handleContainerMouseLeave = useCallback(() => {
@@ -2371,7 +2653,20 @@ function MapView({
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
     }
-  }, []);
+    // Phase 14.3: End data block drag on mouse leave
+    if (isDataBlockDragging) {
+      handleDataBlockDragEnd();
+    }
+  }, [isDataBlockDragging, handleDataBlockDragEnd]);
+
+  // Phase 14.3: Global mouse up handler for data block dragging
+  useEffect(() => {
+    if (isDataBlockDragging) {
+      const handleGlobalMouseUp = () => handleDataBlockDragEnd();
+      window.addEventListener('mouseup', handleGlobalMouseUp);
+      return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+    }
+  }, [isDataBlockDragging, handleDataBlockDragEnd]);
 
   // Track aircraft position history for trails and profile charts
   // Faster updates for smoother trails
@@ -4385,6 +4680,12 @@ function MapView({
       ctx.lineTo(centerX, centerY + 10);
       ctx.stroke();
 
+      // PRO MODE: Draw weather radar overlay (underneath other layers)
+      if (isPro && overlays.radar && weatherRadarImage && weatherRadarBounds) {
+        const radarOpacity = layerOpacities.radar ?? 0.5;
+        drawWeatherRadar(ctx, latLonToScreen, radarOpacity);
+      }
+
       // PRO MODE: Draw terrain overlays (minimal context layers)
       if (isPro) {
         // Helper to draw GeoJSON-style polygon/line data
@@ -4690,9 +4991,24 @@ function MapView({
 
           const aptClass = apt.class || 'E';
           let color = 'rgba(180, 180, 180, 0.6)';
-          if (aptClass === 'B') color = 'rgba(100, 150, 255, 0.7)';
-          else if (aptClass === 'C') color = 'rgba(200, 100, 200, 0.7)';
-          else if (aptClass === 'D') color = 'rgba(100, 200, 100, 0.7)';
+          let hasMetar = false;
+          let aptMetar = null;
+
+          // Check for METAR-based flight category coloring (Pro mode feature)
+          if (overlays.airportFlightCategory && aviationData.metars && aviationData.metars.length > 0) {
+            aptMetar = findMetarForAirport(apt, aviationData.metars);
+            if (aptMetar) {
+              hasMetar = true;
+              color = getFlightCategoryColor(aptMetar, true);
+            }
+          }
+
+          // Fall back to airspace class coloring if no METAR
+          if (!hasMetar) {
+            if (aptClass === 'B') color = 'rgba(100, 150, 255, 0.7)';
+            else if (aptClass === 'C') color = 'rgba(200, 100, 200, 0.7)';
+            else if (aptClass === 'D') color = 'rgba(100, 200, 100, 0.7)';
+          }
 
           // Brighten if selected
           if (isSelected) {
@@ -4705,6 +5021,10 @@ function MapView({
           // Draw runway symbol (circle with lines)
           ctx.beginPath();
           ctx.arc(0, 0, isSelected ? 5 : 4, 0, Math.PI * 2);
+          if (hasMetar) {
+            ctx.fillStyle = color;
+            ctx.fill();
+          }
           ctx.stroke();
           ctx.beginPath();
           ctx.moveTo(isSelected ? -10 : -8, 0);
@@ -4713,17 +5033,19 @@ function MapView({
 
           ctx.restore();
 
-          // Label with background
+          // Label with background - add flight category if has METAR
           const aptId = apt.icao || apt.icaoId || apt.faaId || apt.id || 'APT';
+          const labelSuffix = hasMetar ? ` ${aptMetar.fltCat || 'VFR'}` : '';
+          const fullLabel = aptId + labelSuffix;
           ctx.font = isSelected
             ? 'bold 11px "JetBrains Mono", monospace'
             : '11px "JetBrains Mono", monospace';
-          const aptLabelWidth = ctx.measureText(aptId).width + 6;
+          const aptLabelWidth = ctx.measureText(fullLabel).width + 6;
           ctx.fillStyle = isPro ? 'rgba(10, 13, 18, 0.8)' : 'rgba(10, 15, 10, 0.75)';
           ctx.fillRect(x + 7, y - 6, aptLabelWidth, 15);
           ctx.fillStyle = color;
           ctx.textAlign = 'left';
-          ctx.fillText(aptId, x + 10, y + 4);
+          ctx.fillText(fullLabel, x + 10, y + 4);
         });
       }
 
@@ -6411,8 +6733,12 @@ function MapView({
           }
 
           // Position for data block (used by both data block and alert labels)
-          const blockX = x + 14;
-          const blockY = y - 10;
+          // Phase 14.3: Support custom data block positions with leader lines
+          const dataBlockOffset = getDataBlockOffset(ac.hex);
+          const hasCustomPosition = hasCustomDataBlockOffset(ac.hex);
+          const blockX = x + DATA_BLOCK_DEFAULT_X + dataBlockOffset.x;
+          const blockY = y + DATA_BLOCK_DEFAULT_Y + dataBlockOffset.y;
+          if (hasCustomPosition && isPro) { const leaderDist = Math.sqrt(dataBlockOffset.x ** 2 + dataBlockOffset.y ** 2); if (leaderDist > 20) { ctx.save(); ctx.strokeStyle = themeColors.rgba('vector', 0.4); ctx.lineWidth = 1; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(blockX - 2, blockY + 10); ctx.stroke(); ctx.setLineDash([]); ctx.restore(); } }
 
           // Draw data block (callsign, speed, altitude, etc.) - respects showDataBlocks toggle, performance mode, and dataBlockConfig
           // Debug: Log data block thinning info (only once per draw cycle)
@@ -6445,6 +6771,10 @@ function MapView({
                 ? `${(ac.vr ?? ac.baro_rate) > 0 ? '+' : ''}${Math.round(ac.vr ?? ac.baro_rate)}fpm`
                 : null;
             const aircraftType = ac.t || ac.desc || null;
+            // Phase 8.4: Wake Turbulence Category
+            const acInfo = aircraftInfo?.[ac.hex?.toUpperCase()] || {};
+            const wakeCategory = determineWakeCategory(ac, acInfo);
+            const wakeColor = wakeCategory ? getWakeCategoryColor(wakeCategory) : null;
 
             ctx.font = '13px "JetBrains Mono", monospace';
             ctx.textAlign = 'left';
@@ -6464,6 +6794,7 @@ function MapView({
               if (dataBlockConfig.showVerticalSpeed && verticalSpeed)
                 compactParts.push(verticalSpeed);
               if (dataBlockConfig.showAircraftType && aircraftType) compactParts.push(aircraftType);
+              if (dataBlockConfig.showWakeCategory && wakeCategory) compactParts.push(`[${wakeCategory}]`);
 
               const compactLine = compactParts.join(' ');
               labelLines = [{ text: compactLine, isCallsign: true }];
@@ -6506,6 +6837,13 @@ function MapView({
                 labelWidth = Math.max(labelWidth, ctx.measureText(aircraftType).width);
               }
 
+              // Line 6: Wake Turbulence Category (Phase 8.4)
+              if (dataBlockConfig.showWakeCategory && wakeCategory) {
+                const wakeLine = `WTC ${wakeCategory}`;
+                labelLines.push({ text: wakeLine, isCallsign: false, color: wakeColor });
+                labelWidth = Math.max(labelWidth, ctx.measureText(wakeLine).width);
+              }
+
               labelWidth += 8;
             }
 
@@ -6537,6 +6875,10 @@ function MapView({
               if (line.isCallsign) {
                 ctx.fillStyle = textColor;
                 ctx.font = '13px "JetBrains Mono", monospace';
+              } else if (line.color) {
+                // Phase 8.4: Custom color for wake turbulence category
+                ctx.fillStyle = line.color;
+                ctx.font = 'bold 12px "JetBrains Mono", monospace';
               } else {
                 ctx.fillStyle = isPro
                   ? `rgba(100, 200, 180, 0.85)`
@@ -7729,13 +8071,17 @@ function MapView({
                     transform: `translate(-50%, -50%) rotate(${ac.track || 0}deg)`,
                   }}
                   onClick={() => selectAircraft(ac)}
+                  onContextMenu={(e) => handleAircraftContextMenu(e, ac)}
                   onKeyDown={(e) => e.key === 'Enter' && selectAircraft(ac)}
                   role="button"
                   tabIndex={0}
-                  title={`${ac.flight || ac.hex} - ${ac.alt || '?'}ft`}
-                  aria-label={`Aircraft ${ac.flight || ac.hex}`}
+                  title={`${ac.flight || ac.hex} - ${ac.alt || '?'}ft${hasAircraftNote(ac.hex) ? ' [Note]' : ''}`}
+                  aria-label={`Aircraft ${ac.flight || ac.hex}${hasAircraftNote(ac.hex) ? ', has note' : ''}`}
                 >
                   <Plane size={16} />
+                  {hasAircraftNote(ac.hex) && (
+                    <span className="aircraft-note-indicator" title="Has note" aria-hidden="true">*</span>
+                  )}
                 </div>
               );
             })}
@@ -8272,6 +8618,39 @@ function MapView({
               </button>
             ))}
           </div>
+
+          {/* Phase 14.1: Multi-Scope Layout Toggle (Pro Mode only) */}
+          {config.mapMode === 'pro' && scopeLayout && (
+            <LayoutToggle
+              layout={scopeLayout.layout}
+              onLayoutChange={scopeLayout.setLayoutMode}
+              syncSelection={scopeLayout.syncSelection}
+              onSyncToggle={() => scopeLayout.setSyncSelection(!scopeLayout.syncSelection)}
+              isPro={true}
+            />
+          )}
+
+          {/* Heat Map Layer (Pro mode) */}
+          {config.mapMode === 'pro' && overlays.heatMap && (
+            <HeatMapLayer
+              enabled={overlays.heatMap}
+              heatMapData={heatMapData}
+              bounds={heatMapBounds}
+              width={containerRef.current?.clientWidth || 800}
+              height={containerRef.current?.clientHeight || 600}
+              latLonToScreen={latLonToScreenMemo}
+              stats={heatMapStats}
+              loading={heatMapLoading}
+              error={heatMapError}
+              timePeriod={heatMapTimePeriod}
+              setTimePeriod={setHeatMapTimePeriod}
+              gridSize={heatMapGridSize}
+              setGridSize={setHeatMapGridSize}
+              onRefresh={refreshHeatMap}
+              onClear={clearHeatMap}
+              themeColors={themeColors}
+            />
+          )}
         </div>
       )}
 
@@ -8827,6 +9206,7 @@ function MapView({
                 />
                 <span className="toggle-label">Compact Mode</span>
               </label>
+              <button className="legend-toggle-btn" onClick={() => { setShowDataBlockConfigPanel(true); setShowOverlayMenu(false); }} style={{ marginTop: '8px' }}><Settings2 size={14} /><span>Advanced Config...</span></button>
               <div className="overlay-divider" />
               <div className="overlay-section-title">Layer Opacity</div>
               {/* Phase 4.4: Layer Opacity Controls */}
@@ -8910,6 +9290,17 @@ function MapView({
           <div className="overlay-note">Weather data from aviationweather.gov</div>
         </div>
       )}
+
+      {/* Phase 8.3: Altitude Filter Panel - Pro Mode */}
+      <AltitudeFilterPanel
+        show={showAltitudeFilterPanel && (config.mapMode === 'pro' || config.mapMode === 'crt')}
+        onClose={() => setShowAltitudeFilterPanel(false)}
+        altitudeFilter={altitudeFilter}
+        setAltitudePreset={setAltitudePreset}
+        setCustomRange={setCustomRange}
+        toggleHideFiltered={toggleHideFiltered}
+        resetFilter={resetAltitudeFilter}
+      />
 
       {/* Traffic Filter Menu - available on all map modes */}
       {showFilterMenu && (
@@ -9244,6 +9635,21 @@ function MapView({
           )}
         </div>
       )}
+
+      {/* Session Stats Panel (Phase 13.3) */}
+      <SessionStatsPanel
+        show={showSessionStats}
+        onClose={() => setShowSessionStats(false)}
+        sessionStats={sessionStats}
+        config={config}
+      />
+
+      {/* Session Stats Button */}
+      <SessionStatsButton
+        onClick={() => setShowSessionStats(!showSessionStats)}
+        isActive={showSessionStats}
+        config={config}
+      />
 
       {/* Show Aircraft List Button (when hidden) */}
       {(config.mapMode === 'crt' || config.mapMode === 'pro') && !showAircraftList && (
@@ -11231,6 +11637,18 @@ function MapView({
                 </div>
               </div>
 
+              {/* Phase 11.2: ETA Section */}
+              <ETASection
+                aircraft={liveAircraft}
+                etaTarget={etaTarget}
+                airports={aviationData.airports}
+                onClearTarget={() => setEtaTarget(null)}
+                onSelectAirport={(apt) => {
+                  setSelectedAirport(apt);
+                  setEtaTarget({ lat: apt.lat, lon: apt.lon });
+                }}
+              />
+
               <div className="pro-external-links">
                 <div className="pro-section-header">EXTERNAL</div>
                 <div className="pro-links">
@@ -11551,6 +11969,135 @@ function MapView({
         {safetyEvents.length > 0 &&
           ` ${safetyEvents.length} active safety alert${safetyEvents.length > 1 ? 's' : ''}.`}
       </div>
+
+      {/* Phase 5.2: Data Block Configuration Panel */}
+      {showDataBlockConfigPanel && (
+        <DataBlockConfigPanel
+          config={{
+            mode: dataBlockConfig.compact ? 'compact' : 'full',
+            fields: {
+              altitude: dataBlockConfig.showAltitude,
+              speed: dataBlockConfig.showSpeed,
+              verticalSpeed: dataBlockConfig.showVerticalSpeed,
+              heading: dataBlockConfig.showHeading,
+              type: dataBlockConfig.showAircraftType,
+              squawk: false,
+              distance: false,
+              wakeCategory: dataBlockConfig.showWakeCategory || false,
+            },
+          }}
+          onUpdateField={(field, value) => {
+            const fieldMap = {
+              altitude: 'showAltitude',
+              speed: 'showSpeed',
+              verticalSpeed: 'showVerticalSpeed',
+              heading: 'showHeading',
+              type: 'showAircraftType',
+              wakeCategory: 'showWakeCategory',
+            };
+            const configKey = fieldMap[field];
+            if (configKey) {
+              const newConfig = { ...dataBlockConfig, [configKey]: value };
+              setDataBlockConfig(newConfig);
+              localStorage.setItem('adsb-pro-datablock-config', JSON.stringify(newConfig));
+            }
+          }}
+          onSetMode={(mode) => {
+            const newConfig = {
+              ...dataBlockConfig,
+              compact: mode === 'compact',
+            };
+            setDataBlockConfig(newConfig);
+            localStorage.setItem('adsb-pro-datablock-config', JSON.stringify(newConfig));
+          }}
+          onReset={() => {
+            const defaults = {
+              showCallsign: true,
+              showAltitude: true,
+              showSpeed: true,
+              showHeading: false,
+              showVerticalSpeed: false,
+              showAircraftType: false,
+              showWakeCategory: false,
+              compact: false,
+            };
+            setDataBlockConfig(defaults);
+            localStorage.setItem('adsb-pro-datablock-config', JSON.stringify(defaults));
+          }}
+          onClose={() => setShowDataBlockConfigPanel(false)}
+          isPro={config.mapMode === 'pro'}
+        />
+      )}
+
+      {/* Phase 9.3: Aircraft Context Menu */}
+      <AircraftContextMenu
+        isOpen={contextMenuState.isOpen}
+        position={contextMenuState.position}
+        aircraft={contextMenuState.aircraft}
+        onClose={closeContextMenu}
+        onAddNote={() => openNoteModal(contextMenuState.aircraft)}
+        onTrack={() => {
+          selectAircraft(contextMenuState.aircraft);
+          closeContextMenu();
+        }}
+        hasNote={hasAircraftNote(contextMenuState.aircraft?.hex)}
+        isTracking={selectedAircraft?.hex === contextMenuState.aircraft?.hex}
+        hasCustomDataBlockPosition={hasCustomDataBlockOffset(contextMenuState.aircraft?.hex)}
+        onResetDataBlockPosition={() => {
+          resetDataBlockOffset(contextMenuState.aircraft?.hex);
+          closeContextMenu();
+        }}
+      />
+
+      {/* Phase 9.3: Note Input Modal */}
+      <NoteInputModal
+        isOpen={noteModalState.isOpen}
+        onClose={closeNoteModal}
+        onSave={handleSaveNote}
+        onDelete={handleDeleteNote}
+        aircraftId={noteModalState.aircraft?.flight?.trim() || noteModalState.aircraft?.hex}
+        existingNote={noteModalState.aircraft?.hex ? getAircraftNote(noteModalState.aircraft.hex) : ''}
+      />
+
+      {/* Phase 13.1: Track Playback Controls for Pro Mode */}
+      {config.mapMode === 'pro' && (
+        <>
+          <PlaybackIndicator
+            isPlayback={isPlayback}
+            formattedTime={playbackFormattedTime}
+            isPlaying={isPlaying}
+          />
+          <PlaybackControls
+            isPlayback={isPlayback}
+            isPlaying={isPlaying}
+            playbackTime={playbackTime}
+            playbackSpeed={playbackSpeed}
+            timeRange={playbackTimeRange}
+            playbackPercent={playbackPercent}
+            formattedTime={playbackFormattedTime}
+            formattedDate={playbackFormattedDate}
+            duration={playbackDuration}
+            isLoading={playbackLoading}
+            error={playbackError}
+            historyStats={playbackStats}
+            onEnterPlayback={enterPlayback}
+            onExitPlayback={exitPlayback}
+            onTogglePlayPause={togglePlayPause}
+            onSpeedChange={setPlaybackSpeed}
+            onSeekPercent={seekPlaybackPercent}
+            onSkipToStart={skipPlaybackToStart}
+            onSkipToEnd={skipPlaybackToEnd}
+            timeRangePresets={playbackTimeRangePresets}
+            proStyle={true}
+          />
+        </>
+      )}
+
+      {/* Phase 6: Keyboard Shortcut Help Overlay */}
+      <KeyboardShortcutHelp
+        isOpen={showKeyboardHelp}
+        onClose={() => setShowKeyboardHelp(false)}
+      />
     </div>
   );
 }

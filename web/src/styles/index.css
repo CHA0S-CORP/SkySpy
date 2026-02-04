@@ -20,6 +20,15 @@
 /* 5. Pro Mode - Pro search bar, details panel, conflict alerts */
 @import './pro-mode.css';
 
+/* 5a. Data Block Config - Phase 5.2 aircraft data block configuration */
+@import './datablock-config.css';
+
+/* 5b. Conflict Probe - Phase 3.4 look-ahead conflict detection panel */
+@import './conflict-probe.css';
+
+/* 5c. Highlight Groups - Phase 12.3 aircraft highlighting/grouping */
+@import './highlight-groups.css';
+
 /* 6. Views - Stats, history, alerts, system, settings */
 @import './views.css';
 
@@ -46,6 +55,18 @@
 
 /* 10. Cannonball Mode - Full-screen threat detection UI */
 @import './cannonball.css';
+
+/* 10b. ETA Overlay - Pro mode ETA calculations display */
+@import './eta-overlay.css';
+
+/* 10c. Arrival/Departure Panel - Airport traffic lists */
+@import './arrival-departure.css';
+
+/* 10d. Flight Strips - ATC-style electronic flight strip panel */
+@import './flight-strips.css';
+
+/* 10e. Multi-Scope View - Split screen radar scopes for Pro Mode */
+@import './multi-scope.css';
 
 /* 11. Responsive - Breakpoints, mobile menu, touch improvements */
 @import './responsive.css';

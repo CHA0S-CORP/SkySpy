@@ -1,0 +1,69 @@
+// Add these cases to the keyboard shortcuts switch statement in MapView.jsx
+// After the existing 'm' case and before the closing brace of switch:
+
+        case 'w': // Toggle watch list panel
+          setShowWatchListPanel((prev) => !prev);
+          break;
+        case 'n': // Add selected aircraft to watch list
+          if (selectedAircraft && selectedAircraft.hex) {
+            setWatchList((prev) => {
+              const hex = selectedAircraft.hex.toUpperCase();
+              let newList;
+              if (prev.includes(hex)) {
+                newList = prev.filter((h) => h !== hex);
+              } else {
+                newList = [...prev, hex];
+              }
+              localStorage.setItem('adsb-pro-watch-list', JSON.stringify(newList));
+              return newList;
+            });
+          }
+          break;
+        case 'j': // Toggle J-rings (distance rings around selected aircraft)
+          setShowJRings((prev) => {
+            const newVal = !prev;
+            localStorage.setItem('adsb-pro-j-rings', String(newVal));
+            return newVal;
+          });
+          break;
+        case '?': // Show keyboard shortcuts help
+          e.preventDefault();
+          setShowKeyboardHelp((prev) => !prev);
+          break;
+
+// Also modify the 'escape' case to close the keyboard help:
+// Change:
+//   case 'escape': // Clear measurement/selection
+//     setMeasurementPoints([]);
+// To:
+//   case 'escape': // Clear measurement/selection and close help
+//     setMeasurementPoints([]);
+//     setShowKeyboardHelp(false);
+
+// Also modify the 'f' case:
+// Change:
+//   case 'f': // Toggle FPS counter
+//     setShowFpsCounter((prev) => !prev);
+// To:
+//   case 'f': // Toggle filter menu
+//     e.preventDefault();
+//     setShowFilterMenu((prev) => !prev);
+//     break;
+//   case 'd': // Toggle FPS counter (debug)
+//     setShowFpsCounter((prev) => !prev);
+
+// Also modify the 'm' case:
+// Change:
+//   case 'm': // Toggle reduced motion
+//     setReducedMotion((prev) => {
+//       const newVal = !prev;
+//       localStorage.setItem('adsb-pro-reduced-motion', String(newVal));
+// To:
+//   case 'm': // Toggle MSAW (Minimum Safe Altitude Warning)
+//     setShowMsawWarnings((prev) => {
+//       const newVal = !prev;
+//       localStorage.setItem('adsb-pro-msaw', String(newVal));
+
+// Update dependency array:
+// Change: }, [config.mapMode, panelPinned]);
+// To: }, [config.mapMode, panelPinned, selectedAircraft]);

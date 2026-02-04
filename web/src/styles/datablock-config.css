@@ -1,0 +1,371 @@
+/* Data Block Configuration Panel Styles */
+
+.datablock-config-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--glass-bg, rgba(15, 23, 42, 0.95));
+  border: 1px solid var(--glass-border, rgba(148, 163, 184, 0.2));
+  border-radius: 12px;
+  width: 320px;
+  max-height: 80vh;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+}
+
+.datablock-config-panel.pro-style {
+  background: rgba(10, 13, 18, 0.98);
+  border-color: rgba(100, 200, 255, 0.3);
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+}
+
+/* Header */
+.datablock-config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--glass-border, rgba(148, 163, 184, 0.2));
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.datablock-config-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary, #f1f5f9);
+}
+
+.datablock-config-title svg {
+  color: var(--primary, #3b82f6);
+}
+
+.pro-style .datablock-config-title {
+  color: rgba(100, 200, 255, 0.9);
+}
+
+.pro-style .datablock-config-title svg {
+  color: rgba(100, 200, 255, 0.8);
+}
+
+.datablock-config-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  color: var(--text-secondary, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.datablock-config-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary, #f1f5f9);
+}
+
+/* Sections */
+.datablock-config-section {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--glass-border, rgba(148, 163, 184, 0.1));
+}
+
+.datablock-config-section:last-child {
+  border-bottom: none;
+}
+
+.datablock-section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary, #64748b);
+  margin-bottom: 10px;
+}
+
+.pro-style .datablock-section-title {
+  color: rgba(100, 200, 255, 0.6);
+}
+
+/* Display Mode Selection */
+.datablock-mode-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.datablock-mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.datablock-mode-option:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.datablock-mode-option input[type='radio'] {
+  margin-top: 2px;
+  accent-color: var(--primary, #3b82f6);
+}
+
+.pro-style .datablock-mode-option input[type='radio'] {
+  accent-color: rgba(100, 200, 255, 0.8);
+}
+
+.datablock-mode-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.datablock-mode-label .mode-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary, #f1f5f9);
+}
+
+.pro-style .datablock-mode-label .mode-name {
+  color: rgba(150, 255, 200, 0.9);
+}
+
+.datablock-mode-label .mode-description {
+  font-size: 11px;
+  color: var(--text-secondary, #64748b);
+}
+
+.pro-style .datablock-mode-label .mode-description {
+  color: rgba(100, 200, 255, 0.5);
+}
+
+/* Field Items */
+.datablock-field-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.datablock-field-item:hover:not(.disabled) {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.datablock-field-item.disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.datablock-field-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.datablock-field-info .field-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary, #f1f5f9);
+}
+
+.pro-style .datablock-field-info .field-name {
+  color: rgba(150, 255, 200, 0.9);
+}
+
+.datablock-field-info .field-description {
+  font-size: 11px;
+  color: var(--text-secondary, #64748b);
+}
+
+.pro-style .datablock-field-info .field-description {
+  color: rgba(100, 200, 255, 0.5);
+}
+
+/* Field Toggle Button */
+.datablock-field-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  color: var(--text-secondary, #64748b);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.datablock-field-toggle:hover:not(.locked) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.datablock-field-toggle.active {
+  background: rgba(59, 130, 246, 0.2);
+  color: var(--primary, #3b82f6);
+}
+
+.pro-style .datablock-field-toggle.active {
+  background: rgba(100, 200, 255, 0.2);
+  color: rgba(100, 200, 255, 0.9);
+}
+
+.datablock-field-toggle.locked {
+  cursor: default;
+  color: rgba(100, 200, 255, 0.6);
+  background: rgba(100, 200, 255, 0.1);
+}
+
+/* Field Action Button (Reset) */
+.datablock-field-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #64748b);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s ease;
+  border-radius: 4px;
+}
+
+.datablock-field-action:hover {
+  color: var(--primary, #3b82f6);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.pro-style .datablock-field-action:hover {
+  color: rgba(100, 200, 255, 0.9);
+}
+
+/* Preview Section */
+.datablock-preview {
+  position: relative;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  padding: 20px;
+  min-height: 80px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.pro-style .datablock-preview {
+  background: rgba(10, 13, 18, 0.9);
+  border: 1px solid rgba(100, 200, 255, 0.2);
+}
+
+/* Simulated radar blip */
+.preview-blip {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  background: var(--primary, #3b82f6);
+  border-radius: 50%;
+  box-shadow: 0 0 4px var(--primary, #3b82f6);
+}
+
+.pro-style .preview-blip {
+  background: rgba(0, 255, 150, 0.9);
+  box-shadow: 0 0 6px rgba(0, 255, 150, 0.6);
+}
+
+/* Simulated leader line */
+.preview-leader-line {
+  position: absolute;
+  left: 24px;
+  top: 50%;
+  width: 20px;
+  height: 1px;
+  background: var(--text-secondary, #64748b);
+  transform: translateY(-50%);
+}
+
+.pro-style .preview-leader-line {
+  background: rgba(100, 200, 255, 0.4);
+}
+
+/* Data block preview */
+.preview-datablock {
+  margin-left: 52px;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.preview-line {
+  white-space: nowrap;
+}
+
+.preview-line.callsign {
+  color: var(--text-primary, #f1f5f9);
+  font-weight: 600;
+}
+
+.pro-style .preview-line.callsign {
+  color: rgba(150, 255, 200, 0.95);
+  text-shadow: 0 0 4px rgba(150, 255, 200, 0.3);
+}
+
+.preview-line.data {
+  color: var(--text-secondary, #94a3b8);
+}
+
+.pro-style .preview-line.data {
+  color: rgba(100, 200, 255, 0.8);
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .datablock-config-panel {
+    width: calc(100vw - 32px);
+    max-width: 320px;
+    max-height: 70vh;
+  }
+}
+
+/* Animation for panel appearance */
+@keyframes datablock-panel-appear {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.datablock-config-panel {
+  animation: datablock-panel-appear 0.2s ease-out;
+}
+
+/* Backdrop for modal behavior (optional - add via parent) */
+.datablock-config-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+}

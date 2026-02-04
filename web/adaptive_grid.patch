@@ -1,0 +1,40 @@
+--- a/src/components/map/MapView.jsx
++++ b/src/components/map/MapView.jsx
+@@ -4141,11 +4141,31 @@ function MapView({
+       }
+
+       if (isPro) {
+-        // PRO MODE: Draw lat/lon grid (with adjustable opacity) - theme-aware
++        // PRO MODE: Adaptive Grid Spacing (Phase 4.1) - distance-based grid
++        // Grid lines adapt to zoom: 10nm(2/5), 25nm(5/10), 50nm(10/25), 100nm(25/50), 250nm(50/100)
+         const gridAlpha = gridOpacity;
+-        const gridColor = themeColors.rgba('grid', gridAlpha);
+-        const gridLabelColor = themeColors.rgba('gridLabel', Math.min(0.7, gridAlpha * 2.3));
+-        ctx.strokeStyle = gridColor;
++        const adaptivePxPerNm = (Math.min(width, height) * 0.45) / radarRange;
++        let minorSp, majorSp;
++        if (radarRange <= 10) { minorSp = 2; majorSp = 5; }
++        else if (radarRange <= 25) { minorSp = 5; majorSp = 10; }
++        else if (radarRange <= 50) { minorSp = 10; majorSp = 25; }
++        else if (radarRange <= 100) { minorSp = 25; majorSp = 50; }
++        else { minorSp = 50; majorSp = 100; }
++        const maxDist = radarRange * 1.3;
++        const gcX = centerX + proPanOffset.x, gcY = centerY + proPanOffset.y;
++        const minAlpha = gridAlpha * 0.33, majAlpha = gridAlpha * 0.83;
++        // Minor grid rings (subtle - rgba(0,255,255,0.1) style)
++        ctx.strokeStyle = themeColors.rgba('grid', minAlpha); ctx.lineWidth = 0.5; ctx.setLineDash([]);
++        for (let d = minorSp; d <= maxDist; d += minorSp) { if (d % majorSp === 0) continue; ctx.beginPath(); ctx.arc(gcX, gcY, d * adaptivePxPerNm, 0, Math.PI * 2); ctx.stroke(); }
++        // Major grid rings with labels (rgba(0,255,255,0.25) style)
++        ctx.strokeStyle = themeColors.rgba('grid', majAlpha); ctx.lineWidth = 1;
++        for (let d = majorSp; d <= maxDist; d += majorSp) { const r = d * adaptivePxPerNm; ctx.beginPath(); ctx.arc(gcX, gcY, r, 0, Math.PI * 2); ctx.stroke(); ctx.fillStyle = themeColors.rgba('gridLabel', Math.min(0.7, gridAlpha * 2)); ctx.font = '11px "JetBrains Mono", monospace'; ctx.textAlign = 'center'; const tY = gcY - r - 4; if (tY > 15 && tY < height - 15) ctx.fillText(`${d}nm`, gcX, tY); const rX = gcX + r + 4; if (rX > 30 && rX < width - 30) { ctx.textAlign = 'left'; ctx.fillText(`${d}`, rX, gcY + 4); } }
++        // Radial bearing lines (10deg minor, 30deg major)
++        const maxRad = maxDist * adaptivePxPerNm;
++        ctx.strokeStyle = themeColors.rgba('grid', minAlpha * 0.5); ctx.lineWidth = 0.5;
++        for (let a = 0; a < 360; a += 10) { if (a % 30 === 0) continue; const rd = ((a - 90) * Math.PI) / 180; ctx.beginPath(); ctx.moveTo(gcX, gcY); ctx.lineTo(gcX + Math.cos(rd) * maxRad, gcY + Math.sin(rd) * maxRad); ctx.stroke(); }
++        ctx.strokeStyle = themeColors.rgba('grid', majAlpha * 0.6); ctx.lineWidth = 1;
++        for (let a = 0; a < 360; a += 30) { const rd = ((a - 90) * Math.PI) / 180; ctx.beginPath(); ctx.moveTo(gcX, gcY); ctx.lineTo(gcX + Math.cos(rd) * maxRad, gcY + Math.sin(rd) * maxRad); ctx.stroke(); }
++        // Legacy variables for scale bar compatibility
++        const gridColor = themeColors.rgba('grid', gridAlpha); const gridLabelColor = themeColors.rgba('gridLabel', Math.min(0.7, gridAlpha * 2.3)); ctx.strokeStyle = gridColor;
+         ctx.lineWidth = 1;
+         ctx.font = '12px "JetBrains Mono", monospace';
+         ctx.fillStyle = gridLabelColor;

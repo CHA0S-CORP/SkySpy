@@ -27,6 +27,18 @@ export { useTrackHistory } from './useTrackHistory';
 export { useMapAlarms } from './useMapAlarms';
 export { useSafetyEvents } from './useSafetyEvents';
 export { useGestures } from './useGestures';
+export { useConflictProbe } from './useConflictProbe';
+export { useAirportTraffic } from './useAirportTraffic';
+export {
+  useHighlightGroups,
+  DEFAULT_GROUPS,
+  RULE_FIELDS,
+  RULE_OPERATORS,
+  COLOR_PALETTE,
+  matchesRule,
+  parseInValue,
+  formatInValue,
+} from './useHighlightGroups';
 
 // History hooks
 export { useHistoryStream } from './useHistoryStream';
@@ -71,3 +83,30 @@ export { useAudioPlayback } from './useAudioPlayback';
 export { useListPreferences } from './useListPreferences';
 export { useSortState } from './useSortState';
 export { useToast } from './useToast';
+export { useWatchList } from './useWatchList';
+export { useFlightStrips, getWakeCategory } from './useFlightStrips';
+
+// Filter hooks
+export { useAltitudeFilter, ALTITUDE_PRESETS } from './useAltitudeFilter';
+
+// Pro mode safety hooks
+export { useMSAW, MSAW_THRESHOLDS, AIRPORT_EXCLUSION } from './useMSAW';
+
+// Search hooks
+export { useSearchHistory } from './useSearchHistory';
+
+// Pro Mode Multi-Scope hooks
+export { useScopeLayout } from './useScopeLayout';
+
+// Pro Mode Session Statistics (Phase 13.3)
+export { useSessionStats } from './useSessionStats';
+
+// Pro Mode Separation Tool (Phase 8.5)
+export { useSeparationTool } from './useSeparationTool';
+
+// Data Block Configuration (Phase 5.2)
+export {
+  useDataBlockConfig,
+  FIELD_DEFINITIONS,
+  MODE_DEFINITIONS,
+} from './useDataBlockConfig';

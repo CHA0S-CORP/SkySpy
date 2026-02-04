@@ -1,0 +1,591 @@
+/* ===============================================
+   HIGHLIGHT GROUPS PANEL (Phase 12.3)
+   =============================================== */
+
+/* Main panel container */
+.highlight-groups-panel {
+  position: absolute;
+  top: 120px;
+  right: 16px;
+  width: 280px;
+  max-height: calc(100vh - 200px);
+  background: rgba(12, 17, 24, 0.95);
+  border: 1px solid rgba(100, 200, 255, 0.25);
+  border-radius: 10px;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(100, 200, 255, 0.1);
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.highlight-groups-panel.dragging {
+  cursor: grabbing;
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.6),
+    0 0 20px rgba(100, 200, 255, 0.15);
+}
+
+.highlight-groups-panel.pro-style {
+  border-color: rgba(100, 200, 255, 0.3);
+}
+
+/* Panel header */
+.highlight-groups-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(20, 30, 45, 0.8);
+  border-bottom: 1px solid rgba(100, 200, 255, 0.15);
+  cursor: grab;
+  user-select: none;
+}
+
+.highlight-groups-header:active {
+  cursor: grabbing;
+}
+
+.highlight-groups-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  background: none;
+  border: none;
+  color: rgba(100, 200, 255, 0.9);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.highlight-groups-toggle:hover {
+  color: rgba(100, 200, 255, 1);
+}
+
+.highlight-groups-toggle .highlight-icon {
+  color: rgba(100, 200, 255, 0.8);
+}
+
+.highlight-groups-toggle .enabled-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  background: rgba(100, 200, 255, 0.2);
+  border: 1px solid rgba(100, 200, 255, 0.4);
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(100, 200, 255, 1);
+}
+
+.highlight-groups-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.highlight-action-btn,
+.highlight-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: rgba(100, 200, 255, 0.08);
+  border: 1px solid rgba(100, 200, 255, 0.2);
+  border-radius: 6px;
+  color: rgba(100, 200, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.highlight-action-btn:hover,
+.highlight-close-btn:hover {
+  background: rgba(100, 200, 255, 0.15);
+  border-color: rgba(100, 200, 255, 0.4);
+  color: rgba(100, 200, 255, 1);
+}
+
+/* Panel content */
+.highlight-groups-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+/* Groups list */
+.highlight-groups-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+/* Individual group item */
+.highlight-group-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(20, 30, 45, 0.5);
+  border: 1px solid rgba(100, 200, 255, 0.1);
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.highlight-group-item:hover {
+  background: rgba(30, 45, 60, 0.6);
+  border-color: rgba(100, 200, 255, 0.2);
+}
+
+.highlight-group-item.enabled {
+  background: rgba(100, 200, 255, 0.08);
+  border-color: rgba(100, 200, 255, 0.25);
+}
+
+.highlight-group-item.editing {
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+}
+
+/* Drag handle */
+.highlight-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  color: rgba(100, 200, 255, 0.3);
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.highlight-drag-handle:active {
+  cursor: grabbing;
+}
+
+.highlight-group-item:hover .highlight-drag-handle {
+  color: rgba(100, 200, 255, 0.5);
+}
+
+/* Checkbox */
+.highlight-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  background: rgba(20, 30, 45, 0.8);
+  border: 1px solid rgba(100, 200, 255, 0.3);
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.highlight-checkbox:hover {
+  border-color: rgba(100, 200, 255, 0.5);
+}
+
+.highlight-checkbox.checked {
+  background: rgba(100, 200, 255, 0.3);
+  border-color: rgba(100, 200, 255, 0.6);
+  color: rgba(100, 200, 255, 1);
+}
+
+/* Color swatch */
+.highlight-color-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Group info */
+.highlight-group-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.highlight-group-name {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.highlight-group-count {
+  color: rgba(100, 200, 255, 0.6);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+/* Group actions */
+.highlight-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.highlight-group-item:hover .highlight-group-actions {
+  opacity: 1;
+}
+
+.highlight-group-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: rgba(100, 200, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.highlight-group-action:hover {
+  background: rgba(100, 200, 255, 0.1);
+  color: rgba(100, 200, 255, 0.9);
+}
+
+.highlight-group-action.remove:hover {
+  background: rgba(255, 100, 100, 0.15);
+  color: rgba(255, 100, 100, 0.9);
+}
+
+/* Add group button */
+.highlight-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px;
+  background: rgba(100, 200, 255, 0.08);
+  border: 1px dashed rgba(100, 200, 255, 0.3);
+  border-radius: 6px;
+  color: rgba(100, 200, 255, 0.8);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.highlight-add-btn:hover {
+  background: rgba(100, 200, 255, 0.12);
+  border-color: rgba(100, 200, 255, 0.5);
+  color: rgba(100, 200, 255, 1);
+}
+
+/* Edit and Add forms */
+.highlight-edit-form,
+.highlight-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(20, 30, 45, 0.6);
+  border: 1px solid rgba(100, 200, 255, 0.2);
+  border-radius: 6px;
+}
+
+.highlight-add-form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  color: rgba(100, 200, 255, 0.9);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.highlight-add-form-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: none;
+  color: rgba(100, 200, 255, 0.5);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.highlight-add-form-close:hover {
+  color: rgba(100, 200, 255, 1);
+}
+
+.highlight-form-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.highlight-form-row.highlight-rule-row {
+  flex-wrap: wrap;
+}
+
+/* Form inputs */
+.highlight-input,
+.highlight-select {
+  height: 28px;
+  padding: 0 8px;
+  background: rgba(10, 15, 22, 0.8);
+  border: 1px solid rgba(100, 200, 255, 0.2);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: inherit;
+  font-size: 11px;
+  transition: border-color 0.15s ease;
+}
+
+.highlight-input:focus,
+.highlight-select:focus {
+  outline: none;
+  border-color: rgba(100, 200, 255, 0.5);
+}
+
+.highlight-input::placeholder {
+  color: rgba(100, 200, 255, 0.4);
+}
+
+.highlight-name-input {
+  flex: 1;
+  min-width: 100px;
+}
+
+.highlight-field-select {
+  width: 100px;
+}
+
+.highlight-operator-select {
+  width: 90px;
+}
+
+.highlight-value-input,
+.highlight-value-select {
+  flex: 1;
+  min-width: 60px;
+}
+
+/* Color picker */
+.highlight-color-picker-container {
+  position: relative;
+}
+
+.highlight-color-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.8);
+  transition: border-color 0.15s ease;
+}
+
+.highlight-color-btn:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.highlight-color-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  padding: 8px;
+  background: rgba(12, 17, 24, 0.98);
+  border: 1px solid rgba(100, 200, 255, 0.3);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  z-index: 10;
+}
+
+.highlight-color-option {
+  width: 24px;
+  height: 24px;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.highlight-color-option:hover {
+  transform: scale(1.15);
+}
+
+.highlight-color-option.selected {
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+}
+
+.highlight-color-custom {
+  grid-column: span 4;
+  width: 100%;
+  height: 24px;
+  margin-top: 4px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Form actions */
+.highlight-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.highlight-form-btn {
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.highlight-form-btn.cancel {
+  background: transparent;
+  border: 1px solid rgba(100, 200, 255, 0.2);
+  color: rgba(100, 200, 255, 0.7);
+}
+
+.highlight-form-btn.cancel:hover {
+  background: rgba(100, 200, 255, 0.1);
+  border-color: rgba(100, 200, 255, 0.4);
+  color: rgba(100, 200, 255, 1);
+}
+
+.highlight-form-btn.save {
+  background: rgba(100, 200, 255, 0.2);
+  border: 1px solid rgba(100, 200, 255, 0.4);
+  color: rgba(100, 200, 255, 1);
+}
+
+.highlight-form-btn.save:hover:not(:disabled) {
+  background: rgba(100, 200, 255, 0.3);
+  border-color: rgba(100, 200, 255, 0.6);
+}
+
+.highlight-form-btn.save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Show button (when panel is hidden) */
+.highlight-groups-show-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 36px;
+  height: 36px;
+  background: rgba(12, 17, 24, 0.9);
+  border: 1px solid rgba(100, 200, 255, 0.25);
+  border-radius: 8px;
+  color: rgba(100, 200, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.highlight-groups-show-btn:hover {
+  background: rgba(20, 30, 45, 0.95);
+  border-color: rgba(100, 200, 255, 0.4);
+  color: rgba(100, 200, 255, 1);
+}
+
+.highlight-groups-show-btn.pro-style {
+  border-color: rgba(100, 200, 255, 0.3);
+}
+
+.highlight-groups-show-btn.has-enabled {
+  border-color: rgba(100, 200, 255, 0.5);
+  color: rgba(100, 200, 255, 1);
+}
+
+.highlight-groups-show-btn .enabled-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: rgba(100, 200, 255, 0.3);
+  border: 1px solid rgba(100, 200, 255, 0.6);
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(100, 200, 255, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Scrollbar styling */
+.highlight-groups-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.highlight-groups-content::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.highlight-groups-content::-webkit-scrollbar-thumb {
+  background: rgba(100, 200, 255, 0.3);
+  border-radius: 3px;
+}
+
+.highlight-groups-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 200, 255, 0.5);
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .highlight-groups-panel {
+    right: 8px;
+    width: 260px;
+    max-height: calc(100vh - 150px);
+  }
+
+  .highlight-groups-show-btn {
+    width: 32px;
+    height: 32px;
+  }
+}

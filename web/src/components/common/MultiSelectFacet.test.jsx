@@ -82,7 +82,9 @@ describe('MultiSelectFacet', () => {
       render(<MultiSelectFacet {...defaultProps} value={['a320']} onChange={onChange} />);
 
       fireEvent.click(screen.getByRole('button'));
-      fireEvent.click(screen.getByText('A320'));
+      // When selected, A320 appears in both trigger and dropdown - get the option element
+      const a320Option = screen.getByRole('option', { name: /A320/ });
+      fireEvent.click(a320Option);
 
       expect(onChange).toHaveBeenCalledWith([]);
     });
@@ -205,7 +207,7 @@ describe('MultiSelectFacet', () => {
       render(<MultiSelectFacet {...defaultProps} value={['a320']} />);
       fireEvent.click(screen.getByRole('button'));
 
-      const selectedOption = screen.getByText('A320').closest('[role="option"]');
+      const selectedOption = screen.getByRole('option', { name: /A320/ });
       expect(selectedOption).toHaveAttribute('aria-selected', 'true');
     });
 

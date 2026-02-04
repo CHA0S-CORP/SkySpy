@@ -1,0 +1,719 @@
+/* ========================================
+   Phase 9.2: Flight Strip Display Styles
+   ATC-style electronic flight strip panel
+   ======================================== */
+
+/* Toggle button when panel is collapsed */
+.flight-strip-toggle-btn {
+  position: absolute;
+  top: 70px;
+  left: 16px;
+  background: rgba(15, 25, 35, 0.95);
+  border: 1px solid rgba(80, 140, 200, 0.4);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: rgba(100, 180, 255, 0.9);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  z-index: 899;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.flight-strip-toggle-btn:hover {
+  background: rgba(30, 50, 70, 0.95);
+  border-color: rgba(100, 180, 255, 0.6);
+}
+
+.flight-strip-toggle-btn .toggle-count {
+  background: rgba(80, 140, 200, 0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+/* Main flight strip panel */
+.flight-strip-panel {
+  position: absolute;
+  top: 70px;
+  left: 16px;
+  background: rgba(15, 25, 35, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(80, 140, 200, 0.4);
+  border-radius: 8px;
+  width: 320px;
+  max-height: calc(100% - 160px);
+  z-index: 900;
+  font-family: 'JetBrains Mono', monospace;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+}
+
+/* Panel header */
+.strip-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(80, 140, 200, 0.3);
+  background: rgba(20, 35, 50, 0.5);
+}
+
+.strip-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(100, 180, 255, 0.9);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.strip-panel-title svg {
+  color: rgba(100, 180, 255, 0.7);
+}
+
+.strip-count {
+  background: rgba(80, 140, 200, 0.3);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.strip-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.strip-panel-btn {
+  background: transparent;
+  border: 1px solid rgba(80, 140, 200, 0.3);
+  border-radius: 4px;
+  padding: 4px 6px;
+  color: rgba(100, 160, 220, 0.7);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.strip-panel-btn:hover {
+  background: rgba(80, 140, 200, 0.15);
+  border-color: rgba(100, 180, 255, 0.5);
+  color: rgba(150, 210, 255, 1);
+}
+
+.strip-panel-btn.active {
+  background: rgba(60, 120, 180, 0.3);
+  border-color: rgba(100, 180, 255, 0.7);
+  color: rgba(150, 210, 255, 1);
+}
+
+.strip-panel-btn.danger:hover {
+  background: rgba(255, 80, 80, 0.2);
+  border-color: rgba(255, 100, 100, 0.5);
+  color: rgba(255, 150, 150, 1);
+}
+
+.strip-panel-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Status summary bar */
+.strip-status-summary {
+  display: flex;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(10, 20, 30, 0.5);
+  border-bottom: 1px solid rgba(80, 140, 200, 0.2);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.strip-status-summary .status-count {
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.strip-status-summary .status-count.emergency {
+  background: rgba(255, 50, 50, 0.3);
+  color: rgba(255, 120, 120, 1);
+  border: 1px solid rgba(255, 80, 80, 0.5);
+}
+
+.strip-status-summary .status-count.conflict {
+  background: rgba(255, 200, 0, 0.3);
+  color: rgba(255, 220, 80, 1);
+  border: 1px solid rgba(255, 200, 0, 0.5);
+}
+
+.strip-status-summary .status-count.watched {
+  background: rgba(100, 200, 255, 0.2);
+  color: rgba(150, 220, 255, 1);
+  border: 1px solid rgba(100, 180, 255, 0.4);
+}
+
+.strip-status-summary .status-count.stale {
+  background: rgba(100, 100, 100, 0.3);
+  color: rgba(180, 180, 180, 1);
+  border: 1px solid rgba(120, 120, 120, 0.5);
+}
+
+/* Panel content (strip list) */
+.strip-panel-content {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(80, 140, 200, 0.3) transparent;
+}
+
+.strip-panel-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.strip-panel-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.strip-panel-content::-webkit-scrollbar-thumb {
+  background: rgba(80, 140, 200, 0.3);
+  border-radius: 3px;
+}
+
+.strip-panel-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(80, 140, 200, 0.5);
+}
+
+/* Empty state */
+.strip-panel-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: rgba(150, 180, 220, 0.5);
+  font-size: 12px;
+}
+
+.strip-panel-empty .empty-hint {
+  margin-top: 8px;
+  font-size: 10px;
+  color: rgba(150, 180, 220, 0.35);
+}
+
+.strip-panel-empty kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  background: rgba(80, 140, 200, 0.2);
+  border: 1px solid rgba(80, 140, 200, 0.3);
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 9px;
+}
+
+/* Strip list container */
+.strip-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Panel footer */
+.strip-panel-footer {
+  display: flex;
+  gap: 12px;
+  padding: 8px 12px;
+  border-top: 1px solid rgba(80, 140, 200, 0.2);
+  background: rgba(10, 20, 30, 0.5);
+  font-size: 9px;
+  color: rgba(150, 180, 220, 0.4);
+}
+
+.strip-panel-footer .keyboard-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.strip-panel-footer kbd {
+  padding: 1px 4px;
+  background: rgba(80, 140, 200, 0.15);
+  border: 1px solid rgba(80, 140, 200, 0.25);
+  border-radius: 2px;
+  font-family: inherit;
+}
+
+/* Individual flight strip */
+.flight-strip {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  background: rgba(20, 35, 50, 0.6);
+  border-bottom: 1px solid rgba(80, 140, 200, 0.15);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.flight-strip:hover {
+  background: rgba(30, 50, 70, 0.8);
+}
+
+.flight-strip.selected {
+  background: rgba(60, 100, 150, 0.4);
+  box-shadow: inset 3px 0 0 rgba(100, 180, 255, 0.8);
+}
+
+.flight-strip.dragging {
+  opacity: 0.5;
+  background: rgba(80, 140, 200, 0.3);
+}
+
+.flight-strip.drag-over {
+  border-top: 2px solid rgba(100, 180, 255, 0.8);
+}
+
+.flight-strip.stale {
+  opacity: 0.6;
+}
+
+/* Status variants */
+.flight-strip.emergency {
+  background: rgba(80, 20, 20, 0.6);
+  box-shadow: inset 3px 0 0 rgba(255, 80, 80, 0.9);
+}
+
+.flight-strip.emergency:hover {
+  background: rgba(100, 30, 30, 0.8);
+}
+
+.flight-strip.conflict {
+  background: rgba(80, 60, 10, 0.6);
+  box-shadow: inset 3px 0 0 rgba(255, 200, 0, 0.9);
+}
+
+.flight-strip.conflict:hover {
+  background: rgba(100, 80, 20, 0.8);
+}
+
+.flight-strip.watched {
+  background: rgba(30, 50, 70, 0.6);
+  box-shadow: inset 3px 0 0 rgba(100, 200, 255, 0.7);
+}
+
+/* Drag handle */
+.strip-drag-handle {
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  color: rgba(100, 160, 220, 0.3);
+  cursor: grab;
+}
+
+.strip-drag-handle:active {
+  cursor: grabbing;
+}
+
+.flight-strip:hover .strip-drag-handle {
+  color: rgba(100, 160, 220, 0.6);
+}
+
+/* Status indicator bar (left edge) */
+.strip-status-bar {
+  width: 3px;
+  flex-shrink: 0;
+}
+
+.strip-status-bar.normal {
+  background: rgba(100, 180, 255, 0.5);
+}
+
+.strip-status-bar.emergency {
+  background: rgba(255, 80, 80, 0.9);
+  animation: strip-pulse-red 1s ease-in-out infinite;
+}
+
+.strip-status-bar.conflict {
+  background: rgba(255, 200, 0, 0.9);
+  animation: strip-pulse-yellow 1.2s ease-in-out infinite;
+}
+
+.strip-status-bar.watched {
+  background: rgba(100, 200, 255, 0.7);
+}
+
+@keyframes strip-pulse-red {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes strip-pulse-yellow {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 0.5; }
+}
+
+/* Strip content area */
+.strip-content {
+  flex: 1;
+  padding: 6px 8px;
+  min-width: 0;
+}
+
+/* Strip rows */
+.strip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.strip-row + .strip-row {
+  margin-top: 4px;
+}
+
+/* Primary row: Callsign, type, squawk */
+.strip-primary {
+  justify-content: space-between;
+}
+
+.strip-callsign {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.strip-callsign .strip-icon {
+  color: rgba(100, 180, 255, 0.6);
+  flex-shrink: 0;
+}
+
+.strip-callsign .callsign-text {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(150, 220, 255, 1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.strip-callsign .strip-reg {
+  font-size: 9px;
+  color: rgba(120, 180, 220, 0.7);
+  margin-left: 4px;
+}
+
+.strip-type-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.strip-type {
+  font-size: 9px;
+  color: rgba(180, 200, 220, 0.8);
+  background: rgba(80, 140, 200, 0.15);
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+.strip-wake {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+.strip-wake.wake-super {
+  background: rgba(255, 50, 50, 0.3);
+  color: rgba(255, 120, 120, 1);
+  border: 1px solid rgba(255, 80, 80, 0.5);
+}
+
+.strip-wake.wake-heavy {
+  background: rgba(255, 140, 0, 0.3);
+  color: rgba(255, 180, 80, 1);
+  border: 1px solid rgba(255, 140, 0, 0.5);
+}
+
+.strip-wake.wake-medium {
+  background: rgba(255, 220, 0, 0.25);
+  color: rgba(255, 230, 100, 1);
+  border: 1px solid rgba(255, 200, 0, 0.4);
+}
+
+.strip-wake.wake-light {
+  background: rgba(100, 255, 100, 0.2);
+  color: rgba(150, 255, 150, 1);
+  border: 1px solid rgba(100, 200, 100, 0.4);
+}
+
+.strip-squawk {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: rgba(180, 200, 220, 0.7);
+}
+
+.strip-squawk .squawk-emergency {
+  color: rgba(255, 100, 100, 1);
+  font-weight: 700;
+}
+
+/* Metrics row: Altitude, Speed, V/S */
+.strip-metrics {
+  font-size: 10px;
+}
+
+.strip-altitude,
+.strip-speed,
+.strip-vs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.strip-metrics .metric-label {
+  font-size: 8px;
+  color: rgba(150, 180, 220, 0.5);
+  text-transform: uppercase;
+}
+
+.strip-metrics .metric-value {
+  font-weight: 600;
+  color: rgba(150, 220, 255, 0.95);
+}
+
+.strip-metrics .metric-unit {
+  font-size: 8px;
+  color: rgba(150, 180, 220, 0.5);
+}
+
+.vs-trend {
+  margin-left: 2px;
+}
+
+.vs-trend.climbing {
+  color: rgba(100, 255, 150, 0.9);
+}
+
+.vs-trend.descending {
+  color: rgba(255, 150, 100, 0.9);
+}
+
+.vs-trend.level {
+  color: rgba(180, 200, 220, 0.5);
+}
+
+.strip-vs .metric-value.climbing {
+  color: rgba(100, 255, 150, 0.95);
+}
+
+.strip-vs .metric-value.descending {
+  color: rgba(255, 150, 100, 0.95);
+}
+
+/* Route row */
+.strip-route {
+  font-size: 9px;
+  color: rgba(180, 200, 220, 0.7);
+}
+
+.route-origin,
+.route-dest {
+  font-weight: 600;
+  color: rgba(150, 200, 255, 0.9);
+}
+
+.route-arrow {
+  color: rgba(150, 180, 220, 0.4);
+}
+
+.route-operator {
+  margin-left: auto;
+  color: rgba(150, 180, 220, 0.5);
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+}
+
+/* Footer row: Time, badges, note */
+.strip-footer {
+  margin-top: 2px;
+  font-size: 9px;
+}
+
+.strip-time {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: rgba(150, 180, 220, 0.5);
+}
+
+.strip-badges {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.strip-badge {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.strip-badge.emergency {
+  background: rgba(255, 50, 50, 0.3);
+  color: rgba(255, 120, 120, 1);
+}
+
+.strip-badge.conflict {
+  background: rgba(255, 200, 0, 0.3);
+  color: rgba(255, 220, 80, 1);
+}
+
+.strip-badge.watched {
+  background: rgba(100, 180, 255, 0.2);
+  color: rgba(150, 200, 255, 1);
+}
+
+.strip-badge.stale {
+  background: rgba(100, 100, 100, 0.3);
+  color: rgba(180, 180, 180, 1);
+}
+
+/* Note/scratchpad */
+.strip-note {
+  margin-left: auto;
+}
+
+.note-display {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px dashed rgba(80, 140, 200, 0.2);
+  border-radius: 3px;
+  padding: 2px 6px;
+  color: rgba(150, 180, 220, 0.4);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 8px;
+  transition: all 0.15s;
+}
+
+.note-display:hover {
+  border-color: rgba(100, 180, 255, 0.4);
+  color: rgba(150, 200, 255, 0.7);
+}
+
+.note-display.has-note {
+  border-style: solid;
+  border-color: rgba(100, 180, 255, 0.3);
+  background: rgba(80, 140, 200, 0.1);
+  color: rgba(180, 210, 255, 0.9);
+}
+
+.note-text {
+  max-width: 80px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.note-edit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.note-input {
+  width: 100px;
+  padding: 2px 6px;
+  background: rgba(20, 40, 60, 0.9);
+  border: 1px solid rgba(100, 180, 255, 0.5);
+  border-radius: 3px;
+  color: rgba(200, 230, 255, 1);
+  font-family: inherit;
+  font-size: 9px;
+}
+
+.note-input:focus {
+  outline: none;
+  border-color: rgba(100, 180, 255, 0.8);
+}
+
+.note-save {
+  background: rgba(60, 120, 80, 0.3);
+  border: 1px solid rgba(100, 200, 100, 0.4);
+  border-radius: 3px;
+  padding: 2px 4px;
+  color: rgba(150, 255, 150, 0.9);
+  cursor: pointer;
+}
+
+.note-save:hover {
+  background: rgba(60, 120, 80, 0.5);
+}
+
+/* Remove button */
+.strip-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  background: transparent;
+  border: none;
+  color: rgba(150, 180, 220, 0.3);
+  cursor: pointer;
+  transition: all 0.15s;
+  opacity: 0;
+}
+
+.flight-strip:hover .strip-remove {
+  opacity: 1;
+}
+
+.strip-remove:hover {
+  color: rgba(255, 100, 100, 0.9);
+  background: rgba(255, 50, 50, 0.1);
+}
+
+/* Responsive adjustments for flight strips */
+@media (max-width: 768px) {
+  .flight-strip-panel {
+    width: calc(100% - 32px);
+    max-width: 320px;
+  }
+
+  .flight-strip-toggle-btn {
+    top: auto;
+    bottom: 80px;
+    left: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .flight-strip-panel {
+    top: auto;
+    bottom: 60px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: 50vh;
+  }
+
+  .strip-panel-footer {
+    display: none;
+  }
+}

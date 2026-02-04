@@ -1,0 +1,508 @@
+/* ============================================================================
+   Phase 3.4: Conflict Probe Panel Styles
+   ============================================================================ */
+
+.conflict-probe-panel {
+  position: absolute;
+  bottom: 80px;
+  left: 16px;
+  background: rgba(10, 20, 10, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 180, 50, 0.4);
+  border-radius: 8px;
+  min-width: 280px;
+  max-width: 360px;
+  max-height: calc(100% - 160px);
+  z-index: 950;
+  font-family: 'JetBrains Mono', monospace;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+}
+
+.conflict-probe-panel.pro-style {
+  background: rgba(15, 25, 35, 0.95);
+  border-color: rgba(255, 180, 100, 0.4);
+}
+
+.conflict-probe-panel.collapsed {
+  max-height: 42px;
+  min-width: 200px;
+}
+
+.conflict-probe-header {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 180, 50, 0.3);
+}
+
+.conflict-probe-panel.pro-style .conflict-probe-header {
+  border-color: rgba(255, 180, 100, 0.3);
+}
+
+.conflict-probe-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  color: rgba(255, 200, 100, 0.9);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.conflict-probe-panel.pro-style .conflict-probe-toggle {
+  color: rgba(255, 220, 150, 0.9);
+}
+
+.conflict-probe-toggle:hover {
+  background: rgba(255, 200, 100, 0.1);
+}
+
+.conflict-probe-icon {
+  color: rgba(255, 180, 50, 0.9);
+}
+
+.conflict-probe-title {
+  flex: 1;
+  text-align: left;
+}
+
+.conflict-probe-clear {
+  color: rgba(100, 255, 150, 0.8);
+  font-size: 10px;
+  padding: 2px 6px;
+  background: rgba(100, 255, 150, 0.15);
+  border-radius: 3px;
+}
+
+.conflict-probe-badges {
+  display: flex;
+  gap: 4px;
+}
+
+.conflict-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.conflict-badge.conflict-level-red {
+  background: rgba(255, 80, 80, 0.3);
+  color: rgba(255, 100, 100, 1);
+  border: 1px solid rgba(255, 80, 80, 0.5);
+}
+
+.conflict-badge.conflict-level-orange {
+  background: rgba(255, 140, 50, 0.3);
+  color: rgba(255, 160, 80, 1);
+  border: 1px solid rgba(255, 140, 50, 0.5);
+}
+
+.conflict-badge.conflict-level-yellow {
+  background: rgba(255, 220, 50, 0.25);
+  color: rgba(255, 220, 100, 1);
+  border: 1px solid rgba(255, 220, 50, 0.4);
+}
+
+.conflict-toggle-icon {
+  margin-left: auto;
+  color: rgba(255, 200, 100, 0.6);
+}
+
+.conflict-probe-enable,
+.conflict-probe-close {
+  background: none;
+  border: none;
+  border-left: 1px solid rgba(255, 180, 50, 0.3);
+  padding: 10px 12px;
+  color: rgba(255, 200, 100, 0.6);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.conflict-probe-enable:hover,
+.conflict-probe-close:hover {
+  background: rgba(255, 200, 100, 0.15);
+  color: rgba(255, 220, 150, 0.9);
+}
+
+.conflict-probe-enable.active {
+  color: rgba(100, 255, 150, 0.9);
+}
+
+.conflict-probe-panel.pro-style .conflict-probe-enable,
+.conflict-probe-panel.pro-style .conflict-probe-close {
+  border-color: rgba(255, 180, 100, 0.3);
+}
+
+.conflict-probe-content {
+  overflow-y: auto;
+  max-height: 400px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 180, 50, 0.3) transparent;
+}
+
+.conflict-probe-panel.pro-style .conflict-probe-content {
+  scrollbar-color: rgba(255, 180, 100, 0.3) transparent;
+}
+
+.conflict-probe-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  color: rgba(255, 200, 100, 0.7);
+  font-size: 11px;
+}
+
+.conflict-probe-subtitle {
+  font-size: 10px;
+  color: rgba(255, 200, 100, 0.5);
+  margin-top: 4px;
+}
+
+.conflict-probe-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.conflict-probe-item {
+  border-bottom: 1px solid rgba(255, 180, 50, 0.2);
+  transition: background 0.2s;
+}
+
+.conflict-probe-item.pro-style {
+  border-color: rgba(255, 180, 100, 0.2);
+}
+
+.conflict-probe-item:last-child {
+  border-bottom: none;
+}
+
+.conflict-probe-item.conflict-level-red {
+  background: rgba(255, 80, 80, 0.1);
+  border-left: 3px solid rgba(255, 80, 80, 0.8);
+}
+
+.conflict-probe-item.conflict-level-red .conflict-alert-icon,
+.conflict-probe-item.conflict-level-red .conflict-alert-label {
+  color: rgba(255, 100, 100, 1);
+}
+
+.conflict-probe-item.conflict-level-orange {
+  background: rgba(255, 140, 50, 0.1);
+  border-left: 3px solid rgba(255, 140, 50, 0.8);
+}
+
+.conflict-probe-item.conflict-level-orange .conflict-alert-icon,
+.conflict-probe-item.conflict-level-orange .conflict-alert-label {
+  color: rgba(255, 160, 80, 1);
+}
+
+.conflict-probe-item.conflict-level-yellow {
+  background: rgba(255, 220, 50, 0.08);
+  border-left: 3px solid rgba(255, 220, 50, 0.7);
+}
+
+.conflict-probe-item.conflict-level-yellow .conflict-alert-icon,
+.conflict-probe-item.conflict-level-yellow .conflict-alert-label {
+  color: rgba(255, 220, 100, 1);
+}
+
+.conflict-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.conflict-item-header:hover {
+  background: rgba(255, 200, 100, 0.08);
+}
+
+.conflict-item-alert {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.conflict-alert-icon {
+  flex-shrink: 0;
+}
+
+.conflict-alert-label {
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+
+.conflict-item-pair {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.conflict-callsign {
+  color: rgba(150, 255, 200, 0.95);
+  font-weight: 600;
+}
+
+.conflict-probe-panel.pro-style .conflict-callsign {
+  color: rgba(150, 220, 255, 0.95);
+}
+
+.conflict-separator {
+  color: rgba(255, 200, 100, 0.5);
+}
+
+.conflict-item-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: rgba(255, 200, 100, 0.8);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.conflict-item-toggle {
+  color: rgba(255, 200, 100, 0.5);
+}
+
+.conflict-item-details {
+  padding: 8px 12px 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-top: 1px solid rgba(255, 180, 50, 0.15);
+}
+
+.conflict-probe-item.pro-style .conflict-item-details {
+  border-color: rgba(255, 180, 100, 0.15);
+}
+
+.conflict-separation-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.conflict-sep-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.conflict-sep-label {
+  font-size: 9px;
+  color: rgba(255, 200, 100, 0.6);
+  letter-spacing: 0.5px;
+}
+
+.conflict-sep-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 220, 150, 1);
+}
+
+.conflict-aircraft-row {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 180, 50, 0.1);
+}
+
+.conflict-aircraft-row:last-of-type {
+  border-bottom: none;
+}
+
+.conflict-aircraft-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.conflict-aircraft-header svg {
+  color: rgba(255, 200, 100, 0.6);
+}
+
+.conflict-aircraft-callsign {
+  color: rgba(150, 255, 200, 0.95);
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.conflict-aircraft-callsign:hover {
+  color: rgba(200, 255, 255, 1);
+  text-decoration: underline;
+}
+
+.conflict-probe-panel.pro-style .conflict-aircraft-callsign {
+  color: rgba(150, 220, 255, 0.95);
+}
+
+.conflict-aircraft-data {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 10px;
+  color: rgba(255, 200, 100, 0.7);
+  padding-left: 18px;
+}
+
+.conflict-data-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.conflict-data-item svg {
+  color: rgba(255, 200, 100, 0.5);
+}
+
+.conflict-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.conflict-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(255, 200, 100, 0.15);
+  border: 1px solid rgba(255, 200, 100, 0.3);
+  border-radius: 4px;
+  color: rgba(255, 220, 150, 0.9);
+  font-size: 10px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.conflict-action-btn:hover {
+  background: rgba(255, 200, 100, 0.25);
+  border-color: rgba(255, 220, 150, 0.5);
+}
+
+.conflict-action-btn svg {
+  flex-shrink: 0;
+}
+
+/* Conflict visualization on radar canvas */
+.conflict-point-marker {
+  position: absolute;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.conflict-point-marker.level-red {
+  color: rgba(255, 80, 80, 1);
+  filter: drop-shadow(0 0 6px rgba(255, 80, 80, 0.8));
+  animation: conflict-pulse-red 0.8s ease-in-out infinite;
+}
+
+.conflict-point-marker.level-orange {
+  color: rgba(255, 140, 50, 1);
+  filter: drop-shadow(0 0 5px rgba(255, 140, 50, 0.7));
+  animation: conflict-pulse-orange 1.2s ease-in-out infinite;
+}
+
+.conflict-point-marker.level-yellow {
+  color: rgba(255, 220, 50, 1);
+  filter: drop-shadow(0 0 4px rgba(255, 220, 50, 0.6));
+  animation: conflict-pulse-yellow 1.5s ease-in-out infinite;
+}
+
+@keyframes conflict-pulse-red {
+  0%, 100% {
+    filter: drop-shadow(0 0 6px rgba(255, 80, 80, 0.8));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 12px rgba(255, 80, 80, 1));
+    transform: scale(1.2);
+  }
+}
+
+@keyframes conflict-pulse-orange {
+  0%, 100% {
+    filter: drop-shadow(0 0 5px rgba(255, 140, 50, 0.7));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 10px rgba(255, 140, 50, 0.9));
+    transform: scale(1.15);
+  }
+}
+
+@keyframes conflict-pulse-yellow {
+  0%, 100% {
+    filter: drop-shadow(0 0 4px rgba(255, 220, 50, 0.6));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 8px rgba(255, 220, 50, 0.8));
+    transform: scale(1.1);
+  }
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .conflict-probe-panel {
+    left: 8px;
+    right: 8px;
+    bottom: 70px;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .conflict-probe-content {
+    max-height: 300px;
+  }
+
+  .conflict-alert-label {
+    display: none;
+  }
+
+  .conflict-aircraft-data {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .conflict-actions {
+    flex-direction: column;
+  }
+
+  .conflict-action-btn {
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conflict-point-marker.level-red,
+  .conflict-point-marker.level-orange,
+  .conflict-point-marker.level-yellow {
+    animation: none !important;
+    transform: scale(1) !important;
+  }
+}

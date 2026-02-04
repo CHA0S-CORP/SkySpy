@@ -105,6 +105,12 @@ export default function App() {
   const [hashState, setHashState] = useState(parseHash);
   const [config, setConfig] = useState(getConfig);
   const [showSettings, setShowSettings] = useState(false);
+
+  // Phase 5.1: Initialize pro mode theme CSS variables on app startup
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('adsb-pro-theme') || 'cyan';
+    document.documentElement.setAttribute('data-pro-theme', savedTheme);
+  }, []);
   // Sidebar collapse state - auto-collapse below 1200px, respect user preference above
   const SIDEBAR_COLLAPSE_BREAKPOINT = 1200;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
