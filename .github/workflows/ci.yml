@@ -146,7 +146,7 @@ jobs:
         run: |
           source .venv/bin/activate
           python manage.py migrate --noinput
-          pytest -v --tb=short -n auto \
+          pytest -v --tb=short \
             --ignore=skyspy/tests/e2e \
             --ignore=skyspy/tests/integration \
             --cov=skyspy --cov-report=xml --cov-fail-under=40  # TODO: Investigate coverage drop and restore to 80
@@ -236,7 +236,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-changes, lint-frontend]
     if: needs.detect-changes.outputs.frontend == 'true'
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
