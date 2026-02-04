@@ -458,15 +458,17 @@ class SafetyEventFactory(DjangoModelFactory):
         }
     )
     aircraft_snapshot_2 = factory.LazyAttribute(
-        lambda o: {
-            "hex": generate_icao_hex(),
-            "flight": generate_callsign(),
-            "alt": random.randint(1000, 45000),
-            "lat": random.uniform(25, 49),
-            "lon": random.uniform(-125, -65),
-        }
-        if o.event_type == "proximity_conflict"
-        else None
+        lambda o: (
+            {
+                "hex": generate_icao_hex(),
+                "flight": generate_callsign(),
+                "alt": random.randint(1000, 45000),
+                "lat": random.uniform(25, 49),
+                "lon": random.uniform(-125, -65),
+            }
+            if o.event_type == "proximity_conflict"
+            else None
+        )
     )
     acknowledged = False
     acknowledged_at = None
@@ -577,7 +579,9 @@ class AcarsMessageFactory(DjangoModelFactory):
         position = factory.Trait(
             label="Q0",
             text=factory.LazyFunction(
-                lambda: f"POS N{random.randint(25, 49):02d}{random.randint(0, 59):02d}.{random.randint(0, 9)}W{random.randint(65, 125):03d}{random.randint(0, 59):02d}.{random.randint(0, 9)},ALT {random.randint(25, 45)}000,SPD {random.randint(350, 520)},HDG {random.randint(0, 359):03d}"
+                lambda: (
+                    f"POS N{random.randint(25, 49):02d}{random.randint(0, 59):02d}.{random.randint(0, 9)}W{random.randint(65, 125):03d}{random.randint(0, 59):02d}.{random.randint(0, 9)},ALT {random.randint(25, 45)}000,SPD {random.randint(350, 520)},HDG {random.randint(0, 359):03d}"
+                )
             ),
         )
         # OOOI (Out, Off, On, In)
