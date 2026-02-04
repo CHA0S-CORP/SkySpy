@@ -100,6 +100,13 @@ app.conf.beat_schedule = {
         "schedule": 10.0,
         "options": {"expires": 10.0},
     },
+    # Aircraft stream cold path - periodic cleanup of stale aircraft every 30 seconds
+    # Safety net that catches aircraft that slip through normal batch-based removal
+    "cleanup-stale-aircraft-every-30s": {
+        "task": "skyspy.tasks.aircraft_stream.cleanup_stale_aircraft",
+        "schedule": 30.0,
+        "options": {"expires": 30.0},
+    },
     # Update aircraft sessions - every 5 seconds
     "update-aircraft-sessions-every-5s": {
         "task": "skyspy.tasks.aircraft.update_aircraft_sessions_from_cache",
@@ -176,21 +183,35 @@ app.conf.beat_schedule = {
         "task": "skyspy.tasks.geodata.refresh_tafs",
         "schedule": 1800.0,  # 30 minutes
     },
-    # Stats cache update - every 60 seconds
-    "update-stats-cache-every-60s": {
-        "task": "skyspy.tasks.aircraft.update_stats_cache",
+    # ==========================================================================
+    # Unified Stats Aggregation (P1 optimization)
+    # ==========================================================================
+    # Replaces the individual stats tasks below with a single unified task
+    # that shares a database connection context for better efficiency.
+    "aggregate-all-stats-every-60s": {
+        "task": "skyspy.tasks.analytics.aggregate_all_stats",
         "schedule": 60.0,
+        "options": {"expires": 60.0},
     },
-    # Safety stats update - every 30 seconds
-    "update-safety-stats-every-30s": {
-        "task": "skyspy.tasks.aircraft.update_safety_stats",
-        "schedule": 30.0,
-    },
-    # ACARS stats update - every 60 seconds
-    "update-acars-stats-every-60s": {
-        "task": "skyspy.tasks.analytics.refresh_acars_stats",
-        "schedule": 60.0,
-    },
+    # --------------------------------------------------------------------------
+    # Legacy individual stats tasks (commented out - replaced by aggregate_all_stats)
+    # Kept for reference and in case individual tasks need to be called directly.
+    # --------------------------------------------------------------------------
+    # # Stats cache update - every 60 seconds
+    # "update-stats-cache-every-60s": {
+    #     "task": "skyspy.tasks.aircraft.update_stats_cache",
+    #     "schedule": 60.0,
+    # },
+    # # Safety stats update - every 30 seconds
+    # "update-safety-stats-every-30s": {
+    #     "task": "skyspy.tasks.aircraft.update_safety_stats",
+    #     "schedule": 30.0,
+    # },
+    # # ACARS stats update - every 60 seconds
+    # "update-acars-stats-every-60s": {
+    #     "task": "skyspy.tasks.analytics.refresh_acars_stats",
+    #     "schedule": 60.0,
+    # },
     # Time comparison stats update - every 5 minutes
     "update-time-comparison-stats-every-5m": {
         "task": "skyspy.tasks.analytics.refresh_time_comparison_stats",
@@ -338,6 +359,43 @@ app.conf.beat_schedule = {
         "task": "skyspy.tasks.cleanup.vacuum_analyze_tables",
         "schedule": crontab(hour=4, minute=0, day_of_week=0),
     },
+    # Cooldown key cleanup - daily at 4:30 AM UTC
+    # Removes Redis cooldown keys for deleted alert rules
+    "cleanup-orphan-cooldown-keys-daily": {
+        "task": "skyspy.tasks.cleanup.cleanup_orphan_cooldown_keys",
+        "schedule": crontab(hour=4, minute=30),
+    },
+    # Stale cooldown key cleanup - weekly on Sundays at 5 AM
+    # Removes cooldown keys that have no TTL set (should never happen, but safety net)
+    "cleanup-stale-cooldown-keys-weekly": {
+        "task": "skyspy.tasks.cleanup.cleanup_stale_cooldown_keys",
+        "schedule": crontab(hour=5, minute=0, day_of_week="sunday"),
+    },
+    # ==========================================================================
+    # Task Monitoring Tasks
+    # ==========================================================================
+    # Update queue depth metrics - every 30 seconds
+    "update-queue-metrics-every-30s": {
+        "task": "skyspy.tasks.monitoring.update_queue_metrics",
+        "schedule": 30.0,
+        "options": {"expires": 30.0},
+    },
+    # Check for stale/failing tasks - every 60 seconds
+    "check-task-health-every-60s": {
+        "task": "skyspy.tasks.monitoring.check_task_health",
+        "schedule": 60.0,
+        "options": {"expires": 60.0},
+    },
+    # Collect worker statistics - every 5 minutes
+    "collect-worker-stats-every-5m": {
+        "task": "skyspy.tasks.monitoring.collect_worker_stats",
+        "schedule": 300.0,
+    },
+    # Cleanup stale task metrics - daily at 2 AM UTC
+    "cleanup-stale-task-metrics-daily": {
+        "task": "skyspy.tasks.monitoring.cleanup_stale_task_metrics",
+        "schedule": crontab(hour=2, minute=0),
+    },
 }
 
 
@@ -356,10 +414,12 @@ if _is_rpi_mode():
     app.conf.beat_schedule["poll-aircraft-every-2s"]["schedule"] = float(polling_interval)
     app.conf.beat_schedule["poll-aircraft-every-2s"]["options"]["expires"] = float(polling_interval)
 
-    # Override stats task frequencies (staggered to avoid concurrent execution)
-    app.conf.beat_schedule["update-stats-cache-every-60s"]["schedule"] = rpi_intervals.get("stats_cache", 90.0)
-    app.conf.beat_schedule["update-safety-stats-every-30s"]["schedule"] = rpi_intervals.get("safety_stats", 60.0)
-    app.conf.beat_schedule["update-acars-stats-every-60s"]["schedule"] = rpi_intervals.get("acars_stats", 120.0)
+    # Override unified stats aggregation task frequency for RPi
+    # Uses a longer interval (90s instead of 60s) to reduce CPU load
+    app.conf.beat_schedule["aggregate-all-stats-every-60s"]["schedule"] = rpi_intervals.get("stats_cache", 90.0)
+    app.conf.beat_schedule["aggregate-all-stats-every-60s"]["options"]["expires"] = rpi_intervals.get(
+        "stats_cache", 90.0
+    )
 
     # Override expensive analytics tasks with staggered schedules
     app.conf.beat_schedule["update-flight-pattern-geographic-stats-every-2m"]["schedule"] = crontab(
@@ -383,9 +443,13 @@ app.conf.task_routes = {
     # Aircraft stream cold path (database writes - separate queue to not block hot path)
     "skyspy.tasks.aircraft_stream.flush_stream_to_database": {"queue": "database"},
     "skyspy.tasks.aircraft_stream.process_new_aircraft_lookups": {"queue": "database"},
+    # Aircraft stream stale cleanup (quick, in-memory operation)
+    "skyspy.tasks.aircraft_stream.cleanup_stale_aircraft": {"queue": "default"},
     # Antenna analytics (runs frequently, should be quick)
     "skyspy.tasks.analytics.update_antenna_analytics": {"queue": "polling"},
     "skyspy.tasks.analytics.refresh_acars_stats": {"queue": "polling"},
+    # Unified stats aggregation (runs every 60s, combines aircraft/safety/acars stats)
+    "skyspy.tasks.analytics.aggregate_all_stats": {"queue": "polling"},
     # Low-priority expensive analytics tasks (RPi optimization)
     "skyspy.tasks.analytics.refresh_time_comparison_stats": {"queue": "low_priority"},
     "skyspy.tasks.analytics.refresh_tracking_quality_stats": {"queue": "low_priority"},
@@ -413,6 +477,7 @@ app.conf.task_routes = {
     "skyspy.tasks.acars.process_acars_decode_queue": {"queue": "database"},
     # Notification tasks
     "skyspy.tasks.notifications.send_notification_task": {"queue": "notifications"},
+    "skyspy.tasks.notifications.send_webhook_task": {"queue": "notifications"},
     "skyspy.tasks.notifications.process_notification_queue": {"queue": "notifications"},
     "skyspy.tasks.notifications.cleanup_notification_cooldowns": {"queue": "notifications"},
     "skyspy.tasks.notifications.*": {"queue": "notifications"},
@@ -422,6 +487,11 @@ app.conf.task_routes = {
     "skyspy.tasks.cannonball.cleanup_old_patterns": {"queue": "low_priority"},
     "skyspy.tasks.cannonball.aggregate_cannonball_stats": {"queue": "low_priority"},
     "skyspy.tasks.cannonball.*": {"queue": "default"},
+    # Monitoring tasks (quick checks, run on default queue)
+    "skyspy.tasks.monitoring.update_queue_metrics": {"queue": "default"},
+    "skyspy.tasks.monitoring.check_task_health": {"queue": "default"},
+    "skyspy.tasks.monitoring.collect_worker_stats": {"queue": "default"},
+    "skyspy.tasks.monitoring.cleanup_stale_task_metrics": {"queue": "low_priority"},
     # Default queue for everything else
     "skyspy.tasks.*": {"queue": "default"},
 }

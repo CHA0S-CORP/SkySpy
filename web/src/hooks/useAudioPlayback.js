@@ -24,6 +24,8 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
 
   const autoplayQueueRef = useRef([]);
   const processAutoplayQueueRef = useRef(null);
+  // Lock to prevent concurrent processing of autoplay queue
+  const isProcessingQueueRef = useRef(false);
 
   // Refs to capture latest state values for use in async callbacks (avoid stale closures)
   const localAutoplayRef = useRef(localAutoplay);
@@ -98,119 +100,137 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
     // Use refs to get latest state values (avoid stale closures)
     if (!localAutoplayRef.current || globalAudioState.playingId) return;
 
+    // Prevent concurrent processing - check and set lock atomically
+    if (isProcessingQueueRef.current) return;
+    isProcessingQueueRef.current = true;
+
     const next = autoplayQueueRef.current.shift();
-    if (next && next.s3_url) {
-      const audio = new Audio(next.s3_url);
-      audio.volume = isMutedRef.current ? 0 : audioVolumeRef.current;
-      audioRefs[next.id] = audio;
+    if (!next || !next.s3_url) {
+      // No item to process, release lock
+      isProcessingQueueRef.current = false;
+      return;
+    }
 
-      let loadTimeout = null;
-      const cleanup = () => {
-        if (loadTimeout) clearTimeout(loadTimeout);
-      };
+    const audio = new Audio(next.s3_url);
+    audio.volume = isMutedRef.current ? 0 : audioVolumeRef.current;
+    audioRefs[next.id] = audio;
 
-      // Create named handler functions so they can be removed later
-      const handleLoadedMetadata = function () {
-        cleanup();
-        globalAudioState.audioDurations[next.id] = audio.duration;
-        notifySubscribers({ audioDurations: { ...globalAudioState.audioDurations } });
+    let loadTimeout = null;
+    const cleanup = () => {
+      if (loadTimeout) clearTimeout(loadTimeout);
+    };
+
+    // Helper to release lock and continue processing
+    const releaseAndContinue = () => {
+      isProcessingQueueRef.current = false;
+      processAutoplayQueue();
+    };
+
+    // Create named handler functions so they can be removed later
+    const handleLoadedMetadata = function () {
+      cleanup();
+      globalAudioState.audioDurations[next.id] = audio.duration;
+      notifySubscribers({ audioDurations: { ...globalAudioState.audioDurations } });
+      if (isMountedRef.current) {
+        setLocalAudioDurations((prev) => ({ ...prev, [next.id]: audio.duration }));
+      }
+    };
+
+    const handleEnded = function () {
+      cleanup();
+      if (globalAudioState.progressIntervalRef) {
+        clearInterval(globalAudioState.progressIntervalRef);
+        globalAudioState.progressIntervalRef = null;
+      }
+      globalAudioState.playingId = null;
+      globalAudioState.currentTransmission = null;
+      globalAudioState.audioProgress[next.id] = 0;
+      notifySubscribers({
+        playingId: null,
+        currentTransmission: null,
+        audioProgress: { ...globalAudioState.audioProgress },
+      });
+      if (isMountedRef.current) {
+        setLocalPlayingId(null);
+        setLocalAudioProgress((prev) => ({ ...prev, [next.id]: 0 }));
+      }
+      releaseAndContinue();
+    };
+
+    const handleError = function () {
+      cleanup();
+      if (globalAudioState.progressIntervalRef) {
+        clearInterval(globalAudioState.progressIntervalRef);
+        globalAudioState.progressIntervalRef = null;
+      }
+      console.warn(`Failed to load audio ${next.id}, trying next file...`);
+      globalAudioState.playingId = null;
+      globalAudioState.currentTransmission = null;
+      notifySubscribers({ playingId: null, currentTransmission: null });
+      if (isMountedRef.current) {
+        setLocalPlayingId(null);
+      }
+      releaseAndContinue();
+    };
+
+    // Store listeners for later cleanup
+    audioListenersRef.current.set(next.id, {
+      loadedmetadata: handleLoadedMetadata,
+      ended: handleEnded,
+      error: handleError,
+    });
+
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('error', handleError);
+
+    loadTimeout = setTimeout(() => {
+      console.warn(`Audio ${next.id} took too long to load, trying next file...`);
+      audio.pause();
+      audio.src = '';
+      releaseAndContinue();
+    }, 10000);
+
+    if (globalAudioState.progressIntervalRef) {
+      clearInterval(globalAudioState.progressIntervalRef);
+      globalAudioState.progressIntervalRef = null;
+    }
+
+    audio
+      .play()
+      .then(() => {
+        // Successfully started playing, release the lock
+        // (next processAutoplayQueue will see playingId is set and exit early)
+        isProcessingQueueRef.current = false;
+
+        globalAudioState.playingId = next.id;
+        globalAudioState.currentTransmission = next;
+        notifySubscribers({ playingId: next.id, currentTransmission: next });
         if (isMountedRef.current) {
-          setLocalAudioDurations((prev) => ({ ...prev, [next.id]: audio.duration }));
+          setLocalPlayingId(next.id);
         }
-      };
-
-      const handleEnded = function () {
+        globalAudioState.progressIntervalRef = setInterval(() => {
+          if (audio && !audio.paused) {
+            const progress = (audio.currentTime / audio.duration) * 100 || 0;
+            globalAudioState.audioProgress[next.id] = progress;
+            notifySubscribers({ audioProgress: { ...globalAudioState.audioProgress } });
+            if (isMountedRef.current) {
+              setLocalAudioProgress((prev) => ({ ...prev, [next.id]: progress }));
+            }
+          }
+        }, 100);
+      })
+      .catch((err) => {
         cleanup();
-        if (globalAudioState.progressIntervalRef) {
-          clearInterval(globalAudioState.progressIntervalRef);
-          globalAudioState.progressIntervalRef = null;
-        }
-        globalAudioState.playingId = null;
-        globalAudioState.currentTransmission = null;
-        globalAudioState.audioProgress[next.id] = 0;
-        notifySubscribers({
-          playingId: null,
-          currentTransmission: null,
-          audioProgress: { ...globalAudioState.audioProgress },
-        });
-        if (isMountedRef.current) {
-          setLocalPlayingId(null);
-          setLocalAudioProgress((prev) => ({ ...prev, [next.id]: 0 }));
-        }
-        processAutoplayQueue();
-      };
-
-      const handleError = function () {
-        cleanup();
-        if (globalAudioState.progressIntervalRef) {
-          clearInterval(globalAudioState.progressIntervalRef);
-          globalAudioState.progressIntervalRef = null;
-        }
-        console.warn(`Failed to load audio ${next.id}, trying next file...`);
+        console.warn(`Autoplay failed for ${next.id}: ${err.message}, trying next file...`);
         globalAudioState.playingId = null;
         globalAudioState.currentTransmission = null;
         notifySubscribers({ playingId: null, currentTransmission: null });
         if (isMountedRef.current) {
           setLocalPlayingId(null);
         }
-        processAutoplayQueue();
-      };
-
-      // Store listeners for later cleanup
-      audioListenersRef.current.set(next.id, {
-        loadedmetadata: handleLoadedMetadata,
-        ended: handleEnded,
-        error: handleError,
+        releaseAndContinue();
       });
-
-      audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.addEventListener('ended', handleEnded);
-      audio.addEventListener('error', handleError);
-
-      loadTimeout = setTimeout(() => {
-        console.warn(`Audio ${next.id} took too long to load, trying next file...`);
-        audio.pause();
-        audio.src = '';
-        processAutoplayQueue();
-      }, 10000);
-
-      if (globalAudioState.progressIntervalRef) {
-        clearInterval(globalAudioState.progressIntervalRef);
-        globalAudioState.progressIntervalRef = null;
-      }
-
-      audio
-        .play()
-        .then(() => {
-          globalAudioState.playingId = next.id;
-          globalAudioState.currentTransmission = next;
-          notifySubscribers({ playingId: next.id, currentTransmission: next });
-          if (isMountedRef.current) {
-            setLocalPlayingId(next.id);
-          }
-          globalAudioState.progressIntervalRef = setInterval(() => {
-            if (audio && !audio.paused) {
-              const progress = (audio.currentTime / audio.duration) * 100 || 0;
-              globalAudioState.audioProgress[next.id] = progress;
-              notifySubscribers({ audioProgress: { ...globalAudioState.audioProgress } });
-              if (isMountedRef.current) {
-                setLocalAudioProgress((prev) => ({ ...prev, [next.id]: progress }));
-              }
-            }
-          }, 100);
-        })
-        .catch((err) => {
-          cleanup();
-          console.warn(`Autoplay failed for ${next.id}: ${err.message}, trying next file...`);
-          globalAudioState.playingId = null;
-          globalAudioState.currentTransmission = null;
-          notifySubscribers({ playingId: null, currentTransmission: null });
-          if (isMountedRef.current) {
-            setLocalPlayingId(null);
-          }
-          processAutoplayQueue();
-        });
-    }
   }, [audioRefs, removeAudioListeners]);
 
   // Store processAutoplayQueue in ref

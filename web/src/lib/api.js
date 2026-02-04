@@ -8,6 +8,11 @@
 const API_BASE = '/api/v1';
 
 /**
+ * Default request timeout in milliseconds
+ */
+const DEFAULT_TIMEOUT = 30000;
+
+/**
  * Custom error class for API errors
  */
 export class ApiError extends Error {
@@ -15,12 +20,16 @@ export class ApiError extends Error {
    * @param {string} message - Error message
    * @param {number} status - HTTP status code
    * @param {Object|null} data - Error response data from server
+   * @param {boolean} isCorsError - Whether this is a CORS-related error
+   * @param {boolean} isTimeout - Whether this is a timeout error
    */
-  constructor(message, status, data = null) {
+  constructor(message, status, data = null, isCorsError = false, isTimeout = false) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.data = data;
+    this.isCorsError = isCorsError;
+    this.isTimeout = isTimeout;
   }
 }
 
@@ -84,7 +93,7 @@ export function parseDRFError(data) {
 }
 
 /**
- * Make an API request with standardized error handling
+ * Make an API request with standardized error handling and timeout
  *
  * @param {string} endpoint - API endpoint (relative to API_BASE)
  * @param {Object} options - Fetch options
@@ -92,11 +101,12 @@ export function parseDRFError(data) {
  * @param {Object} [options.body] - Request body (will be JSON stringified)
  * @param {Object} [options.params] - URL query parameters
  * @param {Object} [options.headers] - Additional headers
+ * @param {number} [options.timeout] - Request timeout in ms (default: 30000)
  * @returns {Promise<Object>} Parsed JSON response
- * @throws {ApiError} On HTTP error responses
+ * @throws {ApiError} On HTTP error responses, timeout, or CORS failures
  */
 async function apiRequest(endpoint, options = {}) {
-  const { method = 'GET', body, params, headers: customHeaders = {} } = options;
+  const { method = 'GET', body, params, headers: customHeaders = {}, timeout = DEFAULT_TIMEOUT } = options;
 
   // Build URL with query parameters
   let url = `${API_BASE}${endpoint}`;
@@ -119,19 +129,55 @@ async function apiRequest(endpoint, options = {}) {
     ...customHeaders,
   };
 
+  // Set up abort controller for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
   // Build fetch options
   const fetchOptions = {
     method,
     headers,
     credentials: 'include', // Include cookies for session auth
+    signal: controller.signal,
   };
 
   if (body && method !== 'GET') {
     fetchOptions.body = JSON.stringify(body);
   }
 
-  // Make the request
-  const response = await fetch(url, fetchOptions);
+  let response;
+  try {
+    // Make the request
+    response = await fetch(url, fetchOptions);
+  } catch (err) {
+    clearTimeout(timeoutId);
+
+    // Handle timeout
+    if (err.name === 'AbortError') {
+      throw new ApiError(
+        `Request timeout after ${timeout}ms`,
+        0,
+        null,
+        false,
+        true
+      );
+    }
+
+    // Detect CORS errors (typically show as TypeError: Failed to fetch)
+    if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+      throw new ApiError(
+        'CORS error: Unable to access the API. Check that the server allows requests from this origin with credentials.',
+        0,
+        null,
+        true,
+        false
+      );
+    }
+
+    throw new ApiError(err.message || 'Network error', 0, null);
+  }
+
+  clearTimeout(timeoutId);
 
   // Parse response
   let data = null;

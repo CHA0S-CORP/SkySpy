@@ -488,6 +488,27 @@ class CannonballService:
         if grid:
             patterns.append(grid)
 
+        # Enhanced pattern detection (Phase 2)
+        # Detect stakeout pattern
+        stakeout = self._detect_stakeout(positions)
+        if stakeout:
+            patterns.append(stakeout)
+
+        # Detect racetrack orbit pattern
+        racetrack = self._detect_racetrack(positions)
+        if racetrack:
+            patterns.append(racetrack)
+
+        # Detect highway tracking pattern
+        highway = self._detect_highway_parallel(positions)
+        if highway:
+            patterns.append(highway)
+
+        # Detect area search pattern
+        area_search = self._detect_area_search(positions)
+        if area_search:
+            patterns.append(area_search)
+
         return patterns
 
     def _detect_circling(self, positions: list[AircraftPosition]) -> PatternDetection | None:
@@ -749,6 +770,15 @@ class CannonballService:
                 score += int(10 * pattern.confidence)
             elif pattern.pattern_type == "grid_search":
                 score += int(15 * pattern.confidence)
+            # New enhanced patterns
+            elif pattern.pattern_type == "stakeout":
+                score += int(18 * pattern.confidence)  # High urgency - focused surveillance
+            elif pattern.pattern_type == "racetrack":
+                score += int(15 * pattern.confidence)  # Systematic surveillance orbit
+            elif pattern.pattern_type == "highway_tracking":
+                score += int(20 * pattern.confidence)  # Traffic enforcement
+            elif pattern.pattern_type == "area_search":
+                score += int(12 * pattern.confidence)  # Search operation
 
         # Threat level factor
         if threat_level == "critical":
@@ -782,6 +812,412 @@ class CannonballService:
         if hex_code in self._previous_distances:
             del self._previous_distances[hex_code]
         cache.delete(CACHE_POSITION_HISTORY.format(hex_code))
+
+    # ========================================
+    # Enhanced Pattern Detection (Phase 2)
+    # ========================================
+
+    def _detect_stakeout(self, positions: list[AircraftPosition]) -> PatternDetection | None:
+        """
+        Detect stakeout loitering pattern.
+
+        Characteristics:
+        - Extended time (20+ minutes) in a very small area (<0.5nm radius)
+        - Consistent altitude (minimal variation)
+        - Low ground speed
+        """
+        if len(positions) < 10:
+            return None
+
+        # Check time span - need at least 20 minutes
+        first_time = positions[0].timestamp
+        last_time = positions[-1].timestamp
+        duration_minutes = (last_time - first_time).total_seconds() / 60
+
+        if duration_minutes < 20:
+            return None
+
+        # Calculate centroid and spread
+        lats = [p.lat for p in positions]
+        lons = [p.lon for p in positions]
+        center_lat = sum(lats) / len(lats)
+        center_lon = sum(lons) / len(lons)
+
+        # Calculate distances from centroid
+        distances = [haversine_distance(center_lat, center_lon, p.lat, p.lon) for p in positions]
+        avg_distance = sum(distances) / len(distances)
+        max_distance = max(distances)
+
+        # Stakeout: very tight area - less than 0.5nm radius
+        if max_distance > 0.5:
+            return None
+
+        # Check altitude consistency
+        altitudes = [p.altitude for p in positions if p.altitude]
+        if altitudes:
+            avg_altitude = sum(altitudes) / len(altitudes)
+            altitude_variance = sum((a - avg_altitude) ** 2 for a in altitudes) / len(altitudes)
+            altitude_std = math.sqrt(altitude_variance)
+            altitude_consistent = altitude_std < 200  # Less than 200ft variation
+        else:
+            altitude_consistent = False
+            avg_altitude = 0
+
+        # Check for low ground speed
+        speeds = [p.speed for p in positions if p.speed is not None]
+        avg_speed = sum(speeds) / len(speeds) if speeds else 0
+        low_speed = avg_speed < 80  # Less than 80 knots average
+
+        if not altitude_consistent:
+            return None
+
+        # Calculate confidence
+        confidence = 0.0
+        confidence += min(0.4, duration_minutes / 60)  # Up to 0.4 for duration
+        confidence += 0.3 if altitude_consistent else 0
+        confidence += 0.2 if low_speed else 0
+        confidence += 0.1 * (1 - avg_distance / 0.5)  # Tighter = more confident
+
+        confidence = min(1.0, confidence)
+
+        if confidence < 0.5:
+            return None
+
+        return PatternDetection(
+            pattern_type="stakeout",
+            confidence=confidence,
+            center_lat=center_lat,
+            center_lon=center_lon,
+            radius_nm=avg_distance,
+            duration_minutes=int(duration_minutes),
+            description=f"Stakeout pattern: {int(duration_minutes)}min at {avg_distance:.2f}nm spread, {int(avg_altitude)}ft",
+            metadata={
+                "duration_minutes": int(duration_minutes),
+                "avg_altitude": int(avg_altitude),
+                "altitude_std": round(altitude_std, 1) if altitudes else None,
+                "avg_speed": round(avg_speed, 1),
+                "max_spread_nm": round(max_distance, 3),
+            },
+        )
+
+    def _detect_racetrack(self, positions: list[AircraftPosition]) -> PatternDetection | None:
+        """
+        Detect racetrack/figure-8 orbit pattern.
+
+        Characteristics:
+        - Alternating left and right turns
+        - Consistent endpoint locations
+        - Elongated oval pattern
+        """
+        if len(positions) < 15:
+            return None
+
+        # Extract tracks and look for alternating turn directions
+        tracks = [p.track for p in positions if p.track is not None]
+        if len(tracks) < 10:
+            return None
+
+        # Calculate heading changes between consecutive positions
+        heading_changes = []
+        for i in range(1, len(tracks)):
+            change = tracks[i] - tracks[i - 1]
+            # Normalize to -180 to 180
+            if change > 180:
+                change -= 360
+            if change < -180:
+                change += 360
+            heading_changes.append(change)
+
+        # Look for alternating significant turns (>90 degrees cumulative)
+        turn_segments = []
+        current_turn = 0
+        for change in heading_changes:
+            current_turn += change
+            if abs(current_turn) > 150:  # Significant turn completed
+                turn_segments.append(1 if current_turn > 0 else -1)
+                current_turn = 0
+
+        # Need at least 3 turn segments for racetrack
+        if len(turn_segments) < 3:
+            return None
+
+        # Check for alternating pattern
+        alternating_count = 0
+        for i in range(1, len(turn_segments)):
+            if turn_segments[i] != turn_segments[i - 1]:
+                alternating_count += 1
+
+        alternating_ratio = alternating_count / max(1, len(turn_segments) - 1)
+
+        if alternating_ratio < 0.7:  # Need mostly alternating turns
+            return None
+
+        # Calculate center and dimensions
+        lats = [p.lat for p in positions]
+        lons = [p.lon for p in positions]
+        center_lat = sum(lats) / len(lats)
+        center_lon = sum(lons) / len(lons)
+
+        lat_range = max(lats) - min(lats)
+        lon_range = max(lons) - min(lons)
+        lat_range_nm = lat_range * 60
+        lon_range_nm = lon_range * 60 * math.cos(math.radians(center_lat))
+
+        # Racetrack should be elongated (aspect ratio > 1.5)
+        aspect_ratio = max(lat_range_nm, lon_range_nm) / max(0.1, min(lat_range_nm, lon_range_nm))
+        if aspect_ratio < 1.3:
+            return None
+
+        confidence = min(1.0, alternating_ratio * 0.5 + (len(turn_segments) / 10) * 0.3 + 0.2)
+
+        return PatternDetection(
+            pattern_type="racetrack",
+            confidence=confidence,
+            center_lat=center_lat,
+            center_lon=center_lon,
+            radius_nm=max(lat_range_nm, lon_range_nm) / 2,
+            description=f"Racetrack orbit: {len(turn_segments)} turns, {aspect_ratio:.1f} aspect ratio",
+            metadata={
+                "turn_count": len(turn_segments),
+                "alternating_ratio": round(alternating_ratio, 2),
+                "aspect_ratio": round(aspect_ratio, 2),
+                "length_nm": round(max(lat_range_nm, lon_range_nm), 2),
+                "width_nm": round(min(lat_range_nm, lon_range_nm), 2),
+            },
+        )
+
+    def _detect_highway_parallel(self, positions: list[AircraftPosition]) -> PatternDetection | None:
+        """
+        Detect highway tracking/parallel flight pattern.
+
+        Characteristics:
+        - Consistent heading for extended distance
+        - Low altitude
+        - Moderate speed
+        - Linear track
+        """
+        if len(positions) < 8:
+            return None
+
+        # Extract tracks
+        tracks = [p.track for p in positions if p.track is not None]
+        if len(tracks) < 6:
+            return None
+
+        # Calculate average heading and variance
+        # Use circular mean for headings
+        sin_sum = sum(math.sin(math.radians(t)) for t in tracks)
+        cos_sum = sum(math.cos(math.radians(t)) for t in tracks)
+        avg_heading = math.degrees(math.atan2(sin_sum, cos_sum)) % 360
+
+        # Calculate heading deviation
+        heading_deviations = []
+        for t in tracks:
+            diff = abs(t - avg_heading)
+            if diff > 180:
+                diff = 360 - diff
+            heading_deviations.append(diff)
+
+        avg_deviation = sum(heading_deviations) / len(heading_deviations)
+
+        # Highway parallel: very consistent heading (deviation < 15 degrees)
+        if avg_deviation > 15:
+            return None
+
+        # Check altitude - should be low
+        altitudes = [p.altitude for p in positions if p.altitude]
+        if altitudes:
+            avg_altitude = sum(altitudes) / len(altitudes)
+            if avg_altitude > 5000:  # Too high for highway monitoring
+                return None
+        else:
+            avg_altitude = 0
+
+        # Calculate track length
+        total_distance = 0
+        for i in range(1, len(positions)):
+            total_distance += haversine_distance(
+                positions[i - 1].lat, positions[i - 1].lon,
+                positions[i].lat, positions[i].lon
+            )
+
+        # Need at least 2nm of linear flight for highway tracking
+        if total_distance < 2.0:
+            return None
+
+        # Calculate linearity (ratio of direct distance to path distance)
+        direct_distance = haversine_distance(
+            positions[0].lat, positions[0].lon,
+            positions[-1].lat, positions[-1].lon
+        )
+        linearity = direct_distance / max(0.1, total_distance)
+
+        if linearity < 0.7:  # Too much deviation from straight line
+            return None
+
+        # Calculate center
+        lats = [p.lat for p in positions]
+        lons = [p.lon for p in positions]
+        center_lat = sum(lats) / len(lats)
+        center_lon = sum(lons) / len(lons)
+
+        confidence = min(1.0, linearity * 0.4 + (1 - avg_deviation / 15) * 0.3 + min(0.3, total_distance / 10))
+
+        return PatternDetection(
+            pattern_type="highway_tracking",
+            confidence=confidence,
+            center_lat=center_lat,
+            center_lon=center_lon,
+            radius_nm=total_distance / 2,
+            description=f"Highway parallel: {avg_heading:.0f}° heading, {total_distance:.1f}nm track, {int(avg_altitude)}ft",
+            metadata={
+                "avg_heading": round(avg_heading, 1),
+                "heading_deviation": round(avg_deviation, 1),
+                "track_length_nm": round(total_distance, 2),
+                "linearity": round(linearity, 3),
+                "avg_altitude": int(avg_altitude),
+            },
+        )
+
+    def _detect_area_search(self, positions: list[AircraftPosition]) -> PatternDetection | None:
+        """
+        Detect expanding area search pattern.
+
+        Characteristics:
+        - Systematic coverage of an area
+        - Multiple parallel tracks with consistent spacing
+        - Gradual expansion from a center point
+        """
+        if len(positions) < 15:
+            return None
+
+        # Calculate bounding box over time
+        lats = [p.lat for p in positions]
+        lons = [p.lon for p in positions]
+
+        # Check if area is expanding over time
+        # Split positions into thirds and compare coverage areas
+        third = len(positions) // 3
+        if third < 3:
+            return None
+
+        areas = []
+        for i in range(3):
+            start = i * third
+            end = start + third if i < 2 else len(positions)
+            section = positions[start:end]
+
+            section_lats = [p.lat for p in section]
+            section_lons = [p.lon for p in section]
+
+            lat_range = max(section_lats) - min(section_lats)
+            lon_range = max(section_lons) - min(section_lons)
+
+            # Convert to approximate nm²
+            lat_nm = lat_range * 60
+            lon_nm = lon_range * 60 * math.cos(math.radians(sum(section_lats) / len(section_lats)))
+            area = lat_nm * lon_nm
+            areas.append(area)
+
+        # Check for expansion (each section larger than previous)
+        expanding = all(areas[i] >= areas[i - 1] * 0.8 for i in range(1, len(areas)))
+
+        if not expanding or areas[-1] < 0.5:  # Need meaningful final area
+            return None
+
+        # Check for systematic coverage (look at track changes)
+        tracks = [p.track for p in positions if p.track is not None]
+        if len(tracks) < 10:
+            return None
+
+        # Count 180-degree turns (characteristic of search patterns)
+        turn_count = 0
+        for i in range(2, len(tracks)):
+            change = abs(tracks[i] - tracks[i - 2])
+            if change > 180:
+                change = 360 - change
+            if 160 < change < 200:
+                turn_count += 1
+
+        # Need multiple systematic turns
+        if turn_count < 2:
+            return None
+
+        center_lat = sum(lats) / len(lats)
+        center_lon = sum(lons) / len(lons)
+
+        # Calculate total area covered
+        lat_range_nm = (max(lats) - min(lats)) * 60
+        lon_range_nm = (max(lons) - min(lons)) * 60 * math.cos(math.radians(center_lat))
+        total_area = lat_range_nm * lon_range_nm
+
+        confidence = min(1.0, (turn_count / 5) * 0.4 + 0.3 + min(0.3, total_area / 10))
+
+        return PatternDetection(
+            pattern_type="area_search",
+            confidence=confidence,
+            center_lat=center_lat,
+            center_lon=center_lon,
+            radius_nm=math.sqrt(total_area) / 2,
+            description=f"Area search: {total_area:.1f}nm² covered, {turn_count} track reversals",
+            metadata={
+                "area_nm_sq": round(total_area, 2),
+                "turn_count": turn_count,
+                "expansion_ratio": round(areas[-1] / max(0.01, areas[0]), 2),
+            },
+        )
+
+    def _calculate_pattern_confidence(
+        self,
+        pattern: PatternDetection,
+        le_info: dict[str, Any] | None = None,
+        history: list | None = None,
+    ) -> float:
+        """
+        Calculate enhanced confidence for a pattern considering multiple factors.
+
+        Args:
+            pattern: Detected pattern
+            le_info: Law enforcement identification info
+            history: Historical pattern data for this aircraft
+
+        Returns:
+            Adjusted confidence score 0.0-1.0
+        """
+        base_confidence = pattern.confidence
+
+        # Boost confidence if aircraft is known LE
+        if le_info and le_info.get("is_law_enforcement"):
+            base_confidence = min(1.0, base_confidence + 0.2)
+
+        # Boost confidence if aircraft matches surveillance type
+        if le_info and le_info.get("is_surveillance_type"):
+            base_confidence = min(1.0, base_confidence + 0.1)
+
+        # Consider pattern quality metrics from metadata
+        metadata = pattern.metadata or {}
+
+        # Stakeout: longer duration = higher confidence
+        if pattern.pattern_type == "stakeout":
+            duration = metadata.get("duration_minutes", 0)
+            if duration > 60:
+                base_confidence = min(1.0, base_confidence + 0.15)
+            elif duration > 30:
+                base_confidence = min(1.0, base_confidence + 0.1)
+
+        # Racetrack: more turns = higher confidence
+        if pattern.pattern_type == "racetrack":
+            turns = metadata.get("turn_count", 0)
+            if turns > 6:
+                base_confidence = min(1.0, base_confidence + 0.15)
+
+        # Highway tracking: longer track = higher confidence
+        if pattern.pattern_type == "highway_tracking":
+            length = metadata.get("track_length_nm", 0)
+            if length > 5:
+                base_confidence = min(1.0, base_confidence + 0.1)
+
+        return base_confidence
 
 
 # Module-level service instance

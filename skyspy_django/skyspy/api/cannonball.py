@@ -7,8 +7,13 @@ Provides endpoints for:
 - Alert history
 - Known aircraft database
 - Statistics
+- External data sources (Phase 1)
+- Pattern analytics (Phase 2)
+- Registration analysis (Phase 3)
+- Community submissions (Phase 4)
 """
 
+import contextlib
 import logging
 from datetime import timedelta
 
@@ -19,6 +24,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -31,6 +37,11 @@ from skyspy.models import (
     CannonballPattern,
     CannonballSession,
     CannonballStats,
+    CommunitySubmission,
+    LEDataSource,
+    PatternAnalytics,
+    RegistrationAnalysis,
+    SubmitterReputation,
 )
 from skyspy.serializers.cannonball import (
     CannonballAlertListSerializer,
@@ -43,6 +54,19 @@ from skyspy.serializers.cannonball import (
     CannonballSessionSerializer,
     CannonballStatsSerializer,
     CannonballThreatSerializer,
+    CommunitySubmissionCreateSerializer,
+    CommunitySubmissionListSerializer,
+    CommunitySubmissionSerializer,
+    LEDataSourceListSerializer,
+    LEDataSourceSerializer,
+    PatternAnalyticsSerializer,
+    PatternFeedbackSerializer,
+    RegistrationAnalysisListSerializer,
+    RegistrationAnalysisSerializer,
+    RegistrationReviewSerializer,
+    SubmissionRejectSerializer,
+    SubmissionReviewSerializer,
+    SubmitterReputationSerializer,
 )
 from skyspy.tasks.cannonball import (
     clear_active_cannonball_user,
@@ -642,3 +666,465 @@ class CannonballStatsViewSet(viewsets.ReadOnlyModelViewSet):
                 "timestamp": now.isoformat(),
             }
         )
+
+
+# ========================================
+# Phase 1: External Data Sources
+# ========================================
+
+
+class LEDataSourceViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet for external LE data sources."""
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
+    queryset = LEDataSource.objects.all()
+
+    def get_serializer_class(self):
+        if self.action == "list":
+            return LEDataSourceListSerializer
+        return LEDataSourceSerializer
+
+    @extend_schema(summary="List data sources", responses={200: LEDataSourceListSerializer(many=True)})
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(
+            {
+                "sources": serializer.data,
+                "count": queryset.count(),
+                "total_records": sum(s.record_count for s in queryset),
+            }
+        )
+
+    @extend_schema(summary="Trigger sync for a source", responses={200: dict})
+    @action(detail=True, methods=["post"], permission_classes=[IsAdminUser])
+    def sync(self, request, pk=None):
+        """Trigger sync for a specific data source."""
+        source = self.get_object()
+
+        from skyspy.tasks.le_data_sync import import_le_source
+
+        task = import_le_source.delay(source.name, force=True)
+
+        return Response(
+            {
+                "status": "sync_started",
+                "source": source.name,
+                "task_id": task.id,
+            }
+        )
+
+    @extend_schema(summary="Toggle source enabled status", responses={200: LEDataSourceSerializer})
+    @action(detail=True, methods=["post"], permission_classes=[IsAdminUser])
+    def toggle_enabled(self, request, pk=None):
+        """Enable or disable a data source."""
+        source = self.get_object()
+        source.fetch_enabled = not source.fetch_enabled
+        source.save(update_fields=["fetch_enabled"])
+        return Response(LEDataSourceSerializer(source).data)
+
+
+# ========================================
+# Phase 2: Pattern Analytics
+# ========================================
+
+
+class PatternAnalyticsViewSet(viewsets.ModelViewSet):
+    """ViewSet for pattern detection analytics and feedback."""
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
+    queryset = PatternAnalytics.objects.all()
+    serializer_class = PatternAnalyticsSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["pattern_type", "was_confirmed_le", "false_positive_reported"]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # Time range filter
+        hours = self.request.query_params.get("hours", 168)  # Default 7 days
+        try:
+            hours = int(hours)
+            cutoff = timezone.now() - timedelta(hours=hours)
+            queryset = queryset.filter(detected_at__gte=cutoff)
+        except ValueError:
+            pass
+
+        return queryset.order_by("-detected_at")
+
+    @extend_schema(summary="Submit feedback for a pattern", responses={200: PatternAnalyticsSerializer})
+    @action(detail=True, methods=["post"])
+    def feedback(self, request, pk=None):
+        """Submit user feedback on a pattern detection."""
+        pattern = self.get_object()
+        serializer = PatternFeedbackSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = request.user if request.user.is_authenticated else None
+        pattern.record_feedback(
+            user=user,
+            is_confirmed_le=serializer.validated_data.get("was_confirmed_le"),
+            is_false_positive=serializer.validated_data.get("is_false_positive", False),
+        )
+
+        return Response(PatternAnalyticsSerializer(pattern).data)
+
+    @extend_schema(summary="Get pattern accuracy statistics", responses={200: dict})
+    @action(detail=False, methods=["get"])
+    def accuracy_stats(self, request):
+        """Get pattern detection accuracy statistics."""
+        from django.db.models import Avg, Count
+
+        queryset = self.get_queryset().exclude(was_confirmed_le__isnull=True)
+
+        by_type = (
+            queryset.values("pattern_type")
+            .annotate(
+                total=Count("id"),
+                confirmed=Count("id", filter=Q(was_confirmed_le=True)),
+                false_positives=Count("id", filter=Q(false_positive_reported=True)),
+                avg_confidence=Avg("confidence_score"),
+            )
+            .order_by("pattern_type")
+        )
+
+        return Response(
+            {
+                "by_pattern_type": list(by_type),
+                "total_with_feedback": queryset.count(),
+                "total_confirmed": queryset.filter(was_confirmed_le=True).count(),
+                "total_false_positives": queryset.filter(false_positive_reported=True).count(),
+            }
+        )
+
+
+# ========================================
+# Phase 3: Registration Analysis
+# ========================================
+
+
+class RegistrationAnalysisViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet for registration analysis results."""
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
+    queryset = RegistrationAnalysis.objects.all()
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["risk_level", "manually_reviewed", "is_confirmed_le"]
+
+    def get_serializer_class(self):
+        if self.action == "list":
+            return RegistrationAnalysisListSerializer
+        return RegistrationAnalysisSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # Search filter
+        search = self.request.query_params.get("search")
+        if search:
+            queryset = queryset.filter(
+                Q(icao_hex__icontains=search)
+                | Q(registration__icontains=search)
+                | Q(owner_name__icontains=search)
+            )
+
+        # Min score filter
+        min_score = self.request.query_params.get("min_score")
+        if min_score:
+            with contextlib.suppress(ValueError):
+                queryset = queryset.filter(shell_company_score__gte=float(min_score))
+
+        return queryset.order_by("-shell_company_score")
+
+    @extend_schema(
+        summary="List registration analyses",
+        parameters=[
+            OpenApiParameter(name="search", type=str, description="Search by ICAO, registration, or owner"),
+            OpenApiParameter(name="min_score", type=float, description="Minimum shell company score"),
+        ],
+    )
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset[:100], many=True)
+
+        return Response(
+            {
+                "analyses": serializer.data,
+                "count": queryset.count(),
+                "high_risk_count": queryset.filter(risk_level="high").count(),
+            }
+        )
+
+    @extend_schema(summary="Get high-risk unreviewed registrations", responses={200: RegistrationAnalysisListSerializer(many=True)})
+    @action(detail=False, methods=["get"])
+    def high_risk(self, request):
+        """Get high-risk registrations that need review."""
+        queryset = self.get_queryset().filter(
+            risk_level="high",
+            manually_reviewed=False,
+        )[:50]
+
+        return Response(
+            {
+                "analyses": RegistrationAnalysisListSerializer(queryset, many=True).data,
+                "count": queryset.count(),
+            }
+        )
+
+    @extend_schema(summary="Submit review for a registration", responses={200: RegistrationAnalysisSerializer})
+    @action(detail=True, methods=["post"], permission_classes=[IsAdminUser])
+    def review(self, request, pk=None):
+        """Submit admin review for a registration analysis."""
+        analysis = self.get_object()
+        serializer = RegistrationReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        analysis.manually_reviewed = True
+        analysis.is_confirmed_le = serializer.validated_data.get("is_confirmed_le")
+        analysis.review_notes = serializer.validated_data.get("review_notes", "")
+        analysis.reviewed_by = request.user
+        analysis.reviewed_at = timezone.now()
+        analysis.save()
+
+        return Response(RegistrationAnalysisSerializer(analysis).data)
+
+    @extend_schema(summary="Check ICAO for shell company indicators", responses={200: dict})
+    @action(detail=False, methods=["get"], url_path="check/(?P<icao_hex>[A-Fa-f0-9]+)")
+    def check(self, request, icao_hex=None):
+        """Check if an ICAO hex has registration analysis."""
+        if not icao_hex:
+            return Response({"error": "icao_hex required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        icao_hex = icao_hex.upper()
+        try:
+            analysis = RegistrationAnalysis.objects.get(icao_hex=icao_hex)
+            return Response(
+                {
+                    "found": True,
+                    "analysis": RegistrationAnalysisSerializer(analysis).data,
+                }
+            )
+        except RegistrationAnalysis.DoesNotExist:
+            return Response(
+                {
+                    "found": False,
+                    "icao_hex": icao_hex,
+                }
+            )
+
+
+# ========================================
+# Phase 4: Community Submissions
+# ========================================
+
+
+class CommunitySubmissionViewSet(viewsets.ModelViewSet):
+    """ViewSet for community aircraft submissions."""
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
+    throttle_classes = [AuthRateThrottle]
+    queryset = CommunitySubmission.objects.all()
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["status", "agency_type", "evidence_type"]
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return CommunitySubmissionCreateSerializer
+        if self.action == "list":
+            return CommunitySubmissionListSerializer
+        return CommunitySubmissionSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # Users see their own; admins see all
+        if not self.request.user.is_staff:
+            if self.request.user.is_authenticated:
+                queryset = queryset.filter(submitted_by=self.request.user)
+            else:
+                queryset = queryset.none()
+
+        return queryset.select_related("submitted_by", "reviewed_by").order_by("-submitted_at")
+
+    @extend_schema(summary="Create a submission")
+    def create(self, request, *args, **kwargs):
+        """Create a new community submission."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        from skyspy.services.community_submissions import ValidationError, get_submission_service
+
+        service = get_submission_service()
+
+        try:
+            # Get client IP for abuse prevention
+            x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+            ip_address = x_forwarded_for.split(",")[0] if x_forwarded_for else request.META.get("REMOTE_ADDR")
+
+            submission = service.create_submission(
+                user=request.user if request.user.is_authenticated else None,
+                ip_address=ip_address,
+                **serializer.validated_data,
+            )
+
+            return Response(
+                CommunitySubmissionSerializer(submission).data,
+                status=status.HTTP_201_CREATED,
+            )
+
+        except ValidationError as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    @extend_schema(summary="Get pending submissions (admin)", responses={200: CommunitySubmissionSerializer(many=True)})
+    @action(detail=False, methods=["get"], permission_classes=[IsAdminUser])
+    def pending(self, request):
+        """Get all pending submissions for admin review."""
+        queryset = CommunitySubmission.objects.filter(status="pending").select_related(
+            "submitted_by"
+        ).order_by("-submitted_at")
+
+        return Response(
+            {
+                "submissions": CommunitySubmissionSerializer(queryset[:100], many=True).data,
+                "count": queryset.count(),
+            }
+        )
+
+    @extend_schema(summary="Approve a submission", responses={200: CommunitySubmissionSerializer})
+    @action(detail=True, methods=["post"], permission_classes=[IsAdminUser])
+    def approve(self, request, pk=None):
+        """Approve a submission and add to known aircraft database."""
+        submission = self.get_object()
+        serializer = SubmissionReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        from skyspy.services.community_submissions import ValidationError, get_submission_service
+
+        service = get_submission_service()
+
+        try:
+            service.approve_submission(
+                submission=submission,
+                reviewer=request.user,
+                notes=serializer.validated_data.get("notes", ""),
+            )
+            return Response(CommunitySubmissionSerializer(submission).data)
+
+        except ValidationError as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    @extend_schema(summary="Reject a submission", responses={200: CommunitySubmissionSerializer})
+    @action(detail=True, methods=["post"], permission_classes=[IsAdminUser])
+    def reject(self, request, pk=None):
+        """Reject a submission."""
+        submission = self.get_object()
+        serializer = SubmissionRejectSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        from skyspy.services.community_submissions import ValidationError, get_submission_service
+
+        service = get_submission_service()
+
+        try:
+            service.reject_submission(
+                submission=submission,
+                reviewer=request.user,
+                reason=serializer.validated_data["reason"],
+            )
+            return Response(CommunitySubmissionSerializer(submission).data)
+
+        except ValidationError as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    @extend_schema(summary="Mark as duplicate", responses={200: CommunitySubmissionSerializer})
+    @action(detail=True, methods=["post"], permission_classes=[IsAdminUser])
+    def mark_duplicate(self, request, pk=None):
+        """Mark a submission as duplicate."""
+        submission = self.get_object()
+
+        from skyspy.services.community_submissions import get_submission_service
+
+        service = get_submission_service()
+        service.mark_duplicate(submission, request.user)
+
+        return Response(CommunitySubmissionSerializer(submission).data)
+
+    @extend_schema(summary="Get submission statistics", responses={200: dict})
+    @action(detail=False, methods=["get"], permission_classes=[IsAdminUser])
+    def stats(self, request):
+        """Get submission statistics."""
+        from skyspy.services.community_submissions import get_submission_service
+
+        service = get_submission_service()
+        return Response(service.get_submission_stats())
+
+
+class SubmitterReputationViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet for submitter reputation (admin only)."""
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [IsAdminUser]
+    queryset = SubmitterReputation.objects.all()
+    serializer_class = SubmitterReputationSerializer
+
+    def get_queryset(self):
+        return self.queryset.select_related("user").order_by("-reputation_score")
+
+    @extend_schema(summary="Get trusted submitters", responses={200: SubmitterReputationSerializer(many=True)})
+    @action(detail=False, methods=["get"])
+    def trusted(self, request):
+        """Get list of trusted submitters."""
+        queryset = self.get_queryset().filter(is_trusted=True)
+        return Response(
+            {
+                "submitters": self.get_serializer(queryset, many=True).data,
+                "count": queryset.count(),
+            }
+        )
+
+    @extend_schema(summary="Ban a user from submissions", responses={200: SubmitterReputationSerializer})
+    @action(detail=True, methods=["post"])
+    def ban(self, request, pk=None):
+        """Ban a user from making submissions."""
+        reputation = self.get_object()
+
+        from skyspy.services.community_submissions import get_submission_service
+
+        service = get_submission_service()
+
+        reason = request.data.get("reason", "Banned by admin")
+        duration_days = request.data.get("duration_days")
+
+        service.ban_user(
+            user=reputation.user,
+            reason=reason,
+            duration_days=int(duration_days) if duration_days else None,
+        )
+
+        return Response(self.get_serializer(reputation).data)
+
+    @extend_schema(summary="Unban a user", responses={200: SubmitterReputationSerializer})
+    @action(detail=True, methods=["post"])
+    def unban(self, request, pk=None):
+        """Unban a user."""
+        reputation = self.get_object()
+
+        from skyspy.services.community_submissions import get_submission_service
+
+        service = get_submission_service()
+        service.unban_user(reputation.user)
+
+        return Response(self.get_serializer(reputation).data)

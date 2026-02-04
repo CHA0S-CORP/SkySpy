@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronDown, ChevronUp, BarChart3, Compass, Signal, Ruler, Activity } from 'lucide-react';
+import { ChevronDown, ChevronUp, BarChart3, Compass, Signal, Ruler, Activity, Calendar } from 'lucide-react';
+import { DistributionChart } from '../common/DistributionChart';
+import { PolarPlotEnhanced } from '../common/PolarPlotEnhanced';
+import { HeatmapCalendar } from './HeatmapCalendar';
 
 /**
  * Analytics Panel - Collapsible panel showing analytics visualizations
@@ -11,7 +14,7 @@ import { ChevronDown, ChevronUp, BarChart3, Compass, Signal, Ruler, Activity } f
  * @param {Function} props.wsRequest - WebSocket request function
  * @param {boolean} props.wsConnected - WebSocket connection status
  */
-export function AnalyticsPanel({ apiBase = '', hours = 24, wsRequest, wsConnected }) {
+export function AnalyticsPanel({ apiBase = '', hours = 24, wsRequest, wsConnected, sessions = [], useEnhancedVisuals = true }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [loading, setLoading] = useState({});
   const [data, setData] = useState({
@@ -252,108 +255,200 @@ export function AnalyticsPanel({ apiBase = '', hours = 24, wsRequest, wsConnecte
   const maxDistCount = Math.max(...distanceDistribution.map((d) => d.count), 1);
   const maxSpeedCount = Math.max(...speedDistribution.map((s) => s.count), 1);
 
+  // Prepare polar data for enhanced visualization
+  const polarPlotData = useMemo(() => {
+    if (!data.antennaPolar?.bearings) return [];
+    return Object.entries(data.antennaPolar.bearings).map(([bearing, info]) => ({
+      bearing: parseFloat(bearing),
+      range: info.avgDistance || 50,
+      rssi: info.avgRssi,
+      count: info.count,
+    }));
+  }, [data.antennaPolar]);
+
+  // Prepare session data for activity heatmap
+  const sessionActivityData = useMemo(() => {
+    if (!sessions || sessions.length === 0) return [];
+    return sessions.map((s) => ({
+      timestamp: s.first_seen || s.timestamp,
+    }));
+  }, [sessions]);
+
   return (
-    <div className={`analytics-panel ${isExpanded ? 'expanded' : 'collapsed'}`}>
-      <button className="analytics-panel-toggle" onClick={() => setIsExpanded(!isExpanded)}>
-        <BarChart3 size={16} />
-        <span>Analytics</span>
-        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-      </button>
+    <div className={`analytics-panel analytics-dock ${isExpanded ? 'expanded' : 'analytics-dock--collapsed'}`}>
+      <div className="analytics-dock__header" onClick={() => setIsExpanded(!isExpanded)}>
+        <div className="analytics-dock__title">
+          <BarChart3 size={14} />
+          <span>Analytics</span>
+        </div>
+        <div className="analytics-dock__toggle">
+          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </div>
+      </div>
 
       {isExpanded && (
-        <div className="analytics-panel-content">
-          <div className="analytics-grid">
-            {/* Distance Distribution */}
-            <div className="analytics-card">
-              <div className="analytics-card-header">
-                <Ruler size={14} />
-                <span>Distance Distribution</span>
-              </div>
-              <div className="analytics-card-content">
-                {loading.distance ? (
-                  <div className="analytics-loading">Loading...</div>
-                ) : error.distance ? (
-                  <div className="analytics-error">{error.distance}</div>
-                ) : (
-                  <>
-                    {renderBarChart(distanceDistribution, maxDistCount, '#00d4ff')}
-                    {data.distance?.stats && (
-                      <div className="analytics-stats">
-                        <span>Avg: {data.distance.stats.avg?.toFixed(1)} nm</span>
-                        <span>Max: {data.distance.stats.max?.toFixed(1)} nm</span>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
+        <div className="analytics-dock__content">
+          {/* Distance Distribution - Enhanced */}
+          <div className="analytics-card">
+            <div className="analytics-card-header">
+              <Ruler size={14} />
+              <span>Distance Distribution</span>
             </div>
-
-            {/* Speed Distribution */}
-            <div className="analytics-card">
-              <div className="analytics-card-header">
-                <Activity size={14} />
-                <span>Speed Distribution</span>
-              </div>
-              <div className="analytics-card-content">
-                {loading.speed ? (
-                  <div className="analytics-loading">Loading...</div>
-                ) : error.speed ? (
-                  <div className="analytics-error">{error.speed}</div>
-                ) : (
-                  <>
-                    {renderBarChart(speedDistribution, maxSpeedCount, '#a371f7')}
-                    {data.speed?.stats && (
-                      <div className="analytics-stats">
-                        <span>Avg: {data.speed.stats.avg?.toFixed(0)} kts</span>
-                        <span>Max: {data.speed.stats.max?.toFixed(0)} kts</span>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Antenna Polar Coverage */}
-            <div className="analytics-card">
-              <div className="analytics-card-header">
-                <Compass size={14} />
-                <span>Bearing Coverage</span>
-              </div>
-              <div className="analytics-card-content">
-                {loading.antennaPolar ? (
-                  <div className="analytics-loading">Loading...</div>
-                ) : error.antennaPolar ? (
-                  <div className="analytics-error">{error.antennaPolar}</div>
-                ) : (
-                  renderPolarPlot(data.antennaPolar)
-                )}
-              </div>
-            </div>
-
-            {/* Signal Fade Curve */}
-            <div className="analytics-card">
-              <div className="analytics-card-header">
-                <Signal size={14} />
-                <span>Signal vs Distance</span>
-              </div>
-              <div className="analytics-card-content">
-                {loading.antennaRssi ? (
-                  <div className="analytics-loading">Loading...</div>
-                ) : error.antennaRssi ? (
-                  <div className="analytics-error">{error.antennaRssi}</div>
-                ) : (
-                  <>
-                    {renderRssiFadeCurve(data.antennaRssi)}
-                    {data.antennaRssi?.stats && (
-                      <div className="analytics-stats">
-                        <span>Avg RSSI: {data.antennaRssi.stats.avgRssi?.toFixed(1)} dB</span>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
+            <div className="analytics-card-content">
+              {loading.distance ? (
+                <div className="analytics-loading">Loading...</div>
+              ) : error.distance ? (
+                <div className="analytics-error">{error.distance}</div>
+              ) : useEnhancedVisuals && distanceDistribution.length > 0 ? (
+                <>
+                  <DistributionChart
+                    data={distanceDistribution.map((d) => ({
+                      label: d.label || d.range,
+                      value: d.count,
+                    }))}
+                    color="var(--accent-cyan)"
+                    barHeight={14}
+                    barGap={4}
+                    labelWidth={50}
+                    valueWidth={40}
+                    animate
+                  />
+                  {data.distance?.stats && (
+                    <div className="analytics-stats" style={{ marginTop: '8px' }}>
+                      <span>Avg: {data.distance.stats.avg?.toFixed(1)} nm</span>
+                      <span>Max: {data.distance.stats.max?.toFixed(1)} nm</span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {renderBarChart(distanceDistribution, maxDistCount, '#00d4ff')}
+                  {data.distance?.stats && (
+                    <div className="analytics-stats">
+                      <span>Avg: {data.distance.stats.avg?.toFixed(1)} nm</span>
+                      <span>Max: {data.distance.stats.max?.toFixed(1)} nm</span>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
+
+          {/* Speed Distribution - Enhanced */}
+          <div className="analytics-card">
+            <div className="analytics-card-header">
+              <Activity size={14} />
+              <span>Speed Distribution</span>
+            </div>
+            <div className="analytics-card-content">
+              {loading.speed ? (
+                <div className="analytics-loading">Loading...</div>
+              ) : error.speed ? (
+                <div className="analytics-error">{error.speed}</div>
+              ) : useEnhancedVisuals && speedDistribution.length > 0 ? (
+                <>
+                  <DistributionChart
+                    data={speedDistribution.map((s) => ({
+                      label: s.label || s.range,
+                      value: s.count,
+                    }))}
+                    color="var(--viz-military)"
+                    barHeight={14}
+                    barGap={4}
+                    labelWidth={50}
+                    valueWidth={40}
+                    animate
+                  />
+                  {data.speed?.stats && (
+                    <div className="analytics-stats" style={{ marginTop: '8px' }}>
+                      <span>Avg: {data.speed.stats.avg?.toFixed(0)} kts</span>
+                      <span>Max: {data.speed.stats.max?.toFixed(0)} kts</span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {renderBarChart(speedDistribution, maxSpeedCount, '#a371f7')}
+                  {data.speed?.stats && (
+                    <div className="analytics-stats">
+                      <span>Avg: {data.speed.stats.avg?.toFixed(0)} kts</span>
+                      <span>Max: {data.speed.stats.max?.toFixed(0)} kts</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Antenna Polar Coverage - Enhanced */}
+          <div className="analytics-card">
+            <div className="analytics-card-header">
+              <Compass size={14} />
+              <span>Bearing Coverage</span>
+            </div>
+            <div className="analytics-card-content">
+              {loading.antennaPolar ? (
+                <div className="analytics-loading">Loading...</div>
+              ) : error.antennaPolar ? (
+                <div className="analytics-error">{error.antennaPolar}</div>
+              ) : useEnhancedVisuals && polarPlotData.length > 0 ? (
+                <PolarPlotEnhanced
+                  data={polarPlotData}
+                  size={140}
+                  maxRange={150}
+                  colorBySignal
+                  dotSize={4}
+                  showLegend={false}
+                />
+              ) : (
+                renderPolarPlot(data.antennaPolar)
+              )}
+            </div>
+          </div>
+
+          {/* Signal Fade Curve */}
+          <div className="analytics-card">
+            <div className="analytics-card-header">
+              <Signal size={14} />
+              <span>Signal vs Distance</span>
+            </div>
+            <div className="analytics-card-content">
+              {loading.antennaRssi ? (
+                <div className="analytics-loading">Loading...</div>
+              ) : error.antennaRssi ? (
+                <div className="analytics-error">{error.antennaRssi}</div>
+              ) : (
+                <>
+                  {renderRssiFadeCurve(data.antennaRssi)}
+                  {data.antennaRssi?.stats && (
+                    <div className="analytics-stats">
+                      <span>Avg RSSI: {data.antennaRssi.stats.avgRssi?.toFixed(1)} dB</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Activity Heatmap - New */}
+          {useEnhancedVisuals && sessionActivityData.length > 0 && (
+            <div className="analytics-card" style={{ gridColumn: 'span 2' }}>
+              <div className="analytics-card-header">
+                <Calendar size={14} />
+                <span>Activity Heatmap (7 days)</span>
+              </div>
+              <div className="analytics-card-content">
+                <HeatmapCalendar
+                  data={sessionActivityData}
+                  dateField="timestamp"
+                  days={7}
+                  cellSize={14}
+                  cellGap={3}
+                  colorScale="cyan"
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

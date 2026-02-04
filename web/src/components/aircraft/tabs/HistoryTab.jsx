@@ -1,8 +1,11 @@
-import React, { useRef, useCallback, useEffect } from 'react';
-import { History, Map as MapIcon } from 'lucide-react';
+import React, { useRef, useCallback, useEffect, useState } from 'react';
+import { History, Map as MapIcon, ChevronDown, ChevronUp, Download } from 'lucide-react';
 import L from 'leaflet';
 import { MiniGraph, useGraphInteraction } from '../components/MiniGraph';
 import { ReplayControls } from '../components/ReplayControls';
+import { EnhancedFlightMap } from './components/EnhancedFlightMap';
+import { LinkedGraphPanel } from './components/LinkedGraphPanel';
+import { FlightStatsPanel } from './components/FlightStatsPanel';
 
 export function HistoryTab({
   sightings,
@@ -17,10 +20,18 @@ export function HistoryTab({
   setGraphZoom,
   graphScrollOffset,
   setGraphScrollOffset,
+  safetyEvents = [],
+  useEnhancedLayout = true, // Feature flag for new layout
 }) {
   const mapRef = useRef(null);
   const replayMarkerRef = useRef(null);
   const animationRef = useRef(null);
+
+  // State for enhanced layout
+  const [selectedPositionIndex, setSelectedPositionIndex] = useState(null);
+  const [showPositionTable, setShowPositionTable] = useState(false);
+  const [mapColorBy, setMapColorBy] = useState('altitude');
+  const [linkedGraphZoom, setLinkedGraphZoom] = useState({ start: 0, end: 1 });
 
   const {
     handleGraphWheel,
@@ -264,6 +275,34 @@ export function HistoryTab({
     }
   }, [showTrackMap]);
 
+  // Get current replay position for enhanced map
+  const currentReplayPos = useCallback(() => {
+    if (!sightings || sightings.length === 0) return null;
+    const validSightings = sightings.filter((s) => s.lat && s.lon);
+    return getInterpolatedPosition(validSightings, replayPosition);
+  }, [sightings, replayPosition, getInterpolatedPosition]);
+
+  // Handle export to CSV
+  const handleExportCSV = useCallback(() => {
+    if (!sightings || sightings.length === 0) return;
+
+    const headers = ['timestamp', 'lat', 'lon', 'altitude', 'gs', 'track', 'vr', 'distance_nm', 'rssi'];
+    const csvContent = [
+      headers.join(','),
+      ...sightings.map((s) =>
+        headers.map((h) => s[h] ?? '').join(',')
+      ),
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `flight-history-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [sightings]);
+
   // Empty state
   if (sightings.length === 0) {
     return (
@@ -282,6 +321,229 @@ export function HistoryTab({
     );
   }
 
+  // Enhanced layout with linked graphs and stats panel
+  if (useEnhancedLayout) {
+    const validSightings = sightings.filter((s) => s.lat && s.lon);
+    const duration = sightings.length > 1
+      ? Math.round((new Date(sightings[0].timestamp) - new Date(sightings[sightings.length - 1].timestamp)) / 60000)
+      : 0;
+
+    return (
+      <div
+        className="detail-history detail-history--enhanced"
+        id="panel-history"
+        role="tabpanel"
+        aria-labelledby="tab-history"
+      >
+        {/* Header row */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '8px 12px',
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--bg-card)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>
+              {sightings.length.toLocaleString()} positions
+            </span>
+            <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
+              {duration} min duration
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={handleExportCSV}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '4px 8px',
+                background: 'var(--bg-hover)',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                color: 'var(--text-secondary)',
+                fontSize: '11px',
+                cursor: 'pointer',
+              }}
+            >
+              <Download size={12} />
+              Export
+            </button>
+            <button
+              onClick={() => setShowTrackMap(!showTrackMap)}
+              className={`map-toggle-btn ${showTrackMap ? 'active' : ''}`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '4px 8px',
+                background: showTrackMap ? 'var(--accent-cyan)' : 'var(--bg-hover)',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                color: showTrackMap ? 'var(--bg-dark)' : 'var(--text-secondary)',
+                fontSize: '11px',
+                cursor: 'pointer',
+              }}
+            >
+              <MapIcon size={12} />
+              {showTrackMap ? 'Hide Map' : 'Show Map'}
+            </button>
+          </div>
+        </div>
+
+        {showTrackMap && validSightings.length > 0 && (
+          <div style={{ display: 'flex', gap: '12px', padding: '12px' }}>
+            {/* Main content area (map + graphs) */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* Enhanced map with color gradient */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>Color by:</span>
+                {['altitude', 'speed', 'time'].map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setMapColorBy(mode)}
+                    style={{
+                      padding: '2px 8px',
+                      background: mapColorBy === mode ? 'var(--accent-cyan)' : 'var(--bg-hover)',
+                      border: 'none',
+                      borderRadius: '3px',
+                      fontSize: '10px',
+                      color: mapColorBy === mode ? 'var(--bg-dark)' : 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      textTransform: 'capitalize',
+                    }}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+
+              <EnhancedFlightMap
+                sightings={sightings}
+                feederLocation={feederLocation}
+                colorBy={mapColorBy}
+                showRangeRings
+                selectedPosition={selectedPositionIndex}
+                onPositionClick={setSelectedPositionIndex}
+                replayPosition={currentReplayPos()}
+                height={250}
+              />
+
+              {/* Linked graphs panel */}
+              <LinkedGraphPanel
+                sightings={sightings}
+                selectedIndex={selectedPositionIndex}
+                onSelectIndex={(idx) => {
+                  setSelectedPositionIndex(idx);
+                  // Also update replay position
+                  const percent = (idx / (sightings.length - 1)) * 100;
+                  handleReplayChange(percent);
+                }}
+                safetyEvents={safetyEvents}
+                graphZoom={linkedGraphZoom}
+                onGraphZoom={setLinkedGraphZoom}
+                height={120}
+              />
+
+              {/* Replay controls */}
+              <ReplayControls
+                isPlaying={isPlaying}
+                position={replayPosition}
+                timestamp={getReplayTimestamp()}
+                onPlayToggle={togglePlay}
+                onSkipToStart={skipToStart}
+                onSkipToEnd={skipToEnd}
+                onPositionChange={handleReplayChange}
+                showSpeedControl
+              />
+            </div>
+
+            {/* Stats panel (sidebar) */}
+            <FlightStatsPanel
+              sightings={sightings}
+              className="flight-stats-panel--sidebar"
+            />
+          </div>
+        )}
+
+        {/* Collapsible position table */}
+        <div style={{ borderTop: '1px solid var(--border)' }}>
+          <button
+            onClick={() => setShowPositionTable(!showPositionTable)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              width: '100%',
+              padding: '8px 12px',
+              background: 'var(--bg-card)',
+              border: 'none',
+              color: 'var(--text-secondary)',
+              fontSize: '11px',
+              cursor: 'pointer',
+              textAlign: 'left',
+            }}
+          >
+            {showPositionTable ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            Position History ({sightings.length} entries)
+          </button>
+
+          {showPositionTable && (
+            <div className="history-table" role="table" aria-label="Position history" style={{ maxHeight: '300px', overflow: 'auto' }}>
+              <div className="history-row header" role="row">
+                <span role="columnheader">Time</span>
+                <span role="columnheader">Alt (ft)</span>
+                <span role="columnheader">Speed (kts)</span>
+                <span role="columnheader">V/S (fpm)</span>
+                <span role="columnheader">Dist (nm)</span>
+                <span role="columnheader">Signal (dB)</span>
+              </div>
+              {sightings.map((s, i) => (
+                <div
+                  key={i}
+                  className={`history-row ${i === selectedPositionIndex ? 'selected' : ''}`}
+                  role="row"
+                  tabIndex={0}
+                  onClick={() => {
+                    setSelectedPositionIndex(i);
+                    const percent = (i / (sightings.length - 1)) * 100;
+                    handleReplayChange(percent);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedPositionIndex(i);
+                      const percent = (i / (sightings.length - 1)) * 100;
+                      handleReplayChange(percent);
+                    }
+                  }}
+                  style={{
+                    cursor: 'pointer',
+                    background: i === selectedPositionIndex ? 'rgba(0, 212, 255, 0.1)' : undefined,
+                  }}
+                >
+                  <span role="cell">{new Date(s.timestamp).toLocaleTimeString()}</span>
+                  <span role="cell">{s.altitude?.toLocaleString() || '--'}</span>
+                  <span role="cell">{s.gs?.toFixed(0) || '--'}</span>
+                  <span role="cell" style={{ color: s.vr > 0 ? 'var(--accent-green)' : s.vr < 0 ? 'var(--accent-red)' : undefined }}>
+                    {s.vr != null ? (s.vr > 0 ? '+' : '') + s.vr : '--'}
+                  </span>
+                  <span role="cell">{s.distance_nm?.toFixed(1) || '--'}</span>
+                  <span role="cell">{s.rssi?.toFixed(1) || '--'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Legacy layout (original)
   return (
     <div
       className="detail-history"

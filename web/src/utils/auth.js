@@ -67,30 +67,66 @@ export function storeUser(user) {
 
 /**
  * Parse JWT token payload
+ *
+ * @param {string} token - JWT token string
+ * @returns {Object|null} Parsed payload or null if invalid/malformed
  */
 export function parseJwt(token) {
+  // Validate input
+  if (!token || typeof token !== 'string') {
+    return null;
+  }
+
+  // Validate JWT structure: must have exactly 3 parts separated by dots
+  const parts = token.split('.');
+  if (parts.length !== 3) {
+    console.warn('Invalid JWT format: expected 3 parts separated by dots');
+    return null;
+  }
+
+  const base64Url = parts[1];
+  if (!base64Url) {
+    console.warn('Invalid JWT format: missing payload section');
+    return null;
+  }
+
+  // Decode base64url to base64
+  let base64;
   try {
-    if (!token || typeof token !== 'string') {
-      return null;
-    }
-    // Validate JWT structure: must have exactly 3 parts separated by dots
-    const parts = token.split('.');
-    if (parts.length !== 3) {
-      return null;
-    }
-    const base64Url = parts[1];
-    if (!base64Url) {
-      return null;
-    }
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
+    base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  } catch (err) {
+    console.warn('JWT parsing error: failed to convert base64url to base64', err);
+    return null;
+  }
+
+  // Decode base64 to string
+  let decoded;
+  try {
+    decoded = atob(base64);
+  } catch (err) {
+    console.warn('JWT parsing error: failed to decode base64 payload - token may be malformed', err);
+    return null;
+  }
+
+  // Convert decoded string to UTF-8 JSON
+  let jsonPayload;
+  try {
+    jsonPayload = decodeURIComponent(
+      decoded
         .split('')
         .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
         .join('')
     );
+  } catch (err) {
+    console.warn('JWT parsing error: failed to decode UTF-8 payload', err);
+    return null;
+  }
+
+  // Parse JSON payload
+  try {
     return JSON.parse(jsonPayload);
-  } catch {
+  } catch (err) {
+    console.warn('JWT parsing error: invalid JSON in payload', err);
     return null;
   }
 }

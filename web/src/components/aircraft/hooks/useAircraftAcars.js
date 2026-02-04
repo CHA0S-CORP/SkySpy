@@ -46,8 +46,12 @@ export function useAircraftAcars({
     if (activeTab !== 'acars' || loaded) return;
 
     const abortController = new AbortController();
+    // Capture and validate values at effect start to prevent using stale/invalid closures
     const currentHex = hex;
-    const currentCallsign = callsign;
+    const currentCallsign = callsign && typeof callsign === 'string' ? callsign.trim() : null;
+
+    // Validate hex is present
+    if (!currentHex) return;
 
     const fetchAcarsData = async () => {
       try {
@@ -55,13 +59,14 @@ export function useAircraftAcars({
         if (wsRequest && wsConnected) {
           try {
             let result = await wsRequest('acars-messages', {
-              icao_hex: hex,
+              icao_hex: currentHex,
               hours: acarsHours,
               limit: 50,
             });
             if (result && !result.error) {
               acarsFound = Array.isArray(result) ? result : result.messages || [];
             }
+            // Only use callsign if it was validated as non-empty
             if (acarsFound.length === 0 && currentCallsign) {
               result = await wsRequest('acars-messages', {
                 callsign: currentCallsign,
@@ -81,7 +86,7 @@ export function useAircraftAcars({
 
         if (acarsFound.length === 0) {
           const acarsRes = await fetch(
-            `${baseUrl}/api/v1/acars?icao_hex=${hex}&hours=${acarsHours}&limit=50`,
+            `${baseUrl}/api/v1/acars?icao_hex=${encodeURIComponent(currentHex)}&hours=${acarsHours}&limit=50`,
             {
               signal: abortController.signal,
             }
@@ -92,6 +97,7 @@ export function useAircraftAcars({
               acarsData.messages ||
               acarsData.results ||
               (Array.isArray(acarsData) ? acarsData : []);
+          // Only use callsign if validated
           if (acarsFound.length === 0 && currentCallsign) {
             const callsignRes = await fetch(
               `${baseUrl}/api/v1/acars?callsign=${encodeURIComponent(currentCallsign)}&hours=${acarsHours}&limit=50`,
@@ -118,7 +124,7 @@ export function useAircraftAcars({
             acarsFound = allRecent.filter(
               (msg) =>
                 (msg.icao_hex && msg.icao_hex.toUpperCase() === currentHex.toUpperCase()) ||
-                callsignsMatch(msg.callsign, currentCallsign)
+                (currentCallsign && callsignsMatch(msg.callsign, currentCallsign))
             );
           }
         }
@@ -149,8 +155,12 @@ export function useAircraftAcars({
     prevAcarsHoursRef.current = acarsHours;
 
     const abortController = new AbortController();
+    // Capture and validate values at effect start
     const currentHex = hex;
-    const currentCallsign = callsign;
+    const currentCallsign = callsign && typeof callsign === 'string' ? callsign.trim() : null;
+
+    // Validate hex is present
+    if (!currentHex) return;
 
     const fetchAcarsMessages = async () => {
       try {
@@ -158,13 +168,14 @@ export function useAircraftAcars({
         if (wsRequest && wsConnected) {
           try {
             let result = await wsRequest('acars-messages', {
-              icao_hex: hex,
+              icao_hex: currentHex,
               hours: acarsHours,
               limit: 100,
             });
             if (result && !result.error) {
               acarsFound = Array.isArray(result) ? result : result.messages || [];
             }
+            // Only use callsign if validated
             if (acarsFound.length === 0 && currentCallsign) {
               result = await wsRequest('acars-messages', {
                 callsign: currentCallsign,
@@ -184,7 +195,7 @@ export function useAircraftAcars({
 
         if (acarsFound.length === 0) {
           const acarsRes = await fetch(
-            `${baseUrl}/api/v1/acars?icao_hex=${hex}&hours=${acarsHours}&limit=100`,
+            `${baseUrl}/api/v1/acars?icao_hex=${encodeURIComponent(currentHex)}&hours=${acarsHours}&limit=100`,
             {
               signal: abortController.signal,
             }
@@ -195,6 +206,7 @@ export function useAircraftAcars({
               acarsData.messages ||
               acarsData.results ||
               (Array.isArray(acarsData) ? acarsData : []);
+          // Only use callsign if validated
           if (acarsFound.length === 0 && currentCallsign) {
             const callsignRes = await fetch(
               `${baseUrl}/api/v1/acars?callsign=${encodeURIComponent(currentCallsign)}&hours=${acarsHours}&limit=100`,
@@ -226,7 +238,7 @@ export function useAircraftAcars({
                   : new Date(msg.timestamp).getTime();
               const matchesAircraft =
                 (msg.icao_hex && msg.icao_hex.toUpperCase() === currentHex.toUpperCase()) ||
-                callsignsMatch(msg.callsign, currentCallsign);
+                (currentCallsign && callsignsMatch(msg.callsign, currentCallsign));
               return matchesAircraft && msgTime >= cutoffTime;
             });
           }

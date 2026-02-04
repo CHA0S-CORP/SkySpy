@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 import httpx
 from django.conf import settings
 
+from skyspy.services.cache import BoundedCache
+
 logger = logging.getLogger(__name__)
 
 # Service statistics
@@ -34,8 +36,8 @@ _stats = {
     "rate_limits": 0,
 }
 
-# Simple in-memory cache
-_cache: dict[str, tuple[float, any]] = {}
+# Bounded in-memory cache to prevent memory growth
+_llm_cache = BoundedCache(maxsize=1000, name="llm")
 
 
 @dataclass
@@ -71,26 +73,16 @@ class LLMClient:
 
     def _check_cache(self, cache_key: str) -> dict | None:
         """Check cache for a valid response."""
-        if cache_key in _cache:
-            timestamp, response = _cache[cache_key]
-            if time.time() - timestamp < self.cache_ttl:
-                _stats["cache_hits"] += 1
-                return response
-            else:
-                del _cache[cache_key]
+        response = _llm_cache.get(cache_key)
+        if response is not None:
+            _stats["cache_hits"] += 1
+            return response
         _stats["cache_misses"] += 1
         return None
 
     def _set_cache(self, cache_key: str, response: dict):
-        """Store response in cache."""
-        _cache[cache_key] = (time.time(), response)
-
-        # Prune old entries if cache grows too large
-        if len(_cache) > 1000:
-            current_time = time.time()
-            expired = [k for k, (t, _) in _cache.items() if current_time - t > self.cache_ttl]
-            for k in expired:
-                del _cache[k]
+        """Store response in cache with TTL."""
+        _llm_cache.set(cache_key, response, ttl=self.cache_ttl)
 
     def complete(self, messages: list[dict], use_cache: bool = True, **kwargs) -> dict | None:
         """
@@ -567,7 +559,7 @@ def get_llm_stats() -> dict:
         "available": llm_client.is_available(),
         "model": settings.LLM_MODEL,
         "api_url": settings.LLM_API_URL.split("/")[2] if settings.LLM_API_URL else None,  # Domain only
-        "cache_size": len(_cache),
+        "cache": _llm_cache.get_stats(),
         "cache_ttl": settings.LLM_CACHE_TTL,
         **_stats,
     }
@@ -575,6 +567,5 @@ def get_llm_stats() -> dict:
 
 def clear_cache():
     """Clear the LLM response cache."""
-    global _cache
-    _cache = {}
+    _llm_cache.clear()
     logger.info("LLM cache cleared")

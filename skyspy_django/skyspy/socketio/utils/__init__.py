@@ -15,6 +15,7 @@ from .broadcast import (
     sync_emit,
 )
 from .rate_limiter import DEFAULT_RATE_LIMITS, RateLimiter
+from .snapshot_cache import SnapshotCache, snapshot_cache
 
 __all__ = [
     # Rate limiting
@@ -30,4 +31,7 @@ __all__ = [
     "broadcast_aircraft_update",
     "broadcast_alert",
     "broadcast_safety_event",
+    # Snapshot caching
+    "SnapshotCache",
+    "snapshot_cache",
 ]

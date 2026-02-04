@@ -1,0 +1,342 @@
+# =============================================================================
+# SkysPy Integration Test Environment
+# =============================================================================
+#
+# Docker Compose configuration for running frontend-backend integration tests.
+#
+# This environment provides:
+# - Django API server with real database
+# - PostgreSQL database
+# - Redis for caching and pub/sub
+# - Mock ADS-B data sources (ultrafeeder, dump978)
+# - Frontend development server
+#
+# Usage:
+#   # Start the integration test environment
+#   docker-compose -f web/e2e/integration/docker-compose.test.yml up -d
+#
+#   # Wait for services to be healthy
+#   docker-compose -f web/e2e/integration/docker-compose.test.yml ps
+#
+#   # Run integration tests
+#   cd web && npm run test:e2e:integration
+#
+#   # View logs
+#   docker-compose -f web/e2e/integration/docker-compose.test.yml logs -f api
+#
+#   # Stop and cleanup
+#   docker-compose -f web/e2e/integration/docker-compose.test.yml down -v
+#
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: skyspy_integration_postgres
+    environment:
+      POSTGRES_USER: adsb
+      POSTGRES_PASSWORD: adsb
+      POSTGRES_DB: adsb_integration
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adsb -d adsb_integration"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    tmpfs:
+      - /var/lib/postgresql/data
+    networks:
+      - integration-network
+
+  # ---------------------------------------------------------------------------
+  # Redis (Message Broker, Cache, Channel Layer)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: skyspy_integration_redis
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    tmpfs:
+      - /data
+    networks:
+      - integration-network
+
+  # ---------------------------------------------------------------------------
+  # Django API Server
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: ../../../
+      dockerfile: Dockerfile
+    container_name: skyspy_integration_api
+    environment:
+      # Django Settings
+      DJANGO_SETTINGS_MODULE: skyspy.settings
+      DJANGO_SECRET_KEY: integration-test-secret-key-not-for-production
+      DEBUG: "True"
+      ALLOWED_HOSTS: "*"
+
+      # Authentication - Enable for integration tests
+      AUTH_MODE: hybrid
+      LOCAL_AUTH_ENABLED: "True"
+      API_KEY_ENABLED: "True"
+      JWT_ACCESS_TOKEN_LIFETIME_MINUTES: "60"
+      JWT_REFRESH_TOKEN_LIFETIME_DAYS: "1"
+
+      # Database
+      DATABASE_URL: postgresql://adsb:adsb@postgres:5432/adsb_integration
+
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+
+      # ADS-B Sources (Mock services)
+      ULTRAFEEDER_HOST: ultrafeeder
+      ULTRAFEEDER_PORT: "80"
+      DUMP978_HOST: dump978
+      DUMP978_PORT: "80"
+
+      # Feeder Location (for distance calculations)
+      FEEDER_LAT: "47.4508"
+      FEEDER_LON: "-122.3125"
+
+      # Polling Configuration
+      POLLING_INTERVAL: "2"
+      DB_STORE_INTERVAL: "5"
+      SESSION_TIMEOUT_MINUTES: "30"
+
+      # Safety Monitoring
+      SAFETY_MONITORING_ENABLED: "True"
+
+      # Disable external services for testing
+      PHOTO_CACHE_ENABLED: "False"
+      S3_ENABLED: "False"
+      WHISPER_ENABLED: "False"
+      TRANSCRIPTION_ENABLED: "False"
+      OPENSKY_DB_ENABLED: "False"
+      LLM_ENABLED: "False"
+      SENTRY_DSN: ""
+      PROMETHEUS_ENABLED: "False"
+
+      # CORS - Allow frontend dev server
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://frontend:3000
+
+      # Superuser for tests
+      DJANGO_SUPERUSER_USERNAME: admin
+      DJANGO_SUPERUSER_EMAIL: admin@example.com
+      DJANGO_SUPERUSER_PASSWORD: admin
+
+      # Python settings
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ultrafeeder:
+        condition: service_healthy
+      dump978:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - integration-network
+    command: >
+      sh -c "
+        echo 'Running database migrations...' &&
+        python manage.py migrate --noinput &&
+        echo 'Creating superuser if not exists...' &&
+        python manage.py createsuperuser --noinput || true &&
+        echo 'Initializing default roles...' &&
+        python manage.py shell -c \"
+from skyspy.models.auth import Role, DEFAULT_ROLES
+for name, data in DEFAULT_ROLES.items():
+    Role.objects.get_or_create(name=name, defaults={
+        'display_name': data['display_name'],
+        'description': data['description'],
+        'permissions': data['permissions'],
+        'priority': data['priority'],
+        'is_system': True
+    })
+print('Default roles initialized')
+\" || true &&
+        echo 'Creating test users...' &&
+        python manage.py shell -c \"
+from django.contrib.auth.models import User
+from skyspy.models.auth import SkyspyUser, Role, UserRole
+
+# Create test operator user
+operator, created = User.objects.get_or_create(
+    username='test_operator',
+    defaults={'email': 'operator@test.example.com', 'is_active': True}
+)
+if created:
+    operator.set_password('testpass123')
+    operator.save()
+    profile, _ = SkyspyUser.objects.get_or_create(
+        user=operator,
+        defaults={'display_name': 'Test Operator', 'auth_provider': 'local'}
+    )
+    operator_role = Role.objects.filter(name='operator').first()
+    if operator_role:
+        UserRole.objects.get_or_create(user=operator, role=operator_role)
+    print('Created test_operator user')
+
+# Create test viewer user
+viewer, created = User.objects.get_or_create(
+    username='test_viewer',
+    defaults={'email': 'viewer@test.example.com', 'is_active': True}
+)
+if created:
+    viewer.set_password('testpass123')
+    viewer.save()
+    profile, _ = SkyspyUser.objects.get_or_create(
+        user=viewer,
+        defaults={'display_name': 'Test Viewer', 'auth_provider': 'local'}
+    )
+    viewer_role = Role.objects.filter(name='viewer').first()
+    if viewer_role:
+        UserRole.objects.get_or_create(user=viewer, role=viewer_role)
+    print('Created test_viewer user')
+\" || true &&
+        echo 'Syncing Celery tasks...' &&
+        python manage.py sync_celery_tasks || true &&
+        echo 'Starting Daphne ASGI server...' &&
+        daphne -b 0.0.0.0 -p 8000 --application-close-timeout 30 skyspy.asgi:application
+      "
+
+  # ---------------------------------------------------------------------------
+  # Celery Worker (Background Tasks)
+  # ---------------------------------------------------------------------------
+  celery-worker:
+    build:
+      context: ../../../
+      dockerfile: Dockerfile
+    container_name: skyspy_integration_celery
+    environment:
+      DJANGO_SETTINGS_MODULE: skyspy.settings
+      DJANGO_SECRET_KEY: integration-test-secret-key-not-for-production
+      DATABASE_URL: postgresql://adsb:adsb@postgres:5432/adsb_integration
+      REDIS_URL: redis://redis:6379/0
+      ULTRAFEEDER_HOST: ultrafeeder
+      ULTRAFEEDER_PORT: "80"
+      DUMP978_HOST: dump978
+      DUMP978_PORT: "80"
+      FEEDER_LAT: "47.4508"
+      FEEDER_LON: "-122.3125"
+      POLLING_INTERVAL: "2"
+      SAFETY_MONITORING_ENABLED: "True"
+      PHOTO_CACHE_ENABLED: "False"
+      CELERY_POOL: gevent
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ultrafeeder:
+        condition: service_healthy
+    networks:
+      - integration-network
+    command: >
+      celery -A skyspy worker
+      --loglevel=info
+      --concurrency=10
+      --queues=polling,default,database,notifications
+      --pool=gevent
+
+  # ---------------------------------------------------------------------------
+  # Frontend Development Server
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ../../../web
+      dockerfile: Dockerfile.dev
+    container_name: skyspy_integration_frontend
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../../../web/src:/app/src
+      - ../../../web/public:/app/public
+      - ../../../web/index.html:/app/index.html
+      - ../../../web/vite.config.js:/app/vite.config.js
+    environment:
+      NODE_ENV: development
+      VITE_API_TARGET: http://api:8000
+    stdin_open: true
+    tty: true
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - integration-network
+
+  # ---------------------------------------------------------------------------
+  # Mock Ultrafeeder Service (ADS-B 1090MHz Data Source)
+  # ---------------------------------------------------------------------------
+  ultrafeeder:
+    build:
+      context: ../../../test/mock-1090
+      dockerfile: Dockerfile
+    container_name: skyspy_integration_ultrafeeder
+    command: ["python3", "mock_server.py"]
+    environment:
+      MOCK_TYPE: ultrafeeder
+      # Generate diverse mock aircraft for testing
+      MOCK_AIRCRAFT_COUNT: "25"
+      JSON_STREAM_ENABLED: "true"
+      JSON_STREAM_PORT: "30047"
+      JSON_STREAM_INTERVAL_MS: "100"
+      SSE_ENABLED: "true"
+      SSE_INTERVAL_MS: "1000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - integration-network
+
+  # ---------------------------------------------------------------------------
+  # Mock Dump978 Service (UAT 978MHz Data Source)
+  # ---------------------------------------------------------------------------
+  dump978:
+    build:
+      context: ../../../test/mock-1090
+      dockerfile: Dockerfile
+    container_name: skyspy_integration_dump978
+    command: ["python3", "mock_1090.py"]
+    environment:
+      MOCK_TYPE: dump978
+      MOCK_AIRCRAFT_COUNT: "10"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - integration-network
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  integration-network:
+    driver: bridge
+    name: skyspy-integration-network
+
+# =============================================================================
+# Volumes (none - using tmpfs for ephemeral test data)
+# =============================================================================

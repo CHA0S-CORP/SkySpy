@@ -339,6 +339,132 @@ def run_all_cleanup_tasks():
 
 
 @shared_task
+def cleanup_orphan_cooldown_keys():
+    """
+    Clean up Redis cooldown keys for deleted alert rules.
+
+    Scans Redis for `alert:cooldown:*` keys and deletes any where the
+    rule_id no longer exists in the AlertRule table.
+
+    Runs daily at 4:30 AM (configured in celery.py).
+
+    Returns:
+        dict with 'deleted' count and 'scanned' count
+    """
+    from skyspy.models import AlertRule
+
+    try:
+        import redis
+
+        redis_url = getattr(settings, "REDIS_URL", "redis://redis:6379/0")
+        r = redis.from_url(redis_url, decode_responses=True)
+
+        # Get all active rule IDs
+        active_rule_ids = set(AlertRule.objects.values_list("id", flat=True))
+
+        # Scan for cooldown keys
+        cursor = 0
+        orphan_keys = []
+        pattern = "alert:cooldown:*"
+
+        while True:
+            cursor, keys = r.scan(cursor, match=pattern, count=500)
+
+            for key in keys:
+                # Extract rule_id from key: alert:cooldown:{rule_id}:{icao}
+                parts = key.split(":")
+                if len(parts) >= 3:
+                    try:
+                        rule_id = int(parts[2])
+                        if rule_id not in active_rule_ids:
+                            orphan_keys.append(key)
+                    except ValueError:
+                        # Invalid rule_id format, skip
+                        pass
+
+            if cursor == 0:
+                break
+
+        # Delete orphan keys in batches
+        deleted = 0
+        if orphan_keys:
+            for i in range(0, len(orphan_keys), 100):
+                batch = orphan_keys[i : i + 100]
+                deleted += r.delete(*batch)
+
+        if deleted > 0:
+            logger.info(f"Cleaned up {deleted} orphan cooldown keys for deleted rules")
+        else:
+            logger.debug("No orphan cooldown keys found")
+
+        return {"deleted": deleted, "scanned": len(orphan_keys)}
+
+    except ImportError:
+        logger.warning("Redis not available for cooldown key cleanup")
+        return {"error": "redis_not_available"}
+    except Exception as e:
+        logger.error(f"Failed to cleanup orphan cooldown keys: {e}")
+        return {"error": str(e)}
+
+
+@shared_task
+def cleanup_stale_cooldown_keys(max_age_hours: int = 24):
+    """
+    Clean up cooldown keys that have no TTL set.
+
+    This catches keys that somehow didn't get a proper TTL assigned,
+    which would cause them to persist indefinitely.
+
+    Runs weekly on Sundays at 5 AM (configured in celery.py).
+
+    Args:
+        max_age_hours: Not used currently, but kept for future use if we
+                       want to also clean keys older than a certain age.
+
+    Returns:
+        dict with 'checked' count and 'deleted' count
+    """
+    try:
+        import redis
+
+        redis_url = getattr(settings, "REDIS_URL", "redis://redis:6379/0")
+        r = redis.from_url(redis_url, decode_responses=True)
+
+        cursor = 0
+        checked = 0
+        deleted = 0
+        pattern = "alert:cooldown:*"
+
+        while True:
+            cursor, keys = r.scan(cursor, match=pattern, count=500)
+
+            for key in keys:
+                checked += 1
+                # Check TTL - if no TTL set (-1), delete the key
+                ttl = r.ttl(key)
+                if ttl == -1:  # No TTL set (key persists forever)
+                    r.delete(key)
+                    deleted += 1
+
+            if cursor == 0:
+                break
+
+        if deleted > 0:
+            logger.info(f"Checked {checked} cooldown keys, deleted {deleted} without TTL")
+        else:
+            logger.debug(f"Checked {checked} cooldown keys, all have proper TTL")
+
+        return {"checked": checked, "deleted": deleted}
+
+    except ImportError:
+        logger.warning("Redis not available for stale cooldown key cleanup")
+        return {"error": "redis_not_available"}
+    except Exception as e:
+        logger.error(f"Failed to cleanup stale cooldown keys: {e}")
+        return {"error": str(e)}
+
+
+@shared_task
 def vacuum_analyze_tables():
     """
     Run VACUUM ANALYZE on frequently updated tables.

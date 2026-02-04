@@ -51,6 +51,7 @@ export function useSocketIOCannonball({
 
   /**
    * Handle Socket.IO connection
+   * Note: Uses refs for all values to avoid stale closures on reconnection
    */
   const handleConnect = useCallback(() => {
     console.log('[Cannonball Socket.IO] Connected');
@@ -60,14 +61,17 @@ export function useSocketIOCannonball({
     setTimeout(() => {
       if (!mountedRef.current) return;
       if (socketEmitRef.current) {
-        socketEmitRef.current('set_radius', { radius_nm: threatRadiusRef.current });
+        // Read current ref value at execution time to avoid stale closure on reconnection
+        const currentRadius = threatRadiusRef.current;
+        socketEmitRef.current('set_radius', { radius_nm: currentRadius });
 
-        // Send initial position if available
-        if (userPositionRef.current) {
+        // Send initial position if available - read ref at execution time
+        const currentPosition = userPositionRef.current;
+        if (currentPosition) {
           socketEmitRef.current('position_update', {
-            lat: userPositionRef.current.lat,
-            lon: userPositionRef.current.lon,
-            heading: userPositionRef.current.heading,
+            lat: currentPosition.lat,
+            lon: currentPosition.lon,
+            heading: currentPosition.heading,
           });
         }
       }

@@ -14,12 +14,9 @@ Features:
 import logging
 import re
 import time
-from datetime import datetime
 
-import httpx
 from django.db import transaction
 from django.utils import timezone
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 # Maximum allowed regex pattern length to prevent ReDoS attacks
 MAX_REGEX_PATTERN_LENGTH = 500
@@ -27,6 +24,7 @@ from skyspy.models import AlertHistory, AlertRule, NotificationConfig, Notificat
 from skyspy.services.alert_cooldowns import cooldown_manager
 from skyspy.services.alert_metrics import EvaluationTimer, alert_metrics
 from skyspy.services.alert_rule_cache import CompiledRule, rule_cache
+from skyspy.services.notifications import _is_safe_url
 from skyspy.socketio.utils import sync_emit
 
 logger = logging.getLogger(__name__)
@@ -72,60 +70,107 @@ class AlertService:
         """
         Check all active alert rules against aircraft.
 
-        Uses cached compiled rules for performance and distributed
+        Uses segmented rule lookup for O(1) targeted rule access,
+        cached compiled rules for performance, and distributed
         cooldowns for multi-worker consistency.
+
+        The algorithm uses segmented indexes to reduce evaluations from
+        O(rules x aircraft) to approximately O(general_rules x aircraft + targeted_rules).
 
         Returns list of triggered alerts.
         """
         with EvaluationTimer(alert_metrics) as timer:
             timer.set_aircraft_count(len(aircraft_list))
 
-            # Get cached rules
-            try:
-                rules = rule_cache.get_active_rules()
-                timer.set_cache_hit(True)
-            except Exception as e:
-                logger.warning(f"Cache miss, falling back to DB: {e}")
-                rules = self._get_rules_from_db()
-                timer.set_cache_hit(False)
-
             now = timezone.now()
-
-            # Filter by schedule
-            active_rules = [r for r in rules if r.is_scheduled_active(now)]
-            timer.set_rules_evaluated(len(active_rules))
-
             triggered = []
+            rules_evaluated = 0
 
-            for rule in active_rules:
-                # Pre-filter aircraft using optimization hints
-                if rule.requires_military:
-                    candidates = [ac for ac in aircraft_list if ac.get("military")]
-                elif rule.requires_position:
-                    candidates = [ac for ac in aircraft_list if ac.get("distance_nm") is not None]
-                elif rule.requires_altitude:
-                    # Check both 'alt' and 'alt_baro' since ADS-B data uses alt_baro
-                    candidates = [
-                        ac for ac in aircraft_list if ac.get("alt") is not None or ac.get("alt_baro") is not None
-                    ]
-                elif rule.requires_speed:
-                    candidates = [ac for ac in aircraft_list if ac.get("gs") is not None]
-                else:
-                    candidates = aircraft_list
+            # Use segmented lookup: for each aircraft, get only potentially matching rules
+            try:
+                timer.set_cache_hit(True)
+                for ac in aircraft_list:
+                    # Get only rules that could potentially match this aircraft
+                    # This uses O(1) lookups for ICAO, squawk, and includes general rules
+                    candidate_rules = rule_cache.get_rules_for_aircraft(ac)
 
-                for ac in candidates:
-                    # Quick pre-filter using compiled hints
-                    if not rule.can_match(ac):
-                        continue
+                    for rule in candidate_rules:
+                        # Check if rule is active based on schedule
+                        if not rule.is_scheduled_active(now):
+                            continue
 
-                    # Full condition evaluation
-                    if self._check_rule(rule, ac):
-                        alert = self._trigger_alert(rule, ac)
-                        if alert:
-                            triggered.append(alert)
-                            timer.add_trigger()
+                        rules_evaluated += 1
 
+                        # Apply pre-filtering based on aircraft capabilities
+                        if rule.requires_military:
+                            # Check both 'military' key and 'dbFlags' bit 0
+                            is_military = ac.get("military")
+                            if not is_military:
+                                db_flags = ac.get("dbFlags", 0)
+                                is_military = bool(db_flags & 1) if isinstance(db_flags, int) else False
+                            if not is_military:
+                                continue
+                        elif rule.requires_position and ac.get("distance_nm") is None or rule.requires_altitude and ac.get("alt") is None and ac.get("alt_baro") is None or rule.requires_speed and ac.get("gs") is None:
+                            continue
+
+                        # Quick pre-filter using compiled hints (handles target_icao, target_squawk, etc.)
+                        if not rule.can_match(ac):
+                            continue
+
+                        # Full condition evaluation
+                        if self._check_rule(rule, ac):
+                            alert = self._trigger_alert(rule, ac)
+                            if alert:
+                                triggered.append(alert)
+                                timer.add_trigger()
+
+            except Exception as e:
+                logger.warning(f"Segmented lookup failed, falling back to full iteration: {e}")
+                timer.set_cache_hit(False)
+                # Fallback to original algorithm
+                triggered = self._check_alerts_full_iteration(aircraft_list, now, timer)
+
+            timer.set_rules_evaluated(rules_evaluated)
             return triggered
+
+    def _check_alerts_full_iteration(
+        self, aircraft_list: list, now, timer: "EvaluationTimer"
+    ) -> list:
+        """
+        Fallback method: Check all rules against all aircraft.
+
+        Used when segmented lookup fails.
+        """
+        rules = self._get_rules_from_db()
+        active_rules = [r for r in rules if r.is_scheduled_active(now)]
+        triggered = []
+
+        for rule in active_rules:
+            # Pre-filter aircraft using optimization hints
+            if rule.requires_military:
+                candidates = [ac for ac in aircraft_list if ac.get("military")]
+            elif rule.requires_position:
+                candidates = [ac for ac in aircraft_list if ac.get("distance_nm") is not None]
+            elif rule.requires_altitude:
+                candidates = [
+                    ac for ac in aircraft_list if ac.get("alt") is not None or ac.get("alt_baro") is not None
+                ]
+            elif rule.requires_speed:
+                candidates = [ac for ac in aircraft_list if ac.get("gs") is not None]
+            else:
+                candidates = aircraft_list
+
+            for ac in candidates:
+                if not rule.can_match(ac):
+                    continue
+
+                if self._check_rule(rule, ac):
+                    alert = self._trigger_alert(rule, ac)
+                    if alert:
+                        triggered.append(alert)
+                        timer.add_trigger()
+
+        return triggered
 
     def _get_rules_from_db(self) -> list[CompiledRule]:
         """Fallback: get rules directly from database."""
@@ -346,22 +391,25 @@ class AlertService:
             "message": message,
             "priority": rule.priority,
             "aircraft": aircraft,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": timezone.now().isoformat(),
         }
 
         # Record metrics
         duration_ms = (time.perf_counter() - start_time) * 1000
         alert_metrics.record_trigger(rule.id, rule.name, rule.priority, duration_ms)
 
-        # Broadcast alert via WebSocket
-        try:
-            sync_emit("alert:triggered", alert_data, room="topic_alerts")
+        # Broadcast alert via WebSocket after transaction commits
+        def emit_alert():
+            try:
+                sync_emit("alert:triggered", alert_data, room="topic_alerts")
 
-            # Also broadcast to owner-specific channel if rule has owner
-            if rule.owner_id:
-                sync_emit("alert:triggered", alert_data, room=f"user_{rule.owner_id}")
-        except Exception as e:
-            logger.warning(f"Failed to broadcast alert: {e}")
+                # Also broadcast to owner-specific channel if rule has owner
+                if rule.owner_id:
+                    sync_emit("alert:triggered", alert_data, room=f"user_{rule.owner_id}")
+            except Exception as e:
+                logger.warning(f"Failed to broadcast alert: {e}")
+
+        transaction.on_commit(emit_alert)
 
         # Send notification - fetch rule from DB to get notification channels
         try:
@@ -371,9 +419,12 @@ class AlertService:
             # Fallback to global config only
             self._send_notification(alert_data, None)
 
-        # Call webhook if configured
+        # Call webhook if configured and URL is safe
         if rule.api_url:
-            self._call_webhook(rule.api_url, alert_data)
+            if _is_safe_url(rule.api_url):
+                self._call_webhook(rule.api_url, alert_data, rule)
+            else:
+                logger.warning(f"Blocked unsafe webhook URL for rule {rule.id}: {rule.api_url[:100]}")
 
         return alert_data
 
@@ -466,29 +517,31 @@ class AlertService:
         except Exception as e:
             logger.error(f"Failed to send notification: {e}")
 
-    def _call_webhook(self, url: str, data: dict):
+    def _call_webhook(self, url: str, data: dict, rule: CompiledRule):
         """
-        Call external webhook with alert data.
+        Queue webhook delivery as async task.
 
-        Uses retry logic with exponential backoff for resilience.
+        This is non-blocking - the actual HTTP call happens in a Celery worker.
+        Webhook delivery is handled asynchronously to avoid blocking alert processing.
+
+        Args:
+            url: Webhook URL to POST to
+            data: Alert data payload
+            rule: The compiled rule that triggered the alert
         """
+        from skyspy.tasks.notifications import send_webhook_task
+
         try:
-            self._post_webhook_with_retry(url, data)
+            send_webhook_task.delay(
+                url=url,
+                data=data,
+                timeout=10.0,
+                rule_id=rule.id,
+                rule_name=rule.name,
+            )
+            logger.debug(f"Queued webhook for rule {rule.id}")
         except Exception as e:
-            logger.error(f"Webhook call failed after retries: {e}")
-
-    @staticmethod
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
-    )
-    def _post_webhook_with_retry(url: str, data: dict):
-        """POST to webhook with retry logic."""
-        with httpx.Client(timeout=10.0) as client:
-            response = client.post(url, json=data)
-            response.raise_for_status()
-            logger.debug(f"Webhook response: {response.status_code}")
+            logger.error(f"Failed to queue webhook for rule {rule.id}: {e}")
 
     # Public methods for rule testing and management
 

@@ -331,7 +331,8 @@ export function TrackTab({
     if (trackLiveMode && !trackIsPlaying) {
       setTrackReplayPosition(100);
       const latest = validSightings[0];
-      if (latest && trackMarkerRef.current) {
+      // Bug fix #8: Add null check for trackMapRef.current before using it
+      if (latest && trackMarkerRef.current && trackMapRef.current) {
         trackMapRef.current.removeLayer(trackMarkerRef.current);
         const icon = createAircraftIcon(latest.track, '#00ff88');
         trackMarkerRef.current = L.marker([latest.lat, latest.lon], { icon }).addTo(

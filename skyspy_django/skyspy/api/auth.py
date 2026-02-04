@@ -13,6 +13,7 @@ Provides CRUD endpoints for:
 import logging
 
 from django.contrib.auth.models import User
+from django.db import transaction
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -160,14 +161,15 @@ class UserViewSet(viewsets.ModelViewSet):
             except SkyspyUser.DoesNotExist:
                 return Response({"error": "Cannot assign superadmin role"}, status=status.HTTP_403_FORBIDDEN)
 
-        user_role, created = UserRole.objects.get_or_create(
-            user=profile.user, role=role, defaults={"assigned_by": request.user, "expires_at": expires_at}
-        )
+        with transaction.atomic():
+            user_role, created = UserRole.objects.get_or_create(
+                user=profile.user, role=role, defaults={"assigned_by": request.user, "expires_at": expires_at}
+            )
 
-        if not created:
-            user_role.expires_at = expires_at
-            user_role.assigned_by = request.user
-            user_role.save()
+            if not created:
+                user_role.expires_at = expires_at
+                user_role.assigned_by = request.user
+                user_role.save()
 
         # Return assignment data including expires_at
         return Response(

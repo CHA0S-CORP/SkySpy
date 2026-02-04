@@ -62,28 +62,9 @@
    ============================================================================ */
 
 @media (max-width: 1200px) {
-  .sidebar {
-    width: 60px;
-  }
-
-  .sidebar-header .logo-text,
-  .nav-item span,
-  .version {
-    display: none;
-  }
-
-  .logo {
-    justify-content: center;
-  }
-
-  .nav-item {
-    justify-content: center;
-    padding: 14px;
-  }
-
-  .connection-status span:not(.status-dot) {
-    display: none;
-  }
+  /* Sidebar is auto-collapsed via React state at this breakpoint */
+  /* The .sidebar.collapsed class in layout.css handles all sidebar styling */
+  /* Only keep non-sidebar layout adjustments here */
 
   .system-card.wide {
     grid-column: span 1;

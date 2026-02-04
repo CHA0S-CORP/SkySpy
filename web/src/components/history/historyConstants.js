@@ -1,5 +1,5 @@
 // Valid data types for the history view
-export const VALID_DATA_TYPES = ['sessions', 'sightings', 'acars', 'safety'];
+export const VALID_DATA_TYPES = ['sessions', 'sightings', 'acars', 'safety', 'notams', 'pireps', 'archive'];
 
 // Time range options with their hour values
 export const TIME_RANGES = ['1h', '6h', '24h', '48h', '7d'];
@@ -388,4 +388,48 @@ export const safeJson = async (res) => {
   } catch {
     return null;
   }
+};
+
+// Format duration in minutes to human-readable string
+export const formatDuration = (minutes) => {
+  if (!minutes || minutes < 1) return '<1m';
+  if (minutes < 60) return `${Math.round(minutes)}m`;
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.round(minutes % 60);
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+};
+
+// Format timestamp to time string
+export const formatTime = (timestamp) => {
+  if (!timestamp) return '--';
+  try {
+    return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '--';
+  }
+};
+
+// Get aircraft icon emoji based on type and military status
+export const getAircraftIcon = (aircraftType, isMilitary) => {
+  if (isMilitary) return '🎖️';
+  if (!aircraftType) return '✈️';
+
+  const t = aircraftType.toUpperCase();
+
+  // Helicopters
+  if (AIRCRAFT_TYPE_CATEGORIES.helicopter?.some((h) => t.includes(h) || t.startsWith('H') || t.startsWith('EC') || t.startsWith('AS'))) {
+    return '🚁';
+  }
+
+  // Light aircraft
+  if (AIRCRAFT_TYPE_CATEGORIES.light?.includes(t) || t.startsWith('C1') || t.startsWith('PA') || t.startsWith('SR')) {
+    return '🛩️';
+  }
+
+  // Heavy/wide-body
+  if (AIRCRAFT_TYPE_CATEGORIES.heavy?.includes(t) || t.startsWith('A3') || t.startsWith('B7')) {
+    return '🛫';
+  }
+
+  return '✈️';
 };

@@ -188,8 +188,8 @@ class AircraftInfoSerializer(serializers.ModelSerializer):
 
         icao = obj.icao_hex.upper()
 
-        if settings.PHOTO_CACHE_ENABLED:
-            if settings.S3_ENABLED:
+        if getattr(settings, "PHOTO_CACHE_ENABLED", False):
+            if getattr(settings, "S3_ENABLED", False):
                 # For S3: check if photo exists in cache
                 from skyspy.services.photo_cache import get_photo_url as get_cached_url
 
@@ -207,7 +207,7 @@ class AircraftInfoSerializer(serializers.ModelSerializer):
                     # Fallback to filesystem check if cache not populated yet
                     from pathlib import Path
 
-                    cache_dir = Path(settings.PHOTO_CACHE_DIR)
+                    cache_dir = Path(getattr(settings, "PHOTO_CACHE_DIR", "/tmp/photo_cache"))
                     photo_path = cache_dir / f"{icao}.jpg"
                     if photo_path.exists() and photo_path.stat().st_size > 0:
                         return f"/api/v1/photos/{icao}"
@@ -225,8 +225,8 @@ class AircraftInfoSerializer(serializers.ModelSerializer):
 
         icao = obj.icao_hex.upper()
 
-        if settings.PHOTO_CACHE_ENABLED:
-            if settings.S3_ENABLED:
+        if getattr(settings, "PHOTO_CACHE_ENABLED", False):
+            if getattr(settings, "S3_ENABLED", False):
                 # For S3: check if thumbnail exists in cache
                 from skyspy.services.photo_cache import get_photo_url as get_cached_url
 
@@ -244,7 +244,7 @@ class AircraftInfoSerializer(serializers.ModelSerializer):
                     # Fallback to filesystem check if cache not populated yet
                     from pathlib import Path
 
-                    cache_dir = Path(settings.PHOTO_CACHE_DIR)
+                    cache_dir = Path(getattr(settings, "PHOTO_CACHE_DIR", "/tmp/photo_cache"))
                     thumb_path = cache_dir / f"{icao}_thumb.jpg"
                     if thumb_path.exists() and thumb_path.stat().st_size > 0:
                         return f"/api/v1/photos/{icao}/thumb"

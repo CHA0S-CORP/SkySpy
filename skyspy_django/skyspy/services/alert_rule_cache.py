@@ -159,7 +159,7 @@ class CompiledRule:
             try:
                 compiled_regex = re.compile(rule.value, re.IGNORECASE)
             except re.error as e:
-                logger.warning(f"Invalid regex in rule {rule.id}: {e}")
+                logger.warning(f"Invalid regex in rule {rule.id} ('{rule.name}'): pattern '{rule.value[:50]}' - {e}")
 
         # Analyze complex conditions
         if rule.conditions:
@@ -222,6 +222,7 @@ class AlertRuleCache:
     - Redis cache for cross-worker consistency
     - Automatic invalidation via Django signals
     - Version-based cache coherency
+    - Segmented indexes for O(1) rule lookup by ICAO, squawk, and callsign prefix
     """
 
     REDIS_KEY = "alert:rules:cache"
@@ -234,6 +235,12 @@ class AlertRuleCache:
         self._lock = Lock()
         self._redis = None
         self._initialized = False
+
+        # Segmented indexes for O(1) rule lookup
+        self._rules_by_icao: dict[str, list[CompiledRule]] = {}
+        self._rules_by_squawk: dict[str, list[CompiledRule]] = {}
+        self._rules_by_callsign_prefix: dict[str, list[CompiledRule]] = {}
+        self._general_rules: list[CompiledRule] = []
 
     @property
     def redis(self):
@@ -250,8 +257,11 @@ class AlertRuleCache:
                 self._redis = False
         return self._redis if self._redis else None
 
+    # Sentinel value indicating no version is set (cannot match legitimate versions)
+    _NO_VERSION_SENTINEL = "__NO_VERSION__"
+
     def _get_current_version(self) -> str:
-        """Get current cache version from Redis or generate one."""
+        """Get current cache version from Redis or return sentinel value."""
         if self.redis:
             try:
                 version = self.redis.get(self.VERSION_KEY)
@@ -259,7 +269,7 @@ class AlertRuleCache:
                     return version
             except Exception as e:
                 logger.debug(f"Could not get cache version from Redis: {e}")
-        return ""
+        return self._NO_VERSION_SENTINEL
 
     def _generate_version(self) -> str:
         """Generate a new cache version string with strong uniqueness."""
@@ -310,6 +320,8 @@ class AlertRuleCache:
                         self._local_rules = [self._deserialize_rule(r) for r in rules_data]
                         self._local_version = self._get_current_version()
                         logger.debug(f"Loaded {len(self._local_rules)} rules from Redis cache")
+                        # Build segmented indexes for O(1) lookup
+                        self._build_segmented_indexes()
                         return
                     except (json.JSONDecodeError, KeyError) as e:
                         logger.warning(f"Invalid Redis cache data: {e}")
@@ -332,6 +344,9 @@ class AlertRuleCache:
                 self._local_version = self._generate_version()
 
             logger.debug(f"Refreshed rule cache with {len(self._local_rules)} rules")
+
+            # Build segmented indexes for O(1) lookup
+            self._build_segmented_indexes()
 
         except Exception as e:
             logger.error(f"Failed to refresh rule cache: {e}")
@@ -420,6 +435,90 @@ class AlertRuleCache:
             compiled_regex=compiled_regex,
         )
 
+    def _build_segmented_indexes(self) -> None:
+        """
+        Build segmented indexes for O(1) rule lookup.
+
+        Categorizes rules by their target (ICAO, squawk, callsign prefix)
+        to enable efficient lookup when checking aircraft.
+        """
+        from collections import defaultdict
+
+        by_icao: dict[str, list[CompiledRule]] = defaultdict(list)
+        by_squawk: dict[str, list[CompiledRule]] = defaultdict(list)
+        by_callsign_prefix: dict[str, list[CompiledRule]] = defaultdict(list)
+        general: list[CompiledRule] = []
+
+        for rule in self._local_rules:
+            # Check if rule targets a specific ICAO
+            if rule.target_icao:
+                by_icao[rule.target_icao.upper()].append(rule)
+            # Check if rule targets a specific squawk
+            elif rule.target_squawk:
+                by_squawk[rule.target_squawk].append(rule)
+            # Check if rule targets a callsign prefix
+            elif rule.target_callsign_prefix:
+                by_callsign_prefix[rule.target_callsign_prefix.upper()].append(rule)
+            # General rules apply to all aircraft
+            else:
+                general.append(rule)
+
+        self._rules_by_icao = dict(by_icao)
+        self._rules_by_squawk = dict(by_squawk)
+        self._rules_by_callsign_prefix = dict(by_callsign_prefix)
+        self._general_rules = general
+
+        logger.debug(
+            f"Built segmented indexes: {len(self._rules_by_icao)} ICAO rules, "
+            f"{len(self._rules_by_squawk)} squawk rules, "
+            f"{len(self._rules_by_callsign_prefix)} callsign prefix rules, "
+            f"{len(self._general_rules)} general rules"
+        )
+
+    def get_rules_for_aircraft(self, aircraft: dict) -> list[CompiledRule]:
+        """
+        Get rules that could potentially match this aircraft.
+
+        Uses segmented indexes for O(1) lookup of targeted rules,
+        reducing the number of rules to evaluate per aircraft.
+
+        Args:
+            aircraft: Aircraft data dictionary with hex, squawk, flight fields
+
+        Returns:
+            List of CompiledRule instances that could match this aircraft
+        """
+        icao = (aircraft.get("hex") or "").upper()
+        squawk = aircraft.get("squawk") or ""
+        callsign = (aircraft.get("flight") or "").upper().strip()
+
+        with self._lock:
+            # Ensure cache is valid before accessing indexes
+            current_version = self._get_current_version()
+            if self._local_version != current_version or not self._local_rules:
+                self._refresh_cache()
+
+            rules: list[CompiledRule] = []
+
+            # O(1) lookup for ICAO-targeted rules
+            if icao and icao in self._rules_by_icao:
+                rules.extend(self._rules_by_icao[icao])
+
+            # O(1) lookup for squawk-targeted rules
+            if squawk and squawk in self._rules_by_squawk:
+                rules.extend(self._rules_by_squawk[squawk])
+
+            # Prefix matching for callsign (iterate over prefix rules)
+            if callsign:
+                for prefix, prefix_rules in self._rules_by_callsign_prefix.items():
+                    if callsign.startswith(prefix):
+                        rules.extend(prefix_rules)
+
+            # Always include general rules (they apply to all aircraft)
+            rules.extend(self._general_rules)
+
+            return rules
+
     def invalidate(self) -> None:
         """
         Invalidate the cache, forcing a refresh on next access.
@@ -429,6 +528,11 @@ class AlertRuleCache:
         with self._lock:
             self._local_version = ""
             self._local_rules = []
+            # Clear segmented indexes
+            self._rules_by_icao = {}
+            self._rules_by_squawk = {}
+            self._rules_by_callsign_prefix = {}
+            self._general_rules = []
 
         if self.redis:
             try:
@@ -454,6 +558,12 @@ class AlertRuleCache:
             "cached_rules": len(self._local_rules),
             "cache_version": self._local_version,
             "redis_available": bool(self.redis),
+            "segmented_indexes": {
+                "icao_rules": len(self._rules_by_icao),
+                "squawk_rules": len(self._rules_by_squawk),
+                "callsign_prefix_rules": len(self._rules_by_callsign_prefix),
+                "general_rules": len(self._general_rules),
+            },
         }
 
 

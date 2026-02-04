@@ -26,6 +26,8 @@ export function useAircraftPhoto({ hex, baseUrl, initialPhotoData = null }) {
   const retryPhotoRef = useRef(null);
   const photoPollingRef = useRef(null);
   const intervalsRef = useRef(new Set());
+  // Ref to track current hex for stale closure prevention
+  const currentHexRef = useRef(hex);
 
   // Helper to ensure photo URLs are absolute (handles relative API paths)
   const resolvePhotoUrl = useCallback(
@@ -49,8 +51,9 @@ export function useAircraftPhoto({ hex, baseUrl, initialPhotoData = null }) {
       )
     : null;
 
-  // Reset photo state when hex changes
+  // Reset photo state when hex changes and keep ref in sync
   useEffect(() => {
+    currentHexRef.current = hex;
     setPhotoState('loading');
     setPhotoRetryCount(0);
     setUseThumbnail(false);
@@ -87,7 +90,8 @@ export function useAircraftPhoto({ hex, baseUrl, initialPhotoData = null }) {
     }
 
     const abortController = new AbortController();
-    const currentHex = hex;
+    // Capture hex at start for initial fetch, but use ref for polling to detect stale closures
+    const initialHex = hex;
 
     setPhotoState('loading');
     setUseThumbnail(false);
@@ -96,7 +100,7 @@ export function useAircraftPhoto({ hex, baseUrl, initialPhotoData = null }) {
 
     // Trigger photo fetch with force=true to re-fetch from sources
     try {
-      await fetch(`${baseUrl}/api/v1/airframes/${hex}/photos/fetch/?force=true`, {
+      await fetch(`${baseUrl}/api/v1/airframes/${initialHex}/photos/fetch/?force=true`, {
         method: 'POST',
         signal: abortController.signal,
       });
@@ -108,6 +112,15 @@ export function useAircraftPhoto({ hex, baseUrl, initialPhotoData = null }) {
     let attempts = 0;
     const intervalId = setInterval(async () => {
       attempts++;
+      // Check if hex has changed using ref to prevent stale closure race condition
+      const currentHex = currentHexRef.current;
+      if (currentHex !== initialHex) {
+        // Hex changed - abort this polling
+        clearInterval(intervalId);
+        intervalsRef.current.delete(intervalId);
+        retryPhotoRef.current = null;
+        return;
+      }
       if (attempts > 10 || abortController.signal.aborted) {
         clearInterval(intervalId);
         intervalsRef.current.delete(intervalId);
@@ -124,6 +137,13 @@ export function useAircraftPhoto({ hex, baseUrl, initialPhotoData = null }) {
           signal: abortController.signal,
         });
         const data = await safeJson(res);
+        // Double-check hex hasn't changed before setting state
+        if (currentHexRef.current !== initialHex) {
+          clearInterval(intervalId);
+          intervalsRef.current.delete(intervalId);
+          retryPhotoRef.current = null;
+          return;
+        }
         if (data?.photo_url) {
           clearInterval(intervalId);
           intervalsRef.current.delete(intervalId);
@@ -255,13 +275,25 @@ export function useAircraftPhoto({ hex, baseUrl, initialPhotoData = null }) {
     };
   }, [hex]);
 
-  // Global cleanup for all intervals on unmount
+  // Global cleanup for all intervals on unmount - clear all tracked intervals
   useEffect(() => {
+    // Capture ref for cleanup
+    const intervals = intervalsRef.current;
     return () => {
-      intervalsRef.current.forEach((intervalId) => {
+      // Clear specific refs
+      if (retryPhotoRef.current) {
+        clearInterval(retryPhotoRef.current);
+        retryPhotoRef.current = null;
+      }
+      if (photoPollingRef.current) {
+        clearInterval(photoPollingRef.current);
+        photoPollingRef.current = null;
+      }
+      // Clear all tracked intervals to prevent memory leaks
+      intervals.forEach((intervalId) => {
         clearInterval(intervalId);
       });
-      intervalsRef.current.clear();
+      intervals.clear();
     };
   }, []);
 

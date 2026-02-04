@@ -70,6 +70,14 @@ class ConfigViewSet(viewsets.ViewSet):
         """List all configurations grouped by category."""
         category_filter = request.query_params.get("category")
 
+        # Validate category_filter against CATEGORY_CHOICES
+        valid_categories = {cat_key for cat_key, _ in CATEGORY_CHOICES}
+        if category_filter and category_filter not in valid_categories:
+            return Response(
+                {"error": f"Invalid category. Must be one of: {', '.join(sorted(valid_categories))}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         queryset = SystemConfig.objects.select_related("updated_by")
         if category_filter:
             queryset = queryset.filter(category=category_filter)
@@ -491,3 +499,149 @@ class ConfigViewSet(viewsets.ViewSet):
                 "revealed_at": timezone.now().isoformat(),
             }
         )
+
+
+# =============================================================================
+# Task Metrics Views
+# =============================================================================
+
+
+class TaskMetricsView(viewsets.ViewSet):
+    """
+    ViewSet for Celery task metrics monitoring.
+
+    Requires system.manage permission (admin/superadmin only).
+    Provides real-time visibility into background task health.
+    """
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [HasSystemManagePermission]
+    throttle_classes = [AuthRateThrottle]
+
+    @extend_schema(
+        summary="Get task metrics",
+        description="Get comprehensive Celery task execution metrics",
+        parameters=[
+            OpenApiParameter(
+                name="format",
+                type=str,
+                description="Output format: 'json' (default) or 'prometheus'",
+            ),
+            OpenApiParameter(
+                name="task",
+                type=str,
+                description="Filter metrics for a specific task name",
+            ),
+        ],
+        responses={200: dict},
+    )
+    def list(self, request):
+        """Get all task metrics."""
+        from skyspy.services.task_metrics import task_metrics
+
+        output_format = request.query_params.get("format", "json")
+        task_filter = request.query_params.get("task")
+
+        if output_format == "prometheus":
+            return Response(task_metrics.export_prometheus(), content_type="text/plain")
+
+        if task_filter:
+            metrics = task_metrics.get_task_metrics(task_filter)
+            if not metrics:
+                return Response(
+                    {"error": f"No metrics found for task: {task_filter}"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            return Response({"task": task_filter, "metrics": metrics})
+
+        return Response(task_metrics.get_all_metrics())
+
+    @extend_schema(
+        summary="Get task health status",
+        description="Check health of critical tasks and detect issues",
+        responses={200: dict},
+    )
+    @action(detail=False, methods=["get"])
+    def health(self, request):
+        """Get task health status."""
+        from skyspy.services.task_metrics import task_metrics
+
+        # Expected max age for critical tasks (in seconds)
+        critical_task_intervals = {
+            "skyspy.tasks.aircraft.poll_aircraft": 10,
+            "skyspy.tasks.aircraft.update_aircraft_sessions_from_cache": 30,
+            "skyspy.tasks.aircraft.update_stats_cache": 120,
+            "skyspy.tasks.aircraft.update_safety_stats": 90,
+            "skyspy.tasks.aircraft_stream.stream_aircraft": 120,
+            "skyspy.tasks.analytics.update_antenna_analytics": 360,
+        }
+
+        stale_tasks = task_metrics.get_stale_tasks(critical_task_intervals)
+        failing_tasks = task_metrics.get_failing_tasks(min_failure_rate=0.3, min_executions=5)
+
+        all_metrics = task_metrics.get_all_metrics()
+
+        health_status = "degraded" if stale_tasks or failing_tasks else "healthy"
+
+        return Response(
+            {
+                "status": health_status,
+                "stale_tasks": stale_tasks,
+                "failing_tasks": failing_tasks,
+                "queues": all_metrics.get("queues", {}),
+                "total_active": all_metrics.get("total_active", 0),
+                "total_executions": all_metrics.get("total_executions", 0),
+                "total_failures": all_metrics.get("total_failures", 0),
+            }
+        )
+
+    @extend_schema(
+        summary="Get queue depths",
+        description="Get current depth of all Celery queues",
+        responses={200: dict},
+    )
+    @action(detail=False, methods=["get"])
+    def queues(self, request):
+        """Get queue depth information."""
+        from skyspy.services.task_metrics import task_metrics
+
+        all_metrics = task_metrics.get_all_metrics()
+
+        queues = all_metrics.get("queues", {})
+        total_depth = sum(queues.values())
+
+        # Flag any queues with high depth
+        warnings = []
+        for queue, depth in queues.items():
+            if depth > 100:
+                warnings.append(f"Queue '{queue}' has {depth} pending tasks")
+
+        return Response(
+            {
+                "queues": queues,
+                "total_depth": total_depth,
+                "warnings": warnings,
+            }
+        )
+
+    @extend_schema(
+        summary="Reset task metrics",
+        description="Reset metrics for a specific task or all tasks",
+        request=dict,
+        responses={200: dict},
+    )
+    @action(detail=False, methods=["post"])
+    def reset(self, request):
+        """Reset task metrics."""
+        from skyspy.services.task_metrics import task_metrics
+
+        task_name = request.data.get("task")
+
+        if task_name:
+            task_metrics.reset_task_metrics(task_name)
+            logger.info(f"Task metrics reset for {task_name} by {request.user}")
+            return Response({"status": "ok", "message": f"Metrics reset for {task_name}"})
+        else:
+            task_metrics.reset_all_metrics()
+            logger.info(f"All task metrics reset by {request.user}")
+            return Response({"status": "ok", "message": "All metrics reset"})

@@ -9,6 +9,7 @@ Uses the comprehensive stats_cache service for:
 """
 
 import logging
+import time
 from collections import defaultdict
 from datetime import timedelta
 
@@ -765,3 +766,179 @@ def refresh_flight_pattern_geographic_stats():
         except Exception as sentry_err:
             logger.debug(f"Could not report to Sentry: {sentry_err}")
         return None
+
+
+# =============================================================================
+# Unified Stats Aggregation
+# =============================================================================
+
+
+def _compute_aircraft_stats(now) -> dict:
+    """
+    Compute aircraft statistics from current cached aircraft list.
+
+    Args:
+        now: Current timestamp
+
+    Returns:
+        Dict with aircraft stats including total, with_position, military counts
+    """
+    from datetime import datetime
+
+    # Get current aircraft from cache (same as update_stats_cache does)
+    aircraft_list = cache.get("current_aircraft", [])
+
+    stats = {
+        "total": len(aircraft_list),
+        "with_position": sum(1 for ac in aircraft_list if ac.get("lat") is not None),
+        "military": sum(1 for ac in aircraft_list if ac.get("military")),
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+
+    return stats
+
+
+def _compute_safety_stats(cutoff) -> dict:
+    """
+    Compute safety event statistics.
+
+    Args:
+        cutoff: Timestamp cutoff for events (typically 24 hours ago)
+
+    Returns:
+        Dict with safety stats including total_24h, by_type, and by_severity
+    """
+    from datetime import datetime
+
+    from django.db.models import Count
+
+    from skyspy.models import SafetyEvent
+
+    events = SafetyEvent.objects.filter(timestamp__gte=cutoff)
+
+    by_type = dict(events.values_list("event_type").annotate(count=Count("id")))
+    by_severity = dict(events.values_list("severity").annotate(count=Count("id")))
+
+    stats = {
+        "total_24h": events.count(),
+        "by_type": by_type,
+        "by_severity": by_severity,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+
+    return stats
+
+
+def _compute_acars_stats(cutoff) -> dict:
+    """
+    Compute ACARS message statistics.
+
+    This is a lightweight computation that just gets message count.
+    The full ACARS stats refresh (with trends and airlines) is handled
+    separately by refresh_acars_stats which does more complex aggregations.
+
+    Args:
+        cutoff: Timestamp cutoff for messages (typically 1 hour ago)
+
+    Returns:
+        Dict with total_messages count
+    """
+    from django.db.models import Count
+
+    from skyspy.models import AcarsMessage
+
+    stats = AcarsMessage.objects.filter(timestamp__gte=cutoff).aggregate(
+        total_messages=Count("id"),
+    )
+
+    return {
+        "total_messages": stats["total_messages"] or 0,
+        "period_hours": 1,
+    }
+
+
+@shared_task
+def aggregate_all_stats():
+    """
+    Unified stats aggregation task.
+
+    Combines aircraft stats, safety stats, and ACARS stats into a single
+    task with a shared database connection context, reducing connection
+    overhead and query redundancy.
+
+    Replaces the individual stats tasks in the beat schedule:
+    - update_stats_cache (from tasks/aircraft.py)
+    - update_safety_stats (from tasks/aircraft.py)
+    - refresh_acars_stats (from tasks/analytics.py)
+
+    Cache TTLs:
+    - aircraft_stats: 120s
+    - safety_stats: 60s
+    - acars_stats: 120s
+
+    Runs every 60 seconds.
+    """
+    from django.db import connection
+
+    start_time = time.perf_counter()
+    results = {}
+
+    try:
+        # Use a single database connection context for all queries
+        # This reduces connection overhead when running multiple stats queries
+        with connection.cursor():
+            now = timezone.now()
+
+            # 1. Aircraft Stats (from current_aircraft cache)
+            try:
+                aircraft_stats = _compute_aircraft_stats(now)
+                cache.set("aircraft_stats", aircraft_stats, timeout=120)
+                # Also set celery heartbeat to indicate Celery is alive
+                cache.set("celery_heartbeat", True, timeout=120)
+                results["aircraft_stats"] = "ok"
+                logger.debug(f"Updated aircraft stats: {aircraft_stats['total']} aircraft")
+            except Exception as e:
+                logger.error(f"Error computing aircraft stats: {e}")
+                results["aircraft_stats"] = f"error: {e}"
+
+            # 2. Safety Stats (database query for 24h events)
+            try:
+                safety_cutoff = now - timedelta(hours=24)
+                safety_stats = _compute_safety_stats(safety_cutoff)
+                cache.set("safety_stats", safety_stats, timeout=60)
+                results["safety_stats"] = "ok"
+                logger.debug(f"Updated safety stats: {safety_stats['total_24h']} events in 24h")
+            except Exception as e:
+                logger.error(f"Error computing safety stats: {e}")
+                results["safety_stats"] = f"error: {e}"
+
+            # 3. ACARS Stats (full refresh via the acars_stats service)
+            # We call the existing refresh function which does more comprehensive
+            # aggregation (trends, airlines, etc.) and broadcasts updates
+            try:
+                refresh_acars_stats_cache(broadcast=True)
+                results["acars_stats"] = "ok"
+                logger.debug("Refreshed ACARS stats cache")
+            except Exception as e:
+                logger.error(f"Error refreshing ACARS stats: {e}")
+                results["acars_stats"] = f"error: {e}"
+
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        logger.debug(f"Stats aggregation completed in {duration_ms:.1f}ms")
+
+        return {
+            "status": "ok",
+            "duration_ms": round(duration_ms, 1),
+            "results": results,
+        }
+
+    except Exception as e:
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        logger.error(f"Stats aggregation failed after {duration_ms:.1f}ms: {e}")
+        try:
+            from skyspy.utils.sentry import capture_task_error
+
+            capture_task_error(e, "aggregate_all_stats")
+        except Exception as sentry_err:
+            logger.debug(f"Could not report to Sentry: {sentry_err}")
+        return {"status": "error", "error": str(e), "duration_ms": round(duration_ms, 1)}

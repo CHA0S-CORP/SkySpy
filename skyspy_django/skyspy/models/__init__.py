@@ -30,6 +30,12 @@ from skyspy.models.cannonball import (
     CannonballPattern,
     CannonballSession,
     CannonballStats,
+    CommunitySubmission,
+    LEDataSource,
+    PatternAnalytics,
+    RegistrationAnalysis,
+    RegistrationTransfer,
+    SubmitterReputation,
 )
 from skyspy.models.config import ConfigAuditLog, SystemConfig
 from skyspy.models.engagement import AircraftFavorite, SessionTrackingQuality
@@ -120,6 +126,12 @@ __all__ = [
     "CannonballAlert",
     "CannonballKnownAircraft",
     "CannonballStats",
+    "LEDataSource",
+    "PatternAnalytics",
+    "RegistrationAnalysis",
+    "RegistrationTransfer",
+    "CommunitySubmission",
+    "SubmitterReputation",
     # System Configuration
     "SystemConfig",
     "ConfigAuditLog",

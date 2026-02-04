@@ -233,7 +233,7 @@ class NotificationLog(models.Model):
     notification_type = models.CharField(
         max_length=50, choices=NOTIFICATION_TYPES, db_index=True, blank=True, null=True
     )
-    icao_hex = models.CharField(max_length=10, blank=True, null=True)
+    icao_hex = models.CharField(max_length=10, blank=True, null=True, db_index=True)
     callsign = models.CharField(max_length=10, blank=True, null=True)
     message = models.TextField(blank=True, null=True)
     details = models.JSONField(blank=True, null=True)
@@ -264,6 +264,8 @@ class NotificationLog(models.Model):
         ordering = ["-timestamp"]
         indexes = [
             models.Index(fields=["status", "next_retry_at"], name="idx_notif_log_retry"),
+            models.Index(fields=["icao_hex"], name="idx_notif_log_icao"),
+            models.Index(fields=["-timestamp"], name="notiflog_ts_desc_idx"),
         ]
 
     def __str__(self):
@@ -271,7 +273,7 @@ class NotificationLog(models.Model):
 
     def can_retry(self) -> bool:
         """Check if this notification can be retried."""
-        return self.status in ("failed", "retrying") and self.retry_count < self.max_retries
+        return self.status in ("pending", "failed", "retrying") and self.retry_count < self.max_retries
 
     def mark_sent(self, duration_ms: int = None):
         """Mark notification as successfully sent."""

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 
 /**
  * Parse Django REST Framework error responses.
@@ -60,6 +60,11 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
   const [auditLog, setAuditLog] = useState([]);
   const [auditLogLoading, setAuditLogLoading] = useState(false);
 
+  // AbortController refs for cancelling in-flight requests
+  const fetchConfigsAbortRef = useRef(null);
+  const saveAbortRef = useRef(null);
+  const auditLogAbortRef = useRef(null);
+
   // Toast helper
   const showToast = useCallback(
     (message, type = 'info') => {
@@ -72,12 +77,20 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
 
   // Fetch all configurations
   const fetchConfigs = useCallback(async () => {
+    // Abort any previous fetch
+    if (fetchConfigsAbortRef.current) {
+      fetchConfigsAbortRef.current.abort();
+    }
+    const abortController = new AbortController();
+    fetchConfigsAbortRef.current = abortController;
+
     setLoading(true);
     setError(null);
 
     try {
       const res = await fetch(`${apiBase}/api/v1/admin/config/`, {
         headers: getAuthHeaders(),
+        signal: abortController.signal,
       });
 
       if (!res.ok) {
@@ -88,6 +101,7 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
       const data = await res.json();
       setCategories(data.categories || []);
     } catch (err) {
+      if (err.name === 'AbortError') return;
       setError(err.message);
       showToast(`Failed to load configuration: ${err.message}`, 'error');
     } finally {
@@ -95,9 +109,22 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
     }
   }, [apiBase, showToast]);
 
-  // Initial fetch
+  // Initial fetch and cleanup
   useEffect(() => {
     fetchConfigs();
+
+    // Cleanup: abort all in-flight requests on unmount
+    return () => {
+      if (fetchConfigsAbortRef.current) {
+        fetchConfigsAbortRef.current.abort();
+      }
+      if (saveAbortRef.current) {
+        saveAbortRef.current.abort();
+      }
+      if (auditLogAbortRef.current) {
+        auditLogAbortRef.current.abort();
+      }
+    };
   }, [fetchConfigs]);
 
   // Update a single configuration value (local state only)
@@ -125,6 +152,13 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
   // Save a single configuration value
   const saveValue = useCallback(
     async (key, value) => {
+      // Abort any previous save operation
+      if (saveAbortRef.current) {
+        saveAbortRef.current.abort();
+      }
+      const abortController = new AbortController();
+      saveAbortRef.current = abortController;
+
       setSaving(true);
 
       try {
@@ -132,6 +166,7 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
           method: 'PATCH',
           headers: getAuthHeaders(),
           body: JSON.stringify({ value: String(value) }),
+          signal: abortController.signal,
         });
 
         if (!res.ok) {
@@ -150,6 +185,7 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
         await fetchConfigs();
         return true;
       } catch (err) {
+        if (err.name === 'AbortError') return false;
         showToast(`Failed to save: ${err.message}`, 'error');
         return false;
       } finally {
@@ -165,6 +201,13 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
       return true;
     }
 
+    // Abort any previous save operation
+    if (saveAbortRef.current) {
+      saveAbortRef.current.abort();
+    }
+    const abortController = new AbortController();
+    saveAbortRef.current = abortController;
+
     setSaving(true);
 
     try {
@@ -172,6 +215,7 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ updates: pendingChanges }),
+        signal: abortController.signal,
       });
 
       if (!res.ok) {
@@ -207,6 +251,7 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
       await fetchConfigs();
       return true;
     } catch (err) {
+      if (err.name === 'AbortError') return false;
       showToast(`Failed to save: ${err.message}`, 'error');
       return false;
     } finally {
@@ -254,6 +299,13 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
   // Fetch audit log
   const fetchAuditLog = useCallback(
     async (configKey = null, hours = 24) => {
+      // Abort any previous audit log fetch
+      if (auditLogAbortRef.current) {
+        auditLogAbortRef.current.abort();
+      }
+      const abortController = new AbortController();
+      auditLogAbortRef.current = abortController;
+
       setAuditLogLoading(true);
 
       try {
@@ -264,6 +316,7 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
 
         const res = await fetch(url, {
           headers: getAuthHeaders(),
+          signal: abortController.signal,
         });
 
         if (!res.ok) {
@@ -274,6 +327,7 @@ export function useSystemConfig({ apiBase = '', onToast } = {}) {
         const data = await res.json();
         setAuditLog(data.audit_log || []);
       } catch (err) {
+        if (err.name === 'AbortError') return;
         showToast(`Failed to load audit log: ${err.message}`, 'error');
       } finally {
         setAuditLogLoading(false);

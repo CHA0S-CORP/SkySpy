@@ -21,6 +21,7 @@ import socket
 import time
 from collections import deque
 from threading import Lock
+from typing import Any
 
 import requests
 from celery import shared_task
@@ -56,12 +57,251 @@ _new_aircraft_queue_lock = Lock()
 _previous_icaos: set[str] = set()
 _previous_icaos_lock = Lock()
 
+# Track when each aircraft was last updated (for periodic stale cleanup)
+_aircraft_last_updated: dict[str, float] = {}  # icao -> timestamp
+_aircraft_last_updated_lock = Lock()
+
+# Stale aircraft threshold (seconds since last update)
+STALE_AIRCRAFT_THRESHOLD = 60
+
+# ============================================================================
+# Differential Update State Tracking (P2 optimization)
+# ============================================================================
+
+# Previous aircraft state for computing deltas (stores full aircraft data by hex)
+_previous_aircraft_state: dict[str, dict] = {}
+_previous_aircraft_state_lock = Lock()
+
+# Fields that trigger updates when changed - these are the most important
+# fields that clients need to track for map display and status
+TRACKED_FIELDS = {"lat", "lon", "alt", "alt_baro", "gs", "track", "vr", "squawk", "flight"}
+
 # Cache keys
 CACHE_KEY_AIRCRAFT = "current_aircraft"
 CACHE_KEY_TIMESTAMP = "aircraft_timestamp"
 CACHE_KEY_ONLINE = "adsb_online"
 CACHE_KEY_STREAM_ACTIVE = "aircraft_stream_active"
 CACHE_KEY_LAST_BROADCAST = "last_aircraft_broadcast"
+
+
+# ============================================================================
+# Task Status Functions (P2: Task Dependencies with Celery Primitives)
+# ============================================================================
+
+
+def get_stream_task_status() -> dict[str, Any]:
+    """
+    Check if stream_aircraft task is running using Celery inspect.
+
+    Uses Celery's built-in inspection mechanism for more reliable detection
+    of whether the streaming task is currently running. Falls back to cache
+    check if inspect fails (e.g., broker unavailable).
+
+    Returns:
+        dict with:
+            - running: bool - whether the stream task is active
+            - worker: str - worker hostname if running (empty string otherwise)
+            - task_id: str - task ID if running (empty string otherwise)
+            - source: str - 'inspect' or 'cache' indicating how status was determined
+    """
+    from skyspy.celery import app
+
+    try:
+        inspect = app.control.inspect()
+        active = inspect.active() or {}
+
+        for worker, tasks in active.items():
+            for task in tasks:
+                task_name = task.get("name", "")
+                # Check for both full module path and short name
+                if "stream_aircraft" in task_name:
+                    return {
+                        "running": True,
+                        "worker": worker,
+                        "task_id": task.get("id", ""),
+                        "source": "inspect",
+                    }
+
+        # No stream task found in active tasks
+        return {
+            "running": False,
+            "worker": "",
+            "task_id": "",
+            "source": "inspect",
+        }
+
+    except Exception as e:
+        # Fall back to cache check if Celery inspect fails
+        # This can happen if the broker is temporarily unavailable
+        logger.warning(f"Failed to inspect tasks via Celery, falling back to cache check: {e}")
+        is_active = cache.get(CACHE_KEY_STREAM_ACTIVE, False)
+        return {
+            "running": bool(is_active),
+            "worker": "",
+            "task_id": "",
+            "source": "cache",
+        }
+
+
+# ============================================================================
+# Differential WebSocket Update Functions (P2 optimization)
+# ============================================================================
+
+
+def _compute_field_changes(prev: dict, curr: dict) -> dict:
+    """
+    Compute which tracked fields changed between prev and curr aircraft data.
+
+    Only compares fields in TRACKED_FIELDS to minimize overhead.
+
+    Args:
+        prev: Previous aircraft state
+        curr: Current aircraft state
+
+    Returns:
+        dict containing only the fields that changed (empty if no changes)
+    """
+    changes = {}
+
+    for field in TRACKED_FIELDS:
+        prev_val = prev.get(field)
+        curr_val = curr.get(field)
+
+        if prev_val != curr_val:
+            changes[field] = curr_val
+
+    return changes
+
+
+def compute_aircraft_delta(current: list[dict]) -> dict:
+    """
+    Compute delta between current and previous aircraft state.
+
+    This function compares the current aircraft list against the previously
+    stored state and returns only the changes. This significantly reduces
+    bandwidth for WebSocket updates when most aircraft haven't changed.
+
+    Thread-safe: Uses _previous_aircraft_state_lock for all state access.
+
+    Args:
+        current: List of current aircraft dicts
+
+    Returns:
+        dict with:
+            - added: list of new aircraft (full data)
+            - updated: list of changed aircraft (hex + only changed fields)
+            - removed: list of hex codes no longer present
+            - full_update: bool - True if more than 50% changed (triggers full state send)
+    """
+    global _previous_aircraft_state
+
+    with _previous_aircraft_state_lock:
+        # Build lookup for current aircraft
+        current_by_hex = {ac["hex"]: ac for ac in current if ac.get("hex")}
+        current_hexes = set(current_by_hex.keys())
+        previous_hexes = set(_previous_aircraft_state.keys())
+
+        added = []
+        updated = []
+        removed = list(previous_hexes - current_hexes)
+
+        # Check for new and updated aircraft
+        for hex_code, ac in current_by_hex.items():
+            if hex_code not in _previous_aircraft_state:
+                # New aircraft - include full data
+                added.append(ac)
+            else:
+                # Existing aircraft - check for field changes
+                prev = _previous_aircraft_state[hex_code]
+                changes = _compute_field_changes(prev, ac)
+                if changes:
+                    # Include hex code with the changed fields
+                    updated.append({"hex": hex_code, **changes})
+
+        # If too many changes (>50%), send full update instead of delta
+        # This is more efficient when there's high churn
+        total_changes = len(added) + len(updated) + len(removed)
+        total_current = len(current)
+
+        if total_current > 0 and total_changes > total_current * 0.5:
+            # Update previous state before returning
+            _previous_aircraft_state = current_by_hex.copy()
+            return {
+                "full_update": True,
+                "aircraft": current,
+                "added": [],
+                "updated": [],
+                "removed": [],
+            }
+
+        # Update previous state with current data
+        _previous_aircraft_state = current_by_hex.copy()
+
+        return {
+            "full_update": False,
+            "aircraft": [],
+            "added": added,
+            "updated": updated,
+            "removed": removed,
+        }
+
+
+def broadcast_aircraft_delta(delta: dict, timestamp: str):
+    """
+    Broadcast aircraft delta update to WebSocket clients.
+
+    Sends either a full update or a delta update depending on the
+    `full_update` flag in the delta dict.
+
+    Full update format:
+        {"type": "full", "aircraft": [...], "count": N, "timestamp": "..."}
+
+    Delta update format:
+        {"type": "delta", "added": [...], "updated": [...], "removed": [...], "timestamp": "..."}
+
+    Args:
+        delta: Dict from compute_aircraft_delta()
+        timestamp: ISO timestamp string
+    """
+    if delta.get("full_update"):
+        # Send full state when too many changes occurred
+        sync_emit(
+            "aircraft:update",
+            {
+                "type": "full",
+                "aircraft": delta["aircraft"],
+                "count": len(delta["aircraft"]),
+                "timestamp": timestamp,
+                "stream": True,
+            },
+            room="topic_aircraft",
+        )
+    else:
+        # Send delta update with only changed data
+        sync_emit(
+            "aircraft:update",
+            {
+                "type": "delta",
+                "added": delta.get("added", []),
+                "updated": delta.get("updated", []),
+                "removed": delta.get("removed", []),
+                "timestamp": timestamp,
+                "stream": True,
+            },
+            room="topic_aircraft",
+        )
+
+
+def clear_delta_state():
+    """
+    Clear the differential update state.
+
+    Call this when the stream is restarted or needs to reset state.
+    """
+    global _previous_aircraft_state
+
+    with _previous_aircraft_state_lock:
+        _previous_aircraft_state.clear()
 
 
 # ============================================================================
@@ -223,14 +463,26 @@ def update_state_and_broadcast(batch: list[dict]):
 
     # Update in-memory aircraft state and detect stale aircraft
     stale_icaos = []
+    now = time.time()
     with _aircraft_state_lock:
         _aircraft_state.update(batch_by_icao)
 
         # Prune stale aircraft (not seen in 60s)
         # Check all aircraft in state, not just when > 500
         stale_icaos = [icao for icao, ac in _aircraft_state.items() if ac.get("seen", 0) > 60]
-        for icao in stale_icaos:
+
+        # Remove both stale and removed aircraft from state
+        # Bug fix: removed_icaos were being broadcast but not actually removed from state
+        for icao in set(stale_icaos + removed_icaos):
             _aircraft_state.pop(icao, None)
+
+    # Track last update time for each aircraft in this batch (for periodic cleanup)
+    with _aircraft_last_updated_lock:
+        for icao in current_icaos:
+            _aircraft_last_updated[icao] = now
+        # Clean up timestamp tracking for removed aircraft
+        for icao in set(stale_icaos + removed_icaos):
+            _aircraft_last_updated.pop(icao, None)
 
     # Combine removed aircraft: those not in current batch + stale ones
     all_removed = list(set(removed_icaos + stale_icaos))
@@ -265,10 +517,13 @@ def update_state_and_broadcast(batch: list[dict]):
         # 2. Position updates with removed list (lightest payload, lowest latency)
         broadcast_positions_fast(filtered_batch, all_removed, timestamp)
 
-        # 3. Full aircraft update (filtered to exclude removed aircraft)
-        broadcast_aircraft_update(filtered_batch, timestamp)
+        # 3. Aircraft update using differential updates (P2 optimization)
+        # This sends only changed data instead of full state every time
+        delta = compute_aircraft_delta(filtered_batch)
+        broadcast_aircraft_delta(delta, timestamp)
 
-        # 4. New aircraft events
+        # 4. New aircraft events (still broadcast separately for clients
+        # that need to know about new aircraft immediately)
         if new_icaos:
             new_aircraft = [batch_by_icao[icao] for icao in new_icaos if icao in batch_by_icao]
             broadcast_new_aircraft(new_aircraft, timestamp)
@@ -428,6 +683,56 @@ def process_new_aircraft_lookups(self):
             logger.debug(f"Queued batch of {len(to_lookup)} aircraft for info lookup")
         except Exception as e:
             logger.debug(f"Failed to queue batch lookup: {e}")
+
+
+@shared_task(bind=True, max_retries=0, ignore_result=True)
+def cleanup_stale_aircraft(self):
+    """
+    Periodic cleanup: Remove aircraft that haven't been updated recently.
+
+    This is a safety net that catches aircraft that slip through the normal
+    batch-based removal logic. Runs every 30 seconds and removes aircraft
+    that haven't been seen in STALE_AIRCRAFT_THRESHOLD seconds.
+
+    Also broadcasts removal events to clients for any stale aircraft found.
+    """
+    now = time.time()
+    stale_icaos = []
+
+    # Find stale aircraft based on last update timestamp
+    with _aircraft_last_updated_lock:
+        stale_icaos = [
+            icao
+            for icao, last_updated in _aircraft_last_updated.items()
+            if (now - last_updated) > STALE_AIRCRAFT_THRESHOLD
+        ]
+
+    if not stale_icaos:
+        return
+
+    # Remove stale aircraft from state
+    with _aircraft_state_lock:
+        for icao in stale_icaos:
+            _aircraft_state.pop(icao, None)
+
+    # Clean up timestamp tracking
+    with _aircraft_last_updated_lock:
+        for icao in stale_icaos:
+            _aircraft_last_updated.pop(icao, None)
+
+    # Also clean up from previous state tracking
+    with _previous_icaos_lock:
+        global _previous_icaos
+        _previous_icaos = _previous_icaos - set(stale_icaos)
+
+    # Broadcast removal to clients
+    if stale_icaos:
+        logger.info(f"Periodic cleanup: removing {len(stale_icaos)} stale aircraft: {stale_icaos[:5]}...")
+        try:
+            timestamp = timezone.now().isoformat().replace("+00:00", "Z")
+            broadcast_removed_aircraft(stale_icaos, timestamp)
+        except Exception as e:
+            logger.warning(f"Failed to broadcast stale aircraft removal: {e}")
 
 
 # ============================================================================
@@ -827,6 +1132,10 @@ def stream_aircraft(self):
 
     logger.info(f"Starting aircraft stream (mode={stream_mode}, feeder={feeder_lat},{feeder_lon})")
 
+    # Clear differential update state to ensure clean start
+    # This prevents stale data from previous runs affecting delta calculations
+    clear_delta_state()
+
     consecutive_errors = 0
     max_consecutive_errors = 10
     use_sse = stream_mode in ("sse", "auto")
@@ -908,6 +1217,10 @@ def start_aircraft_stream(self):
     Starter task that launches the streaming task if enabled.
 
     Called by Celery beat to ensure the stream is running.
+
+    Uses Celery's inspect mechanism (P2 improvement) for more reliable
+    detection of whether the stream is already running, with cache flag
+    as fallback.
     """
     logger.info(
         f"start_aircraft_stream called - enabled={settings.AIRCRAFT_STREAM_ENABLED}, "
@@ -916,14 +1229,36 @@ def start_aircraft_stream(self):
 
     if not settings.AIRCRAFT_STREAM_ENABLED:
         logger.info("Aircraft streaming disabled in settings")
-        return
+        return {
+            "status": "disabled",
+            "message": "Aircraft streaming disabled in settings",
+        }
 
-    if cache.get(CACHE_KEY_STREAM_ACTIVE):
-        logger.debug("Aircraft stream already active")
-        return
+    # Use Celery inspect for reliable task status detection (P2 improvement)
+    status = get_stream_task_status()
+
+    if status.get("running"):
+        worker = status.get("worker", "unknown")
+        task_id = status.get("task_id", "unknown")
+        source = status.get("source", "unknown")
+        logger.debug(
+            f"Aircraft stream already running on worker '{worker}' "
+            f"(task_id={task_id}, detected via {source})"
+        )
+        return {
+            "status": "already_running",
+            "worker": worker,
+            "task_id": task_id,
+            "detection_source": source,
+        }
 
     logger.info("Starting aircraft stream task")
-    stream_aircraft.delay()
+    result = stream_aircraft.delay()
+
+    return {
+        "status": "started",
+        "task_id": result.id,
+    }
 
 
 # ============================================================================

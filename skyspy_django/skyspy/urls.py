@@ -65,7 +65,7 @@ from skyspy.api.cannonball import (
     CannonballStatsViewSet,
     CannonballThreatsView,
 )
-from skyspy.api.config import ConfigViewSet
+from skyspy.api.config import ConfigViewSet, TaskMetricsView
 from skyspy.api.flight_pattern_stats import CombinedStatsViewSet, FlightPatternStatsViewSet, GeographicStatsViewSet
 from skyspy.api.history import HistoryViewSet, SessionViewSet, SightingViewSet
 from skyspy.api.map import MapViewSet
@@ -145,6 +145,7 @@ admin_router.register(r"api-keys", APIKeyViewSet, basename="admin-api-keys")
 admin_router.register(r"feature-access", FeatureAccessViewSet, basename="admin-feature-access")
 admin_router.register(r"oidc-mappings", OIDCClaimMappingViewSet, basename="admin-oidc-mappings")
 admin_router.register(r"config", ConfigViewSet, basename="admin-config")
+admin_router.register(r"task-metrics", TaskMetricsView, basename="admin-task-metrics")
 
 urlpatterns = [
     # Admin

@@ -14,6 +14,7 @@ import time
 from datetime import timedelta
 from typing import Any
 
+import apprise
 from celery import shared_task
 from django.utils import timezone
 
@@ -36,9 +37,9 @@ def send_notification_task(
     priority: str = "info",
     event_type: str = "alert",
     channel_type: str = "webhook",
-    channel_id: int = None,
-    rich_payload: dict[str, Any] = None,
-    context: dict[str, Any] = None,
+    channel_id: int | None = None,
+    rich_payload: dict[str, Any] | None = None,
+    context: dict[str, Any] | None = None,
     notification_log_id: int = None,
 ):
     """
@@ -86,8 +87,6 @@ def send_notification_task(
         )
 
     try:
-        import apprise
-
         apobj = apprise.Apprise()
         apobj.add(channel_url)
 
@@ -211,7 +210,7 @@ def cleanup_old_notification_logs(days: int = 30):
 
 
 @shared_task
-def test_notification_channel(channel_id: int) -> dict[str, Any]:
+def verify_notification_channel(channel_id: int) -> dict[str, Any]:
     """
     Send a test notification to verify a channel configuration.
 
@@ -229,8 +228,6 @@ def test_notification_channel(channel_id: int) -> dict[str, Any]:
         return {"success": False, "error": "Channel not found"}
 
     try:
-        import apprise
-
         apobj = apprise.Apprise()
         apobj.add(channel.apprise_url)
 
@@ -307,3 +304,76 @@ def cleanup_notification_cooldowns():
     except Exception as e:
         logger.warning(f"Failed to cleanup notification cooldowns: {e}")
         return {"status": "error", "error": str(e)}
+
+
+@shared_task(
+    bind=True,
+    max_retries=5,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=3600,
+    retry_jitter=True,
+)
+def send_webhook_task(
+    self,
+    url: str,
+    data: dict,
+    timeout: float = 10.0,
+    rule_id: int = None,
+    rule_name: str = None,
+):
+    """
+    Send webhook notification asynchronously with retry support.
+
+    This task handles webhook delivery asynchronously so that alert processing
+    isn't blocked by slow or failing webhooks.
+
+    Args:
+        url: Webhook URL to POST to
+        data: JSON payload to send
+        timeout: Request timeout in seconds
+        rule_id: Alert rule ID for logging
+        rule_name: Alert rule name for logging
+
+    Returns:
+        Dict with delivery status
+    """
+    import httpx
+
+    from skyspy.services.notifications import _is_safe_url
+
+    # Validate URL safety (SSRF prevention)
+    if not _is_safe_url(url):
+        logger.warning(f"Blocked unsafe webhook URL for rule {rule_id}: {url[:100]}")
+        return {"status": "blocked", "reason": "unsafe_url"}
+
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            response = client.post(url, json=data)
+            response.raise_for_status()
+
+            logger.debug(f"Webhook delivered to {url[:50]}... status={response.status_code}")
+            return {
+                "status": "delivered",
+                "status_code": response.status_code,
+                "rule_id": rule_id,
+            }
+
+    except httpx.TimeoutException:
+        logger.warning(f"Webhook timeout for rule {rule_id}: {url[:50]}...")
+        raise  # Will trigger retry
+
+    except httpx.HTTPStatusError as e:
+        logger.warning(f"Webhook HTTP error for rule {rule_id}: {e.response.status_code}")
+        if e.response.status_code >= 500:
+            raise  # Retry on 5xx errors
+        # Don't retry on 4xx errors (client errors)
+        return {
+            "status": "failed",
+            "status_code": e.response.status_code,
+            "rule_id": rule_id,
+        }
+
+    except Exception as e:
+        logger.error(f"Webhook failed for rule {rule_id}: {e}")
+        raise  # Will trigger retry

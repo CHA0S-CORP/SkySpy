@@ -7,7 +7,7 @@ Provides:
 """
 
 from django.contrib.auth.models import User
-from django.db import IntegrityError, models, transaction
+from django.db import models, transaction
 
 
 class AircraftFavorite(models.Model):
@@ -65,38 +65,35 @@ class AircraftFavorite(models.Model):
     @classmethod
     @transaction.atomic
     def toggle_favorite(cls, icao_hex, user=None, session_key=None, registration=None):
-        """Toggle favorite status for an aircraft."""
+        """Toggle favorite status for an aircraft using get_or_create pattern."""
         if not user and not session_key:
             raise ValueError("Either user or session_key is required")
 
-        filters = {"icao_hex": icao_hex.upper()}
-        if user:
-            filters["user"] = user
-            filters["session_key"] = None
-        else:
-            filters["session_key"] = session_key
-            filters["user"] = None
+        icao_hex_upper = icao_hex.upper()
+        defaults = {"registration": registration}
 
-        # Use select_for_update to prevent race conditions
-        existing = cls.objects.select_for_update().filter(**filters).first()
-        if existing:
-            existing.delete()
-            return None, False
+        if user:
+            # Use get_or_create for atomic upsert
+            favorite, created = cls.objects.select_for_update().get_or_create(
+                icao_hex=icao_hex_upper,
+                user=user,
+                session_key=None,
+                defaults=defaults,
+            )
         else:
-            try:
-                favorite = cls.objects.create(
-                    icao_hex=icao_hex.upper(),
-                    user=user,
-                    session_key=session_key if not user else None,
-                    registration=registration,
-                )
-                return favorite, True
-            except IntegrityError:
-                # Race condition: another request created it, so delete it
-                existing = cls.objects.select_for_update().filter(**filters).first()
-                if existing:
-                    existing.delete()
-                return None, False
+            favorite, created = cls.objects.select_for_update().get_or_create(
+                icao_hex=icao_hex_upper,
+                session_key=session_key,
+                user=None,
+                defaults=defaults,
+            )
+
+        if not created:
+            # Already existed, so delete it (toggle off)
+            favorite.delete()
+            return None, False
+
+        return favorite, True
 
     @classmethod
     def is_favorite(cls, icao_hex, user=None, session_key=None):

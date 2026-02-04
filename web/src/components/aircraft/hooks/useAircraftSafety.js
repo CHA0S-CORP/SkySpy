@@ -24,7 +24,9 @@ export function useAircraftSafety({ hex, baseUrl, activeTab, wsRequest, wsConnec
   const [safetyReplayState, setSafetyReplayState] = useState({});
   const [loaded, setLoaded] = useState(false);
 
-  const prevSafetyHoursRef = useRef(safetyHours);
+  // Track the last fetched hours value to avoid redundant fetches
+  // Uses a ref that's only updated after successful fetch initiation
+  const lastFetchedHoursRef = useRef(safetyHours);
 
   // Reset when hex changes
   useEffect(() => {
@@ -89,11 +91,13 @@ export function useAircraftSafety({ hex, baseUrl, activeTab, wsRequest, wsConnec
 
   // Refetch safety events when hours change
   useEffect(() => {
-    if (prevSafetyHoursRef.current === safetyHours || !loaded) {
-      prevSafetyHoursRef.current = safetyHours;
+    // Skip if hours haven't changed or data not yet loaded
+    // Compare against last fetched value to ensure proper dependency tracking
+    if (lastFetchedHoursRef.current === safetyHours || !loaded) {
       return;
     }
-    prevSafetyHoursRef.current = safetyHours;
+    // Update ref immediately when we decide to fetch to prevent duplicate fetches
+    lastFetchedHoursRef.current = safetyHours;
 
     const abortController = new AbortController();
 

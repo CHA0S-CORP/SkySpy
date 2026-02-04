@@ -405,6 +405,13 @@
   display: none;
 }
 
+.detail-tabs-inner {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  align-items: center;
+}
+
 .tab-icon {
   flex-shrink: 0;
 }
@@ -6237,6 +6244,100 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* Metrics Grid for telemetry cards */
+.live-telemetry-section .metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .live-telemetry-section .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Metric Card styling */
+.live-telemetry-section .metrics-grid > div {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.live-telemetry-section .metrics-grid > div:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(0, 212, 255, 0.3);
+  box-shadow: 0 4px 16px rgba(0, 212, 255, 0.1);
+}
+
+/* Metric card label */
+.metric-card-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.metric-card-label span {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim, rgba(255, 255, 255, 0.5));
+}
+
+.metric-card-label svg {
+  flex-shrink: 0;
+  color: var(--text-dim, rgba(255, 255, 255, 0.5));
+}
+
+/* Metric card value */
+.metric-card-value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--text-primary, rgba(255, 255, 255, 0.95));
+}
+
+.metric-card-value .metric-value-text {
+  /* Main value */
+}
+
+.metric-card-value span:last-child:not(.metric-value-text) {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+  margin-left: 2px;
+}
+
+/* Value color states */
+.metric-card-value.climbing {
+  color: var(--accent-green, #00ff88);
+}
+
+.metric-card-value.descending {
+  color: var(--accent-yellow, #ffcc00);
+}
+
+.metric-card-value.extreme-vs {
+  color: #ff4444;
+  animation: extreme-vs-pulse 0.5s ease-in-out infinite;
+}
+
+@keyframes extreme-vs-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 .position-info {

@@ -1260,6 +1260,36 @@
   color: var(--accent-cyan);
 }
 
+.quick-filter-chip.yellow.active {
+  background: rgba(250, 204, 21, 0.15);
+  border-color: #facc15;
+  color: #facc15;
+}
+
+.quick-filter-chip.cyan.active {
+  background: rgba(34, 211, 238, 0.15);
+  border-color: #22d3ee;
+  color: #22d3ee;
+}
+
+.quick-filter-chip.teal.active {
+  background: rgba(20, 184, 166, 0.15);
+  border-color: #14b8a6;
+  color: #14b8a6;
+}
+
+.quick-filter-chip.lime.active {
+  background: rgba(163, 230, 53, 0.15);
+  border-color: #a3e635;
+  color: #a3e635;
+}
+
+.quick-filter-chip.gray.active {
+  background: rgba(156, 163, 175, 0.15);
+  border-color: #9ca3af;
+  color: #9ca3af;
+}
+
 /* Advanced filters panel (Aircraft List) */
 .advanced-filters {
   display: flex;
@@ -1305,6 +1335,44 @@
 .range-inputs span {
   color: var(--text-dim);
   font-size: 11px;
+}
+
+/* Text and select filter inputs */
+.filter-group .text-filter-input,
+.filter-group .select-filter {
+  width: 100%;
+  max-width: 150px;
+  margin-top: 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.filter-group .text-filter-input:focus,
+.filter-group .select-filter:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+}
+
+.filter-group .text-filter-input::placeholder {
+  color: var(--text-dim);
+}
+
+.filter-group .select-filter {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 28px;
+}
+
+.filter-group .select-filter option {
+  background: var(--bg-card);
+  color: var(--text-primary);
 }
 
 /* ============================================================================

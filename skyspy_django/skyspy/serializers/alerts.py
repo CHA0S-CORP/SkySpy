@@ -279,7 +279,8 @@ class AlertRuleSerializer(serializers.ModelSerializer):
         return obj.subscriptions.count()  # Fallback
 
     def get_notification_channel_ids(self, obj) -> list:
-        # Use prefetched data if available
+        # Use prefetched data if available (requires prefetch_related('notification_channels') in viewset)
+        # This avoids N+1 queries when serializing multiple alert rules
         return [ch.id for ch in obj.notification_channels.all()]
 
 
@@ -316,7 +317,8 @@ class AlertHistorySerializer(serializers.ModelSerializer):
             "user_id",
         ]
 
-    def get_acknowledged_by_username(self, obj) -> str:
+    def get_acknowledged_by_username(self, obj) -> str | None:
+        # Requires select_related('acknowledged_by') in viewset to avoid N+1 queries
         if obj.acknowledged_by:
             return obj.acknowledged_by.username
         return None

@@ -67,16 +67,53 @@ export const retrySocketIOAudio = () => {
 };
 
 /**
+ * Simple lock for synchronizing access to globalAudioState mutations
+ */
+let transmissionLock = false;
+const pendingTransmissions = [];
+
+/**
+ * Process pending transmissions one at a time
+ */
+const processPendingTransmissions = () => {
+  if (transmissionLock || pendingTransmissions.length === 0) return;
+
+  transmissionLock = true;
+  const transmission = pendingTransmissions.shift();
+
+  try {
+    processTransmission(transmission);
+  } finally {
+    transmissionLock = false;
+    // Process next pending transmission if any
+    if (pendingTransmissions.length > 0) {
+      // Use setTimeout to avoid stack overflow with many pending items
+      setTimeout(processPendingTransmissions, 0);
+    }
+  }
+};
+
+/**
  * Handle new transmission from socket
  *
- * NOTE: This function mutates globalAudioState without synchronization.
- * Multiple concurrent calls could result in race conditions when updating
- * recentTransmissions or autoplayQueue arrays. Consider adding a mutex or
- * queueing mechanism if issues arise in high-frequency scenarios.
+ * Uses a simple lock mechanism to prevent race conditions when multiple
+ * transmissions arrive simultaneously. Pending transmissions are queued
+ * and processed sequentially.
  *
  * @param {Object} transmission - Transmission data
  */
 const handleNewTransmission = (transmission) => {
+  // Queue the transmission and process
+  pendingTransmissions.push(transmission);
+  processPendingTransmissions();
+};
+
+/**
+ * Process a single transmission (internal, called with lock held)
+ *
+ * @param {Object} transmission - Transmission data
+ */
+const processTransmission = (transmission) => {
   // Enrich transmission with defaults
   const enrichedTransmission = {
     channel_name: transmission.channel_name || 'Unknown Channel',

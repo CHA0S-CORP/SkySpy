@@ -9,7 +9,7 @@ class AircraftSighting(models.Model):
     """Individual aircraft position reports."""
 
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
-    icao_hex = models.CharField(max_length=10, db_index=True)  # TIS-B can have ~ prefix
+    icao_hex = models.CharField(max_length=10, null=False, db_index=True)  # TIS-B can have ~ prefix
     callsign = models.CharField(max_length=10, blank=True, null=True, db_index=True)
     squawk = models.CharField(max_length=4, blank=True, null=True)
     latitude = models.FloatField(blank=True, null=True)
@@ -41,7 +41,7 @@ class AircraftSighting(models.Model):
 class AircraftSession(models.Model):
     """Continuous tracking session for an aircraft."""
 
-    icao_hex = models.CharField(max_length=10, db_index=True)  # TIS-B can have ~ prefix
+    icao_hex = models.CharField(max_length=10, null=False, db_index=True)  # TIS-B can have ~ prefix
     callsign = models.CharField(max_length=10, blank=True, null=True, db_index=True)
     first_seen = models.DateTimeField(auto_now_add=True, db_index=True)
     last_seen = models.DateTimeField(auto_now=True, db_index=True)
@@ -61,6 +61,7 @@ class AircraftSession(models.Model):
         db_table = "aircraft_sessions"
         indexes = [
             models.Index(fields=["last_seen", "icao_hex"], name="idx_sessions_last_seen_icao"),
+            models.Index(fields=["icao_hex"], name="idx_sessions_icao_hex"),
         ]
         ordering = ["-last_seen"]
 

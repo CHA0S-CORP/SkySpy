@@ -2,9 +2,16 @@
 Alert-related models for user-defined rules, subscriptions, and history.
 """
 
+import logging
+
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models, transaction
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
+
+logger = logging.getLogger(__name__)
 
 
 class AlertRule(models.Model):
@@ -46,7 +53,7 @@ class AlertRule(models.Model):
     starts_at = models.DateTimeField(blank=True, null=True)
     expires_at = models.DateTimeField(blank=True, null=True)
     api_url = models.CharField(max_length=500, blank=True, null=True)  # Webhook URL
-    cooldown_minutes = models.IntegerField(default=5)
+    cooldown_minutes = models.IntegerField(default=5, validators=[MinValueValidator(1)])
     last_triggered = models.DateTimeField(blank=True, null=True)
 
     # Notification channels - multiple targets per rule
@@ -101,6 +108,7 @@ class AlertRule(models.Model):
             models.Index(fields=["rule_type", "enabled"], name="idx_alert_rules_type"),
             models.Index(fields=["visibility", "enabled"], name="idx_alert_rules_vis"),
             models.Index(fields=["owner", "enabled"], name="idx_alert_rules_owner"),
+            models.Index(fields=["enabled", "owner"], name="idx_alert_rules_enabled"),
         ]
         ordering = ["-created_at"]
 
@@ -333,3 +341,28 @@ class AlertAggregate(models.Model):
             },
         )
         return aggregate
+
+
+# =============================================================================
+# Signal Handlers
+# =============================================================================
+
+
+@receiver(post_delete, sender=AlertRule)
+def cleanup_rule_cooldowns(sender, instance, **kwargs):
+    """
+    Clean up Redis cooldowns when an alert rule is deleted.
+
+    This ensures that cooldown keys don't accumulate for rules that
+    no longer exist. The cleanup is performed immediately on deletion
+    rather than waiting for the periodic cleanup task.
+    """
+    from skyspy.services.alert_cooldowns import cooldown_manager
+
+    try:
+        count = cooldown_manager.clear_rule(instance.id)
+        if count > 0:
+            logger.debug(f"Cleared {count} cooldowns for deleted rule {instance.id} ({instance.name})")
+    except Exception as e:
+        # Log but don't raise - rule deletion should still succeed
+        logger.warning(f"Failed to clear cooldowns for deleted rule {instance.id}: {e}")

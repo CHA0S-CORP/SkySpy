@@ -124,14 +124,23 @@ class NotificationManager:
                 self.apprise.add(url)
 
     def can_notify(self, key: str, cooldown: int = None) -> bool:
-        """Check if notification can be sent (respects cooldown)."""
+        """
+        Check if notification can be sent (respects cooldown).
+
+        Uses atomic check-and-set to prevent race conditions.
+        Returns True and sets cooldown if notification can proceed.
+        """
         if cooldown is None:
             cooldown = getattr(settings, "NOTIFICATION_COOLDOWN", 300)
 
         now = time.time()
         with _notification_cooldown_lock:
             last_sent = _notification_cooldown.get(key, 0)
-        return (now - last_sent) > cooldown
+            if (now - last_sent) > cooldown:
+                # Atomic check-and-set: update cooldown while holding lock
+                _notification_cooldown[key] = now
+                return True
+            return False
 
     def send(
         self,
@@ -198,9 +207,7 @@ class NotificationManager:
             result = notifier.notify(title=title, body=body, notify_type=apprise_type)
 
             if result:
-                with _notification_cooldown_lock:
-                    _notification_cooldown[cooldown_key] = time.time()
-
+                # Note: cooldown was already set atomically in can_notify()
                 # Log notification
                 try:
                     NotificationLog.objects.create(

@@ -20,8 +20,6 @@ import {
   Database,
   Clock,
   Settings,
-  FileWarning,
-  Archive,
   Crosshair,
   Cog,
 } from 'lucide-react';
@@ -41,14 +39,13 @@ const MobileTimeDisplay = memo(function MobileTimeDisplay() {
 });
 
 // Tab definitions with feature permissions
+// Note: NOTAMs, PIREPs, and Archive are now tabs within the History view
 const tabs = [
   { id: 'map', icon: Radar, label: 'Live Map', feature: 'aircraft' },
   { id: 'aircraft', icon: Plane, label: 'Aircraft List', feature: 'aircraft' },
   { id: 'stats', icon: BarChart3, label: 'Statistics', feature: 'aircraft' },
   { id: 'history', icon: History, label: 'History', feature: 'history' },
   { id: 'audio', icon: Radio, label: 'Radio', feature: 'audio' },
-  { id: 'notams', icon: FileWarning, label: 'NOTAMs', feature: 'aircraft' },
-  { id: 'archive', icon: Archive, label: 'Archive', feature: 'history' },
   { id: 'alerts', icon: Bell, label: 'Alerts', feature: 'alerts' },
   { id: 'system', icon: Activity, label: 'System', feature: 'system' },
   { id: 'admin', icon: Cog, label: 'Admin Config', feature: 'system', permission: 'system.manage' },

@@ -48,6 +48,7 @@ class AcarsMessage(models.Model):
         indexes = [
             models.Index(fields=["icao_hex", "timestamp"], name="idx_acars_icao_time"),
             models.Index(fields=["label", "timestamp"], name="idx_acars_label"),
+            models.Index(fields=["-timestamp"], name="acarsmsg_ts_desc_idx"),
         ]
         ordering = ["-timestamp"]
 

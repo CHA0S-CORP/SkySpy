@@ -17,13 +17,29 @@ export const safeJson = async (res) => {
 
 /**
  * Create user data object from API response
+ * Handles both snake_case (Django) and camelCase field names
+ *
+ * @param {Object} data - API response data
+ * @returns {Object} Normalized user data object
  */
 export function createUserData(data) {
+  if (!data) {
+    return {
+      id: null,
+      username: '',
+      email: '',
+      displayName: '',
+      permissions: [],
+      roles: [],
+    };
+  }
+
   return {
-    id: data.id,
-    username: data.username,
-    email: data.email,
-    displayName: data.display_name,
+    id: data.id ?? null,
+    username: data.username || '',
+    email: data.email || '',
+    // Support both snake_case (display_name) and camelCase (displayName)
+    displayName: data.display_name || data.displayName || '',
     permissions: data.permissions || [],
     roles: data.roles || [],
   };

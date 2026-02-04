@@ -1,21 +1,27 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 /**
- * WebSocket-only API hook for Django REST Framework.
- * Uses WebSocket for all data fetching - no HTTP fallback.
+ * Default request timeout in milliseconds
+ */
+const DEFAULT_TIMEOUT = 30000;
+
+/**
+ * WebSocket-first API hook for Django REST Framework.
+ * Uses WebSocket for data fetching with HTTP fallback for unmapped endpoints.
  *
  * @param {string} endpoint - The API endpoint (e.g., '/api/v1/aircraft/stats')
  * @param {number} interval - Polling interval in ms (null = no polling, 0 = one-time fetch)
- * @param {string} apiBase - API base URL (unused, kept for compatibility)
+ * @param {string} apiBase - API base URL for HTTP fallback
  * @param {Object} options - Additional options
  * @param {Function} options.wsRequest - WebSocket request function (required)
  * @param {boolean} options.wsConnected - Whether WebSocket is connected (required)
  * @param {string} options.socketEvent - Socket event name to use (derived from endpoint if not provided)
  * @param {Object} options.socketParams - Parameters to pass to socket request
- * @param {boolean} options.disableSocket - Deprecated, no longer supported
+ * @param {boolean} options.disableSocket - Force HTTP fallback
+ * @param {number} options.timeout - Request timeout in ms (default: 30000)
  */
 export function useSocketApi(endpoint, interval = null, apiBase = '', options = {}) {
-  const { wsRequest, wsConnected, socketEvent, socketParams = {}, disableSocket = false } = options;
+  const { wsRequest, wsConnected, socketEvent, socketParams = {}, disableSocket = false, timeout = DEFAULT_TIMEOUT } = options;
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -28,16 +34,68 @@ export function useSocketApi(endpoint, interval = null, apiBase = '', options = 
   const wsRequestRef = useRef(wsRequest);
   const wsConnectedRef = useRef(wsConnected);
   const socketParamsRef = useRef(socketParams);
+  const timeoutRef = useRef(timeout);
+  const apiBaseRef = useRef(apiBase);
 
   // Update refs synchronously on each render to ensure callbacks always have current values
   // This avoids the race condition where fetchData runs before the effect updates refs
   wsRequestRef.current = wsRequest;
   wsConnectedRef.current = wsConnected;
   socketParamsRef.current = socketParams;
+  timeoutRef.current = timeout;
+  apiBaseRef.current = apiBase;
 
   // Derive socket event from endpoint if not provided
   // e.g., '/api/v1/aircraft/stats' -> 'aircraft-stats'
   const derivedSocketEvent = socketEvent || deriveSocketEvent(endpoint);
+
+  /**
+   * HTTP fallback for endpoints without socket mapping
+   */
+  const fetchHttp = useCallback(async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutRef.current);
+
+    try {
+      // Build full URL
+      const url = endpoint.startsWith('http') ? endpoint : `${apiBaseRef.current}${endpoint}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        // Check for CORS issues
+        if (response.type === 'opaque' || response.status === 0) {
+          throw new Error('CORS error: Unable to access the API. Check that the server allows requests from this origin.');
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        return await response.json();
+      }
+      return null;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        throw new Error(`Request timeout after ${timeoutRef.current}ms`);
+      }
+      // Detect CORS errors (typically show as TypeError: Failed to fetch)
+      if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+        throw new Error('CORS error: Unable to access the API. Check that the server allows requests from this origin with credentials.');
+      }
+      throw err;
+    }
+  }, [endpoint]);
 
   const fetchData = useCallback(async () => {
     // Debounce rapid fetches (min 500ms between fetches)
@@ -47,56 +105,64 @@ export function useSocketApi(endpoint, interval = null, apiBase = '', options = 
     }
     lastFetchRef.current = now;
 
-    // Check if socket is available
-    if (!wsRequestRef.current || !wsConnectedRef.current) {
-      if (mountedRef.current) {
-        setError('Socket not connected');
-        setLoading(false);
-      }
-      return;
+    // Determine if we should use socket or HTTP
+    const useSocket = !disableSocket && wsRequestRef.current && wsConnectedRef.current && derivedSocketEvent;
+
+    if (import.meta.env.DEV) {
+      console.log(`[useSocketApi] ${endpoint} -> ${derivedSocketEvent || 'HTTP'} (socket: ${useSocket}, connected: ${wsConnectedRef.current})`);
     }
 
-    // Socket disabled - no longer supported, set error
-    if (disableSocket) {
-      if (mountedRef.current) {
-        setError('Socket requests required (HTTP fallback removed)');
-        setLoading(false);
+    if (useSocket) {
+      try {
+        // Parse query params from endpoint to include in socket request
+        const params = { ...socketParamsRef.current, ...parseQueryParams(endpoint) };
+        if (import.meta.env.DEV) {
+          console.log(`[useSocketApi] Socket request: ${derivedSocketEvent}`, params);
+        }
+        const result = await wsRequestRef.current(derivedSocketEvent, params);
+
+        if (result?.error) {
+          throw new Error(result.error);
+        }
+
+        if (import.meta.env.DEV) {
+          console.log(`[useSocketApi] Socket response for ${derivedSocketEvent}:`, result ? 'received' : 'empty');
+        }
+
+        if (mountedRef.current) {
+          setData(result);
+          setError(null);
+        }
+      } catch (err) {
+        console.warn(`[useSocketApi] Socket request failed for ${derivedSocketEvent}:`, err.message);
+        if (mountedRef.current) {
+          setError(err.message || 'Socket request failed');
+        }
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+        }
       }
-      return;
+    } else {
+      // HTTP fallback for unmapped endpoints or when socket is unavailable
+      try {
+        const result = await fetchHttp();
+
+        if (mountedRef.current) {
+          setData(result);
+          setError(null);
+        }
+      } catch (err) {
+        if (mountedRef.current) {
+          setError(err.message || 'HTTP request failed');
+        }
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+        }
+      }
     }
-
-    // Check for valid socket event mapping
-    if (!derivedSocketEvent) {
-      if (mountedRef.current) {
-        setError(`No socket event mapping for endpoint: ${endpoint}`);
-        setLoading(false);
-      }
-      return;
-    }
-
-    try {
-      // Parse query params from endpoint to include in socket request
-      const params = { ...socketParamsRef.current, ...parseQueryParams(endpoint) };
-      const result = await wsRequestRef.current(derivedSocketEvent, params);
-
-      if (result?.error) {
-        throw new Error(result.error);
-      }
-
-      if (mountedRef.current) {
-        setData(result);
-        setError(null);
-      }
-    } catch (err) {
-      if (mountedRef.current) {
-        setError(err.message || 'Socket request failed');
-      }
-    } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [endpoint, derivedSocketEvent, disableSocket]);
+  }, [endpoint, derivedSocketEvent, disableSocket, fetchHttp]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -173,6 +239,7 @@ function deriveSocketEvent(endpoint) {
 
     // Alerts endpoints (Django ViewSets with nested routes)
     '/api/v1/alerts/rules': 'alerts-rules',
+    '/api/v1/alerts/rules/metrics': 'alerts-metrics',
     '/api/v1/alerts/history': 'alerts-history',
     '/api/v1/alerts/subscriptions': 'alerts-subscriptions',
 

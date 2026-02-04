@@ -1,12 +1,17 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { getTypeCategory } from './historyConstants';
+import { Sparkline } from '../common/Sparkline';
 
 /**
  * Session card component for displaying aircraft session data
+ * Enhanced with altitude sparkline visualization
  */
-export function SessionCard({ session, onSelectAircraft }) {
+export function SessionCard({ session, onSelectAircraft, showSparkline = true, compact = false }) {
   const typeCategory = getTypeCategory(session.type);
+
+  // Extract altitude history for sparkline (if available)
+  const altitudeData = session.altitude_history || [];
 
   return (
     <div
@@ -137,6 +142,21 @@ export function SessionCard({ session, onSelectAircraft }) {
           {new Date(session.last_seen).toLocaleTimeString()}
         </span>
       </div>
+
+      {/* Altitude sparkline visualization */}
+      {showSparkline && altitudeData.length > 2 && (
+        <div className="session-card__sparkline-row">
+          <span style={{ fontSize: '10px', color: 'var(--text-dim)', marginRight: '8px' }}>Alt Profile</span>
+          <Sparkline
+            data={altitudeData}
+            type="area"
+            width={compact ? 80 : 120}
+            height={compact ? 20 : 28}
+            color="var(--accent-cyan)"
+            showMinMax={!compact}
+          />
+        </div>
+      )}
     </div>
   );
 }

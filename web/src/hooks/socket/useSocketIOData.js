@@ -152,21 +152,34 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
         processSafetyEventResolved(wrappedData, setSafetyEvents);
       }
 
-      // Airframe errors
+      // Airframe errors - use atomic operations to prevent race conditions
+      // when multiple messages arrive simultaneously
       else if (type === 'airframe:error') {
         if (data?.icao_hex) {
-          airframeErrorsRef.current.set(data.icao_hex.toUpperCase(), {
+          const hexKey = data.icao_hex.toUpperCase();
+          const errorData = {
             error_type: data.error_type,
             error_message: data.error_message,
             source: data.source,
             details: data.details,
             timestamp: data.timestamp || new Date().toISOString(),
-          });
-          // Limit cache size
-          if (airframeErrorsRef.current.size > 100) {
-            const oldest = airframeErrorsRef.current.keys().next().value;
-            airframeErrorsRef.current.delete(oldest);
+          };
+          // Perform atomic update: create new Map to avoid concurrent modification issues
+          const currentMap = airframeErrorsRef.current;
+          const newMap = new Map(currentMap);
+          newMap.set(hexKey, errorData);
+          // Limit cache size - remove oldest entries if needed
+          if (newMap.size > 100) {
+            const keysToDelete = [];
+            let count = 0;
+            for (const key of newMap.keys()) {
+              if (count >= newMap.size - 100) break;
+              keysToDelete.push(key);
+              count++;
+            }
+            keysToDelete.forEach((key) => newMap.delete(key));
           }
+          airframeErrorsRef.current = newMap;
         }
       }
 

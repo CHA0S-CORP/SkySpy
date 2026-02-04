@@ -99,11 +99,7 @@ export function useApi(endpoint, interval = null, apiBase = '') {
   }, [endpoint, apiBase]);
 
   useEffect(() => {
-    // Abort any previous request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
+    // Create a new AbortController for this effect lifecycle
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
@@ -112,6 +108,7 @@ export function useApi(endpoint, interval = null, apiBase = '') {
     let intervalId;
     if (interval) {
       intervalId = setInterval(() => {
+        // Check if the current controller is still valid before fetching
         if (!abortController.signal.aborted) {
           fetchData(abortController.signal);
         }
@@ -119,18 +116,23 @@ export function useApi(endpoint, interval = null, apiBase = '') {
     }
 
     return () => {
+      // Abort the controller and clear interval on cleanup
       abortController.abort();
+      abortControllerRef.current = null;
       if (intervalId) clearInterval(intervalId);
     };
   }, [fetchData, interval]);
 
   const refetch = useCallback(() => {
-    // Abort any previous request before starting a new one
+    // Abort any previous manual refetch before starting a new one
+    // Note: We create a new controller specifically for this refetch
+    // The effect's controller remains separate for interval fetches
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
+    setLoading(true);
     fetchData(abortController.signal);
   }, [fetchData]);
 

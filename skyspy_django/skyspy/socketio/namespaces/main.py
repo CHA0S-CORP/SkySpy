@@ -5,6 +5,7 @@ Handles all main data streams including aircraft, safety, stats, alerts, acars, 
 This is the default namespace ('/') that clients connect to.
 """
 
+import json
 import logging
 import statistics as stats_lib
 from datetime import datetime, timedelta
@@ -23,6 +24,7 @@ from skyspy.socketio.middleware.permissions import (
 )
 from skyspy.socketio.server import sio
 from skyspy.socketio.utils.rate_limiter import RateLimiter
+from skyspy.socketio.utils.snapshot_cache import snapshot_cache
 
 logger = logging.getLogger(__name__)
 
@@ -136,11 +138,12 @@ class MainNamespace(socketio.AsyncNamespace):
                 return False
 
         # Store user in session
+        # Note: subscribed_topics uses a list instead of set for JSON serialization compatibility
         await sio.save_session(
             sid,
             {
                 "user": user,
-                "subscribed_topics": set(),
+                "subscribed_topics": [],
                 "client_filters": {},
                 "rate_limiter": RateLimiter(),
                 "connected_at": timezone.now().isoformat(),
@@ -168,7 +171,8 @@ class MainNamespace(socketio.AsyncNamespace):
         """
         try:
             session = await sio.get_session(sid)
-            subscribed = session.get("subscribed_topics", set())
+            # Convert to set since JSON serialization returns lists
+            subscribed = set(session.get("subscribed_topics", []))
 
             # Leave all subscribed rooms
             for topic in subscribed:
@@ -186,9 +190,9 @@ class MainNamespace(socketio.AsyncNamespace):
 
             logger.info(f"Socket.IO disconnected: {sid}")
         except Exception as e:
-            logger.debug(f"Error during disconnect cleanup for {sid}: {e}")
+            logger.warning(f"Error during disconnect cleanup for {sid}: {e}")
 
-    async def on_subscribe(self, sid: str, data: dict):
+    async def on_subscribe(self, sid: str, data: dict | None):
         """
         Handle topic subscription request.
 
@@ -201,6 +205,17 @@ class MainNamespace(socketio.AsyncNamespace):
         Emits:
             'subscribed' with list of successfully subscribed topics
         """
+        # Handle case where data is None or not a dict
+        if not isinstance(data, dict):
+            logger.warning(f"Invalid subscribe data from {sid}: expected dict, got {type(data).__name__}")
+            await sio.emit(
+                "error",
+                {"message": "Invalid subscription request: expected dict with 'topics' key"},
+                to=sid,
+                namespace=self.namespace,
+            )
+            return
+
         topics = data.get("topics", [])
         if isinstance(topics, str):
             topics = [topics]
@@ -213,7 +228,8 @@ class MainNamespace(socketio.AsyncNamespace):
 
         session = await sio.get_session(sid)
         user = session.get("user")
-        subscribed = session.get("subscribed_topics", set())
+        # Use list instead of set for JSON serialization compatibility
+        subscribed = list(session.get("subscribed_topics", []))
 
         joined = []
         denied = []
@@ -233,11 +249,12 @@ class MainNamespace(socketio.AsyncNamespace):
             # Join room
             room = f"topic_{topic}"
             await sio.enter_room(sid, room)
-            subscribed.add(topic)
+            if topic not in subscribed:
+                subscribed.append(topic)
             joined.append(topic)
             logger.info(f"{sid} is entering room {room} [{self.namespace}]")
 
-        # Update session
+        # Update session (using list for JSON serialization)
         session["subscribed_topics"] = subscribed
         await sio.save_session(sid, session)
 
@@ -257,63 +274,86 @@ class MainNamespace(socketio.AsyncNamespace):
         await self._send_topic_snapshots(sid, joined)
 
     async def _send_topic_snapshots(self, sid: str, topics: list):
-        """Send initial snapshots for the given topics."""
+        """Send initial snapshots for the given topics using cached data when available."""
         for topic in topics:
             try:
-                if topic == "notams":
-                    notam_data = await self._get_notam_snapshot({"active_only": True, "limit": 100})
-                    await sio.emit("notam:snapshot", notam_data, to=sid, namespace=self.namespace)
-                    logger.debug(f"[_send_topic_snapshots] Emitted notam:snapshot to {sid}")
-                elif topic == "safety":
-                    safety_events = await self._get_recent_safety_events()
-                    await sio.emit(
-                        "safety:snapshot",
-                        {"events": safety_events, "count": len(safety_events), "timestamp": timezone.now().isoformat()},
-                        to=sid,
-                        namespace=self.namespace,
-                    )
-                    logger.debug(f"[_send_topic_snapshots] Emitted safety:snapshot to {sid}")
-                elif topic == "alerts":
-                    alert_history = await self._get_alert_history({"limit": 50})
-                    await sio.emit(
-                        "alert:snapshot",
-                        {
-                            "alerts": alert_history,
-                            "count": len(alert_history),
-                            "timestamp": timezone.now().isoformat(),
-                        },
-                        to=sid,
-                        namespace=self.namespace,
-                    )
-                    logger.debug(f"[_send_topic_snapshots] Emitted alert:snapshot to {sid}")
-                elif topic == "acars":
-                    acars_messages = await self._get_recent_acars()
-                    await sio.emit(
-                        "acars:snapshot",
-                        {
-                            "messages": acars_messages,
-                            "count": len(acars_messages),
-                            "timestamp": timezone.now().isoformat(),
-                        },
-                        to=sid,
-                        namespace=self.namespace,
-                    )
-                    logger.debug(f"[_send_topic_snapshots] Emitted acars:snapshot to {sid}")
-                elif topic == "aircraft":
-                    aircraft_list = await self._get_current_aircraft()
-                    await sio.emit(
-                        "aircraft:snapshot",
-                        {
-                            "aircraft": aircraft_list,
-                            "count": len(aircraft_list),
-                            "timestamp": timezone.now().isoformat(),
-                        },
-                        to=sid,
-                        namespace=self.namespace,
-                    )
-                    logger.debug(f"[_send_topic_snapshots] Emitted aircraft:snapshot to {sid}")
+                await self._emit_cached_snapshot(sid, topic)
             except Exception as e:
                 logger.error(f"Failed to send {topic} snapshot to {sid}: {e}", exc_info=True)
+
+    async def _emit_cached_snapshot(self, sid: str, topic: str):
+        """
+        Emit a snapshot for a topic, using cached data when available.
+
+        This reduces database queries when multiple clients connect simultaneously.
+        If a cached snapshot exists and is valid, it's used directly. Otherwise,
+        fresh data is generated and cached for subsequent requests.
+
+        Args:
+            sid: The session ID to emit to
+            topic: The topic name (aircraft, safety, alerts, acars, notams)
+        """
+        event_name = f"{topic}:snapshot"
+
+        # Try to get cached snapshot first
+        cached_json = snapshot_cache.get_snapshot(topic)
+
+        if cached_json:
+            # Use cached data directly
+            try:
+                data = json.loads(cached_json)
+                await sio.emit(event_name, data, to=sid, namespace=self.namespace)
+                logger.debug(f"[_emit_cached_snapshot] Emitted cached {event_name} to {sid}")
+                return
+            except json.JSONDecodeError:
+                logger.warning(f"Invalid cached JSON for topic {topic}, regenerating")
+                snapshot_cache.invalidate(topic)
+
+        # Generate fresh snapshot and cache it
+        data = await self._generate_topic_snapshot(topic)
+        if data is not None:
+            # Cache the snapshot for subsequent connections
+            snapshot_cache.set_snapshot(topic, data)
+            await sio.emit(event_name, data, to=sid, namespace=self.namespace)
+            logger.debug(f"[_emit_cached_snapshot] Emitted fresh {event_name} to {sid}")
+
+    async def _generate_topic_snapshot(self, topic: str) -> dict | None:
+        """
+        Generate a fresh snapshot for a topic.
+
+        Args:
+            topic: The topic name
+
+        Returns:
+            Snapshot data dict or None if topic is unknown
+        """
+        timestamp = timezone.now().isoformat()
+
+        if topic == "notams":
+            return await self._get_notam_snapshot({"active_only": True, "limit": 100})
+        elif topic == "safety":
+            safety_events = await self._get_safety_events({"hours": 24, "limit": 50})
+            return {"events": safety_events, "count": len(safety_events), "timestamp": timestamp}
+        elif topic == "alerts":
+            alert_data = await self._get_alert_snapshot({"hours": 24, "limit": 50})
+            return {
+                "alerts": alert_data.get("alerts", []),
+                "count": alert_data.get("count", 0),
+                "timestamp": timestamp,
+            }
+        elif topic == "acars":
+            acars_data = await self._get_acars_snapshot({"hours": 1, "limit": 50})
+            return {
+                "messages": acars_data.get("messages", []),
+                "count": acars_data.get("count", 0),
+                "timestamp": timestamp,
+            }
+        elif topic == "aircraft":
+            aircraft_list = await self._get_current_aircraft()
+            return {"aircraft": aircraft_list, "count": len(aircraft_list), "timestamp": timestamp}
+
+        logger.warning(f"Unknown topic for snapshot generation: {topic}")
+        return None
 
     async def on_unsubscribe(self, sid: str, data: dict):
         """
@@ -333,7 +373,8 @@ class MainNamespace(socketio.AsyncNamespace):
             topics = [topics]
 
         session = await sio.get_session(sid)
-        subscribed = session.get("subscribed_topics", set())
+        # Convert to set since JSON serialization returns lists
+        subscribed = set(session.get("subscribed_topics", []))
 
         left = []
 
@@ -345,8 +386,8 @@ class MainNamespace(socketio.AsyncNamespace):
                 left.append(topic)
                 logger.debug(f"{sid} unsubscribed from {topic}")
 
-        # Update session
-        session["subscribed_topics"] = subscribed
+        # Update session (convert set to list for JSON serialization)
+        session["subscribed_topics"] = list(subscribed)
         await sio.save_session(sid, session)
 
         # Send response
@@ -420,7 +461,8 @@ class MainNamespace(socketio.AsyncNamespace):
     async def _join_default_rooms(self, sid: str, user):
         """Join default rooms based on user permissions."""
         session = await sio.get_session(sid)
-        subscribed = session.get("subscribed_topics", set())
+        # Convert to set since JSON serialization returns lists
+        subscribed = set(session.get("subscribed_topics", []))
 
         # Always join aircraft room if permitted
         if await check_topic_permission(user, "aircraft"):
@@ -432,88 +474,55 @@ class MainNamespace(socketio.AsyncNamespace):
             await sio.enter_room(sid, "topic_stats")
             subscribed.add("stats")
 
-        # Update session
-        session["subscribed_topics"] = subscribed
+        # Update session (convert set to list for JSON serialization)
+        session["subscribed_topics"] = list(subscribed)
         await sio.save_session(sid, session)
 
     async def _send_initial_state(self, sid: str):
-        """Send initial snapshots on connect for all subscribed data types."""
+        """
+        Send initial snapshots on connect for all subscribed data types.
+
+        Uses cached snapshots when available to reduce database load when
+        multiple clients connect simultaneously.
+        """
         logger.info(f"[_send_initial_state] Starting for {sid}")
 
         # Get session to check subscribed topics
         session = await sio.get_session(sid)
-        subscribed = session.get("subscribed_topics", set())
+        # Convert to set since JSON serialization returns lists
+        subscribed = set(session.get("subscribed_topics", []))
 
         # Always send aircraft snapshot (default subscription)
         try:
-            aircraft_list = await self._get_current_aircraft()
-            logger.info(f"[_send_initial_state] Got {len(aircraft_list)} aircraft from cache")
-            await sio.emit(
-                "aircraft:snapshot",
-                {"aircraft": aircraft_list, "count": len(aircraft_list), "timestamp": timezone.now().isoformat()},
-                to=sid,
-                namespace=self.namespace,
-            )
-            logger.info(f"[_send_initial_state] Emitted aircraft:snapshot to {sid}")
+            await self._emit_cached_snapshot(sid, "aircraft")
         except Exception as e:
             logger.error(f"Failed to send aircraft snapshot to {sid}: {e}", exc_info=True)
 
         # Send safety snapshot if subscribed
         if "safety" in subscribed or "all" in subscribed:
             try:
-                safety_events = await self._get_safety_events({"hours": 24, "limit": 50})
-                await sio.emit(
-                    "safety:snapshot",
-                    {"events": safety_events, "count": len(safety_events), "timestamp": timezone.now().isoformat()},
-                    to=sid,
-                    namespace=self.namespace,
-                )
-                logger.debug(f"[_send_initial_state] Emitted safety:snapshot to {sid}")
+                await self._emit_cached_snapshot(sid, "safety")
             except Exception as e:
                 logger.error(f"Failed to send safety snapshot to {sid}: {e}", exc_info=True)
 
         # Send alert snapshot if subscribed
         if "alerts" in subscribed or "all" in subscribed:
             try:
-                alert_data = await self._get_alert_snapshot({"hours": 24, "limit": 50})
-                await sio.emit(
-                    "alert:snapshot",
-                    {
-                        "alerts": alert_data.get("alerts", []),
-                        "count": alert_data.get("count", 0),
-                        "timestamp": timezone.now().isoformat(),
-                    },
-                    to=sid,
-                    namespace=self.namespace,
-                )
-                logger.debug(f"[_send_initial_state] Emitted alert:snapshot to {sid}")
+                await self._emit_cached_snapshot(sid, "alerts")
             except Exception as e:
                 logger.error(f"Failed to send alert snapshot to {sid}: {e}", exc_info=True)
 
         # Send ACARS snapshot if subscribed
         if "acars" in subscribed or "all" in subscribed:
             try:
-                acars_data = await self._get_acars_snapshot({"hours": 1, "limit": 50})
-                await sio.emit(
-                    "acars:snapshot",
-                    {
-                        "messages": acars_data.get("messages", []),
-                        "count": acars_data.get("count", 0),
-                        "timestamp": timezone.now().isoformat(),
-                    },
-                    to=sid,
-                    namespace=self.namespace,
-                )
-                logger.debug(f"[_send_initial_state] Emitted acars:snapshot to {sid}")
+                await self._emit_cached_snapshot(sid, "acars")
             except Exception as e:
                 logger.error(f"Failed to send ACARS snapshot to {sid}: {e}", exc_info=True)
 
         # Send NOTAM snapshot if subscribed
         if "notams" in subscribed or "all" in subscribed:
             try:
-                notam_data = await self._get_notam_snapshot({"active_only": True, "limit": 100})
-                await sio.emit("notam:snapshot", notam_data, to=sid, namespace=self.namespace)
-                logger.debug(f"[_send_initial_state] Emitted notam:snapshot to {sid}")
+                await self._emit_cached_snapshot(sid, "notams")
             except Exception as e:
                 logger.error(f"Failed to send NOTAM snapshot to {sid}: {e}", exc_info=True)
 
@@ -2644,7 +2653,8 @@ class MainNamespace(socketio.AsyncNamespace):
                     "id": msg.id,
                     "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
                     "icao_hex": msg.icao_hex,
-                    "flight": msg.flight,
+                    "callsign": msg.callsign,
+                    "registration": msg.registration,
                     "label": msg.label,
                     "text": msg.text,
                     "mode": msg.mode,

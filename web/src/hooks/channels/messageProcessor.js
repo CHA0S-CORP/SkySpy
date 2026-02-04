@@ -160,12 +160,63 @@ export function processAircraftSnapshot(data, setAircraft, setStats) {
 /**
  * Process aircraft update message (batched for performance)
  * Updates are accumulated and flushed every 50ms to reduce re-renders
+ *
+ * Handles two formats:
+ * 1. Full update: { type: "full", aircraft: [...] }
+ * 2. Delta update: { type: "delta", added: [...], updated: [...], removed: [...] }
  */
 export function processAircraftUpdate(data, setAircraft) {
-  const aircraftData = data?.data?.aircraft || (data?.data ? [data.data] : []);
+  const payload = data?.data;
+  const updateType = payload?.type;
+
+  // Handle delta updates with added/updated/removed arrays
+  if (updateType === 'delta') {
+    const added = payload?.added || [];
+    const updated = payload?.updated || [];
+    const removed = payload?.removed || [];
+
+    if (import.meta.env.DEV) {
+      console.log(
+        '[processAircraftUpdate] Delta update:',
+        added.length, 'added,',
+        updated.length, 'updated,',
+        removed.length, 'removed'
+      );
+    }
+
+    // Process added and updated aircraft
+    const allUpdates = [...added, ...updated];
+    if (allUpdates.length > 0) {
+      const updates = {};
+      allUpdates.forEach((ac) => {
+        if (ac && typeof ac === 'object') {
+          const normalized = normalizeAircraft(ac);
+          if (normalized.hex) {
+            updates[normalized.hex] = normalized;
+          }
+        }
+      });
+      if (Object.keys(updates).length > 0) {
+        queueAircraftUpdate(updates, setAircraft);
+      }
+    }
+
+    // Process removed aircraft
+    if (removed.length > 0) {
+      removed.forEach((hex) => {
+        if (hex && typeof hex === 'string') {
+          queueAircraftRemoval(hex.toUpperCase(), setAircraft);
+        }
+      });
+    }
+    return;
+  }
+
+  // Handle full updates and legacy format
+  const aircraftData = payload?.aircraft || (payload ? [payload] : []);
   if (import.meta.env.DEV) {
     console.log(
-      '[processAircraftUpdate] Received update with',
+      '[processAircraftUpdate] Full update with',
       aircraftData?.length ?? 0,
       'aircraft'
     );

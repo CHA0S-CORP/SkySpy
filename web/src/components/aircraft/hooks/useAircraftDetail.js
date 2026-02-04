@@ -44,15 +44,36 @@ export function useAircraftDetail({
 }) {
   const baseUrl = (apiUrl || '').replace(/\/$/, ''); // Strip trailing slash
 
+  // Map legacy tab names to new consolidated tabs
+  const mapLegacyTab = (tab) => {
+    const legacyMap = {
+      info: 'overview',
+      live: 'overview',
+      radio: 'communications',
+      acars: 'communications',
+      history: 'track',
+    };
+    return legacyMap[tab] || tab;
+  };
+
   // Core state
   const [info, setInfo] = useState(aircraftInfo || null);
   const [loading, setLoading] = useState(true);
   const [loadedTabs, setLoadedTabs] = useState({});
   const [shareSuccess, setShareSuccess] = useState(false);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTabState] = useState(() =>
-    VALID_DETAIL_TABS.includes(initialTab) ? initialTab : 'info'
-  );
+  const [activeTab, setActiveTabState] = useState(() => {
+    const mappedTab = mapLegacyTab(initialTab);
+    return VALID_DETAIL_TABS.includes(mappedTab) ? mappedTab : 'overview';
+  });
+
+  // Sidebar section expansion state
+  const [expandedSections, setExpandedSections] = useState({
+    aircraft: true,
+    operator: false,
+    registration: false,
+    sources: false,
+  });
 
   // Derived values
   const tailInfo = getTailInfo(hex, aircraft?.flight);
@@ -122,10 +143,21 @@ export function useAircraftDetail({
     [onTabChange]
   );
 
+  // Toggle sidebar section expansion
+  const toggleSection = useCallback((sectionName) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [sectionName]: !prev[sectionName],
+    }));
+  }, []);
+
   // Sync with initialTab prop changes
   useEffect(() => {
-    if (initialTab && VALID_DETAIL_TABS.includes(initialTab) && initialTab !== activeTab) {
-      setActiveTabState(initialTab);
+    if (initialTab) {
+      const mappedTab = mapLegacyTab(initialTab);
+      if (VALID_DETAIL_TABS.includes(mappedTab) && mappedTab !== activeTab) {
+        setActiveTabState(mappedTab);
+      }
     }
   }, [initialTab, activeTab]);
 
@@ -280,6 +312,10 @@ export function useAircraftDetail({
     shareSuccess,
     handleShare,
     calculateDistance,
+
+    // Sidebar sections
+    expandedSections,
+    toggleSection,
 
     // Photo (from useAircraftPhoto)
     photoInfo: photoHook.photoInfo,

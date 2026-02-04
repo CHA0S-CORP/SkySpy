@@ -11,6 +11,79 @@ from django.db import models
 from django.utils import timezone
 
 
+class LEDataSource(models.Model):
+    """
+    External data source for law enforcement aircraft identification.
+
+    Tracks imported databases like BuzzFeed spy planes, academic research,
+    community projects, and FOIA requests.
+    """
+
+    SOURCE_TYPES = [
+        ("buzzfeed", "BuzzFeed Spy Planes"),
+        ("academic", "Academic Research"),
+        ("community_project", "Community Project"),
+        ("foia", "FOIA Request"),
+        ("government", "Government Registry"),
+        ("news_investigation", "News Investigation"),
+    ]
+
+    name = models.CharField(max_length=100, unique=True)
+    source_type = models.CharField(max_length=30, choices=SOURCE_TYPES)
+    url = models.URLField(blank=True, null=True)
+    description = models.TextField(blank=True)
+    record_count = models.IntegerField(default=0)
+    confidence_weight = models.FloatField(
+        default=1.0,
+        help_text="Weight factor for confidence calculations (0.0-2.0)",
+    )
+    last_fetched = models.DateTimeField(blank=True, null=True)
+    last_successful_fetch = models.DateTimeField(blank=True, null=True)
+    update_frequency_hours = models.IntegerField(default=168)  # Weekly
+    fetch_enabled = models.BooleanField(default=True)
+    attribution_text = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Required attribution for this data source",
+    )
+    fetch_errors = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Recent fetch errors for debugging",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "cannonball_le_data_sources"
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.get_source_type_display()})"
+
+    def record_fetch_error(self, error_message: str):
+        """Record a fetch error for debugging."""
+        from django.utils import timezone
+
+        self.fetch_errors = (self.fetch_errors or [])[-9:]  # Keep last 9
+        self.fetch_errors.append(
+            {
+                "timestamp": timezone.now().isoformat(),
+                "error": str(error_message)[:500],
+            }
+        )
+        self.last_fetched = timezone.now()
+        self.save(update_fields=["fetch_errors", "last_fetched"])
+
+    def record_successful_fetch(self, record_count: int):
+        """Record a successful fetch."""
+        self.last_fetched = timezone.now()
+        self.last_successful_fetch = timezone.now()
+        self.record_count = record_count
+        self.save(update_fields=["last_fetched", "last_successful_fetch", "record_count"])
+
+
 class CannonballPattern(models.Model):
     """
     Detected flight patterns that may indicate surveillance or enforcement activity.
@@ -26,6 +99,11 @@ class CannonballPattern(models.Model):
         ("parallel_highway", "Parallel to Highway"),
         ("surveillance", "General Surveillance"),
         ("pursuit", "Pursuit Pattern"),
+        # New enhanced pattern types
+        ("stakeout", "Stakeout Loitering"),
+        ("racetrack", "Racetrack Orbit"),
+        ("highway_tracking", "Highway Tracking"),
+        ("area_search", "Expanding Area Search"),
     ]
 
     CONFIDENCE_LEVELS = [
@@ -311,6 +389,9 @@ class CannonballKnownAircraft(models.Model):
         ("manual", "Manual Entry"),
         ("community", "Community Submission"),
         ("research", "Research/FOIA"),
+        ("buzzfeed", "BuzzFeed Investigation"),
+        ("academic", "Academic Research"),
+        ("external_db", "External Database"),
     ]
 
     AGENCY_TYPES = [
@@ -341,6 +422,30 @@ class CannonballKnownAircraft(models.Model):
     verified_at = models.DateTimeField(blank=True, null=True)
     verified_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="verified_cannonball_aircraft"
+    )
+
+    # External data source tracking
+    data_source = models.ForeignKey(
+        LEDataSource,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="aircraft",
+        help_text="External data source this record came from",
+    )
+    confidence_score = models.FloatField(
+        default=0.5,
+        help_text="Confidence score 0.0-1.0 based on source reliability and corroboration",
+    )
+    evidence_links = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Supporting URLs and evidence links",
+    )
+    external_ids = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Source-specific IDs (e.g., {'buzzfeed_id': '123', 'faa_id': 'N12345'})",
     )
 
     # Usage tracking
@@ -427,3 +532,485 @@ class CannonballStats(models.Model):
     def __str__(self):
         user_str = f" ({self.user.username})" if self.user else " (global)"
         return f"{self.period_type} stats{user_str} - {self.period_start}"
+
+
+class PatternAnalytics(models.Model):
+    """
+    Track pattern detection quality for tuning and improvement.
+
+    Used to gather feedback on false positives and confirmed detections
+    to improve pattern detection algorithms.
+    """
+
+    icao_hex = models.CharField(max_length=10, db_index=True)
+    pattern_type = models.CharField(max_length=30)
+    confidence_score = models.FloatField()
+
+    # Feedback
+    was_confirmed_le = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text="User confirmation if this was actually LE (null=unknown)",
+    )
+    false_positive_reported = models.BooleanField(
+        default=False,
+        help_text="User reported this as a false positive",
+    )
+
+    # Pattern metrics
+    duration_seconds = models.IntegerField()
+    area_nm_sq = models.FloatField(null=True, blank=True, help_text="Area covered in nm²")
+    orbit_count = models.IntegerField(null=True, blank=True)
+    altitude_consistency = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Standard deviation of altitude during pattern",
+    )
+
+    # Location
+    center_lat = models.FloatField()
+    center_lon = models.FloatField()
+
+    # Additional metrics
+    pattern_metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Additional pattern-specific metrics for analysis",
+    )
+
+    detected_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    feedback_at = models.DateTimeField(null=True, blank=True)
+    feedback_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pattern_feedback",
+    )
+
+    class Meta:
+        db_table = "cannonball_pattern_analytics"
+        ordering = ["-detected_at"]
+        indexes = [
+            models.Index(fields=["pattern_type", "was_confirmed_le"], name="idx_cb_pa_type_confirm"),
+            models.Index(fields=["false_positive_reported", "detected_at"], name="idx_cb_pa_fp"),
+        ]
+
+    def __str__(self):
+        status = "Confirmed" if self.was_confirmed_le else "FP" if self.false_positive_reported else "Unverified"
+        return f"{self.icao_hex} - {self.pattern_type} ({status})"
+
+    def record_feedback(self, user, is_confirmed_le: bool | None, is_false_positive: bool = False):
+        """Record user feedback on this pattern detection."""
+        self.was_confirmed_le = is_confirmed_le
+        self.false_positive_reported = is_false_positive
+        self.feedback_at = timezone.now()
+        self.feedback_by = user
+        self.save(update_fields=["was_confirmed_le", "false_positive_reported", "feedback_at", "feedback_by"])
+
+
+class RegistrationAnalysis(models.Model):
+    """
+    FAA registration analysis for shell company detection.
+
+    Analyzes aircraft registrations to identify potential shell companies
+    commonly used by law enforcement to obscure aircraft ownership.
+    """
+
+    RISK_LEVELS = [
+        ("low", "Low"),
+        ("medium", "Medium"),
+        ("high", "High"),
+    ]
+
+    icao_hex = models.CharField(max_length=10, unique=True, db_index=True)
+    registration = models.CharField(max_length=20, db_index=True)
+    owner_name = models.CharField(max_length=200)
+    owner_address = models.TextField(blank=True)
+    owner_city = models.CharField(max_length=100, blank=True)
+    owner_state = models.CharField(max_length=2, blank=True)
+    owner_zip = models.CharField(max_length=20, blank=True)
+
+    # Analysis scores (0.0-1.0)
+    llc_no_web_presence = models.FloatField(
+        default=0.0,
+        help_text="Score for LLC with no web presence (0.0-1.0)",
+    )
+    registered_agent_address = models.FloatField(
+        default=0.0,
+        help_text="Score for using registered agent address (0.0-1.0)",
+    )
+    po_box_address = models.FloatField(
+        default=0.0,
+        help_text="Score for PO Box address (0.0-1.0)",
+    )
+    multiple_transfers = models.FloatField(
+        default=0.0,
+        help_text="Score for multiple recent ownership transfers (0.0-1.0)",
+    )
+    trust_ownership = models.FloatField(
+        default=0.0,
+        help_text="Score for trust-based ownership (0.0-1.0)",
+    )
+    generic_llc_name = models.FloatField(
+        default=0.0,
+        help_text="Score for generic aviation LLC name pattern (0.0-1.0)",
+    )
+
+    # Aggregate scores
+    shell_company_score = models.FloatField(
+        default=0.0,
+        help_text="Weighted aggregate shell company likelihood score (0.0-1.0)",
+    )
+    risk_level = models.CharField(
+        max_length=10,
+        choices=RISK_LEVELS,
+        default="low",
+    )
+
+    # Review tracking
+    manually_reviewed = models.BooleanField(default=False)
+    is_confirmed_le = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text="Manual confirmation of LE ownership (null=unknown)",
+    )
+    review_notes = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="registration_reviews",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    # FAA data
+    faa_last_action_date = models.DateField(null=True, blank=True)
+    certificate_issue_date = models.DateField(null=True, blank=True)
+    aircraft_type = models.CharField(max_length=50, blank=True)
+    aircraft_manufacturer = models.CharField(max_length=100, blank=True)
+    aircraft_model = models.CharField(max_length=50, blank=True)
+    aircraft_year = models.IntegerField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "cannonball_registration_analysis"
+        verbose_name_plural = "Registration analyses"
+        ordering = ["-shell_company_score", "-updated_at"]
+        indexes = [
+            models.Index(fields=["shell_company_score", "risk_level"], name="idx_cb_reg_score"),
+            models.Index(fields=["registration"], name="idx_cb_reg_registration"),
+            models.Index(fields=["is_confirmed_le", "manually_reviewed"], name="idx_cb_reg_review"),
+        ]
+
+    def __str__(self):
+        return f"{self.registration} - {self.owner_name[:50]} ({self.risk_level})"
+
+    def calculate_shell_score(self):
+        """Calculate the aggregate shell company score from individual factors."""
+        weights = {
+            "llc_no_web_presence": 0.15,
+            "registered_agent_address": 0.25,
+            "po_box_address": 0.10,
+            "multiple_transfers": 0.20,
+            "trust_ownership": 0.15,
+            "generic_llc_name": 0.15,
+        }
+
+        score = (
+            self.llc_no_web_presence * weights["llc_no_web_presence"]
+            + self.registered_agent_address * weights["registered_agent_address"]
+            + self.po_box_address * weights["po_box_address"]
+            + self.multiple_transfers * weights["multiple_transfers"]
+            + self.trust_ownership * weights["trust_ownership"]
+            + self.generic_llc_name * weights["generic_llc_name"]
+        )
+
+        self.shell_company_score = min(1.0, max(0.0, score))
+
+        # Determine risk level
+        if self.shell_company_score >= 0.7:
+            self.risk_level = "high"
+        elif self.shell_company_score >= 0.4:
+            self.risk_level = "medium"
+        else:
+            self.risk_level = "low"
+
+        return self.shell_company_score
+
+
+class RegistrationTransfer(models.Model):
+    """
+    Track ownership transfer history for aircraft registrations.
+
+    Multiple recent transfers can be an indicator of shell company activity.
+    """
+
+    registration = models.CharField(max_length=20, db_index=True)
+    previous_owner = models.CharField(max_length=200)
+    new_owner = models.CharField(max_length=200)
+    transfer_date = models.DateField()
+    days_since_last_transfer = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Days between this transfer and the previous one",
+    )
+
+    # Additional context
+    previous_owner_type = models.CharField(
+        max_length=20,
+        blank=True,
+        choices=[
+            ("individual", "Individual"),
+            ("corporation", "Corporation"),
+            ("llc", "LLC"),
+            ("trust", "Trust"),
+            ("government", "Government"),
+            ("unknown", "Unknown"),
+        ],
+    )
+    new_owner_type = models.CharField(
+        max_length=20,
+        blank=True,
+        choices=[
+            ("individual", "Individual"),
+            ("corporation", "Corporation"),
+            ("llc", "LLC"),
+            ("trust", "Trust"),
+            ("government", "Government"),
+            ("unknown", "Unknown"),
+        ],
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "cannonball_registration_transfers"
+        ordering = ["-transfer_date"]
+        indexes = [
+            models.Index(fields=["registration", "transfer_date"], name="idx_cb_transfer_reg_date"),
+        ]
+
+    def __str__(self):
+        return f"{self.registration}: {self.previous_owner[:30]} -> {self.new_owner[:30]}"
+
+
+class CommunitySubmission(models.Model):
+    """
+    Community-submitted law enforcement aircraft identifications.
+
+    Allows users to submit aircraft they believe to be LE, with
+    evidence and review workflow.
+    """
+
+    STATUS_CHOICES = [
+        ("pending", "Pending Review"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+        ("duplicate", "Duplicate"),
+        ("needs_info", "Needs More Information"),
+    ]
+
+    AGENCY_TYPES = [
+        ("federal", "Federal"),
+        ("state", "State"),
+        ("local", "Local"),
+        ("military", "Military"),
+        ("unknown", "Unknown"),
+    ]
+
+    EVIDENCE_TYPES = [
+        ("flight_pattern", "Observed Flight Pattern"),
+        ("callsign", "LE Callsign Observed"),
+        ("news", "News Report"),
+        ("foia", "FOIA Document"),
+        ("registry", "Registry Research"),
+        ("livery", "Aircraft Livery/Markings"),
+        ("public_records", "Public Records"),
+        ("other", "Other"),
+    ]
+
+    # Aircraft identification
+    icao_hex = models.CharField(max_length=10, db_index=True)
+    registration = models.CharField(max_length=20, blank=True, null=True)
+    callsign_observed = models.CharField(max_length=20, blank=True, null=True)
+
+    # Agency information
+    agency_name = models.CharField(max_length=200)
+    agency_type = models.CharField(max_length=20, choices=AGENCY_TYPES, default="unknown")
+    agency_state = models.CharField(max_length=2, blank=True, null=True)
+    agency_city = models.CharField(max_length=100, blank=True, null=True)
+
+    # Evidence
+    evidence_type = models.CharField(max_length=30, choices=EVIDENCE_TYPES)
+    evidence_description = models.TextField(
+        help_text="Detailed description of the evidence supporting this submission",
+    )
+    evidence_url = models.URLField(
+        blank=True,
+        null=True,
+        help_text="URL to supporting evidence (news article, document, etc.)",
+    )
+    additional_evidence = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Additional evidence URLs and descriptions",
+    )
+
+    # Submission tracking
+    submitted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cannonball_submissions",
+    )
+    submitted_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    ip_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="Hashed IP for abuse prevention (no PII stored)",
+    )
+
+    # Review workflow
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cannonball_reviews",
+    )
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    review_notes = models.TextField(
+        blank=True,
+        help_text="Internal notes about the review decision",
+    )
+
+    # Auto-calculated confidence
+    confidence_score = models.FloatField(
+        default=0.5,
+        help_text="Auto-calculated confidence based on submitter reputation and evidence",
+    )
+
+    # Link to created aircraft record (if approved)
+    created_aircraft = models.ForeignKey(
+        CannonballKnownAircraft,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="community_submissions",
+    )
+
+    class Meta:
+        db_table = "cannonball_community_submissions"
+        ordering = ["-submitted_at"]
+        indexes = [
+            models.Index(fields=["status", "submitted_at"], name="idx_cb_sub_status"),
+            models.Index(fields=["icao_hex", "status"], name="idx_cb_sub_icao"),
+            models.Index(fields=["submitted_by", "submitted_at"], name="idx_cb_sub_user"),
+        ]
+
+    def __str__(self):
+        return f"{self.icao_hex} - {self.agency_name} ({self.get_status_display()})"
+
+
+class SubmitterReputation(models.Model):
+    """
+    Track user reputation for community submissions.
+
+    Used to weight submission confidence and identify trusted contributors.
+    """
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="cannonball_reputation",
+    )
+
+    # Submission stats
+    total_submissions = models.IntegerField(default=0)
+    approved_submissions = models.IntegerField(default=0)
+    rejected_submissions = models.IntegerField(default=0)
+    pending_submissions = models.IntegerField(default=0)
+
+    # Calculated reputation
+    reputation_score = models.FloatField(
+        default=0.5,
+        help_text="Reputation score 0.0-1.0 based on approval rate and history",
+    )
+
+    # Status flags
+    is_trusted = models.BooleanField(
+        default=False,
+        help_text="Trusted submitters have higher confidence on their submissions",
+    )
+    is_banned = models.BooleanField(
+        default=False,
+        help_text="Banned users cannot submit new aircraft",
+    )
+    ban_reason = models.TextField(blank=True)
+    ban_expires_at = models.DateTimeField(null=True, blank=True)
+
+    # Activity tracking
+    first_submission_at = models.DateTimeField(null=True, blank=True)
+    last_submission_at = models.DateTimeField(null=True, blank=True)
+    last_approved_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "cannonball_submitter_reputation"
+
+    def __str__(self):
+        status = "Trusted" if self.is_trusted else "Banned" if self.is_banned else "Normal"
+        return f"{self.user.username} - {self.reputation_score:.2f} ({status})"
+
+    def calculate_reputation(self):
+        """
+        Calculate reputation score based on submission history.
+
+        Score formula:
+        - Base: 0.5
+        - +0.1 for every 3 approved submissions
+        - -0.15 for every rejected submission
+        - Cap at 0.1-1.0
+        """
+        if self.total_submissions == 0:
+            self.reputation_score = 0.5
+            return self.reputation_score
+
+        # Calculate approval rate
+        approval_rate = self.approved_submissions / max(1, self.total_submissions)
+
+        # Start with approval rate
+        score = 0.3 + (approval_rate * 0.5)
+
+        # Bonus for volume of approved submissions
+        score += min(0.2, self.approved_submissions * 0.02)
+
+        # Penalty for rejections (harsher to discourage spam)
+        score -= self.rejected_submissions * 0.05
+
+        self.reputation_score = max(0.1, min(1.0, score))
+        return self.reputation_score
+
+    def record_submission_result(self, was_approved: bool):
+        """Update stats after a submission is reviewed."""
+        self.total_submissions = (
+            self.approved_submissions + self.rejected_submissions + self.pending_submissions
+        )
+
+        if was_approved:
+            self.approved_submissions += 1
+            self.last_approved_at = timezone.now()
+        else:
+            self.rejected_submissions += 1
+
+        self.pending_submissions = max(0, self.pending_submissions - 1)
+        self.calculate_reputation()
+        self.save()

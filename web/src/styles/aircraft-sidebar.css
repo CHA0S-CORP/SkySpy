@@ -1,0 +1,691 @@
+/* Aircraft Sidebar Styles - FlightRadar24-inspired design */
+
+/* ============================================================================
+   CSS Custom Properties
+   ============================================================================ */
+.aircraft-sidebar {
+  --sidebar-bg: rgba(15, 20, 30, 0.98);
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --section-bg: rgba(255, 255, 255, 0.02);
+  --section-hover-bg: rgba(255, 255, 255, 0.04);
+  --text-heading: rgba(255, 255, 255, 0.95);
+  --text-label: rgba(255, 255, 255, 0.5);
+  --text-value: rgba(255, 255, 255, 0.85);
+  --accent-glow: rgba(0, 212, 255, 0.15);
+}
+
+/* ============================================================================
+   Sidebar Container
+   ============================================================================ */
+.aircraft-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 380px;
+  min-width: 320px;
+  max-width: 420px;
+  height: 100vh;
+  background: var(--sidebar-bg);
+  border-left: 1px solid var(--sidebar-border);
+  display: flex;
+  flex-direction: column;
+  z-index: 2000;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.4);
+  transform: translateX(0);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.aircraft-sidebar.entering {
+  transform: translateX(100%);
+  animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.aircraft-sidebar.exiting {
+  animation: slideOut 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0.8;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .aircraft-sidebar {
+    width: 100%;
+    max-width: 100%;
+    min-width: 100%;
+  }
+}
+
+/* ============================================================================
+   Sidebar Header
+   ============================================================================ */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(30, 40, 60, 0.95), rgba(20, 30, 50, 0.95));
+  border-bottom: 1px solid var(--sidebar-border);
+  flex-shrink: 0;
+}
+
+.sidebar-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sidebar-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.sidebar-close-btn:hover {
+  background: rgba(248, 81, 73, 0.15);
+  border-color: rgba(248, 81, 73, 0.3);
+  color: #f85149;
+}
+
+.sidebar-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sidebar-callsign {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-heading);
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.5px;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-label);
+}
+
+.sidebar-type-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: rgba(0, 180, 216, 0.15);
+  border: 1px solid rgba(0, 180, 216, 0.3);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent-cyan);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.sidebar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.sidebar-share-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(0, 180, 216, 0.1);
+  border: 1px solid rgba(0, 180, 216, 0.2);
+  border-radius: 8px;
+  color: var(--accent-cyan);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sidebar-share-btn:hover {
+  background: rgba(0, 180, 216, 0.2);
+  border-color: rgba(0, 180, 216, 0.4);
+}
+
+.sidebar-share-btn.success {
+  background: rgba(74, 222, 128, 0.15);
+  border-color: rgba(74, 222, 128, 0.3);
+  color: var(--accent-green);
+}
+
+/* ============================================================================
+   Hero Photo Card
+   ============================================================================ */
+.sidebar-hero {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: rgba(20, 28, 36, 0.9);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sidebar-hero img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 0.3s ease;
+}
+
+.sidebar-hero-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 16px;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.85) 0%,
+    rgba(0, 0, 0, 0.5) 50%,
+    transparent 100%
+  );
+  backdrop-filter: blur(4px);
+}
+
+.sidebar-hero-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sidebar-hero-info span {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.sidebar-hero-info span:not(:last-child)::after {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  margin-left: 12px;
+  vertical-align: middle;
+}
+
+.sidebar-hero-loading,
+.sidebar-hero-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.sidebar-hero-loading svg {
+  color: var(--accent-cyan);
+}
+
+.sidebar-hero-credit {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 4px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.sidebar-hero-refresh {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  opacity: 0;
+}
+
+.sidebar-hero:hover .sidebar-hero-refresh {
+  opacity: 1;
+}
+
+.sidebar-hero-refresh:hover {
+  background: rgba(74, 222, 128, 0.3);
+  color: var(--accent-green);
+}
+
+/* ============================================================================
+   Live Status Bar
+   ============================================================================ */
+.sidebar-status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--sidebar-border);
+  flex-shrink: 0;
+}
+
+.status-metric {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  flex: 1;
+  min-width: 80px;
+}
+
+.status-metric-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: rgba(0, 212, 255, 0.1);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.status-metric-icon svg {
+  color: var(--accent-cyan);
+}
+
+.status-metric-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.status-metric-label {
+  font-size: 9px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-label);
+}
+
+.status-metric-value {
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-value);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-metric-value.climbing {
+  color: var(--accent-green);
+}
+
+.status-metric-value.descending {
+  color: var(--accent-yellow);
+}
+
+.status-metric-value.emergency {
+  color: var(--accent-red);
+  animation: emergencyPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes emergencyPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* ============================================================================
+   Scrollable Content Area
+   ============================================================================ */
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.sidebar-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ============================================================================
+   Collapsible Sections
+   ============================================================================ */
+.sidebar-section {
+  border-bottom: 1px solid var(--sidebar-border);
+}
+
+.sidebar-section:last-child {
+  border-bottom: none;
+}
+
+.sidebar-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.sidebar-section-header:hover {
+  background: var(--section-hover-bg);
+}
+
+.sidebar-section-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-section-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: rgba(0, 212, 255, 0.1);
+  border-radius: 6px;
+  color: var(--accent-cyan);
+}
+
+.sidebar-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-heading);
+  letter-spacing: 0.2px;
+}
+
+.sidebar-section-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-label);
+  transition: transform 0.2s ease;
+}
+
+.sidebar-section.expanded .sidebar-section-chevron {
+  transform: rotate(180deg);
+}
+
+.sidebar-section-content {
+  padding: 0 16px 16px;
+}
+
+/* ============================================================================
+   Info Rows (simplified for sidebar)
+   ============================================================================ */
+.sidebar-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.sidebar-info-row:last-child {
+  border-bottom: none;
+}
+
+.sidebar-info-label {
+  font-size: 12px;
+  color: var(--text-label);
+  flex-shrink: 0;
+}
+
+.sidebar-info-value {
+  font-size: 13px;
+  color: var(--text-value);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-info-value.mono {
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.3px;
+}
+
+/* ============================================================================
+   External Links Footer
+   ============================================================================ */
+.sidebar-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid var(--sidebar-border);
+  flex-shrink: 0;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-width: 80px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.sidebar-link:hover {
+  background: rgba(0, 180, 216, 0.1);
+  border-color: rgba(0, 180, 216, 0.3);
+  color: var(--accent-cyan);
+}
+
+/* ============================================================================
+   Loading & Empty States
+   ============================================================================ */
+.sidebar-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  gap: 12px;
+  color: var(--text-dim);
+}
+
+.sidebar-loading-radar {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-loading-radar svg {
+  color: var(--accent-cyan);
+  opacity: 0.6;
+}
+
+.sidebar-loading-sweep {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    var(--accent-cyan) 30deg,
+    transparent 60deg
+  );
+  opacity: 0.4;
+  animation: sidebarRadarSweep 2s linear infinite;
+}
+
+@keyframes sidebarRadarSweep {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.sidebar-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  gap: 8px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.sidebar-empty svg {
+  opacity: 0.4;
+  margin-bottom: 4px;
+}
+
+/* ============================================================================
+   Tab Navigation (for full detail access)
+   ============================================================================ */
+.sidebar-tabs-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  margin: 12px 16px;
+  background: rgba(0, 180, 216, 0.1);
+  border: 1px solid rgba(0, 180, 216, 0.25);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-cyan);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sidebar-tabs-link:hover {
+  background: rgba(0, 180, 216, 0.2);
+  border-color: rgba(0, 180, 216, 0.4);
+}
+
+/* ============================================================================
+   Data Sources Badge Section
+   ============================================================================ */
+.sidebar-sources-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.sidebar-source-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* ============================================================================
+   Backdrop (for mobile overlay)
+   ============================================================================ */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+  z-index: 1999;
+}
+
+@media (max-width: 768px) {
+  .sidebar-backdrop {
+    display: block;
+  }
+}

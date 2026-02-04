@@ -163,7 +163,16 @@ export const quickFilterCategories = {
   },
 };
 
-export const VALID_DETAIL_TABS = ['info', 'live', 'radio', 'acars', 'safety', 'history', 'track'];
+// New 4-tab structure (plus legacy names for backwards compatibility)
+export const VALID_DETAIL_TABS = [
+  // New consolidated tabs
+  'overview',      // Combined Info + Live
+  'communications', // Combined Radio + ACARS
+  'safety',        // Safety events (unchanged)
+  'track',         // Combined History + Track
+  // Legacy tab names (for URL compatibility)
+  'info', 'live', 'radio', 'acars', 'history',
+];
 
 export function getAcarsLabelDescription(label, msgLabelInfo = null) {
   if (!label) return null;

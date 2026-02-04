@@ -18,10 +18,13 @@ import { AircraftCard } from '../aircraft-list/AircraftCard';
 import { ViewToggle } from '../aircraft-list/ViewToggle';
 import { ColumnSelector } from '../aircraft-list/ColumnSelector';
 import { useListPreferences } from '../../hooks/useListPreferences';
-
-// Row heights for virtual scrolling
-const ROW_HEIGHT_COMPACT = 32;
-const ROW_HEIGHT_COMFORTABLE = 44;
+import {
+  ROW_HEIGHT_COMPACT,
+  ROW_HEIGHT_COMFORTABLE,
+  QUICK_FILTERS,
+  DEFAULT_FILTERS,
+  AIRCRAFT_CATEGORIES,
+} from '../aircraft-list/aircraftListConstants';
 
 export function AircraftList({ aircraft, onSelectAircraft }) {
   const [sortField, setSortField] = useState('distance_nm');
@@ -44,53 +47,8 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
     setColumnPreset,
   } = useListPreferences();
 
-  // Filter states
-  const [filters, setFilters] = useState({
-    military: null,
-    emergency: false,
-    climbing: false,
-    descending: false,
-    onGround: false,
-    minAltitude: '',
-    maxAltitude: '',
-    minDistance: '',
-    maxDistance: '',
-    minSpeed: '',
-    maxSpeed: '',
-  });
-
-  // Quick filter presets
-  const quickFilters = [
-    {
-      id: 'emergency',
-      label: 'Emergency',
-      icon: AlertTriangle,
-      color: 'red',
-      filter: { emergency: true },
-    },
-    {
-      id: 'military',
-      label: 'Military',
-      icon: Shield,
-      color: 'purple',
-      filter: { military: true },
-    },
-    {
-      id: 'climbing',
-      label: 'Climbing',
-      icon: ArrowUp,
-      color: 'green',
-      filter: { climbing: true },
-    },
-    {
-      id: 'descending',
-      label: 'Descending',
-      icon: ArrowDown,
-      color: 'orange',
-      filter: { descending: true },
-    },
-    { id: 'ground', label: 'On Ground', icon: Plane, color: 'blue', filter: { onGround: true } },
-  ];
+  // Filter states - use defaults from constants
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
 
   const toggleQuickFilter = (filterId, filterValues) => {
     setFilters((prev) => {
@@ -112,19 +70,7 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
 
   const clearAllFilters = () => {
     setSearchFilter('');
-    setFilters({
-      military: null,
-      emergency: false,
-      climbing: false,
-      descending: false,
-      onGround: false,
-      minAltitude: '',
-      maxAltitude: '',
-      minDistance: '',
-      maxDistance: '',
-      minSpeed: '',
-      maxSpeed: '',
-    });
+    setFilters(DEFAULT_FILTERS);
   };
 
   const hasActiveFilters = useMemo(() => {
@@ -135,12 +81,24 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
       filters.climbing ||
       filters.descending ||
       filters.onGround ||
+      filters.interesting ||
+      filters.highAltitude ||
+      filters.lowAltitude ||
+      filters.strongSignal ||
+      filters.weakSignal ||
       filters.minAltitude ||
       filters.maxAltitude ||
       filters.minDistance ||
       filters.maxDistance ||
       filters.minSpeed ||
-      filters.maxSpeed
+      filters.maxSpeed ||
+      filters.minHeading ||
+      filters.maxHeading ||
+      filters.minSignal ||
+      filters.maxSignal ||
+      filters.aircraftType ||
+      filters.category ||
+      filters.squawkCode
     );
   }, [searchFilter, filters]);
 
@@ -186,6 +144,34 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
       filtered = filtered.filter((ac) => ac.alt === 0 || ac.alt === null || ac.alt === 'ground');
     }
 
+    // Interesting filter
+    if (filters.interesting) {
+      filtered = filtered.filter((ac) => ac.interesting);
+    }
+
+    // High altitude filter (FL350+)
+    if (filters.highAltitude) {
+      filtered = filtered.filter((ac) => (ac.alt || 0) >= 35000);
+    }
+
+    // Low altitude filter (< 5000 ft)
+    if (filters.lowAltitude) {
+      filtered = filtered.filter((ac) => {
+        const alt = ac.alt;
+        return alt !== null && alt !== 'ground' && alt > 0 && alt < 5000;
+      });
+    }
+
+    // Strong signal filter (RSSI > -10)
+    if (filters.strongSignal) {
+      filtered = filtered.filter((ac) => ac.rssi !== undefined && ac.rssi > -10);
+    }
+
+    // Weak signal filter (RSSI < -25)
+    if (filters.weakSignal) {
+      filtered = filtered.filter((ac) => ac.rssi !== undefined && ac.rssi < -25);
+    }
+
     // Altitude range
     if (filters.minAltitude) {
       const min = parseInt(filters.minAltitude, 10);
@@ -226,6 +212,55 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
       if (!isNaN(max)) {
         filtered = filtered.filter((ac) => (ac.gs || 0) <= max);
       }
+    }
+
+    // Heading/Track range (0-360 with wraparound support)
+    if (filters.minHeading || filters.maxHeading) {
+      const minH = filters.minHeading ? parseInt(filters.minHeading, 10) : 0;
+      const maxH = filters.maxHeading ? parseInt(filters.maxHeading, 10) : 360;
+      if (!isNaN(minH) && !isNaN(maxH)) {
+        filtered = filtered.filter((ac) => {
+          const track = ac.track;
+          if (track === undefined || track === null) return false;
+          // Handle wraparound (e.g., 350-10 means 350-360 and 0-10)
+          if (minH <= maxH) {
+            return track >= minH && track <= maxH;
+          } else {
+            return track >= minH || track <= maxH;
+          }
+        });
+      }
+    }
+
+    // Signal (RSSI) range
+    if (filters.minSignal) {
+      const min = parseFloat(filters.minSignal);
+      if (!isNaN(min)) {
+        filtered = filtered.filter((ac) => ac.rssi !== undefined && ac.rssi >= min);
+      }
+    }
+    if (filters.maxSignal) {
+      const max = parseFloat(filters.maxSignal);
+      if (!isNaN(max)) {
+        filtered = filtered.filter((ac) => ac.rssi !== undefined && ac.rssi <= max);
+      }
+    }
+
+    // Aircraft type filter
+    if (filters.aircraftType) {
+      const typeFilter = filters.aircraftType.toUpperCase();
+      filtered = filtered.filter((ac) => ac.type?.toUpperCase().includes(typeFilter));
+    }
+
+    // Category filter
+    if (filters.category) {
+      filtered = filtered.filter((ac) => ac.category === filters.category);
+    }
+
+    // Squawk code filter
+    if (filters.squawkCode) {
+      const squawkFilter = filters.squawkCode;
+      filtered = filtered.filter((ac) => ac.squawk?.includes(squawkFilter));
     }
 
     // Sort
@@ -269,8 +304,62 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
     ).length;
     const climbing = aircraft.filter((ac) => (ac.vr || 0) > 500).length;
     const descending = aircraft.filter((ac) => (ac.vr || 0) < -500).length;
-    return { total, military, emergency, climbing, descending };
+    const onGround = aircraft.filter(
+      (ac) => ac.alt === 0 || ac.alt === null || ac.alt === 'ground'
+    ).length;
+    const interesting = aircraft.filter((ac) => ac.interesting).length;
+    const highAltitude = aircraft.filter((ac) => (ac.alt || 0) >= 35000).length;
+    const lowAltitude = aircraft.filter((ac) => {
+      const alt = ac.alt;
+      return alt !== null && alt !== 'ground' && alt > 0 && alt < 5000;
+    }).length;
+    const strongSignal = aircraft.filter((ac) => ac.rssi !== undefined && ac.rssi > -10).length;
+    const weakSignal = aircraft.filter((ac) => ac.rssi !== undefined && ac.rssi < -25).length;
+    return {
+      total,
+      military,
+      emergency,
+      climbing,
+      descending,
+      onGround,
+      interesting,
+      highAltitude,
+      lowAltitude,
+      strongSignal,
+      weakSignal,
+    };
   }, [aircraft]);
+
+  // Get count for a quick filter
+  const getQuickFilterCount = useCallback(
+    (filterId) => {
+      switch (filterId) {
+        case 'emergency':
+          return stats.emergency;
+        case 'military':
+          return stats.military;
+        case 'climbing':
+          return stats.climbing;
+        case 'descending':
+          return stats.descending;
+        case 'ground':
+          return stats.onGround;
+        case 'interesting':
+          return stats.interesting;
+        case 'highAltitude':
+          return stats.highAltitude;
+        case 'lowAltitude':
+          return stats.lowAltitude;
+        case 'strongSignal':
+          return stats.strongSignal;
+        case 'weakSignal':
+          return stats.weakSignal;
+        default:
+          return 0;
+      }
+    },
+    [stats]
+  );
 
   // Row height based on density
   const rowHeight = density === 'compact' ? ROW_HEIGHT_COMPACT : ROW_HEIGHT_COMFORTABLE;
@@ -350,24 +439,16 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
 
       {/* Quick filter chips */}
       <div className="quick-filters">
-        {quickFilters.map((qf) => {
+        {QUICK_FILTERS.map((qf) => {
           const Icon = qf.icon;
           const isActive = isQuickFilterActive(qf.filter);
-          const count =
-            qf.id === 'emergency'
-              ? stats.emergency
-              : qf.id === 'military'
-                ? stats.military
-                : qf.id === 'climbing'
-                  ? stats.climbing
-                  : qf.id === 'descending'
-                    ? stats.descending
-                    : 0;
+          const count = getQuickFilterCount(qf.id);
           return (
             <button
               key={qf.id}
               className={`quick-filter-chip ${qf.color} ${isActive ? 'active' : ''}`}
               onClick={() => toggleQuickFilter(qf.id, qf.filter)}
+              title={qf.tooltip}
             >
               <Icon size={14} />
               {qf.label}
@@ -439,6 +520,88 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
                 onChange={(e) => setFilters((prev) => ({ ...prev, maxSpeed: e.target.value }))}
               />
             </div>
+          </div>
+          <div className="filter-group">
+            <label htmlFor="heading-filter-min">Heading (deg)</label>
+            <div className="range-inputs">
+              <input
+                id="heading-filter-min"
+                type="number"
+                placeholder="Min"
+                min="0"
+                max="360"
+                value={filters.minHeading}
+                onChange={(e) => setFilters((prev) => ({ ...prev, minHeading: e.target.value }))}
+              />
+              <span>to</span>
+              <input
+                id="heading-filter-max"
+                type="number"
+                placeholder="Max"
+                min="0"
+                max="360"
+                value={filters.maxHeading}
+                onChange={(e) => setFilters((prev) => ({ ...prev, maxHeading: e.target.value }))}
+              />
+            </div>
+          </div>
+          <div className="filter-group">
+            <label htmlFor="signal-filter-min">Signal (dB)</label>
+            <div className="range-inputs">
+              <input
+                id="signal-filter-min"
+                type="number"
+                placeholder="Min"
+                value={filters.minSignal}
+                onChange={(e) => setFilters((prev) => ({ ...prev, minSignal: e.target.value }))}
+              />
+              <span>to</span>
+              <input
+                id="signal-filter-max"
+                type="number"
+                placeholder="Max"
+                value={filters.maxSignal}
+                onChange={(e) => setFilters((prev) => ({ ...prev, maxSignal: e.target.value }))}
+              />
+            </div>
+          </div>
+          <div className="filter-group">
+            <label htmlFor="type-filter">Aircraft Type</label>
+            <input
+              id="type-filter"
+              type="text"
+              placeholder="e.g., B738, A320"
+              value={filters.aircraftType}
+              onChange={(e) => setFilters((prev) => ({ ...prev, aircraftType: e.target.value }))}
+              className="text-filter-input"
+            />
+          </div>
+          <div className="filter-group">
+            <label htmlFor="category-filter">Category</label>
+            <select
+              id="category-filter"
+              value={filters.category}
+              onChange={(e) => setFilters((prev) => ({ ...prev, category: e.target.value }))}
+              className="select-filter"
+            >
+              {AIRCRAFT_CATEGORIES.map((cat) => (
+                <option key={cat.value} value={cat.value}>
+                  {cat.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="filter-group">
+            <label htmlFor="squawk-filter">Squawk Code</label>
+            <input
+              id="squawk-filter"
+              type="text"
+              placeholder="e.g., 7700, 1200"
+              value={filters.squawkCode}
+              onChange={(e) => setFilters((prev) => ({ ...prev, squawkCode: e.target.value }))}
+              className="text-filter-input"
+              maxLength={4}
+            />
           </div>
         </div>
       )}

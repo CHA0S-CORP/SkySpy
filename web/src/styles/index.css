@@ -32,6 +32,12 @@
 /* 8. Aircraft Detail - Detail overlay, safety events, track replay */
 @import './aircraft-detail.css';
 
+/* 8b. Aircraft Sidebar - FlightRadar24-style sidebar panel */
+@import './aircraft-sidebar.css';
+
+/* 8c. History Redesign - Dense layouts, faceted filters, visualizations */
+@import './history-redesign.css';
+
 /* 9. Auth - Login, user menu, permissions */
 @import './auth.css';
 

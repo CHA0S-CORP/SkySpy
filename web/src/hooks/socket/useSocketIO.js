@@ -87,6 +87,7 @@ export function useSocketIO({
   const namespaceRef = useRef(namespace);
   const pathRef = useRef(path);
   const authRef = useRef(auth);
+  const reconnectConfigRef = useRef(reconnectConfig);
 
   // Keep refs in sync with props
   useEffect(() => {
@@ -102,7 +103,8 @@ export function useSocketIO({
     namespaceRef.current = namespace;
     pathRef.current = path;
     authRef.current = auth;
-  }, [enabled, apiBase, namespace, path, auth]);
+    reconnectConfigRef.current = reconnectConfig;
+  }, [enabled, apiBase, namespace, path, auth, reconnectConfig]);
 
   /**
    * Connect to Socket.IO server
@@ -156,7 +158,7 @@ export function useSocketIO({
         transports: ['websocket', 'polling'],
         upgrade: false,
         ...defaultReconnectConfig,
-        ...reconnectConfig,
+        ...reconnectConfigRef.current,
       });
 
       socketRef.current = socket;
@@ -259,7 +261,7 @@ export function useSocketIO({
       setConnecting(false);
       onErrorRef.current?.(err);
     }
-  }, [reconnectConfig]);
+  }, []); // All values accessed via refs to avoid stale closures
 
   /**
    * Clean up internal event handlers from socket

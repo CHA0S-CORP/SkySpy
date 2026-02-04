@@ -1,0 +1,11 @@
+# Documentation screenshots - generated assets
+# Run `npm run docs:generate` from web/ to regenerate
+
+# Keep the directory structure but ignore generated files
+desktop/*.png
+tablet/*.png
+mobile/*.png
+animations/*.gif
+
+# Keep the index manifest
+!index.json

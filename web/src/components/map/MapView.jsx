@@ -83,8 +83,8 @@ const safeJson = async (res) => {
   }
 };
 
-// Import AircraftDetailPage
-import { AircraftDetailPage } from '../aircraft/AircraftDetailPage';
+// Import AircraftDetailPage and V2
+import { AircraftDetailPage, AircraftDetailV2, AircraftSidebar } from '../aircraft';
 import { useAircraftInfo } from '../../hooks/useAircraftInfo';
 import { useToastContextSafe } from '../../hooks/useToast';
 import { useAirspaceAdvisories, HAZARD_CONFIG } from '../../hooks/useAirspaceAdvisories';
@@ -200,8 +200,11 @@ function MapView({
   _positionSocketConnected = false,
 }) {
   // Use feeder location or default - defined early for use in hooks below
-  const feederLat = feederLocation?.lat || 47.9377;
-  const feederLon = feederLocation?.lon || -121.9687;
+  // Bug fix #9: Explicit null checks for feeder coordinates to avoid NaN calculations
+  const feederLat =
+    feederLocation?.lat != null && !Number.isNaN(feederLocation.lat) ? feederLocation.lat : 47.9377;
+  const feederLon =
+    feederLocation?.lon != null && !Number.isNaN(feederLocation.lon) ? feederLocation.lon : -121.9687;
 
   const [selectedAircraft, setSelectedAircraft] = useState(null);
   const [selectedMetar, setSelectedMetar] = useState(null);
@@ -350,7 +353,8 @@ function MapView({
       };
     }
   });
-  const [aircraftDetailHex, setAircraftDetailHex] = useState(null); // Aircraft for detail page
+  const [aircraftDetailHex, setAircraftDetailHex] = useState(null); // Aircraft for full detail modal
+  const [sidebarAircraftHex, setSidebarAircraftHex] = useState(null); // Aircraft for sidebar quick view
   const [callsignHexCache, setCallsignHexCache] = useState({}); // Callsign → ICAO hex cache for ACARS linking
 
   // Use robust aircraft info hook with bulk lookups and retry logic
@@ -571,6 +575,11 @@ function MapView({
     () => localStorage.getItem('adsb-pro-conflict-viz') !== 'false'
   ); // default on
 
+  // VS trend triangles (climb/descend indicators)
+  const [showVsTrend, setShowVsTrend] = useState(
+    () => localStorage.getItem('adsb-pro-vs-trend') !== 'false'
+  ); // default on
+
   // Phase 4: Grid & Overlays
   const [gridOpacity, setGridOpacity] = useState(() =>
     parseFloat(localStorage.getItem('adsb-pro-grid-opacity') || '0.3')
@@ -618,6 +627,16 @@ function MapView({
   // Phase 6: Hover tooltip
   const [hoverInfo, setHoverInfo] = useState(null); // { aircraft, x, y }
   const hoverTimeoutRef = useRef(null);
+
+  // Bug fix #7: Clean up hover timeout on component unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Phase 7: Accessibility
   const [highContrastMode, setHighContrastMode] = useState(
@@ -698,6 +717,7 @@ function MapView({
   const animationRef = useRef(null);
   const sweepAngleRef = useRef(0);
   const historyRef = useRef({}); // Store position history for trails
+  const trackHistoryRef = useRef({}); // Store track/heading history for turn rate calculation
   const pinchStateRef = useRef({
     lastDistance: 0,
     startRange: 0,
@@ -2146,6 +2166,13 @@ function MapView({
             return newVal;
           });
           break;
+        case 'y': // Toggle VS trend triangles (climb/descend)
+          setShowVsTrend((prev) => {
+            const newVal = !prev;
+            localStorage.setItem('adsb-pro-vs-trend', String(newVal));
+            return newVal;
+          });
+          break;
         case 't': // Toggle trails
           setShowShortTracks((prev) => {
             const newVal = !prev;
@@ -2396,12 +2423,17 @@ function MapView({
         }
       });
 
-      // Clean up aircraft that are no longer present
+      // Bug fix #2: Improved cleanup logic for position history
+      // Clean up aircraft that are no longer present more promptly
       const activeHexes = new Set(aircraft.map((ac) => ac.hex));
       Object.keys(updated).forEach((hex) => {
         if (!activeHexes.has(hex)) {
-          // Keep for a bit after aircraft disappears, then remove
-          if (updated[hex].length > 0 && now - updated[hex][updated[hex].length - 1].time > 60000) {
+          // Remove entries for aircraft gone for more than 30 seconds (reduced from 60s)
+          // Also remove if the entry has no positions or all positions are stale
+          if (
+            updated[hex].length === 0 ||
+            now - updated[hex][updated[hex].length - 1].time > 30000
+          ) {
             delete updated[hex];
           }
         }
@@ -2418,7 +2450,15 @@ function MapView({
         const updated = { ...prev };
 
         aircraft.forEach((ac) => {
-          if (ac.lat && ac.lon && ac.hex && updated[ac.hex]) {
+          if (ac.lat && ac.lon && ac.hex) {
+            // Bug fix #4: Initialize short track history for new aircraft
+            // Previously only updated if entry already existed, new aircraft never got initialized
+            if (!updated[ac.hex]) {
+              updated[ac.hex] = [{ lat: ac.lat, lon: ac.lon, time: now }];
+              hasChanges = true;
+              return; // Skip to next aircraft after initialization
+            }
+
             const existing = updated[ac.hex];
             const lastPos = existing[existing.length - 1];
 
@@ -3801,6 +3841,40 @@ function MapView({
     });
   }, [sortedAircraft, config.mapMode]);
 
+  // Update track history for turn rate calculation (pro mode velocity vectors)
+  useEffect(() => {
+    if (config.mapMode !== 'crt' && config.mapMode !== 'pro') return;
+
+    const now = Date.now();
+    sortedAircraft.forEach((ac) => {
+      if (!ac.hex || ac.track == null) return;
+
+      if (!trackHistoryRef.current[ac.hex]) {
+        trackHistoryRef.current[ac.hex] = [];
+      }
+      const history = trackHistoryRef.current[ac.hex];
+
+      // Add track sample if different from last or first sample
+      const lastTrack = history.length > 0 ? history[history.length - 1].track : null;
+      if (lastTrack === null || Math.abs(ac.track - lastTrack) > 0.5) {
+        history.push({ track: ac.track, time: now });
+      }
+
+      // Keep only last 10 seconds of track history for turn rate calculation
+      while (history.length > 0 && now - history[0].time > 10000) {
+        history.shift();
+      }
+    });
+
+    // Clean up old aircraft
+    const activeHexes = new Set(sortedAircraft.map((a) => a.hex));
+    Object.keys(trackHistoryRef.current).forEach((hex) => {
+      if (!activeHexes.has(hex)) {
+        delete trackHistoryRef.current[hex];
+      }
+    });
+  }, [sortedAircraft, config.mapMode]);
+
   // CRT Radar Canvas Drawing (also handles Pro mode)
   useEffect(() => {
     if (config.mapMode !== 'crt' && config.mapMode !== 'pro') return;
@@ -3809,6 +3883,14 @@ function MapView({
     const canvas = canvasRef.current;
     const container = containerRef.current;
     const ctx = canvas.getContext('2d');
+
+    // Bug fix #5: Track all event listeners for guaranteed cleanup
+    // Store references to handlers to ensure we remove the exact same functions we added
+    const eventListeners = [];
+    const addTrackedListener = (target, event, handler, options) => {
+      target.addEventListener(event, handler, options);
+      eventListeners.push({ target, event, handler, options });
+    };
 
     // Set canvas size to match container
     const resize = () => {
@@ -3820,7 +3902,7 @@ function MapView({
       ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
     };
     resize();
-    window.addEventListener('resize', resize);
+    addTrackedListener(window, 'resize', resize);
 
     // Scroll to zoom - smooth increments
     // When zooming, scale the pan offset so the view stays centered on the same geographic point
@@ -3839,7 +3921,7 @@ function MapView({
         updateRadarRange(clampedRange);
       }
     };
-    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    addTrackedListener(canvas, 'wheel', handleWheel, { passive: false });
 
     // Pinch-to-zoom and two-finger pan for touch devices
     const getTouchDistance = (touches) => {
@@ -3922,9 +4004,9 @@ function MapView({
       }
     };
 
-    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
-    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
-    canvas.addEventListener('touchend', handleTouchEnd);
+    addTrackedListener(canvas, 'touchstart', handleTouchStart, { passive: false });
+    addTrackedListener(canvas, 'touchmove', handleTouchMove, { passive: false });
+    addTrackedListener(canvas, 'touchend', handleTouchEnd);
 
     // Use fetched aviation data or fallback to static
     const navAids =
@@ -5785,18 +5867,125 @@ function MapView({
           return 0;
         });
 
-        aircraftToDraw.forEach((ac) => {
-          const dist = ac.distance_nm || getDistanceNm(ac.lat, ac.lon);
-          if (!isPro && dist > radarRange) return;
-          if (isPro && dist > radarRange * 1.5) return;
+        // Data block thinning: limit data blocks based on screen density
+        // When many aircraft are visible, show fewer data blocks to reduce clutter
+        // Count visible aircraft on screen first (using same viewport culling as rendering)
+        const visibleOnScreen = aircraftToDraw.filter((ac) => {
+          if (!ac.lat || !ac.lon) return false; // Skip aircraft without position
+          const pos = latLonToScreen(ac.lat, ac.lon);
+          if (isPro) {
+            // Pro mode: viewport-based visibility
+            return pos.x >= -30 && pos.x <= width + 30 &&
+                   pos.y >= -30 && pos.y <= height + 30;
+          } else {
+            // CRT mode: distance-based visibility
+            const dist = ac.distance_nm || getDistanceNm(ac.lat, ac.lon);
+            return dist <= radarRange;
+          }
+        });
 
-          // Use latLonToScreen for positioning
+        const density = visibleOnScreen.length;
+
+        // Density-based max data blocks (in Pro mode only)
+        // Fewer aircraft = show all labels; more aircraft = thin out labels
+        const maxDataBlocks = isPro
+          ? density <= 15
+            ? Infinity // Low density: show all
+            : density <= 30
+              ? 25
+              : density <= 50
+                ? 20
+                : density <= 100
+                  ? 15
+                  : 10 // Very crowded: show only 10
+          : Infinity; // No thinning in non-Pro mode
+
+        // Build set of aircraft that should show data blocks (priority-based)
+        const dataBlockVisibleSet = new Set();
+        if (maxDataBlocks !== Infinity && isPro) {
+          // Calculate screen positions and local density for each aircraft
+          const aircraftWithScreenPos = visibleOnScreen.map((ac) => {
+            const pos = latLonToScreen(ac.lat, ac.lon);
+            return { ac, x: pos.x, y: pos.y };
+          });
+
+          // Score aircraft by priority (higher = more important)
+          const scoredAircraft = aircraftWithScreenPos
+            .map(({ ac, x, y }) => {
+              let score = 0;
+              const hex = ac.hex?.toUpperCase();
+
+              // Always show: selected, emergency, military, safety conflicts
+              if (selectedAircraft?.hex?.toUpperCase() === hex) score += 10000;
+              if (ac.emergency || ['7500', '7600', '7700'].includes(ac.squawk)) score += 5000;
+              if (ac.military) score += 3000;
+              if (conflictAircraft.has(hex)) score += 4000;
+
+              // High priority: aircraft with ACARS messages
+              const hasAcars = acarsMessages.some(
+                (msg) =>
+                  (msg.icao_hex && msg.icao_hex.toUpperCase() === hex) ||
+                  (msg.callsign && ac.flight && msg.callsign.toUpperCase() === ac.flight.trim().toUpperCase())
+              );
+              if (hasAcars) score += 2000;
+
+              // Higher priority for aircraft with callsigns vs hex-only
+              if (ac.flight?.trim()) score += 500;
+
+              // Calculate local density penalty (nearby aircraft within 80px)
+              const nearbyCount = aircraftWithScreenPos.filter(
+                (other) =>
+                  other.ac.hex !== ac.hex &&
+                  Math.abs(other.x - x) < 80 &&
+                  Math.abs(other.y - y) < 50
+              ).length;
+              // Penalize aircraft in crowded areas (less likely to show label)
+              score -= nearbyCount * 30;
+
+              // Prefer aircraft closer to center of screen
+              const centerDist = Math.sqrt(
+                Math.pow(x - width / 2, 2) + Math.pow(y - height / 2, 2)
+              );
+              score += Math.max(0, 200 - centerDist / 3);
+
+              // Prefer faster aircraft (more interesting)
+              if (ac.gs) score += Math.min(ac.gs / 10, 50);
+
+              return { hex, score };
+            })
+            .sort((a, b) => b.score - a.score);
+
+          // Add top N aircraft to visible set
+          scoredAircraft.slice(0, maxDataBlocks).forEach(({ hex }) => {
+            dataBlockVisibleSet.add(hex);
+          });
+        }
+
+        aircraftToDraw.forEach((ac) => {
+          // Skip aircraft without valid position
+          if (!ac.lat || !ac.lon) return;
+
+          // Use latLonToScreen for positioning (do this first for early culling)
           const pos = latLonToScreen(ac.lat, ac.lon);
           const x = pos.x;
           const y = pos.y;
 
-          // Skip if outside canvas (Pro mode)
-          if (isPro && (x < 0 || x > width || y < 0 || y > height)) return;
+          // Skip if outside visible area (with margin for data blocks/blips)
+          // Data blocks extend ~120px right and ~60px down from aircraft position
+          // Aircraft blips are ~20px, so add margin on all sides
+          const margin = 30; // Margin for aircraft blip visibility at edges
+          const dataBlockMarginRight = 150; // Extra margin for data blocks on right
+          const dataBlockMarginBottom = 80; // Extra margin for data blocks below
+
+          if (isPro) {
+            // Pro mode: strict viewport culling with margins
+            if (x < -margin || x > width + dataBlockMarginRight ||
+                y < -margin || y > height + dataBlockMarginBottom) return;
+          } else {
+            // CRT mode: use distance-based culling
+            const dist = ac.distance_nm || getDistanceNm(ac.lat, ac.lon);
+            if (dist > radarRange) return;
+          }
 
           // Calculate blip brightness based on sweep position (CRT) or constant (Pro)
           const bearing = getBearing(ac.lat, ac.lon);
@@ -6046,6 +6235,24 @@ function MapView({
             ctx.fill();
           }
 
+          // Calculate turn rate from track history for curved velocity vectors
+          let turnRate = 0; // degrees per second, positive = right turn
+          const trackHistory = trackHistoryRef.current[ac.hex];
+          if (trackHistory && trackHistory.length >= 2) {
+            const oldest = trackHistory[0];
+            const newest = trackHistory[trackHistory.length - 1];
+            const timeDiff = (newest.time - oldest.time) / 1000; // seconds
+            if (timeDiff > 0.5) {
+              // Calculate track change, handling wrap-around at 360°
+              let trackChange = newest.track - oldest.track;
+              if (trackChange > 180) trackChange -= 360;
+              if (trackChange < -180) trackChange += 360;
+              turnRate = trackChange / timeDiff;
+              // Clamp to reasonable values (max ~6°/sec for steep turns)
+              turnRate = Math.max(-6, Math.min(6, turnRate));
+            }
+          }
+
           // Velocity vector line - basic (short)
           if (ac.gs > 50) {
             const vecLen = Math.min(20, ac.gs / 25);
@@ -6060,43 +6267,115 @@ function MapView({
           }
 
           // Extended prediction vectors (Phase 2.3) - skip when too many aircraft
+          // Now supports curved paths for turning aircraft
           if (showPredictionVectors && ac.gs > 50 && isPro && !perfMode.skipPredictionVectors) {
             const pixelsPerNm = (Math.min(width, height) * 0.45) / radarRange;
             const nmPerSecond = ac.gs / 3600; // Convert knots to nm/second
+            const isTurning = Math.abs(turnRate) > 0.3; // Significant turn threshold
 
-            // 30-second prediction (dotted)
-            const nm30s = nmPerSecond * 30;
-            const px30s = nm30s * pixelsPerNm;
-            ctx.strokeStyle = themeColors.rgba('vector', 0.4);
-            ctx.lineWidth = 1;
-            ctx.setLineDash([3, 3]);
-            ctx.beginPath();
-            ctx.moveTo(0, -symSize - 20);
-            ctx.lineTo(0, -symSize - 20 - px30s);
-            ctx.stroke();
+            // Max vector lengths in pixels (prevents excessively long vectors when zoomed in)
+            const maxLen30s = 120;
+            const maxLen60s = 200;
+            const maxLen120s = 280;
 
-            // 60-second prediction (fainter dotted)
-            if (predictionSeconds >= 60) {
-              const nm60s = nmPerSecond * 60;
-              const px60s = nm60s * pixelsPerNm;
-              ctx.strokeStyle = themeColors.rgba('vector', 0.25);
-              ctx.setLineDash([2, 4]);
+            if (isTurning) {
+              // Draw curved prediction vectors for turning aircraft
+              // Simple approach: integrate position with changing heading
+              const pxPerSecond = nmPerSecond * pixelsPerNm;
+
+              // Helper to draw curved path segment with max length
+              const drawCurvedSegment = (startSec, endSec, opacity, dashPattern, maxLen) => {
+                ctx.strokeStyle = themeColors.rgba('vector', opacity);
+                ctx.lineWidth = 1;
+                ctx.setLineDash(dashPattern);
+                ctx.beginPath();
+
+                const stepSec = 2;
+                let startX = 0, startY = -symSize - 20;
+                let totalDist = 0;
+
+                // Calculate starting position from previous segments
+                if (startSec > 0) {
+                  let headingRad = 0;
+                  let posX = 0, posY = 0;
+                  for (let t = 0; t < startSec; t += stepSec) {
+                    const dt = Math.min(stepSec, startSec - t);
+                    headingRad += (turnRate * dt * Math.PI) / 180;
+                    posX += Math.sin(headingRad) * pxPerSecond * dt;
+                    posY -= Math.cos(headingRad) * pxPerSecond * dt;
+                  }
+                  startX = posX;
+                  startY = posY - symSize - 20;
+                }
+
+                ctx.moveTo(startX, startY);
+
+                let headingRad = (turnRate * startSec * Math.PI) / 180;
+                let posX = startX, posY = startY;
+
+                for (let t = startSec; t < endSec; t += stepSec) {
+                  const dt = Math.min(stepSec, endSec - t);
+                  headingRad += (turnRate * dt * Math.PI) / 180;
+                  const dx = Math.sin(headingRad) * pxPerSecond * dt;
+                  const dy = -Math.cos(headingRad) * pxPerSecond * dt;
+                  posX += dx;
+                  posY += dy;
+                  totalDist += Math.sqrt(dx * dx + dy * dy);
+
+                  ctx.lineTo(posX, posY);
+                  if (totalDist > maxLen) break; // Stop if max length reached
+                }
+                ctx.stroke();
+              };
+
+              // 30-second prediction (dotted)
+              drawCurvedSegment(0, 30, 0.4, [3, 3], maxLen30s);
+
+              // 60-second prediction (fainter dotted)
+              if (predictionSeconds >= 60) {
+                drawCurvedSegment(30, 60, 0.25, [2, 4], maxLen60s - maxLen30s);
+              }
+
+              // 120-second prediction (very faint)
+              if (predictionSeconds >= 120) {
+                drawCurvedSegment(60, 120, 0.15, [2, 6], maxLen120s - maxLen60s);
+              }
+            } else {
+              // Straight prediction vectors (original behavior) with max lengths
+              const nm30s = nmPerSecond * 30;
+              const px30s = Math.min(nm30s * pixelsPerNm, maxLen30s);
+              ctx.strokeStyle = themeColors.rgba('vector', 0.4);
+              ctx.lineWidth = 1;
+              ctx.setLineDash([3, 3]);
               ctx.beginPath();
-              ctx.moveTo(0, -symSize - 20 - px30s);
-              ctx.lineTo(0, -symSize - 20 - px60s);
+              ctx.moveTo(0, -symSize - 20);
+              ctx.lineTo(0, -symSize - 20 - px30s);
               ctx.stroke();
-            }
 
-            // 120-second prediction (very faint)
-            if (predictionSeconds >= 120) {
-              const nm120s = nmPerSecond * 120;
-              const px120s = nm120s * pixelsPerNm;
-              ctx.strokeStyle = themeColors.rgba('vector', 0.15);
-              ctx.setLineDash([2, 6]);
-              ctx.beginPath();
-              ctx.moveTo(0, -symSize - 20 - nmPerSecond * 60 * pixelsPerNm);
-              ctx.lineTo(0, -symSize - 20 - px120s);
-              ctx.stroke();
+              // 60-second prediction (fainter dotted)
+              if (predictionSeconds >= 60) {
+                const nm60s = nmPerSecond * 60;
+                const px60s = Math.min(nm60s * pixelsPerNm, maxLen60s);
+                ctx.strokeStyle = themeColors.rgba('vector', 0.25);
+                ctx.setLineDash([2, 4]);
+                ctx.beginPath();
+                ctx.moveTo(0, -symSize - 20 - px30s);
+                ctx.lineTo(0, -symSize - 20 - px60s);
+                ctx.stroke();
+              }
+
+              // 120-second prediction (very faint)
+              if (predictionSeconds >= 120) {
+                const nm120s = nmPerSecond * 120;
+                const px120s = Math.min(nm120s * pixelsPerNm, maxLen120s);
+                const px60sStart = Math.min(nmPerSecond * 60 * pixelsPerNm, maxLen60s);
+                ctx.strokeStyle = themeColors.rgba('vector', 0.15);
+                ctx.setLineDash([2, 6]);
+                ctx.beginPath();
+                ctx.moveTo(0, -symSize - 20 - px60sStart);
+                ctx.lineTo(0, -symSize - 20 - px120s);
+                ctx.stroke();
+              }
             }
             ctx.setLineDash([]);
           }
@@ -6105,7 +6384,7 @@ function MapView({
 
           // Altitude trend indicators (Phase 2.1) - drawn outside rotation
           const vs = ac.vr ?? ac.baro_rate ?? ac.geom_rate ?? 0;
-          if (isPro && Math.abs(vs) > 500) {
+          if (showVsTrend && isPro && Math.abs(vs) > 500) {
             const isClimbing = vs > 0;
             const isRapid = Math.abs(vs) > 2000;
             const trendColor = isClimbing ? 'rgba(0, 255, 100, 0.9)' : 'rgba(255, 200, 0, 0.9)';
@@ -6136,15 +6415,27 @@ function MapView({
           const blockY = y - 10;
 
           // Draw data block (callsign, speed, altitude, etc.) - respects showDataBlocks toggle, performance mode, and dataBlockConfig
-          // Debug: Log first aircraft's data block rendering (only once per draw cycle)
+          // Debug: Log data block thinning info (only once per draw cycle)
           if (frameCount === 1 && ac === aircraftToDraw[0]) {
-            console.log('[MapView] Data block render check:', {
+            console.log('[MapView] Data block thinning:', {
+              isPro,
               showDataBlocks,
-              skipDataBlocks: perfMode.skipDataBlocks,
-              aircraftCount,
+              visibleDensity: density,
+              maxDataBlocks: maxDataBlocks === Infinity ? 'unlimited' : maxDataBlocks,
+              dataBlockSetSize: dataBlockVisibleSet.size,
+              thinningActive: isPro && dataBlockVisibleSet.size > 0,
             });
           }
-          if (showDataBlocks && !perfMode.skipDataBlocks) {
+          // Check if data block should be shown (respects thinning at zoomed-out levels)
+          // If thinning is not active (set is empty) or aircraft is in priority set, show data block
+          const acHex = ac.hex?.toUpperCase();
+          const showThisDataBlock =
+            !isPro || // Always show in non-Pro mode
+            dataBlockVisibleSet.size === 0 || // No thinning active
+            !acHex || // Always show if no hex (shouldn't happen but be safe)
+            dataBlockVisibleSet.has(acHex);
+
+          if (showDataBlocks && !perfMode.skipDataBlocks && showThisDataBlock) {
             const callsign = ac.flight?.trim() || ac.hex;
             const speed = ac.gs ? `${Math.round(ac.gs)}` : '---';
             const altitude = ac.alt ? `${Math.round(ac.alt / 100)}` : '---';
@@ -6526,11 +6817,10 @@ function MapView({
     draw();
 
     return () => {
-      window.removeEventListener('resize', resize);
-      canvas.removeEventListener('wheel', handleWheel);
-      canvas.removeEventListener('touchstart', handleTouchStart);
-      canvas.removeEventListener('touchmove', handleTouchMove);
-      canvas.removeEventListener('touchend', handleTouchEnd);
+      // Bug fix #5: Clean up all tracked event listeners to prevent duplicates
+      eventListeners.forEach(({ target, event, handler, options }) => {
+        target.removeEventListener(event, handler, options);
+      });
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
@@ -6718,16 +7008,22 @@ function MapView({
       // Set higher z-index for aircraft with safety events or emergencies
       const zOffset = hasSafetyEvent ? 2000 : ac.emergency ? 1000 : 0;
 
-      if (markersRef.current[ac.hex]) {
+      // Bug fix #1 & #3: Add null check before marker methods
+      const existingMarker = markersRef.current[ac.hex];
+      if (existingMarker) {
         // Update icon and z-index (position updated by animation loop)
-        markersRef.current[ac.hex].setIcon(icon);
-        markersRef.current[ac.hex].setZIndexOffset(zOffset);
+        existingMarker.setIcon(icon);
+        existingMarker.setZIndexOffset(zOffset);
       } else {
         const marker = L.marker([ac.lat, ac.lon], { icon, zIndexOffset: zOffset })
           .addTo(leafletMapRef.current)
           .on('click', () => selectAircraft(ac))
-          .on('dblclick', () => openAircraftDetail(ac.hex));
-        marker.bindTooltip(`${ac.flight || ac.hex}<br>${ac.alt || '?'}ft`, {
+          .on('dblclick', () => openAircraftSidebar(ac.hex));
+        // Bug fix #10: Handle edge cases for tooltip - fallback for both flight and hex being falsy,
+        // and properly handle altitude 0 (valid) vs null/undefined
+        const displayName = ac.flight?.trim() || ac.hex || 'Unknown';
+        const displayAlt = ac.alt != null ? `${ac.alt}ft` : '?';
+        marker.bindTooltip(`${displayName}<br>${displayAlt}`, {
           permanent: false,
           direction: 'top',
         });
@@ -6739,11 +7035,16 @@ function MapView({
   // High-frequency Leaflet marker position updates using positionsRef
   // This runs in a requestAnimationFrame loop for smooth interpolated movement
   useEffect(() => {
+    // Bug fix #6: Add null check for positionsRef before accessing .current
     if (config.mapMode !== 'map' || !leafletMapRef.current || !positionsRef) return;
 
     let animFrameId = null;
 
     const updateMarkerPositions = () => {
+      // Bug fix #6: Verify positionsRef still exists before accessing .current
+      if (!positionsRef) {
+        return; // Stop the loop if positionsRef becomes null
+      }
       const positions = positionsRef.current;
       if (!positions) {
         animFrameId = requestAnimationFrame(updateMarkerPositions);
@@ -6751,10 +7052,19 @@ function MapView({
       }
 
       // Update marker positions from interpolated data
+      // Bug fix #1: Verify markersRef.current exists
+      if (!markersRef.current) {
+        animFrameId = requestAnimationFrame(updateMarkerPositions);
+        return;
+      }
+
       for (const hex in markersRef.current) {
         const interpolated = positions[hex] || positions[hex.toUpperCase()];
         if (interpolated && interpolated.lat != null && interpolated.lon != null) {
+          // Bug fix #1 & #3: Add null check for marker before calling methods
           const marker = markersRef.current[hex];
+          if (!marker) continue;
+
           marker.setLatLng([interpolated.lat, interpolated.lon]);
 
           // Update icon rotation if track changed significantly
@@ -6952,9 +7262,27 @@ function MapView({
     });
   };
 
-  // Update URL when opening aircraft detail (and clear when closing)
+  // Open sidebar quick view for aircraft
+  const openAircraftSidebar = (hex) => {
+    setSidebarAircraftHex(hex);
+    // Close full modal if open
+    if (hex && aircraftDetailHex) {
+      setAircraftDetailHex(null);
+    }
+    if (setHashParams && hex) {
+      setHashParams({ aircraft: hex });
+    } else if (setHashParams) {
+      setHashParams({ aircraft: undefined });
+    }
+  };
+
+  // Update URL when opening aircraft detail (full modal - and clear when closing)
   const openAircraftDetail = (hex) => {
     setAircraftDetailHex(hex);
+    // Close sidebar when opening full modal
+    if (hex && sidebarAircraftHex) {
+      setSidebarAircraftHex(null);
+    }
     if (setHashParams && hex) {
       setHashParams({ aircraft: hex });
     } else if (setHashParams) {
@@ -7852,7 +8180,7 @@ function MapView({
               }
 
               if (closestAircraft) {
-                openAircraftDetail(closestAircraft.hex);
+                openAircraftSidebar(closestAircraft.hex);
               } else if (config.mapMode === 'pro') {
                 // Phase 1.3: Double-click on empty space to center
                 const newPanX = proPanOffset.x - (clickX - centerX);
@@ -8363,6 +8691,18 @@ function MapView({
                   }}
                 />
                 <span className="toggle-label">Velocity Vectors (V)</span>
+              </label>
+              <label className="overlay-toggle">
+                <input
+                  type="checkbox"
+                  checked={showVsTrend}
+                  onChange={() => {
+                    const newVal = !showVsTrend;
+                    setShowVsTrend(newVal);
+                    localStorage.setItem('adsb-pro-vs-trend', String(newVal));
+                  }}
+                />
+                <span className="toggle-label">VS Trend Indicators (Y)</span>
               </label>
               <label className="overlay-toggle">
                 <input
@@ -9372,10 +9712,10 @@ function MapView({
                   </button>
                   <button
                     className="popup-action-btn"
-                    onClick={() => openAircraftDetail(liveAircraft.hex)}
+                    onClick={() => openAircraftSidebar(liveAircraft.hex)}
                   >
                     <ExternalLink size={14} />
-                    Full Details
+                    Details
                   </button>
                 </div>
 
@@ -10379,8 +10719,8 @@ function MapView({
                   </button>
                   <button
                     className="pro-panel-btn"
-                    onClick={() => openAircraftDetail(liveAircraft.hex)}
-                    title="View full aircraft details"
+                    onClick={() => openAircraftSidebar(liveAircraft.hex)}
+                    title="View aircraft details"
                   >
                     <ExternalLink size={14} />
                   </button>
@@ -11134,21 +11474,52 @@ function MapView({
         />
       )}
 
-      {/* Aircraft Detail Modal */}
+      {/* Aircraft Sidebar (quick view) */}
+      {sidebarAircraftHex && (
+        <AircraftSidebar
+          hex={sidebarAircraftHex}
+          apiUrl={config.apiBaseUrl}
+          onClose={() => openAircraftSidebar(null)}
+          onOpenDetail={(hex) => openAircraftDetail(hex)}
+          aircraft={aircraft.find((a) => a.hex === sidebarAircraftHex)}
+          aircraftInfo={aircraftInfo[sidebarAircraftHex]}
+          feederLocation={{ lat: feederLat, lon: feederLon }}
+          wsRequest={wsRequest}
+          wsConnected={wsConnected}
+        />
+      )}
+
+      {/* Aircraft Detail Modal (full view with tabs) - V1/V2 based on config flag */}
       {aircraftDetailHex && (
         // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
         <div className="aircraft-detail-overlay" onClick={() => openAircraftDetail(null)}>
           {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
           <div className="aircraft-detail-modal" onClick={(e) => e.stopPropagation()}>
-            <AircraftDetailPage
-              hex={aircraftDetailHex}
-              apiUrl={config.apiBaseUrl}
-              onClose={() => openAircraftDetail(null)}
-              onSelectAircraft={(newHex) => openAircraftDetail(newHex)}
-              aircraft={aircraft.find((a) => a.hex === aircraftDetailHex)}
-              aircraftInfo={aircraftInfo[aircraftDetailHex]}
-              feederLocation={{ lat: feederLat, lon: feederLon }}
-            />
+            {config.useAircraftDetailV2 ? (
+              <AircraftDetailV2
+                hex={aircraftDetailHex}
+                apiUrl={config.apiBaseUrl}
+                onClose={() => openAircraftDetail(null)}
+                onSelectAircraft={(newHex) => openAircraftDetail(newHex)}
+                aircraft={aircraft.find((a) => a.hex === aircraftDetailHex)}
+                aircraftInfo={aircraftInfo[aircraftDetailHex]}
+                feederLocation={{ lat: feederLat, lon: feederLon }}
+                wsRequest={wsRequest}
+                wsConnected={wsConnected}
+              />
+            ) : (
+              <AircraftDetailPage
+                hex={aircraftDetailHex}
+                apiUrl={config.apiBaseUrl}
+                onClose={() => openAircraftDetail(null)}
+                onSelectAircraft={(newHex) => openAircraftDetail(newHex)}
+                aircraft={aircraft.find((a) => a.hex === aircraftDetailHex)}
+                aircraftInfo={aircraftInfo[aircraftDetailHex]}
+                feederLocation={{ lat: feederLat, lon: feederLon }}
+                wsRequest={wsRequest}
+                wsConnected={wsConnected}
+              />
+            )}
           </div>
         </div>
       )}

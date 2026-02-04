@@ -34,6 +34,46 @@ button {
   --glow-cyan: rgba(0, 212, 255, 0.15);
   --glow-green: rgba(74, 222, 128, 0.15);
 
+  /* Dense layout spacing */
+  --spacing-xxs: 2px;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --table-row-height-compact: 32px;
+  --table-row-height-normal: 40px;
+  --card-padding-compact: 8px;
+  --card-padding-normal: 12px;
+
+  /* Data visualization colors */
+  --viz-altitude-low: #3b82f6;
+  --viz-altitude-mid: #22c55e;
+  --viz-altitude-high: #ef4444;
+  --viz-speed-low: #60a5fa;
+  --viz-speed-mid: #facc15;
+  --viz-speed-high: #f97316;
+  --viz-signal-excellent: #22c55e;
+  --viz-signal-good: #84cc16;
+  --viz-signal-fair: #eab308;
+  --viz-signal-weak: #ef4444;
+  --viz-military: #a855f7;
+  --viz-safety-critical: #ef4444;
+  --viz-safety-warning: #f59e0b;
+  --viz-safety-info: #3b82f6;
+
+  /* Heatmap gradient */
+  --heatmap-0: rgba(0, 212, 255, 0.05);
+  --heatmap-25: rgba(0, 212, 255, 0.25);
+  --heatmap-50: rgba(0, 212, 255, 0.5);
+  --heatmap-75: rgba(0, 212, 255, 0.75);
+  --heatmap-100: rgba(0, 212, 255, 0.95);
+
+  /* Sparkline colors */
+  --sparkline-line: var(--accent-cyan);
+  --sparkline-area: rgba(0, 212, 255, 0.2);
+  --sparkline-bar: var(--accent-cyan);
+  --sparkline-bar-negative: var(--accent-red);
+
   /* Z-index scale (centralized to prevent stacking conflicts) */
   --z-base: 1;
   --z-dropdown: 100;

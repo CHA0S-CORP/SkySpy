@@ -4,6 +4,24 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * Playwright configuration for SkysPy web e2e tests
  * @see https://playwright.dev/docs/test-configuration
+ *
+ * Browser Projects:
+ * - chromium: Default desktop Chrome testing (default for regular runs)
+ * - firefox: Desktop Firefox testing
+ * - webkit: Desktop Safari testing
+ * - mobile-chrome: Android mobile viewport (Pixel 5)
+ * - mobile-safari: iOS mobile viewport (iPhone 12)
+ * - full: Runs all browsers (use with --project=full)
+ *
+ * Usage:
+ * - npm run test:e2e                    # Runs chromium only (default)
+ * - npx playwright test --project=firefox
+ * - npx playwright test --project=webkit
+ * - npx playwright test --project=mobile-chrome
+ * - npx playwright test --project=mobile-safari
+ * - npx playwright test --project=chromium --project=firefox --project=webkit  # All desktop
+ *
+ * To install all browsers: npx playwright install
  */
 export default defineConfig({
   // Directory containing test files
@@ -65,41 +83,69 @@ export default defineConfig({
   // Output directory for test artifacts
   outputDir: 'test-results',
 
-  // Configure projects for major browsers
-  // Note: Only Chromium is enabled by default. To test other browsers,
-  // install them with: npx playwright install firefox webkit
+  // Configure projects for major browsers and viewports
   projects: [
+    // Desktop Browsers
     {
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
       },
     },
-    // Uncomment to enable Firefox/WebKit testing (requires: npx playwright install)
-    // {
-    //   name: 'firefox',
-    //   use: {
-    //     ...devices['Desktop Firefox'],
-    //   },
-    // },
-    // {
-    //   name: 'webkit',
-    //   use: {
-    //     ...devices['Desktop Safari'],
-    //   },
-    // },
-    // {
-    //   name: 'mobile-chrome',
-    //   use: {
-    //     ...devices['Pixel 5'],
-    //   },
-    // },
-    // {
-    //   name: 'mobile-safari',
-    //   use: {
-    //     ...devices['iPhone 12'],
-    //   },
-    // },
+    {
+      name: 'firefox',
+      use: {
+        ...devices['Desktop Firefox'],
+      },
+    },
+    {
+      name: 'webkit',
+      use: {
+        ...devices['Desktop Safari'],
+      },
+    },
+
+    // Mobile Viewports
+    {
+      name: 'mobile-chrome',
+      use: {
+        ...devices['Pixel 5'],
+      },
+    },
+    {
+      name: 'mobile-safari',
+      use: {
+        ...devices['iPhone 12'],
+      },
+    },
+
+    // Additional mobile viewports for comprehensive testing
+    {
+      name: 'mobile-android-landscape',
+      use: {
+        ...devices['Pixel 5 landscape'],
+      },
+    },
+    {
+      name: 'mobile-ios-landscape',
+      use: {
+        ...devices['iPhone 12 landscape'],
+      },
+    },
+
+    // Tablet viewports
+    {
+      name: 'tablet-ipad',
+      use: {
+        ...devices['iPad (gen 7)'],
+      },
+    },
+    {
+      name: 'tablet-ipad-landscape',
+      use: {
+        ...devices['iPad (gen 7) landscape'],
+      },
+    },
   ],
 
   // Run your local dev server before starting the tests

@@ -5,6 +5,7 @@ Alert rules, subscriptions, and history API views.
 import logging
 from datetime import timedelta
 
+from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -226,6 +227,7 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
         summary="Toggle alert rule", description="Enable or disable an alert rule", responses={200: AlertRuleSerializer}
     )
     @action(detail=True, methods=["post"])
+    @transaction.atomic
     def toggle(self, request, pk=None):
         """Toggle rule enabled status."""
         rule = self.get_object()

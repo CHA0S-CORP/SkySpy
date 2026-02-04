@@ -9,6 +9,7 @@ from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.db import transaction
 from django.test import TestCase
 from django.utils import timezone
 
@@ -638,10 +639,14 @@ class AlertServiceTriggerTests(TestCase):
         self.assertEqual(history.callsign, "UAL456")
         self.assertEqual(history.priority, "warning")
 
+    @patch("skyspy.services.alerts.transaction")
     @patch("skyspy.services.alerts.sync_emit")
-    def test_trigger_alert_broadcasts_to_channel(self, mock_sync_emit):
+    def test_trigger_alert_broadcasts_to_channel(self, mock_sync_emit, mock_transaction):
         """Test that triggered alerts are broadcast via Socket.IO."""
         mock_sync_emit.return_value = True
+        # Make on_commit execute callback immediately for testing
+        mock_transaction.on_commit = lambda func: func()
+        mock_transaction.atomic = transaction.atomic  # Keep atomic working
 
         db_rule = AlertRule.objects.create(
             name="Broadcast Test",
@@ -950,37 +955,68 @@ class AlertServiceWebhookTests(TestCase):
         """Set up test fixtures."""
         self.service = AlertService()
 
-    @patch("httpx.Client")
-    def test_call_webhook_success(self, mock_client_class):
-        """Test successful webhook call."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.raise_for_status = MagicMock()
-        mock_client = MagicMock()
-        mock_client.post.return_value = mock_response
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client_class.return_value = mock_client
+    @patch("skyspy.tasks.notifications.send_webhook_task")
+    def test_call_webhook_queues_task(self, mock_task):
+        """Test that webhook call queues an async task."""
+        from skyspy.services.alert_rule_cache import CompiledRule
+
+        mock_rule = CompiledRule(
+            id=1,
+            name="Test Rule",
+            rule_type="icao",
+            operator="eq",
+            value="ABC123",
+            conditions=None,
+            priority="info",
+            cooldown_seconds=300,
+            api_url="https://example.com/webhook",
+            owner_id=None,
+            visibility="private",
+            is_system=False,
+            starts_at=None,
+            expires_at=None,
+        )
 
         data = {"rule_name": "Test", "message": "Test message"}
 
-        self.service._call_webhook("https://example.com/webhook", data)
+        self.service._call_webhook("https://example.com/webhook", data, mock_rule)
 
-        mock_client.post.assert_called_once_with("https://example.com/webhook", json=data)
+        mock_task.delay.assert_called_once_with(
+            url="https://example.com/webhook",
+            data=data,
+            timeout=10.0,
+            rule_id=1,
+            rule_name="Test Rule",
+        )
 
-    @patch("httpx.Client")
-    def test_call_webhook_failure_does_not_raise(self, mock_client_class):
-        """Test that webhook failures are logged but don't raise."""
-        mock_client = MagicMock()
-        mock_client.post.side_effect = Exception("Connection failed")
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client_class.return_value = mock_client
+    @patch("skyspy.tasks.notifications.send_webhook_task")
+    def test_call_webhook_failure_does_not_raise(self, mock_task):
+        """Test that task queue failures are logged but don't raise."""
+        from skyspy.services.alert_rule_cache import CompiledRule
+
+        mock_task.delay.side_effect = Exception("Redis connection failed")
+
+        mock_rule = CompiledRule(
+            id=1,
+            name="Test Rule",
+            rule_type="icao",
+            operator="eq",
+            value="ABC123",
+            conditions=None,
+            priority="info",
+            cooldown_seconds=300,
+            api_url="https://example.com/webhook",
+            owner_id=None,
+            visibility="private",
+            is_system=False,
+            starts_at=None,
+            expires_at=None,
+        )
 
         data = {"rule_name": "Test", "message": "Test message"}
 
         # Should not raise
-        self.service._call_webhook("https://example.com/webhook", data)
+        self.service._call_webhook("https://example.com/webhook", data, mock_rule)
 
 
 class AlertServiceEdgeCaseTests(TestCase):

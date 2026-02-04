@@ -48,6 +48,9 @@ class NotificationChannelSerializer(serializers.ModelSerializer):
         ]
 
     def get_alert_rule_count(self, obj) -> int:
+        # Use annotated count if available (from viewset with .annotate(_alert_rule_count=Count('alert_rules')))
+        if hasattr(obj, "_alert_rule_count"):
+            return obj._alert_rule_count
         return obj.alert_rules.count()
 
 

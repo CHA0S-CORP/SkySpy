@@ -152,13 +152,136 @@ aircraft_info_cache = BoundedCache(maxsize=5000, name="aircraft_info")
 route_cache = BoundedCache(maxsize=1000, name="routes")
 photo_cache = BoundedCache(maxsize=2000, name="photos")
 
-# In-memory cache for fast access (thread-safe)
-_memory_cache: dict[str, tuple[Any, float]] = {}
-_memory_cache_lock = threading.RLock()
+# In-memory cache for fast access (thread-safe) - bounded to prevent memory growth
+_memory_cache = BoundedCache(maxsize=10000, name="memory")
 
-# Rate limiting timestamps for upstream API calls
-_rate_limit_timestamps: dict[str, float] = {}
-_rate_limit_lock = threading.Lock()
+
+# =============================================================================
+# Bounded Rate Limit Cache
+# =============================================================================
+
+
+class BoundedRateLimitCache:
+    """
+    Bounded rate limit cache with automatic cleanup.
+
+    Provides rate limiting with LRU eviction when the cache reaches max size.
+    Thread-safe with automatic cleanup of old entries.
+
+    Usage:
+        limiter = BoundedRateLimitCache(maxsize=10000)
+        if limiter.check_and_set("api:endpoint", min_interval=60):
+            # Allowed to make the call
+            ...
+        else:
+            # Rate limited
+            remaining = limiter.get_remaining("api:endpoint", 60)
+    """
+
+    MAX_SIZE = 10000
+
+    def __init__(self, maxsize: int = MAX_SIZE):
+        """
+        Initialize bounded rate limit cache.
+
+        Args:
+            maxsize: Maximum number of entries (default 10000)
+        """
+        self._timestamps: OrderedDict = OrderedDict()
+        self._lock = threading.Lock()
+        self._maxsize = maxsize
+
+    def check_and_set(self, key: str, min_interval: float) -> bool:
+        """
+        Check if rate limit allows and set timestamp if so.
+
+        Args:
+            key: Unique identifier for the rate-limited resource
+            min_interval: Minimum seconds between calls
+
+        Returns:
+            True if allowed, False if rate limited
+        """
+        now = time.time()
+
+        with self._lock:
+            # Cleanup if too large
+            if len(self._timestamps) >= self._maxsize:
+                self._cleanup_old(now, min_interval * 2)
+
+            last = self._timestamps.get(key, 0)
+            if now - last < min_interval:
+                return False
+
+            # Update and move to end (most recently used)
+            self._timestamps[key] = now
+            self._timestamps.move_to_end(key)
+            return True
+
+    def get_remaining(self, key: str, min_interval: float) -> float:
+        """
+        Get remaining seconds until rate limit clears.
+
+        Args:
+            key: Unique identifier for the rate-limited resource
+            min_interval: Minimum seconds between calls
+
+        Returns:
+            Seconds remaining (0 if allowed now)
+        """
+        now = time.time()
+        with self._lock:
+            last = self._timestamps.get(key, 0)
+            remaining = min_interval - (now - last)
+            return max(0, remaining)
+
+    def reset(self, key: str):
+        """Reset rate limit for a specific key."""
+        with self._lock:
+            self._timestamps.pop(key, None)
+
+    def clear(self):
+        """Clear all rate limits."""
+        with self._lock:
+            self._timestamps.clear()
+
+    def _cleanup_old(self, now: float, max_age: float):
+        """Remove entries older than max_age. Must hold lock."""
+        cutoff = now - max_age
+        # Remove oldest entries first (they are at the start of OrderedDict)
+        while self._timestamps:
+            key, ts = next(iter(self._timestamps.items()))
+            if ts < cutoff:
+                del self._timestamps[key]
+            else:
+                break
+
+    def cleanup(self, max_age: float = 7200):
+        """
+        Public cleanup method to remove old entries.
+
+        Args:
+            max_age: Maximum age in seconds (default 2 hours)
+        """
+        now = time.time()
+        with self._lock:
+            self._cleanup_old(now, max_age)
+
+    def __len__(self):
+        """Return number of entries in the rate limit cache."""
+        return len(self._timestamps)
+
+    def get_stats(self) -> dict:
+        """Get rate limit cache statistics."""
+        with self._lock:
+            return {
+                "size": len(self._timestamps),
+                "maxsize": self._maxsize,
+            }
+
+
+# Rate limiting with bounded cache to prevent memory growth
+_rate_limiter = BoundedRateLimitCache(maxsize=10000)
 
 
 def generate_cache_key(*args, **kwargs) -> str:
@@ -174,15 +297,10 @@ def get_from_memory_cache(key: str) -> tuple[bool, Any]:
     Returns:
         Tuple of (found, value). If found is False, value is None.
     """
-    with _memory_cache_lock:
-        if key in _memory_cache:
-            value, expires_at = _memory_cache[key]
-            if time.time() < expires_at:
-                return True, value
-            else:
-                # Expired, remove it
-                del _memory_cache[key]
-        return False, None
+    value = _memory_cache.get(key)
+    if value is not None:
+        return True, value
+    return False, None
 
 
 def set_in_memory_cache(key: str, value: Any, ttl: int = None):
@@ -195,33 +313,23 @@ def set_in_memory_cache(key: str, value: Any, ttl: int = None):
         ttl: Time to live in seconds (default from settings)
     """
     if ttl is None:
-        ttl = settings.CACHE_TTL
-
-    expires_at = time.time() + ttl
-
-    with _memory_cache_lock:
-        _memory_cache[key] = (value, expires_at)
+        ttl = getattr(settings, "CACHE_TTL", 300)
+    _memory_cache.set(key, value, ttl=ttl)
 
 
 def delete_from_memory_cache(key: str):
     """Delete value from in-memory cache."""
-    with _memory_cache_lock:
-        _memory_cache.pop(key, None)
+    _memory_cache.delete(key)
 
 
 def clear_memory_cache():
     """Clear all entries from in-memory cache."""
-    with _memory_cache_lock:
-        _memory_cache.clear()
+    _memory_cache.clear()
 
 
 def cleanup_expired_memory_cache():
     """Remove expired entries from in-memory cache."""
-    now = time.time()
-    with _memory_cache_lock:
-        expired_keys = [key for key, (_, expires_at) in _memory_cache.items() if now >= expires_at]
-        for key in expired_keys:
-            del _memory_cache[key]
+    return _memory_cache.cleanup_expired()
 
 
 def check_rate_limit(key: str, min_interval: int = None) -> bool:
@@ -237,15 +345,7 @@ def check_rate_limit(key: str, min_interval: int = None) -> bool:
     """
     if min_interval is None:
         min_interval = settings.UPSTREAM_API_MIN_INTERVAL
-
-    now = time.time()
-
-    with _rate_limit_lock:
-        last_call = _rate_limit_timestamps.get(key, 0)
-        if now - last_call < min_interval:
-            return False
-        _rate_limit_timestamps[key] = now
-        return True
+    return _rate_limiter.check_and_set(key, min_interval)
 
 
 def get_rate_limit_remaining(key: str, min_interval: int = None) -> float:
@@ -261,25 +361,17 @@ def get_rate_limit_remaining(key: str, min_interval: int = None) -> float:
     """
     if min_interval is None:
         min_interval = settings.UPSTREAM_API_MIN_INTERVAL
-
-    now = time.time()
-
-    with _rate_limit_lock:
-        last_call = _rate_limit_timestamps.get(key, 0)
-        remaining = min_interval - (now - last_call)
-        return max(0, remaining)
+    return _rate_limiter.get_remaining(key, min_interval)
 
 
 def reset_rate_limit(key: str):
     """Reset rate limit for a specific key."""
-    with _rate_limit_lock:
-        _rate_limit_timestamps.pop(key, None)
+    _rate_limiter.reset(key)
 
 
 def clear_rate_limits():
     """Clear all rate limit timestamps."""
-    with _rate_limit_lock:
-        _rate_limit_timestamps.clear()
+    _rate_limiter.clear()
 
 
 def cached_with_ttl(ttl: int = None, use_memory: bool = True):
@@ -438,16 +530,7 @@ def cleanup_rate_limits(max_age_seconds: int = 7200):
     Args:
         max_age_seconds: Maximum age of rate limit entries (default 2 hours)
     """
-    now = time.time()
-    cutoff = now - max_age_seconds
-
-    with _rate_limit_lock:
-        stale_keys = [k for k, v in _rate_limit_timestamps.items() if v < cutoff]
-        for k in stale_keys:
-            del _rate_limit_timestamps[k]
-
-    if stale_keys:
-        logger.debug(f"Cleaned up {len(stale_keys)} rate limit entries")
+    _rate_limiter.cleanup(max_age_seconds)
 
 
 def cleanup_all_caches():
@@ -496,15 +579,9 @@ def cleanup_all_caches():
 
 def get_cache_stats() -> dict:
     """Get statistics about in-memory caches."""
-    with _memory_cache_lock:
-        memory_cache_size = len(_memory_cache)
-
-    with _rate_limit_lock:
-        rate_limit_size = len(_rate_limit_timestamps)
-
     return {
-        "memory_cache_entries": memory_cache_size,
-        "rate_limit_entries": rate_limit_size,
+        "memory_cache": _memory_cache.get_stats(),
+        "rate_limiter": _rate_limiter.get_stats(),
         "bounded_caches": {
             "aircraft_info": aircraft_info_cache.get_stats(),
             "routes": route_cache.get_stats(),
