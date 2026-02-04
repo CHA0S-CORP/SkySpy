@@ -205,9 +205,11 @@ class AircraftInfoSerializer(serializers.ModelSerializer):
                     return f"/api/v1/photos/{icao}"
                 else:
                     # Fallback to filesystem check if cache not populated yet
+                    import tempfile
                     from pathlib import Path
 
-                    cache_dir = Path(getattr(settings, "PHOTO_CACHE_DIR", "/tmp/photo_cache"))
+                    default_cache = Path(tempfile.gettempdir()) / "photo_cache"
+                    cache_dir = Path(getattr(settings, "PHOTO_CACHE_DIR", str(default_cache)))
                     photo_path = cache_dir / f"{icao}.jpg"
                     if photo_path.exists() and photo_path.stat().st_size > 0:
                         return f"/api/v1/photos/{icao}"
@@ -242,9 +244,11 @@ class AircraftInfoSerializer(serializers.ModelSerializer):
                     return f"/api/v1/photos/{icao}/thumb"
                 else:
                     # Fallback to filesystem check if cache not populated yet
+                    import tempfile
                     from pathlib import Path
 
-                    cache_dir = Path(getattr(settings, "PHOTO_CACHE_DIR", "/tmp/photo_cache"))
+                    default_cache = Path(tempfile.gettempdir()) / "photo_cache"
+                    cache_dir = Path(getattr(settings, "PHOTO_CACHE_DIR", str(default_cache)))
                     thumb_path = cache_dir / f"{icao}_thumb.jpg"
                     if thumb_path.exists() and thumb_path.stat().st_size > 0:
                         return f"/api/v1/photos/{icao}/thumb"
