@@ -47,37 +47,34 @@ export function AuthProvider({ children }) {
   /**
    * Make authenticated API request
    */
-  const authFetch = useCallback(
-    async (url, options = {}) => {
-      const { accessToken } = getStoredTokens();
+  const authFetch = useCallback(async (url, options = {}) => {
+    const { accessToken } = getStoredTokens();
 
-      const headers = {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      };
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
 
-      if (accessToken) {
-        headers['Authorization'] = `Bearer ${accessToken}`;
+    if (accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    if (response.status === 401) {
+      const refreshed = await refreshAccessTokenRef.current?.();
+      if (refreshed) {
+        const newTokens = getStoredTokens();
+        headers['Authorization'] = `Bearer ${newTokens.accessToken}`;
+        return fetch(url, { ...options, headers });
       }
+    }
 
-      const response = await fetch(url, {
-        ...options,
-        headers,
-      });
-
-      if (response.status === 401) {
-        const refreshed = await refreshAccessTokenRef.current?.();
-        if (refreshed) {
-          const newTokens = getStoredTokens();
-          headers['Authorization'] = `Bearer ${newTokens.accessToken}`;
-          return fetch(url, { ...options, headers });
-        }
-      }
-
-      return response;
-    },
-    []
-  );
+    return response;
+  }, []);
 
   /**
    * Schedule token refresh before expiration
