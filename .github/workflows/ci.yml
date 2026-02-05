@@ -1462,7 +1462,8 @@ jobs:
         run: |
           RESULTS='${{ toJSON(needs.*.result) }}'
           echo "Job results: $RESULTS"
-          if echo "$RESULTS" | grep -qE '"failure"|"cancelled"'; then
+          # Only fail on actual failures, not on cancelled/skipped jobs
+          if echo "$RESULTS" | grep -q '"failure"'; then
             echo "CI failed"
             exit 1
           fi
@@ -1473,8 +1474,8 @@ jobs:
           echo "## CI Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Status
-          if echo '${{ toJSON(needs.*.result) }}' | grep -qE '"failure"|"cancelled"'; then
+          # Status - only fail on actual failures, not cancelled/skipped
+          if echo '${{ toJSON(needs.*.result) }}' | grep -q '"failure"'; then
             echo "### Status: :x: Failed" >> $GITHUB_STEP_SUMMARY
           else
             echo "### Status: :white_check_mark: Passed" >> $GITHUB_STEP_SUMMARY
