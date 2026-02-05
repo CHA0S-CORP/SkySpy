@@ -21,10 +21,10 @@ import django
 import pytest
 from django.conf import settings
 
-
 # =============================================================================
 # Skip failing tests (temporary until tests are updated)
 # =============================================================================
+
 
 def _load_skip_list():
     """Load list of tests to skip from skip_failing.txt."""
@@ -62,6 +62,7 @@ def pytest_collection_modifyitems(config, items):
 
         if test_id in _SKIP_TESTS:
             item.add_marker(skip_marker)
+
 
 # Ensure Django is configured
 if not settings.configured:
