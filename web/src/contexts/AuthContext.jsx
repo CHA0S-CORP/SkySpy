@@ -41,6 +41,7 @@ export function AuthProvider({ children }) {
   const refreshPromiseRef = useRef(null);
   const oidcPopupRef = useRef(null);
   const oidcCleanupRef = useRef(null);
+  const refreshAccessTokenRef = useRef(null);
   const apiBaseUrl = getConfig().apiBaseUrl;
 
   /**
@@ -65,7 +66,7 @@ export function AuthProvider({ children }) {
       });
 
       if (response.status === 401) {
-        const refreshed = await refreshAccessToken();
+        const refreshed = await refreshAccessTokenRef.current?.();
         if (refreshed) {
           const newTokens = getStoredTokens();
           headers['Authorization'] = `Bearer ${newTokens.accessToken}`;
@@ -75,7 +76,7 @@ export function AuthProvider({ children }) {
 
       return response;
     },
-    [refreshAccessToken]
+    []
   );
 
   /**
@@ -149,6 +150,11 @@ export function AuthProvider({ children }) {
     refreshPromiseRef.current = doRefresh();
     return refreshPromiseRef.current;
   }, [apiBaseUrl, scheduleTokenRefresh]);
+
+  // Keep ref in sync with refreshAccessToken
+  useEffect(() => {
+    refreshAccessTokenRef.current = refreshAccessToken;
+  }, [refreshAccessToken]);
 
   /**
    * Fetch auth configuration from server
