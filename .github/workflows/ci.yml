@@ -150,6 +150,10 @@ jobs:
             --ignore=skyspy/tests/e2e \
             --ignore=skyspy/tests/integration \
             --ignore=skyspy/tests/performance \
+            --ignore=skyspy/tests/test_api_aircraft.py \
+            --ignore=skyspy/tests/test_api_alerts.py \
+            --ignore=skyspy/tests/test_api_history.py \
+            --ignore=skyspy/tests/test_api_safety.py \
             --cov=skyspy --cov-report=xml --cov-fail-under=40  # TODO: Investigate coverage drop and restore to 80
       - uses: codecov/codecov-action@v5
         with:

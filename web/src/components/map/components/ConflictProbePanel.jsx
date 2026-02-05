@@ -163,7 +163,8 @@ const ConflictItem = memo(function ConflictItem({
             <div className="conflict-aircraft-data">
               <span className="conflict-data-item">
                 <TrendIcon1 size={10} />
-                {aircraft1.altitude?.toLocaleString?.() ?? '--'}ft - {aircraft1.altitudeAtCPA?.toLocaleString?.() ?? '--'}
+                {aircraft1.altitude?.toLocaleString?.() ?? '--'}ft -{' '}
+                {aircraft1.altitudeAtCPA?.toLocaleString?.() ?? '--'}
                 ft
               </span>
               <span className="conflict-data-item">
@@ -191,7 +192,8 @@ const ConflictItem = memo(function ConflictItem({
             <div className="conflict-aircraft-data">
               <span className="conflict-data-item">
                 <TrendIcon2 size={10} />
-                {aircraft2.altitude?.toLocaleString?.() ?? '--'}ft - {aircraft2.altitudeAtCPA?.toLocaleString?.() ?? '--'}
+                {aircraft2.altitude?.toLocaleString?.() ?? '--'}ft -{' '}
+                {aircraft2.altitudeAtCPA?.toLocaleString?.() ?? '--'}
                 ft
               </span>
               <span className="conflict-data-item">

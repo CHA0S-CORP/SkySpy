@@ -223,7 +223,7 @@ export function RangeSlider({
       <div
         ref={trackRef}
         role="slider"
-        aria-label={label || "Range slider"}
+        aria-label={label || 'Range slider'}
         aria-valuemin={min}
         aria-valuemax={max}
         aria-valuenow={localValue[0]}

@@ -268,7 +268,7 @@ export function MultiSelectFacet({
           <div
             id="dropdown-listbox"
             role="listbox"
-            aria-label={label || "Select options"}
+            aria-label={label || 'Select options'}
             style={{
               maxHeight,
               overflowY: 'auto',

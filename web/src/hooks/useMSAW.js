@@ -166,7 +166,8 @@ export function useMSAW(aircraft = [], airports = []) {
       const alt = ac.alt_baro === 'ground' ? 0 : ac.alt_baro || ac.alt_geom || ac.alt || null;
 
       // Skip aircraft with no altitude data, negative altitude, on ground, or ground-indicated
-      if (alt === null || alt < 0 || alt === 0 || ac.alt_baro === 'ground' || ac.on_ground) continue;
+      if (alt === null || alt < 0 || alt === 0 || ac.alt_baro === 'ground' || ac.on_ground)
+        continue;
 
       // Check if near airport (excluded from MSAW)
       const nearAirport = findNearestAirport(ac, airports);

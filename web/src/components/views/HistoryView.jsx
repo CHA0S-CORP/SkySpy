@@ -593,12 +593,7 @@ export function HistoryView({
   // so they should not trigger an offset reset (which would refetch from server)
   useEffect(() => {
     setArchiveOffset(0);
-  }, [
-    archiveSearchQuery,
-    archiveTypeFilter,
-    archiveIcaoFilter,
-    archiveDateRange,
-  ]);
+  }, [archiveSearchQuery, archiveTypeFilter, archiveIcaoFilter, archiveDateRange]);
 
   // Apply client-side hazard and altitude filters to PIREPs
   const filteredArchivedPireps = useMemo(() => {

@@ -186,7 +186,9 @@ export function FlightStatsPanel({
         <span className="flight-stats-panel__stat-label">Max Climb</span>
         <span
           className="flight-stats-panel__stat-value"
-          style={{ color: stats.maxVS != null && stats.maxVS > 0 ? 'var(--accent-green)' : undefined }}
+          style={{
+            color: stats.maxVS != null && stats.maxVS > 0 ? 'var(--accent-green)' : undefined,
+          }}
         >
           {formatVS(stats.maxVS)} fpm
         </span>
@@ -195,7 +197,9 @@ export function FlightStatsPanel({
         <span className="flight-stats-panel__stat-label">Max Desc</span>
         <span
           className="flight-stats-panel__stat-value"
-          style={{ color: stats.minVS != null && stats.minVS < 0 ? 'var(--accent-red)' : undefined }}
+          style={{
+            color: stats.minVS != null && stats.minVS < 0 ? 'var(--accent-red)' : undefined,
+          }}
         >
           {formatVS(stats.minVS)} fpm
         </span>

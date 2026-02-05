@@ -153,13 +153,21 @@ export function drawSeparationLine(ctx, options) {
   // Aircraft 1 label
   ctx.fillText(callsign1, pos1.x + 12, pos1.y - 4);
   ctx.fillStyle = 'rgba(180, 200, 220, 0.8)';
-  ctx.fillText(`${aircraft1.alt_baro ?? aircraft1.alt_geom ?? aircraft1.altitude ?? '--'} ft`, pos1.x + 12, pos1.y + 8);
+  ctx.fillText(
+    `${aircraft1.alt_baro ?? aircraft1.alt_geom ?? aircraft1.altitude ?? '--'} ft`,
+    pos1.x + 12,
+    pos1.y + 8
+  );
 
   // Aircraft 2 label
   ctx.fillStyle = color.text;
   ctx.fillText(callsign2, pos2.x + 12, pos2.y - 4);
   ctx.fillStyle = 'rgba(180, 200, 220, 0.8)';
-  ctx.fillText(`${aircraft2.alt_baro ?? aircraft2.alt_geom ?? aircraft2.altitude ?? '--'} ft`, pos2.x + 12, pos2.y + 8);
+  ctx.fillText(
+    `${aircraft2.alt_baro ?? aircraft2.alt_geom ?? aircraft2.altitude ?? '--'} ft`,
+    pos2.x + 12,
+    pos2.y + 8
+  );
 
   ctx.restore();
 }

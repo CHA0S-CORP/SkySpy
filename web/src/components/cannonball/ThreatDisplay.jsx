@@ -165,7 +165,10 @@ export const ThreatDisplay = memo(function ThreatDisplay({
         {showPatternDetails && threat.patterns && threat.patterns.length > 0 && (
           <div className="pattern-badges">
             {threat.patterns.map((pattern) => (
-              <span key={pattern.type || pattern.pattern_type || pattern} className={`pattern-badge ${pattern.type || pattern.pattern_type}`}>
+              <span
+                key={pattern.type || pattern.pattern_type || pattern}
+                className={`pattern-badge ${pattern.type || pattern.pattern_type}`}
+              >
                 {pattern.type === 'circling' && <RefreshCw size={10} />}
                 {pattern.type === 'grid_search' && <Target size={10} />}
                 {(pattern.type || pattern.pattern_type || 'unknown')

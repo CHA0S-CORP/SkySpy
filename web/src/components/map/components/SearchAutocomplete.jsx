@@ -297,7 +297,12 @@ export function SearchAutocomplete({
   const showNoRecent = (!query || query.trim().length === 0) && recentSearches.length === 0;
 
   return (
-    <div ref={dropdownRef} className="search-autocomplete" role="listbox" aria-label="Search results">
+    <div
+      ref={dropdownRef}
+      className="search-autocomplete"
+      role="listbox"
+      aria-label="Search results"
+    >
       {/* Search Results */}
       {showResults && (
         <div className="search-section">

@@ -49,13 +49,23 @@ export const MapControls = memo(function MapControls({
           <ZoomIn size={18} />
         </button>
 
-        <button className="map-control-btn" onClick={onZoomOut} title="Zoom Out" aria-label="Zoom Out">
+        <button
+          className="map-control-btn"
+          onClick={onZoomOut}
+          title="Zoom Out"
+          aria-label="Zoom Out"
+        >
           <ZoomOut size={18} />
         </button>
 
         <div className="control-divider" />
 
-        <button className="map-control-btn" onClick={onCenterOnFeeder} title="Center on Receiver" aria-label="Center on Receiver">
+        <button
+          className="map-control-btn"
+          onClick={onCenterOnFeeder}
+          title="Center on Receiver"
+          aria-label="Center on Receiver"
+        >
           <Target size={18} />
         </button>
 
