@@ -58,8 +58,6 @@ export function ProSearchBar({
   aircraft = [],
   aircraftInfo = {},
   onSelectAircraft,
-  // eslint-disable-next-line no-unused-vars
-  highlightedHexes = [],
   setHighlightedHexes,
 }) {
   const inputRef = useRef(null);
@@ -123,10 +121,15 @@ export function ProSearchBar({
             const item = navigationItems[selectedIndex];
             if (searchQuery && searchQuery.trim()) {
               // Select search result
-              handleSelectResult(item);
+              onSelectAircraft?.(item);
+              addSearch(searchQuery, item);
+              setSearchQuery('');
+              setIsDropdownOpen(false);
+              setSelectedIndex(-1);
             } else {
               // Select from history
-              handleSelectRecent(item.query);
+              setSearchQuery(item.query);
+              setSelectedIndex(-1);
             }
           }
           break;
@@ -144,7 +147,7 @@ export function ProSearchBar({
           break;
       }
     },
-    [isDropdownOpen, navigationItems, selectedIndex, searchQuery]
+    [isDropdownOpen, navigationItems, selectedIndex, searchQuery, onSelectAircraft, addSearch, setSearchQuery]
   );
 
   // Handle selecting a search result

@@ -248,9 +248,16 @@ export function SearchAutocomplete({
   const dropdownRef = useRef(null);
   const itemRefs = useRef([]);
 
+  // Clear stale refs when results or recent searches change
+  const totalItems = query?.trim() ? results.length : recentSearches.length;
+  useEffect(() => {
+    // Trim the refs array to match current item count
+    itemRefs.current = itemRefs.current.slice(0, totalItems);
+  }, [totalItems]);
+
   // Scroll selected item into view
   useEffect(() => {
-    if (selectedIndex >= 0 && itemRefs.current[selectedIndex]) {
+    if (selectedIndex >= 0 && selectedIndex < itemRefs.current.length && itemRefs.current[selectedIndex]) {
       itemRefs.current[selectedIndex].scrollIntoView({
         block: 'nearest',
         behavior: 'smooth',
@@ -300,7 +307,12 @@ export function SearchAutocomplete({
               ref={(el) => (itemRefs.current[i] = el)}
               className={`search-result ${i === selectedIndex ? 'selected' : ''}`}
               onClick={() => onSelect(ac)}
-              onKeyDown={(e) => e.key === 'Enter' && onSelect(ac)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  onSelect(ac);
+                }
+              }}
               role="option"
               aria-selected={i === selectedIndex}
               tabIndex={-1}
@@ -352,7 +364,12 @@ export function SearchAutocomplete({
               ref={(el) => (itemRefs.current[i] = el)}
               className={`search-recent ${i === selectedIndex ? 'selected' : ''}`}
               onClick={() => onSelectRecent(item.query)}
-              onKeyDown={(e) => e.key === 'Enter' && onSelectRecent(item.query)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  onSelectRecent(item.query);
+                }
+              }}
               role="option"
               aria-selected={i === selectedIndex}
               tabIndex={-1}

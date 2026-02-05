@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, memo } from 'react';
+import React, { useRef, useState, useCallback, useEffect, memo } from 'react';
 import {
   Plane,
   AlertTriangle,
@@ -131,6 +131,14 @@ const getTrendIcon = (trend) => {
   }
 };
 
+// Module-level state to persist section collapse state across component unmounts
+// This ensures sections stay open/closed when switching between aircraft
+let persistedSectionsOpen = {
+  secondaryMetrics: false,
+  photo: false,
+  graphs: false,
+};
+
 /**
  * PanelHeader - Title bar with action buttons
  */
@@ -253,6 +261,15 @@ const AircraftIdentity = memo(function AircraftIdentity({
   const info = aircraftInfo[aircraft.hex];
   const [creatingAlert, setCreatingAlert] = useState(null); // 'callsign' | 'registration' | null
   const [createdAlerts, setCreatedAlerts] = useState({}); // Track which alerts were created
+  const prevAircraftHexRef = useRef(aircraft.hex);
+
+  // Reset createdAlerts state when aircraft changes to prevent stale UI
+  if (prevAircraftHexRef.current !== aircraft.hex) {
+    prevAircraftHexRef.current = aircraft.hex;
+    // Note: This is intentionally not in useEffect to reset synchronously
+    // before the render to avoid showing stale "Alert Set" indicators
+    setCreatedAlerts({});
+  }
 
   const handleCreateAlert = useCallback(
     async (type, value, displayName) => {
@@ -422,6 +439,17 @@ const PhotoSection = memo(function PhotoSection({
   wsRequest,
   wsConnected,
 }) {
+  // Cleanup retry interval on unmount or aircraft change
+  useEffect(() => {
+    const currentRef = photoRetryRef;
+    return () => {
+      if (currentRef.current) {
+        clearInterval(currentRef.current);
+        currentRef.current = null;
+      }
+    };
+  }, [aircraft.hex, photoRetryRef]);
+
   const handleRetry = useCallback(() => {
     if (photoRetryRef.current) {
       clearInterval(photoRetryRef.current);
@@ -686,12 +714,17 @@ export function ProDetailsPanel({
   airports,
   setSelectedAirport,
 }) {
-  // Section collapse state - persist during session
-  const [sectionsOpen, setSectionsOpen] = useState({
-    secondaryMetrics: false,
-    photo: false,
-    graphs: false,
-  });
+  // Section collapse state - initialized from persisted module-level state
+  const [sectionsOpen, setSectionsOpen] = useState(() => persistedSectionsOpen);
+
+  // Sync state changes back to module-level persistence
+  const handleSectionChange = useCallback((section, open) => {
+    setSectionsOpen((prev) => {
+      const next = { ...prev, [section]: open };
+      persistedSectionsOpen = next; // Persist to module level
+      return next;
+    });
+  }, []);
 
   // Distance trend tracking - hooks must be called before any conditional returns
   const proPrevDistanceRef = useRef(null);
@@ -887,7 +920,7 @@ export function ProDetailsPanel({
       </CollapsibleSection>
 
       {/* ETA Section */}
-      {etaTarget !== undefined && (
+      {etaTarget != null && (
         <ETASection
           aircraft={liveAircraft}
           etaTarget={etaTarget}

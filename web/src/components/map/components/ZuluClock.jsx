@@ -8,9 +8,15 @@ import { Clock } from 'lucide-react';
  * Used in Pro mode search bar header.
  */
 export function ZuluClock({ className = '' }) {
-  const [time, setTime] = useState(() => new Date().toISOString().slice(11, 19));
+  // Initialize with placeholder to avoid SSR hydration mismatch
+  const [time, setTime] = useState('--:--:--');
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // Set initial time on mount to avoid hydration mismatch
+    setTime(new Date().toISOString().slice(11, 19));
+    setMounted(true);
+
     const interval = setInterval(() => {
       setTime(new Date().toISOString().slice(11, 19));
     }, 1000);
@@ -21,7 +27,7 @@ export function ZuluClock({ className = '' }) {
   return (
     <div className={`pro-time ${className}`.trim()}>
       <Clock size={14} />
-      <span>{time} Z</span>
+      <span>{mounted ? `${time} Z` : '--:--:-- Z'}</span>
     </div>
   );
 }

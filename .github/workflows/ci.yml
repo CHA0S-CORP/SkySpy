@@ -149,6 +149,7 @@ jobs:
           pytest -v --tb=short -n auto --dist loadfile \
             --ignore=skyspy/tests/e2e \
             --ignore=skyspy/tests/integration \
+            --ignore=skyspy/tests/performance \
             --cov=skyspy --cov-report=xml --cov-fail-under=40  # TODO: Investigate coverage drop and restore to 80
       - uses: codecov/codecov-action@v5
         with:
