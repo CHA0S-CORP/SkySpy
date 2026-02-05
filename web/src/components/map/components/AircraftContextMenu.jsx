@@ -172,6 +172,7 @@ export function AircraftContextMenu({
         top: position.y,
       }}
       role="menu"
+      tabIndex={0}
       aria-label="Aircraft context menu"
       onKeyDown={(e) => {
         const items = menuRef.current?.querySelectorAll('[role="menuitem"]');

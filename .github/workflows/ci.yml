@@ -146,7 +146,7 @@ jobs:
         run: |
           source .venv/bin/activate
           python manage.py migrate --noinput
-          pytest -v --tb=short -n auto --dist loadfile \
+          pytest -v --tb=short \
             --ignore=skyspy/tests/e2e \
             --ignore=skyspy/tests/integration \
             --ignore=skyspy/tests/performance \
