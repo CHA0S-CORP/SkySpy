@@ -530,6 +530,14 @@ function MapView({
     radarRange,
   });
 
+  // Clear track history when entering/exiting playback mode to prevent showing future positions
+  useEffect(() => {
+    if (isPlayback) {
+      trackHistoryRef.current = {};
+      setShortTrackHistory({});
+    }
+  }, [isPlayback]);
+
   // Phase 14.3: Data Block Leader Lines - allows Shift+drag to reposition data blocks
   const {
     getOffset: getDataBlockOffset,
@@ -3881,13 +3889,16 @@ function MapView({
   }, [safetyEvents]);
 
   const sortedAircraft = useMemo(() => {
+    // Use playback aircraft when in playback mode, otherwise use live aircraft
+    const sourceAircraft = isPlayback ? getPlaybackAircraft() : aircraft;
+
     // Debug: Log aircraft data received by MapView
     console.log(
       '[MapView] sortedAircraft memo running, received',
-      aircraft?.length ?? 0,
-      'aircraft'
+      sourceAircraft?.length ?? 0,
+      isPlayback ? 'playback aircraft' : 'live aircraft'
     );
-    let filtered = [...aircraft].filter((a) => a.lat && a.lon);
+    let filtered = [...sourceAircraft].filter((a) => a.lat && a.lon);
 
     // Apply traffic filters
     filtered = filtered.filter((ac) => {
@@ -3950,7 +3961,7 @@ function MapView({
     }
 
     return filtered.sort((a, b) => (a.distance_nm || 999) - (b.distance_nm || 999));
-  }, [aircraft, searchQuery, trafficFilters, safetyHexes]);
+  }, [aircraft, searchQuery, trafficFilters, safetyHexes, isPlayback, playbackPercent, getPlaybackAircraft]);
 
   // Live aircraft data for selected aircraft (updates in real-time)
   const liveAircraft = useMemo(() => {

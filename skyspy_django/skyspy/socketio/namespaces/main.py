@@ -5,6 +5,7 @@ Handles all main data streams including aircraft, safety, stats, alerts, acars, 
 This is the default namespace ('/') that clients connect to.
 """
 
+import asyncio
 import json
 import logging
 import statistics as stats_lib
@@ -127,38 +128,43 @@ class MainNamespace(socketio.AsyncNamespace):
         """
         logger.info(f"Socket.IO connection attempt: {sid}")
 
-        # Authenticate
-        user, error = await authenticate_socket(auth)
+        try:
+            # Authenticate
+            user, error = await authenticate_socket(auth)
 
-        if error:
-            auth_mode = getattr(settings, "AUTH_MODE", "hybrid")
-            reject_invalid = getattr(settings, "WS_REJECT_INVALID_TOKENS", False)
-            if auth_mode == "private" or (auth_mode == "hybrid" and reject_invalid):
-                logger.warning(f"Socket.IO connection rejected for {sid}: {error}")
-                return False
+            if error:
+                auth_mode = getattr(settings, "AUTH_MODE", "hybrid")
+                reject_invalid = getattr(settings, "WS_REJECT_INVALID_TOKENS", False)
+                if auth_mode == "private" or (auth_mode == "hybrid" and reject_invalid):
+                    logger.warning(f"Socket.IO connection rejected for {sid}: {error}")
+                    return False
 
-        # Store user in session
-        # Note: subscribed_topics uses a list instead of set for JSON serialization compatibility
-        await sio.save_session(
-            sid,
-            {
-                "user": user,
-                "subscribed_topics": [],
-                "client_filters": {},
-                "rate_limiter": RateLimiter(),
-                "connected_at": timezone.now().isoformat(),
-            },
-        )
+            # Store user in session
+            # Note: subscribed_topics uses a list instead of set for JSON serialization compatibility
+            await sio.save_session(
+                sid,
+                {
+                    "user": user,
+                    "subscribed_topics": [],
+                    "client_filters": {},
+                    "rate_limiter": RateLimiter(),
+                    "connected_at": timezone.now().isoformat(),
+                },
+            )
 
-        logger.info(f"Socket.IO connected: {sid}, user={user.username if user.is_authenticated else 'anonymous'}")
+            logger.info(f"Socket.IO connected: {sid}, user={user.username if user.is_authenticated else 'anonymous'}")
 
-        # Join default rooms based on permissions
-        await self._join_default_rooms(sid, user)
+            # Join default rooms based on permissions
+            await self._join_default_rooms(sid, user)
 
-        # Send initial aircraft snapshot
-        await self._send_initial_state(sid)
+            # Send initial aircraft snapshot
+            await self._send_initial_state(sid)
 
-        return True
+            return True
+        except asyncio.CancelledError:
+            # Client disconnected during connection setup
+            logger.debug(f"Connection setup cancelled for {sid} (client disconnected)")
+            return False
 
     async def on_disconnect(self, sid: str):
         """
@@ -189,6 +195,9 @@ class MainNamespace(socketio.AsyncNamespace):
             await sio.save_session(sid, {})
 
             logger.info(f"Socket.IO disconnected: {sid}")
+        except asyncio.CancelledError:
+            # Cleanup cancelled - session already gone, nothing more to do
+            logger.debug(f"Disconnect cleanup cancelled for {sid}")
         except Exception as e:
             logger.warning(f"Error during disconnect cleanup for {sid}: {e}")
 
@@ -216,62 +225,66 @@ class MainNamespace(socketio.AsyncNamespace):
             )
             return
 
-        topics = data.get("topics", [])
-        if isinstance(topics, str):
-            topics = [topics]
+        try:
+            topics = data.get("topics", [])
+            if isinstance(topics, str):
+                topics = [topics]
 
-        # Handle 'all' topic - expand to all supported topics
-        logger.info(f"[on_subscribe] {sid} requested topics: {topics}")
-        if "all" in topics:
-            topics = list(self.SUPPORTED_TOPICS)
-            logger.info(f"[on_subscribe] Expanded 'all' to: {topics}")
+            # Handle 'all' topic - expand to all supported topics
+            logger.info(f"[on_subscribe] {sid} requested topics: {topics}")
+            if "all" in topics:
+                topics = list(self.SUPPORTED_TOPICS)
+                logger.info(f"[on_subscribe] Expanded 'all' to: {topics}")
 
-        session = await sio.get_session(sid)
-        user = session.get("user")
-        # Use list instead of set for JSON serialization compatibility
-        subscribed = list(session.get("subscribed_topics", []))
+            session = await sio.get_session(sid)
+            user = session.get("user")
+            # Use list instead of set for JSON serialization compatibility
+            subscribed = list(session.get("subscribed_topics", []))
 
-        joined = []
-        denied = []
+            joined = []
+            denied = []
 
-        for topic in topics:
-            # Validate topic
-            if topic not in self.SUPPORTED_TOPICS:
-                logger.warning(f"Unknown topic requested by {sid}: {topic}")
-                continue
+            for topic in topics:
+                # Validate topic
+                if topic not in self.SUPPORTED_TOPICS:
+                    logger.warning(f"Unknown topic requested by {sid}: {topic}")
+                    continue
 
-            # Check permission
-            if not await check_topic_permission(user, topic):
-                logger.warning(f"Permission denied for {sid} to subscribe to {topic}")
-                denied.append(topic)
-                continue
+                # Check permission
+                if not await check_topic_permission(user, topic):
+                    logger.warning(f"Permission denied for {sid} to subscribe to {topic}")
+                    denied.append(topic)
+                    continue
 
-            # Join room
-            room = f"topic_{topic}"
-            await sio.enter_room(sid, room)
-            if topic not in subscribed:
-                subscribed.append(topic)
-            joined.append(topic)
-            logger.info(f"{sid} is entering room {room} [{self.namespace}]")
+                # Join room
+                room = f"topic_{topic}"
+                await sio.enter_room(sid, room)
+                if topic not in subscribed:
+                    subscribed.append(topic)
+                joined.append(topic)
+                logger.info(f"{sid} is entering room {room} [{self.namespace}]")
 
-        # Update session (using list for JSON serialization)
-        session["subscribed_topics"] = subscribed
-        await sio.save_session(sid, session)
+            # Update session (using list for JSON serialization)
+            session["subscribed_topics"] = subscribed
+            await sio.save_session(sid, session)
 
-        # Send response
-        await sio.emit(
-            "subscribed",
-            {
-                "topics": list(subscribed),
-                "joined": joined,
-                "denied": denied if denied else None,
-            },
-            to=sid,
-            namespace=self.namespace,
-        )
+            # Send response
+            await sio.emit(
+                "subscribed",
+                {
+                    "topics": list(subscribed),
+                    "joined": joined,
+                    "denied": denied if denied else None,
+                },
+                to=sid,
+                namespace=self.namespace,
+            )
 
-        # Send initial snapshots for newly joined topics
-        await self._send_topic_snapshots(sid, joined)
+            # Send initial snapshots for newly joined topics
+            await self._send_topic_snapshots(sid, joined)
+        except asyncio.CancelledError:
+            # Client disconnected during subscription - this is expected
+            logger.debug(f"Subscription cancelled for {sid} (client disconnected)")
 
     async def _send_topic_snapshots(self, sid: str, topics: list):
         """Send initial snapshots for the given topics using cached data when available."""
@@ -446,6 +459,9 @@ class MainNamespace(socketio.AsyncNamespace):
                     await self._emit_response(sid, request_id, request_type, result)
                 else:
                     await self._emit_error(sid, request_id, f"Unknown request type: {request_type}")
+        except asyncio.CancelledError:
+            # Client disconnected during request processing - this is expected
+            logger.debug(f"Request {request_type} cancelled for {sid} (client disconnected)")
         except Exception as e:
             logger.exception(f"Error handling request {request_type} for {sid}: {e}")
             await self._emit_error(sid, request_id, "Internal server error")
