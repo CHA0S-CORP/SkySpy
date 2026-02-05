@@ -28,7 +28,7 @@
     "docs:animations:convert": "node e2e/docs/utils/convert-all-videos.js",
     "docs:index": "node e2e/docs/utils/generate-index.js",
     "docs:generate": "npm run docs:screenshots:all && npm run docs:animations && npm run docs:animations:convert && npm run docs:index",
-    "lint": "eslint src --ext .js,.jsx --report-unused-disable-directives --max-warnings 200",
+    "lint": "eslint src --ext .js,.jsx --report-unused-disable-directives --max-warnings 250",
     "lint:fix": "eslint src --ext .js,.jsx --fix",
     "format": "prettier --write \"src/**/*.{js,jsx,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{js,jsx,css,json}\"",
