@@ -34,6 +34,9 @@ function AudioList({
 
   // Intersection Observer for infinite scroll
   useEffect(() => {
+    const currentRef = loadMoreRef.current;
+    if (!currentRef) return;
+
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
@@ -43,11 +46,12 @@ function AudioList({
       { rootMargin: '200px' }
     );
 
-    if (loadMoreRef.current) {
-      observer.observe(loadMoreRef.current);
-    }
+    observer.observe(currentRef);
 
-    return () => observer.disconnect();
+    return () => {
+      observer.unobserve(currentRef);
+      observer.disconnect();
+    };
   }, [transmissions.length]);
 
   return (

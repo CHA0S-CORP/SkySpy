@@ -74,20 +74,24 @@ export function VirtualList<T>({
     setScrollTop(target.scrollTop);
   }, []);
 
+  // Type guard to check if value is a non-null object
+  const isNonNullObject = (value: unknown): value is Record<string, unknown> => {
+    return typeof value === 'object' && value !== null;
+  };
+
   // Get unique key for each item
   const getKey = useCallback(
     (item: T, index: number): string | number => {
       if (getItemKey) {
         return getItemKey(item, index);
       }
-      // Try common key properties
-      if (typeof item === 'object' && item !== null) {
-        const obj = item as Record<string, unknown>;
-        if ('id' in obj && (typeof obj.id === 'string' || typeof obj.id === 'number')) {
-          return obj.id;
+      // Try common key properties using type guard
+      if (isNonNullObject(item)) {
+        if ('id' in item && (typeof item.id === 'string' || typeof item.id === 'number')) {
+          return item.id;
         }
-        if ('key' in obj && (typeof obj.key === 'string' || typeof obj.key === 'number')) {
-          return obj.key;
+        if ('key' in item && (typeof item.key === 'string' || typeof item.key === 'number')) {
+          return item.key;
         }
       }
       return index;

@@ -112,6 +112,11 @@ export function HistoryView({
   const [expandedSnapshots, setExpandedSnapshots] = useState({});
   const eventRefs = useRef({});
 
+  // Reset expandedSnapshots when tab changes to prevent stale state
+  useEffect(() => {
+    setExpandedSnapshots({});
+  }, [viewType]);
+
   // View mode state (grid, list, table)
   const [viewMode, setViewMode] = useState('grid');
 
@@ -299,7 +304,7 @@ export function HistoryView({
 
   // Set up NOTAM message event listeners
   useEffect(() => {
-    if (!notamsConnected || !notamsEnabled) return;
+    if (!notamsConnected || !notamsEnabled || !notamOn) return;
 
     const eventTypes = [
       'notam:snapshot',
@@ -314,25 +319,34 @@ export function HistoryView({
     ];
 
     const unsubscribers = eventTypes.map((eventType) => {
-      return notamOn(eventType, (data) => {
+      const unsub = notamOn(eventType, (data) => {
         handleNotamMessage({ type: eventType, data });
       });
+      return unsub;
     });
 
     return () => {
-      unsubscribers.forEach((unsub) => unsub && unsub());
+      unsubscribers.forEach((unsub) => {
+        if (unsub && typeof unsub === 'function') {
+          unsub();
+        }
+      });
     };
   }, [notamsConnected, notamsEnabled, notamOn, handleNotamMessage]);
 
   // If NOTAM WebSocket connected but no data after 5 seconds, try HTTP fallback
   useEffect(() => {
     if (notamsEnabled && notamsConnected && notamsLoading && notams.length === 0) {
+      let cancelled = false;
       const timeout = setTimeout(() => {
-        if (notams.length === 0 && !httpFallbackAttempted) {
+        if (!cancelled && notams.length === 0 && !httpFallbackAttempted) {
           fetchNotamsHttp();
         }
       }, 5000);
-      return () => clearTimeout(timeout);
+      return () => {
+        cancelled = true;
+        clearTimeout(timeout);
+      };
     }
   }, [
     notamsEnabled,

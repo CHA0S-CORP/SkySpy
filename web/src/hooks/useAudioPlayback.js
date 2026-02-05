@@ -199,10 +199,8 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
     audio
       .play()
       .then(() => {
-        // Successfully started playing, release the lock
-        // (next processAutoplayQueue will see playingId is set and exit early)
-        isProcessingQueueRef.current = false;
-
+        // Update state FIRST before releasing lock to prevent race condition
+        // where next processAutoplayQueue sees empty playingId
         globalAudioState.playingId = next.id;
         globalAudioState.currentTransmission = next;
         notifySubscribers({ playingId: next.id, currentTransmission: next });
@@ -219,6 +217,10 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
             }
           }
         }, 100);
+
+        // Release lock AFTER state is updated
+        // (next processAutoplayQueue will see playingId is set and exit early)
+        isProcessingQueueRef.current = false;
       })
       .catch((err) => {
         cleanup();
@@ -238,17 +240,23 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
     processAutoplayQueueRef.current = processAutoplayQueue;
   }, [processAutoplayQueue]);
 
+  // Ref to store handlePlay for use in event handlers to avoid stale closures
+  const handlePlayRef = useRef(null);
+
   // Audio playback handler
   const handlePlay = useCallback(
     (transmission) => {
       const id = transmission.id;
 
-      // Stop any currently playing audio
+      // Stop any currently playing audio and clean up its listeners
       if (globalAudioState.playingId && globalAudioState.playingId !== id) {
-        const prevAudio = audioRefs[globalAudioState.playingId];
+        const prevId = globalAudioState.playingId;
+        const prevAudio = audioRefs[prevId];
         if (prevAudio) {
           prevAudio.pause();
           prevAudio.currentTime = 0;
+          // Clean up old listeners to prevent memory leak
+          removeAudioListeners(prevId, prevAudio);
         }
       }
 
@@ -283,14 +291,14 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
           setLocalPlayingId(null);
           setLocalAudioProgress((prev) => ({ ...prev, [id]: 0 }));
 
-          // Autoplay next transmission
+          // Autoplay next transmission - use handlePlayRef to get current function (avoid stale closure)
           if (globalAudioState.autoplay && filteredTransmissionsRef?.current) {
             const transmissions = filteredTransmissionsRef.current;
             const currentIndex = transmissions.findIndex((t) => t.id === id);
             if (currentIndex !== -1 && currentIndex < transmissions.length - 1) {
               const nextTransmission = transmissions[currentIndex + 1];
               if (nextTransmission && nextTransmission.s3_url) {
-                setTimeout(() => handlePlay(nextTransmission), 100);
+                setTimeout(() => handlePlayRef.current?.(nextTransmission), 100);
               }
             }
           }
@@ -366,8 +374,13 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
           });
       }
     },
-    [audioRefs, isMuted, audioVolume, filteredTransmissionsRef]
+    [audioRefs, isMuted, audioVolume, filteredTransmissionsRef, removeAudioListeners]
   );
+
+  // Keep handlePlayRef in sync to avoid stale closures in event handlers
+  useEffect(() => {
+    handlePlayRef.current = handlePlay;
+  }, [handlePlay]);
 
   // Seek handler
   const handleSeek = useCallback(

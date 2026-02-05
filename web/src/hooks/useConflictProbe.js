@@ -258,74 +258,95 @@ export function useConflictProbe({
   const [conflicts, setConflicts] = useState([]);
   const lastUpdateRef = useRef(0);
   const aircraftMapRef = useRef(new Map());
+  // Store aircraft in ref to avoid triggering effect on every array reference change
+  const aircraftRef = useRef(aircraft);
+  aircraftRef.current = aircraft;
 
-  // Build aircraft map for quick lookups
+  // Build aircraft map for quick lookups - use length as dependency to avoid unnecessary rebuilds
+  const aircraftLength = aircraft.length;
   useEffect(() => {
+    const currentAircraft = aircraftRef.current;
     const map = new Map();
-    aircraft.forEach((ac) => {
+    currentAircraft.forEach((ac) => {
       if (ac.hex) {
         map.set(ac.hex.toUpperCase(), ac);
       }
     });
     aircraftMapRef.current = map;
-  }, [aircraft]);
+  }, [aircraftLength]);
 
-  // Analyze conflicts
+  // Analyze conflicts using interval-based approach to avoid O(n²) recalculations on every render
   useEffect(() => {
-    if (!enabled || aircraft.length < 2) {
+    if (!enabled) {
       setConflicts([]);
       return;
     }
 
-    // Throttle updates
-    const now = Date.now();
-    if (now - lastUpdateRef.current < UPDATE_INTERVAL) {
-      return;
-    }
-    lastUpdateRef.current = now;
+    const analyzeConflicts = () => {
+      const currentAircraft = aircraftRef.current;
+      if (currentAircraft.length < 2) {
+        setConflicts([]);
+        return;
+      }
 
-    const newConflicts = [];
-    const analyzedPairs = new Set();
+      // Throttle updates
+      const now = Date.now();
+      if (now - lastUpdateRef.current < UPDATE_INTERVAL) {
+        return;
+      }
+      lastUpdateRef.current = now;
 
-    // Filter to aircraft with valid position data
-    const validAircraft = aircraft.filter(
-      (ac) =>
-        ac.lat != null && ac.lon != null && (ac.alt_baro || ac.alt_geom || ac.alt) >= MIN_ALTITUDE
-    );
+      const newConflicts = [];
+      const analyzedPairs = new Set();
 
-    // O(n^2) comparison - consider spatial indexing for large numbers of aircraft
-    for (let i = 0; i < validAircraft.length; i++) {
-      for (let j = i + 1; j < validAircraft.length; j++) {
-        const ac1 = validAircraft[i];
-        const ac2 = validAircraft[j];
+      // Filter to aircraft with valid position data
+      const validAircraft = currentAircraft.filter(
+        (ac) =>
+          ac.lat != null && ac.lon != null && (ac.alt_baro || ac.alt_geom || ac.alt) >= MIN_ALTITUDE
+      );
 
-        // Skip if we've already analyzed this pair
-        const pairKey = [ac1.hex, ac2.hex].sort().join('-');
-        if (analyzedPairs.has(pairKey)) continue;
-        analyzedPairs.add(pairKey);
+      // O(n^2) comparison - consider spatial indexing for large numbers of aircraft
+      for (let i = 0; i < validAircraft.length; i++) {
+        for (let j = i + 1; j < validAircraft.length; j++) {
+          const ac1 = validAircraft[i];
+          const ac2 = validAircraft[j];
 
-        // Quick distance check to avoid expensive CPA calculation
-        const quickDist = calculateDistanceNm(ac1.lat, ac1.lon, ac2.lat, ac2.lon);
-        if (quickDist > maxDistance) continue;
+          // Skip if we've already analyzed this pair
+          const pairKey = [ac1.hex, ac2.hex].sort().join('-');
+          if (analyzedPairs.has(pairKey)) continue;
+          analyzedPairs.add(pairKey);
 
-        // Analyze potential conflict
-        const conflict = analyzeConflict(ac1, ac2, feederLocation);
-        if (conflict) {
-          newConflicts.push(conflict);
+          // Quick distance check to avoid expensive CPA calculation
+          const quickDist = calculateDistanceNm(ac1.lat, ac1.lon, ac2.lat, ac2.lon);
+          if (quickDist > maxDistance) continue;
+
+          // Analyze potential conflict
+          const conflict = analyzeConflict(ac1, ac2, feederLocation);
+          if (conflict) {
+            newConflicts.push(conflict);
+          }
         }
       }
-    }
 
-    // Sort by urgency (alert level and time to CPA)
-    newConflicts.sort((a, b) => {
-      const levelOrder = { red: 0, orange: 1, yellow: 2 };
-      const levelDiff = levelOrder[a.alertLevel] - levelOrder[b.alertLevel];
-      if (levelDiff !== 0) return levelDiff;
-      return a.cpa.timeSeconds - b.cpa.timeSeconds;
-    });
+      // Sort by urgency (alert level and time to CPA)
+      newConflicts.sort((a, b) => {
+        const levelOrder = { red: 0, orange: 1, yellow: 2 };
+        const levelDiff = levelOrder[a.alertLevel] - levelOrder[b.alertLevel];
+        if (levelDiff !== 0) return levelDiff;
+        return a.cpa.timeSeconds - b.cpa.timeSeconds;
+      });
 
-    setConflicts(newConflicts);
-  }, [aircraft, feederLocation, enabled, maxDistance]);
+      setConflicts(newConflicts);
+    };
+
+    // Run initial analysis
+    analyzeConflicts();
+
+    // Set up interval for periodic analysis
+    const intervalId = setInterval(analyzeConflicts, UPDATE_INTERVAL);
+
+    return () => clearInterval(intervalId);
+  }, [enabled, feederLocation, maxDistance]);
 
   // Get conflict involving a specific aircraft
   const getConflictForAircraft = useCallback(

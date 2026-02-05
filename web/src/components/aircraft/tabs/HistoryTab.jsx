@@ -87,6 +87,9 @@ export function HistoryTab({
       return v1 + (v2 - v1) * t;
     };
 
+    // Null check before spreading p1
+    if (!p1) return p2 || null;
+
     return {
       ...p1,
       lat: lerp(p1.lat, p2.lat, fraction),
@@ -203,21 +206,31 @@ export function HistoryTab({
     [setReplayPosition, updateReplayMarker]
   );
 
+  // Use a ref to track the current position in the animation loop
+  const posRef = useRef(replayPosition);
+
+  // Keep posRef in sync when replayPosition changes externally
+  useEffect(() => {
+    posRef.current = replayPosition;
+  }, [replayPosition]);
+
   // Toggle play/pause
   const togglePlay = useCallback(() => {
     setIsPlaying((prev) => {
       if (!prev) {
-        let pos = replayPosition <= 0 ? 0 : replayPosition;
+        if (posRef.current <= 0) {
+          posRef.current = 0;
+        }
         const animate = () => {
-          pos += 0.5;
-          if (pos >= 100) {
+          posRef.current += 0.5;
+          if (posRef.current >= 100) {
             setReplayPosition(100);
             updateReplayMarker(100);
             setIsPlaying(false);
             return;
           }
-          setReplayPosition(pos);
-          updateReplayMarker(pos);
+          setReplayPosition(posRef.current);
+          updateReplayMarker(posRef.current);
           animationRef.current = requestAnimationFrame(animate);
         };
         animationRef.current = requestAnimationFrame(animate);
@@ -227,7 +240,7 @@ export function HistoryTab({
         return false;
       }
     });
-  }, [replayPosition, setReplayPosition, updateReplayMarker, setIsPlaying]);
+  }, [setReplayPosition, updateReplayMarker, setIsPlaying]);
 
   // Skip to start/end
   const skipToStart = useCallback(() => {
@@ -519,7 +532,7 @@ export function HistoryTab({
               </div>
               {sightings.map((s, i) => (
                 <div
-                  key={i}
+                  key={`${s.timestamp}-${i}`}
                   className={`history-row ${i === selectedPositionIndex ? 'selected' : ''}`}
                   role="row"
                   tabIndex={0}
@@ -689,7 +702,7 @@ export function HistoryTab({
             <span role="columnheader">Dist (nm)</span>
           </div>
           {sightings.slice(0, 50).map((s, i) => (
-            <div key={i} className="history-row" role="row">
+            <div key={`${s.timestamp}-${i}`} className="history-row" role="row">
               <span role="cell">{new Date(s.timestamp).toLocaleTimeString()}</span>
               <span role="cell">{s.altitude?.toLocaleString() || '--'}</span>
               <span role="cell">{s.gs?.toFixed(0) || '--'}</span>

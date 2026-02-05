@@ -72,6 +72,9 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
     mountedRef.current = true;
     if (viewType !== 'acars') return;
 
+    // Create AbortController for fetch cancellation
+    const abortController = new AbortController();
+
     const fetchAcars = async () => {
       try {
         const queryParams = {
@@ -95,7 +98,7 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
         }
 
         // HTTP fallback
-        if (!result) {
+        if (!result && !abortController.signal.aborted) {
           const params = new URLSearchParams();
           params.set('hours', hours[timeRange]);
           params.set('limit', '200');
@@ -103,7 +106,9 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
           if (acarsAirlineFilter) params.set('airline', acarsAirlineFilter);
           if (acarsSelectedLabels.length > 0) params.set('label', acarsSelectedLabels.join(','));
 
-          const res = await fetch(`${apiBase}/api/v1/acars?${params.toString()}`);
+          const res = await fetch(`${apiBase}/api/v1/acars?${params.toString()}`, {
+            signal: abortController.signal,
+          });
           result = await safeJson(res);
         }
 
@@ -111,6 +116,8 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
           setAcarsMessages(result.messages || result.results || result || []);
         }
       } catch (err) {
+        // Ignore abort errors
+        if (err.name === 'AbortError') return;
         console.log('ACARS fetch error:', err.message);
       }
     };
@@ -118,6 +125,7 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
 
     return () => {
       mountedRef.current = false;
+      abortController.abort();
     };
   }, [viewType, timeRange, acarsSource, acarsAirlineFilter, acarsSelectedLabels, apiBase]);
 
@@ -152,6 +160,7 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
               hours: 24,
               limit: 1,
             });
+            if (!isMounted) return;
             if (result && (result.sightings || result.results)) {
               data = result;
             } else {
@@ -161,7 +170,9 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
             const res = await fetch(
               `${apiBase}/api/v1/sightings?callsign=${encodeURIComponent(callsign)}&hours=24&limit=1`
             );
+            if (!isMounted) return;
             data = await safeJson(res);
+            if (!isMounted) return;
             if (!data) throw new Error('HTTP request failed');
           }
           const sightings = data?.sightings || data?.results || [];
@@ -220,6 +231,7 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
               hours: 168,
               limit: 1,
             });
+            if (!isMounted) return;
             if (result && (result.sightings || result.results)) {
               data = result;
             } else {
@@ -229,7 +241,9 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
             const res = await fetch(
               `${apiBase}/api/v1/sightings?registration=${encodeURIComponent(reg)}&hours=168&limit=1`
             );
+            if (!isMounted) return;
             data = await safeJson(res);
+            if (!isMounted) return;
             if (!data) throw new Error('HTTP request failed');
           }
           const sightings = data?.sightings || data?.results || [];

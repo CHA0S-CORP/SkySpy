@@ -56,6 +56,7 @@ export function useDeviceGPS({
   const orientationHandlerRef = useRef(null);
   const permissionCheckedRef = useRef(false);
   const permissionStatusRef = useRef(null);
+  const mountedRef = useRef(true);
 
   // Check if geolocation is supported
   const isSupported = typeof navigator !== 'undefined' && 'geolocation' in navigator;
@@ -111,8 +112,10 @@ export function useDeviceGPS({
     return GPS_PERMISSION_STATES.PROMPT;
   }, [isSupported]);
 
-  // Check permission on mount
+  // Check permission on mount and track mount state
   useEffect(() => {
+    mountedRef.current = true;
+
     if (!permissionCheckedRef.current) {
       permissionCheckedRef.current = true;
       checkPermission();
@@ -120,6 +123,7 @@ export function useDeviceGPS({
 
     // Cleanup permission status listener on unmount
     return () => {
+      mountedRef.current = false;
       if (permissionStatusRef.current) {
         permissionStatusRef.current.onchange = null;
       }
@@ -186,28 +190,38 @@ export function useDeviceGPS({
   // Request permission explicitly (for use with permission UI)
   const requestPermission = useCallback(async () => {
     if (!isSupported) {
-      setPermissionState(GPS_PERMISSION_STATES.UNAVAILABLE);
-      setError('Geolocation not supported');
+      if (mountedRef.current) {
+        setPermissionState(GPS_PERMISSION_STATES.UNAVAILABLE);
+        setError('Geolocation not supported');
+      }
       return false;
     }
 
-    setPermissionState(GPS_PERMISSION_STATES.REQUESTING);
-    setError(null);
+    if (mountedRef.current) {
+      setPermissionState(GPS_PERMISSION_STATES.REQUESTING);
+      setError(null);
+    }
 
     return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          setPermissionState(GPS_PERMISSION_STATES.GRANTED);
-          handlePositionUpdate(pos);
+          // Check mounted state before updating state after async callback
+          if (mountedRef.current) {
+            setPermissionState(GPS_PERMISSION_STATES.GRANTED);
+            handlePositionUpdate(pos);
+          }
           resolve(true);
         },
         (err) => {
-          if (err.code === err.PERMISSION_DENIED) {
-            setPermissionState(GPS_PERMISSION_STATES.DENIED);
-            setError('Location permission denied');
-          } else {
-            setPermissionState(GPS_PERMISSION_STATES.GRANTED); // Permission granted but location error
-            handlePositionError(err);
+          // Check mounted state before updating state after async callback
+          if (mountedRef.current) {
+            if (err.code === err.PERMISSION_DENIED) {
+              setPermissionState(GPS_PERMISSION_STATES.DENIED);
+              setError('Location permission denied');
+            } else {
+              setPermissionState(GPS_PERMISSION_STATES.GRANTED); // Permission granted but location error
+              handlePositionError(err);
+            }
           }
           resolve(false);
         },
@@ -286,9 +300,21 @@ export function useDeviceGPS({
                 true
               );
               window.addEventListener('deviceorientation', orientationHandlerRef.current, true);
+            } else if (orientationPermState !== 'granted') {
+              // Permission denied - clean up the handler ref since we won't add listeners
+              orientationHandlerRef.current = null;
             }
           } catch (err) {
             console.error('Device orientation permission error:', err);
+            // Clean up: remove any listeners that may have been added before the error
+            if (orientationHandlerRef.current) {
+              window.removeEventListener(
+                'deviceorientationabsolute',
+                orientationHandlerRef.current,
+                true
+              );
+              window.removeEventListener('deviceorientation', orientationHandlerRef.current, true);
+            }
             // Clean up the handler ref since we couldn't add listeners
             orientationHandlerRef.current = null;
           }

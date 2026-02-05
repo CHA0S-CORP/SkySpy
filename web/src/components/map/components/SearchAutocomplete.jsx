@@ -257,7 +257,11 @@ export function SearchAutocomplete({
 
   // Scroll selected item into view
   useEffect(() => {
-    if (selectedIndex >= 0 && selectedIndex < itemRefs.current.length && itemRefs.current[selectedIndex]) {
+    if (
+      selectedIndex >= 0 &&
+      selectedIndex < itemRefs.current.length &&
+      itemRefs.current[selectedIndex]
+    ) {
       itemRefs.current[selectedIndex].scrollIntoView({
         block: 'nearest',
         behavior: 'smooth',

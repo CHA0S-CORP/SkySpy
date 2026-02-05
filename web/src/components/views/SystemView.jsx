@@ -180,11 +180,14 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
 
   // Initial fetch and periodic refresh - use WebSocket if connected, else HTTP
   useEffect(() => {
-    const doFetch = () => {
+    let mounted = true;
+
+    const doFetch = async () => {
+      if (!mounted) return;
       if (wsConnected && wsRequest) {
-        fetchViaSocket();
+        await fetchViaSocket();
       } else {
-        fetchViaHttp();
+        await fetchViaHttp();
       }
     };
 
@@ -193,8 +196,14 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
 
     // Refresh interval: 15s for WebSocket, 10s for HTTP
     const intervalMs = wsConnected ? 15000 : 10000;
-    const interval = setInterval(doFetch, intervalMs);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      if (mounted) doFetch();
+    }, intervalMs);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
   }, [wsConnected, wsRequest, fetchViaSocket, fetchViaHttp]);
 
   // Manual refresh handler
@@ -417,17 +426,26 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
   useEffect(() => {
     const lat = status?.location?.latitude;
     const lon = status?.location?.longitude;
+    const container = mapContainerRef.current;
 
-    if (!mapContainerRef.current || !lat || !lon) return;
+    if (!container || !lat || !lon) return;
 
-    // Clean up existing map
+    // Clean up existing map completely before creating new one
     if (mapRef.current) {
-      mapRef.current.remove();
+      try {
+        mapRef.current.off();
+        mapRef.current.remove();
+      } catch {
+        // Map may already be removed
+      }
       mapRef.current = null;
     }
 
+    // Clear the container to remove any leftover Leaflet DOM elements
+    container.innerHTML = '';
+
     // Initialize map
-    const map = L.map(mapContainerRef.current, {
+    const map = L.map(container, {
       center: [lat, lon],
       zoom: 9,
       zoomControl: false,
@@ -465,7 +483,12 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
 
     return () => {
       if (mapRef.current) {
-        mapRef.current.remove();
+        try {
+          mapRef.current.off();
+          mapRef.current.remove();
+        } catch {
+          // Map may already be removed
+        }
         mapRef.current = null;
       }
     };

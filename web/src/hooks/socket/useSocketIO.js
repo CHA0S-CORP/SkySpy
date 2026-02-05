@@ -130,6 +130,9 @@ export function useSocketIO({
 
     console.log('[useSocketIO] Connecting to:', fullUrl, 'path:', pathRef.current);
 
+    // Validate mount state before state updates
+    if (!mountedRef.current) return;
+
     setConnecting(true);
     setError(null);
 
@@ -160,6 +163,12 @@ export function useSocketIO({
         ...defaultReconnectConfig,
         ...reconnectConfigRef.current,
       });
+
+      // Validate mount state after socket creation to handle race condition
+      if (!mountedRef.current) {
+        socket.disconnect();
+        return;
+      }
 
       socketRef.current = socket;
 

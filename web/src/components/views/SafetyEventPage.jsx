@@ -102,6 +102,12 @@ export function SafetyEventPage({
     setReplayState((prev) => ({ ...prev, isPlaying: newPlaying }));
 
     if (newPlaying) {
+      // Cancel any existing animation frame before starting a new one
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+
       let pos = replayState.position <= 0 ? 0 : replayState.position;
       let lastTime = performance.now();
 
@@ -114,6 +120,7 @@ export function SafetyEventPage({
         if (pos >= 100) {
           pos = 100;
           setReplayState((prev) => ({ ...prev, position: 100, isPlaying: false }));
+          animationFrameRef.current = null;
           return;
         }
 
@@ -125,6 +132,7 @@ export function SafetyEventPage({
     } else {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
     }
   }, [replayState]);
@@ -158,6 +166,9 @@ export function SafetyEventPage({
 
   // Handle mousewheel on replay controls to scrub through time
   useEffect(() => {
+    const controls = replayControlsRef.current;
+    if (!controls) return;
+
     const handleWheel = (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -169,14 +180,14 @@ export function SafetyEventPage({
       });
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
     };
 
-    const controls = replayControlsRef.current;
-    if (controls) controls.addEventListener('wheel', handleWheel, { passive: false });
+    controls.addEventListener('wheel', handleWheel, { passive: false });
 
     return () => {
-      if (controls) controls.removeEventListener('wheel', handleWheel);
+      controls.removeEventListener('wheel', handleWheel);
     };
   }, []);
 

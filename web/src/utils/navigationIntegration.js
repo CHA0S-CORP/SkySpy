@@ -49,7 +49,7 @@ export function openInGoogleMaps(lat, lon, label = '') {
   const url = label
     ? `https://www.google.com/maps/search/?api=1&query=${lat},${lon}&query_place_id=${encodedLabel}`
     : `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
-  window.open(url, '_blank');
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 /**
@@ -61,7 +61,7 @@ export function openInGoogleMaps(lat, lon, label = '') {
 export function openInAppleMaps(lat, lon, label = '') {
   const encodedLabel = encodeURIComponent(label);
   const url = `https://maps.apple.com/?ll=${lat},${lon}&q=${encodedLabel || lat + ',' + lon}`;
-  window.open(url, '_blank');
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 /**
@@ -71,7 +71,7 @@ export function openInAppleMaps(lat, lon, label = '') {
  */
 export function openInWaze(lat, lon) {
   const url = `https://www.waze.com/ul?ll=${lat},${lon}&navigate=yes`;
-  window.open(url, '_blank');
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 /**

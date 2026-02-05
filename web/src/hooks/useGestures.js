@@ -6,7 +6,7 @@
  * - Double-tap
  * - Long press
  */
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 
 const SWIPE_THRESHOLD = 50; // Minimum distance for swipe
 const SWIPE_TIMEOUT = 300; // Max time for swipe gesture
@@ -26,6 +26,20 @@ export function useGestures({
   const touchTimeRef = useRef(null);
   const lastTapRef = useRef(0);
   const longPressTimerRef = useRef(null);
+  const mountedRef = useRef(true);
+
+  // Track mounted state and cleanup timer on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      // Clear any pending timer on unmount
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const handleTouchStart = useCallback(
     (e) => {
@@ -41,6 +55,8 @@ export function useGestures({
       // Start long press timer
       if (onLongPress) {
         longPressTimerRef.current = setTimeout(() => {
+          // Check if still mounted before calling handler
+          if (!mountedRef.current) return;
           onLongPress();
           touchStartRef.current = null; // Prevent swipe after long press
         }, LONG_PRESS_DELAY);

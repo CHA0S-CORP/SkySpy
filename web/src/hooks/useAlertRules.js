@@ -69,8 +69,21 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
     path: '/socket.io',
   });
 
+  // Track event listener unsubscribers to prevent stacking on reconnect
+  const alertListenersRef = useRef({ triggered: null, snapshot: null });
+
   // Set up alert event listeners
   useEffect(() => {
+    // Always clean up previous listeners first to prevent stacking
+    if (alertListenersRef.current.triggered) {
+      alertListenersRef.current.triggered();
+      alertListenersRef.current.triggered = null;
+    }
+    if (alertListenersRef.current.snapshot) {
+      alertListenersRef.current.snapshot();
+      alertListenersRef.current.snapshot = null;
+    }
+
     if (!alertsConnected) return;
 
     const handleAlertTriggered = (data) => {
@@ -81,12 +94,18 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
       setRealtimeAlerts(data?.alerts || []);
     };
 
-    const unsubTriggered = onAlertEvent('alert:triggered', handleAlertTriggered);
-    const unsubSnapshot = onAlertEvent('alert:snapshot', handleAlertSnapshot);
+    alertListenersRef.current.triggered = onAlertEvent('alert:triggered', handleAlertTriggered);
+    alertListenersRef.current.snapshot = onAlertEvent('alert:snapshot', handleAlertSnapshot);
 
     return () => {
-      unsubTriggered?.();
-      unsubSnapshot?.();
+      if (alertListenersRef.current.triggered) {
+        alertListenersRef.current.triggered();
+        alertListenersRef.current.triggered = null;
+      }
+      if (alertListenersRef.current.snapshot) {
+        alertListenersRef.current.snapshot();
+        alertListenersRef.current.snapshot = null;
+      }
     };
   }, [alertsConnected, onAlertEvent]);
 

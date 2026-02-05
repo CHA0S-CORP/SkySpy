@@ -21,33 +21,34 @@ function HoverTooltip({ aircraft, info, x, y, containerWidth, containerHeight })
 
   // Calculate position to avoid screen edges
   useEffect(() => {
-    if (tooltipRef.current) {
-      const rect = tooltipRef.current.getBoundingClientRect();
-      const newPos = { left: x + 20, top: y - 10 };
+    const tooltip = tooltipRef.current;
+    if (!tooltip) return;
 
-      // Avoid right edge
-      if (newPos.left + rect.width > containerWidth - 10) {
-        newPos.left = x - rect.width - 20;
-      }
+    const rect = tooltip.getBoundingClientRect();
+    const newPos = { left: x + 20, top: y - 10 };
 
-      // Avoid bottom edge
-      if (newPos.top + rect.height > containerHeight - 10) {
-        newPos.top = y - rect.height - 10;
-      }
-
-      // Avoid top edge
-      if (newPos.top < 10) {
-        newPos.top = 10;
-      }
-
-      // Avoid left edge
-      if (newPos.left < 10) {
-        newPos.left = 10;
-      }
-
-      setPosition(newPos);
+    // Avoid right edge
+    if (newPos.left + rect.width > containerWidth - 10) {
+      newPos.left = x - rect.width - 20;
     }
-  }, [x, y, containerWidth, containerHeight]);
+
+    // Avoid bottom edge
+    if (newPos.top + rect.height > containerHeight - 10) {
+      newPos.top = y - rect.height - 10;
+    }
+
+    // Avoid top edge
+    if (newPos.top < 10) {
+      newPos.top = 10;
+    }
+
+    // Avoid left edge
+    if (newPos.left < 10) {
+      newPos.left = 10;
+    }
+
+    setPosition(newPos);
+  }, [x, y, containerWidth, containerHeight, aircraft]);
 
   // Determine if aircraft has special status
   const isEmergency = useMemo(() => {

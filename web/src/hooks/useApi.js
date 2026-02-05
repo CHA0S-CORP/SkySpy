@@ -70,7 +70,9 @@ export function useApi(endpoint, interval = null, apiBase = '') {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const abortControllerRef = useRef(null);
+  // Separate refs for effect and manual refetch to avoid race conditions
+  const effectAbortControllerRef = useRef(null);
+  const refetchAbortControllerRef = useRef(null);
 
   const fetchData = useCallback(
     async (signal) => {
@@ -104,7 +106,7 @@ export function useApi(endpoint, interval = null, apiBase = '') {
   useEffect(() => {
     // Create a new AbortController for this effect lifecycle
     const abortController = new AbortController();
-    abortControllerRef.current = abortController;
+    effectAbortControllerRef.current = abortController;
 
     fetchData(abortController.signal);
 
@@ -121,20 +123,19 @@ export function useApi(endpoint, interval = null, apiBase = '') {
     return () => {
       // Abort the controller and clear interval on cleanup
       abortController.abort();
-      abortControllerRef.current = null;
+      effectAbortControllerRef.current = null;
       if (intervalId) clearInterval(intervalId);
     };
   }, [fetchData, interval]);
 
   const refetch = useCallback(() => {
     // Abort any previous manual refetch before starting a new one
-    // Note: We create a new controller specifically for this refetch
-    // The effect's controller remains separate for interval fetches
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    // Use a separate ref to avoid interfering with the effect's controller
+    if (refetchAbortControllerRef.current) {
+      refetchAbortControllerRef.current.abort();
     }
     const abortController = new AbortController();
-    abortControllerRef.current = abortController;
+    refetchAbortControllerRef.current = abortController;
     setLoading(true);
     fetchData(abortController.signal);
   }, [fetchData]);

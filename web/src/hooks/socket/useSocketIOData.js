@@ -365,6 +365,7 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
     // Flush any pending batched aircraft updates before clearing state
     forceFlushAircraftBatch();
 
+    // Check mounted state before state updates to prevent React warnings
     if (mountedRef.current) {
       setAircraft({});
       setStats({ count: 0 });
@@ -372,11 +373,11 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
 
     // Reject all pending requests - always reject to prevent hanging promises
     // The .catch() handler in calling code should handle unmounted state
+    // Note: We reject regardless of mount state to prevent memory leaks from hanging promises
     const pendingEntries = Array.from(pendingRequests.current.entries());
     pendingRequests.current.clear();
     pendingEntries.forEach(([, { reject, timeoutId }]) => {
       clearTimeout(timeoutId);
-      // Always reject to prevent memory leaks from hanging promises
       reject(new Error('Socket.IO disconnected'));
     });
   }, []);

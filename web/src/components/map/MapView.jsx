@@ -768,11 +768,7 @@ function MapView({
   );
 
   // Phase 5: Theme & Customization - using useProTheme hook
-  const {
-    theme: proTheme,
-    setTheme: setProTheme,
-    themeColors: proThemeColors,
-  } = useProTheme();
+  const { theme: proTheme, setTheme: setProTheme, themeColors: proThemeColors } = useProTheme();
   // Theme colors for Pro mode - computed from proTheme for use in render
   const themeColors = useMemo(() => {
     return config.mapMode === 'pro' ? proThemeColors : null;

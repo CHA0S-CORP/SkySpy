@@ -129,11 +129,26 @@ export function CannonballMode({ apiBase, onExit, aircraft = [] }) {
     logThreat,
   });
 
-  // Send location updates to backend when position changes
+  // Debounced location update ref
+  const locationUpdateTimeoutRef = useRef(null);
+
+  // Send location updates to backend when position changes (debounced)
   useEffect(() => {
     if (position && settings.useBackend !== false) {
-      updateLocation(position.lat, position.lon, heading, userSpeed);
+      // Clear any pending update
+      if (locationUpdateTimeoutRef.current) {
+        clearTimeout(locationUpdateTimeoutRef.current);
+      }
+      // Debounce location updates to prevent hammering the backend
+      locationUpdateTimeoutRef.current = setTimeout(() => {
+        updateLocation(position.lat, position.lon, heading, userSpeed);
+      }, 500);
     }
+    return () => {
+      if (locationUpdateTimeoutRef.current) {
+        clearTimeout(locationUpdateTimeoutRef.current);
+      }
+    };
   }, [position, heading, userSpeed, updateLocation, settings.useBackend]);
 
   // Update backend threat radius when settings change
@@ -144,11 +159,17 @@ export function CannonballMode({ apiBase, onExit, aircraft = [] }) {
   // Handle critical threat continuous vibration
   useEffect(() => {
     const hasCritical = threats.some((t) => t.threat_level === 'critical');
-    if (hasCritical && settings.hapticEnabled && !criticalVibrationRef.current) {
-      criticalVibrationRef.current = startContinuousVibration(3000);
-    } else if (!hasCritical && criticalVibrationRef.current) {
-      stopContinuousVibration(criticalVibrationRef.current);
-      criticalVibrationRef.current = null;
+    if (hasCritical && settings.hapticEnabled) {
+      // Only start vibration if not already running
+      if (!criticalVibrationRef.current) {
+        criticalVibrationRef.current = startContinuousVibration(3000);
+      }
+    } else if (!hasCritical || !settings.hapticEnabled) {
+      // Stop vibration if no critical threat or haptic disabled
+      if (criticalVibrationRef.current) {
+        stopContinuousVibration(criticalVibrationRef.current);
+        criticalVibrationRef.current = null;
+      }
     }
     return () => {
       if (criticalVibrationRef.current) {

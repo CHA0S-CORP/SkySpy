@@ -96,9 +96,24 @@ export function AudioView({ apiBase, onSelectAircraft }) {
     }
   }, [statsData]);
 
-  // Refetch on filter change
+  // Abort controller ref for request cancellation
+  const abortControllerRef = useRef(null);
+
+  // Refetch on filter change with abort handling
   useEffect(() => {
+    // Cancel any pending request before starting new one
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     refetch();
+
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [timeRange, statusFilter, channelFilter, refetch]);
 
   // Merge realtime transmissions with API data

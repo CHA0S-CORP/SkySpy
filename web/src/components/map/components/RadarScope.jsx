@@ -96,16 +96,22 @@ const RadarScope = forwardRef(function RadarScope(
     const container = containerRef.current;
 
     const resize = () => {
-      const rect = container.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
+      try {
+        const rect = container.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
 
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      canvas.style.width = rect.width + 'px';
-      canvas.style.height = rect.height + 'px';
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
 
-      const ctx = canvas.getContext('2d');
-      ctx.scale(dpr, dpr);
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.scale(dpr, dpr);
+        }
+      } catch (error) {
+        console.error('RadarScope resize error:', error);
+      }
     };
 
     resize();

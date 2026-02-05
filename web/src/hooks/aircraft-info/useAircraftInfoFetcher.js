@@ -128,7 +128,7 @@ export function useAircraftInfoFetcher({
         pendingFetches.current.delete(icao);
       }
     },
-    [wsRequest, wsConnected, apiBaseUrl, maxRetries, onSuccess, onError]
+    [wsRequest, wsConnected, apiBaseUrl, maxRetries, onSuccess, onError, scheduleRetryProcessing]
   );
 
   /**

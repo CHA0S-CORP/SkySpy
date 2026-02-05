@@ -120,11 +120,17 @@ export function useAlertNotifications(options = {}) {
         data = await safeJson(res);
       }
 
-      if (data && typeof data.count === 'number' && mountedRef.current) {
+      // Check mounted state after async operation to prevent state update on unmounted component
+      if (!mountedRef.current) return;
+
+      if (data && typeof data.count === 'number') {
         setUnacknowledgedCount(data.count);
       }
     } catch (err) {
-      console.warn('Failed to fetch unacknowledged alert count:', err.message);
+      // Only log warning if still mounted
+      if (mountedRef.current) {
+        console.warn('Failed to fetch unacknowledged alert count:', err.message);
+      }
     }
   }, [apiBase, wsRequest, wsConnected]);
 
@@ -260,8 +266,14 @@ export function useAlertNotifications(options = {}) {
 
   // Listen for WebSocket alert events via custom event
   useEffect(() => {
+    // Use effect-local cleanup flag to prevent race condition where
+    // handler fires after cleanup but before event listener is removed
+    let isCleanedUp = false;
+
     const handleAlertEvent = (event) => {
-      if (event.detail && mountedRef.current) {
+      // Check both cleanup flag and mount state to handle all race conditions
+      if (isCleanedUp || !mountedRef.current) return;
+      if (event.detail) {
         handleAlertTriggeredInternal(event.detail);
       }
     };
@@ -269,6 +281,7 @@ export function useAlertNotifications(options = {}) {
     window.addEventListener('skyspy:alert:triggered', handleAlertEvent);
 
     return () => {
+      isCleanedUp = true;
       window.removeEventListener('skyspy:alert:triggered', handleAlertEvent);
     };
   }, [handleAlertTriggeredInternal]);

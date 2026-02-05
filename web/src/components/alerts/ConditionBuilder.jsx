@@ -118,7 +118,7 @@ function ConditionGroup({
       <div className="condition-rows">
         {group.conditions.map((cond, ci) => (
           <ConditionRow
-            key={ci}
+            key={cond.id || `cond-${groupIndex}-${ci}`}
             condition={cond}
             groupIndex={groupIndex}
             condIndex={ci}
@@ -167,6 +167,11 @@ export function ConditionBuilder({
 
   // Update a single condition
   const updateCondition = (groupIndex, condIndex, field, value) => {
+    // Bounds check for groupIndex
+    if (groupIndex < 0 || groupIndex >= groups.length) {
+      console.error('Invalid groupIndex:', groupIndex);
+      return;
+    }
     const newGroups = [...groups];
     const newConditions = [...newGroups[groupIndex].conditions];
     newConditions[condIndex] = { ...newConditions[condIndex], [field]: value };
@@ -223,7 +228,7 @@ export function ConditionBuilder({
       <div className="condition-groups">
         {groups.map((group, gi) => (
           <ConditionGroup
-            key={gi}
+            key={group.id || `group-${gi}`}
             group={group}
             groupIndex={gi}
             topLevelLogic={topLevelLogic}

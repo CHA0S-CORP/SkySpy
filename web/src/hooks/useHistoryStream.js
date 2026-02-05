@@ -34,11 +34,20 @@ export function useHistoryStream({
   itemsRef.current = items;
 
   const isLiveRef = useRef(isLive);
+  const mountedRef = useRef(true);
 
   // Keep isLiveRef in sync
   useEffect(() => {
     isLiveRef.current = isLive;
   }, [isLive]);
+
+  // Track mounted state
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Add new item to stream
   const addItem = useCallback(
@@ -75,7 +84,7 @@ export function useHistoryStream({
     if (!subscribeMessages || !enabled) return;
 
     const handleMessage = (data) => {
-      if (!data) return;
+      if (!data || !mountedRef.current) return;
 
       const { type: msgType } = data;
 

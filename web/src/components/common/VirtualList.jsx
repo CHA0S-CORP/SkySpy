@@ -26,29 +26,32 @@ export function VirtualList({
 }) {
   const [scrollTop, setScrollTop] = useState(0);
   const containerRef = useRef(null);
-  const [containerHeight, setContainerHeight] = useState(height === 'auto' ? 400 : height);
+  const [parentHeight, setParentHeight] = useState(400);
 
   // Validate itemHeight to prevent division by zero and invalid calculations
   const safeItemHeight =
     typeof itemHeight === 'number' && itemHeight > 0 && isFinite(itemHeight) ? itemHeight : 50; // Default fallback height
 
-  // Update container height when 'auto' or on resize
+  // Track parent height for 'auto' mode
   useEffect(() => {
     if (height === 'auto' && containerRef.current) {
       const updateHeight = () => {
         const parent = containerRef.current?.parentElement;
         if (parent) {
-          setContainerHeight(parent.clientHeight || 400);
+          setParentHeight(parent.clientHeight || 400);
         }
       };
 
       updateHeight();
       window.addEventListener('resize', updateHeight);
       return () => window.removeEventListener('resize', updateHeight);
-    } else if (height !== 'auto') {
-      setContainerHeight(height);
     }
   }, [height]);
+
+  // Derive container height from props or measured parent height
+  const containerHeight = useMemo(() => {
+    return height === 'auto' ? parentHeight : height;
+  }, [height, parentHeight]);
 
   // Calculate total height
   const totalHeight = items.length * safeItemHeight;

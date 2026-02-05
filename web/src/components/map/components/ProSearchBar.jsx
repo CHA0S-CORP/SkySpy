@@ -147,7 +147,15 @@ export function ProSearchBar({
           break;
       }
     },
-    [isDropdownOpen, navigationItems, selectedIndex, searchQuery, onSelectAircraft, addSearch, setSearchQuery]
+    [
+      isDropdownOpen,
+      navigationItems,
+      selectedIndex,
+      searchQuery,
+      onSelectAircraft,
+      addSearch,
+      setSearchQuery,
+    ]
   );
 
   // Handle selecting a search result

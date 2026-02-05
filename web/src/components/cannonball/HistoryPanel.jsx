@@ -221,7 +221,7 @@ function EncounterDetail({ entry, onClose }) {
             className="action-btn"
             onClick={() => {
               const url = `https://maps.google.com/maps?q=${entry.lat},${entry.lon}`;
-              window.open(url, '_blank');
+              window.open(url, '_blank', 'noopener,noreferrer');
             }}
           >
             <MapIcon size={16} />
