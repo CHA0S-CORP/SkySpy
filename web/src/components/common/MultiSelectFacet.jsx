@@ -99,6 +99,9 @@ export function MultiSelectFacet({
         type="button"
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-controls="dropdown-listbox"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -263,6 +266,9 @@ export function MultiSelectFacet({
 
           {/* Options list */}
           <div
+            id="dropdown-listbox"
+            role="listbox"
+            aria-label={label || "Select options"}
             style={{
               maxHeight,
               overflowY: 'auto',

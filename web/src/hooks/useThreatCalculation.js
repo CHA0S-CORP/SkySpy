@@ -195,11 +195,14 @@ export function useThreatCalculation({
       if (position) {
         distanceNm = calculateDistanceNm(position.lat, position.lon, ac.lat, ac.lon);
 
-        // Apply radius filter
+        // FIX: Apply radius filter BEFORE threat level calculation
         if (distanceNm > settings.threatRadius) continue;
 
         bearing = calculateBearing(position.lat, position.lon, ac.lat, ac.lon);
       }
+
+      // FIX: Calculate threat level AFTER distance filter
+      const threatLevel = getThreatLevel(ac, distanceNm ?? 10, leInfo);
 
       // Apply altitude filters
       const altitude = ac.alt_baro || ac.alt_geom || ac.alt || 0;
@@ -208,8 +211,6 @@ export function useThreatCalculation({
 
       // Check whitelisted hexes
       if (settings.whitelistedHexes?.includes(ac.hex)) continue;
-
-      const threatLevel = getThreatLevel(ac, distanceNm ?? 10, leInfo);
 
       // Determine trend and calculate closing speed
       let trend = 'unknown';

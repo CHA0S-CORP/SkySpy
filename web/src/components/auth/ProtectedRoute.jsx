@@ -8,7 +8,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import LoginPage from './LoginPage';
 
 export default function ProtectedRoute({ children, requiredPermissions = [], requireAll = true }) {
-  const { status, config, _hasPermission, hasAnyPermission, hasAllPermissions } = useAuth();
+  const { status, config, hasAnyPermission, hasAllPermissions } = useAuth();
 
   // If auth is disabled or public mode, show content
   if (!config.authEnabled || config.publicMode) {

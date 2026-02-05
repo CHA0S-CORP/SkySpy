@@ -142,8 +142,12 @@ export const reorderQueue = (fromIndex, toIndex) => {
   }
 };
 
+// Lock to prevent race conditions in queue processing
+let isProcessingQueue = false;
+
 // Process the global autoplay queue
 export const processGlobalAutoplayQueue = () => {
+  if (isProcessingQueue) return;
   if (!globalAudioState.autoplay || globalAudioState.autoplayQueue.length === 0) {
     return;
   }
@@ -153,9 +157,11 @@ export const processGlobalAutoplayQueue = () => {
     return;
   }
 
+  isProcessingQueue = true;
   const next = globalAudioState.autoplayQueue.shift();
   if (!next || !next.s3_url) {
     // Try next item
+    isProcessingQueue = false;
     if (globalAudioState.autoplayQueue.length > 0) {
       processGlobalAutoplayQueue();
     }
@@ -176,6 +182,7 @@ export const processGlobalAutoplayQueue = () => {
       `(${Math.round(transmissionAge / 1000)}s old)`
     );
     // Try next item
+    isProcessingQueue = false;
     if (globalAudioState.autoplayQueue.length > 0) {
       processGlobalAutoplayQueue();
     }
@@ -183,44 +190,23 @@ export const processGlobalAutoplayQueue = () => {
   }
 
   // Play the audio
-  playAudioFromGlobal(next);
+  try {
+    playAudioFromGlobal(next);
+  } finally {
+    isProcessingQueue = false;
+  }
 };
 
-// Play audio from global state (used by autoplay)
-export const playAudioFromGlobal = (transmission) => {
-  const id = transmission.id;
-  const audioUrl = transmission.s3_url || transmission.audio_url;
-
-  if (!audioUrl) {
-    console.warn('No audio URL for transmission:', id);
-    processGlobalAutoplayQueue();
-    return;
-  }
-
-  // Stop any currently playing audio
-  if (globalAudioState.playingId && globalAudioState.playingId !== id) {
-    const prevAudio = globalAudioState.audioRefs[globalAudioState.playingId];
-    if (prevAudio) {
-      prevAudio.pause();
-      prevAudio.currentTime = 0;
-    }
-  }
-
-  // Get or create audio element
-  let audio = globalAudioState.audioRefs[id];
-  if (!audio) {
-    audio = new Audio(audioUrl);
-    audio.volume = 1;
-    globalAudioState.audioRefs[id] = audio;
-
-    audio.addEventListener('loadedmetadata', () => {
+// Create named handlers that can be tracked and removed
+const createAudioHandlers = (audio, id) => {
+  const handlers = {
+    loadedmetadata: () => {
       // Only notify if there are active subscribers
       if (globalAudioState.subscribers.length === 0) return;
       globalAudioState.audioDurations[id] = audio.duration;
       notifySubscribers({ audioDurations: { ...globalAudioState.audioDurations } });
-    });
-
-    audio.addEventListener('ended', () => {
+    },
+    ended: () => {
       globalAudioState.playingId = null;
       globalAudioState.currentTransmission = null;
       globalAudioState.audioProgress[id] = 0;
@@ -242,9 +228,8 @@ export const playAudioFromGlobal = (transmission) => {
 
       // Play next in queue
       setTimeout(() => processGlobalAutoplayQueue(), 100);
-    });
-
-    audio.addEventListener('error', (e) => {
+    },
+    error: (e) => {
       console.error('Global audio playback error:', e);
       globalAudioState.playingId = null;
       globalAudioState.currentTransmission = null;
@@ -256,6 +241,61 @@ export const playAudioFromGlobal = (transmission) => {
 
       // Try next in queue
       setTimeout(() => processGlobalAutoplayQueue(), 100);
+    },
+  };
+
+  // Store handlers on the audio element for later removal
+  audio._handlers = handlers;
+
+  return handlers;
+};
+
+// Remove audio handlers from an audio element (cleanup function)
+export const removeAudioHandlers = (audio) => {
+  if (audio && audio._handlers) {
+    Object.entries(audio._handlers).forEach(([event, handler]) => {
+      audio.removeEventListener(event, handler);
+    });
+    delete audio._handlers;
+  }
+};
+
+// Play audio from global state (used by autoplay)
+export const playAudioFromGlobal = (transmission) => {
+  const id = transmission.id;
+  const audioUrl = transmission.s3_url || transmission.audio_url;
+
+  if (!audioUrl) {
+    console.warn('No audio URL for transmission:', id);
+    processGlobalAutoplayQueue();
+    return;
+  }
+
+  // Stop any currently playing audio
+  if (globalAudioState.playingId && globalAudioState.playingId !== id) {
+    const prevAudio = globalAudioState.audioRefs[globalAudioState.playingId];
+    if (prevAudio) {
+      prevAudio.pause();
+      prevAudio.currentTime = 0;
+      prevAudio.src = '';
+      // Clean up handlers from the previous audio element
+      removeAudioHandlers(prevAudio);
+    }
+  }
+
+  // Get or create audio element
+  let audio = globalAudioState.audioRefs[id];
+  if (!audio) {
+    audio = new Audio(audioUrl);
+    audio.volume = 1;
+    globalAudioState.audioRefs[id] = audio;
+
+    // Create named handlers that can be removed later
+    const handlers = createAudioHandlers(audio, id);
+
+    // Attach handlers to audio element
+    Object.entries(handlers).forEach(([event, handler]) => {
+      audio.addEventListener(event, handler);
     });
   }
 

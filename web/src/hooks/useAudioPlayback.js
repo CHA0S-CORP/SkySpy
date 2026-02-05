@@ -142,6 +142,8 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
         clearInterval(globalAudioState.progressIntervalRef);
         globalAudioState.progressIntervalRef = null;
       }
+      // Clear the source to release resources
+      audio.src = '';
       globalAudioState.playingId = null;
       globalAudioState.currentTransmission = null;
       globalAudioState.audioProgress[next.id] = 0;
@@ -163,6 +165,8 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
         clearInterval(globalAudioState.progressIntervalRef);
         globalAudioState.progressIntervalRef = null;
       }
+      // Clear the source to release resources
+      audio.src = '';
       console.warn(`Failed to load audio ${next.id}, trying next file...`);
       globalAudioState.playingId = null;
       globalAudioState.currentTransmission = null;
@@ -224,6 +228,8 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
       })
       .catch((err) => {
         cleanup();
+        // Clear the source to release resources
+        audio.src = '';
         console.warn(`Autoplay failed for ${next.id}: ${err.message}, trying next file...`);
         globalAudioState.playingId = null;
         globalAudioState.currentTransmission = null;
@@ -255,6 +261,7 @@ export function useAudioPlayback({ audioRefs, filteredTransmissionsRef }) {
         if (prevAudio) {
           prevAudio.pause();
           prevAudio.currentTime = 0;
+          prevAudio.src = '';
           // Clean up old listeners to prevent memory leak
           removeAudioListeners(prevId, prevAudio);
         }

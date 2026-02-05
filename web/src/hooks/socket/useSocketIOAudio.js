@@ -222,6 +222,9 @@ export function useSocketIOAudio(apiBase) {
   );
   const [realtimeTransmissions, setRealtimeTransmissions] = useState([]);
   const mountedRef = useRef(true);
+  // Ref for handleNewTransmission to ensure callback stability in event listeners
+  // This protects against future refactoring where the function might move inside the hook
+  const handleNewTransmissionRef = useRef(handleNewTransmission);
 
   // Store apiBase for retry functionality using the manager
   useEffect(() => {
@@ -282,6 +285,7 @@ export function useSocketIOAudio(apiBase) {
   }, [socketRef]);
 
   // Setup event listeners for audio events
+  // Uses handleNewTransmissionRef to ensure callback stability
   useEffect(() => {
     // Listen for audio transmission events
     // Django sends: { type: 'audio.transmission' or 'transmission', ... }
@@ -290,7 +294,7 @@ export function useSocketIOAudio(apiBase) {
     const unsubscribers = audioEvents.map((eventType) => {
       return on(eventType, (data) => {
         console.log('[useSocketIOAudio] New audio transmission via Socket.IO:', data);
-        handleNewTransmission(data);
+        handleNewTransmissionRef.current(data);
       });
     });
 
@@ -300,7 +304,7 @@ export function useSocketIOAudio(apiBase) {
       if (data?.transmissions && Array.isArray(data.transmissions)) {
         // Process each transmission from the snapshot
         data.transmissions.forEach((transmission) => {
-          handleNewTransmission(transmission);
+          handleNewTransmissionRef.current(transmission);
         });
       }
     });
@@ -311,7 +315,7 @@ export function useSocketIOAudio(apiBase) {
     const transcriptUnsubscribers = transcriptEvents.map((eventType) => {
       return on(eventType, (data) => {
         console.log('[useSocketIOAudio] Transcript update via Socket.IO:', data);
-        handleNewTransmission(data);
+        handleNewTransmissionRef.current(data);
       });
     });
 
@@ -370,7 +374,7 @@ export function useSocketIOAudio(apiBase) {
           });
         } else {
           // Transmission not in list yet, add it
-          handleNewTransmission(data);
+          handleNewTransmissionRef.current(data);
         }
       }
     });

@@ -24,6 +24,9 @@ export function useCreateAlertRule(options = {}) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: alertKeys.rules() });
     },
+    onError: (error) => {
+      console.error('Failed to create alert rule:', error);
+    },
     ...options,
   });
 }
@@ -36,6 +39,9 @@ export function useUpdateAlertRule(options = {}) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: alertKeys.rules() });
     },
+    onError: (error) => {
+      console.error('Failed to update alert rule:', error);
+    },
     ...options,
   });
 }
@@ -47,6 +53,9 @@ export function useDeleteAlertRule(options = {}) {
     mutationFn: (id) => api.delete(`/alerts/rules/${id}/`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: alertKeys.rules() });
+    },
+    onError: (error) => {
+      console.error('Failed to delete alert rule:', error);
     },
     ...options,
   });

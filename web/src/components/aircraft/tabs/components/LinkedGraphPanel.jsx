@@ -340,13 +340,13 @@ export function LinkedGraphPanel({
           />
 
           {/* Safety event markers */}
-          {eventMarkers.map((marker, i) => {
+          {eventMarkers.map((marker) => {
             const markerIdx = marker.index - data.startIdx;
             if (markerIdx < 0 || markerIdx >= values.length) return null;
             const markerX = (markerIdx / (values.length - 1)) * width;
             return (
               <line
-                key={i}
+                key={marker.event?.id || `marker-${markerX}-${markerIdx}`}
                 x1={markerX}
                 y1="0"
                 x2={markerX}

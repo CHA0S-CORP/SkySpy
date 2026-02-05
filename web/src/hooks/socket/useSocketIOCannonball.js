@@ -9,7 +9,7 @@
  * @module useSocketIOCannonball
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
 import { useSocketIO } from './useSocketIO';
 
 /**
@@ -43,11 +43,25 @@ export function useSocketIOCannonball({
   const threatRadiusRef = useRef(threatRadius);
   const pendingRequests = useRef(new Map());
   const socketEmitRef = useRef(null);
+  // Refs for callback stability - prevents listener churn on every render
+  const onThreatsUpdateRef = useRef(onThreatsUpdate);
+  const onSessionStartedRef = useRef(onSessionStarted);
+  // Flag to track if initial setup has been sent after connection
+  const initialSetupSentRef = useRef(false);
 
   // Keep refs in sync
   useEffect(() => {
     threatRadiusRef.current = threatRadius;
   }, [threatRadius]);
+
+  // Keep callback refs in sync
+  useEffect(() => {
+    onThreatsUpdateRef.current = onThreatsUpdate;
+  }, [onThreatsUpdate]);
+
+  useEffect(() => {
+    onSessionStartedRef.current = onSessionStarted;
+  }, [onSessionStarted]);
 
   /**
    * Handle Socket.IO connection
@@ -55,28 +69,32 @@ export function useSocketIOCannonball({
    */
   const handleConnect = useCallback(() => {
     console.log('[Cannonball Socket.IO] Connected');
-
-    // Set initial radius - use setTimeout to ensure emit ref is populated
-    // This handles the case where connection happens before emit ref is set
-    setTimeout(() => {
-      if (!mountedRef.current) return;
-      if (socketEmitRef.current) {
-        // Read current ref value at execution time to avoid stale closure on reconnection
-        const currentRadius = threatRadiusRef.current;
-        socketEmitRef.current('set_radius', { radius_nm: currentRadius });
-
-        // Send initial position if available - read ref at execution time
-        const currentPosition = userPositionRef.current;
-        if (currentPosition) {
-          socketEmitRef.current('position_update', {
-            lat: currentPosition.lat,
-            lon: currentPosition.lon,
-            heading: currentPosition.heading,
-          });
-        }
-      }
-    }, 0);
+    // Mark that initial setup needs to be sent
+    initialSetupSentRef.current = false;
   }, []);
+
+  // Send initial setup after connection when emit is available
+  // Uses useLayoutEffect to run synchronously after DOM updates,
+  // ensuring emit ref is populated before we try to use it
+  useLayoutEffect(() => {
+    if (!initialSetupSentRef.current && socketEmitRef.current && mountedRef.current) {
+      initialSetupSentRef.current = true;
+
+      // Read current ref value at execution time to avoid stale closure on reconnection
+      const currentRadius = threatRadiusRef.current;
+      socketEmitRef.current('set_radius', { radius_nm: currentRadius });
+
+      // Send initial position if available - read ref at execution time
+      const currentPosition = userPositionRef.current;
+      if (currentPosition) {
+        socketEmitRef.current('position_update', {
+          lat: currentPosition.lat,
+          lon: currentPosition.lon,
+          heading: currentPosition.heading,
+        });
+      }
+    }
+  });
 
   /**
    * Handle Socket.IO disconnection
@@ -120,6 +138,8 @@ export function useSocketIOCannonball({
   }, [emit]);
 
   // Setup event listeners
+  // Note: Uses refs for callbacks (onThreatsUpdateRef, onSessionStartedRef) to avoid
+  // listener churn when callback props change on every render
   useEffect(() => {
     if (!enabled) return;
 
@@ -132,7 +152,7 @@ export function useSocketIOCannonball({
         console.log('[Cannonball Socket.IO] Session started:', data.session_id);
         setSessionId(data.session_id);
         setError(null);
-        onSessionStarted?.(data);
+        onSessionStartedRef.current?.(data);
       })
     );
 
@@ -144,7 +164,7 @@ export function useSocketIOCannonball({
         setThreats(threatList);
         setThreatCount(data.count || threatList.length);
         setLastUpdate(data.timestamp || new Date().toISOString());
-        onThreatsUpdate?.(threatList, data);
+        onThreatsUpdateRef.current?.(threatList, data);
       })
     );
 
@@ -208,7 +228,7 @@ export function useSocketIOCannonball({
     return () => {
       unsubscribers.forEach((unsub) => unsub && unsub());
     };
-  }, [enabled, on, onThreatsUpdate, onSessionStarted]);
+  }, [enabled, on]);
 
   // Mount/unmount cleanup
   useEffect(() => {

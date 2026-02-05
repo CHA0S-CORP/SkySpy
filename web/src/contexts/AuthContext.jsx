@@ -73,7 +73,7 @@ export function AuthProvider({ children }) {
     }
 
     return response;
-  }, []);
+  }, [refreshAccessToken]);
 
   /**
    * Schedule token refresh before expiration
@@ -270,6 +270,10 @@ export function AuthProvider({ children }) {
         'oidc_login',
         'width=500,height=600,menubar=no,toolbar=no'
       );
+
+      if (!popup) {
+        throw new Error('Popup blocked by browser. Please allow popups and try again.');
+      }
 
       oidcPopupRef.current = popup;
 

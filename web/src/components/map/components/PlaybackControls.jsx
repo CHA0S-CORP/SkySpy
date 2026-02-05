@@ -93,6 +93,9 @@ export const PlaybackControls = memo(function PlaybackControls({
             className="playback-trigger-btn"
             onClick={() => setShowTimeRangeMenu((prev) => !prev)}
             title="Enter track playback mode"
+            aria-label="Enter track playback mode"
+            aria-expanded={showTimeRangeMenu}
+            aria-haspopup="menu"
           >
             <History size={16} />
             <span>Track Playback</span>

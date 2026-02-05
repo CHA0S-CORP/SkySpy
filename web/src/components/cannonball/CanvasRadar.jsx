@@ -253,6 +253,12 @@ export const CanvasRadar = memo(function CanvasRadar({
     ctx.scale(dpr, dpr);
 
     const animate = (timestamp) => {
+      // FIX: Skip drawing when tab is hidden to save resources
+      if (document.hidden) {
+        animationRef.current = requestAnimationFrame(animate);
+        return;
+      }
+
       if (!lastTimeRef.current) lastTimeRef.current = timestamp;
       const delta = timestamp - lastTimeRef.current;
       lastTimeRef.current = timestamp;

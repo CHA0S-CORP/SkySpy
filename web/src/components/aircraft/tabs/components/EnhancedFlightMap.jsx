@@ -251,9 +251,9 @@ export function EnhancedFlightMap({
 
         {/* Range rings */}
         {feederLocation &&
-          rangeRings.map((ring, i) => (
+          rangeRings.map((ring) => (
             <CircleMarker
-              key={i}
+              key={`ring-${ring.radius}`}
               center={[feederLocation.lat, feederLocation.lon]}
               radius={0}
               pathOptions={{ color: 'transparent' }}
@@ -273,7 +273,7 @@ export function EnhancedFlightMap({
         {/* Track segments with color gradient */}
         {trackSegments.map((segment, i) => (
           <Polyline
-            key={i}
+            key={`segment-${segment.positions[0]?.[0]}-${segment.positions[0]?.[1]}-${i}`}
             positions={segment.positions}
             pathOptions={{
               color: segment.color,

@@ -124,6 +124,7 @@ export function useHistoryFilters({ hashParams, setHashParams, initialFilters = 
       setFilters(newFilters);
 
       if (setHashParams) {
+        // Start fresh, don't merge
         const params = {};
 
         if (newFilters.search) {
@@ -179,7 +180,8 @@ export function useHistoryFilters({ hashParams, setHashParams, initialFilters = 
           params.emergency = 'true';
         }
 
-        setHashParams((prev) => ({ ...prev, ...params }));
+        // Replace entirely instead of merging
+        setHashParams(params);
       }
     },
     [setHashParams]

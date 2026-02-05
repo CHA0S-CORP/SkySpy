@@ -1,5 +1,18 @@
 import { useCallback, useRef, useEffect } from 'react';
-import { safeJson } from '../aircraftInfo';
+
+/**
+ * Helper to safely parse JSON from fetch response
+ */
+async function safeJson(res) {
+  if (!res.ok) return null;
+  const ct = res.headers.get('content-type');
+  if (!ct || !ct.includes('application/json')) return null;
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
 
 /**
  * @typedef {Object} UseAircraftInfoFetcherOptions
@@ -44,6 +57,21 @@ export function useAircraftInfoFetcher({
   // Retry queue with backoff info: icao -> { retryCount, nextRetryAt }
   const retryQueue = useRef(new Map());
   const retryTimeoutRef = useRef(null);
+
+  // Ref for processRetryQueue to break circular dependency
+  const processRetryQueueRef = useRef(null);
+
+  /**
+   * Schedule retry processing - defined BEFORE fetchSingle to avoid circular dependency
+   */
+  const scheduleRetryProcessing = useCallback(() => {
+    if (retryTimeoutRef.current) return;
+
+    retryTimeoutRef.current = setTimeout(() => {
+      retryTimeoutRef.current = null;
+      processRetryQueueRef.current?.();
+    }, 1000);
+  }, []);
 
   /**
    * Fetch single aircraft info via WebSocket or HTTP
@@ -235,19 +263,7 @@ export function useAircraftInfoFetcher({
   );
 
   /**
-   * Schedule retry processing
-   */
-  const scheduleRetryProcessing = useCallback(() => {
-    if (retryTimeoutRef.current) return;
-
-    retryTimeoutRef.current = setTimeout(() => {
-      retryTimeoutRef.current = null;
-      processRetryQueue();
-    }, 1000);
-  }, []);
-
-  /**
-   * Process retry queue
+   * Process retry queue - defined AFTER fetchSingle
    */
   const processRetryQueue = useCallback(() => {
     const now = Date.now();
@@ -269,6 +285,11 @@ export function useAircraftInfoFetcher({
       scheduleRetryProcessing();
     }
   }, [fetchSingle, scheduleRetryProcessing]);
+
+  // Keep ref updated for scheduleRetryProcessing to use
+  useEffect(() => {
+    processRetryQueueRef.current = processRetryQueue;
+  }, [processRetryQueue]);
 
   // Cleanup on unmount
   useEffect(() => {

@@ -90,6 +90,7 @@ export function useDeviceGPS({
 
         // Listen for permission changes
         result.onchange = () => {
+          if (!mountedRef.current) return; // Guard against unmount
           const newState =
             result.state === 'granted'
               ? GPS_PERMISSION_STATES.GRANTED
@@ -406,6 +407,8 @@ export function useDeviceGPS({
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
+        // FIX: Also reset tracking state on cleanup
+        setIsTracking(false);
       }
       // Use inline cleanup to avoid dependency on cleanupOrientationListeners
       if (orientationHandlerRef.current) {

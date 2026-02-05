@@ -37,7 +37,7 @@ export function useSafetyEvents(
 
   // Merge WebSocket safety events with local state
   useEffect(() => {
-    if (wsSafetyEvents && wsSafetyEvents.length > 0) {
+    if (wsSafetyEvents && wsSafetyEvents.length > 0 && mountedRef.current) {
       setSafetyEvents((prev) => {
         const existingIds = new Set(prev.map((e) => e.id));
         const newEvents = wsSafetyEvents.filter((e) => !existingIds.has(e.id));
@@ -152,19 +152,24 @@ export function useSafetyEvents(
 
           if (ac1?.lat && ac1?.lon && ac2?.lat && ac2?.lon) {
             const dLat = (ac2.lat - ac1.lat) * 60;
-            const dLon = (ac2.lon - ac1.lon) * 60 * Math.cos((ac1.lat * Math.PI) / 180);
+            const avgLat = (ac1.lat + ac2.lat) / 2;
+            const dLon = (ac2.lon - ac1.lon) * 60 * Math.cos((avgLat * Math.PI) / 180);
             horizontalNm = Math.sqrt(dLat * dLat + dLon * dLon).toFixed(1);
           }
 
-          if (ac1?.alt && ac2?.alt) {
-            verticalFt = Math.round(Math.abs(ac2.alt - ac1.alt));
+          const getAltitude = (ac) => ac?.alt_baro ?? ac?.alt_geom ?? ac?.alt ?? null;
+          const alt1 = getAltitude(ac1);
+          const alt2 = getAltitude(ac2);
+          if (alt1 !== null && alt2 !== null) {
+            verticalFt = Math.round(Math.abs(alt2 - alt1));
           }
         }
         // For single-aircraft events, show current altitude/vs
         else if (event.icao) {
           const ac = aircraft.find((a) => a.hex?.toLowerCase() === event.icao?.toLowerCase());
-          if (ac?.alt) {
-            verticalFt = Math.round(ac.alt);
+          const acAlt = ac?.alt_baro ?? ac?.alt_geom ?? ac?.alt ?? null;
+          if (acAlt !== null) {
+            verticalFt = Math.round(acAlt);
           }
           if (
             event.event_type?.includes('vs') ||

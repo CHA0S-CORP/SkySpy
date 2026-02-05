@@ -28,6 +28,8 @@ export function useAircraftPhoto({ hex, baseUrl, initialPhotoData = null }) {
   const intervalsRef = useRef(new Set());
   // Ref to track current hex for stale closure prevention
   const currentHexRef = useRef(hex);
+  // Ref to store AbortController for cleanup
+  const abortControllerRef = useRef(null);
 
   // Helper to ensure photo URLs are absolute (handles relative API paths)
   const resolvePhotoUrl = useCallback(
@@ -89,7 +91,13 @@ export function useAircraftPhoto({ hex, baseUrl, initialPhotoData = null }) {
       retryPhotoRef.current = null;
     }
 
+    // Abort any existing request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
     const abortController = new AbortController();
+    abortControllerRef.current = abortController;
     // Capture hex at start for initial fetch, but use ref for polling to detect stale closures
     const initialHex = hex;
 
@@ -288,6 +296,11 @@ export function useAircraftPhoto({ hex, baseUrl, initialPhotoData = null }) {
       if (photoPollingRef.current) {
         clearInterval(photoPollingRef.current);
         photoPollingRef.current = null;
+      }
+      // Abort any pending fetch request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
       }
       // Clear all tracked intervals to prevent memory leaks
       intervals.forEach((intervalId) => {

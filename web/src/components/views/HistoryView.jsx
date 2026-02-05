@@ -111,6 +111,8 @@ export function HistoryView({
   const [timeRange, setTimeRange] = useState('24h');
   const [expandedSnapshots, setExpandedSnapshots] = useState({});
   const eventRefs = useRef({});
+  const scrollTimeoutRef = useRef(null);
+  const highlightTimeoutRef = useRef(null);
 
   // Reset expandedSnapshots when tab changes to prevent stale state
   useEffect(() => {
@@ -255,6 +257,9 @@ export function HistoryView({
       case 'response': {
         const resolver = notamPendingRequestsRef.current.get(data.request_id);
         if (resolver) {
+          if (resolver.timeoutId) {
+            clearTimeout(resolver.timeoutId);
+          }
           resolver.resolve(data.data);
           notamPendingRequestsRef.current.delete(data.request_id);
         }
@@ -264,6 +269,9 @@ export function HistoryView({
         if (data.request_id) {
           const resolver = notamPendingRequestsRef.current.get(data.request_id);
           if (resolver) {
+            if (resolver.timeoutId) {
+              clearTimeout(resolver.timeoutId);
+            }
             resolver.reject(new Error(data.message));
             notamPendingRequestsRef.current.delete(data.request_id);
           }
@@ -362,20 +370,29 @@ export function HistoryView({
     async (type, params = {}) => {
       return new Promise((resolve, reject) => {
         const requestId = `req_${++notamRequestIdRef.current}`;
-        notamPendingRequestsRef.current.set(requestId, { resolve, reject });
-
-        setTimeout(() => {
+        const timeoutId = setTimeout(() => {
           if (notamPendingRequestsRef.current.has(requestId)) {
             notamPendingRequestsRef.current.delete(requestId);
             reject(new Error('Request timeout'));
           }
         }, 30000);
 
+        notamPendingRequestsRef.current.set(requestId, { resolve, reject, timeoutId });
         notamEmit('request', { type, request_id: requestId, params });
       });
     },
     [notamEmit]
   );
+
+  // Cleanup NOTAM pending requests on unmount
+  useEffect(() => {
+    return () => {
+      notamPendingRequestsRef.current.forEach(({ timeoutId }) => {
+        clearTimeout(timeoutId);
+      });
+      notamPendingRequestsRef.current.clear();
+    };
+  }, []);
 
   // Search for airport NOTAMs
   const handleAirportSearch = useCallback(
@@ -572,6 +589,8 @@ export function HistoryView({
   ]);
 
   // Reset archive offset when filters change
+  // Note: archiveHazardFilter and archiveAltitudeFilter are client-side filters,
+  // so they should not trigger an offset reset (which would refetch from server)
   useEffect(() => {
     setArchiveOffset(0);
   }, [
@@ -579,8 +598,6 @@ export function HistoryView({
     archiveTypeFilter,
     archiveIcaoFilter,
     archiveDateRange,
-    archiveHazardFilter,
-    archiveAltitudeFilter,
   ]);
 
   // Apply client-side hazard and altitude filters to PIREPs
@@ -656,17 +673,27 @@ export function HistoryView({
       replay.toggleMap(eventKey, event);
     }
 
-    setTimeout(() => {
+    scrollTimeoutRef.current = setTimeout(() => {
       const eventEl = eventRefs.current[eventKey];
       if (eventEl) {
         eventEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         eventEl.classList.add('highlight-event');
-        setTimeout(() => eventEl.classList.remove('highlight-event'), 2000);
+        highlightTimeoutRef.current = setTimeout(() => {
+          eventEl.classList.remove('highlight-event');
+        }, 2000);
       }
     }, 100);
 
     onEventViewed?.();
   }, [targetEventId, data?.events, replay.expandedMaps, replay.toggleMap, onEventViewed]);
+
+  // Cleanup scroll/highlight timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+      if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+    };
+  }, []);
 
   // Filter sessions using new faceted filters (with fallback to legacy filters)
   const filteredSessionsUnsorted = useMemo(() => {

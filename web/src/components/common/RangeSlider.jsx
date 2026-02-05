@@ -223,9 +223,11 @@ export function RangeSlider({
       <div
         ref={trackRef}
         role="slider"
+        aria-label={label || "Range slider"}
         aria-valuemin={min}
         aria-valuemax={max}
         aria-valuenow={localValue[0]}
+        aria-valuetext={`${formatValue(localValue[0])} to ${formatValue(localValue[1])} ${unit}`.trim()}
         tabIndex={disabled ? -1 : 0}
         onClick={handleTrackClick}
         onKeyDown={(e) => {

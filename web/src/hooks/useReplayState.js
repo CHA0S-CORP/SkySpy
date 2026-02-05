@@ -184,7 +184,7 @@ export function useReplayState({ apiBase, wsRequest, wsConnected }) {
         if (!abortController.signal.aborted) {
           setReplayState((prev) => ({
             ...prev,
-            [eventKey]: { position: 100, isPlaying: false, speed: 1 },
+            [eventKey]: { position: 50, isPlaying: false, speed: 1 },
           }));
         }
 
@@ -238,7 +238,7 @@ export function useReplayState({ apiBase, wsRequest, wsConnected }) {
           lastTime = currentTime;
 
           const increment = (deltaTime / 200) * speed;
-          pos += increment;
+          pos = Math.min(100, Math.max(0, Math.round((pos + increment) * 100) / 100));
 
           if (pos >= 100) {
             pos = 100;
@@ -512,6 +512,8 @@ export function useReplayState({ apiBase, wsRequest, wsConnected }) {
       replayMarkersRef.current = {};
       replayTracksRef.current = {};
       abortControllersRef.current = {};
+      // Clear trackData to prevent memory leak
+      setTrackData({});
     };
   }, []);
 

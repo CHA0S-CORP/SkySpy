@@ -79,6 +79,8 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
   const interpolateRef = useRef(interpolate);
   const interpolationMsRef = useRef(interpolationMs);
   const socketEmitRef = useRef(null);
+  // Flag to prevent message handling during disconnect cleanup
+  const isDisconnectingRef = useRef(false);
 
   // Keep settings refs in sync
   useEffect(() => {
@@ -90,7 +92,8 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
    * Handle incoming position messages
    */
   const handleMessage = useCallback((type, data) => {
-    if (!mountedRef.current) return;
+    // Skip processing if unmounted or during disconnect cleanup
+    if (!mountedRef.current || isDisconnectingRef.current) return;
 
     try {
       // Handle batched messages
@@ -337,6 +340,9 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
   const handleDisconnect = useCallback(() => {
     console.log('[useSocketIOPositions] Socket.IO disconnected');
 
+    // Set flag to prevent message handling during cleanup
+    isDisconnectingRef.current = true;
+
     if (mountedRef.current) {
       setConnected(false);
       // Clear stale position data
@@ -346,6 +352,11 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
       lastUpdateRef.current = {};
       setCount(0);
     }
+
+    // Reset the flag after a short delay to allow for reconnection
+    setTimeout(() => {
+      isDisconnectingRef.current = false;
+    }, 100);
   }, []);
 
   // Setup Socket.IO connection with faster reconnection for positions

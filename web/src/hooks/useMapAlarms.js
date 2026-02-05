@@ -12,6 +12,7 @@ export function useMapAlarms() {
   const audioContextRef = useRef(null);
   const alarmPlayingRef = useRef(false);
   const alarmIntervalRef = useRef(null);
+  const alarmTimeoutRef = useRef(null);
   const notifiedEventsRef = useRef(new Set());
   const notifiedEmergenciesRef = useRef(new Set());
   const mountedRef = useRef(true);
@@ -123,7 +124,10 @@ export function useMapAlarms() {
       playDing(now + 0.5);
 
       alarmPlayingRef.current = true;
-      setTimeout(() => {
+      if (alarmTimeoutRef.current) {
+        clearTimeout(alarmTimeoutRef.current);
+      }
+      alarmTimeoutRef.current = setTimeout(() => {
         alarmPlayingRef.current = false;
       }, 1200);
     } catch (e) {
@@ -191,7 +195,10 @@ export function useMapAlarms() {
       playDing(now + 0.4);
 
       alarmPlayingRef.current = true;
-      setTimeout(() => {
+      if (alarmTimeoutRef.current) {
+        clearTimeout(alarmTimeoutRef.current);
+      }
+      alarmTimeoutRef.current = setTimeout(() => {
         alarmPlayingRef.current = false;
       }, 800);
     } catch (e) {
@@ -250,7 +257,10 @@ export function useMapAlarms() {
       playTone(now + 0.75, 1200, 0.25);
 
       alarmPlayingRef.current = true;
-      setTimeout(() => {
+      if (alarmTimeoutRef.current) {
+        clearTimeout(alarmTimeoutRef.current);
+      }
+      alarmTimeoutRef.current = setTimeout(() => {
         alarmPlayingRef.current = false;
       }, 1200);
     } catch (e) {
@@ -322,6 +332,9 @@ export function useMapAlarms() {
     return () => {
       mountedRef.current = false;
       stopAlarmLoop();
+      if (alarmTimeoutRef.current) {
+        clearTimeout(alarmTimeoutRef.current);
+      }
     };
   }, [stopAlarmLoop]);
 

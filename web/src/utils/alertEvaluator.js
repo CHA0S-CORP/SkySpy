@@ -85,10 +85,13 @@ export function evaluateCondition(condition, aircraft, distanceNm = null) {
       if (dist == null || typeof dist !== 'number' || isNaN(dist)) return false;
       const threshold = parseFloat(value);
       if (isNaN(threshold)) return false;
+
       if (condType === 'distance_within') return dist <= threshold;
-      if (op === 'lt' || op === 'lte') return dist <= threshold;
-      if (op === 'gt' || op === 'gte') return dist >= threshold;
-      return dist <= threshold;
+      if (op === 'lt') return dist < threshold;
+      if (op === 'lte') return dist <= threshold;
+      if (op === 'gt') return dist > threshold;
+      if (op === 'gte') return dist >= threshold;
+      return dist <= threshold; // Default for proximity
     }
 
     case 'category':

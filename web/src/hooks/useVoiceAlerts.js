@@ -242,6 +242,8 @@ export function useVoiceAlerts({
         // Cancel current speech and announce immediately
         speechSynthesis.cancel();
         queueRef.current = [];
+        // FIX: Clear announced threats when queue is cancelled to allow re-announcement
+        announcedThreatsRef.current.clear();
         speak(text, { rate: rate * 1.1 });
       } else {
         queue(text);

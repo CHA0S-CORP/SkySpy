@@ -19,10 +19,14 @@ export function EventHeader({
   // Copy link to clipboard
   const copyLink = useCallback(() => {
     const url = `${window.location.origin}${window.location.pathname}#event?id=${eventId}`;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    navigator.clipboard.writeText(url)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
+      .catch((err) => {
+        console.error('Failed to copy:', err);
+      });
   }, [eventId]);
 
   const handleBack = useCallback(() => {

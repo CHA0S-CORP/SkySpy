@@ -80,6 +80,9 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
 
   // Track previous topics for re-subscription logic
   const prevTopicsRef = useRef(topics);
+  // State to track if listeners are set up before subscribing
+  // Using state (not ref) so it triggers a re-render and the subscription effect can run
+  const [listenersReady, setListenersReady] = useState(false);
 
   // Debug: Log aircraft state changes
   useEffect(() => {
@@ -411,15 +414,16 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
     topicsRef.current = topics;
     prevTopicsRef.current = topics;
 
-    // Re-subscribe if topics changed while connected
-    if (isReady && socketEmitRef.current && prevTopics !== topics) {
+    // Re-subscribe if topics changed while connected and listeners are ready
+    // This ensures we don't subscribe before listeners are set up
+    if (isReady && socketEmitRef.current && listenersReady && prevTopics !== topics) {
       const topicsList = topics.split(',').map((t) => t.trim());
       if (import.meta.env.DEV) {
         console.log('[useSocketIOData] Topics changed, re-subscribing:', topicsList);
       }
       socketEmitRef.current('subscribe', { topics: topicsList });
     }
-  }, [topics, isReady]);
+  }, [topics, isReady, listenersReady]);
 
   // Setup event listeners when socket is ready
   // Re-runs when isReady changes to set up listeners after socket connects
@@ -494,14 +498,19 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
       });
     });
 
+    // Mark listeners as ready after setup
+    setListenersReady(true);
+
     return () => {
+      setListenersReady(false);
       unsubscribers.forEach((unsub) => unsub && unsub());
     };
   }, [enabled, isReady, on]); // Re-run when socket becomes ready
 
-  // Subscribe to topics when socket becomes ready
+  // Subscribe to topics when socket becomes ready AND listeners are set up
+  // The listenersReady check ensures we don't subscribe before event handlers are attached
   useEffect(() => {
-    if (!enabled || !isReady) return;
+    if (!enabled || !isReady || !listenersReady) return;
 
     const topicsList = topicsRef.current.split(',').map((t) => t.trim());
     if (import.meta.env.DEV) {
@@ -525,7 +534,7 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
         params: {},
       });
     }
-  }, [enabled, isReady, emit]);
+  }, [enabled, isReady, listenersReady, emit]);
 
   // Mount/unmount cleanup
   useEffect(() => {

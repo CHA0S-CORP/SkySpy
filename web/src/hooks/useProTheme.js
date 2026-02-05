@@ -234,17 +234,23 @@ export const applyThemeCssVariables = (element, themeName) => {
 export function useProTheme(options = {}) {
   const { targetElement = null } = options;
 
-  // Initialize theme from localStorage
+  // Initialize theme from localStorage and apply immediately to prevent flash
   const [theme, setThemeState] = useState(() => {
+    let savedTheme = DEFAULT_THEME;
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved && THEME_IDS.includes(saved)) {
-        return saved;
+        savedTheme = saved;
       }
     } catch (e) {
       console.warn('Failed to read theme from localStorage:', e);
     }
-    return DEFAULT_THEME;
+    // Apply theme immediately to prevent flash of default theme
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-pro-theme', savedTheme);
+      applyThemeCssVariables(document.documentElement, savedTheme);
+    }
+    return savedTheme;
   });
 
   // Get the target element (document.documentElement if not specified)

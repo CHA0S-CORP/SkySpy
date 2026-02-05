@@ -61,6 +61,12 @@ export function useHistoryStream({
       };
 
       setItems((prev) => {
+        // Check for duplicate by ID
+        const itemId = item.id || item._id || item.message_id;
+        if (itemId && prev.some((p) => (p.id || p._id || p.message_id) === itemId)) {
+          return prev; // Skip duplicate
+        }
+
         const updated = [newItem, ...prev];
         // Trim to max items
         if (updated.length > maxItems) {

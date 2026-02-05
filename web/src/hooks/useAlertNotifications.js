@@ -106,10 +106,12 @@ export function useAlertNotifications(options = {}) {
    * Fetch unacknowledged alert count from API
    */
   const fetchUnacknowledgedCount = useCallback(async () => {
-    // Rate limit to once per 5 seconds
     const now = Date.now();
     if (now - lastFetchRef.current < 5000) return;
-    lastFetchRef.current = now;
+
+    // Set a temporary lock
+    const fetchId = now;
+    lastFetchRef.current = fetchId;
 
     try {
       let data;
@@ -120,17 +122,12 @@ export function useAlertNotifications(options = {}) {
         data = await safeJson(res);
       }
 
-      // Check mounted state after async operation to prevent state update on unmounted component
-      if (!mountedRef.current) return;
-
-      if (data && typeof data.count === 'number') {
+      // Only update if we're still the latest fetch
+      if (lastFetchRef.current === fetchId && data && typeof data.count === 'number') {
         setUnacknowledgedCount(data.count);
       }
     } catch (err) {
-      // Only log warning if still mounted
-      if (mountedRef.current) {
-        console.warn('Failed to fetch unacknowledged alert count:', err.message);
-      }
+      console.error('Failed to fetch count:', err);
     }
   }, [apiBase, wsRequest, wsConnected]);
 
@@ -336,7 +333,7 @@ export function useAlertNotifications(options = {}) {
       if (wsRequest && wsConnected) {
         await wsRequest('acknowledge-all-alerts', {});
       } else if (apiBase) {
-        await fetch(`${apiBase}/api/v1/alerts/acknowledge-all`, {
+        await fetch(`${apiBase}/api/v1/alerts/history/acknowledge-all`, {
           method: 'POST',
         });
       }

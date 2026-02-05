@@ -16,8 +16,8 @@ export function SightingsTable({ sightings, sortField, sortDirection, onSort, on
           onSort={onSort}
         />
         <tbody>
-          {sightings.map((s, i) => (
-            <tr key={i}>
+          {sightings.map((s) => (
+            <tr key={s.id || s.icao_hex || `${s.timestamp}-${s.callsign}`}>
               <td>{new Date(s.timestamp).toLocaleTimeString()}</td>
               <td className="mono">
                 <span

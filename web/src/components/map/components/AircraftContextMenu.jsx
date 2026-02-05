@@ -131,6 +131,8 @@ export function AircraftContextMenu({
   const MenuItem = ({ icon: Icon, label, onClick, variant = 'default', disabled = false }) => (
     <button
       type="button"
+      role="menuitem"
+      tabIndex={-1}
       onClick={onClick}
       disabled={disabled}
       className={`
@@ -171,6 +173,22 @@ export function AircraftContextMenu({
       }}
       role="menu"
       aria-label="Aircraft context menu"
+      onKeyDown={(e) => {
+        const items = menuRef.current?.querySelectorAll('[role="menuitem"]');
+        if (!items?.length) return;
+
+        const currentIndex = Array.from(items).indexOf(document.activeElement);
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          const nextIndex = (currentIndex + 1) % items.length;
+          items[nextIndex]?.focus();
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          const prevIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+          items[prevIndex]?.focus();
+        }
+      }}
     >
       {/* Header */}
       <div className="px-3 py-2 border-b border-border bg-bg-elevated/50">

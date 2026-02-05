@@ -2106,16 +2106,24 @@ function MapView({
   }, []);
 
   // Add global mouse handlers for dragging
+  // Use refs to avoid stale closure issues with event handlers
+  const handlePopupMouseMoveRef = useRef(handlePopupMouseMove);
+  const handlePopupMouseUpRef = useRef(handlePopupMouseUp);
+  handlePopupMouseMoveRef.current = handlePopupMouseMove;
+  handlePopupMouseUpRef.current = handlePopupMouseUp;
+
   useEffect(() => {
     if (isDragging) {
-      window.addEventListener('mousemove', handlePopupMouseMove);
-      window.addEventListener('mouseup', handlePopupMouseUp);
+      const moveHandler = (e) => handlePopupMouseMoveRef.current(e);
+      const upHandler = (e) => handlePopupMouseUpRef.current(e);
+      window.addEventListener('mousemove', moveHandler);
+      window.addEventListener('mouseup', upHandler);
       return () => {
-        window.removeEventListener('mousemove', handlePopupMouseMove);
-        window.removeEventListener('mouseup', handlePopupMouseUp);
+        window.removeEventListener('mousemove', moveHandler);
+        window.removeEventListener('mouseup', upHandler);
       };
     }
-  }, [isDragging, handlePopupMouseMove, handlePopupMouseUp]);
+  }, [isDragging]);
 
   // Legend drag handlers
   const handleLegendMouseDown = (e) => {
@@ -2353,7 +2361,10 @@ function MapView({
 
   // ========== KEYBOARD SHORTCUTS (Phase 6) ==========
   useEffect(() => {
-    if (config.mapMode !== 'pro' && config.mapMode !== 'crt') return;
+    if (config.mapMode !== 'pro' && config.mapMode !== 'crt') {
+      // Return empty cleanup function when not in pro/crt mode
+      return () => {};
+    }
 
     const handleKeyDown = (e) => {
       // Don't trigger shortcuts when typing in inputs
@@ -7315,7 +7326,7 @@ function MapView({
         feederMarkerRef.current = null;
       }
     };
-  }, [config.mapMode, config.mapDarkMode, feederLat, feederLon]);
+  }, [config.mapMode, config.mapDarkMode]);
 
   // Leaflet marker creation/removal (runs when aircraft list changes)
   useEffect(() => {
@@ -7328,7 +7339,11 @@ function MapView({
     // Remove markers for aircraft no longer present
     Object.keys(markersRef.current).forEach((hex) => {
       if (!currentHexes.has(hex)) {
-        markersRef.current[hex].remove();
+        try {
+          markersRef.current[hex]?.remove();
+        } catch (e) {
+          // Already removed
+        }
         delete markersRef.current[hex];
       }
     });
@@ -7412,39 +7427,43 @@ function MapView({
       }
 
       for (const hex in markersRef.current) {
+        const marker = markersRef.current[hex];
+        if (!marker) continue;
+
         const interpolated = positions[hex] || positions[hex.toUpperCase()];
         if (interpolated && interpolated.lat != null && interpolated.lon != null) {
-          // Bug fix #1 & #3: Add null check for marker before calling methods
-          const marker = markersRef.current[hex];
-          if (!marker) continue;
+          try {
+            marker.setLatLng([interpolated.lat, interpolated.lon]);
 
-          marker.setLatLng([interpolated.lat, interpolated.lon]);
+            // Update icon rotation if track changed significantly
+            if (interpolated.track != null) {
+              const currentIcon = marker.getIcon();
+              if (currentIcon && currentIcon.options && currentIcon.options.html) {
+                // Extract current rotation from icon HTML
+                const match = currentIcon.options.html.match(/rotate\(([0-9.]+)deg\)/);
+                const currentRotation = match ? parseFloat(match[1]) : 0;
+                const newRotation = interpolated.track;
 
-          // Update icon rotation if track changed significantly
-          if (interpolated.track != null) {
-            const currentIcon = marker.getIcon();
-            if (currentIcon && currentIcon.options && currentIcon.options.html) {
-              // Extract current rotation from icon HTML
-              const match = currentIcon.options.html.match(/rotate\(([0-9.]+)deg\)/);
-              const currentRotation = match ? parseFloat(match[1]) : 0;
-              const newRotation = interpolated.track;
-
-              // Only update icon if rotation changed by more than 2 degrees
-              let diff = Math.abs(newRotation - currentRotation);
-              if (diff > 180) diff = 360 - diff;
-              if (diff > 2) {
-                const newHtml = currentIcon.options.html.replace(
-                  /rotate\([0-9.]+deg\)/,
-                  `rotate(${newRotation}deg)`
-                );
-                marker.setIcon(
-                  L.divIcon({
-                    ...currentIcon.options,
-                    html: newHtml,
-                  })
-                );
+                // Only update icon if rotation changed by more than 2 degrees
+                let diff = Math.abs(newRotation - currentRotation);
+                if (diff > 180) diff = 360 - diff;
+                if (diff > 2) {
+                  const newHtml = currentIcon.options.html.replace(
+                    /rotate\([0-9.]+deg\)/,
+                    `rotate(${newRotation}deg)`
+                  );
+                  marker.setIcon(
+                    L.divIcon({
+                      ...currentIcon.options,
+                      html: newHtml,
+                    })
+                  );
+                }
               }
             }
+          } catch (e) {
+            // Marker was removed, skip
+            continue;
           }
         }
       }

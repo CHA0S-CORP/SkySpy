@@ -6,21 +6,19 @@ const STORAGE_KEY = 'skyspy_saved_views';
  * useSavedViews - Hook for managing saved filter views with localStorage persistence
  */
 export function useSavedViews(namespace = 'history') {
-  const [savedViews, setSavedViews] = useState([]);
-
-  // Load from localStorage on mount
-  useEffect(() => {
+  // Initialize from localStorage synchronously to avoid race conditions
+  const [savedViews, setSavedViews] = useState(() => {
     try {
       const stored = localStorage.getItem(`${STORAGE_KEY}_${namespace}`);
       if (stored) {
         const parsed = JSON.parse(stored);
-        setSavedViews(Array.isArray(parsed) ? parsed : []);
+        return Array.isArray(parsed) ? parsed : [];
       }
     } catch (err) {
       console.error('Failed to load saved views:', err);
-      setSavedViews([]);
     }
-  }, [namespace]);
+    return [];
+  });
 
   // Save to localStorage whenever views change
   useEffect(() => {

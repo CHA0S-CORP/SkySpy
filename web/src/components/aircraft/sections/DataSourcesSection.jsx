@@ -54,8 +54,8 @@ export function DataSourcesSection({ sourceData = [] }) {
               {/* Show which fields came from this source */}
               {source.fields && source.fields.length > 0 && (
                 <div className="data-source-fields-list">
-                  {source.fields.slice(0, 5).map((field, i) => (
-                    <span key={i} className="data-source-field-tag">
+                  {source.fields.slice(0, 5).map((field) => (
+                    <span key={field} className="data-source-field-tag">
                       {field}
                     </span>
                   ))}

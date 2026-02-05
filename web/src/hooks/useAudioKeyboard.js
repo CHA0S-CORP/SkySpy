@@ -207,6 +207,7 @@ export function useAudioKeyboard(options = {}) {
       if (prevAudio) {
         prevAudio.pause();
         prevAudio.currentTime = 0;
+        prevAudio.src = '';
       }
     }
 
@@ -222,43 +223,55 @@ export function useAudioKeyboard(options = {}) {
       audio = new Audio(audioUrl);
       audioState.audioRefs[id] = audio;
 
-      audio.addEventListener('loadedmetadata', () => {
-        audioState.audioDurations[id] = audio.duration;
-        audioState.subscribers.forEach((callback) =>
-          callback({
-            audioDurations: { ...audioState.audioDurations },
-          })
-        );
-      });
+      // Create named handlers that can be tracked
+      const handlers = {
+        loadedmetadata: () => {
+          audioState.audioDurations[id] = audio.duration;
+          audioState.subscribers.forEach((callback) =>
+            callback({
+              audioDurations: { ...audioState.audioDurations },
+            })
+          );
+        },
+        ended: () => {
+          audioState.playingId = null;
+          audioState.currentTransmission = null;
+          audioState.audioProgress[id] = 0;
+          if (audioState.progressIntervalRef) {
+            clearInterval(audioState.progressIntervalRef);
+            audioState.progressIntervalRef = null;
+          }
+          audioState.subscribers.forEach((callback) =>
+            callback({
+              playingId: null,
+              currentTransmission: null,
+              audioProgress: { ...audioState.audioProgress },
+            })
+          );
+        },
+        error: (e) => {
+          console.error('Audio playback error:', e);
+          audioState.playingId = null;
+          audioState.currentTransmission = null;
+          audioState.subscribers.forEach((callback) =>
+            callback({
+              playingId: null,
+              currentTransmission: null,
+            })
+          );
+        },
+      };
 
-      audio.addEventListener('ended', () => {
-        audioState.playingId = null;
-        audioState.currentTransmission = null;
-        audioState.audioProgress[id] = 0;
-        if (audioState.progressIntervalRef) {
-          clearInterval(audioState.progressIntervalRef);
-          audioState.progressIntervalRef = null;
-        }
-        audioState.subscribers.forEach((callback) =>
-          callback({
-            playingId: null,
-            currentTransmission: null,
-            audioProgress: { ...audioState.audioProgress },
-          })
-        );
-      });
+      // Store handlers on audio element for later removal/checking
+      audio._handlers = handlers;
 
-      audio.addEventListener('error', (e) => {
-        console.error('Audio playback error:', e);
-        audioState.playingId = null;
-        audioState.currentTransmission = null;
-        audioState.subscribers.forEach((callback) =>
-          callback({
-            playingId: null,
-            currentTransmission: null,
-          })
-        );
+      // Add event listeners
+      Object.entries(handlers).forEach(([event, handler]) => {
+        audio.addEventListener(event, handler);
       });
+    } else if (!audio._handlers) {
+      // Audio element exists but handlers were not tracked - skip adding duplicate listeners
+      // This prevents duplicate listener registration on reused audio elements
     }
 
     // Play

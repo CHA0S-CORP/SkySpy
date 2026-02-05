@@ -142,19 +142,21 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
     setBulkActionLoading(true);
     setConfirmModal({ isOpen: false, type: null });
 
+    const unacknowledgedAlerts = alerts.filter(
+      (a) => !a.acknowledged && !localAcknowledgedIds.has(a.id)
+    );
+
+    // Store original state for rollback
+    const originalIds = new Set(localAcknowledgedIds);
+
+    // Optimistic update
+    setLocalAcknowledgedIds((prev) => {
+      const next = new Set(prev);
+      unacknowledgedAlerts.forEach((a) => next.add(a.id));
+      return next;
+    });
+
     try {
-      const unacknowledgedAlerts = alerts.filter(
-        (a) => !a.acknowledged && !localAcknowledgedIds.has(a.id)
-      );
-
-      // Optimistic update for all
-      setLocalAcknowledgedIds((prev) => {
-        const next = new Set(prev);
-        unacknowledgedAlerts.forEach((a) => next.add(a.id));
-        return next;
-      });
-
-      // Use bulk endpoint if available, otherwise acknowledge one by one
       const res = await fetch(`${apiBase}/api/v1/alerts/history/acknowledge-all`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -164,23 +166,22 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
         // Fallback to individual acknowledgments
         await Promise.all(
           unacknowledgedAlerts.map((alert) =>
-            fetch(`${apiBase}/api/v1/alerts/history/${alert.id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ acknowledged: true }),
+            fetch(`${apiBase}/api/v1/alerts/history/${alert.id}/acknowledge`, {
+              method: 'POST',
             })
           )
         );
       }
 
       onToast?.(`${unacknowledgedAlerts.length} alerts acknowledged`, 'success');
-      refetch();
     } catch (err) {
       console.error('Failed to acknowledge all:', err);
+      // Rollback on error
+      setLocalAcknowledgedIds(originalIds);
       onToast?.('Failed to acknowledge all alerts', 'error');
-      // Rollback will happen on refetch
     } finally {
       setBulkActionLoading(false);
+      refetch(); // Always refetch to sync with server
     }
   };
 

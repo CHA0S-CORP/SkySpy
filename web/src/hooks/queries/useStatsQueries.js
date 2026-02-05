@@ -12,7 +12,7 @@ export function useStats(options = {}) {
   return useQuery({
     queryKey: statsKeys.current(),
     queryFn: () => api.get('/stats/current/'),
-    staleTime: 5 * 1000,
+    staleTime: 10 * 1000, // Match refetchInterval
     refetchInterval: 10 * 1000,
     ...options,
   });
