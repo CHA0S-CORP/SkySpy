@@ -220,8 +220,10 @@ class GetAircraftInfoTests(TestCase):
 
         with patch("skyspy.services.aircraft_info.external_db") as mock_external:
             mock_external.lookup_all.return_value = None
+            with patch("skyspy.services.aircraft_info._fetch_from_external_apis") as mock_fetch:
+                mock_fetch.return_value = None
 
-            result = aircraft_info.get_aircraft_info("ABC123")
+                result = aircraft_info.get_aircraft_info("ABC123")
 
         # Should not return the failed record
         self.assertIsNone(result)
@@ -332,7 +334,7 @@ class QueueAircraftLookupTests(TestCase):
 
         self.assertFalse(result)
 
-    @patch("skyspy.services.aircraft_info.fetch_aircraft_info")
+    @patch("skyspy.tasks.external_db.fetch_aircraft_info")
     def test_queues_valid_lookup(self, mock_fetch):
         """Test that valid ICAO is queued."""
         mock_fetch.delay = MagicMock()

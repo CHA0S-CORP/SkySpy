@@ -1001,8 +1001,6 @@ class SubmitterReputation(models.Model):
 
     def record_submission_result(self, was_approved: bool):
         """Update stats after a submission is reviewed."""
-        self.total_submissions = self.approved_submissions + self.rejected_submissions + self.pending_submissions
-
         if was_approved:
             self.approved_submissions += 1
             self.last_approved_at = timezone.now()
@@ -1010,5 +1008,6 @@ class SubmitterReputation(models.Model):
             self.rejected_submissions += 1
 
         self.pending_submissions = max(0, self.pending_submissions - 1)
+        self.total_submissions = self.approved_submissions + self.rejected_submissions + self.pending_submissions
         self.calculate_reputation()
         self.save()

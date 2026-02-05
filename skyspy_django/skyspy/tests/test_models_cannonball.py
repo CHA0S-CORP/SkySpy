@@ -14,7 +14,7 @@ from datetime import timedelta
 
 import pytest
 from django.contrib.auth.models import User
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
@@ -53,8 +53,9 @@ class LEDataSourceModelTests(TestCase):
         """Test that name must be unique."""
         LEDataSource.objects.create(name="test_source", source_type="foia")
 
-        with self.assertRaises(IntegrityError):
-            LEDataSource.objects.create(name="test_source", source_type="academic")
+        with transaction.atomic():
+            with self.assertRaises(IntegrityError):
+                LEDataSource.objects.create(name="test_source", source_type="academic")
 
     def test_source_type_choices(self):
         """Test valid source type choices."""
@@ -292,12 +293,13 @@ class RegistrationAnalysisModelTests(TestCase):
             owner_name="Test Owner",
         )
 
-        with self.assertRaises(IntegrityError):
-            RegistrationAnalysis.objects.create(
-                icao_hex="A12345",
-                registration="N67890",
-                owner_name="Another Owner",
-            )
+        with transaction.atomic():
+            with self.assertRaises(IntegrityError):
+                RegistrationAnalysis.objects.create(
+                    icao_hex="A12345",
+                    registration="N67890",
+                    owner_name="Another Owner",
+                )
 
     def test_all_score_fields(self):
         """Test all shell company score fields."""
@@ -582,8 +584,9 @@ class SubmitterReputationModelTests(TestCase):
         """Test that each user can only have one reputation."""
         SubmitterReputation.objects.create(user=self.user)
 
-        with self.assertRaises(IntegrityError):
-            SubmitterReputation.objects.create(user=self.user)
+        with transaction.atomic():
+            with self.assertRaises(IntegrityError):
+                SubmitterReputation.objects.create(user=self.user)
 
     def test_str_representation(self):
         """Test string representation."""
