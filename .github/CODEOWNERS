@@ -1,0 +1,9 @@
+# CODEOWNERS for SkySpy
+# These owners will be requested for review when someone opens a pull request
+# that modifies these files.
+
+# GitHub Actions workflows - require review for CI/CD changes
+/.github/workflows/ @maxwatermolen
+
+# Signing configuration - require review for security-sensitive changes
+/.github/signing/ @maxwatermolen

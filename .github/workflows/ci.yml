@@ -35,6 +35,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Restrict default permissions - jobs define elevated permissions where needed
+permissions:
+  contents: read
+
 jobs:
   # ===========================================================================
   # Stage 1: Path Detection (runs in parallel with linting)
@@ -327,7 +331,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - uses: snyk/actions/setup@master
+      - uses: snyk/actions/setup@806182742461562b67788a64410098c9d9b96adb # v0.6.0
       - name: Snyk test
         working-directory: skyspy_django
         env:
@@ -353,7 +357,7 @@ jobs:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
-      - uses: snyk/actions/setup@master
+      - uses: snyk/actions/setup@806182742461562b67788a64410098c9d9b96adb # v0.6.0
       - name: Install dependencies
         working-directory: web
         run: npm ci
@@ -381,7 +385,7 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: skyspy-go/go.sum
-      - uses: snyk/actions/setup@master
+      - uses: snyk/actions/setup@806182742461562b67788a64410098c9d9b96adb # v0.6.0
       - name: Snyk test
         working-directory: skyspy-go
         env:
@@ -404,7 +408,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: snyk/actions/setup@master
+      - uses: snyk/actions/setup@806182742461562b67788a64410098c9d9b96adb # v0.6.0
       - name: Login to registry
         uses: docker/login-action@v3
         with:
@@ -652,11 +656,9 @@ jobs:
         run: npx playwright install-deps chromium
         if: steps.playwright-cache.outputs.cache-hit == 'true'
       - name: Run E2E tests
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 2
-          command: cd web && npm run test:e2e
+        working-directory: web
+        run: npm run test:e2e
+        timeout-minutes: 10
         env:
           CI: true
       - uses: actions/upload-artifact@v4
@@ -803,26 +805,39 @@ jobs:
           rdme: docs upload docs --key=${{ secrets.README_API_KEY }}
 
   # ===========================================================================
-  # Stage 6: Docker Build & Push
+  # Stage 6: Quality Gate & Docker Build
   # ===========================================================================
+
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    needs: [lint-python, lint-go, lint-frontend, security-python, security-frontend, security-go, test-python-unit, test-go, test-python-integration, test-e2e]
+    if: always()
+    outputs:
+      passed: ${{ steps.check.outputs.passed }}
+    steps:
+      - name: Check results
+        id: check
+        run: |
+          RESULTS='${{ toJSON(needs.*.result) }}'
+          echo "Job results: $RESULTS"
+          if echo "$RESULTS" | jq -e 'all(. == "success" or . == "skipped")' > /dev/null; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+            echo "Quality gate passed"
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+            echo "Quality gate failed"
+            exit 1
+          fi
 
   docker-build-push:
     name: Build ${{ matrix.name }}
     runs-on: ubuntu-latest
-    needs: [detect-changes, lint-python, lint-go, lint-frontend, security-python, security-frontend, security-go, test-python-unit, test-go, test-python-integration, test-e2e]
+    needs: [detect-changes, quality-gate]
     if: |
       always() &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      (needs.lint-python.result == 'success' || needs.lint-python.result == 'skipped') &&
-      (needs.lint-go.result == 'success' || needs.lint-go.result == 'skipped') &&
-      (needs.lint-frontend.result == 'success' || needs.lint-frontend.result == 'skipped') &&
-      (needs.security-python.result == 'success' || needs.security-python.result == 'skipped') &&
-      (needs.security-frontend.result == 'success' || needs.security-frontend.result == 'skipped') &&
-      (needs.security-go.result == 'success' || needs.security-go.result == 'skipped') &&
-      (needs.test-python-unit.result == 'success' || needs.test-python-unit.result == 'skipped') &&
-      (needs.test-go.result == 'success' || needs.test-go.result == 'skipped') &&
-      (needs.test-python-integration.result == 'success' || needs.test-python-integration.result == 'skipped') &&
-      (needs.test-e2e.result == 'success' || needs.test-e2e.result == 'skipped')
+      needs.quality-gate.outputs.passed == 'true' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     timeout-minutes: 20
     permissions:
       contents: read
@@ -853,7 +868,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -882,7 +897,7 @@ jobs:
           cache-to: type=gha,mode=max
           sbom: true
           provenance: true
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image-suffix }}
           subject-digest: ${{ steps.build.outputs.digest }}
@@ -1123,7 +1138,7 @@ jobs:
     if: needs.go-version.result == 'success'
     timeout-minutes: 10
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - goos: linux
