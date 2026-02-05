@@ -11,6 +11,7 @@ export { OverlayMenu } from './OverlayMenu';
 export { FilterMenu } from './FilterMenu';
 export { ProSearchBar } from './ProSearchBar';
 export { SearchAutocomplete, searchAircraft } from './SearchAutocomplete';
+export { ZuluClock } from './ZuluClock';
 export { AcarsPanel } from './AcarsPanel';
 export { ProDetailsPanel } from './ProDetailsPanel';
 export { HoverTooltip } from './HoverTooltip';

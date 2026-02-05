@@ -1,7 +1,6 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import {
   Search,
-  Clock,
   MessageCircle,
   Bell,
   VolumeX,
@@ -17,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { SearchAutocomplete, searchAircraft } from './SearchAutocomplete';
+import { ZuluClock } from './ZuluClock';
 import { useSearchHistory } from '../../../hooks/useSearchHistory';
 
 /**
@@ -255,10 +255,7 @@ export function ProSearchBar({
       </div>
 
       <div className="pro-header-right">
-        <div className="pro-time">
-          <Clock size={14} />
-          <span>{new Date().toISOString().slice(11, 19)} Z</span>
-        </div>
+        <ZuluClock />
         {acarsStatus && (
           <div
             className={`acars-status-badge ${acarsStatus.running ? 'running' : 'stopped'}`}

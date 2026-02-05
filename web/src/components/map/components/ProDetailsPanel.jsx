@@ -25,6 +25,7 @@ import { getTailInfo, getCategoryName, windDirToCardinal } from '../../../utils'
 import { getSeverityClass, getEventTypeName } from './ConflictBanner';
 import { CollapsibleSection } from '../../ui';
 import { PrimaryMetrics, SecondaryMetrics } from '../../ui/metric-card';
+import { ETASection } from './ETAOverlay';
 
 /**
  * Create an alert rule for a specific aircraft via WebSocket
@@ -679,6 +680,11 @@ export function ProDetailsPanel({
   vsProfileCanvasRef,
   distProfileCanvasRef,
   trackCanvasRef,
+  // ETA props
+  etaTarget,
+  setEtaTarget,
+  airports,
+  setSelectedAirport,
 }) {
   // Section collapse state - persist during session
   const [sectionsOpen, setSectionsOpen] = useState({
@@ -879,6 +885,20 @@ export function ProDetailsPanel({
           trackCanvasRef={trackCanvasRef}
         />
       </CollapsibleSection>
+
+      {/* ETA Section */}
+      {etaTarget !== undefined && (
+        <ETASection
+          aircraft={liveAircraft}
+          etaTarget={etaTarget}
+          airports={airports}
+          onClearTarget={() => setEtaTarget?.(null)}
+          onSelectAirport={(apt) => {
+            setSelectedAirport?.(apt);
+            setEtaTarget?.({ lat: apt.lat, lon: apt.lon });
+          }}
+        />
+      )}
 
       {/* External Links */}
       <ExternalLinks callsign={liveAircraft.flight?.trim()} hex={liveAircraft.hex} />
