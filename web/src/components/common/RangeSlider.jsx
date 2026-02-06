@@ -232,7 +232,7 @@ export function RangeSlider({
         onClick={handleTrackClick}
         onKeyDown={(e) => {
           if (disabled) return;
-          const step10 = step * 10;
+          // const step10 = step * 10; // Available for shift+arrow keys if needed
           if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
             e.preventDefault();
             const newVal = [localValue[0], Math.min(max, localValue[1] + step)];

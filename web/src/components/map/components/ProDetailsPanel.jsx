@@ -718,7 +718,7 @@ export function ProDetailsPanel({
   const [sectionsOpen, setSectionsOpen] = useState(() => persistedSectionsOpen);
 
   // Sync state changes back to module-level persistence
-  const handleSectionChange = useCallback((section, open) => {
+  const _handleSectionChange = useCallback((section, open) => {
     setSectionsOpen((prev) => {
       const next = { ...prev, [section]: open };
       persistedSectionsOpen = next; // Persist to module level

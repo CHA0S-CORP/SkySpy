@@ -538,6 +538,59 @@
 }
 
 /* ========================================
+   Inactive Scope Placeholder
+   ======================================== */
+
+.scope-inactive-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(10, 15, 25, 0.95) 0%, rgba(15, 25, 40, 0.9) 100%);
+  border: 1px dashed rgba(80, 140, 200, 0.3);
+}
+
+.scope-inactive-info {
+  text-align: center;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+}
+
+.scope-inactive-range {
+  font-size: 24px;
+  font-weight: 600;
+  color: rgba(100, 180, 255, 0.6);
+  margin-bottom: 8px;
+}
+
+.scope-inactive-hint {
+  font-size: 11px;
+  color: rgba(100, 160, 200, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.scope-pane:hover .scope-inactive-placeholder {
+  background: linear-gradient(135deg, rgba(15, 25, 40, 0.95) 0%, rgba(20, 35, 55, 0.9) 100%);
+  border-color: rgba(100, 180, 255, 0.4);
+}
+
+.scope-pane:hover .scope-inactive-range {
+  color: rgba(100, 200, 255, 0.8);
+}
+
+.scope-pane:hover .scope-inactive-hint {
+  color: rgba(100, 180, 255, 0.7);
+}
+
+/* Scope content wrapper for the active scope */
+.scope-content-wrapper {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* ========================================
    Animation & Transitions
    ======================================== */
 

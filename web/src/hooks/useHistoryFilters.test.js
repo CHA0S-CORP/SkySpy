@@ -134,36 +134,36 @@ describe('useHistoryFilters', () => {
     });
 
     it('should include search in hash params', () => {
-      const setHashParams = vi.fn((fn) => fn({}));
+      const setHashParams = vi.fn();
       const { result } = renderHook(() => useHistoryFilters({ setHashParams }));
 
       act(() => {
         result.current.setFilters({ ...result.current.filters, search: 'test' });
       });
 
-      expect(setHashParams).toHaveBeenCalled();
+      expect(setHashParams).toHaveBeenCalledWith({ search: 'test' });
     });
 
     it('should include types in hash params', () => {
-      const setHashParams = vi.fn((fn) => fn({}));
+      const setHashParams = vi.fn();
       const { result } = renderHook(() => useHistoryFilters({ setHashParams }));
 
       act(() => {
         result.current.setFilters({ ...result.current.filters, types: ['A320', 'B738'] });
       });
 
-      expect(setHashParams).toHaveBeenCalled();
+      expect(setHashParams).toHaveBeenCalledWith({ types: 'A320,B738' });
     });
 
     it('should include military flag in hash params', () => {
-      const setHashParams = vi.fn((fn) => fn({}));
+      const setHashParams = vi.fn();
       const { result } = renderHook(() => useHistoryFilters({ setHashParams }));
 
       act(() => {
         result.current.setFilters({ ...result.current.filters, militaryOnly: true });
       });
 
-      expect(setHashParams).toHaveBeenCalled();
+      expect(setHashParams).toHaveBeenCalledWith({ military: 'true' });
     });
   });
 

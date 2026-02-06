@@ -27,9 +27,9 @@ import { LayoutToggle, MultiScopeContainer } from './components/MultiScopeContai
 function MultiScopeWrapper({
   children,
   isPro = true,
-  currentRange = 50,
+  currentRange: _currentRange = 50,
   onRangeChange,
-  currentPanOffset = { x: 0, y: 0 },
+  currentPanOffset: _currentPanOffset = { x: 0, y: 0 },
   onPanOffsetChange,
   className = '',
   showLayoutToggleOnly = false,
@@ -199,10 +199,10 @@ MultiScopeWrapper.propTypes = {
  * without the full MultiScopeContainer wrapper.
  */
 export function useScopeLayoutIntegration({
-  currentRange,
+  currentRange: _currentRange,
   setRange,
-  currentPanOffset,
-  setPanOffset,
+  currentPanOffset: _currentPanOffset,
+  setPanOffset: _setPanOffset,
 }) {
   const scopeLayout = useScopeLayout({
     initialLayout: 'single',

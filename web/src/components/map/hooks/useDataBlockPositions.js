@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 
 /**
  * @typedef {Object} DataBlockOffset
@@ -30,7 +30,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
  * @property {function(Set<string>): void} pruneStaleAircraft - Remove offsets for aircraft no longer visible
  */
 
-const STORAGE_KEY = 'adsb-pro-datablock-positions';
+// const STORAGE_KEY = 'adsb-pro-datablock-positions'; // Available for persistence if needed
 const DEFAULT_OFFSET = { x: 0, y: 0 };
 
 // Default data block position relative to aircraft icon
@@ -102,7 +102,7 @@ export function useDataBlockPositions() {
   // Check if a point is within a data block's bounds
   // Returns the aircraft hex if hit, null otherwise
   const hitTestDataBlock = useCallback(
-    (mouseX, mouseY, aircraftPositions, dataBlockDimensions) => {
+    (mouseX, mouseY, aircraftPositions, _dataBlockDimensions) => {
       // aircraftPositions is an array of { hex, screenX, screenY, blockWidth, blockHeight }
       // Check in reverse order (top-most first for overlapping blocks)
       for (let i = aircraftPositions.length - 1; i >= 0; i--) {

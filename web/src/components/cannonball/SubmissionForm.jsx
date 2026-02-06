@@ -201,7 +201,7 @@ export function SubmissionForm({
       <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-6 text-center">
         <div className="text-green-400 text-lg font-medium mb-2">Submission Received</div>
         <p className="text-gray-400 mb-4">
-          Thank you for your submission. Our team will review it and you'll be notified of the
+          Thank you for your submission. Our team will review it and you&apos;ll be notified of the
           outcome.
         </p>
         <button

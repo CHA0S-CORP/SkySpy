@@ -1,17 +1,5 @@
 import React, { useMemo } from 'react';
-import {
-  Star,
-  X,
-  ChevronDown,
-  ChevronUp,
-  Eye,
-  EyeOff,
-  Trash2,
-  Clock,
-  MapPin,
-  Crosshair,
-  Plane,
-} from 'lucide-react';
+import { Star, X, ChevronDown, ChevronUp, EyeOff, Trash2, Clock, Crosshair } from 'lucide-react';
 
 /**
  * Format milliseconds to human-readable duration
@@ -47,7 +35,7 @@ export function WatchListPanel({
   // Callbacks
   onRemove,
   onClear,
-  onTogglePanel,
+  onTogglePanel: _onTogglePanel,
   onHidePanel,
   onCenterAircraft,
   onSelectAircraft,

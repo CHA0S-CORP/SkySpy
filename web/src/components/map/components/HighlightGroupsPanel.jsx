@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Highlighter,
   X,
@@ -8,7 +8,6 @@ import {
   Trash2,
   Check,
   RotateCcw,
-  Eye,
   EyeOff,
   Edit2,
   GripVertical,
@@ -38,7 +37,7 @@ export function HighlightGroupsPanel({
   onToggleExpanded,
   onClose,
   isProMode = false,
-  aircraft = [],
+  aircraft: _aircraft = [],
   groupCounts = {},
   // Dragging
   position,
@@ -274,7 +273,7 @@ function HighlightGroupItem({
 /**
  * Form for editing an existing group
  */
-function EditGroupForm({ group, onSave, onCancel, isProMode }) {
+function EditGroupForm({ group, onSave, onCancel, isProMode: _isProMode }) {
   const [name, setName] = useState(group.name);
   const [color, setColor] = useState(group.color);
   const [field, setField] = useState(group.rule?.field || 'operator');
@@ -445,7 +444,7 @@ function EditGroupForm({ group, onSave, onCancel, isProMode }) {
 /**
  * Form for adding a new group
  */
-function AddGroupForm({ onAdd, onCancel, isProMode }) {
+function AddGroupForm({ onAdd, onCancel, isProMode: _isProMode }) {
   const [name, setName] = useState('');
   const [color, setColor] = useState(
     COLOR_PALETTE[Math.floor(Math.random() * COLOR_PALETTE.length)]

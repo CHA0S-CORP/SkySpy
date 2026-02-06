@@ -5,8 +5,6 @@ import {
   Plane,
   Radio,
   MapPin,
-  Activity,
-  Clock,
   Filter,
   ChevronUp,
   ChevronDown,
@@ -17,7 +15,6 @@ import {
   Zap,
   RefreshCw,
   AlertTriangle,
-  Radar,
   Moon,
   Sun,
   Layers,
@@ -32,23 +29,11 @@ import {
   VolumeX,
   Check,
   Menu,
-  Search,
-  Signal,
   Crosshair,
-  BellPlus,
-  TrendingUp,
-  ArrowUpRight,
-  ArrowDownRight,
-  ArrowRight,
   LocateFixed,
   Maximize2,
   Minimize2,
-  Pin,
-  PinOff,
   MessageCircle,
-  Building2,
-  Loader2,
-  FileWarning,
   Settings2,
 } from 'lucide-react';
 
@@ -60,7 +45,6 @@ import {
   getLayerOpacities,
   saveLayerOpacities,
   getTailInfo,
-  getCategoryName,
   decodeMetar,
   decodePirep,
   getPirepType,
@@ -101,27 +85,23 @@ import { useDataBlockPositions, DATA_BLOCK_DEFAULT_X, DATA_BLOCK_DEFAULT_Y } fro
 import { useHeatMap } from '../../hooks/useHeatMap';
 import { HeatMapLayer } from './components/HeatMapLayer';
 import { useWatchList } from '../../hooks/useWatchList';
-import { WatchListPanel, WatchListShowButton } from './components/WatchListPanel';
+import { WatchListShowButton } from './components/WatchListPanel';
 import { useHighlightGroups } from '../../hooks/useHighlightGroups';
-import { HighlightGroupsPanel, HighlightGroupsShowButton } from './components/HighlightGroupsPanel';
+import { HighlightGroupsShowButton } from './components/HighlightGroupsPanel';
 import { useConflictProbe } from '../../hooks/useConflictProbe';
 import { ConflictProbePanel } from './components/ConflictProbePanel';
 import { useDraggable } from '../../hooks/useDraggable';
 import { useWeatherRadarOverlay } from './components/WeatherRadarOverlay';
 import { useScopeLayout } from '../../hooks/useScopeLayout';
-import { LayoutToggle } from './components/MultiScopeContainer';
+import MultiScopeContainer from './components/MultiScopeContainer';
 import { useMapAircraftNotes } from './hooks';
 import {
   NoteInputModal,
   AircraftContextMenu,
-  SeparationLine,
-  drawSeparationLine,
   DataBlockConfigPanel,
-  ETASection,
   ProSearchBar,
   ProDetailsPanel,
 } from './components';
-import { useSeparationTool } from '../../hooks/useSeparationTool';
 import { useAltitudeFilter } from '../../hooks/useAltitudeFilter';
 import { AltitudeFilterPanel } from './components/AltitudeFilterPanel';
 import { useSessionStats } from '../../hooks/useSessionStats';
@@ -389,7 +369,7 @@ function MapView({
     error: heatMapError,
     stats: heatMapStats,
     bounds: heatMapBounds,
-    addLivePosition: addHeatMapPosition,
+    addLivePosition: _addHeatMapPosition,
     clearHeatMap,
     refresh: refreshHeatMap,
   } = useHeatMap({
@@ -425,52 +405,52 @@ function MapView({
 
   // Phase 12.3: Highlight Groups Hook for aircraft grouping/highlighting
   const {
-    groups: highlightGroups,
-    panelVisible: highlightPanelVisible,
-    panelExpanded: highlightPanelExpanded,
-    enabledCount: highlightEnabledCount,
-    hasEnabledGroups: hasHighlightGroups,
-    toggleGroup: toggleHighlightGroup,
-    addGroup: addHighlightGroup,
-    removeGroup: removeHighlightGroup,
-    updateGroup: updateHighlightGroup,
-    reorderGroups: reorderHighlightGroups,
-    resetToDefaults: resetHighlightDefaults,
-    disableAll: disableAllHighlights,
-    getAircraftHighlight,
-    getGroupCounts: getHighlightGroupCounts,
-    togglePanel: toggleHighlightPanel,
-    togglePanelExpanded: toggleHighlightPanelExpanded,
+    groups: _highlightGroups,
+    panelVisible: _highlightPanelVisible,
+    panelExpanded: _highlightPanelExpanded,
+    enabledCount: _highlightEnabledCount,
+    hasEnabledGroups: _hasHighlightGroups,
+    toggleGroup: _toggleHighlightGroup,
+    addGroup: _addHighlightGroup,
+    removeGroup: _removeHighlightGroup,
+    updateGroup: _updateHighlightGroup,
+    reorderGroups: _reorderHighlightGroups,
+    resetToDefaults: _resetHighlightDefaults,
+    disableAll: _disableAllHighlights,
+    getAircraftHighlight: _getAircraftHighlight,
+    getGroupCounts: _getHighlightGroupCounts,
+    togglePanel: _toggleHighlightPanel,
+    togglePanelExpanded: _toggleHighlightPanelExpanded,
     setPanelVisible: setHighlightPanelVisible,
   } = useHighlightGroups(aircraftInfo);
 
   // Phase 6: Watch List Hook for tracking aircraft
   const {
-    watchList,
-    panelVisible: watchListPanelVisible,
+    watchList: _watchList,
+    panelVisible: _watchListPanelVisible,
     toggleWatchList,
-    isWatched,
+    isWatched: _isWatched,
     togglePanel: toggleWatchListPanel,
-    clearWatchList,
-    removeFromWatchList,
-    initializeAudio: initializeWatchListAudio,
+    clearWatchList: _clearWatchList,
+    removeFromWatchList: _removeFromWatchList,
+    initializeAudio: _initializeWatchListAudio,
   } = useWatchList({ enableAudio: true });
 
   // Phase 6: Keyboard Shortcut Help state
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
 
   // Phase 6: J-Rings toggle state
-  const [showJRings, setShowJRings] = useState(
+  const [_showJRings, setShowJRings] = useState(
     () => localStorage.getItem('adsb-pro-j-rings') === 'true'
   );
 
   // Phase 3.4: Conflict Probe (Look-Ahead)
   const {
-    conflicts: predictedConflicts,
-    conflictCount: predictedConflictCount,
-    stats: conflictProbeStats,
-    getConflictForAircraft,
-    getConflictsForAircraft,
+    conflicts: _predictedConflicts,
+    conflictCount: _predictedConflictCount,
+    stats: _conflictProbeStats,
+    getConflictForAircraft: _getConflictForAircraft,
+    getConflictsForAircraft: _getConflictsForAircraft,
   } = useConflictProbe({
     aircraft,
     feederLocation: feederLocationMemo,
@@ -480,17 +460,17 @@ function MapView({
 
   // Draggable position for highlight groups panel
   const {
-    position: highlightPanelPosition,
-    isDragging: isHighlightPanelDragging,
-    onMouseDown: onHighlightPanelMouseDown,
+    position: _highlightPanelPosition,
+    isDragging: _isHighlightPanelDragging,
+    onMouseDown: _onHighlightPanelMouseDown,
   } = useDraggable('highlight-groups-panel');
 
   // Phase 10.1: Weather Radar Overlay Hook (NEXRAD via Iowa State Mesonet)
   const {
     radarImage: weatherRadarImage,
     radarBounds: weatherRadarBounds,
-    loading: weatherRadarLoading,
-    timestampDisplay: weatherRadarTimestamp,
+    loading: _weatherRadarLoading,
+    timestampDisplay: _weatherRadarTimestamp,
     drawOnCanvas: drawWeatherRadar,
   } = useWeatherRadarOverlay({
     enabled: overlays.radar,
@@ -543,15 +523,15 @@ function MapView({
     getOffset: getDataBlockOffset,
     setOffset: setDataBlockOffset,
     resetOffset: resetDataBlockOffset,
-    resetAllOffsets: resetAllDataBlockOffsets,
+    resetAllOffsets: _resetAllDataBlockOffsets,
     handleMouseDown: handleDataBlockDragStart,
     handleMouseMove: handleDataBlockDragMove,
     handleMouseUp: handleDataBlockDragEnd,
     isDragging: isDataBlockDragging,
     hasCustomOffset: hasCustomDataBlockOffset,
     hitTestDataBlock,
-    pruneStaleAircraft: pruneStaleDataBlockPositions,
-    customPositionCount: dataBlockCustomPositionCount,
+    pruneStaleAircraft: _pruneStaleDataBlockPositions,
+    customPositionCount: _dataBlockCustomPositionCount,
   } = useDataBlockPositions();
 
   // Toast context for notifications (gracefully handles if not in provider)
@@ -569,7 +549,7 @@ function MapView({
     handleDeleteNote,
     hasNote: hasAircraftNote,
     getNote: getAircraftNote,
-    getAbbreviatedNote: getAbbreviatedAircraftNote,
+    getAbbreviatedNote: _getAbbreviatedAircraftNote,
   } = useMapAircraftNotes({ toastContext });
 
   // Phase 14.1: Multi-Scope Layout for Pro Mode
@@ -578,12 +558,48 @@ function MapView({
     persistToStorage: true,
   });
 
+  // Phase 14.1: Sync active scope settings with MapView's radarRange and proPanOffset
+  // When the active scope changes or its settings update, sync to the main state
+  useEffect(() => {
+    if (config.mapMode !== 'pro' || scopeLayout.layout === 'single') return;
+
+    const activeScope = scopeLayout.scopes.find((s) => s.id === scopeLayout.activeScope);
+    if (activeScope) {
+      // Sync range if different
+      if (activeScope.range !== radarRange) {
+        setRadarRange(activeScope.range);
+      }
+      // Sync pan offset if different
+      const scopePan = activeScope.panOffset || { x: 0, y: 0 };
+      if (scopePan.x !== proPanOffset.x || scopePan.y !== proPanOffset.y) {
+        setProPanOffset(scopePan);
+      }
+    }
+  }, [config.mapMode, scopeLayout.layout, scopeLayout.activeScope, scopeLayout.scopes]);
+
+  // Phase 14.1: Update active scope when radarRange or proPanOffset changes (bidirectional sync)
+  useEffect(() => {
+    if (config.mapMode !== 'pro' || scopeLayout.layout === 'single') return;
+
+    const activeScope = scopeLayout.scopes.find((s) => s.id === scopeLayout.activeScope);
+    if (activeScope) {
+      // Only update if changed (to avoid infinite loops)
+      if (activeScope.range !== radarRange) {
+        scopeLayout.setScopeRange(scopeLayout.activeScope, radarRange);
+      }
+      const scopePan = activeScope.panOffset || { x: 0, y: 0 };
+      if (scopePan.x !== proPanOffset.x || scopePan.y !== proPanOffset.y) {
+        scopeLayout.setScopePanOffset(scopeLayout.activeScope, proPanOffset);
+      }
+    }
+  }, [config.mapMode, scopeLayout.layout, radarRange, proPanOffset]);
+
   // Quick alert creation state for pro panel
-  const [quickAlertLoading, setQuickAlertLoading] = useState(null); // 'callsign' | 'registration' | null
+  const [_quickAlertLoading, setQuickAlertLoading] = useState(null); // 'callsign' | 'registration' | null
   const [quickAlertsCreated, setQuickAlertsCreated] = useState({}); // Track created alerts
 
   // Create quick alert rule helper
-  const createQuickAlert = useCallback(
+  const _createQuickAlert = useCallback(
     async (type, value, displayName) => {
       if (!wsRequest || !wsConnected) {
         console.warn('[Quick Alert] Not connected to server');
@@ -687,9 +703,9 @@ function MapView({
     setCustomRange,
     toggleHideFiltered,
     resetFilter: resetAltitudeFilter,
-    isAircraftVisible: isAltitudeVisible,
-    getAircraftOpacity,
-    filterLabel: altitudeFilterLabel,
+    isAircraftVisible: _isAltitudeVisible,
+    getAircraftOpacity: _getAircraftOpacity,
+    filterLabel: _altitudeFilterLabel,
   } = useAltitudeFilter();
   const sessionStats = useSessionStats(aircraft, {
     enabled: config.mapMode === 'pro' || config.mapMode === 'crt',
@@ -758,7 +774,7 @@ function MapView({
   ); // default on
 
   // Phase 3.4: Conflict Probe (Look-Ahead) - collapsed state only (main state moved earlier)
-  const [conflictProbeCollapsed, setConflictProbeCollapsed] = useState(
+  const [_conflictProbeCollapsed, setConflictProbeCollapsed] = useState(
     () => localStorage.getItem('adsb-pro-conflict-probe-collapsed') === 'true'
   ); // default expanded
 
@@ -930,9 +946,9 @@ function MapView({
   const distProfileCanvasRef = useRef(null);
 
   // Pro panel distance trend tracking
-  const proPrevDistanceRef = useRef(null);
-  const proDistanceTrendRef = useRef(null); // 'approaching', 'receding', or 'stable'
-  const proTrackedAircraftRef = useRef(null); // Track which aircraft we're monitoring
+  const _proPrevDistanceRef = useRef(null);
+  const _proDistanceTrendRef = useRef(null); // 'approaching', 'receding', or 'stable'
+  const _proTrackedAircraftRef = useRef(null); // Track which aircraft we're monitoring
 
   // Notification tracking refs
   const notifiedConflictsRef = useRef(new Set()); // Track notified conflict pairs
@@ -3961,7 +3977,15 @@ function MapView({
     }
 
     return filtered.sort((a, b) => (a.distance_nm || 999) - (b.distance_nm || 999));
-  }, [aircraft, searchQuery, trafficFilters, safetyHexes, isPlayback, playbackPercent, getPlaybackAircraft]);
+  }, [
+    aircraft,
+    searchQuery,
+    trafficFilters,
+    safetyHexes,
+    isPlayback,
+    playbackPercent,
+    getPlaybackAircraft,
+  ]);
 
   // Live aircraft data for selected aircraft (updates in real-time)
   const liveAircraft = useMemo(() => {
@@ -4077,7 +4101,7 @@ function MapView({
   }, [visibleNotams, acknowledgedNotams]);
 
   // Get color class for speed based on value and altitude (for pro panel)
-  const getSpeedColorClass = (speed, altitude) => {
+  const _getSpeedColorClass = (speed, altitude) => {
     if (!speed) return '';
     const isBelowTransition = altitude && altitude < 10000;
     const isOverLimit = isBelowTransition && speed > 250;
@@ -4088,7 +4112,7 @@ function MapView({
   };
 
   // Get color class for altitude (for pro panel)
-  const getAltitudeColorClass = (altitude) => {
+  const _getAltitudeColorClass = (altitude) => {
     if (!altitude) return '';
     if (altitude >= 40000) return 'alt-fl400';
     if (altitude >= 30000) return 'alt-fl300';
@@ -4100,7 +4124,7 @@ function MapView({
 
   // Get signal strength class based on RSSI
   // RSSI typically ranges from about -20 (excellent) to -50 (poor) dBFS
-  const getSignalStrengthClass = (rssi) => {
+  const _getSignalStrengthClass = (rssi) => {
     if (rssi > -20) return 'excellent';
     if (rssi > -30) return 'good';
     if (rssi > -40) return 'fair';
@@ -8134,567 +8158,657 @@ function MapView({
 
       {/* CRT ATC Radar Mode & Pro Mode - Canvas Based */}
       {(config.mapMode === 'crt' || config.mapMode === 'pro') && (
-        <div
+        <MultiScopeContainer
+          layout={config.mapMode === 'pro' ? scopeLayout.layout : 'single'}
+          scopes={scopeLayout.scopes}
+          activeScope={scopeLayout.activeScope}
+          syncSelection={scopeLayout.syncSelection}
+          onLayoutChange={scopeLayout.setLayoutMode}
+          onSyncToggle={() => scopeLayout.setSyncSelection(!scopeLayout.syncSelection)}
+          onScopeRangeChange={(id, range) => {
+            scopeLayout.setScopeRange(id, range);
+            // If this is the active scope, also update the main radarRange
+            if (id === scopeLayout.activeScope) {
+              setRadarRange(range);
+            }
+          }}
+          onScopeReset={(id) => {
+            scopeLayout.resetScope(id);
+            if (id === scopeLayout.activeScope) {
+              setProPanOffset({ x: 0, y: 0 });
+            }
+          }}
+          onScopeActivate={(id) => {
+            scopeLayout.setActiveScope(id);
+            // When switching scopes, load that scope's range and pan offset
+            const scope = scopeLayout.scopes.find((s) => s.id === id);
+            if (scope) {
+              setRadarRange(scope.range);
+              setProPanOffset(scope.panOffset || { x: 0, y: 0 });
+            }
+          }}
+          isPro={config.mapMode === 'pro'}
           className={`crt-radar-container ${config.mapMode === 'pro' ? 'pro-mode' : ''}`}
-          ref={containerRef}
-          onMouseMove={handleContainerMouseMove}
-          onMouseLeave={handleContainerMouseLeave}
         >
-          <canvas
-            ref={canvasRef}
-            className="crt-radar-canvas"
-            onMouseDown={handleProPanStart}
-            onContextMenu={(e) => e.preventDefault()}
-            style={{
-              cursor: isProPanning ? 'grabbing' : config.mapMode === 'pro' ? 'grab' : 'default',
-            }}
-            onClick={(e) => {
-              const rect = canvasRef.current.getBoundingClientRect();
-              const clickX = e.clientX - rect.left;
-              const clickY = e.clientY - rect.top;
-              const centerX = rect.width / 2;
-              const centerY = rect.height / 2;
-              const maxRadius = Math.min(rect.width, rect.height) * 0.45;
-              const pixelsPerNm = maxRadius / radarRange;
-
-              // Phase 1.2: Measurement tool (Shift+click)
-              if (e.shiftKey && config.mapMode === 'pro') {
-                // Convert click position to lat/lon
-                const nmX = (clickX - centerX - proPanOffset.x) / pixelsPerNm;
-                const nmY = -(clickY - centerY - proPanOffset.y) / pixelsPerNm;
-                const clickLat = feederLat + nmY / 60;
-                const clickLon = feederLon + nmX / (60 * Math.cos((feederLat * Math.PI) / 180));
-
-                if (measurementPoints.length === 0) {
-                  // First point
-                  setMeasurementPoints([{ lat: clickLat, lon: clickLon }]);
-                } else if (measurementPoints.length === 1) {
-                  // Second point
-                  setMeasurementPoints((prev) => [...prev, { lat: clickLat, lon: clickLon }]);
-                } else {
-                  // Third click clears and starts new measurement
-                  setMeasurementPoints([{ lat: clickLat, lon: clickLon }]);
-                }
-                return; // Don't process as regular click
-              }
-
-              // Helper to convert lat/lon to screen position
-              const getScreenPos = (lat, lon) => {
-                const dLat = lat - feederLat;
-                const dLon = lon - feederLon;
-                const nmY = dLat * 60;
-                const nmX = dLon * 60 * Math.cos((feederLat * Math.PI) / 180);
-
-                if (config.mapMode === 'pro') {
-                  return {
-                    x: centerX + nmX * pixelsPerNm + proPanOffset.x,
-                    y: centerY - nmY * pixelsPerNm + proPanOffset.y,
-                  };
-                } else {
-                  const dist = Math.sqrt(nmX * nmX + nmY * nmY);
-                  const bearing = getBearing(lat, lon);
-                  const radius = (dist / radarRange) * maxRadius;
-                  const rad = ((bearing - 90) * Math.PI) / 180;
-                  return {
-                    x: centerX + Math.cos(rad) * radius,
-                    y: centerY + Math.sin(rad) * radius,
-                  };
-                }
-              };
-
-              let closest = null;
-              let closestDist = 30;
-              let closestType = null; // 'aircraft', 'metar', 'pirep', 'navaid', 'airport'
-
-              // Check aircraft (if overlay enabled)
-              if (overlays.aircraft) {
-                sortedAircraft.forEach((ac) => {
-                  const dist = ac.distance_nm || getDistanceNm(ac.lat, ac.lon);
-                  if (config.mapMode === 'crt' && dist > radarRange) return;
-                  if (config.mapMode === 'pro' && dist > radarRange * 1.5) return;
-
-                  const pos = getScreenPos(ac.lat, ac.lon);
-                  const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
-                  if (clickDist < closestDist) {
-                    closestDist = clickDist;
-                    closest = ac;
-                    closestType = 'aircraft';
-                  }
-                });
-              }
-
-              // Check METARs if enabled
-              if (overlays.metars && aviationData.metars.length > 0) {
-                aviationData.metars.forEach((metar) => {
-                  if (!metar.lat || !metar.lon) return;
-                  const pos = getScreenPos(metar.lat, metar.lon);
-                  if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height) return;
-
-                  const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
-                  if (clickDist < closestDist) {
-                    closestDist = clickDist;
-                    closest = metar;
-                    closestType = 'metar';
-                  }
-                });
-              }
-
-              // Check PIREPs if enabled
-              if (overlays.pireps && aviationData.pireps.length > 0) {
-                aviationData.pireps.forEach((pirep) => {
-                  if (!pirep.lat || !pirep.lon) return;
-                  const pos = getScreenPos(pirep.lat, pirep.lon);
-                  if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height) return;
-
-                  const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
-                  if (clickDist < closestDist) {
-                    closestDist = clickDist;
-                    closest = pirep;
-                    closestType = 'pirep';
-                  }
-                });
-              }
-
-              // Check Navaids if enabled (use fallback data if API data empty)
-              if (overlays.vors) {
-                const navAidsToCheck =
-                  aviationData.navaids.length > 0
-                    ? aviationData.navaids
-                    : [
-                        {
-                          id: 'SEA',
-                          name: 'Seattle VORTAC',
-                          lat: 47.435,
-                          lon: -122.309,
-                          type: 'VORTAC',
-                        },
-                        {
-                          id: 'PAE',
-                          name: 'Paine Field',
-                          lat: 47.906,
-                          lon: -122.283,
-                          type: 'VOR/DME',
-                        },
-                        {
-                          id: 'BFI',
-                          name: 'Boeing Field',
-                          lat: 47.529,
-                          lon: -122.302,
-                          type: 'VOR/DME',
-                        },
-                        { id: 'TCM', name: 'McChord', lat: 47.136, lon: -122.476, type: 'TACAN' },
-                        { id: 'OLM', name: 'Olympia', lat: 46.969, lon: -122.902, type: 'VOR/DME' },
-                        { id: 'EPH', name: 'Ephrata', lat: 47.385, lon: -119.515, type: 'VOR/DME' },
-                        {
-                          id: 'ELN',
-                          name: 'Ellensburg',
-                          lat: 47.033,
-                          lon: -120.53,
-                          type: 'VOR/DME',
-                        },
-                        {
-                          id: 'YYJ',
-                          name: 'Victoria',
-                          lat: 48.647,
-                          lon: -123.426,
-                          type: 'VOR/DME',
-                        },
-                        { id: 'CV', name: 'Coupeville', lat: 48.188, lon: -122.688, type: 'NDB' },
-                        {
-                          id: 'BTG',
-                          name: 'Battleground',
-                          lat: 45.816,
-                          lon: -122.531,
-                          type: 'VOR/DME',
-                        },
-                        {
-                          id: 'UBG',
-                          name: 'Bellingham',
-                          lat: 48.795,
-                          lon: -122.538,
-                          type: 'VOR/DME',
-                        },
-                        { id: 'GEG', name: 'Spokane', lat: 47.625, lon: -117.539, type: 'VORTAC' },
-                      ];
-                navAidsToCheck.forEach((nav) => {
-                  if (!nav.lat || !nav.lon) return;
-                  const pos = getScreenPos(nav.lat, nav.lon);
-                  if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height) return;
-
-                  const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
-                  if (clickDist < closestDist) {
-                    closestDist = clickDist;
-                    closest = nav;
-                    closestType = 'navaid';
-                  }
-                });
-              }
-
-              // Check Airports if enabled (use fallback data if API data empty)
-              if (overlays.airports) {
-                const airportsToCheck =
-                  aviationData.airports.length > 0
-                    ? aviationData.airports
-                    : [
-                        {
-                          icao: 'KSEA',
-                          name: 'Seattle-Tacoma',
-                          lat: 47.449,
-                          lon: -122.309,
-                          class: 'B',
-                        },
-                        {
-                          icao: 'KBFI',
-                          name: 'Boeing Field',
-                          lat: 47.529,
-                          lon: -122.302,
-                          class: 'D',
-                        },
-                        {
-                          icao: 'KPAE',
-                          name: 'Paine Field',
-                          lat: 47.906,
-                          lon: -122.283,
-                          class: 'D',
-                        },
-                        {
-                          icao: 'KPDX',
-                          name: 'Portland Intl',
-                          lat: 45.589,
-                          lon: -122.597,
-                          class: 'C',
-                        },
-                        { icao: 'KGEG', name: 'Spokane', lat: 47.62, lon: -117.534, class: 'C' },
-                      ];
-                airportsToCheck.forEach((apt) => {
-                  if (!apt.lat || !apt.lon) return;
-                  const pos = getScreenPos(apt.lat, apt.lon);
-                  if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height) return;
-
-                  const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
-                  if (clickDist < closestDist) {
-                    closestDist = clickDist;
-                    closest = apt;
-                    closestType = 'airport';
-                  }
-                });
-              }
-
-              // Check Airspaces if enabled - use point-in-polygon test
-              if (overlays.airspace) {
-                // Compute filtered airspace data inline (same logic as canvas rendering)
-                const rawAirspaces = [
-                  ...(aviationData.airspaces || []),
-                  ...(aviationData.boundaries || []),
-                ];
-                const filteredAirspaces = rawAirspaces.filter((as) => {
-                  const asClass =
-                    as.class || as.airspace_class || as.type?.replace('CLASS_', '') || '';
-                  if (airspaceTypeFilters[asClass] !== undefined) {
-                    return airspaceTypeFilters[asClass];
-                  }
-                  // For G-AIRMETs and other advisories, filter by hazard type
-                  if (as.isAdvisory && as.hazard) {
-                    if (weatherAdvisoryFilters[as.hazard] !== undefined) {
-                      return weatherAdvisoryFilters[as.hazard];
-                    }
-                  }
-                  return true;
-                });
-                filteredAirspaces.forEach((as) => {
-                  // Get polygon coordinates
-                  let polygonCoords = null;
-                  if (as.polygon) {
-                    if (Array.isArray(as.polygon) && as.polygon.length >= 3) {
-                      polygonCoords = as.polygon;
-                    } else if (as.polygon.type === 'Polygon' && as.polygon.coordinates?.[0]) {
-                      polygonCoords = as.polygon.coordinates[0];
-                    } else if (
-                      as.polygon.type === 'MultiPolygon' &&
-                      as.polygon.coordinates?.[0]?.[0]
-                    ) {
-                      polygonCoords = as.polygon.coordinates[0][0];
-                    }
-                  }
-
-                  if (!polygonCoords || polygonCoords.length < 3) return;
-
-                  // Convert click position to lat/lon
-                  const clickLat =
-                    feederLat + ((centerY - clickY + proPanOffset.y) / pixelsPerNm) * (1 / 60);
-                  const clickLon =
-                    feederLon +
-                    ((clickX - centerX - proPanOffset.x) / pixelsPerNm) *
-                      (1 / 60) *
-                      (1 / Math.cos((feederLat * Math.PI) / 180));
-
-                  // Point-in-polygon test (ray casting algorithm)
-                  let inside = false;
-                  for (let i = 0, j = polygonCoords.length - 1; i < polygonCoords.length; j = i++) {
-                    const xi = Array.isArray(polygonCoords[i])
-                      ? polygonCoords[i][0]
-                      : polygonCoords[i].lon;
-                    const yi = Array.isArray(polygonCoords[i])
-                      ? polygonCoords[i][1]
-                      : polygonCoords[i].lat;
-                    const xj = Array.isArray(polygonCoords[j])
-                      ? polygonCoords[j][0]
-                      : polygonCoords[j].lon;
-                    const yj = Array.isArray(polygonCoords[j])
-                      ? polygonCoords[j][1]
-                      : polygonCoords[j].lat;
-
-                    if (
-                      yi > clickLat !== yj > clickLat &&
-                      clickLon < ((xj - xi) * (clickLat - yi)) / (yj - yi) + xi
-                    ) {
-                      inside = !inside;
-                    }
-                  }
-
-                  if (inside) {
-                    // Don't override aircraft selections - aircraft have priority
-                    if (closestType === 'aircraft') return;
-
-                    // Use center distance as priority (closer centers = higher priority)
-                    const centerLat = as.center_lat || as.lat;
-                    const centerLon = as.center_lon || as.lon;
-                    if (centerLat && centerLon) {
-                      const centerPos = getScreenPos(centerLat, centerLon);
-                      const clickDist = Math.sqrt(
-                        (clickX - centerPos.x) ** 2 + (clickY - centerPos.y) ** 2
-                      );
-                      // Only select airspace if nothing else is close (closestDist > 30)
-                      if (closestDist > 30) {
-                        closestDist = Math.min(clickDist, 25); // Cap distance for polygon items
-                        closest = as;
-                        closestType = 'airspace';
-                      }
-                    } else if (closestDist > 30) {
-                      // No center, just select if inside and nothing else is close
-                      closest = as;
-                      closestType = 'airspace';
-                      closestDist = 20;
-                    }
-                  }
-                });
-              }
-
-              // Handle click based on type
-              if (closest) {
-                // Only clear aircraft selection if not pinned, or if selecting a new aircraft
-                if (!panelPinned || closestType === 'aircraft') {
-                  selectAircraft(null);
-                }
-                setSelectedMetar(null);
-                setSelectedPirep(null);
-                setSelectedNavaid(null);
-                setSelectedAirport(null);
-                setSelectedAirspace(null);
-
-                if (closestType === 'aircraft') {
-                  selectAircraft(closest);
-                } else if (closestType === 'metar') {
-                  setSelectedMetar(closest);
-                } else if (closestType === 'pirep') {
-                  setSelectedPirep(closest);
-                } else if (closestType === 'navaid') {
-                  setSelectedNavaid(closest);
-                } else if (closestType === 'airport') {
-                  setSelectedAirport(closest);
-                } else if (closestType === 'airspace') {
-                  setSelectedAirspace(closest);
-                }
-              } else {
-                // Clicked on empty area - clear all selections (unless panel is pinned)
-                if (!panelPinned) {
-                  selectAircraft(null);
-                }
-                setSelectedMetar(null);
-                setSelectedPirep(null);
-                setSelectedNavaid(null);
-                setSelectedAirport(null);
-                setSelectedAirspace(null);
-              }
-            }}
-            onDoubleClick={(e) => {
-              // Double-click to open aircraft detail page
-              const rect = canvasRef.current.getBoundingClientRect();
-              const clickX = e.clientX - rect.left;
-              const clickY = e.clientY - rect.top;
-              const centerX = rect.width / 2;
-              const centerY = rect.height / 2;
-              const maxRadius = Math.min(rect.width, rect.height) * 0.45;
-              const pixelsPerNm = maxRadius / radarRange;
-
-              const getScreenPos = (lat, lon) => {
-                const dLat = lat - feederLat;
-                const dLon = lon - feederLon;
-                const nmY = dLat * 60;
-                const nmX = dLon * 60 * Math.cos((feederLat * Math.PI) / 180);
-
-                if (config.mapMode === 'pro') {
-                  return {
-                    x: centerX + nmX * pixelsPerNm + proPanOffset.x,
-                    y: centerY - nmY * pixelsPerNm + proPanOffset.y,
-                  };
-                } else {
-                  const dist = Math.sqrt(nmX * nmX + nmY * nmY);
-                  const bearing = getBearing(lat, lon);
-                  const radius = (dist / radarRange) * maxRadius;
-                  const rad = ((bearing - 90) * Math.PI) / 180;
-                  return {
-                    x: centerX + Math.cos(rad) * radius,
-                    y: centerY + Math.sin(rad) * radius,
-                  };
-                }
-              };
-
-              let closestAircraft = null;
-              let closestDist = 30;
-
-              if (overlays.aircraft) {
-                sortedAircraft.forEach((ac) => {
-                  const dist = ac.distance_nm || getDistanceNm(ac.lat, ac.lon);
-                  if (config.mapMode === 'crt' && dist > radarRange) return;
-                  if (config.mapMode === 'pro' && dist > radarRange * 1.5) return;
-
-                  const pos = getScreenPos(ac.lat, ac.lon);
-                  const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
-                  if (clickDist < closestDist) {
-                    closestDist = clickDist;
-                    closestAircraft = ac;
-                  }
-                });
-              }
-
-              if (closestAircraft) {
-                openAircraftSidebar(closestAircraft.hex);
-              } else if (config.mapMode === 'pro') {
-                // Phase 1.3: Double-click on empty space to center
-                const newPanX = proPanOffset.x - (clickX - centerX);
-                const newPanY = proPanOffset.y - (clickY - centerY);
-                setFollowingAircraft(null);
-                setProPanOffset({ x: newPanX, y: newPanY });
-              }
-            }}
-          />
-
-          {/* CRT overlay effects (CRT mode only) */}
-          {config.mapMode === 'crt' && (
-            <div className="crt-effects">
-              <div className="crt-scanlines" />
-            </div>
-          )}
-
-          {/* Phase 6.2: Hover info tooltip */}
-          {hoverInfo && config.mapMode === 'pro' && (
-            <div
-              className="pro-hover-tooltip"
-              style={{
-                position: 'absolute',
-                left: Math.min(
-                  hoverInfo.x + 20,
-                  containerRef.current?.clientWidth - 200 || hoverInfo.x
-                ),
-                top: Math.min(
-                  hoverInfo.y - 10,
-                  containerRef.current?.clientHeight - 120 || hoverInfo.y
-                ),
-                background: 'rgba(15, 25, 35, 0.95)',
-                border: '1px solid rgba(80, 140, 200, 0.6)',
-                borderRadius: '6px',
-                padding: '10px 12px',
-                zIndex: 1000,
-                pointerEvents: 'none',
-                fontFamily: '"JetBrains Mono", monospace',
-                fontSize: '11px',
-                color: 'rgba(150, 210, 255, 0.9)',
-                minWidth: '160px',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
-              }}
-            >
+          {({ scope, isActive }) =>
+            // Only render the full canvas for the active scope
+            // Inactive scopes show a simplified preview
+            isActive ? (
               <div
-                style={{
-                  fontWeight: 'bold',
-                  fontSize: '13px',
-                  color: 'rgba(100, 200, 255, 1)',
-                  marginBottom: '6px',
-                }}
+                className="scope-content-wrapper"
+                ref={containerRef}
+                onMouseMove={handleContainerMouseMove}
+                onMouseLeave={handleContainerMouseLeave}
               >
-                {hoverInfo.aircraft.flight?.trim() || hoverInfo.aircraft.hex}
+                <canvas
+                  ref={canvasRef}
+                  className="crt-radar-canvas"
+                  onMouseDown={handleProPanStart}
+                  onContextMenu={(e) => e.preventDefault()}
+                  style={{
+                    cursor: isProPanning
+                      ? 'grabbing'
+                      : config.mapMode === 'pro'
+                        ? 'grab'
+                        : 'default',
+                  }}
+                  onClick={(e) => {
+                    const rect = canvasRef.current.getBoundingClientRect();
+                    const clickX = e.clientX - rect.left;
+                    const clickY = e.clientY - rect.top;
+                    const centerX = rect.width / 2;
+                    const centerY = rect.height / 2;
+                    const maxRadius = Math.min(rect.width, rect.height) * 0.45;
+                    const pixelsPerNm = maxRadius / radarRange;
+
+                    // Phase 1.2: Measurement tool (Shift+click)
+                    if (e.shiftKey && config.mapMode === 'pro') {
+                      // Convert click position to lat/lon
+                      const nmX = (clickX - centerX - proPanOffset.x) / pixelsPerNm;
+                      const nmY = -(clickY - centerY - proPanOffset.y) / pixelsPerNm;
+                      const clickLat = feederLat + nmY / 60;
+                      const clickLon =
+                        feederLon + nmX / (60 * Math.cos((feederLat * Math.PI) / 180));
+
+                      if (measurementPoints.length === 0) {
+                        // First point
+                        setMeasurementPoints([{ lat: clickLat, lon: clickLon }]);
+                      } else if (measurementPoints.length === 1) {
+                        // Second point
+                        setMeasurementPoints((prev) => [...prev, { lat: clickLat, lon: clickLon }]);
+                      } else {
+                        // Third click clears and starts new measurement
+                        setMeasurementPoints([{ lat: clickLat, lon: clickLon }]);
+                      }
+                      return; // Don't process as regular click
+                    }
+
+                    // Helper to convert lat/lon to screen position
+                    const getScreenPos = (lat, lon) => {
+                      const dLat = lat - feederLat;
+                      const dLon = lon - feederLon;
+                      const nmY = dLat * 60;
+                      const nmX = dLon * 60 * Math.cos((feederLat * Math.PI) / 180);
+
+                      if (config.mapMode === 'pro') {
+                        return {
+                          x: centerX + nmX * pixelsPerNm + proPanOffset.x,
+                          y: centerY - nmY * pixelsPerNm + proPanOffset.y,
+                        };
+                      } else {
+                        const dist = Math.sqrt(nmX * nmX + nmY * nmY);
+                        const bearing = getBearing(lat, lon);
+                        const radius = (dist / radarRange) * maxRadius;
+                        const rad = ((bearing - 90) * Math.PI) / 180;
+                        return {
+                          x: centerX + Math.cos(rad) * radius,
+                          y: centerY + Math.sin(rad) * radius,
+                        };
+                      }
+                    };
+
+                    let closest = null;
+                    let closestDist = 30;
+                    let closestType = null; // 'aircraft', 'metar', 'pirep', 'navaid', 'airport'
+
+                    // Check aircraft (if overlay enabled)
+                    if (overlays.aircraft) {
+                      sortedAircraft.forEach((ac) => {
+                        const dist = ac.distance_nm || getDistanceNm(ac.lat, ac.lon);
+                        if (config.mapMode === 'crt' && dist > radarRange) return;
+                        if (config.mapMode === 'pro' && dist > radarRange * 1.5) return;
+
+                        const pos = getScreenPos(ac.lat, ac.lon);
+                        const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
+                        if (clickDist < closestDist) {
+                          closestDist = clickDist;
+                          closest = ac;
+                          closestType = 'aircraft';
+                        }
+                      });
+                    }
+
+                    // Check METARs if enabled
+                    if (overlays.metars && aviationData.metars.length > 0) {
+                      aviationData.metars.forEach((metar) => {
+                        if (!metar.lat || !metar.lon) return;
+                        const pos = getScreenPos(metar.lat, metar.lon);
+                        if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height)
+                          return;
+
+                        const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
+                        if (clickDist < closestDist) {
+                          closestDist = clickDist;
+                          closest = metar;
+                          closestType = 'metar';
+                        }
+                      });
+                    }
+
+                    // Check PIREPs if enabled
+                    if (overlays.pireps && aviationData.pireps.length > 0) {
+                      aviationData.pireps.forEach((pirep) => {
+                        if (!pirep.lat || !pirep.lon) return;
+                        const pos = getScreenPos(pirep.lat, pirep.lon);
+                        if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height)
+                          return;
+
+                        const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
+                        if (clickDist < closestDist) {
+                          closestDist = clickDist;
+                          closest = pirep;
+                          closestType = 'pirep';
+                        }
+                      });
+                    }
+
+                    // Check Navaids if enabled (use fallback data if API data empty)
+                    if (overlays.vors) {
+                      const navAidsToCheck =
+                        aviationData.navaids.length > 0
+                          ? aviationData.navaids
+                          : [
+                              {
+                                id: 'SEA',
+                                name: 'Seattle VORTAC',
+                                lat: 47.435,
+                                lon: -122.309,
+                                type: 'VORTAC',
+                              },
+                              {
+                                id: 'PAE',
+                                name: 'Paine Field',
+                                lat: 47.906,
+                                lon: -122.283,
+                                type: 'VOR/DME',
+                              },
+                              {
+                                id: 'BFI',
+                                name: 'Boeing Field',
+                                lat: 47.529,
+                                lon: -122.302,
+                                type: 'VOR/DME',
+                              },
+                              {
+                                id: 'TCM',
+                                name: 'McChord',
+                                lat: 47.136,
+                                lon: -122.476,
+                                type: 'TACAN',
+                              },
+                              {
+                                id: 'OLM',
+                                name: 'Olympia',
+                                lat: 46.969,
+                                lon: -122.902,
+                                type: 'VOR/DME',
+                              },
+                              {
+                                id: 'EPH',
+                                name: 'Ephrata',
+                                lat: 47.385,
+                                lon: -119.515,
+                                type: 'VOR/DME',
+                              },
+                              {
+                                id: 'ELN',
+                                name: 'Ellensburg',
+                                lat: 47.033,
+                                lon: -120.53,
+                                type: 'VOR/DME',
+                              },
+                              {
+                                id: 'YYJ',
+                                name: 'Victoria',
+                                lat: 48.647,
+                                lon: -123.426,
+                                type: 'VOR/DME',
+                              },
+                              {
+                                id: 'CV',
+                                name: 'Coupeville',
+                                lat: 48.188,
+                                lon: -122.688,
+                                type: 'NDB',
+                              },
+                              {
+                                id: 'BTG',
+                                name: 'Battleground',
+                                lat: 45.816,
+                                lon: -122.531,
+                                type: 'VOR/DME',
+                              },
+                              {
+                                id: 'UBG',
+                                name: 'Bellingham',
+                                lat: 48.795,
+                                lon: -122.538,
+                                type: 'VOR/DME',
+                              },
+                              {
+                                id: 'GEG',
+                                name: 'Spokane',
+                                lat: 47.625,
+                                lon: -117.539,
+                                type: 'VORTAC',
+                              },
+                            ];
+                      navAidsToCheck.forEach((nav) => {
+                        if (!nav.lat || !nav.lon) return;
+                        const pos = getScreenPos(nav.lat, nav.lon);
+                        if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height)
+                          return;
+
+                        const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
+                        if (clickDist < closestDist) {
+                          closestDist = clickDist;
+                          closest = nav;
+                          closestType = 'navaid';
+                        }
+                      });
+                    }
+
+                    // Check Airports if enabled (use fallback data if API data empty)
+                    if (overlays.airports) {
+                      const airportsToCheck =
+                        aviationData.airports.length > 0
+                          ? aviationData.airports
+                          : [
+                              {
+                                icao: 'KSEA',
+                                name: 'Seattle-Tacoma',
+                                lat: 47.449,
+                                lon: -122.309,
+                                class: 'B',
+                              },
+                              {
+                                icao: 'KBFI',
+                                name: 'Boeing Field',
+                                lat: 47.529,
+                                lon: -122.302,
+                                class: 'D',
+                              },
+                              {
+                                icao: 'KPAE',
+                                name: 'Paine Field',
+                                lat: 47.906,
+                                lon: -122.283,
+                                class: 'D',
+                              },
+                              {
+                                icao: 'KPDX',
+                                name: 'Portland Intl',
+                                lat: 45.589,
+                                lon: -122.597,
+                                class: 'C',
+                              },
+                              {
+                                icao: 'KGEG',
+                                name: 'Spokane',
+                                lat: 47.62,
+                                lon: -117.534,
+                                class: 'C',
+                              },
+                            ];
+                      airportsToCheck.forEach((apt) => {
+                        if (!apt.lat || !apt.lon) return;
+                        const pos = getScreenPos(apt.lat, apt.lon);
+                        if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height)
+                          return;
+
+                        const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
+                        if (clickDist < closestDist) {
+                          closestDist = clickDist;
+                          closest = apt;
+                          closestType = 'airport';
+                        }
+                      });
+                    }
+
+                    // Check Airspaces if enabled - use point-in-polygon test
+                    if (overlays.airspace) {
+                      // Compute filtered airspace data inline (same logic as canvas rendering)
+                      const rawAirspaces = [
+                        ...(aviationData.airspaces || []),
+                        ...(aviationData.boundaries || []),
+                      ];
+                      const filteredAirspaces = rawAirspaces.filter((as) => {
+                        const asClass =
+                          as.class || as.airspace_class || as.type?.replace('CLASS_', '') || '';
+                        if (airspaceTypeFilters[asClass] !== undefined) {
+                          return airspaceTypeFilters[asClass];
+                        }
+                        // For G-AIRMETs and other advisories, filter by hazard type
+                        if (as.isAdvisory && as.hazard) {
+                          if (weatherAdvisoryFilters[as.hazard] !== undefined) {
+                            return weatherAdvisoryFilters[as.hazard];
+                          }
+                        }
+                        return true;
+                      });
+                      filteredAirspaces.forEach((as) => {
+                        // Get polygon coordinates
+                        let polygonCoords = null;
+                        if (as.polygon) {
+                          if (Array.isArray(as.polygon) && as.polygon.length >= 3) {
+                            polygonCoords = as.polygon;
+                          } else if (as.polygon.type === 'Polygon' && as.polygon.coordinates?.[0]) {
+                            polygonCoords = as.polygon.coordinates[0];
+                          } else if (
+                            as.polygon.type === 'MultiPolygon' &&
+                            as.polygon.coordinates?.[0]?.[0]
+                          ) {
+                            polygonCoords = as.polygon.coordinates[0][0];
+                          }
+                        }
+
+                        if (!polygonCoords || polygonCoords.length < 3) return;
+
+                        // Convert click position to lat/lon
+                        const clickLat =
+                          feederLat +
+                          ((centerY - clickY + proPanOffset.y) / pixelsPerNm) * (1 / 60);
+                        const clickLon =
+                          feederLon +
+                          ((clickX - centerX - proPanOffset.x) / pixelsPerNm) *
+                            (1 / 60) *
+                            (1 / Math.cos((feederLat * Math.PI) / 180));
+
+                        // Point-in-polygon test (ray casting algorithm)
+                        let inside = false;
+                        for (
+                          let i = 0, j = polygonCoords.length - 1;
+                          i < polygonCoords.length;
+                          j = i++
+                        ) {
+                          const xi = Array.isArray(polygonCoords[i])
+                            ? polygonCoords[i][0]
+                            : polygonCoords[i].lon;
+                          const yi = Array.isArray(polygonCoords[i])
+                            ? polygonCoords[i][1]
+                            : polygonCoords[i].lat;
+                          const xj = Array.isArray(polygonCoords[j])
+                            ? polygonCoords[j][0]
+                            : polygonCoords[j].lon;
+                          const yj = Array.isArray(polygonCoords[j])
+                            ? polygonCoords[j][1]
+                            : polygonCoords[j].lat;
+
+                          if (
+                            yi > clickLat !== yj > clickLat &&
+                            clickLon < ((xj - xi) * (clickLat - yi)) / (yj - yi) + xi
+                          ) {
+                            inside = !inside;
+                          }
+                        }
+
+                        if (inside) {
+                          // Don't override aircraft selections - aircraft have priority
+                          if (closestType === 'aircraft') return;
+
+                          // Use center distance as priority (closer centers = higher priority)
+                          const centerLat = as.center_lat || as.lat;
+                          const centerLon = as.center_lon || as.lon;
+                          if (centerLat && centerLon) {
+                            const centerPos = getScreenPos(centerLat, centerLon);
+                            const clickDist = Math.sqrt(
+                              (clickX - centerPos.x) ** 2 + (clickY - centerPos.y) ** 2
+                            );
+                            // Only select airspace if nothing else is close (closestDist > 30)
+                            if (closestDist > 30) {
+                              closestDist = Math.min(clickDist, 25); // Cap distance for polygon items
+                              closest = as;
+                              closestType = 'airspace';
+                            }
+                          } else if (closestDist > 30) {
+                            // No center, just select if inside and nothing else is close
+                            closest = as;
+                            closestType = 'airspace';
+                            closestDist = 20;
+                          }
+                        }
+                      });
+                    }
+
+                    // Handle click based on type
+                    if (closest) {
+                      // Only clear aircraft selection if not pinned, or if selecting a new aircraft
+                      if (!panelPinned || closestType === 'aircraft') {
+                        selectAircraft(null);
+                      }
+                      setSelectedMetar(null);
+                      setSelectedPirep(null);
+                      setSelectedNavaid(null);
+                      setSelectedAirport(null);
+                      setSelectedAirspace(null);
+
+                      if (closestType === 'aircraft') {
+                        selectAircraft(closest);
+                      } else if (closestType === 'metar') {
+                        setSelectedMetar(closest);
+                      } else if (closestType === 'pirep') {
+                        setSelectedPirep(closest);
+                      } else if (closestType === 'navaid') {
+                        setSelectedNavaid(closest);
+                      } else if (closestType === 'airport') {
+                        setSelectedAirport(closest);
+                      } else if (closestType === 'airspace') {
+                        setSelectedAirspace(closest);
+                      }
+                    } else {
+                      // Clicked on empty area - clear all selections (unless panel is pinned)
+                      if (!panelPinned) {
+                        selectAircraft(null);
+                      }
+                      setSelectedMetar(null);
+                      setSelectedPirep(null);
+                      setSelectedNavaid(null);
+                      setSelectedAirport(null);
+                      setSelectedAirspace(null);
+                    }
+                  }}
+                  onDoubleClick={(e) => {
+                    // Double-click to open aircraft detail page
+                    const rect = canvasRef.current.getBoundingClientRect();
+                    const clickX = e.clientX - rect.left;
+                    const clickY = e.clientY - rect.top;
+                    const centerX = rect.width / 2;
+                    const centerY = rect.height / 2;
+                    const maxRadius = Math.min(rect.width, rect.height) * 0.45;
+                    const pixelsPerNm = maxRadius / radarRange;
+
+                    const getScreenPos = (lat, lon) => {
+                      const dLat = lat - feederLat;
+                      const dLon = lon - feederLon;
+                      const nmY = dLat * 60;
+                      const nmX = dLon * 60 * Math.cos((feederLat * Math.PI) / 180);
+
+                      if (config.mapMode === 'pro') {
+                        return {
+                          x: centerX + nmX * pixelsPerNm + proPanOffset.x,
+                          y: centerY - nmY * pixelsPerNm + proPanOffset.y,
+                        };
+                      } else {
+                        const dist = Math.sqrt(nmX * nmX + nmY * nmY);
+                        const bearing = getBearing(lat, lon);
+                        const radius = (dist / radarRange) * maxRadius;
+                        const rad = ((bearing - 90) * Math.PI) / 180;
+                        return {
+                          x: centerX + Math.cos(rad) * radius,
+                          y: centerY + Math.sin(rad) * radius,
+                        };
+                      }
+                    };
+
+                    let closestAircraft = null;
+                    let closestDist = 30;
+
+                    if (overlays.aircraft) {
+                      sortedAircraft.forEach((ac) => {
+                        const dist = ac.distance_nm || getDistanceNm(ac.lat, ac.lon);
+                        if (config.mapMode === 'crt' && dist > radarRange) return;
+                        if (config.mapMode === 'pro' && dist > radarRange * 1.5) return;
+
+                        const pos = getScreenPos(ac.lat, ac.lon);
+                        const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
+                        if (clickDist < closestDist) {
+                          closestDist = clickDist;
+                          closestAircraft = ac;
+                        }
+                      });
+                    }
+
+                    if (closestAircraft) {
+                      openAircraftSidebar(closestAircraft.hex);
+                    } else if (config.mapMode === 'pro') {
+                      // Phase 1.3: Double-click on empty space to center
+                      const newPanX = proPanOffset.x - (clickX - centerX);
+                      const newPanY = proPanOffset.y - (clickY - centerY);
+                      setFollowingAircraft(null);
+                      setProPanOffset({ x: newPanX, y: newPanY });
+                    }
+                  }}
+                />
+
+                {/* CRT overlay effects (CRT mode only) */}
+                {config.mapMode === 'crt' && (
+                  <div className="crt-effects">
+                    <div className="crt-scanlines" />
+                  </div>
+                )}
+
+                {/* Phase 6.2: Hover info tooltip */}
+                {hoverInfo && config.mapMode === 'pro' && (
+                  <div
+                    className="pro-hover-tooltip"
+                    style={{
+                      position: 'absolute',
+                      left: Math.min(
+                        hoverInfo.x + 20,
+                        containerRef.current?.clientWidth - 200 || hoverInfo.x
+                      ),
+                      top: Math.min(
+                        hoverInfo.y - 10,
+                        containerRef.current?.clientHeight - 120 || hoverInfo.y
+                      ),
+                      background: 'rgba(15, 25, 35, 0.95)',
+                      border: '1px solid rgba(80, 140, 200, 0.6)',
+                      borderRadius: '6px',
+                      padding: '10px 12px',
+                      zIndex: 1000,
+                      pointerEvents: 'none',
+                      fontFamily: '"JetBrains Mono", monospace',
+                      fontSize: '11px',
+                      color: 'rgba(150, 210, 255, 0.9)',
+                      minWidth: '160px',
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontWeight: 'bold',
+                        fontSize: '13px',
+                        color: 'rgba(100, 200, 255, 1)',
+                        marginBottom: '6px',
+                      }}
+                    >
+                      {hoverInfo.aircraft.flight?.trim() || hoverInfo.aircraft.hex}
+                    </div>
+                    <div
+                      style={{ display: 'grid', gridTemplateColumns: '60px 1fr', gap: '3px 8px' }}
+                    >
+                      <span style={{ color: 'rgba(100, 160, 200, 0.7)' }}>Type:</span>
+                      <span>
+                        {hoverInfo.aircraft.t ||
+                          hoverInfo.aircraft.type ||
+                          hoverInfo.aircraft.desc ||
+                          '---'}
+                      </span>
+                      <span style={{ color: 'rgba(100, 160, 200, 0.7)' }}>Alt:</span>
+                      <span>
+                        {hoverInfo.aircraft.alt
+                          ? `${hoverInfo.aircraft.alt.toLocaleString()} ft`
+                          : '---'}
+                      </span>
+                      <span style={{ color: 'rgba(100, 160, 200, 0.7)' }}>Speed:</span>
+                      <span>
+                        {hoverInfo.aircraft.gs ? `${Math.round(hoverInfo.aircraft.gs)} kts` : '---'}
+                      </span>
+                      <span style={{ color: 'rgba(100, 160, 200, 0.7)' }}>Squawk:</span>
+                      <span>{hoverInfo.aircraft.squawk || '---'}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Range control */}
+                <div
+                  className={`crt-range-control ${config.mapMode === 'pro' ? 'pro-style' : ''} ${showRangeControl ? 'visible' : ''}`}
+                >
+                  <span className="crt-range-label">RNG</span>
+                  {[10, 25, 50, 100, 200].map((r) => (
+                    <button
+                      key={r}
+                      className={`crt-range-btn ${radarRange === r ? 'active' : ''}`}
+                      onClick={() => updateRadarRange(r)}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Heat Map Layer (Pro mode) */}
+                {config.mapMode === 'pro' && overlays.heatMap && (
+                  <HeatMapLayer
+                    enabled={overlays.heatMap}
+                    heatMapData={heatMapData}
+                    bounds={heatMapBounds}
+                    width={containerRef.current?.clientWidth || 800}
+                    height={containerRef.current?.clientHeight || 600}
+                    latLonToScreen={latLonToScreenMemo}
+                    stats={heatMapStats}
+                    loading={heatMapLoading}
+                    error={heatMapError}
+                    timePeriod={heatMapTimePeriod}
+                    setTimePeriod={setHeatMapTimePeriod}
+                    gridSize={heatMapGridSize}
+                    setGridSize={setHeatMapGridSize}
+                    onRefresh={refreshHeatMap}
+                    onClear={clearHeatMap}
+                    themeColors={themeColors}
+                  />
+                )}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr', gap: '3px 8px' }}>
-                <span style={{ color: 'rgba(100, 160, 200, 0.7)' }}>Type:</span>
-                <span>
-                  {hoverInfo.aircraft.t ||
-                    hoverInfo.aircraft.type ||
-                    hoverInfo.aircraft.desc ||
-                    '---'}
-                </span>
-                <span style={{ color: 'rgba(100, 160, 200, 0.7)' }}>Alt:</span>
-                <span>
-                  {hoverInfo.aircraft.alt ? `${hoverInfo.aircraft.alt.toLocaleString()} ft` : '---'}
-                </span>
-                <span style={{ color: 'rgba(100, 160, 200, 0.7)' }}>Speed:</span>
-                <span>
-                  {hoverInfo.aircraft.gs ? `${Math.round(hoverInfo.aircraft.gs)} kts` : '---'}
-                </span>
-                <span style={{ color: 'rgba(100, 160, 200, 0.7)' }}>Squawk:</span>
-                <span>{hoverInfo.aircraft.squawk || '---'}</span>
+            ) : (
+              // Inactive scope - show placeholder with scope info
+              <div className="scope-inactive-placeholder">
+                <div className="scope-inactive-info">
+                  <div className="scope-inactive-range">{scope.range}nm</div>
+                  <div className="scope-inactive-hint">Click to activate</div>
+                </div>
               </div>
-            </div>
-          )}
-
-          {/* Range control */}
-          <div
-            className={`crt-range-control ${config.mapMode === 'pro' ? 'pro-style' : ''} ${showRangeControl ? 'visible' : ''}`}
-          >
-            <span className="crt-range-label">RNG</span>
-            {[10, 25, 50, 100, 200].map((r) => (
-              <button
-                key={r}
-                className={`crt-range-btn ${radarRange === r ? 'active' : ''}`}
-                onClick={() => updateRadarRange(r)}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-
-          {/* Phase 14.1: Multi-Scope Layout Toggle (Pro Mode only) */}
-          {config.mapMode === 'pro' && scopeLayout && (
-            <LayoutToggle
-              layout={scopeLayout.layout}
-              onLayoutChange={scopeLayout.setLayoutMode}
-              syncSelection={scopeLayout.syncSelection}
-              onSyncToggle={() => scopeLayout.setSyncSelection(!scopeLayout.syncSelection)}
-              isPro={true}
-            />
-          )}
-
-          {/* Heat Map Layer (Pro mode) */}
-          {config.mapMode === 'pro' && overlays.heatMap && (
-            <HeatMapLayer
-              enabled={overlays.heatMap}
-              heatMapData={heatMapData}
-              bounds={heatMapBounds}
-              width={containerRef.current?.clientWidth || 800}
-              height={containerRef.current?.clientHeight || 600}
-              latLonToScreen={latLonToScreenMemo}
-              stats={heatMapStats}
-              loading={heatMapLoading}
-              error={heatMapError}
-              timePeriod={heatMapTimePeriod}
-              setTimePeriod={setHeatMapTimePeriod}
-              gridSize={heatMapGridSize}
-              setGridSize={setHeatMapGridSize}
-              onRefresh={refreshHeatMap}
-              onClear={clearHeatMap}
-              themeColors={themeColors}
-            />
-          )}
-        </div>
+            )
+          }
+        </MultiScopeContainer>
       )}
 
       {/* Leaflet Map Mode */}

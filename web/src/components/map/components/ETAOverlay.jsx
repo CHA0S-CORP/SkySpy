@@ -1,5 +1,5 @@
-import React, { memo, useMemo, useCallback } from 'react';
-import { Clock, MapPin, Navigation, Plane, X, Building2, ArrowRight } from 'lucide-react';
+import React, { memo, useMemo } from 'react';
+import { Clock, MapPin, Navigation, X, Building2 } from 'lucide-react';
 import {
   calculateETAToPoint,
   calculateETAToNearbyAirports,

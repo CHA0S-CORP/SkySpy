@@ -45,9 +45,9 @@ export function usePlaybackMode({
   apiBaseUrl = '',
   wsRequest,
   wsConnected,
-  feederLat,
-  feederLon,
-  radarRange = 50,
+  feederLat: _feederLat,
+  feederLon: _feederLon,
+  radarRange: _radarRange = 50,
 }) {
   // Core playback state
   const [isPlayback, setIsPlayback] = useState(false);

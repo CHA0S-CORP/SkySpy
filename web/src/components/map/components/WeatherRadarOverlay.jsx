@@ -1,4 +1,4 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo } from 'react';
 import { useWeatherRadar, RADAR_COLOR_SCALE } from '../../../hooks/useWeatherRadar';
 
 /**
@@ -30,13 +30,20 @@ export const WeatherRadarOverlay = memo(function WeatherRadarOverlay({
   ctx,
   latLonToScreen,
 }) {
-  const { radarImage, radarBounds, loading, error, timestampDisplay, drawOnCanvas, refresh } =
-    useWeatherRadar({
-      enabled,
-      feederLocation,
-      radarRange,
-      refreshInterval: 5 * 60 * 1000, // 5 minutes
-    });
+  const {
+    radarImage,
+    radarBounds: _radarBounds,
+    loading,
+    error,
+    timestampDisplay,
+    drawOnCanvas,
+    refresh,
+  } = useWeatherRadar({
+    enabled,
+    feederLocation,
+    radarRange,
+    refreshInterval: 5 * 60 * 1000, // 5 minutes
+  });
 
   // Draw radar on canvas when available
   React.useEffect(() => {

@@ -371,11 +371,21 @@ describe('useApi', () => {
         expect(result.current.loading).toBe(false);
       });
 
+      // First refetch - creates a new abort controller
       act(() => {
         result.current.refetch();
       });
 
-      // Previous request should have been aborted
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Second refetch - should abort the previous refetch controller
+      act(() => {
+        result.current.refetch();
+      });
+
+      // Previous refetch request should have been aborted
       expect(abortSpy).toHaveBeenCalled();
 
       abortSpy.mockRestore();

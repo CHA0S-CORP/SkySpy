@@ -32,21 +32,21 @@ const RadarScope = forwardRef(function RadarScope(
     // Data
     aircraft = [],
     feederLocation,
-    selectedAircraft = null,
+    selectedAircraft: _selectedAircraft = null,
 
     // Display settings
     isPro = true,
-    themeColors = null,
-    showGrid = true,
-    showCompassRose = true,
-    showRangeRings = true,
-    showDataBlocks = true,
-    showPredictionVectors = true,
-    showShortTracks = false,
+    themeColors: _themeColors = null,
+    showGrid: _showGrid = true,
+    showCompassRose: _showCompassRose = true,
+    showRangeRings: _showRangeRings = true,
+    showDataBlocks: _showDataBlocks = true,
+    showPredictionVectors: _showPredictionVectors = true,
+    showShortTracks: _showShortTracks = false,
 
     // Event handlers
-    onAircraftClick,
-    onAircraftHover,
+    onAircraftClick: _onAircraftClick,
+    onAircraftHover: _onAircraftHover,
     onPanChange,
     onRangeChange,
     onCanvasClick,
@@ -63,7 +63,7 @@ const RadarScope = forwardRef(function RadarScope(
 ) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
-  const animationRef = useRef(null);
+  const _animationRef = useRef(null);
 
   // Expose canvas ref and methods to parent
   useImperativeHandle(
@@ -338,7 +338,11 @@ RadarScope.propTypes = {
  * Hook to coordinate multiple RadarScope instances
  * Manages shared state like selected aircraft across synced scopes
  */
-export function useRadarScopeCoordinator({ scopes, syncSelection = true, onScopeChange }) {
+export function useRadarScopeCoordinator({
+  scopes: _scopes,
+  syncSelection = true,
+  onScopeChange: _onScopeChange,
+}) {
   const scopeRefs = useRef({});
 
   const registerScope = useCallback((scopeId, ref) => {

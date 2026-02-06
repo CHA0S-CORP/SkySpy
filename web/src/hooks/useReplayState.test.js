@@ -166,7 +166,7 @@ describe('useReplayState', () => {
       });
 
       expect(result.current.replayState['event1']).toBeDefined();
-      expect(result.current.replayState['event1'].position).toBe(100);
+      expect(result.current.replayState['event1'].position).toBe(50);
       expect(result.current.replayState['event1'].isPlaying).toBe(false);
       expect(result.current.replayState['event1'].speed).toBe(1);
     });

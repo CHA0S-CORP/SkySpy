@@ -28,7 +28,7 @@ export const PlaybackControls = memo(function PlaybackControls({
   // State
   isPlayback,
   isPlaying,
-  playbackTime,
+  playbackTime: _playbackTime,
   playbackSpeed,
   timeRange,
   playbackPercent,
@@ -54,7 +54,7 @@ export const PlaybackControls = memo(function PlaybackControls({
   proStyle = false,
 }) {
   const [showTimeRangeMenu, setShowTimeRangeMenu] = useState(false);
-  const [selectedPreset, setSelectedPreset] = useState(1); // Default to 1 hour
+  const [_selectedPreset, setSelectedPreset] = useState(1); // Default to 1 hour
 
   /**
    * Handle time range selection

@@ -9,8 +9,8 @@ import { Sparkline } from '../common/Sparkline';
  */
 export function HistoryDashboardHeader({
   sessions = [],
-  sightings = [],
-  safetyEvents = [],
+  sightings: _sightings = [],
+  safetyEvents: _safetyEvents = [],
   timeRange = 24,
   onTimeRangeChange,
   viewMode = 'grid',
