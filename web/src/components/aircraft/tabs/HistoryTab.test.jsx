@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { HistoryTab } from './HistoryTab';
 
 // Mock lucide-react
@@ -124,11 +124,15 @@ describe('HistoryTab', () => {
   };
 
   beforeEach(() => {
+    vi.useFakeTimers();
     vi.clearAllMocks();
   });
 
   afterEach(() => {
-    vi.resetAllMocks();
+    vi.clearAllTimers();
+    cleanup();
+    vi.useRealTimers();
+    vi.clearAllMocks();
   });
 
   describe('empty state', () => {
@@ -174,6 +178,7 @@ describe('HistoryTab', () => {
 
     it('should show Hide Map when map is visible', () => {
       render(<HistoryTab {...defaultProps} showTrackMap={true} />);
+      vi.runAllTimers();
 
       expect(screen.getByRole('button', { name: /hide map/i })).toBeInTheDocument();
     });
@@ -233,6 +238,7 @@ describe('HistoryTab', () => {
   describe('map container', () => {
     it('should render map container when showTrackMap is true', () => {
       const { container } = render(<HistoryTab {...defaultProps} showTrackMap={true} />);
+      vi.runAllTimers();
 
       expect(container.querySelector('.history-map')).toBeInTheDocument();
     });
@@ -245,6 +251,7 @@ describe('HistoryTab', () => {
 
     it('should render MiniGraphs when map is shown', () => {
       render(<HistoryTab {...defaultProps} showTrackMap={true} />);
+      vi.runAllTimers();
 
       expect(screen.getByTestId('mini-graph-altitude')).toBeInTheDocument();
       expect(screen.getByTestId('mini-graph-speed')).toBeInTheDocument();
@@ -253,12 +260,14 @@ describe('HistoryTab', () => {
 
     it('should render ReplayControls when map is shown', () => {
       render(<HistoryTab {...defaultProps} showTrackMap={true} />);
+      vi.runAllTimers();
 
       expect(screen.getByTestId('replay-controls')).toBeInTheDocument();
     });
 
     it('should render map legend when map is shown', () => {
       render(<HistoryTab {...defaultProps} showTrackMap={true} />);
+      vi.runAllTimers();
 
       expect(screen.getByText('Current Position')).toBeInTheDocument();
       expect(screen.getByText('Start')).toBeInTheDocument();
@@ -266,12 +275,14 @@ describe('HistoryTab', () => {
 
     it('should render feeder legend item when feederLocation is provided', () => {
       render(<HistoryTab {...defaultProps} showTrackMap={true} />);
+      vi.runAllTimers();
 
       expect(screen.getByText('Feeder')).toBeInTheDocument();
     });
 
     it('should not render feeder legend when feederLocation is null', () => {
       render(<HistoryTab {...defaultProps} showTrackMap={true} feederLocation={null} />);
+      vi.runAllTimers();
 
       expect(screen.queryByText('Feeder')).not.toBeInTheDocument();
     });
@@ -281,6 +292,7 @@ describe('HistoryTab', () => {
     it('should call setIsPlaying when play button is clicked', () => {
       const mockSetIsPlaying = vi.fn();
       render(<HistoryTab {...defaultProps} showTrackMap={true} setIsPlaying={mockSetIsPlaying} />);
+      vi.runAllTimers();
 
       const playBtn = screen.getByTestId('play-btn');
       fireEvent.click(playBtn);
@@ -299,6 +311,7 @@ describe('HistoryTab', () => {
           setIsPlaying={mockSetIsPlaying}
         />
       );
+      vi.runAllTimers();
 
       const skipStartBtn = screen.getByTestId('skip-start-btn');
       fireEvent.click(skipStartBtn);
@@ -318,6 +331,7 @@ describe('HistoryTab', () => {
           setIsPlaying={mockSetIsPlaying}
         />
       );
+      vi.runAllTimers();
 
       const skipEndBtn = screen.getByTestId('skip-end-btn');
       fireEvent.click(skipEndBtn);
@@ -328,6 +342,7 @@ describe('HistoryTab', () => {
 
     it('should have position slider in replay controls', () => {
       render(<HistoryTab {...defaultProps} showTrackMap={true} />);
+      vi.runAllTimers();
 
       const slider = screen.getByTestId('position-slider');
       expect(slider).toBeInTheDocument();
@@ -346,6 +361,7 @@ describe('HistoryTab', () => {
 
     it('should have aria-pressed on map toggle button', () => {
       render(<HistoryTab {...defaultProps} showTrackMap={true} />);
+      vi.runAllTimers();
 
       const button = screen.getByRole('button', { name: /hide map/i });
       expect(button).toHaveAttribute('aria-pressed', 'true');
@@ -366,6 +382,7 @@ describe('HistoryTab', () => {
 
     it('should have application role on map', () => {
       render(<HistoryTab {...defaultProps} showTrackMap={true} />);
+      vi.runAllTimers();
 
       expect(screen.getByRole('application', { name: /flight history map/i })).toBeInTheDocument();
     });
