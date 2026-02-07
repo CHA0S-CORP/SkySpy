@@ -259,9 +259,11 @@ export function useConflictProbe({
   const [conflicts, setConflicts] = useState([]);
   const lastUpdateRef = useRef(0);
   const aircraftMapRef = useRef(new Map());
-  // Store aircraft in ref to avoid triggering effect on every array reference change
+  // Store objects in refs to avoid triggering effect on every reference change
   const aircraftRef = useRef(aircraft);
   aircraftRef.current = aircraft;
+  const feederLocationRef = useRef(feederLocation);
+  feederLocationRef.current = feederLocation;
   const safetyEventsRef = useRef(safetyEvents);
   safetyEventsRef.current = safetyEvents;
 
@@ -282,14 +284,14 @@ export function useConflictProbe({
   // Analyze conflicts using interval-based approach to avoid O(n²) recalculations on every render
   useEffect(() => {
     if (!enabled) {
-      setConflicts([]);
+      setConflicts((prev) => (prev.length === 0 ? prev : []));
       return;
     }
 
     const analyzeConflicts = () => {
       const currentAircraft = aircraftRef.current;
       if (currentAircraft.length < 2) {
-        setConflicts([]);
+        setConflicts((prev) => (prev.length === 0 ? prev : []));
         return;
       }
 
@@ -325,7 +327,7 @@ export function useConflictProbe({
           if (quickDist > maxDistance) continue;
 
           // Analyze potential conflict
-          const conflict = analyzeConflict(ac1, ac2, feederLocation);
+          const conflict = analyzeConflict(ac1, ac2, feederLocationRef.current);
           if (conflict) {
             newConflicts.push(conflict);
           }
@@ -379,7 +381,7 @@ export function useConflictProbe({
     const intervalId = setInterval(analyzeConflicts, UPDATE_INTERVAL);
 
     return () => clearInterval(intervalId);
-  }, [enabled, feederLocation, maxDistance, safetyEventsLength]);
+  }, [enabled, maxDistance, safetyEventsLength]);
 
   // Get conflict involving a specific aircraft
   const getConflictForAircraft = useCallback(
@@ -389,7 +391,7 @@ export function useConflictProbe({
       return conflicts.find(
         (c) =>
           c.aircraft1.hex?.toUpperCase() === upperHex || c.aircraft2.hex?.toUpperCase() === upperHex
-      );
+      ) || null;
     },
     [conflicts]
   );

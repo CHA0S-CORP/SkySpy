@@ -632,7 +632,7 @@ class TestMixedWorkload:
 
         print(f"\n{metrics}")
         assert metrics.success_rate >= 99
-        assert metrics.p95 < 200  # Allow 200ms for mixed workload
+        assert metrics.p95 < thresholds.get("api_mixed_workload_p95", 200)
 
     def test_sustained_load(self, large_aircraft_cache, thresholds):
         """

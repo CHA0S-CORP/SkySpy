@@ -211,7 +211,7 @@ class TestWebSocketBroadcastLoad:
 
         aircraft_data = large_aircraft_cache[:10]  # Broadcast 10 aircraft
 
-        with patch("skyspy.socketio.utils.sio") as mock_sio:
+        with patch("skyspy.socketio.server.sio") as mock_sio:
             mock_sio.emit = AsyncMock()
 
             for _ in range(20):
