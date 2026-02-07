@@ -11,15 +11,18 @@ import {
   AlertTriangle,
   Clock,
   Plane,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 /**
  * Playback Controls Component
  *
  * Provides UI for historical track playback mode including:
- * - Time range selection (1hr, 2hr, 4hr, 8hr, custom)
+ * - Time range selection (1hr, 6hr, 24hr, custom)
  * - Play/Pause controls
- * - Playback speed (1x, 2x, 4x, 8x)
+ * - Playback speed (1x, 2x, 4x, 8x, 16x)
  * - Timeline scrubber
  * - Current playback time display
  * - Exit button to return to live mode
@@ -47,14 +50,21 @@ export const PlaybackControls = memo(function PlaybackControls({
   onSeekPercent,
   onSkipToStart,
   onSkipToEnd,
+  onSetTimeRange,
+  onSkipForward,
+  onSkipBackward,
 
   // Options
   timeRangePresets,
+  availableSpeeds = [1, 2, 4, 8, 16],
   className = '',
   proStyle = false,
 }) {
   const [showTimeRangeMenu, setShowTimeRangeMenu] = useState(false);
+  const [showCustomRangeInput, setShowCustomRangeInput] = useState(false);
   const [_selectedPreset, setSelectedPreset] = useState(1); // Default to 1 hour
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
 
   /**
    * Handle time range selection
@@ -63,10 +73,55 @@ export const PlaybackControls = memo(function PlaybackControls({
     (hours) => {
       setSelectedPreset(hours);
       setShowTimeRangeMenu(false);
+      setShowCustomRangeInput(false);
       onEnterPlayback?.(hours);
     },
     [onEnterPlayback]
   );
+
+  /**
+   * Handle custom time range submission
+   */
+  const handleCustomRangeSubmit = useCallback(() => {
+    if (!customStart || !customEnd) return;
+
+    const start = new Date(customStart);
+    const end = new Date(customEnd);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return;
+    }
+
+    if (start >= end) {
+      return;
+    }
+
+    setShowTimeRangeMenu(false);
+    setShowCustomRangeInput(false);
+    onSetTimeRange?.(start, end);
+  }, [customStart, customEnd, onSetTimeRange]);
+
+  /**
+   * Initialize custom range inputs with default values
+   */
+  const handleShowCustomRange = useCallback(() => {
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+
+    // Format for datetime-local input (YYYY-MM-DDTHH:mm)
+    const formatForInput = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+
+    setCustomStart(formatForInput(oneHourAgo));
+    setCustomEnd(formatForInput(now));
+    setShowCustomRangeInput(true);
+  }, []);
 
   /**
    * Handle timeline scrubbing
@@ -115,6 +170,46 @@ export const PlaybackControls = memo(function PlaybackControls({
                   <span>{preset.label}</span>
                 </button>
               ))}
+              <div className="playback-menu-divider" />
+              <button
+                className="playback-time-option"
+                onClick={handleShowCustomRange}
+              >
+                <Calendar size={14} />
+                <span>Custom range...</span>
+              </button>
+
+              {showCustomRangeInput && (
+                <div className="playback-custom-range">
+                  <div className="playback-custom-range-inputs">
+                    <label>
+                      <span>Start:</span>
+                      <input
+                        type="datetime-local"
+                        value={customStart}
+                        onChange={(e) => setCustomStart(e.target.value)}
+                        className="playback-datetime-input"
+                      />
+                    </label>
+                    <label>
+                      <span>End:</span>
+                      <input
+                        type="datetime-local"
+                        value={customEnd}
+                        onChange={(e) => setCustomEnd(e.target.value)}
+                        className="playback-datetime-input"
+                      />
+                    </label>
+                  </div>
+                  <button
+                    className="playback-custom-range-submit"
+                    onClick={handleCustomRangeSubmit}
+                    disabled={!customStart || !customEnd}
+                  >
+                    Start Playback
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -230,13 +325,33 @@ export const PlaybackControls = memo(function PlaybackControls({
           </button>
 
           <button
+            className="playback-btn playback-seek-btn"
+            onClick={() => onSkipBackward?.(60)}
+            disabled={isLoading}
+            title="Skip back 1 minute (Left arrow)"
+            aria-label="Skip back 1 minute"
+          >
+            <ChevronLeft size={16} />
+          </button>
+
+          <button
             className={`playback-btn playback-play-btn ${isPlaying ? 'playing' : ''}`}
             onClick={onTogglePlayPause}
             disabled={isLoading}
-            title={isPlaying ? 'Pause' : 'Play'}
+            title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
             aria-label={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+          </button>
+
+          <button
+            className="playback-btn playback-seek-btn"
+            onClick={() => onSkipForward?.(60)}
+            disabled={isLoading}
+            title="Skip forward 1 minute (Right arrow)"
+            aria-label="Skip forward 1 minute"
+          >
+            <ChevronRight size={16} />
           </button>
 
           <button
@@ -253,12 +368,13 @@ export const PlaybackControls = memo(function PlaybackControls({
         {/* Speed control */}
         <div className="playback-speed-control">
           <span className="playback-speed-label">Speed:</span>
-          {[1, 2, 4, 8].map((speed) => (
+          {availableSpeeds.map((speed) => (
             <button
               key={speed}
               className={`playback-speed-btn ${playbackSpeed === speed ? 'active' : ''}`}
               onClick={() => onSpeedChange?.(speed)}
               disabled={isLoading}
+              title={`${speed}x speed${speed > 1 ? ` (Up/Down arrows to change)` : ''}`}
               aria-label={`${speed}x speed`}
             >
               {speed}x

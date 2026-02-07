@@ -60,3 +60,4 @@ export { ScreenReaderAnnouncements } from './ScreenReaderAnnouncements';
 // Phase 14.1: Multi-scope
 export { MultiScopeContainer, LayoutToggle } from './MultiScopeContainer';
 export { RadarScope } from './RadarScope';
+export { ProRadarScope } from './ProRadarScope';

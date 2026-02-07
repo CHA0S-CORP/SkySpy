@@ -21,6 +21,10 @@ export const HeatMapLayer = memo(function HeatMapLayer({
   setTimePeriod,
   gridSize,
   setGridSize,
+  opacity = 0.7,
+  setOpacity,
+  hideAircraft = false,
+  setHideAircraft,
   onRefresh,
   onClear,
   themeColors,
@@ -58,7 +62,7 @@ export const HeatMapLayer = memo(function HeatMapLayer({
 
     // Draw heat map to offscreen canvas at native grid resolution
     drawHeatMap(offCtx, heatMapData, offscreen.width, offscreen.height, {
-      opacity: 0.7,
+      opacity: opacity,
       blur: false, // We'll apply blur when scaling up
       minOpacity: 0.05,
     });
@@ -67,17 +71,18 @@ export const HeatMapLayer = memo(function HeatMapLayer({
     ctx.save();
     ctx.filter = 'blur(8px)';
     ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = opacity;
     ctx.drawImage(offscreen, topLeft.x, topLeft.y, screenWidth, screenHeight);
     ctx.restore();
 
     // Draw a second pass with less blur for sharper hot spots
     ctx.save();
     ctx.filter = 'blur(2px)';
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = opacity * 0.5;
     ctx.globalCompositeOperation = 'screen';
     ctx.drawImage(offscreen, topLeft.x, topLeft.y, screenWidth, screenHeight);
     ctx.restore();
-  }, [enabled, heatMapData, bounds, width, height, latLonToScreen]);
+  }, [enabled, heatMapData, bounds, width, height, latLonToScreen, opacity]);
 
   // Redraw when dependencies change
   useEffect(() => {
@@ -233,6 +238,58 @@ export const HeatMapLayer = memo(function HeatMapLayer({
               </option>
             ))}
           </select>
+        </div>
+
+        {/* Opacity/Intensity slider */}
+        <div style={{ marginBottom: '10px' }}>
+          <label
+            htmlFor="heatmap-opacity"
+            style={{ display: 'block', marginBottom: '4px', color: dimTextColor }}
+          >
+            Intensity: {Math.round(opacity * 100)}%
+          </label>
+          <input
+            id="heatmap-opacity"
+            type="range"
+            min="0.1"
+            max="1"
+            step="0.05"
+            value={opacity}
+            onChange={(e) => setOpacity?.(parseFloat(e.target.value))}
+            style={{
+              width: '100%',
+              height: '6px',
+              appearance: 'none',
+              background: `linear-gradient(to right, ${borderColor}, ${textColor})`,
+              borderRadius: '3px',
+              cursor: 'pointer',
+            }}
+          />
+        </div>
+
+        {/* Hide aircraft toggle */}
+        <div style={{ marginBottom: '10px' }}>
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              cursor: 'pointer',
+              color: textColor,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={hideAircraft}
+              onChange={(e) => setHideAircraft?.(e.target.checked)}
+              style={{
+                width: '14px',
+                height: '14px',
+                cursor: 'pointer',
+              }}
+            />
+            <span style={{ fontSize: '11px' }}>Hide aircraft symbols</span>
+          </label>
         </div>
 
         {/* Statistics */}

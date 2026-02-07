@@ -255,7 +255,7 @@ class TestComplexConditionEvaluation:
         rule.delete()
 
         # Should still be reasonably fast
-        assert metrics.p95 < 100
+        assert metrics.p95 < thresholds["alert_deep_nested_p95"]
 
     def test_many_condition_groups(self, db, thresholds):
         """
@@ -315,7 +315,7 @@ class TestComplexConditionEvaluation:
         # Cleanup
         rule.delete()
 
-        assert metrics.p95 < 150
+        assert metrics.p95 < thresholds["alert_many_groups_p95"]
 
     def test_regex_condition_performance(self, db, thresholds):
         """
@@ -376,7 +376,7 @@ class TestComplexConditionEvaluation:
         for rule in regex_rules:
             rule.delete()
 
-        assert metrics.p95 < 200
+        assert metrics.p95 < thresholds["alert_regex_p95"]
 
 
 @pytest.mark.performance
@@ -445,7 +445,7 @@ class TestGeographicBoundaryChecks:
         for rule in distance_rules:
             rule.delete()
 
-        assert metrics.p95 < 100
+        assert metrics.p95 < thresholds["alert_distance_p95"]
 
     def test_combined_geo_altitude_conditions(self, db, thresholds):
         """
@@ -508,7 +508,7 @@ class TestGeographicBoundaryChecks:
         for rule in combined_rules:
             rule.delete()
 
-        assert metrics.p95 < 100
+        assert metrics.p95 < thresholds["alert_geo_altitude_p95"]
 
 
 @pytest.mark.performance
@@ -591,7 +591,7 @@ class TestTimeBasedConditions:
             rule.delete()
 
         # Schedule checking should add minimal overhead
-        assert metrics.p95 < 100
+        assert metrics.p95 < thresholds["alert_schedule_p95"]
 
     def test_cooldown_checking_performance(self, db, thresholds):
         """
@@ -655,7 +655,7 @@ class TestTimeBasedConditions:
             rule.delete()
 
         # Cooldown checks should be fast
-        assert metrics.p95 < 50
+        assert metrics.p95 < thresholds["alert_cooldown_p95"]
 
 
 @pytest.mark.performance

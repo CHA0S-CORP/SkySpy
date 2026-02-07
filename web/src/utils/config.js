@@ -39,8 +39,10 @@ export const DEFAULT_OVERLAYS = {
   airports: true,
   airspace: true,
   metars: false,
+  tafs: false, // TAF (Terminal Aerodrome Forecast) data
   pireps: false,
   advisories: false, // Weather advisories (SIGMETs, AIRMETs, G-AIRMETs)
+  convectiveSigmets: false, // Convective SIGMET polygons (thunderstorm areas)
   radar: false, // NEXRAD weather radar overlay
   // Airport weather coloring (Pro mode)
   airportFlightCategory: true, // Color airports by METAR flight category (VFR/MVFR/IFR/LIFR)
@@ -59,6 +61,8 @@ export const DEFAULT_OVERLAYS = {
   approachPaths: false, // Extended runway centerlines with glideslope markers
   // Pro mode analytics
   heatMap: false, // Traffic density heat map
+  // Pro mode weather
+  windsAloft: false, // Winds aloft overlay with barbs
 };
 
 export const getConfig = () => {

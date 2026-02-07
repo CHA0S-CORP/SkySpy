@@ -90,7 +90,7 @@ class AudioViewSet(viewsets.ModelViewSet):
     )
     def list(self, request, *args, **kwargs):
         """List audio transmissions."""
-        queryset = self.get_queryset()
+        queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
 
         if page is not None:

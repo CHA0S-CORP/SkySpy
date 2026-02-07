@@ -1144,6 +1144,315 @@
   color: #88ddff !important;
 }
 
+/* ============================================================================
+   TAF Popup Styles
+   ============================================================================ */
+
+.weather-popup.taf-popup {
+  width: 360px;
+  min-width: 320px;
+}
+
+.weather-popup.taf-popup .popup-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.weather-popup.taf-popup .popup-header .trend-icon {
+  margin-left: auto;
+}
+
+.weather-popup.taf-popup .trend-icon.improving {
+  color: #00d480;
+}
+
+.weather-popup.taf-popup .trend-icon.deteriorating {
+  color: #ff6666;
+}
+
+/* Flight category badge in TAF popup */
+.weather-popup.taf-popup .flight-cat-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+.weather-popup.taf-popup .flight-cat-badge.small {
+  font-size: 9px;
+  padding: 1px 4px;
+}
+
+.weather-popup.taf-popup .flight-cat-badge.vfr {
+  background: rgba(0, 200, 80, 0.9);
+  color: #000;
+}
+
+.weather-popup.taf-popup .flight-cat-badge.mvfr {
+  background: rgba(80, 120, 255, 0.9);
+  color: #fff;
+}
+
+.weather-popup.taf-popup .flight-cat-badge.ifr {
+  background: rgba(255, 80, 80, 0.9);
+  color: #fff;
+}
+
+.weather-popup.taf-popup .flight-cat-badge.lifr {
+  background: rgba(255, 50, 200, 0.9);
+  color: #fff;
+}
+
+/* Summary row */
+.weather-popup.taf-popup .summary-row .taf-summary {
+  font-weight: 600;
+  color: #00d4ff;
+}
+
+.weather-popup.crt-popup.taf-popup .summary-row .taf-summary {
+  color: rgba(0, 255, 180, 0.95);
+}
+
+/* Validity remaining */
+.weather-popup.taf-popup .validity-remaining {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-left: 8px;
+}
+
+/* Transition indicator */
+.weather-popup.taf-popup .transition-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.weather-popup.taf-popup .transition-indicator.improving {
+  color: #00d480;
+}
+
+.weather-popup.taf-popup .transition-indicator.deteriorating {
+  color: #ff6666;
+}
+
+.weather-popup.taf-popup .transition-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.weather-popup.taf-popup .transition-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.weather-popup.taf-popup .transition-item .temp-label {
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-left: 2px;
+}
+
+.weather-popup.taf-popup .transition-summary .more {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Section headers */
+.weather-popup.taf-popup .detail-section {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.weather-popup.taf-popup .section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 8px;
+}
+
+.weather-popup.taf-popup .section-header.warning {
+  color: #ffaa44;
+}
+
+.weather-popup.taf-popup .section-header.warning svg {
+  color: #ffaa44;
+}
+
+/* Base conditions */
+.weather-popup.taf-popup .base-conditions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.weather-popup.taf-popup .condition-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.weather-popup.taf-popup .condition-item svg {
+  color: rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+}
+
+.weather-popup.taf-popup .condition-item.weather svg.significant {
+  color: #ffaa44;
+}
+
+/* Change groups */
+.weather-popup.taf-popup .change-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.weather-popup.taf-popup .taf-change-group {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.weather-popup.taf-popup .taf-change-group.fm {
+  border-left: 3px solid #00d4ff;
+}
+
+.weather-popup.taf-popup .taf-change-group.tempo {
+  border-left: 3px solid #ffaa44;
+}
+
+.weather-popup.taf-popup .taf-change-group.becmg {
+  border-left: 3px solid #88dd88;
+}
+
+.weather-popup.taf-popup .taf-change-group.prob {
+  border-left: 3px solid #aa88dd;
+}
+
+.weather-popup.taf-popup .change-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.weather-popup.taf-popup .change-type {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.weather-popup.taf-popup .change-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.weather-popup.taf-popup .change-conditions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.weather-popup.taf-popup .change-conditions .condition-item {
+  font-size: 11px;
+}
+
+.weather-popup.taf-popup .cloud-layer {
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.weather-popup.taf-popup .cloud-type {
+  color: #ffaa44;
+  font-weight: 600;
+  margin-left: 2px;
+}
+
+/* Significant weather section */
+.weather-popup.taf-popup .significant-weather-section {
+  background: rgba(255, 170, 68, 0.1);
+  border: 1px solid rgba(255, 170, 68, 0.3);
+  border-radius: 6px;
+  padding: 8px;
+  margin-top: 8px;
+}
+
+.weather-popup.taf-popup .significant-weather-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.weather-popup.taf-popup .sig-wx-item {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: rgba(255, 170, 68, 0.2);
+  border-radius: 4px;
+  color: #ffcc88;
+}
+
+/* Stale warning */
+.weather-popup.taf-popup .stale-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: rgba(255, 100, 100, 0.15);
+  border: 1px solid rgba(255, 100, 100, 0.3);
+  border-radius: 4px;
+  font-size: 11px;
+  color: #ffaaaa;
+}
+
+.weather-popup.taf-popup .stale-warning svg {
+  color: #ff8888;
+}
+
+.weather-popup.taf-popup.stale {
+  opacity: 0.8;
+}
+
+/* TAF indicator on airport symbols */
+.airport-taf-indicator {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.airport-taf-indicator.has-change {
+  animation: taf-pulse 2s infinite;
+}
+
+@keyframes taf-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 /* Draggable popup styles */
 .aircraft-popup,
 .weather-popup {

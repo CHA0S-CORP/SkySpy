@@ -10,4 +10,5 @@ export * from './cpaCalculation';
 export * from './separationRules';
 export * from './wakeCategories';
 export * from './metarUtils';
+export * from './tafUtils';
 export * from './etaCalculations';

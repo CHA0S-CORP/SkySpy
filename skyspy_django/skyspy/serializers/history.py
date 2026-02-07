@@ -32,6 +32,7 @@ class SightingSerializer(serializers.ModelSerializer):
             "distance_nm",
             "is_military",
             "squawk",
+            "aircraft_type",
         ]
 
 

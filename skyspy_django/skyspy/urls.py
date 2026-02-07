@@ -103,8 +103,8 @@ from skyspy.auth.views import (
 )
 
 # Create router and register viewsets
-# trailing_slash=False allows requests without trailing slash (avoids 301 redirects)
-router = DefaultRouter(trailing_slash=False)
+# Use default trailing_slash=True which allows both with/without trailing slash
+router = DefaultRouter()
 router.register(r"aircraft", AircraftViewSet, basename="aircraft")
 router.register(r"sightings", SightingViewSet, basename="sightings")
 router.register(r"sessions", SessionViewSet, basename="sessions")
@@ -138,7 +138,7 @@ router.register(r"cannonball/stats", CannonballStatsViewSet, basename="cannonbal
 router.register(r"tasks", TaskResultViewSet, basename="tasks")
 
 # Admin management router
-admin_router = DefaultRouter(trailing_slash=False)
+admin_router = DefaultRouter()
 admin_router.register(r"users", UserViewSet, basename="admin-users")
 admin_router.register(r"roles", RoleViewSet, basename="admin-roles")
 admin_router.register(r"user-roles", UserRoleViewSet, basename="admin-user-roles")

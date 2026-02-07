@@ -9,3 +9,5 @@ __pycache__/
 web/test-results/
 *storybook.log
 storybook-static
+dist/
+coverage/

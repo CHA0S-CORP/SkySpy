@@ -29,13 +29,33 @@ const safeJson = async (res) => {
 };
 
 /**
+ * Interpolate heading (handles 360/0 wraparound)
+ */
+const interpolateHeading = (h1, h2, ratio) => {
+  if (h1 == null || h2 == null) return h1 || h2;
+
+  // Normalize to 0-360
+  h1 = ((h1 % 360) + 360) % 360;
+  h2 = ((h2 % 360) + 360) % 360;
+
+  // Find shortest path
+  let delta = h2 - h1;
+  if (delta > 180) delta -= 360;
+  if (delta < -180) delta += 360;
+
+  const result = h1 + delta * ratio;
+  return ((result % 360) + 360) % 360;
+};
+
+/**
  * Hook for managing historical track playback mode
  *
  * Features:
  * - Fetches historical sightings data for a time range
- * - Manages playback state (playing, speed, position)
+ * - Manages playback state (playing, paused, speed, currentTime)
  * - Interpolates aircraft positions between data points
  * - Provides formatted time displays
+ * - Supports playback speeds: 1x, 2x, 4x, 8x, 16x
  *
  * @param {Object} options
  * @param {string} options.apiBaseUrl - Base URL for API calls
@@ -45,20 +65,23 @@ const safeJson = async (res) => {
  * @param {number} options.feederLon - Feeder longitude for filtering
  * @param {number} options.radarRange - Radar range in nm
  */
-export function usePlaybackMode({
+export function useTrackPlayback({
   apiBaseUrl = '',
   wsRequest,
   wsConnected,
   feederLat: _feederLat,
   feederLon: _feederLon,
   radarRange: _radarRange = 50,
-}) {
+} = {}) {
   // Core playback state
   const [isPlayback, setIsPlayback] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [playbackSpeed, setPlaybackSpeedState] = useState(1);
   const [playbackPercent, setPlaybackPercent] = useState(0);
   const [selectedHours, setSelectedHours] = useState(1);
+
+  // Custom time range state
+  const [customTimeRange, setCustomTimeRange] = useState(null); // { start: Date, end: Date }
 
   // Data state
   const [isLoading, setIsLoading] = useState(false);
@@ -80,19 +103,24 @@ export function usePlaybackMode({
   }, [isPlaying, playbackSpeed, playbackPercent]);
 
   /**
-   * Calculate time range based on selected hours
+   * Calculate time range based on selected hours or custom range
    */
   const timeRange = useMemo(() => {
     if (!isPlayback) return null;
+
+    if (customTimeRange) {
+      return customTimeRange;
+    }
+
     const end = new Date();
     const start = new Date(end.getTime() - selectedHours * 60 * 60 * 1000);
     return { start, end };
-  }, [isPlayback, selectedHours]);
+  }, [isPlayback, selectedHours, customTimeRange]);
 
   /**
    * Calculate current playback time based on percent
    */
-  const playbackTime = useMemo(() => {
+  const currentTime = useMemo(() => {
     if (!timeRange) return null;
     const totalMs = timeRange.end.getTime() - timeRange.start.getTime();
     const currentMs = timeRange.start.getTime() + (playbackPercent / 100) * totalMs;
@@ -103,34 +131,43 @@ export function usePlaybackMode({
    * Format time for display
    */
   const formattedTime = useMemo(() => {
-    if (!playbackTime) return '--:--:--';
-    return playbackTime.toLocaleTimeString('en-US', {
+    if (!currentTime) return '--:--:--';
+    return currentTime.toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
       hour12: false,
     });
-  }, [playbackTime]);
+  }, [currentTime]);
 
   /**
    * Format date for display
    */
   const formattedDate = useMemo(() => {
-    if (!playbackTime) return '';
-    return playbackTime.toLocaleDateString('en-US', {
+    if (!currentTime) return '';
+    return currentTime.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
     });
-  }, [playbackTime]);
+  }, [currentTime]);
 
   /**
    * Format duration for display
    */
   const duration = useMemo(() => {
+    if (customTimeRange) {
+      const diffMs = customTimeRange.end.getTime() - customTimeRange.start.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
+      if (diffHours < 1) {
+        const minutes = Math.round(diffHours * 60);
+        return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+      }
+      return `${diffHours.toFixed(1)} hours`;
+    }
     if (selectedHours === 1) return '1 hour';
     return `${selectedHours} hours`;
-  }, [selectedHours]);
+  }, [selectedHours, customTimeRange]);
 
   /**
    * Calculate history stats
@@ -165,10 +202,10 @@ export function usePlaybackMode({
    * Get interpolated aircraft positions at the current playback time
    */
   const getPlaybackAircraft = useCallback(() => {
-    if (!isPlayback || !playbackTime || !timeRange) return [];
+    if (!isPlayback || !currentTime || !timeRange) return [];
 
     const aircraft = [];
-    const currentTime = playbackTime.getTime();
+    const currentTimeMs = currentTime.getTime();
 
     Object.entries(sightingsByAircraft).forEach(([icao, sightings]) => {
       if (sightings.length === 0) return;
@@ -179,9 +216,9 @@ export function usePlaybackMode({
 
       for (let i = 0; i < sightings.length; i++) {
         const sightingTime = new Date(sightings[i].timestamp).getTime();
-        if (sightingTime <= currentTime) {
+        if (sightingTime <= currentTimeMs) {
           before = sightings[i];
-        } else if (sightingTime > currentTime && !after) {
+        } else if (sightingTime > currentTimeMs && !after) {
           after = sightings[i];
           break;
         }
@@ -193,7 +230,7 @@ export function usePlaybackMode({
       // If we only have before data (no future point), use it directly
       // But only if it's within 5 minutes of current time (aircraft may have left)
       const beforeTime = new Date(before.timestamp).getTime();
-      const timeSinceBefore = currentTime - beforeTime;
+      const timeSinceBefore = currentTimeMs - beforeTime;
       const maxStaleMs = 5 * 60 * 1000; // 5 minutes
 
       if (timeSinceBefore > maxStaleMs) return;
@@ -206,7 +243,7 @@ export function usePlaybackMode({
         // Interpolate between before and after
         const afterTime = new Date(after.timestamp).getTime();
         const totalDelta = afterTime - beforeTime;
-        const currentDelta = currentTime - beforeTime;
+        const currentDelta = currentTimeMs - beforeTime;
         const ratio = totalDelta > 0 ? currentDelta / totalDelta : 0;
 
         position = {
@@ -247,44 +284,31 @@ export function usePlaybackMode({
     });
 
     return aircraft;
-  }, [isPlayback, playbackTime, timeRange, sightingsByAircraft]);
-
-  /**
-   * Interpolate heading (handles 360/0 wraparound)
-   */
-  const interpolateHeading = (h1, h2, ratio) => {
-    if (h1 == null || h2 == null) return h1 || h2;
-
-    // Normalize to 0-360
-    h1 = ((h1 % 360) + 360) % 360;
-    h2 = ((h2 % 360) + 360) % 360;
-
-    // Find shortest path
-    let delta = h2 - h1;
-    if (delta > 180) delta -= 360;
-    if (delta < -180) delta += 360;
-
-    const result = h1 + delta * ratio;
-    return ((result % 360) + 360) % 360;
-  };
+  }, [isPlayback, currentTime, timeRange, sightingsByAircraft]);
 
   /**
    * Fetch historical sightings
    */
   const fetchHistory = useCallback(
-    async (hours) => {
+    async (hours, customRange = null) => {
       setIsLoading(true);
       setError(null);
 
       try {
         let data;
+        const params = {};
+
+        if (customRange) {
+          params.start = customRange.start.toISOString();
+          params.end = customRange.end.toISOString();
+        } else {
+          params.hours = hours;
+        }
+        params.limit = 100000; // Get lots of data for playback
 
         // Try WebSocket first if available
         if (wsRequest && wsConnected) {
-          const result = await wsRequest('sightings', {
-            hours,
-            limit: 50000, // Get a lot of data for playback
-          });
+          const result = await wsRequest('sightings', params);
 
           if (result?.error) {
             throw new Error(result.error);
@@ -293,12 +317,12 @@ export function usePlaybackMode({
           data = result;
         } else {
           // Fall back to HTTP
-          const params = new URLSearchParams({
-            hours: hours.toString(),
-            limit: '50000',
+          const searchParams = new URLSearchParams();
+          Object.entries(params).forEach(([key, value]) => {
+            searchParams.set(key, String(value));
           });
 
-          const res = await fetch(`${apiBaseUrl}/api/v1/sightings?${params}`);
+          const res = await fetch(`${apiBaseUrl}/api/v1/sightings?${searchParams}`);
           data = await safeJson(res);
 
           if (!data) {
@@ -311,7 +335,7 @@ export function usePlaybackMode({
         setIsLoading(false);
         return true;
       } catch (err) {
-        console.error('[Playback] Failed to fetch history:', err);
+        console.error('[TrackPlayback] Failed to fetch history:', err);
         setError(err.message || 'Failed to load history');
         setIsLoading(false);
         return false;
@@ -321,16 +345,39 @@ export function usePlaybackMode({
   );
 
   /**
-   * Enter playback mode
+   * Enter playback mode with a preset time range
    */
   const enterPlayback = useCallback(
     async (hours) => {
       setSelectedHours(hours);
+      setCustomTimeRange(null);
       setIsPlayback(true);
       setPlaybackPercent(0);
       setIsPlaying(false);
+      setPlaybackSpeedState(1);
 
       const success = await fetchHistory(hours);
+      if (!success) {
+        // If fetch failed, exit playback mode
+        setIsPlayback(false);
+      }
+    },
+    [fetchHistory]
+  );
+
+  /**
+   * Set a custom time range for playback
+   */
+  const setTimeRange = useCallback(
+    async (start, end) => {
+      const customRange = { start: new Date(start), end: new Date(end) };
+      setCustomTimeRange(customRange);
+      setIsPlayback(true);
+      setPlaybackPercent(0);
+      setIsPlaying(false);
+      setPlaybackSpeedState(1);
+
+      const success = await fetchHistory(null, customRange);
       if (!success) {
         // If fetch failed, exit playback mode
         setIsPlayback(false);
@@ -354,6 +401,22 @@ export function usePlaybackMode({
     setPlaybackPercent(0);
     setHistorySightings([]);
     setError(null);
+    setCustomTimeRange(null);
+    setPlaybackSpeedState(1);
+  }, []);
+
+  /**
+   * Play playback
+   */
+  const play = useCallback(() => {
+    setIsPlaying(true);
+  }, []);
+
+  /**
+   * Pause playback
+   */
+  const pause = useCallback(() => {
+    setIsPlaying(false);
   }, []);
 
   /**
@@ -367,31 +430,54 @@ export function usePlaybackMode({
    * Set playback speed
    */
   const setSpeed = useCallback((speed) => {
-    setPlaybackSpeed(speed);
+    // Validate speed is one of the allowed values
+    if (PLAYBACK_SPEEDS.includes(speed)) {
+      setPlaybackSpeedState(speed);
+    }
   }, []);
 
   /**
-   * Seek to a specific percent
+   * Cycle to next speed
+   */
+  const cycleSpeedUp = useCallback(() => {
+    setPlaybackSpeedState((prev) => {
+      const currentIndex = PLAYBACK_SPEEDS.indexOf(prev);
+      const nextIndex = Math.min(currentIndex + 1, PLAYBACK_SPEEDS.length - 1);
+      return PLAYBACK_SPEEDS[nextIndex];
+    });
+  }, []);
+
+  /**
+   * Cycle to previous speed
+   */
+  const cycleSpeedDown = useCallback(() => {
+    setPlaybackSpeedState((prev) => {
+      const currentIndex = PLAYBACK_SPEEDS.indexOf(prev);
+      const nextIndex = Math.max(currentIndex - 1, 0);
+      return PLAYBACK_SPEEDS[nextIndex];
+    });
+  }, []);
+
+  /**
+   * Seek to a specific percent (0-100)
    */
   const seekPercent = useCallback((percent) => {
     setPlaybackPercent(Math.max(0, Math.min(100, percent)));
   }, []);
 
   /**
-   * Skip to start
+   * Seek to a specific time
    */
-  const skipToStart = useCallback(() => {
-    setPlaybackPercent(0);
-    setIsPlaying(false);
-  }, []);
-
-  /**
-   * Skip to end
-   */
-  const skipToEnd = useCallback(() => {
-    setPlaybackPercent(100);
-    setIsPlaying(false);
-  }, []);
+  const seekTo = useCallback(
+    (time) => {
+      if (!timeRange) return;
+      const targetTime = new Date(time).getTime();
+      const totalMs = timeRange.end.getTime() - timeRange.start.getTime();
+      const percent = ((targetTime - timeRange.start.getTime()) / totalMs) * 100;
+      setPlaybackPercent(Math.max(0, Math.min(100, percent)));
+    },
+    [timeRange]
+  );
 
   /**
    * Skip forward by a number of seconds
@@ -420,82 +506,20 @@ export function usePlaybackMode({
   );
 
   /**
-   * Cycle to next speed
+   * Skip to start
    */
-  const cycleSpeedUp = useCallback(() => {
-    setPlaybackSpeed((prev) => {
-      const currentIndex = PLAYBACK_SPEEDS.indexOf(prev);
-      const nextIndex = Math.min(currentIndex + 1, PLAYBACK_SPEEDS.length - 1);
-      return PLAYBACK_SPEEDS[nextIndex];
-    });
+  const skipToStart = useCallback(() => {
+    setPlaybackPercent(0);
+    setIsPlaying(false);
   }, []);
 
   /**
-   * Cycle to previous speed
+   * Skip to end
    */
-  const cycleSpeedDown = useCallback(() => {
-    setPlaybackSpeed((prev) => {
-      const currentIndex = PLAYBACK_SPEEDS.indexOf(prev);
-      const nextIndex = Math.max(currentIndex - 1, 0);
-      return PLAYBACK_SPEEDS[nextIndex];
-    });
+  const skipToEnd = useCallback(() => {
+    setPlaybackPercent(100);
+    setIsPlaying(false);
   }, []);
-
-  /**
-   * Set a custom time range for playback
-   */
-  const setTimeRange = useCallback(
-    async (start, end) => {
-      const customRange = { start: new Date(start), end: new Date(end) };
-      // For custom ranges, we need to calculate hours for the fetch
-      const hours = Math.ceil((customRange.end - customRange.start) / (1000 * 60 * 60));
-      setSelectedHours(hours);
-      setIsPlayback(true);
-      setPlaybackPercent(0);
-      setIsPlaying(false);
-
-      // Fetch with custom range
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        let data;
-        const params = {
-          start: customRange.start.toISOString(),
-          end: customRange.end.toISOString(),
-          limit: 100000,
-        };
-
-        if (wsRequest && wsConnected) {
-          const result = await wsRequest('sightings', params);
-          if (result?.error) {
-            throw new Error(result.error);
-          }
-          data = result;
-        } else {
-          const searchParams = new URLSearchParams();
-          Object.entries(params).forEach(([key, value]) => {
-            searchParams.set(key, String(value));
-          });
-          const res = await fetch(`${apiBaseUrl}/api/v1/sightings?${searchParams}`);
-          data = await safeJson(res);
-          if (!data) {
-            throw new Error('Failed to fetch history data');
-          }
-        }
-
-        const sightings = data?.sightings || data?.results || [];
-        setHistorySightings(sightings);
-        setIsLoading(false);
-      } catch (err) {
-        console.error('[Playback] Failed to fetch history:', err);
-        setError(err.message || 'Failed to load history');
-        setIsLoading(false);
-        setIsPlayback(false);
-      }
-    },
-    [apiBaseUrl, wsRequest, wsConnected]
-  );
 
   /**
    * Animation loop for playback
@@ -511,7 +535,7 @@ export function usePlaybackMode({
 
     lastTimeRef.current = performance.now();
 
-    const animate = (currentTime) => {
+    const animate = (frameTime) => {
       const { isPlaying: playing, speed, percent } = playbackStateRef.current;
 
       if (!playing) {
@@ -519,15 +543,15 @@ export function usePlaybackMode({
         return;
       }
 
-      const deltaTime = currentTime - lastTimeRef.current;
-      lastTimeRef.current = currentTime;
+      const deltaTime = frameTime - lastTimeRef.current;
+      lastTimeRef.current = frameTime;
 
       // Calculate percent increment based on speed
       // At 1x speed, we want to cover 100% over the duration of the time range
-      // This means the increment per second = 100 / (hours * 3600)
-      // With 60fps, increment per frame = 100 / (hours * 3600) / 60 * speed
-      // Simplified: increment per ms = 100 / (hours * 3600 * 1000) * speed
-      const totalMs = selectedHours * 60 * 60 * 1000;
+      // increment per ms = 100 / (totalMs) * speed
+      const totalMs = (customTimeRange
+        ? customTimeRange.end.getTime() - customTimeRange.start.getTime()
+        : selectedHours * 60 * 60 * 1000);
       const incrementPerMs = (100 / totalMs) * speed;
       const increment = deltaTime * incrementPerMs;
 
@@ -550,7 +574,7 @@ export function usePlaybackMode({
         animationFrameRef.current = null;
       }
     };
-  }, [isPlaying, isPlayback, selectedHours]);
+  }, [isPlaying, isPlayback, selectedHours, customTimeRange]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -567,7 +591,7 @@ export function usePlaybackMode({
     isPlaying,
     playbackSpeed,
     playbackPercent,
-    playbackTime,
+    currentTime,
     timeRange,
     formattedTime,
     formattedDate,
@@ -581,21 +605,26 @@ export function usePlaybackMode({
     getPlaybackAircraft,
 
     // Actions
-    enterPlayback,
-    exitPlayback,
+    play,
+    pause,
     togglePlayPause,
     setSpeed,
-    seekPercent,
-    skipToStart,
-    skipToEnd,
-    skipForward,
-    skipBackward,
     cycleSpeedUp,
     cycleSpeedDown,
+    seekTo,
+    seekPercent,
+    skipForward,
+    skipBackward,
+    skipToStart,
+    skipToEnd,
     setTimeRange,
+    enterPlayback,
+    exitPlayback,
 
     // Constants
     timeRangePresets: TIME_RANGE_PRESETS,
     availableSpeeds: PLAYBACK_SPEEDS,
   };
 }
+
+export default useTrackPlayback;

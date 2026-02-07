@@ -2,29 +2,55 @@ import { useState, useCallback, useEffect } from 'react';
 
 /**
  * Default scope configurations for different layout modes
+ * Each scope has its own center, range, pan offset, and overlay settings
  */
 const DEFAULT_SCOPE_CONFIGS = {
-  single: [{ id: 1, center: null, range: 50, panOffset: { x: 0, y: 0 } }],
+  single: [{ id: 1, center: null, range: 50, panOffset: { x: 0, y: 0 }, overlays: null }],
   'split-2': [
-    { id: 1, center: null, range: 50, panOffset: { x: 0, y: 0 } },
-    { id: 2, center: null, range: 150, panOffset: { x: 0, y: 0 } },
+    { id: 1, center: null, range: 50, panOffset: { x: 0, y: 0 }, overlays: null },
+    { id: 2, center: null, range: 150, panOffset: { x: 0, y: 0 }, overlays: null },
+  ],
+  'split-horizontal': [
+    { id: 1, center: null, range: 50, panOffset: { x: 0, y: 0 }, overlays: null },
+    { id: 2, center: null, range: 150, panOffset: { x: 0, y: 0 }, overlays: null },
+  ],
+  'split-vertical': [
+    { id: 1, center: null, range: 50, panOffset: { x: 0, y: 0 }, overlays: null },
+    { id: 2, center: null, range: 150, panOffset: { x: 0, y: 0 }, overlays: null },
   ],
   'split-4': [
-    { id: 1, center: null, range: 25, panOffset: { x: 0, y: 0 } },
-    { id: 2, center: null, range: 50, panOffset: { x: 0, y: 0 } },
-    { id: 3, center: null, range: 100, panOffset: { x: 0, y: 0 } },
-    { id: 4, center: null, range: 250, panOffset: { x: 0, y: 0 } },
+    { id: 1, center: null, range: 25, panOffset: { x: 0, y: 0 }, overlays: null },
+    { id: 2, center: null, range: 50, panOffset: { x: 0, y: 0 }, overlays: null },
+    { id: 3, center: null, range: 100, panOffset: { x: 0, y: 0 }, overlays: null },
+    { id: 4, center: null, range: 250, panOffset: { x: 0, y: 0 }, overlays: null },
   ],
 };
+
+/**
+ * Default divider positions (in percentage) for split layouts
+ */
+const DEFAULT_DIVIDER_POSITIONS = {
+  single: {},
+  'split-2': { horizontal: 50 },
+  'split-horizontal': { horizontal: 50 },
+  'split-vertical': { vertical: 50 },
+  'split-4': { horizontal: 50, vertical: 50 },
+};
+
+/**
+ * Valid layout modes
+ */
+const LAYOUT_MODES = ['single', 'split-2', 'split-horizontal', 'split-vertical', 'split-4'];
 
 /**
  * Hook for managing multi-scope radar layout
  *
  * Features:
  * - Split screen: 2 or 4 independent scopes
- * - Each scope has own center point and range
+ * - Each scope has own center point, range, and overlay settings
  * - Sync option: same aircraft selection across scopes
- * - Keyboard shortcuts: Ctrl+1, Ctrl+2, Ctrl+4
+ * - Resizable dividers between scopes
+ * - Keyboard shortcuts: Shift+1, Shift+2, Shift+4
  *
  * @param {Object} options - Configuration options
  * @param {string} options.initialLayout - Initial layout mode ('single' | 'split-2' | 'split-4')
@@ -39,7 +65,7 @@ export function useScopeLayout(options = {}) {
     if (persistToStorage) {
       try {
         const saved = localStorage.getItem('adsb-scope-layout');
-        if (saved && ['single', 'split-2', 'split-4'].includes(saved)) {
+        if (saved && LAYOUT_MODES.includes(saved)) {
           return saved;
         }
       } catch {
@@ -90,6 +116,21 @@ export function useScopeLayout(options = {}) {
 
   const [activeScope, setActiveScope] = useState(1);
 
+  // Divider positions for resizable layouts
+  const [dividerPositions, setDividerPositions] = useState(() => {
+    if (persistToStorage) {
+      try {
+        const saved = localStorage.getItem('adsb-scope-dividers');
+        if (saved) {
+          return JSON.parse(saved);
+        }
+      } catch {
+        // Ignore localStorage errors
+      }
+    }
+    return DEFAULT_DIVIDER_POSITIONS[initialLayout] || {};
+  });
+
   // Persist layout changes to localStorage
   useEffect(() => {
     if (persistToStorage) {
@@ -122,6 +163,27 @@ export function useScopeLayout(options = {}) {
       }
     }
   }, [syncSelection, persistToStorage]);
+
+  // Persist divider positions
+  useEffect(() => {
+    if (persistToStorage) {
+      try {
+        localStorage.setItem('adsb-scope-dividers', JSON.stringify(dividerPositions));
+      } catch {
+        // Ignore localStorage errors
+      }
+    }
+  }, [dividerPositions, persistToStorage]);
+
+  /**
+   * Update divider position
+   */
+  const setDividerPosition = useCallback((axis, position) => {
+    setDividerPositions((prev) => ({
+      ...prev,
+      [axis]: Math.min(80, Math.max(20, position)),
+    }));
+  }, []);
 
   /**
    * Update a specific scope's configuration
@@ -175,15 +237,28 @@ export function useScopeLayout(options = {}) {
   }, [layout]);
 
   /**
-   * Set the layout mode (single, split-2, split-4)
+   * Update overlay settings for a specific scope
+   */
+  const setScopeOverlays = useCallback(
+    (id, overlays) => {
+      updateScope(id, { overlays });
+    },
+    [updateScope]
+  );
+
+  /**
+   * Set the layout mode (single, split-2, split-horizontal, split-vertical, split-4)
    */
   const setLayoutMode = useCallback((mode) => {
-    if (!['single', 'split-2', 'split-4'].includes(mode)) {
+    if (!LAYOUT_MODES.includes(mode)) {
       console.warn(`Invalid layout mode: ${mode}`);
       return;
     }
 
     setLayout(mode);
+
+    // Reset divider positions for new layout
+    setDividerPositions(DEFAULT_DIVIDER_POSITIONS[mode] || {});
 
     // Get default configs for the new layout
     const newScopes = DEFAULT_SCOPE_CONFIGS[mode];
@@ -247,23 +322,27 @@ export function useScopeLayout(options = {}) {
   const scopeCount = scopes.length;
 
   // Keyboard shortcut handler for layout switching
+  // Shift+1 = single, Shift+2 = split-2, Shift+4 = quad
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Only handle Ctrl+number combinations
-      if (!e.ctrlKey && !e.metaKey) return;
+      // Only handle Shift+number combinations (not Ctrl which may conflict)
+      if (!e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
 
       // Prevent if user is typing in an input
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
       switch (e.key) {
+        case '!': // Shift+1 produces '!'
         case '1':
           e.preventDefault();
           setLayoutMode('single');
           break;
+        case '@': // Shift+2 produces '@'
         case '2':
           e.preventDefault();
           setLayoutMode('split-2');
           break;
+        case '$': // Shift+4 produces '$'
         case '4':
           e.preventDefault();
           setLayoutMode('split-4');
@@ -285,6 +364,7 @@ export function useScopeLayout(options = {}) {
     activeScope,
     isMultiScope,
     scopeCount,
+    dividerPositions,
 
     // Setters
     setLayoutMode,
@@ -292,8 +372,10 @@ export function useScopeLayout(options = {}) {
     updateScope,
     setScopeRange,
     setScopePanOffset,
+    setScopeOverlays,
     setSyncSelection,
     setActiveScope,
+    setDividerPosition,
 
     // Utilities
     getScope,
@@ -302,8 +384,9 @@ export function useScopeLayout(options = {}) {
     resetAllScopes,
 
     // Constants
-    LAYOUT_MODES: ['single', 'split-2', 'split-4'],
+    LAYOUT_MODES,
     DEFAULT_CONFIGS: DEFAULT_SCOPE_CONFIGS,
+    DEFAULT_DIVIDERS: DEFAULT_DIVIDER_POSITIONS,
   };
 }
 

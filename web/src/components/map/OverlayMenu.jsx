@@ -9,6 +9,7 @@ import {
   MapPin,
   Wind,
   FileWarning,
+  Flame,
 } from 'lucide-react';
 
 /**
@@ -179,6 +180,16 @@ export const OverlayMenu = memo(function OverlayMenu({
             <Wind size={14} />
             <span>Weather Advisories</span>
           </label>
+
+          <label className="overlay-toggle">
+            <input
+              type="checkbox"
+              checked={overlays.convectiveSigmets}
+              onChange={() => handleToggle('convectiveSigmets')}
+            />
+            <AlertTriangle size={14} />
+            <span>Convective SIGMETs</span>
+          </label>
         </div>
 
         <div className="overlay-section">
@@ -209,6 +220,16 @@ export const OverlayMenu = memo(function OverlayMenu({
               onChange={() => handleToggle('labels')}
             />
             <span>Aircraft Labels</span>
+          </label>
+
+          <label className="overlay-toggle">
+            <input
+              type="checkbox"
+              checked={overlays.heatMap}
+              onChange={() => handleToggle('heatMap')}
+            />
+            <Flame size={14} />
+            <span>Heat Map (Pro)</span>
           </label>
         </div>
       </div>

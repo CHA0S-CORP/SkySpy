@@ -21,6 +21,15 @@ const KeyboardShortcutHelp = ({ isOpen, onClose }) => {
       ],
     },
     {
+      title: 'Multi-Scope Layout (Pro Mode)',
+      shortcuts: [
+        { key: 'Shift+1', description: 'Single scope view (full screen)' },
+        { key: 'Shift+2', description: 'Split view (2 scopes side by side)' },
+        { key: 'Shift+4', description: 'Quad view (4 scopes in 2x2 grid)' },
+        { key: 'Click scope', description: 'Activate scope for interaction' },
+      ],
+    },
+    {
       title: 'Measurement Tool',
       shortcuts: [
         { key: 'Shift+Click (1st)', description: 'Set point A marker' },
@@ -34,6 +43,7 @@ const KeyboardShortcutHelp = ({ isOpen, onClose }) => {
       shortcuts: [
         { key: 'V', description: 'Toggle velocity/prediction vectors' },
         { key: 'T', description: 'Toggle trails (short tracks)' },
+        { key: 'Shift+T', description: 'Cycle color theme (Cyan/Amber/Green/High Contrast)' },
         { key: 'G', description: 'Cycle grid opacity (100% -> 50% -> 0%)' },
         { key: 'L', description: 'Toggle labels/data blocks' },
         { key: 'P', description: 'Toggle compass rose' },
@@ -41,13 +51,17 @@ const KeyboardShortcutHelp = ({ isOpen, onClose }) => {
         { key: 'C', description: 'Toggle conflict visualization' },
         { key: 'Y', description: 'Toggle vertical speed trend triangles' },
         { key: 'A', description: 'Toggle altitude-colored trails' },
+        { key: 'Shift+H', description: 'Toggle heat map (traffic density)' },
+        { key: 'Shift+W', description: 'Toggle winds aloft overlay' },
+        { key: 'X', description: 'Toggle weather radar overlay' },
       ],
     },
     {
       title: 'Data Block Leader Lines',
       shortcuts: [
         { key: 'Shift+Drag', description: 'Reposition data block (on data block)' },
-        { key: 'Right-click', description: 'Reset data block to default position' },
+        { key: 'D', description: 'Reset all data block positions to default' },
+        { key: 'Right-click', description: 'Reset single data block to default' },
       ],
     },
     {
@@ -63,7 +77,7 @@ const KeyboardShortcutHelp = ({ isOpen, onClose }) => {
       title: 'Safety',
       shortcuts: [
         { key: 'Shift+M', description: 'Toggle MSAW (Minimum Safe Altitude Warning)' },
-        { key: 'D', description: 'Toggle FPS counter (debug)' },
+        { key: 'Shift+F', description: 'Toggle FPS counter (debug)' },
         { key: '?', description: 'Show this help overlay' },
       ],
     },
@@ -73,6 +87,16 @@ const KeyboardShortcutHelp = ({ isOpen, onClose }) => {
         { key: 'H', description: 'Toggle high contrast mode' },
         { key: 'M', description: 'Toggle reduced motion' },
         { key: 'Shift+A', description: 'Toggle screen reader announcements' },
+      ],
+    },
+    {
+      title: 'Track Playback (when active)',
+      shortcuts: [
+        { key: 'Space', description: 'Play/Pause playback' },
+        { key: 'Left', description: 'Skip backward 1 minute' },
+        { key: 'Right', description: 'Skip forward 1 minute' },
+        { key: 'Up', description: 'Increase playback speed' },
+        { key: 'Down', description: 'Decrease playback speed' },
       ],
     },
   ];

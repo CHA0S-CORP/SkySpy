@@ -3,6 +3,7 @@ export { useApi, parseDRFError } from './useApi';
 export { useSocketApi } from './useSocketApi';
 export { useAviationData } from './useAviationData';
 export { useAircraftInfo } from './useAircraftInfo';
+export { useTafData } from './useTafData';
 export { useAlertNotifications } from './useAlertNotifications';
 export { useNotificationChannels } from './useNotificationChannels';
 export { useStats } from './useStats';
@@ -106,3 +107,18 @@ export { useSeparationTool } from './useSeparationTool';
 
 // Data Block Configuration (Phase 5.2)
 export { useDataBlockConfig, FIELD_DEFINITIONS, MODE_DEFINITIONS } from './useDataBlockConfig';
+
+// Pro Radar Settings (Phase 5.3)
+export {
+  useRadarSettings,
+  THEME_PRESETS,
+  OVERLAY_TYPES,
+  PERFORMANCE_SETTINGS,
+} from './useRadarSettings';
+
+// Track Playback (Phase 13.1)
+export {
+  useTrackPlayback,
+  TIME_RANGE_PRESETS,
+  PLAYBACK_SPEEDS,
+} from './useTrackPlayback';

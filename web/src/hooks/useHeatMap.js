@@ -103,9 +103,39 @@ export function useHeatMap({
   apiBaseUrl = '',
 }) {
   // Time period: '1h', '6h', '24h'
-  const [timePeriod, setTimePeriod] = useState('1h');
+  const [timePeriod, setTimePeriod] = useState(() => {
+    try {
+      return localStorage.getItem('adsb-heatmap-time-period') || '1h';
+    } catch {
+      return '1h';
+    }
+  });
   // Grid resolution
-  const [gridSize, setGridSize] = useState(50);
+  const [gridSize, setGridSize] = useState(() => {
+    try {
+      const saved = localStorage.getItem('adsb-heatmap-grid-size');
+      return saved ? parseInt(saved, 10) : 50;
+    } catch {
+      return 50;
+    }
+  });
+  // Opacity/intensity (0-1)
+  const [opacity, setOpacity] = useState(() => {
+    try {
+      const saved = localStorage.getItem('adsb-heatmap-opacity');
+      return saved ? parseFloat(saved) : 0.7;
+    } catch {
+      return 0.7;
+    }
+  });
+  // Hide aircraft symbols when heat map is shown
+  const [hideAircraft, setHideAircraft] = useState(() => {
+    try {
+      return localStorage.getItem('adsb-heatmap-hide-aircraft') === 'true';
+    } catch {
+      return false;
+    }
+  });
   // Generated heat map data (2D array)
   const [heatMapData, setHeatMapData] = useState(null);
   // Loading state
@@ -377,20 +407,61 @@ export function useHeatMap({
     };
   }, [feederLocation, radarRange]);
 
+  // Persist settings to localStorage
+  const handleSetTimePeriod = useCallback((value) => {
+    setTimePeriod(value);
+    try {
+      localStorage.setItem('adsb-heatmap-time-period', value);
+    } catch {
+      // Ignore storage errors
+    }
+  }, []);
+
+  const handleSetGridSize = useCallback((value) => {
+    setGridSize(value);
+    try {
+      localStorage.setItem('adsb-heatmap-grid-size', String(value));
+    } catch {
+      // Ignore storage errors
+    }
+  }, []);
+
+  const handleSetOpacity = useCallback((value) => {
+    setOpacity(value);
+    try {
+      localStorage.setItem('adsb-heatmap-opacity', String(value));
+    } catch {
+      // Ignore storage errors
+    }
+  }, []);
+
+  const handleSetHideAircraft = useCallback((value) => {
+    setHideAircraft(value);
+    try {
+      localStorage.setItem('adsb-heatmap-hide-aircraft', String(value));
+    } catch {
+      // Ignore storage errors
+    }
+  }, []);
+
   return {
     // State
     enabled,
     heatMapData,
     timePeriod,
     gridSize,
+    opacity,
+    hideAircraft,
     loading,
     error,
     stats,
     bounds,
 
     // Actions
-    setTimePeriod,
-    setGridSize,
+    setTimePeriod: handleSetTimePeriod,
+    setGridSize: handleSetGridSize,
+    setOpacity: handleSetOpacity,
+    setHideAircraft: handleSetHideAircraft,
     addLivePosition,
     regenerateFromLive,
     clearHeatMap,

@@ -128,7 +128,7 @@ class TestSocketIOAuthentication:
     """Tests for Socket.IO connection authentication."""
 
     @pytest.mark.asyncio
-    @pytest.mark.django_db
+    @pytest.mark.django_db(transaction=True)
     async def test_authenticate_with_valid_jwt(self, valid_jwt_token):
         """Test authentication with valid JWT token."""
         from skyspy.socketio.middleware.auth import authenticate_socket
@@ -164,7 +164,7 @@ class TestSocketIOAuthentication:
             assert isinstance(user, AnonymousUser)
 
     @pytest.mark.asyncio
-    @pytest.mark.django_db
+    @pytest.mark.django_db(transaction=True)
     async def test_authenticate_with_api_key(self, api_key_token):
         """Test authentication with valid API key."""
         from skyspy.socketio.middleware.auth import authenticate_socket
@@ -916,6 +916,8 @@ class TestAudioNamespace:
 
         with patch("skyspy.socketio.namespaces.audio.sio", mock_sio_server):
             namespace = AudioNamespace()
+            # Set the server attribute so emit() works
+            namespace.server = mock_sio_server
 
             mock_sio_server.get_session.return_value = {
                 "user": AnonymousUser(),

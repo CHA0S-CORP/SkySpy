@@ -11,4 +11,4 @@ export {
   DATA_BLOCK_DEFAULT_Y,
 } from './useDataBlockPositions';
 export { useMapAircraftNotes } from './useMapAircraftNotes';
-export { usePlaybackMode, TIME_RANGE_PRESETS } from './usePlaybackMode';
+export { usePlaybackMode, TIME_RANGE_PRESETS, PLAYBACK_SPEEDS } from './usePlaybackMode';

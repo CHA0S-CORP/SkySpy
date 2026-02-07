@@ -594,7 +594,83 @@
    Animation & Transitions
    ======================================== */
 
-/* Reduced motion support */
+/* ========================================
+   Resizable Dividers
+   ======================================== */
+
+.scope-divider {
+  background: transparent;
+  transition: background 0.15s ease;
+  user-select: none;
+}
+
+.scope-divider:hover,
+.scope-divider.dragging {
+  background: rgba(100, 180, 255, 0.2);
+}
+
+.scope-divider-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: rgba(10, 20, 30, 0.7);
+  border: 1px solid rgba(100, 180, 255, 0.3);
+  border-radius: 4px;
+  color: rgba(100, 180, 255, 0.6);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.scope-divider:hover .scope-divider-handle,
+.scope-divider.dragging .scope-divider-handle {
+  opacity: 1;
+}
+
+.scope-divider.vertical .scope-divider-handle {
+  height: 40px;
+}
+
+.scope-divider.horizontal .scope-divider-handle {
+  width: 40px;
+}
+
+/* ========================================
+   ProRadarScope Styles
+   ======================================== */
+
+.pro-radar-scope {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #0a0d12;
+}
+
+.pro-radar-scope.active {
+  box-shadow: inset 0 0 0 2px rgba(100, 200, 255, 0.4);
+}
+
+.pro-radar-scope-canvas {
+  display: block;
+}
+
+/* ========================================
+   Focus Management
+   ======================================== */
+
+.scope-pane:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(100, 200, 255, 0.6);
+}
+
+.scope-pane:focus-visible {
+  box-shadow: inset 0 0 0 2px rgba(100, 200, 255, 0.8);
+}
+
+/* ========================================
+   Reduced motion support
+   ======================================== */
+
 @media (prefers-reduced-motion: reduce) {
   .scope-active-border {
     animation: none;
@@ -603,7 +679,9 @@
   .scope-btn,
   .layout-btn,
   .scope-controls,
-  .scope-pane {
+  .scope-pane,
+  .scope-divider,
+  .scope-divider-handle {
     transition: none;
   }
 }

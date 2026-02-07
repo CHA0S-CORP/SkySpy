@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { LayoutGrid, Maximize2, Minus, Plus, RotateCcw, Link2, Link2Off } from 'lucide-react';
+import { LayoutGrid, Maximize2, Minus, Plus, RotateCcw, Link2, Link2Off, GripVertical, GripHorizontal } from 'lucide-react';
 
 /**
  * Grid class mapping for different layout modes
@@ -9,6 +9,101 @@ const GRID_CLASSES = {
   single: 'scope-grid-single',
   'split-2': 'scope-grid-split-2',
   'split-4': 'scope-grid-split-4',
+};
+
+/**
+ * Resizable divider component for split layouts
+ */
+function ResizableDivider({ orientation = 'vertical', position, onDrag, onDragEnd }) {
+  const [isDragging, setIsDragging] = useState(false);
+  const dividerRef = useRef(null);
+  const startPosRef = useRef(0);
+  const startValueRef = useRef(50);
+
+  const handleMouseDown = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(true);
+    startPosRef.current = orientation === 'vertical' ? e.clientX : e.clientY;
+    startValueRef.current = position;
+  }, [orientation, position]);
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e) => {
+      const container = dividerRef.current?.parentElement;
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const currentPos = orientation === 'vertical' ? e.clientX : e.clientY;
+      const containerSize = orientation === 'vertical' ? rect.width : rect.height;
+      const delta = currentPos - startPosRef.current;
+      const deltaPercent = (delta / containerSize) * 100;
+
+      const newPosition = Math.min(80, Math.max(20, startValueRef.current + deltaPercent));
+      onDrag?.(newPosition);
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      onDragEnd?.();
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, orientation, onDrag, onDragEnd]);
+
+  const isVertical = orientation === 'vertical';
+  const GripIcon = isVertical ? GripVertical : GripHorizontal;
+
+  return (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div
+      ref={dividerRef}
+      className={`scope-divider ${isVertical ? 'vertical' : 'horizontal'} ${isDragging ? 'dragging' : ''}`}
+      onMouseDown={handleMouseDown}
+      style={{
+        position: 'absolute',
+        ...(isVertical
+          ? {
+              left: `${position}%`,
+              top: 0,
+              bottom: 0,
+              width: '8px',
+              marginLeft: '-4px',
+              cursor: 'col-resize',
+            }
+          : {
+              top: `${position}%`,
+              left: 0,
+              right: 0,
+              height: '8px',
+              marginTop: '-4px',
+              cursor: 'row-resize',
+            }),
+        zIndex: 30,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <div className="scope-divider-handle">
+        <GripIcon size={12} />
+      </div>
+    </div>
+  );
+}
+
+ResizableDivider.propTypes = {
+  orientation: PropTypes.oneOf(['vertical', 'horizontal']),
+  position: PropTypes.number.isRequired,
+  onDrag: PropTypes.func,
+  onDragEnd: PropTypes.func,
 };
 
 /**
@@ -132,14 +227,14 @@ function LayoutToggle({ layout, onLayoutChange, syncSelection, onSyncToggle, isP
         <button
           className={`layout-btn ${layout === 'single' ? 'active' : ''}`}
           onClick={() => onLayoutChange('single')}
-          title="Single scope (Ctrl+1)"
+          title="Single scope (Shift+1)"
         >
           <Maximize2 size={14} />
         </button>
         <button
           className={`layout-btn ${layout === 'split-2' ? 'active' : ''}`}
           onClick={() => onLayoutChange('split-2')}
-          title="Split 2 scopes (Ctrl+2)"
+          title="Split 2 scopes (Shift+2)"
         >
           <div className="layout-icon-split-2">
             <div className="layout-cell" />
@@ -149,7 +244,7 @@ function LayoutToggle({ layout, onLayoutChange, syncSelection, onSyncToggle, isP
         <button
           className={`layout-btn ${layout === 'split-4' ? 'active' : ''}`}
           onClick={() => onLayoutChange('split-4')}
-          title="Split 4 scopes (Ctrl+4)"
+          title="Split 4 scopes (Shift+4)"
         >
           <LayoutGrid size={14} />
         </button>

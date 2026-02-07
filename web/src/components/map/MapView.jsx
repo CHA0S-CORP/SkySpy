@@ -84,16 +84,21 @@ import { KeyboardShortcutHelp } from './components/KeyboardShortcutHelp';
 import { useDataBlockPositions, DATA_BLOCK_DEFAULT_X, DATA_BLOCK_DEFAULT_Y } from './hooks';
 import { useHeatMap } from '../../hooks/useHeatMap';
 import { HeatMapLayer } from './components/HeatMapLayer';
+import { useWindsAloft, WINDS_ALOFT_LEVELS } from '../../hooks/useWindsAloft';
+import { drawWindBarbs, drawWindsLevelIndicator } from './utils/windBarbs';
 import { useWatchList } from '../../hooks/useWatchList';
-import { WatchListShowButton } from './components/WatchListPanel';
+import { WatchListPanel, WatchListShowButton } from './components/WatchListPanel';
 import { useHighlightGroups } from '../../hooks/useHighlightGroups';
-import { HighlightGroupsShowButton } from './components/HighlightGroupsPanel';
+import { HighlightGroupsPanel, HighlightGroupsShowButton } from './components/HighlightGroupsPanel';
 import { useConflictProbe } from '../../hooks/useConflictProbe';
 import { ConflictProbePanel } from './components/ConflictProbePanel';
 import { useDraggable } from '../../hooks/useDraggable';
 import { useWeatherRadarOverlay } from './components/WeatherRadarOverlay';
+import { useSigmetData } from '../../hooks/useSigmetData';
+import { useTafData } from '../../hooks/useTafData';
 import { useScopeLayout } from '../../hooks/useScopeLayout';
 import MultiScopeContainer from './components/MultiScopeContainer';
+import { ProRadarScope } from './components/ProRadarScope';
 import { useMapAircraftNotes } from './hooks';
 import {
   NoteInputModal,
@@ -102,8 +107,12 @@ import {
   ProSearchBar,
   ProDetailsPanel,
 } from './components';
+import { TafPopup } from './components/popups';
 import { useAltitudeFilter } from '../../hooks/useAltitudeFilter';
 import { AltitudeFilterPanel } from './components/AltitudeFilterPanel';
+import { useMSAW } from '../../hooks/useMSAW';
+import { useQuickFilters } from '../../hooks/useQuickFilters';
+import { QuickFilterBar } from './components/QuickFilterBar';
 import { useSessionStats } from '../../hooks/useSessionStats';
 import { SessionStatsPanel, SessionStatsButton } from './components/SessionStatsPanel';
 import { usePlaybackMode } from './hooks/usePlaybackMode';
@@ -146,10 +155,12 @@ function MapView({
 
   const [selectedAircraft, setSelectedAircraft] = useState(null);
   const [selectedMetar, setSelectedMetar] = useState(null);
+  const [selectedTaf, setSelectedTaf] = useState(null);
   const [selectedPirep, setSelectedPirep] = useState(null);
   const [selectedNavaid, setSelectedNavaid] = useState(null);
   const [selectedAirport, setSelectedAirport] = useState(null);
   const [selectedAirspace, setSelectedAirspace] = useState(null);
+  const [selectedSigmet, setSelectedSigmet] = useState(null);
   // Aviation overlay states - load from localStorage (moved early for useHeatMap dependency)
   const [overlays, setOverlays] = useState(getOverlays);
   // Pro mode pan state (moved early for latLonToScreenMemo dependency)
@@ -365,6 +376,10 @@ function MapView({
     setTimePeriod: setHeatMapTimePeriod,
     gridSize: heatMapGridSize,
     setGridSize: setHeatMapGridSize,
+    opacity: heatMapOpacity,
+    setOpacity: setHeatMapOpacity,
+    hideAircraft: heatMapHideAircraft,
+    setHideAircraft: setHeatMapHideAircraft,
     loading: heatMapLoading,
     error: heatMapError,
     stats: heatMapStats,
@@ -379,6 +394,30 @@ function MapView({
     wsRequest,
     wsConnected,
     apiBaseUrl: config.apiBaseUrl,
+  });
+
+  // Winds aloft altitude level selection (persisted to localStorage)
+  const [windsAloftLevel, setWindsAloftLevel] = useState(() => {
+    try {
+      const saved = localStorage.getItem('adsb-winds-aloft-level');
+      return saved ? parseInt(saved, 10) : 6000;
+    } catch {
+      return 6000;
+    }
+  });
+
+  // Winds Aloft Hook for wind barb overlay (Pro mode)
+  const {
+    windGrid,
+    loading: windsLoading,
+    error: windsError,
+    timestampDisplay: windsTimestamp,
+    refresh: refreshWinds,
+  } = useWindsAloft({
+    enabled: overlays.windsAloft && config.mapMode === 'pro',
+    feederLocation: feederLocationMemo,
+    radarRange,
+    selectedLevel: windsAloftLevel,
   });
 
   // Memoized latLonToScreen for HeatMapLayer
@@ -405,42 +444,48 @@ function MapView({
 
   // Phase 12.3: Highlight Groups Hook for aircraft grouping/highlighting
   const {
-    groups: _highlightGroups,
-    panelVisible: _highlightPanelVisible,
-    panelExpanded: _highlightPanelExpanded,
-    enabledCount: _highlightEnabledCount,
-    hasEnabledGroups: _hasHighlightGroups,
-    toggleGroup: _toggleHighlightGroup,
-    addGroup: _addHighlightGroup,
-    removeGroup: _removeHighlightGroup,
-    updateGroup: _updateHighlightGroup,
-    reorderGroups: _reorderHighlightGroups,
-    resetToDefaults: _resetHighlightDefaults,
-    disableAll: _disableAllHighlights,
-    getAircraftHighlight: _getAircraftHighlight,
-    getGroupCounts: _getHighlightGroupCounts,
-    togglePanel: _toggleHighlightPanel,
-    togglePanelExpanded: _toggleHighlightPanelExpanded,
+    groups: highlightGroups,
+    panelVisible: highlightPanelVisible,
+    panelExpanded: highlightPanelExpanded,
+    enabledCount: highlightEnabledCount,
+    hasEnabledGroups: hasHighlightGroups,
+    toggleGroup: toggleHighlightGroup,
+    addGroup: addHighlightGroup,
+    removeGroup: removeHighlightGroup,
+    updateGroup: updateHighlightGroup,
+    reorderGroups: reorderHighlightGroups,
+    resetToDefaults: resetHighlightDefaults,
+    disableAll: disableAllHighlights,
+    getAircraftHighlight,
+    getGroupCounts: getHighlightGroupCounts,
+    togglePanel: toggleHighlightPanel,
+    togglePanelExpanded: toggleHighlightPanelExpanded,
     setPanelVisible: setHighlightPanelVisible,
   } = useHighlightGroups(aircraftInfo);
 
   // Phase 6: Watch List Hook for tracking aircraft
   const {
-    watchList: _watchList,
-    panelVisible: _watchListPanelVisible,
+    watchList,
+    panelVisible: watchListPanelVisible,
+    count: watchListCount,
     toggleWatchList,
-    isWatched: _isWatched,
+    isWatched,
     togglePanel: toggleWatchListPanel,
-    clearWatchList: _clearWatchList,
-    removeFromWatchList: _removeFromWatchList,
+    showPanel: showWatchListPanel,
+    hidePanel: hideWatchListPanel,
+    clearWatchList,
+    removeFromWatchList,
     initializeAudio: _initializeWatchListAudio,
   } = useWatchList({ enableAudio: true });
+
+  // Watch list panel expanded state
+  const [watchListExpanded, setWatchListExpanded] = useState(true);
 
   // Phase 6: Keyboard Shortcut Help state
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
 
-  // Phase 6: J-Rings toggle state
-  const [_showJRings, setShowJRings] = useState(
+  // Phase 6: J-Rings toggle state (range rings around selected aircraft)
+  const [showJRings, setShowJRings] = useState(
     () => localStorage.getItem('adsb-pro-j-rings') === 'true'
   );
 
@@ -460,10 +505,17 @@ function MapView({
 
   // Draggable position for highlight groups panel
   const {
-    position: _highlightPanelPosition,
-    isDragging: _isHighlightPanelDragging,
-    onMouseDown: _onHighlightPanelMouseDown,
+    position: highlightPanelPosition,
+    isDragging: isHighlightPanelDragging,
+    onMouseDown: onHighlightPanelMouseDown,
   } = useDraggable('highlight-groups-panel');
+
+  // Draggable position for watch list panel
+  const {
+    position: watchListPanelPosition,
+    isDragging: isWatchListPanelDragging,
+    onMouseDown: onWatchListPanelMouseDown,
+  } = useDraggable('watch-list-panel');
 
   // Phase 10.1: Weather Radar Overlay Hook (NEXRAD via Iowa State Mesonet)
   const {
@@ -477,6 +529,42 @@ function MapView({
     feederLocation: feederLocationMemo,
     radarRange: radarRange,
   });
+
+  // Convective SIGMET Overlay Hook
+  const {
+    sigmets: convectiveSigmets,
+    loading: sigmetsLoading,
+    error: sigmetsError,
+    timestampDisplay: sigmetsTimestamp,
+    countsBySeverity: sigmetCounts,
+    drawOnCanvas: drawSigmets,
+    getSigmetAtPoint,
+    refresh: refreshSigmets,
+  } = useSigmetData({
+    enabled: overlays.convectiveSigmets && config.mapMode === 'pro',
+    feederLocation: feederLocationMemo,
+    radarRange: radarRange,
+    refreshInterval: 5 * 60 * 1000,
+  });
+
+  // TAF (Terminal Aerodrome Forecast) data hook
+  const {
+    tafs,
+    loading: tafsLoading,
+    error: tafsError,
+    getTafForAirport,
+    hasTafAvailable,
+    getForecastChanges,
+    stationsWithTaf,
+    fetchTafForStation,
+  } = useTafData(
+    wsRequest,
+    wsConnected,
+    feederLat,
+    feederLon,
+    radarRange,
+    overlays.tafs && config.mapMode === 'pro'
+  );
 
   // Phase 13.1: Track Playback Mode Hook
   const {
@@ -500,7 +588,13 @@ function MapView({
     seekPercent: seekPlaybackPercent,
     skipToStart: skipPlaybackToStart,
     skipToEnd: skipPlaybackToEnd,
+    skipForward: skipPlaybackForward,
+    skipBackward: skipPlaybackBackward,
+    cycleSpeedUp: cyclePlaybackSpeedUp,
+    cycleSpeedDown: cyclePlaybackSpeedDown,
+    setTimeRange: setPlaybackTimeRange,
     timeRangePresets: playbackTimeRangePresets,
+    availableSpeeds: playbackAvailableSpeeds,
   } = usePlaybackMode({
     apiBaseUrl: config.apiBaseUrl,
     wsRequest,
@@ -523,7 +617,7 @@ function MapView({
     getOffset: getDataBlockOffset,
     setOffset: setDataBlockOffset,
     resetOffset: resetDataBlockOffset,
-    resetAllOffsets: _resetAllDataBlockOffsets,
+    resetAllOffsets: resetAllDataBlockOffsets,
     handleMouseDown: handleDataBlockDragStart,
     handleMouseMove: handleDataBlockDragMove,
     handleMouseUp: handleDataBlockDragEnd,
@@ -531,7 +625,8 @@ function MapView({
     hasCustomOffset: hasCustomDataBlockOffset,
     hitTestDataBlock,
     pruneStaleAircraft: _pruneStaleDataBlockPositions,
-    customPositionCount: _dataBlockCustomPositionCount,
+    customPositionCount: dataBlockCustomPositionCount,
+    updateLastSeen: _updateDataBlockLastSeen,
   } = useDataBlockPositions();
 
   // Toast context for notifications (gracefully handles if not in provider)
@@ -707,6 +802,18 @@ function MapView({
     getAircraftOpacity: _getAircraftOpacity,
     filterLabel: _altitudeFilterLabel,
   } = useAltitudeFilter();
+
+  // Phase 12.1: Quick Filters for Pro Mode
+  const {
+    activeFilters: quickActiveFilters,
+    showFilterBar: showQuickFilterBar,
+    toggleFilter: toggleQuickFilter,
+    clearFilters: clearQuickFilters,
+    toggleFilterBar: toggleQuickFilterBar,
+    filterAircraft: filterAircraftByQuickFilters,
+    computeFilterCounts: computeQuickFilterCounts,
+  } = useQuickFilters();
+
   const sessionStats = useSessionStats(aircraft, {
     enabled: config.mapMode === 'pro' || config.mapMode === 'crt',
   });
@@ -792,7 +899,7 @@ function MapView({
   );
 
   // Phase 5: Theme & Customization - using useProTheme hook
-  const { theme: proTheme, setTheme: setProTheme, themeColors: proThemeColors } = useProTheme();
+  const { theme: proTheme, setTheme: setProTheme, cycleTheme: cycleProTheme, themeColors: proThemeColors, themeInfo: proThemeInfo } = useProTheme();
   // Theme colors for Pro mode - computed from proTheme for use in render
   const themeColors = useMemo(() => {
     return config.mapMode === 'pro' ? proThemeColors : null;
@@ -882,6 +989,9 @@ function MapView({
     metars: [],
     pireps: [],
   });
+
+  // MSAW (Minimum Safe Altitude Warning) hook
+  const msaw = useMSAW(aircraft, aviationData.airports);
 
   // Terrain overlay data (pro mode only) - cached GeoJSON boundaries
   const [terrainData, setTerrainData] = useState({
@@ -2496,8 +2606,14 @@ function MapView({
           }
           setHoverInfo(null);
           break;
-        case 'f': // Toggle FPS counter
-          setShowFpsCounter((prev) => !prev);
+        case 'f': // Toggle quick filter bar OR FPS counter (Shift+F)
+          if (e.shiftKey) {
+            // Shift+F: Toggle FPS counter (debug)
+            setShowFpsCounter((prev) => !prev);
+          } else {
+            // F: Toggle quick filter bar
+            toggleQuickFilterBar();
+          }
           break;
         case 'h': // Toggle high contrast
           setHighContrastMode((prev) => {
@@ -2519,12 +2635,18 @@ function MapView({
             });
           }
           break;
-        case 'm': // Toggle reduced motion
-          setReducedMotion((prev) => {
-            const newVal = !prev;
-            localStorage.setItem('adsb-pro-reduced-motion', String(newVal));
-            return newVal;
-          });
+        case 'm': // Toggle reduced motion OR MSAW (Shift+M)
+          if (e.shiftKey) {
+            // Shift+M: Toggle MSAW (Minimum Safe Altitude Warning)
+            msaw.toggle();
+          } else {
+            // M: Toggle reduced motion
+            setReducedMotion((prev) => {
+              const newVal = !prev;
+              localStorage.setItem('adsb-pro-reduced-motion', String(newVal));
+              return newVal;
+            });
+          }
           break;
         case 'x': // Toggle weather radar overlay
           setOverlays((prev) => {
@@ -2535,6 +2657,15 @@ function MapView({
           break;
         case 'w': // Toggle watch list panel
           toggleWatchListPanel();
+          break;
+        case 'W': // Toggle winds aloft overlay (Shift+W)
+          if (e.shiftKey) {
+            setOverlays((prev) => {
+              const next = { ...prev, windsAloft: !prev.windsAloft };
+              saveOverlays(next);
+              return next;
+            });
+          }
           break;
         case 'n': // Add selected aircraft to watch list
           if (selectedAircraft) {
@@ -2555,12 +2686,53 @@ function MapView({
           e.preventDefault();
           setShowKeyboardHelp((prev) => !prev);
           break;
+        case 'T': // Cycle color theme (Shift+T)
+          if (e.shiftKey) {
+            cycleProTheme();
+          }
+          break;
+        case 'd': // Reset all data block positions to default
+          if (dataBlockCustomPositionCount > 0) {
+            resetAllDataBlockOffsets();
+            toastContext?.success?.(`Reset ${dataBlockCustomPositionCount} data block position(s)`);
+          }
+          break;
+        case ' ': // Space: Toggle play/pause in playback mode
+          if (isPlayback) {
+            e.preventDefault();
+            togglePlayPause();
+          }
+          break;
+        case 'arrowleft': // Left arrow: Seek backward in playback mode
+          if (isPlayback) {
+            e.preventDefault();
+            skipPlaybackBackward(60); // Skip 1 minute
+          }
+          break;
+        case 'arrowright': // Right arrow: Seek forward in playback mode
+          if (isPlayback) {
+            e.preventDefault();
+            skipPlaybackForward(60); // Skip 1 minute
+          }
+          break;
+        case 'arrowup': // Up arrow: Increase playback speed
+          if (isPlayback) {
+            e.preventDefault();
+            cyclePlaybackSpeedUp();
+          }
+          break;
+        case 'arrowdown': // Down arrow: Decrease playback speed
+          if (isPlayback) {
+            e.preventDefault();
+            cyclePlaybackSpeedDown();
+          }
+          break;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [config.mapMode, panelPinned, selectedAircraft, toggleWatchList, toggleWatchListPanel]);
+  }, [config.mapMode, panelPinned, selectedAircraft, toggleWatchList, toggleWatchListPanel, toggleQuickFilterBar, msaw, cycleProTheme, dataBlockCustomPositionCount, resetAllDataBlockOffsets, toastContext, isPlayback, togglePlayPause, skipPlaybackBackward, skipPlaybackForward, cyclePlaybackSpeedUp, cyclePlaybackSpeedDown]);
 
   // Handle mouse move on radar container to show/hide range control and track cursor
   const handleContainerMouseMove = useCallback(
@@ -3976,6 +4148,9 @@ function MapView({
       });
     }
 
+    // Phase 12.1: Apply quick filters for Pro mode
+    filtered = filterAircraftByQuickFilters(filtered);
+
     return filtered.sort((a, b) => (a.distance_nm || 999) - (b.distance_nm || 999));
   }, [
     aircraft,
@@ -3985,6 +4160,7 @@ function MapView({
     isPlayback,
     playbackPercent,
     getPlaybackAircraft,
+    filterAircraftByQuickFilters,
   ]);
 
   // Live aircraft data for selected aircraft (updates in real-time)
@@ -3992,6 +4168,21 @@ function MapView({
     if (!selectedAircraft) return null;
     return sortedAircraft.find((a) => a.hex === selectedAircraft.hex) || selectedAircraft;
   }, [selectedAircraft, sortedAircraft]);
+
+  // Phase 12.1: Compute quick filter counts (based on pre-filtered aircraft before quick filters)
+  // We use the aircraft array before quick filters are applied to show accurate counts
+  const quickFilterCounts = useMemo(() => {
+    // Use playback aircraft when in playback mode, otherwise use live aircraft
+    const sourceAircraft = isPlayback ? getPlaybackAircraft() : aircraft;
+    return computeQuickFilterCounts(sourceAircraft.filter((a) => a.lat && a.lon));
+  }, [aircraft, isPlayback, getPlaybackAircraft, computeQuickFilterCounts]);
+
+  // Count of watched aircraft that are currently live/visible
+  const watchListLiveCount = useMemo(() => {
+    return watchList.filter((entry) =>
+      sortedAircraft.some((ac) => ac.hex?.toUpperCase() === entry.hex?.toUpperCase())
+    ).length;
+  }, [watchList, sortedAircraft]);
 
   // Calculate bounds for simple radar mode (include feeder location)
   const bounds = useMemo(() => {
@@ -4715,6 +4906,12 @@ function MapView({
         drawWeatherRadar(ctx, latLonToScreen, radarOpacity);
       }
 
+      // PRO MODE: Draw convective SIGMET polygons (above radar, below terrain)
+      if (isPro && overlays.convectiveSigmets && convectiveSigmets.length > 0) {
+        const sigmetOpacity = layerOpacities.convectiveSigmets ?? 0.8;
+        drawSigmets(ctx, latLonToScreen, sigmetOpacity);
+      }
+
       // PRO MODE: Draw terrain overlays (minimal context layers)
       if (isPro) {
         // Helper to draw GeoJSON-style polygon/line data
@@ -5064,10 +5261,45 @@ function MapView({
           ctx.lineTo(isSelected ? 10 : 8, 0);
           ctx.stroke();
 
+          // TAF indicator (small dot in upper right if TAF available)
+          const aptId = apt.icao || apt.icaoId || apt.faaId || apt.id || 'APT';
+          if (overlays.tafs && stationsWithTaf && stationsWithTaf.has(aptId.toUpperCase())) {
+            const aptTaf = getTafForAirport(apt);
+            if (aptTaf) {
+              // Draw TAF indicator dot
+              ctx.beginPath();
+              ctx.arc(6, -6, 3, 0, Math.PI * 2);
+              // Color based on worst forecast category
+              const worstCat = aptTaf.forecastCategories?.includes('LIFR') ? 'LIFR'
+                : aptTaf.forecastCategories?.includes('IFR') ? 'IFR'
+                : aptTaf.forecastCategories?.includes('MVFR') ? 'MVFR'
+                : 'VFR';
+              const tafColors = {
+                VFR: 'rgba(0, 200, 80, 0.9)',
+                MVFR: 'rgba(80, 120, 255, 0.9)',
+                IFR: 'rgba(255, 80, 80, 0.9)',
+                LIFR: 'rgba(255, 50, 200, 0.9)',
+              };
+              ctx.fillStyle = tafColors[worstCat] || 'rgba(200, 200, 200, 0.9)';
+              ctx.fill();
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+              ctx.lineWidth = 1;
+              ctx.stroke();
+
+              // Pulsing ring for IFR transitions
+              if (aptTaf.hasIfrTransition) {
+                ctx.beginPath();
+                ctx.arc(6, -6, 5, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(255, 100, 100, 0.4)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+              }
+            }
+          }
+
           ctx.restore();
 
           // Label with background - add flight category if has METAR
-          const aptId = apt.icao || apt.icaoId || apt.faaId || apt.id || 'APT';
           const labelSuffix = hasMetar ? ` ${aptMetar.fltCat || 'VFR'}` : '';
           const fullLabel = aptId + labelSuffix;
           ctx.font = isSelected
@@ -5698,6 +5930,25 @@ function MapView({
         });
       }
 
+      // Draw Winds Aloft overlay (Pro mode only)
+      if (isPro && overlays.windsAloft && windGrid && windGrid.length > 0) {
+        // Adapt barb size to zoom level
+        const barbSize = radarRange <= 25 ? 30 : radarRange <= 50 ? 25 : radarRange <= 100 ? 22 : 18;
+        const minSpacing = radarRange <= 25 ? 50 : radarRange <= 50 ? 45 : radarRange <= 100 ? 40 : 35;
+
+        drawWindBarbs(ctx, windGrid, latLonToScreen, {
+          size: barbSize,
+          minSpacing,
+          opacity: 0.85,
+          showLabels: radarRange <= 50,
+        });
+
+        // Draw level indicator in corner
+        drawWindsLevelIndicator(ctx, 10, height - 60, windsAloftLevel, {
+          themeColors,
+        });
+      }
+
       // Draw METARs if enabled
       if (overlays.metars && aviationData.metars.length > 0) {
         aviationData.metars.forEach((metar) => {
@@ -5995,6 +6246,74 @@ function MapView({
           ctx.stroke();
           ctx.setLineDash([]);
         });
+
+        ctx.restore();
+      }
+
+      // Phase 6: J-Rings - Draw range rings around selected aircraft
+      // J-Rings show concentric distance rings (5nm, 10nm, 20nm) centered on the selected aircraft
+      // Toggle with 'J' key, persisted in localStorage
+      if (showJRings && selectedAircraft?.lat && selectedAircraft?.lon) {
+        ctx.save();
+
+        // Get selected aircraft screen position
+        const acPos = latLonToScreen(selectedAircraft.lat, selectedAircraft.lon);
+
+        // Skip if aircraft is too far off screen
+        if (acPos.x >= -200 && acPos.x <= width + 200 && acPos.y >= -200 && acPos.y <= height + 200) {
+          // J-Ring distances in nautical miles (configurable)
+          const jRingDistances = [5, 10, 20];
+
+          // Calculate pixels per nautical mile for current view
+          const pixelsPerNm = isPro
+            ? (Math.min(width, height) * 0.45) / radarRange
+            : maxRadius / radarRange;
+
+          // Use cyan/theme color with lower opacity
+          const ringColor = isPro
+            ? themeColors?.rgba('primary', 0.35) || 'rgba(0, 200, 255, 0.35)'
+            : 'rgba(0, 255, 100, 0.35)';
+          const labelColor = isPro
+            ? themeColors?.rgba('primary', 0.6) || 'rgba(0, 200, 255, 0.6)'
+            : 'rgba(0, 255, 100, 0.6)';
+
+          ctx.strokeStyle = ringColor;
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([6, 4]);
+
+          jRingDistances.forEach((distNm) => {
+            const radiusPx = distNm * pixelsPerNm;
+
+            // Only draw if ring would be at least partially visible
+            if (radiusPx > 10 && radiusPx < Math.max(width, height) * 2) {
+              // Draw the ring
+              ctx.beginPath();
+              ctx.arc(acPos.x, acPos.y, radiusPx, 0, Math.PI * 2);
+              ctx.stroke();
+
+              // Draw distance label at the top of the ring
+              ctx.fillStyle = labelColor;
+              ctx.font = '11px "JetBrains Mono", monospace';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'bottom';
+
+              const labelY = acPos.y - radiusPx - 3;
+              // Only draw label if it's within reasonable screen bounds
+              if (labelY > -20 && labelY < height + 20) {
+                ctx.fillText(`${distNm}nm`, acPos.x, labelY);
+              }
+
+              // Also draw label at bottom for better visibility when panning
+              const bottomLabelY = acPos.y + radiusPx + 12;
+              if (bottomLabelY > 0 && bottomLabelY < height + 30 && labelY < 10) {
+                ctx.textBaseline = 'top';
+                ctx.fillText(`${distNm}nm`, acPos.x, acPos.y + radiusPx + 3);
+              }
+            }
+          });
+
+          ctx.setLineDash([]);
+        }
 
         ctx.restore();
       }
@@ -6424,6 +6743,44 @@ function MapView({
             // Purple for military
             primaryColor = isPro ? `rgba(200, 100, 255, 0.9)` : `rgba(180, 80, 255, ${brightness})`;
             textColor = isPro ? 'rgba(220, 150, 255, 0.9)' : `rgba(200, 150, 255, ${brightness})`;
+          } else if (isPro && hasHighlightGroups) {
+            // Check for highlight group color (Pro mode only)
+            const highlight = getAircraftHighlight(ac);
+            if (highlight && highlight.color) {
+              // Convert hex color to rgba for consistency
+              const hexToRgba = (hex, alpha) => {
+                const r = parseInt(hex.slice(1, 3), 16);
+                const g = parseInt(hex.slice(3, 5), 16);
+                const b = parseInt(hex.slice(5, 7), 16);
+                return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+              };
+              primaryColor = hexToRgba(highlight.color, 0.9);
+              // Slightly lighter version for text
+              const r = parseInt(highlight.color.slice(1, 3), 16);
+              const g = parseInt(highlight.color.slice(3, 5), 16);
+              const b = parseInt(highlight.color.slice(5, 7), 16);
+              textColor = `rgba(${Math.min(255, r + 50)}, ${Math.min(255, g + 50)}, ${Math.min(255, b + 50)}, 0.95)`;
+            } else if (showSpeedColors && ac.gs) {
+              // Fall through to speed colors if no highlight match
+              const speed = ac.gs;
+              if (speed > 500) {
+                primaryColor = 'rgba(255, 165, 0, 0.9)';
+                textColor = 'rgba(255, 200, 100, 0.9)';
+              } else if (speed > 300) {
+                primaryColor = 'rgba(255, 255, 0, 0.9)';
+                textColor = 'rgba(255, 255, 150, 0.9)';
+              } else if (speed < 150) {
+                primaryColor = 'rgba(100, 180, 255, 0.9)';
+                textColor = 'rgba(150, 200, 255, 0.9)';
+              } else {
+                primaryColor = 'rgba(0, 255, 200, 0.9)';
+                textColor = 'rgba(150, 255, 220, 0.9)';
+              }
+            } else {
+              // Default green
+              primaryColor = 'rgba(0, 255, 150, 0.9)';
+              textColor = 'rgba(150, 255, 200, 0.9)';
+            }
           } else if (showSpeedColors && ac.gs) {
             // Speed-based coloring for civilian (Phase 2.2)
             const speed = ac.gs;
@@ -7711,6 +8068,23 @@ function MapView({
     }
   };
 
+  // Center map on a watched aircraft
+  const centerOnWatchedAircraft = useCallback(
+    (entry) => {
+      // Find live aircraft data for this watched entry
+      const ac = sortedAircraft.find(
+        (a) => a.hex?.toUpperCase() === entry.hex?.toUpperCase()
+      );
+      if (ac?.lat && ac?.lon && config.mapMode === 'map' && leafletMapRef.current) {
+        leafletMapRef.current.flyTo([ac.lat, ac.lon], 12, {
+          duration: 1.5,
+          easeLinearity: 0.25,
+        });
+      }
+    },
+    [sortedAircraft, config.mapMode]
+  );
+
   // Get feeder position for simple radar
   const feederPos = getPosition(feederLat, feederLon);
 
@@ -8200,6 +8574,16 @@ function MapView({
                 onMouseMove={handleContainerMouseMove}
                 onMouseLeave={handleContainerMouseLeave}
               >
+                {/* Phase 12.1: Quick Filter Bar for Pro Mode */}
+                {config.mapMode === 'pro' && showQuickFilterBar && (
+                  <QuickFilterBar
+                    activeFilters={quickActiveFilters}
+                    filterCounts={quickFilterCounts}
+                    onToggleFilter={toggleQuickFilter}
+                    onClear={clearQuickFilters}
+                    onClose={toggleQuickFilterBar}
+                  />
+                )}
                 <canvas
                   ref={canvasRef}
                   className="crt-radar-canvas"
@@ -8601,6 +8985,8 @@ function MapView({
                       setSelectedNavaid(null);
                       setSelectedAirport(null);
                       setSelectedAirspace(null);
+                      setSelectedTaf(null);
+                      setSelectedSigmet(null);
 
                       if (closestType === 'aircraft') {
                         selectAircraft(closest);
@@ -8612,8 +8998,17 @@ function MapView({
                         setSelectedNavaid(closest);
                       } else if (closestType === 'airport') {
                         setSelectedAirport(closest);
+                        // Also show TAF if available for this airport
+                        if (overlays.tafs) {
+                          const aptTaf = getTafForAirport(closest);
+                          if (aptTaf) {
+                            setSelectedTaf(aptTaf);
+                          }
+                        }
                       } else if (closestType === 'airspace') {
                         setSelectedAirspace(closest);
+                      } else if (closestType === 'sigmet') {
+                        setSelectedSigmet(closest);
                       }
                     } else {
                       // Clicked on empty area - clear all selections (unless panel is pinned)
@@ -8621,10 +9016,12 @@ function MapView({
                         selectAircraft(null);
                       }
                       setSelectedMetar(null);
+                      setSelectedTaf(null);
                       setSelectedPirep(null);
                       setSelectedNavaid(null);
                       setSelectedAirport(null);
                       setSelectedAirspace(null);
+                      setSelectedSigmet(null);
                     }
                   }}
                   onDoubleClick={(e) => {
@@ -8792,6 +9189,10 @@ function MapView({
                     setTimePeriod={setHeatMapTimePeriod}
                     gridSize={heatMapGridSize}
                     setGridSize={setHeatMapGridSize}
+                    opacity={heatMapOpacity}
+                    setOpacity={setHeatMapOpacity}
+                    hideAircraft={heatMapHideAircraft}
+                    setHideAircraft={setHeatMapHideAircraft}
                     onRefresh={refreshHeatMap}
                     onClear={clearHeatMap}
                     themeColors={themeColors}
@@ -8799,13 +9200,48 @@ function MapView({
                 )}
               </div>
             ) : (
-              // Inactive scope - show placeholder with scope info
-              <div className="scope-inactive-placeholder">
-                <div className="scope-inactive-info">
-                  <div className="scope-inactive-range">{scope.range}nm</div>
-                  <div className="scope-inactive-hint">Click to activate</div>
-                </div>
-              </div>
+              // Inactive scope - render simplified radar view using ProRadarScope
+              <ProRadarScope
+                scopeId={scope.id}
+                isActive={false}
+                range={scope.range}
+                panOffset={scope.panOffset || { x: 0, y: 0 }}
+                center={scope.center}
+                aircraft={sortedAircraft}
+                feederLocation={feederLocationMemo}
+                selectedAircraft={scopeLayout.syncSelection ? selectedAircraft : null}
+                themeColors={themeColors}
+                showGrid={overlays.grid !== false}
+                showCompassRose={overlays.compassRose !== false}
+                showRangeRings={overlays.rangeRings !== false}
+                showDataBlocks={overlays.dataBlocks !== false}
+                showPredictionVectors={overlays.predictionVectors !== false}
+                showShortTracks={showShortTracks}
+                showSpeedColoring={overlays.speedColoring !== false}
+                showVerticalSpeedTrend={overlays.verticalSpeedTrend !== false}
+                predictionMinutes={config.predictionMinutes || 2}
+                shortTrackLength={config.shortTrackLength || 15}
+                gridOpacity={gridOpacity}
+                onAircraftClick={(ac) => {
+                  if (ac && scopeLayout.syncSelection) {
+                    selectAircraft(ac);
+                  }
+                }}
+                onPanChange={(id, offset) => {
+                  scopeLayout.setScopePanOffset(id, offset);
+                }}
+                onRangeChange={(id, newRange) => {
+                  scopeLayout.setScopeRange(id, newRange);
+                }}
+                onActivate={(id) => {
+                  scopeLayout.setActiveScope(id);
+                  const targetScope = scopeLayout.scopes.find((s) => s.id === id);
+                  if (targetScope) {
+                    setRadarRange(targetScope.range);
+                    setProPanOffset(targetScope.panOffset || { x: 0, y: 0 });
+                  }
+                }}
+              />
             )
           }
         </MultiScopeContainer>
@@ -9065,13 +9501,61 @@ function MapView({
           <label className="overlay-toggle">
             <input
               type="checkbox"
+              checked={overlays.tafs}
+              onChange={() => updateOverlays({ ...overlays, tafs: !overlays.tafs })}
+            />
+            <span className="toggle-label">TAFs (Forecasts)</span>
+          </label>
+          <label className="overlay-toggle">
+            <input
+              type="checkbox"
               checked={overlays.pireps}
               onChange={() => updateOverlays({ ...overlays, pireps: !overlays.pireps })}
             />
             <span className="toggle-label">PIREPs</span>
           </label>
+          <label className="overlay-toggle">
+            <input
+              type="checkbox"
+              checked={overlays.convectiveSigmets}
+              onChange={() =>
+                updateOverlays({ ...overlays, convectiveSigmets: !overlays.convectiveSigmets })
+              }
+            />
+            <span className="toggle-label">Convective SIGMETs</span>
+          </label>
           {config.mapMode === 'pro' && (
             <>
+              <label className="overlay-toggle">
+                <input
+                  type="checkbox"
+                  checked={overlays.windsAloft}
+                  onChange={() => updateOverlays({ ...overlays, windsAloft: !overlays.windsAloft })}
+                />
+                <span className="toggle-label">
+                  <Wind size={12} /> Winds Aloft (Shift+W)
+                </span>
+              </label>
+              {overlays.windsAloft && (
+                <div className="overlay-setting" style={{ paddingLeft: '20px' }}>
+                  <span className="setting-label">Altitude Level</span>
+                  <select
+                    className="overlay-select"
+                    value={windsAloftLevel}
+                    onChange={(e) => {
+                      const level = parseInt(e.target.value, 10);
+                      setWindsAloftLevel(level);
+                      localStorage.setItem('adsb-winds-aloft-level', String(level));
+                    }}
+                  >
+                    {WINDS_ALOFT_LEVELS.map((level) => (
+                      <option key={level.value} value={level.value}>
+                        {level.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="overlay-divider" />
               <div className="overlay-section-title">Terrain Context</div>
               <label className="overlay-toggle">
@@ -9156,7 +9640,7 @@ function MapView({
               <div className="overlay-section-title">Pro Display Settings</div>
               {/* Phase 5.1: Theme Selector */}
               <div className="overlay-setting">
-                <span className="setting-label">Color Theme</span>
+                <span className="setting-label">Color Theme (Shift+T)</span>
                 <select
                   className="overlay-select"
                   value={proTheme}
@@ -9465,6 +9949,44 @@ function MapView({
         toggleHideFiltered={toggleHideFiltered}
         resetFilter={resetAltitudeFilter}
       />
+
+      {/* Watch List Panel - Pro/CRT Mode */}
+      <WatchListPanel
+        watchList={watchList}
+        panelVisible={watchListPanelVisible && (config.mapMode === 'pro' || config.mapMode === 'crt')}
+        onRemove={removeFromWatchList}
+        onClear={clearWatchList}
+        onTogglePanel={toggleWatchListPanel}
+        onHidePanel={hideWatchListPanel}
+        onCenterAircraft={centerOnWatchedAircraft}
+        onSelectAircraft={selectAircraft}
+        aircraft={sortedAircraft}
+        isProMode={config.mapMode === 'pro'}
+        expanded={watchListExpanded}
+        onToggleExpanded={() => setWatchListExpanded((prev) => !prev)}
+        position={watchListPanelPosition}
+        isDragging={isWatchListPanelDragging}
+        onMouseDown={onWatchListPanelMouseDown}
+      />
+
+      {/* Watch List Show Button - when panel is hidden */}
+      {!watchListPanelVisible && (config.mapMode === 'pro' || config.mapMode === 'crt') && (
+        <WatchListShowButton
+          count={watchListCount}
+          liveCount={watchListLiveCount}
+          onClick={showWatchListPanel}
+          isProMode={config.mapMode === 'pro'}
+        />
+      )}
+
+      {/* Highlight Groups Show Button - when panel is hidden (Pro mode only) */}
+      {!highlightPanelVisible && config.mapMode === 'pro' && (
+        <HighlightGroupsShowButton
+          enabledCount={highlightEnabledCount}
+          onClick={toggleHighlightPanel}
+          isProMode={true}
+        />
+      )}
 
       {/* Traffic Filter Menu - available on all map modes */}
       {showFilterMenu && (
@@ -10550,6 +11072,16 @@ function MapView({
           );
         })()}
 
+      {/* TAF Popup */}
+      {selectedTaf && (
+        <TafPopup
+          taf={selectedTaf}
+          onClose={() => setSelectedTaf(null)}
+          mapMode={config.mapMode}
+          getDistanceNm={getDistanceNm}
+        />
+      )}
+
       {/* PIREP Popup */}
       {selectedPirep &&
         (() => {
@@ -11062,6 +11594,104 @@ function MapView({
         </div>
       )}
 
+      {/* Convective SIGMET Popup */}
+      {selectedSigmet && (
+        <div
+          className={`weather-popup sigmet-popup ${config.mapMode === 'pro' ? 'pro-popup' : 'crt-popup'} ${isDragging ? 'dragging' : ''}`}
+          style={{ left: popupPosition.x, top: popupPosition.y }}
+        >
+          <button className="popup-close" onClick={() => setSelectedSigmet(null)}>
+            <X size={16} />
+          </button>
+          <div
+            role="toolbar"
+            aria-label="Drag to move panel"
+            tabIndex={0}
+            className="popup-header"
+            onMouseDown={handlePopupMouseDown}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setSelectedSigmet(null);
+            }}
+          >
+            <AlertTriangle size={20} />
+            <span className="popup-callsign">SIGMET</span>
+            <span
+              className={`sigmet-severity-badge severity-${selectedSigmet.severity?.level || 1}`}
+              style={{
+                backgroundColor: selectedSigmet.severity?.color || 'rgba(255, 200, 0, 0.5)',
+                border: `1px solid ${selectedSigmet.severity?.stroke || 'rgba(255, 200, 0, 0.8)'}`,
+              }}
+            >
+              {selectedSigmet.severity?.label || 'Convective'}
+            </span>
+          </div>
+
+          <div className="popup-details">
+            <div className="detail-row">
+              <span>ID</span>
+              <span className="mono">{selectedSigmet.id || '---'}</span>
+            </div>
+
+            <div className="detail-row">
+              <span>Type</span>
+              <span>{selectedSigmet.type || selectedSigmet.hazard || 'Convective'}</span>
+            </div>
+
+            {selectedSigmet.qualifier && (
+              <div className="detail-row">
+                <span>Qualifier</span>
+                <span>{selectedSigmet.qualifier}</span>
+              </div>
+            )}
+
+            <div className="detail-row">
+              <span>Valid Time</span>
+              <span>{selectedSigmet.validTimeDisplay || '---'}</span>
+            </div>
+
+            {selectedSigmet.altitude && (
+              <div className="detail-row">
+                <span>Altitude</span>
+                <span>
+                  FL{Math.round((selectedSigmet.altitude.lower || 0) / 100)} -{' '}
+                  FL{Math.round((selectedSigmet.altitude.upper || 45000) / 100)}
+                </span>
+              </div>
+            )}
+
+            {selectedSigmet.movement && (
+              <div className="detail-row">
+                <span>Movement</span>
+                <span>{selectedSigmet.movement}</span>
+              </div>
+            )}
+
+            {selectedSigmet.intensity && (
+              <div className="detail-row">
+                <span>Trend</span>
+                <span>{selectedSigmet.intensity}</span>
+              </div>
+            )}
+
+            {selectedSigmet.rawText && (
+              <div className="detail-row raw-section">
+                <span>Raw Text</span>
+                <span className="mono raw-text" style={{ fontSize: '10px', maxWidth: '250px' }}>
+                  {selectedSigmet.rawText}
+                </span>
+              </div>
+            )}
+
+            {selectedSigmet.source && (
+              <div className="detail-row">
+                <span>Source</span>
+                <span>{selectedSigmet.source}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Pro Mode Search Bar */}
       <ProSearchBar
         config={config}
@@ -11361,6 +11991,29 @@ function MapView({
         />
       )}
 
+      {/* Highlight Groups Panel (Pro mode) */}
+      {config.mapMode === 'pro' && highlightPanelVisible && (
+        <HighlightGroupsPanel
+          groups={highlightGroups}
+          onToggle={toggleHighlightGroup}
+          onAdd={addHighlightGroup}
+          onRemove={removeHighlightGroup}
+          onUpdate={updateHighlightGroup}
+          onReorder={reorderHighlightGroups}
+          onDisableAll={disableAllHighlights}
+          onResetDefaults={resetHighlightDefaults}
+          expanded={highlightPanelExpanded}
+          onToggleExpanded={toggleHighlightPanelExpanded}
+          onClose={() => setHighlightPanelVisible(false)}
+          isProMode={true}
+          aircraft={aircraft}
+          groupCounts={getHighlightGroupCounts(aircraft)}
+          position={highlightPanelPosition}
+          isDragging={isHighlightPanelDragging}
+          onMouseDown={onHighlightPanelMouseDown}
+        />
+      )}
+
       {/* Aircraft Sidebar (quick view) */}
       {sidebarAircraftHex && (
         <AircraftSidebar
@@ -11558,7 +12211,11 @@ function MapView({
             onSeekPercent={seekPlaybackPercent}
             onSkipToStart={skipPlaybackToStart}
             onSkipToEnd={skipPlaybackToEnd}
+            onSkipForward={skipPlaybackForward}
+            onSkipBackward={skipPlaybackBackward}
+            onSetTimeRange={setPlaybackTimeRange}
             timeRangePresets={playbackTimeRangePresets}
+            availableSpeeds={playbackAvailableSpeeds}
             proStyle={true}
           />
         </>

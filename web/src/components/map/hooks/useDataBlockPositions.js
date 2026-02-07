@@ -1,9 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 
 /**
  * @typedef {Object} DataBlockOffset
  * @property {number} x - X offset from default position (pixels)
  * @property {number} y - Y offset from default position (pixels)
+ * @property {number} lastSeen - Timestamp when aircraft was last seen (for auto-expiry)
  */
 
 /**
@@ -28,29 +29,72 @@ import { useState, useCallback } from 'react';
  * @property {function(): void} handleMouseUp - Handle drag end
  * @property {boolean} isDragging - Whether a drag operation is in progress
  * @property {function(Set<string>): void} pruneStaleAircraft - Remove offsets for aircraft no longer visible
+ * @property {function(Set<string>): void} updateLastSeen - Update lastSeen timestamp for active aircraft
  */
 
-// const STORAGE_KEY = 'adsb-pro-datablock-positions'; // Available for persistence if needed
+const STORAGE_KEY = 'adsb-pro-datablock-positions';
 const DEFAULT_OFFSET = { x: 0, y: 0 };
+// Auto-expire positions for aircraft not seen in 30 minutes
+const EXPIRY_MS = 30 * 60 * 1000;
 
 // Default data block position relative to aircraft icon
 export const DATA_BLOCK_DEFAULT_X = 14;
 export const DATA_BLOCK_DEFAULT_Y = -10;
 
 /**
+ * Load positions from localStorage, filtering out expired entries
+ */
+function loadPositionsFromStorage() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return {};
+
+    const parsed = JSON.parse(stored);
+    const now = Date.now();
+    const filtered = {};
+
+    // Filter out expired positions (not seen in 30 minutes)
+    for (const [hex, data] of Object.entries(parsed)) {
+      if (data.lastSeen && now - data.lastSeen < EXPIRY_MS) {
+        filtered[hex] = data;
+      }
+    }
+
+    return filtered;
+  } catch (e) {
+    console.warn('[useDataBlockPositions] Failed to load from localStorage:', e);
+    return {};
+  }
+}
+
+/**
+ * Save positions to localStorage
+ */
+function savePositionsToStorage(positions) {
+  try {
+    if (Object.keys(positions).length === 0) {
+      localStorage.removeItem(STORAGE_KEY);
+    } else {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(positions));
+    }
+  } catch (e) {
+    console.warn('[useDataBlockPositions] Failed to save to localStorage:', e);
+  }
+}
+
+/**
  * Hook to manage data block position offsets for Pro mode
  * Allows users to Shift+drag data blocks to custom positions
- * Positions are stored per-session in memory (not persisted to localStorage to avoid clutter)
+ * Positions are persisted to localStorage with 30-minute auto-expiry
  *
  * @returns {UseDataBlockPositionsReturn}
  */
 export function useDataBlockPositions() {
-  // Map of aircraft hex -> { x, y } offset from default position
-  const [positions, setPositions] = useState(() => {
-    // Session-only storage - don't persist to localStorage
-    // This prevents stale positions from accumulating
-    return {};
-  });
+  // Map of aircraft hex -> { x, y, lastSeen } offset from default position
+  const [positions, setPositions] = useState(() => loadPositionsFromStorage());
+
+  // Track if we need to save (debounce saves)
+  const saveTimeoutRef = useRef(null);
 
   // Current drag operation state
   const [dragState, setDragState] = useState({
@@ -63,23 +107,63 @@ export function useDataBlockPositions() {
 
   const isDragging = dragState.aircraftHex !== null;
 
+  // Debounced save to localStorage when positions change
+  useEffect(() => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    saveTimeoutRef.current = setTimeout(() => {
+      savePositionsToStorage(positions);
+    }, 500); // Debounce 500ms
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [positions]);
+
+  // Periodic cleanup of expired positions (every 5 minutes)
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      setPositions((prev) => {
+        const filtered = {};
+        let changed = false;
+        for (const [hex, data] of Object.entries(prev)) {
+          if (data.lastSeen && now - data.lastSeen < EXPIRY_MS) {
+            filtered[hex] = data;
+          } else {
+            changed = true;
+          }
+        }
+        return changed ? filtered : prev;
+      });
+    }, 5 * 60 * 1000); // Every 5 minutes
+
+    return () => clearInterval(cleanupInterval);
+  }, []);
+
   // Get offset for an aircraft (returns default if not set)
   const getOffset = useCallback(
     (hex) => {
       if (!hex) return DEFAULT_OFFSET;
       const key = hex.toUpperCase();
-      return positions[key] || DEFAULT_OFFSET;
+      const entry = positions[key];
+      if (!entry) return DEFAULT_OFFSET;
+      // Return only x, y (not lastSeen) for external use
+      return { x: entry.x, y: entry.y };
     },
     [positions]
   );
 
-  // Set offset for an aircraft
+  // Set offset for an aircraft (includes lastSeen timestamp)
   const setOffset = useCallback((hex, x, y) => {
     if (!hex) return;
     const key = hex.toUpperCase();
     setPositions((prev) => ({
       ...prev,
-      [key]: { x, y },
+      [key]: { x, y, lastSeen: Date.now() },
     }));
   }, []);
 
@@ -91,6 +175,25 @@ export function useDataBlockPositions() {
       const next = { ...prev };
       delete next[key];
       return next;
+    });
+  }, []);
+
+  // Update lastSeen timestamp for active aircraft (call periodically with visible aircraft)
+  const updateLastSeen = useCallback((activeHexes) => {
+    const now = Date.now();
+    setPositions((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const hex of Object.keys(next)) {
+        if (activeHexes.has(hex)) {
+          // Only update if enough time has passed (1 minute) to avoid constant updates
+          if (!next[hex].lastSeen || now - next[hex].lastSeen > 60000) {
+            next[hex] = { ...next[hex], lastSeen: now };
+            changed = true;
+          }
+        }
+      }
+      return changed ? next : prev;
     });
   }, []);
 
@@ -222,6 +325,7 @@ export function useDataBlockPositions() {
     hitTestDataBlock,
     hasCustomOffset,
     pruneStaleAircraft,
+    updateLastSeen,
     customPositionCount,
     // Constants for external use
     DATA_BLOCK_DEFAULT_X,
