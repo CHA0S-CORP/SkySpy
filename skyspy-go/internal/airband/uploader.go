@@ -26,7 +26,7 @@ type Uploader struct {
 }
 
 // NewUploader creates an Uploader targeting the given API base URL.
-func NewUploader(host string, port int, timeout int, maxRetries int, authProvider AuthProvider, metrics *Metrics, logger *slog.Logger) *Uploader {
+func NewUploader(host string, port, timeout, maxRetries int, authProvider AuthProvider, metrics *Metrics, logger *slog.Logger) *Uploader {
 	baseURL := fmt.Sprintf("http://%s:%d", host, port)
 	return &Uploader{
 		baseURL:      baseURL,
@@ -112,30 +112,26 @@ func (u *Uploader) DryRun(meta FileMetadata) {
 	)
 }
 
-// tryUpload performs a single upload attempt. Returns (success, retryable).
-func (u *Uploader) tryUpload(meta FileMetadata, channel string) (bool, bool) {
+// buildMultipartBody creates the multipart form body for an upload request.
+// Returns the body buffer, content type, and any error.
+func (u *Uploader) buildMultipartBody(meta FileMetadata) (*bytes.Buffer, string, error) {
 	f, err := os.Open(meta.FilePath)
 	if err != nil {
-		u.logger.Error("failed to open file", "file", meta.FilePath, "err", err)
-		return false, false
+		return nil, "", fmt.Errorf("open file: %w", err)
 	}
 	defer f.Close()
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	// Add file field
 	part, err := writer.CreateFormFile("file", meta.Filename)
 	if err != nil {
-		u.logger.Error("failed to create form file", "err", err)
-		return false, false
+		return nil, "", fmt.Errorf("create form file: %w", err)
 	}
-	if _, err := io.Copy(part, f); err != nil {
-		u.logger.Error("failed to copy file data", "err", err)
-		return false, false
+	if _, copyErr := io.Copy(part, f); copyErr != nil {
+		return nil, "", fmt.Errorf("copy file data: %w", copyErr)
 	}
 
-	// Add form fields
 	_ = writer.WriteField("queue_transcription", "true")
 	_ = writer.WriteField("channel_name", meta.ChannelName)
 
@@ -146,8 +142,19 @@ func (u *Uploader) tryUpload(meta FileMetadata, channel string) (bool, bool) {
 		_ = writer.WriteField("timestamp_utc", meta.Timestamp.UTC().Format(time.RFC3339))
 	}
 
-	if err := writer.Close(); err != nil {
-		u.logger.Error("failed to close multipart writer", "err", err)
+	contentType := writer.FormDataContentType()
+	if closeErr := writer.Close(); closeErr != nil {
+		return nil, "", fmt.Errorf("close multipart writer: %w", closeErr)
+	}
+
+	return body, contentType, nil
+}
+
+// tryUpload performs a single upload attempt. Returns (success, retryable).
+func (u *Uploader) tryUpload(meta FileMetadata, channel string) (bool, bool) {
+	body, contentType, err := u.buildMultipartBody(meta)
+	if err != nil {
+		u.logger.Error("failed to build request body", "file", meta.FilePath, "err", err)
 		return false, false
 	}
 
@@ -157,11 +164,10 @@ func (u *Uploader) tryUpload(meta FileMetadata, channel string) (bool, bool) {
 		u.logger.Error("failed to create request", "err", err)
 		return false, false
 	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Content-Type", contentType)
 
-	// Set auth header
 	if u.authProvider != nil {
-		if authHeader, err := u.authProvider(); err == nil && authHeader != "" {
+		if authHeader, authErr := u.authProvider(); authErr == nil && authHeader != "" {
 			req.Header.Set("Authorization", authHeader)
 		}
 	}
@@ -173,6 +179,11 @@ func (u *Uploader) tryUpload(meta FileMetadata, channel string) (bool, bool) {
 	}
 	defer resp.Body.Close()
 
+	return u.handleResponse(resp, meta, channel)
+}
+
+// handleResponse interprets the HTTP response from an upload attempt.
+func (u *Uploader) handleResponse(resp *http.Response, meta FileMetadata, channel string) (bool, bool) {
 	if u.metrics != nil {
 		u.metrics.IncAPIResponseCodes(strconv.Itoa(resp.StatusCode))
 	}
@@ -203,7 +214,6 @@ func (u *Uploader) tryUpload(meta FileMetadata, channel string) (bool, bool) {
 		return false, false
 
 	default:
-		// 5xx and other errors are retryable
 		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 200))
 		u.logger.Warn("upload failed",
 			"status", resp.StatusCode,

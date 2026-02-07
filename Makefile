@@ -1,4 +1,4 @@
-.PHONY: test test-docker test-local test-verbose clean build help test-cli test-common test-python install-cli lint lint-python lint-go
+.PHONY: test test-docker test-local test-verbose clean build help test-cli test-common test-python install-cli lint lint-python lint-go lint-frontend
 
 # Default target
 help:
@@ -8,9 +8,10 @@ help:
 	@echo "  make test-cli      - Run CLI package tests"
 	@echo "  make test-common   - Run common package tests"
 	@echo "  make test-python   - Run all Python package tests (CLI + common)"
-	@echo "  make lint          - Run all linters (Python + Go)"
+	@echo "  make lint          - Run all linters (Python + Go + Frontend)"
 	@echo "  make lint-python   - Run Python linter (ruff)"
 	@echo "  make lint-go       - Run Go linter (go vet)"
+	@echo "  make lint-frontend - Run frontend linter (eslint)"
 	@echo "  make install-cli   - Install CLI package locally"
 	@echo "  make dev           - Start dev services"
 	@echo "  make dev-down      - Remove dev services"
@@ -123,6 +124,12 @@ lint-go:
 	cd skyspy-go && go vet ./... && test -z "$$(gofmt -l .)"
 	@echo "✅ Go lint passed"
 
+# Run frontend linter
+lint-frontend:
+	@echo "🔍 Linting Frontend..."
+	cd web && npm run lint
+	@echo "✅ Frontend lint passed"
+
 # Run all linters
-lint: lint-python lint-go
+lint: lint-python lint-go lint-frontend
 	@echo "✅ All linters passed"

@@ -69,7 +69,7 @@ func (w *Watcher) Events() <-chan ProcessResult {
 	return w.eventCh
 }
 
-// Run starts the polling loop. It blocks until ctx is cancelled.
+// Run starts the polling loop. It blocks until ctx is canceled.
 func (w *Watcher) Run(ctx context.Context) {
 	// Ensure directories exist
 	if err := os.MkdirAll(w.recordingsDir, 0o755); err != nil {
