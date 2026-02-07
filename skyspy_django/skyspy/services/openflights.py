@@ -453,6 +453,8 @@ def should_refresh() -> bool:
 
     try:
         last_dt = datetime.fromisoformat(last_refresh)
+        if last_dt.tzinfo is not None:
+            last_dt = last_dt.replace(tzinfo=None)
         age = datetime.utcnow() - last_dt
         return age.days >= REFRESH_INTERVAL_DAYS
     except (ValueError, TypeError):

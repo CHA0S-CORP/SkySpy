@@ -135,18 +135,18 @@ class S3PhotoUrlTests(TestCase):
 class CheckS3PhotoExistsTests(TestCase):
     """Tests for S3 existence checking."""
 
-    @patch("skyspy.services.photo_cache._get_s3_client")
+    @patch("skyspy.services.storage._get_s3_client")
     def test_check_exists_true(self, mock_get_client):
         """Test checking existing photo."""
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
 
-        _check_s3_photo_exists("abc123", use_cache=False)
+        _check_s3_photo_exists("abc123")
 
         # Should call head_object
         mock_client.head_object.assert_called()
 
-    @patch("skyspy.services.photo_cache._get_s3_client")
+    @patch("skyspy.services.storage._get_s3_client")
     def test_check_exists_not_found(self, mock_get_client):
         """Test checking non-existent photo."""
         from botocore.exceptions import ClientError
@@ -157,11 +157,11 @@ class CheckS3PhotoExistsTests(TestCase):
         )
         mock_get_client.return_value = mock_client
 
-        result = _check_s3_photo_exists("nonexistent", use_cache=False)
+        result = _check_s3_photo_exists("nonexistent")
 
         self.assertFalse(result)
 
-    @patch("skyspy.services.photo_cache._get_s3_client")
+    @patch("skyspy.services.storage._get_s3_client")
     def test_check_exists_no_client(self, mock_get_client):
         """Test checking when S3 client unavailable."""
         mock_get_client.return_value = None
@@ -179,7 +179,7 @@ class CheckS3PhotoExistsTests(TestCase):
 class UploadPhotoToS3Tests(TestCase):
     """Tests for S3 upload functionality."""
 
-    @patch("skyspy.services.photo_cache._get_s3_client")
+    @patch("skyspy.services.storage._get_s3_client")
     def test_upload_success(self, mock_get_client):
         """Test successful upload."""
         mock_client = MagicMock()
@@ -190,7 +190,7 @@ class UploadPhotoToS3Tests(TestCase):
         self.assertIsNotNone(result)
         mock_client.put_object.assert_called_once()
 
-    @patch("skyspy.services.photo_cache._get_s3_client")
+    @patch("skyspy.services.storage._get_s3_client")
     def test_upload_no_client(self, mock_get_client):
         """Test upload when S3 client unavailable."""
         mock_get_client.return_value = None
@@ -199,7 +199,7 @@ class UploadPhotoToS3Tests(TestCase):
 
         self.assertIsNone(result)
 
-    @patch("skyspy.services.photo_cache._get_s3_client")
+    @patch("skyspy.services.storage._get_s3_client")
     @patch("time.sleep")
     def test_upload_retry_on_error(self, mock_sleep, mock_get_client):
         """Test upload retries on error."""
@@ -221,7 +221,7 @@ class UploadPhotoToS3Tests(TestCase):
 class GetSignedPhotoUrlTests(TestCase):
     """Tests for signed URL generation."""
 
-    @patch("skyspy.services.photo_cache._get_s3_client")
+    @patch("skyspy.services.storage._get_s3_client")
     def test_get_signed_url_success(self, mock_get_client):
         """Test successful signed URL generation."""
         mock_client = MagicMock()
@@ -232,7 +232,7 @@ class GetSignedPhotoUrlTests(TestCase):
 
         self.assertEqual(result, "https://signed-url.example.com/photo.jpg")
 
-    @patch("skyspy.services.photo_cache._get_s3_client")
+    @patch("skyspy.services.storage._get_s3_client")
     def test_get_signed_url_no_client(self, mock_get_client):
         """Test signed URL when S3 client unavailable."""
         mock_get_client.return_value = None
@@ -241,7 +241,7 @@ class GetSignedPhotoUrlTests(TestCase):
 
         self.assertIsNone(result)
 
-    @patch("skyspy.services.photo_cache._get_s3_client")
+    @patch("skyspy.services.storage._get_s3_client")
     def test_get_signed_url_error(self, mock_get_client):
         """Test signed URL generation error."""
         mock_client = MagicMock()

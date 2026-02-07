@@ -360,7 +360,7 @@ class CacheUpdateTests(TestCase):
 class BroadcastTests(TestCase):
     """Tests for broadcasting functionality."""
 
-    @patch("skyspy.services.airspace.sync_emit")
+    @patch("skyspy.socketio.utils.sync_emit")
     def test_broadcast_advisory_update(self, mock_emit):
         """Test broadcasting advisory update."""
         advisories = [{"advisory_id": "BROADCAST_001"}]
@@ -373,7 +373,7 @@ class BroadcastTests(TestCase):
         self.assertEqual(call_args[0][1]["update_type"], "advisory")
         self.assertEqual(call_args[0][1]["count"], 1)
 
-    @patch("skyspy.services.airspace.sync_emit")
+    @patch("skyspy.socketio.utils.sync_emit")
     def test_broadcast_boundary_update(self, mock_emit):
         """Test broadcasting boundary update."""
         boundaries = [{"name": "Boundary 1"}, {"name": "Boundary 2"}]
@@ -386,7 +386,7 @@ class BroadcastTests(TestCase):
         self.assertEqual(call_args[0][1]["update_type"], "boundary")
         self.assertEqual(call_args[0][1]["count"], 2)
 
-    @patch("skyspy.services.airspace.sync_emit")
+    @patch("skyspy.socketio.utils.sync_emit")
     def test_broadcast_advisory_expired(self, mock_emit):
         """Test broadcasting advisory expiration."""
         advisory_ids = ["EXPIRED_001", "EXPIRED_002"]
@@ -399,7 +399,7 @@ class BroadcastTests(TestCase):
         self.assertEqual(call_args[0][1]["update_type"], "advisory_expired")
         self.assertEqual(call_args[0][1]["advisory_ids"], advisory_ids)
 
-    @patch("skyspy.services.airspace.sync_emit")
+    @patch("skyspy.socketio.utils.sync_emit")
     def test_broadcast_failure_does_not_raise(self, mock_emit):
         """Test that broadcast failures are logged but don't raise."""
         mock_emit.side_effect = Exception("Socket.IO error")

@@ -512,7 +512,7 @@ class GetOrCalculateTests(TestCase):
 class BroadcastTests(TestCase):
     """Tests for broadcasting functionality."""
 
-    @patch("skyspy.services.antenna_analytics.sync_emit")
+    @patch("skyspy.socketio.utils.sync_emit")
     @patch("skyspy.services.antenna_analytics.get_cached_data")
     def test_broadcast_antenna_update(self, mock_get_cached, mock_sync_emit):
         """Test broadcasting antenna analytics update."""
@@ -523,7 +523,7 @@ class BroadcastTests(TestCase):
 
         mock_sync_emit.assert_called_once()
 
-    @patch("skyspy.services.antenna_analytics.sync_emit")
+    @patch("skyspy.socketio.utils.sync_emit")
     def test_broadcast_antenna_update_with_data(self, mock_sync_emit):
         """Test broadcasting with provided data."""
         mock_sync_emit.return_value = True
@@ -533,7 +533,7 @@ class BroadcastTests(TestCase):
 
         mock_sync_emit.assert_called_once()
 
-    @patch("skyspy.services.antenna_analytics.sync_emit")
+    @patch("skyspy.socketio.utils.sync_emit")
     def test_broadcast_handles_exception(self, mock_sync_emit):
         """Test broadcast handles exceptions gracefully."""
         mock_sync_emit.side_effect = Exception("Socket error")

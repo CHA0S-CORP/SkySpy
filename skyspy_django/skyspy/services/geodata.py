@@ -156,6 +156,9 @@ def calculate_bbox(geometry: dict) -> tuple:
 
     extract_coords(geometry)
 
+    # Filter out empty coordinate entries
+    coords = [c for c in coords if c]
+
     if not coords:
         return (0, 0, 0, 0)
 
@@ -576,6 +579,9 @@ def should_refresh() -> bool:
     # Parse and check age
     try:
         last_dt = datetime.fromisoformat(last_refresh)
+        # Ensure both are naive or both aware for comparison
+        if last_dt.tzinfo is not None:
+            last_dt = last_dt.replace(tzinfo=None)
         age = datetime.utcnow() - last_dt
         return age.total_seconds() >= REFRESH_INTERVAL
     except (ValueError, TypeError):

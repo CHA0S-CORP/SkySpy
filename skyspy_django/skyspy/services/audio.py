@@ -353,6 +353,11 @@ def _convert_phonetic_to_digits(text: str) -> str:
 
 def _normalize_flight_number(text: str) -> str | None:
     """Extract and normalize a flight number from text."""
+    # Check for spaced single digits first (e.g., "1 2 3" -> "123")
+    spaced_digits = re.findall(r"\b(\d)\b", text)
+    if len(spaced_digits) >= 2 and len(spaced_digits) <= 4:
+        return "".join(spaced_digits)
+
     digit_match = re.search(r"\d{1,4}", text)
     if digit_match:
         return digit_match.group()
@@ -360,10 +365,6 @@ def _normalize_flight_number(text: str) -> str | None:
     converted = _convert_phonetic_to_digits(text)
     if converted and len(converted) <= 4:
         return converted
-
-    spaced_digits = re.findall(r"\b(\d)\b", text)
-    if spaced_digits and len(spaced_digits) <= 4:
-        return "".join(spaced_digits)
 
     return None
 

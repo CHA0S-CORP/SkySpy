@@ -192,8 +192,8 @@ def _get_country_from_registration(registration: str) -> str | None:
 
     registration = registration.upper().strip()
 
-    # Check longer prefixes first (3, then 2, then 1 char)
-    for prefix_len in [3, 2, 1]:
+    # Check longer prefixes first (4, then 3, then 2, then 1 char)
+    for prefix_len in [4, 3, 2, 1]:
         for prefix, country in REGISTRATION_PREFIXES.items():
             if len(prefix) == prefix_len and registration.startswith(prefix):
                 return country
