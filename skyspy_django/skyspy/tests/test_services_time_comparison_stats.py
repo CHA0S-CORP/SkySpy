@@ -86,23 +86,28 @@ class WeekOverWeekComparisonTests(TestCase):
     def test_calculate_week_over_week_comparison_with_data(self):
         """Test week comparison with sighting data."""
         # Create sightings for this week
+        # (auto_now_add ignores timestamp kwarg, so use update() after create)
         this_week_start, _ = tcs._get_week_dates(0)
         for i in range(10):
-            AircraftSighting.objects.create(
+            s = AircraftSighting.objects.create(
                 icao_hex=f"ABC{i:03d}",
-                timestamp=this_week_start + timedelta(hours=i),
                 latitude=40.0,
                 longitude=-74.0,
+            )
+            AircraftSighting.objects.filter(pk=s.pk).update(
+                timestamp=this_week_start + timedelta(hours=i)
             )
 
         # Create sightings for last week
         last_week_start, _ = tcs._get_week_dates(1)
         for i in range(5):
-            AircraftSighting.objects.create(
+            s = AircraftSighting.objects.create(
                 icao_hex=f"DEF{i:03d}",
-                timestamp=last_week_start + timedelta(hours=i),
                 latitude=40.0,
                 longitude=-74.0,
+            )
+            AircraftSighting.objects.filter(pk=s.pk).update(
+                timestamp=last_week_start + timedelta(hours=i)
             )
 
         result = tcs.calculate_week_over_week_comparison()
@@ -113,23 +118,28 @@ class WeekOverWeekComparisonTests(TestCase):
     def test_calculate_week_over_week_change_calculation(self):
         """Test change percentage calculation."""
         # Create sightings for this week (100)
+        # (auto_now_add ignores timestamp kwarg, so use update() after create)
         this_week_start, _ = tcs._get_week_dates(0)
         for i in range(100):
-            AircraftSighting.objects.create(
+            s = AircraftSighting.objects.create(
                 icao_hex=f"ABC{i:03d}",
-                timestamp=this_week_start + timedelta(minutes=i),
                 latitude=40.0,
                 longitude=-74.0,
+            )
+            AircraftSighting.objects.filter(pk=s.pk).update(
+                timestamp=this_week_start + timedelta(minutes=i)
             )
 
         # Create sightings for last week (50)
         last_week_start, _ = tcs._get_week_dates(1)
         for i in range(50):
-            AircraftSighting.objects.create(
+            s = AircraftSighting.objects.create(
                 icao_hex=f"DEF{i:03d}",
-                timestamp=last_week_start + timedelta(minutes=i),
                 latitude=40.0,
                 longitude=-74.0,
+            )
+            AircraftSighting.objects.filter(pk=s.pk).update(
+                timestamp=last_week_start + timedelta(minutes=i)
             )
 
         result = tcs.calculate_week_over_week_comparison()
@@ -142,21 +152,25 @@ class WeekOverWeekComparisonTests(TestCase):
         """Test military aircraft tracking in week comparison."""
         this_week_start, _ = tcs._get_week_dates(0)
 
-        # Create military session
-        AircraftSession.objects.create(
+        # Create military session (first_seen/last_seen also have auto_now_add/auto_now)
+        session = AircraftSession.objects.create(
             icao_hex="MIL001",
-            first_seen=this_week_start + timedelta(hours=1),
-            last_seen=this_week_start + timedelta(hours=2),
             is_military=True,
         )
+        AircraftSession.objects.filter(pk=session.pk).update(
+            first_seen=this_week_start + timedelta(hours=1),
+            last_seen=this_week_start + timedelta(hours=2),
+        )
 
-        # Create military sighting
-        AircraftSighting.objects.create(
+        # Create military sighting (auto_now_add ignores timestamp kwarg)
+        sighting = AircraftSighting.objects.create(
             icao_hex="MIL001",
-            timestamp=this_week_start + timedelta(hours=1),
             latitude=40.0,
             longitude=-74.0,
             is_military=True,
+        )
+        AircraftSighting.objects.filter(pk=sighting.pk).update(
+            timestamp=this_week_start + timedelta(hours=1)
         )
 
         result = tcs.calculate_week_over_week_comparison()
@@ -196,13 +210,16 @@ class SeasonalTrendsTests(TestCase):
     def test_calculate_seasonal_trends_with_data(self):
         """Test seasonal trends with sighting data."""
         # Create sightings for current month
+        # (auto_now_add ignores timestamp kwarg, so use update() after create)
         current_month_start, _ = tcs._get_month_dates(0)
         for i in range(10):
-            AircraftSighting.objects.create(
+            s = AircraftSighting.objects.create(
                 icao_hex=f"ABC{i:03d}",
-                timestamp=current_month_start + timedelta(hours=i),
                 latitude=40.0,
                 longitude=-74.0,
+            )
+            AircraftSighting.objects.filter(pk=s.pk).update(
+                timestamp=current_month_start + timedelta(hours=i)
             )
 
         result = tcs.calculate_seasonal_trends(months=3)
@@ -361,15 +378,16 @@ class WeekendWeekdayPatternsTests(TestCase):
     def test_calculate_weekend_weekday_patterns_with_data(self):
         """Test weekend/weekday patterns with sighting data."""
         # Create sightings on different days
+        # (auto_now_add ignores timestamp kwarg, so use update() after create)
         for days_back in range(7):
             day = self.now - timedelta(days=days_back)
             for i in range(10):
-                AircraftSighting.objects.create(
+                s = AircraftSighting.objects.create(
                     icao_hex=f"A{days_back}{i:02d}",
-                    timestamp=day,
                     latitude=40.0,
                     longitude=-74.0,
                 )
+                AircraftSighting.objects.filter(pk=s.pk).update(timestamp=day)
 
         result = tcs.calculate_weekend_weekday_patterns(weeks=1)
 
@@ -379,15 +397,15 @@ class WeekendWeekdayPatternsTests(TestCase):
 
     def test_calculate_weekend_weekday_day_breakdown(self):
         """Test daily breakdown in weekend/weekday patterns."""
-        # Create sightings
+        # Create sightings (auto_now_add ignores timestamp kwarg)
         for days_back in range(7):
             day = self.now - timedelta(days=days_back)
-            AircraftSighting.objects.create(
+            s = AircraftSighting.objects.create(
                 icao_hex=f"A{days_back:02d}",
-                timestamp=day,
                 latitude=40.0,
                 longitude=-74.0,
             )
+            AircraftSighting.objects.filter(pk=s.pk).update(timestamp=day)
 
         result = tcs.calculate_weekend_weekday_patterns(weeks=1)
 
@@ -417,13 +435,15 @@ class DailyTotalsTests(TestCase):
 
     def test_calculate_daily_totals_structure(self):
         """Test daily totals return structure."""
-        # Create some data
+        # Create some data (auto_now_add ignores timestamp kwarg)
         for i in range(5):
-            AircraftSighting.objects.create(
+            s = AircraftSighting.objects.create(
                 icao_hex=f"ABC{i:03d}",
-                timestamp=self.now - timedelta(days=i),
                 latitude=40.0,
                 longitude=-74.0,
+            )
+            AircraftSighting.objects.filter(pk=s.pk).update(
+                timestamp=self.now - timedelta(days=i)
             )
 
         result = tcs.calculate_daily_totals(days=30)
@@ -436,15 +456,16 @@ class DailyTotalsTests(TestCase):
     def test_calculate_daily_totals_with_data(self):
         """Test daily totals with sighting data."""
         # Create sightings for past 5 days
+        # (auto_now_add ignores timestamp kwarg, so use update() after create)
         for days_back in range(5):
             day = self.now - timedelta(days=days_back)
             for i in range(10):
-                AircraftSighting.objects.create(
+                s = AircraftSighting.objects.create(
                     icao_hex=f"D{days_back}{i:02d}",
-                    timestamp=day,
                     latitude=40.0,
                     longitude=-74.0,
                 )
+                AircraftSighting.objects.filter(pk=s.pk).update(timestamp=day)
 
         result = tcs.calculate_daily_totals(days=7)
 
@@ -455,17 +476,17 @@ class DailyTotalsTests(TestCase):
 
     def test_calculate_daily_totals_summary_stats(self):
         """Test daily totals summary statistics."""
-        # Create uneven data
+        # Create uneven data (auto_now_add ignores timestamp kwarg)
         for days_back in range(5):
             day = self.now - timedelta(days=days_back)
             count = 10 * (days_back + 1)  # More sightings further back
             for i in range(count):
-                AircraftSighting.objects.create(
+                s = AircraftSighting.objects.create(
                     icao_hex=f"D{days_back}{i:03d}",
-                    timestamp=day,
                     latitude=40.0,
                     longitude=-74.0,
                 )
+                AircraftSighting.objects.filter(pk=s.pk).update(timestamp=day)
 
         result = tcs.calculate_daily_totals(days=7)
 
@@ -507,15 +528,16 @@ class WeeklyTotalsTests(TestCase):
     def test_calculate_weekly_totals_with_data(self):
         """Test weekly totals with sighting data."""
         # Create sightings for past few weeks
+        # (auto_now_add ignores timestamp kwarg, so use update() after create)
         for weeks_back in range(3):
             day = self.now - timedelta(weeks=weeks_back)
             for i in range(10):
-                AircraftSighting.objects.create(
+                s = AircraftSighting.objects.create(
                     icao_hex=f"W{weeks_back}{i:02d}",
-                    timestamp=day,
                     latitude=40.0,
                     longitude=-74.0,
                 )
+                AircraftSighting.objects.filter(pk=s.pk).update(timestamp=day)
 
         result = tcs.calculate_weekly_totals(weeks=4)
 
@@ -554,11 +576,10 @@ class MonthlyTotalsTests(TestCase):
 
     def test_calculate_monthly_totals_with_data(self):
         """Test monthly totals with sighting data."""
-        # Create sightings for current month
+        # Create sightings for current month (auto_now_add sets timestamp to now)
         for i in range(10):
             AircraftSighting.objects.create(
                 icao_hex=f"MON{i:03d}",
-                timestamp=self.now,
                 latitude=40.0,
                 longitude=-74.0,
             )
@@ -702,12 +723,15 @@ class EdgeCaseTests(TestCase):
     def test_week_comparison_zero_division(self):
         """Test week comparison handles zero last week data."""
         # No data for last week, some data for this week
+        # (auto_now_add ignores timestamp kwarg, so use update() after create)
         this_week_start, _ = tcs._get_week_dates(0)
-        AircraftSighting.objects.create(
+        sighting = AircraftSighting.objects.create(
             icao_hex="ABC001",
-            timestamp=this_week_start + timedelta(hours=1),
             latitude=40.0,
             longitude=-74.0,
+        )
+        AircraftSighting.objects.filter(pk=sighting.pk).update(
+            timestamp=this_week_start + timedelta(hours=1)
         )
 
         result = tcs.calculate_week_over_week_comparison()
@@ -750,7 +774,7 @@ class EdgeCaseTests(TestCase):
 
     def test_broadcast_handles_exception(self):
         """Test that broadcast handles exceptions gracefully."""
-        with patch("skyspy.services.time_comparison_stats.sync_emit") as mock_emit:
+        with patch("skyspy.socketio.utils.sync_emit") as mock_emit:
             mock_emit.side_effect = Exception("Socket error")
 
             # Should not raise

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -335,6 +336,21 @@ func (s *MockServer) handleOIDCAuthorize(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+
+	// Simulate browser completing the OIDC flow by sending a callback
+	// request to the redirect_uri with a mock authorization code.
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		callbackURL := redirectURI + "?" + url.Values{
+			"code":  {"mock_auth_code"},
+			"state": {state},
+		}.Encode()
+		client := &http.Client{Timeout: 5 * time.Second}
+		resp, err := client.Get(callbackURL) //nolint:errcheck
+		if err == nil {
+			resp.Body.Close()
+		}
+	}()
 }
 
 // handleOIDCCallback handles GET /api/v1/auth/oidc/callback
