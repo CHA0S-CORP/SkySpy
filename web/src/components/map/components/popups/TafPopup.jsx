@@ -1,5 +1,15 @@
 import React, { memo, useRef, useEffect, useCallback } from 'react';
-import { X, Cloud, Wind, Eye, Clock, ChevronRight, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
+import {
+  X,
+  Cloud,
+  Wind,
+  Eye,
+  Clock,
+  ChevronRight,
+  AlertTriangle,
+  TrendingUp,
+  TrendingDown,
+} from 'lucide-react';
 import { useDraggable } from '../../../../hooks/useDraggable';
 import {
   formatTafTime,
@@ -66,9 +76,7 @@ const FlightCategoryBadge = memo(function FlightCategoryBadge({ category, small 
  * Change group component - renders a single TAF change group
  */
 const ChangeGroupItem = memo(function ChangeGroupItem({ group, index }) {
-  const timeStr = group.startTime
-    ? formatTafTime(group.startTime)
-    : group.rawTime || '--';
+  const timeStr = group.startTime ? formatTafTime(group.startTime) : group.rawTime || '--';
 
   const endTimeStr = group.endTime ? ` - ${formatTafTime(group.endTime)}` : '';
 
@@ -77,11 +85,10 @@ const ChangeGroupItem = memo(function ChangeGroupItem({ group, index }) {
       <div className="change-header">
         <span className="change-type">{group.typeDesc}</span>
         <span className="change-time">
-          <Clock size={12} /> {timeStr}{endTimeStr}
+          <Clock size={12} /> {timeStr}
+          {endTimeStr}
         </span>
-        {group.flightCategory && (
-          <FlightCategoryBadge category={group.flightCategory} small />
-        )}
+        {group.flightCategory && <FlightCategoryBadge category={group.flightCategory} small />}
       </div>
 
       <div className="change-conditions">
@@ -124,7 +131,10 @@ const ChangeGroupItem = memo(function ChangeGroupItem({ group, index }) {
           <div className="condition-item clouds">
             {group.clouds.map((c, i) => (
               <span key={i} className="cloud-layer">
-                {c.cover} {Math.round(c.base / 100).toString().padStart(3, '0')}
+                {c.cover}{' '}
+                {Math.round(c.base / 100)
+                  .toString()
+                  .padStart(3, '0')}
                 {c.type && <span className="cloud-type">{c.type}</span>}
               </span>
             ))}
@@ -142,19 +152,17 @@ const TransitionIndicator = memo(function TransitionIndicator({ transitionInfo }
   if (!transitionInfo || transitionInfo.transitions.length === 0) return null;
 
   const improving = transitionInfo.transitions.some(
-    (t) =>
-      ['LIFR', 'IFR'].includes(t.from) &&
-      ['MVFR', 'VFR'].includes(t.to)
+    (t) => ['LIFR', 'IFR'].includes(t.from) && ['MVFR', 'VFR'].includes(t.to)
   );
 
   const deteriorating = transitionInfo.transitions.some(
-    (t) =>
-      ['VFR', 'MVFR'].includes(t.from) &&
-      ['IFR', 'LIFR'].includes(t.to)
+    (t) => ['VFR', 'MVFR'].includes(t.from) && ['IFR', 'LIFR'].includes(t.to)
   );
 
   return (
-    <div className={`transition-indicator ${improving ? 'improving' : deteriorating ? 'deteriorating' : ''}`}>
+    <div
+      className={`transition-indicator ${improving ? 'improving' : deteriorating ? 'deteriorating' : ''}`}
+    >
       {improving && <TrendingUp size={16} />}
       {deteriorating && <TrendingDown size={16} />}
       <span className="transition-summary">
@@ -183,12 +191,7 @@ const TransitionIndicator = memo(function TransitionIndicator({ transitionInfo }
  * @param {string} mapMode - 'pro' or 'crt' for styling
  * @param {Function} getDistanceNm - Distance calculation function
  */
-export const TafPopup = memo(function TafPopup({
-  taf,
-  onClose,
-  mapMode,
-  getDistanceNm,
-}) {
+export const TafPopup = memo(function TafPopup({ taf, onClose, mapMode, getDistanceNm }) {
   const { position, isDragging, handleMouseDown } = useDraggable({ x: 120, y: 120 });
   const popupRef = usePopupAccessibility(!!taf, onClose);
   const titleId = `taf-popup-title-${taf?.stationId || 'unknown'}`;
@@ -226,7 +229,9 @@ export const TafPopup = memo(function TafPopup({
         </span>
         <FlightCategoryBadge category={taf.currentCategory} />
         {improving && <TrendingUp size={16} className="trend-icon improving" title="Improving" />}
-        {deteriorating && <TrendingDown size={16} className="trend-icon deteriorating" title="Deteriorating" />}
+        {deteriorating && (
+          <TrendingDown size={16} className="trend-icon deteriorating" title="Deteriorating" />
+        )}
       </div>
 
       <div className="popup-details">
@@ -244,9 +249,7 @@ export const TafPopup = memo(function TafPopup({
           <span>
             {formatTafValidity(taf.validFrom, taf.validTo)}
             {remainingHours >= 0 && (
-              <span className="validity-remaining">
-                ({remainingHours}h remaining)
-              </span>
+              <span className="validity-remaining">({remainingHours}h remaining)</span>
             )}
           </span>
         </div>
@@ -300,9 +303,7 @@ export const TafPopup = memo(function TafPopup({
                   {taf.baseConditions.weather.some((w) => w.isSignificant) && (
                     <AlertTriangle size={14} className="significant" />
                   )}
-                  <span>
-                    {taf.baseConditions.weather.map((w) => w.description).join(', ')}
-                  </span>
+                  <span>{taf.baseConditions.weather.map((w) => w.description).join(', ')}</span>
                 </div>
               )}
             </div>
@@ -325,21 +326,23 @@ export const TafPopup = memo(function TafPopup({
         )}
 
         {/* Significant weather warning */}
-        {taf.hasSignificantWeather && taf.significantWeather && taf.significantWeather.length > 0 && (
-          <div className="detail-section significant-weather-section">
-            <div className="section-header warning">
-              <AlertTriangle size={14} />
-              <span>Significant Weather</span>
+        {taf.hasSignificantWeather &&
+          taf.significantWeather &&
+          taf.significantWeather.length > 0 && (
+            <div className="detail-section significant-weather-section">
+              <div className="section-header warning">
+                <AlertTriangle size={14} />
+                <span>Significant Weather</span>
+              </div>
+              <div className="significant-weather-list">
+                {taf.significantWeather.map((wx, i) => (
+                  <span key={i} className="sig-wx-item">
+                    {wx.description || wx.code}
+                  </span>
+                ))}
+              </div>
             </div>
-            <div className="significant-weather-list">
-              {taf.significantWeather.map((wx, i) => (
-                <span key={i} className="sig-wx-item">
-                  {wx.description || wx.code}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
+          )}
 
         {/* Raw TAF */}
         {taf.raw && (

@@ -400,7 +400,7 @@ export function usePlaybackMode({
     (seconds = 60) => {
       if (!timeRange) return;
       const totalMs = timeRange.end.getTime() - timeRange.start.getTime();
-      const incrementPercent = (seconds * 1000 / totalMs) * 100;
+      const incrementPercent = ((seconds * 1000) / totalMs) * 100;
       setPlaybackPercent((prev) => Math.min(100, prev + incrementPercent));
     },
     [timeRange]
@@ -413,7 +413,7 @@ export function usePlaybackMode({
     (seconds = 60) => {
       if (!timeRange) return;
       const totalMs = timeRange.end.getTime() - timeRange.start.getTime();
-      const decrementPercent = (seconds * 1000 / totalMs) * 100;
+      const decrementPercent = ((seconds * 1000) / totalMs) * 100;
       setPlaybackPercent((prev) => Math.max(0, prev - decrementPercent));
     },
     [timeRange]

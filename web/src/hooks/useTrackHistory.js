@@ -27,13 +27,20 @@ export function useTrackHistory(aircraft, feederLat, feederLon, maxAge = 5 * 60 
     const now = Date.now();
 
     setTrackHistory((prev) => {
+      // Skip update if there's nothing to process
+      if (aircraft.length === 0 && Object.keys(prev).length === 0) {
+        return prev;
+      }
+
       const updated = { ...prev };
+      let changed = false;
 
       // Add new positions for each aircraft
       aircraft.forEach((ac) => {
         if (ac.lat && ac.lon && ac.hex) {
           if (!updated[ac.hex]) {
             updated[ac.hex] = [];
+            changed = true;
           }
 
           // Calculate distance from feeder
@@ -57,10 +64,13 @@ export function useTrackHistory(aircraft, feederLat, feederLon, maxAge = 5 * 60 
               dist: dist,
               time: now,
             });
+            changed = true;
           }
 
           // Remove old positions
+          const beforeLen = updated[ac.hex].length;
           updated[ac.hex] = updated[ac.hex].filter((p) => now - p.time < maxAge);
+          if (updated[ac.hex].length !== beforeLen) changed = true;
         }
       });
 
@@ -71,11 +81,13 @@ export function useTrackHistory(aircraft, feederLat, feederLon, maxAge = 5 * 60 
           // Keep for a bit after aircraft disappears, then remove
           if (updated[hex].length > 0 && now - updated[hex][updated[hex].length - 1].time > 60000) {
             delete updated[hex];
+            changed = true;
           }
         }
       });
 
-      return updated;
+      // Return prev reference if nothing changed to avoid unnecessary re-renders
+      return changed ? updated : prev;
     });
   }, [aircraft, getDistanceNm, maxAge]);
 

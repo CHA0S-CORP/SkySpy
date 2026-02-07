@@ -155,7 +155,7 @@ export function useWatchList({ enableAudio = true } = {}) {
         if (res.ok) {
           const data = await res.json();
           if (data.watchList?.length > 0) {
-            const backendList = data.watchList.map(item => ({
+            const backendList = data.watchList.map((item) => ({
               hex: item.hex.toUpperCase(),
               callsign: item.callsign || null,
               type: item.type_code || null,
@@ -169,11 +169,13 @@ export function useWatchList({ enableAudio = true } = {}) {
             await fetch('/api/v1/watchlist/import/', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ watchList: watchList.map(item => ({
-                hex: item.hex,
-                callsign: item.callsign || '',
-                type_code: item.type || '',
-              })) }),
+              body: JSON.stringify({
+                watchList: watchList.map((item) => ({
+                  hex: item.hex,
+                  callsign: item.callsign || '',
+                  type_code: item.type || '',
+                })),
+              }),
             });
           }
         }
@@ -325,7 +327,7 @@ export function useWatchList({ enableAudio = true } = {}) {
     const data = {
       version: 1,
       exported: new Date().toISOString(),
-      watchList: watchList.map(item => ({
+      watchList: watchList.map((item) => ({
         hex: item.hex,
         callsign: item.callsign || item.flight,
         addedAt: item.addedAt,
@@ -343,37 +345,40 @@ export function useWatchList({ enableAudio = true } = {}) {
   }, [watchList]);
 
   // Import watch list from JSON string
-  const importWatchList = useCallback(async (jsonString) => {
-    try {
-      const data = JSON.parse(jsonString);
-      const items = data.watchList || data;
-      if (!Array.isArray(items)) throw new Error('Invalid format');
+  const importWatchList = useCallback(
+    async (jsonString) => {
+      try {
+        const data = JSON.parse(jsonString);
+        const items = data.watchList || data;
+        if (!Array.isArray(items)) throw new Error('Invalid format');
 
-      let added = 0;
-      const newItems = [];
-      items.forEach(item => {
-        if (item.hex && !isWatched(item.hex)) {
-          newItems.push(item);
-          addToWatchList({ hex: item.hex, callsign: item.callsign, flight: item.callsign });
-          added++;
+        let added = 0;
+        const newItems = [];
+        items.forEach((item) => {
+          if (item.hex && !isWatched(item.hex)) {
+            newItems.push(item);
+            addToWatchList({ hex: item.hex, callsign: item.callsign, flight: item.callsign });
+            added++;
+          }
+        });
+
+        // Bulk import to backend
+        if (newItems.length > 0) {
+          fetch('/api/v1/watchlist/import/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ watchList: newItems }),
+          }).catch(() => {});
         }
-      });
 
-      // Bulk import to backend
-      if (newItems.length > 0) {
-        fetch('/api/v1/watchlist/import/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ watchList: newItems }),
-        }).catch(() => {});
+        return { success: true, added };
+      } catch (e) {
+        console.error('Failed to import watch list:', e);
+        return { success: false, error: e.message };
       }
-
-      return { success: true, added };
-    } catch (e) {
-      console.error('Failed to import watch list:', e);
-      return { success: false, error: e.message };
-    }
-  }, [isWatched, addToWatchList]);
+    },
+    [isWatched, addToWatchList]
+  );
 
   // Get watch list with live aircraft data merged in
   const getWatchListWithLiveData = useCallback(

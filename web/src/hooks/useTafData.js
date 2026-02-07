@@ -17,7 +17,14 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
  * @param {number} radarRange - Radar range in nm
  * @param {boolean} enabled - Whether TAF overlay is enabled
  */
-export function useTafData(wsRequest, wsConnected, feederLat, feederLon, radarRange, enabled = false) {
+export function useTafData(
+  wsRequest,
+  wsConnected,
+  feederLat,
+  feederLon,
+  radarRange,
+  enabled = false
+) {
   const [tafs, setTafs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -251,8 +258,10 @@ export function useTafData(wsRequest, wsConnected, feederLat, feederLon, radarRa
         });
 
         // Track lowest ceiling
-        if ((cover === 'BKN' || cover === 'OVC' || cover === 'VV') &&
-            (result.ceiling === null || base < result.ceiling)) {
+        if (
+          (cover === 'BKN' || cover === 'OVC' || cover === 'VV') &&
+          (result.ceiling === null || base < result.ceiling)
+        ) {
           result.ceiling = base;
         }
         return;
@@ -293,13 +302,17 @@ export function useTafData(wsRequest, wsConnected, feederLat, feederLon, radarRa
       return 'LIFR';
     }
     // IFR: Ceiling 500-999 OR visibility 1-2
-    if ((ceiling !== null && ceiling >= 500 && ceiling < 1000) ||
-        (visibility !== null && visibility >= 1 && visibility < 3)) {
+    if (
+      (ceiling !== null && ceiling >= 500 && ceiling < 1000) ||
+      (visibility !== null && visibility >= 1 && visibility < 3)
+    ) {
       return 'IFR';
     }
     // MVFR: Ceiling 1000-3000 OR visibility 3-5
-    if ((ceiling !== null && ceiling >= 1000 && ceiling <= 3000) ||
-        (visibility !== null && visibility >= 3 && visibility <= 5)) {
+    if (
+      (ceiling !== null && ceiling >= 1000 && ceiling <= 3000) ||
+      (visibility !== null && visibility >= 3 && visibility <= 5)
+    ) {
       return 'MVFR';
     }
     // VFR: Ceiling > 3000 AND visibility > 5
@@ -307,85 +320,88 @@ export function useTafData(wsRequest, wsConnected, feederLat, feederLon, radarRa
   };
 
   // Decode a TAF into structured format
-  const decodeTaf = useCallback((taf) => {
-    if (!taf) return null;
+  const decodeTaf = useCallback(
+    (taf) => {
+      if (!taf) return null;
 
-    const rawText = taf.rawTaf || taf.rawOb || taf.raw_text || '';
-    const stationId = taf.stationId || taf.icaoId || taf.station_id || '';
+      const rawText = taf.rawTaf || taf.rawOb || taf.raw_text || '';
+      const stationId = taf.stationId || taf.icaoId || taf.station_id || '';
 
-    // Parse issue time and validity period
-    const issueMatch = rawText.match(/(\d{6})Z/);
-    const validMatch = rawText.match(/(\d{4})\/(\d{4})/);
+      // Parse issue time and validity period
+      const issueMatch = rawText.match(/(\d{6})Z/);
+      const validMatch = rawText.match(/(\d{4})\/(\d{4})/);
 
-    let issueTime = null;
-    let validFrom = null;
-    let validTo = null;
+      let issueTime = null;
+      let validFrom = null;
+      let validTo = null;
 
-    if (issueMatch) {
-      issueTime = parseTafTime(issueMatch[1]);
-    }
+      if (issueMatch) {
+        issueTime = parseTafTime(issueMatch[1]);
+      }
 
-    if (validMatch) {
-      validFrom = parseTafTime(validMatch[1]);
-      validTo = parseTafTime(validMatch[2]);
-    }
+      if (validMatch) {
+        validFrom = parseTafTime(validMatch[1]);
+        validTo = parseTafTime(validMatch[2]);
+      }
 
-    // Extract the forecast portion (after the validity period)
-    let forecastPortion = rawText;
-    if (validMatch) {
-      const validIdx = rawText.indexOf(validMatch[0]);
-      forecastPortion = rawText.slice(validIdx + validMatch[0].length).trim();
-    }
+      // Extract the forecast portion (after the validity period)
+      let forecastPortion = rawText;
+      if (validMatch) {
+        const validIdx = rawText.indexOf(validMatch[0]);
+        forecastPortion = rawText.slice(validIdx + validMatch[0].length).trim();
+      }
 
-    // Parse base forecast (before first FM/TEMPO/BECMG/PROB)
-    const changePattern = /\b(FM\d{6}|TEMPO|BECMG|PROB\d{2})\b/;
-    const changeMatch = forecastPortion.match(changePattern);
-    let baseForecast = forecastPortion;
-    let changeGroups = [];
+      // Parse base forecast (before first FM/TEMPO/BECMG/PROB)
+      const changePattern = /\b(FM\d{6}|TEMPO|BECMG|PROB\d{2})\b/;
+      const changeMatch = forecastPortion.match(changePattern);
+      let baseForecast = forecastPortion;
+      let changeGroups = [];
 
-    if (changeMatch) {
-      baseForecast = forecastPortion.slice(0, changeMatch.index).trim();
-      const changePortion = forecastPortion.slice(changeMatch.index);
-      changeGroups = parseChangeGroups(changePortion);
-    }
+      if (changeMatch) {
+        baseForecast = forecastPortion.slice(0, changeMatch.index).trim();
+        const changePortion = forecastPortion.slice(changeMatch.index);
+        changeGroups = parseChangeGroups(changePortion);
+      }
 
-    // Parse base conditions
-    const baseConditions = parseConditions(baseForecast.split(/\s+/));
+      // Parse base conditions
+      const baseConditions = parseConditions(baseForecast.split(/\s+/));
 
-    // Determine current and forecast flight categories
-    const currentCategory = baseConditions.flightCategory;
-    const forecastCategories = changeGroups.map((g) => g.flightCategory).filter(Boolean);
-    const hasIfrTransition = forecastCategories.some((c) => c === 'IFR' || c === 'LIFR');
-    const hasMvfrTransition = forecastCategories.some((c) => c === 'MVFR');
+      // Determine current and forecast flight categories
+      const currentCategory = baseConditions.flightCategory;
+      const forecastCategories = changeGroups.map((g) => g.flightCategory).filter(Boolean);
+      const hasIfrTransition = forecastCategories.some((c) => c === 'IFR' || c === 'LIFR');
+      const hasMvfrTransition = forecastCategories.some((c) => c === 'MVFR');
 
-    // Find significant weather
-    const significantWeather = [
-      ...baseConditions.weather.filter((w) => w.isSignificant),
-      ...changeGroups.flatMap((g) => g.weather?.filter((w) => w.isSignificant) || []),
-    ];
+      // Find significant weather
+      const significantWeather = [
+        ...baseConditions.weather.filter((w) => w.isSignificant),
+        ...changeGroups.flatMap((g) => g.weather?.filter((w) => w.isSignificant) || []),
+      ];
 
-    return {
-      stationId,
-      raw: rawText,
-      issueTime,
-      validFrom,
-      validTo,
-      baseConditions,
-      changeGroups,
-      currentCategory,
-      forecastCategories: [...new Set(forecastCategories)],
-      hasIfrTransition,
-      hasMvfrTransition,
-      hasSignificantWeather: significantWeather.length > 0,
-      significantWeather,
-      // Location data
-      lat: taf.lat,
-      lon: taf.lon,
-      name: taf.name,
-      // Age tracking
-      fetchTime: Date.now(),
-    };
-  }, [parseChangeGroups]);
+      return {
+        stationId,
+        raw: rawText,
+        issueTime,
+        validFrom,
+        validTo,
+        baseConditions,
+        changeGroups,
+        currentCategory,
+        forecastCategories: [...new Set(forecastCategories)],
+        hasIfrTransition,
+        hasMvfrTransition,
+        hasSignificantWeather: significantWeather.length > 0,
+        significantWeather,
+        // Location data
+        lat: taf.lat,
+        lon: taf.lon,
+        name: taf.name,
+        // Age tracking
+        fetchTime: Date.now(),
+      };
+    },
+    [parseChangeGroups]
+  );
 
   // Fetch TAFs for airports in range
   const fetchTafs = useCallback(async () => {
@@ -427,9 +443,7 @@ export function useTafData(wsRequest, wsConnected, feederLat, feederLon, radarRa
       }
 
       // Decode and cache TAFs
-      const decoded = tafData
-        .map((taf) => decodeTaf(taf))
-        .filter(Boolean);
+      const decoded = tafData.map((taf) => decodeTaf(taf)).filter(Boolean);
 
       // Update cache
       decoded.forEach((taf) => {
@@ -446,87 +460,97 @@ export function useTafData(wsRequest, wsConnected, feederLat, feederLon, radarRa
   }, [wsRequest, wsConnected, feederLat, feederLon, radarRange, enabled, decodeTaf]);
 
   // Fetch single TAF for a station
-  const fetchTafForStation = useCallback(async (stationId) => {
-    if (!wsRequest || !wsConnected) {
-      return null;
-    }
-
-    // Check cache first (valid for 10 minutes)
-    const cached = cacheRef.current.get(stationId);
-    if (cached && Date.now() - cached.fetchTime < 600000) {
-      return cached;
-    }
-
-    try {
-      const response = await wsRequest('taf', { station: stationId }, 15000);
-      if (response) {
-        const decoded = decodeTaf(response);
-        if (decoded) {
-          cacheRef.current.set(stationId, decoded);
-          return decoded;
-        }
+  const fetchTafForStation = useCallback(
+    async (stationId) => {
+      if (!wsRequest || !wsConnected) {
+        return null;
       }
-    } catch (err) {
-      console.error(`TAF fetch error for ${stationId}:`, err);
-    }
 
-    return null;
-  }, [wsRequest, wsConnected, decodeTaf]);
-
-  // Get TAF for a specific airport
-  const getTafForAirport = useCallback((airport) => {
-    if (!airport) return null;
-
-    const airportIds = [airport.icao, airport.icaoId, airport.faaId, airport.id]
-      .filter(Boolean)
-      .map((id) => id.toUpperCase());
-
-    for (const id of airportIds) {
-      const taf = tafs.find(
-        (t) => t.stationId.toUpperCase() === id
-      );
-      if (taf) return taf;
-
-      // Check cache
-      const cached = cacheRef.current.get(id);
+      // Check cache first (valid for 10 minutes)
+      const cached = cacheRef.current.get(stationId);
       if (cached && Date.now() - cached.fetchTime < 600000) {
         return cached;
       }
-    }
 
-    return null;
-  }, [tafs]);
+      try {
+        const response = await wsRequest('taf', { station: stationId }, 15000);
+        if (response) {
+          const decoded = decodeTaf(response);
+          if (decoded) {
+            cacheRef.current.set(stationId, decoded);
+            return decoded;
+          }
+        }
+      } catch (err) {
+        console.error(`TAF fetch error for ${stationId}:`, err);
+      }
 
-  // Check if airport has TAF available
-  const hasTafAvailable = useCallback((airport) => {
-    return getTafForAirport(airport) !== null;
-  }, [getTafForAirport]);
+      return null;
+    },
+    [wsRequest, wsConnected, decodeTaf]
+  );
 
-  // Get forecast category changes for an airport
-  const getForecastChanges = useCallback((airport) => {
-    const taf = getTafForAirport(airport);
-    if (!taf) return null;
+  // Get TAF for a specific airport
+  const getTafForAirport = useCallback(
+    (airport) => {
+      if (!airport) return null;
 
-    const changes = [];
-    let prevCategory = taf.currentCategory;
+      const airportIds = [airport.icao, airport.icaoId, airport.faaId, airport.id]
+        .filter(Boolean)
+        .map((id) => id.toUpperCase());
 
-    taf.changeGroups.forEach((group) => {
-      if (group.flightCategory && group.flightCategory !== prevCategory) {
-        changes.push({
-          from: prevCategory,
-          to: group.flightCategory,
-          time: group.startTime,
-          type: group.type,
-          typeDesc: group.typeDesc,
-        });
-        if (group.type === 'FM' || group.type === 'BECMG') {
-          prevCategory = group.flightCategory;
+      for (const id of airportIds) {
+        const taf = tafs.find((t) => t.stationId.toUpperCase() === id);
+        if (taf) return taf;
+
+        // Check cache
+        const cached = cacheRef.current.get(id);
+        if (cached && Date.now() - cached.fetchTime < 600000) {
+          return cached;
         }
       }
-    });
 
-    return changes;
-  }, [getTafForAirport]);
+      return null;
+    },
+    [tafs]
+  );
+
+  // Check if airport has TAF available
+  const hasTafAvailable = useCallback(
+    (airport) => {
+      return getTafForAirport(airport) !== null;
+    },
+    [getTafForAirport]
+  );
+
+  // Get forecast category changes for an airport
+  const getForecastChanges = useCallback(
+    (airport) => {
+      const taf = getTafForAirport(airport);
+      if (!taf) return null;
+
+      const changes = [];
+      let prevCategory = taf.currentCategory;
+
+      taf.changeGroups.forEach((group) => {
+        if (group.flightCategory && group.flightCategory !== prevCategory) {
+          changes.push({
+            from: prevCategory,
+            to: group.flightCategory,
+            time: group.startTime,
+            type: group.type,
+            typeDesc: group.typeDesc,
+          });
+          if (group.type === 'FM' || group.type === 'BECMG') {
+            prevCategory = group.flightCategory;
+          }
+        }
+      });
+
+      return changes;
+    },
+    [getTafForAirport]
+  );
 
   // Fetch on mount and when enabled changes
   useEffect(() => {

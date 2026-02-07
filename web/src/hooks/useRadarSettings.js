@@ -156,7 +156,10 @@ function loadConfig() {
             ...DEFAULT_CONFIG.overlays.militaryZones,
             ...(parsed.overlays?.militaryZones || {}),
           },
-          coastlines: { ...DEFAULT_CONFIG.overlays.coastlines, ...(parsed.overlays?.coastlines || {}) },
+          coastlines: {
+            ...DEFAULT_CONFIG.overlays.coastlines,
+            ...(parsed.overlays?.coastlines || {}),
+          },
         },
         performance: {
           ...DEFAULT_CONFIG.performance,
@@ -381,7 +384,10 @@ export function useRadarSettings() {
           ...DEFAULT_CONFIG.overlays.militaryZones,
           ...(newConfig.overlays?.militaryZones || {}),
         },
-        coastlines: { ...DEFAULT_CONFIG.overlays.coastlines, ...(newConfig.overlays?.coastlines || {}) },
+        coastlines: {
+          ...DEFAULT_CONFIG.overlays.coastlines,
+          ...(newConfig.overlays?.coastlines || {}),
+        },
       },
       performance: {
         ...DEFAULT_CONFIG.performance,

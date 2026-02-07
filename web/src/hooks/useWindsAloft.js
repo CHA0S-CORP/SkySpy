@@ -144,7 +144,8 @@ function interpolateWind(lat, lon, stations, maxDistance = 300) {
   if (weightSum === 0) return null;
 
   // Calculate averaged direction
-  const avgDirection = ((Math.atan2(dirX / weightSum, dirY / weightSum) * 180) / Math.PI + 360) % 360;
+  const avgDirection =
+    ((Math.atan2(dirX / weightSum, dirY / weightSum) * 180) / Math.PI + 360) % 360;
   const avgSpeed = speedSum / weightSum;
 
   return {
@@ -163,7 +164,8 @@ const AWC_WINDS_URL = 'https://aviationweather.gov/api/data/windtemp';
  * NOAA NDFD (National Digital Forecast Database) for gridded wind data
  * Alternative source with broader coverage
  */
-const NOAA_NDFD_URL = 'https://graphical.weather.gov/xml/sample_products/browser_interface/ndfdXMLclient.php';
+const NOAA_NDFD_URL =
+  'https://graphical.weather.gov/xml/sample_products/browser_interface/ndfdXMLclient.php';
 
 /**
  * useWindsAloft - Hook for winds aloft data overlay
@@ -256,7 +258,7 @@ export function useWindsAloft({
 
       const response = await fetch(`${AWC_WINDS_URL}?${params}`, {
         headers: {
-          'Accept': 'application/json',
+          Accept: 'application/json',
         },
       });
 
@@ -307,7 +309,6 @@ export function useWindsAloft({
 
       // Set valid time (typically 6-24 hours from issuance)
       setValidTime(new Date(now + 6 * 60 * 60 * 1000));
-
     } catch (err) {
       console.error('[WindsAloft] Fetch error:', err);
       setError(err.message || 'Failed to fetch winds aloft data');
@@ -333,13 +334,15 @@ export function useWindsAloft({
 
     const gridPoints = calculateGridPoints(bounds, gridSpacing);
 
-    const grid = gridPoints.map((point) => {
-      const wind = interpolateWind(point.lat, point.lon, stationData);
-      return {
-        ...point,
-        wind: wind || { direction: 0, speed: 0 },
-      };
-    }).filter((point) => point.wind.speed > 0);
+    const grid = gridPoints
+      .map((point) => {
+        const wind = interpolateWind(point.lat, point.lon, stationData);
+        return {
+          ...point,
+          wind: wind || { direction: 0, speed: 0 },
+        };
+      })
+      .filter((point) => point.wind.speed > 0);
 
     setWindGrid(grid);
   }, [bounds, stationData, gridSpacing]);
@@ -374,10 +377,13 @@ export function useWindsAloft({
       return;
     }
 
-    refreshIntervalRef.current = setInterval(() => {
-      lastFetchTimeRef.current = 0; // Allow refetch
-      fetchWindsData();
-    }, 60 * 60 * 1000); // 1 hour
+    refreshIntervalRef.current = setInterval(
+      () => {
+        lastFetchTimeRef.current = 0; // Allow refetch
+        fetchWindsData();
+      },
+      60 * 60 * 1000
+    ); // 1 hour
 
     return () => {
       if (refreshIntervalRef.current) {
@@ -503,10 +509,17 @@ function generateSyntheticWinds(bounds, level) {
       const latOffset = (lat - (north + south) / 2) * 2;
       const lonOffset = (lon - (east + west) / 2) * 1;
 
-      const direction = (baseDirection + latOffset * 0.5 + lonOffset * 0.3 +
-                        (Math.random() - 0.5) * variation + 360) % 360;
-      const speed = Math.max(0, baseSpeed + latOffset * 0.5 +
-                    (Math.random() - 0.5) * variation * 0.5);
+      const direction =
+        (baseDirection +
+          latOffset * 0.5 +
+          lonOffset * 0.3 +
+          (Math.random() - 0.5) * variation +
+          360) %
+        360;
+      const speed = Math.max(
+        0,
+        baseSpeed + latOffset * 0.5 + (Math.random() - 0.5) * variation * 0.5
+      );
 
       stations.push({
         id: `syn_${lat}_${lon}`,

@@ -101,55 +101,86 @@ export function useThreatCalculation({
   const [threats, setThreats] = useState([]);
   const [connected, setConnected] = useState(false);
 
+  // Store objects in refs to avoid triggering effect on every reference change
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const positionRef = useRef(position);
+  positionRef.current = position;
+  const aircraftRef = useRef(aircraft);
+  aircraftRef.current = aircraft;
+  const backendThreatsRef = useRef(backendThreats);
+  backendThreatsRef.current = backendThreats;
+
+  // Primitive deps for triggering effects
+  const aircraftLength = aircraft.length;
+  const backendThreatsLength = backendThreats.length;
+  const positionLat = position?.lat;
+  const positionLon = position?.lon;
+
   // Refs
   const lastThreatsRef = useRef([]);
   const prevPositionRef = useRef(null);
   const threatHistoryRef = useRef(new Map()); // For behavior detection
   const updateTimeRef = useRef(Date.now());
 
+  // Store callback refs to avoid triggering effect on every reference change
+  const announceNewThreatRef = useRef(announceNewThreat);
+  announceNewThreatRef.current = announceNewThreat;
+  const announceClearRef = useRef(announceClear);
+  announceClearRef.current = announceClear;
+  const vibrateNewThreatRef = useRef(vibrateNewThreat);
+  vibrateNewThreatRef.current = vibrateNewThreat;
+  const vibrateClearRef = useRef(vibrateClear);
+  vibrateClearRef.current = vibrateClear;
+  const logThreatRef = useRef(logThreat);
+  logThreatRef.current = logThreat;
+
   // Process new threats and trigger alerts
-  const processNewThreats = useCallback(
-    (newThreats, oldThreats) => {
-      // Check for new threats to announce
+  const processNewThreats = useCallback((newThreats, oldThreats) => {
+    const currentSettings = settingsRef.current;
+    // Check for new threats to announce
+    for (const threat of newThreats) {
+      const wasTracked = oldThreats.find((t) => t.hex === threat.hex);
+      if (!wasTracked) {
+        if (currentSettings.voiceEnabled && announceNewThreatRef.current) {
+          announceNewThreatRef.current(threat);
+        }
+        if (currentSettings.hapticEnabled && vibrateNewThreatRef.current) {
+          vibrateNewThreatRef.current(threat.threat_level);
+        }
+      }
+    }
+
+    // Announce if all clear
+    if (newThreats.length === 0 && oldThreats.length > 0) {
+      if (currentSettings.voiceEnabled && announceClearRef.current) {
+        announceClearRef.current();
+      }
+      if (currentSettings.hapticEnabled && vibrateClearRef.current) {
+        vibrateClearRef.current();
+      }
+    }
+
+    // Log threats to history
+    if (currentSettings.persistent && logThreatRef.current) {
       for (const threat of newThreats) {
-        const wasTracked = oldThreats.find((t) => t.hex === threat.hex);
-        if (!wasTracked) {
-          if (settings.voiceEnabled && announceNewThreat) {
-            announceNewThreat(threat);
-          }
-          if (settings.hapticEnabled && vibrateNewThreat) {
-            vibrateNewThreat(threat.threat_level);
-          }
+        if (threat.is_law_enforcement || threat.threat_level === 'critical' || threat.knownLE) {
+          logThreatRef.current(threat);
         }
       }
-
-      // Announce if all clear
-      if (newThreats.length === 0 && oldThreats.length > 0) {
-        if (settings.voiceEnabled && announceClear) {
-          announceClear();
-        }
-        if (settings.hapticEnabled && vibrateClear) {
-          vibrateClear();
-        }
-      }
-
-      // Log threats to history
-      if (settings.persistent && logThreat) {
-        for (const threat of newThreats) {
-          if (threat.is_law_enforcement || threat.threat_level === 'critical' || threat.knownLE) {
-            logThreat(threat);
-          }
-        }
-      }
-    },
-    [settings, announceNewThreat, announceClear, vibrateNewThreat, vibrateClear, logThreat]
-  );
+    }
+  }, []);
 
   // Calculate threats from aircraft list
   useEffect(() => {
+    const currentSettings = settingsRef.current;
+    const currentAircraft = aircraftRef.current;
+    const currentPosition = positionRef.current;
+    const currentBackendThreats = backendThreatsRef.current;
+
     // If using backend threats, process them
-    if (settings.useBackend !== false && backendThreats.length > 0) {
-      const transformedThreats = backendThreats.map(transformBackendThreat);
+    if (currentSettings.useBackend !== false && currentBackendThreats.length > 0) {
+      const transformedThreats = currentBackendThreats.map(transformBackendThreat);
       const sortedThreats = sortThreats(transformedThreats);
 
       processNewThreats(sortedThreats, lastThreatsRef.current);
@@ -166,39 +197,39 @@ export function useThreatCalculation({
     updateTimeRef.current = now;
 
     // Can work without GPS, just won't have distance/bearing
-    if (!aircraft.length) return;
+    if (!currentAircraft.length) return;
 
     const calculatedThreats = [];
     const timeDelta = 3; // seconds between updates (approximate)
 
-    for (const ac of aircraft) {
+    for (const ac of currentAircraft) {
       if (!ac.lat || !ac.lon) continue;
 
       // Identify law enforcement
       const leInfo = identifyLawEnforcement(ac);
 
       // Apply filtering settings
-      if (settings.showLawEnforcementOnly && !leInfo.isLawEnforcement) {
+      if (currentSettings.showLawEnforcementOnly && !leInfo.isLawEnforcement) {
         continue;
       }
-      if (!settings.showAllHelicopters && !leInfo.isLawEnforcement && !leInfo.isInterest) {
+      if (!currentSettings.showAllHelicopters && !leInfo.isLawEnforcement && !leInfo.isInterest) {
         continue;
       }
 
       // Only include interesting aircraft
-      if (!leInfo.isInterest && !settings.showAllHelicopters) continue;
+      if (!leInfo.isInterest && !currentSettings.showAllHelicopters) continue;
 
       // If we have GPS, calculate distance and bearing
       let distanceNm = null;
       let bearing = null;
 
-      if (position) {
-        distanceNm = calculateDistanceNm(position.lat, position.lon, ac.lat, ac.lon);
+      if (currentPosition) {
+        distanceNm = calculateDistanceNm(currentPosition.lat, currentPosition.lon, ac.lat, ac.lon);
 
         // FIX: Apply radius filter BEFORE threat level calculation
-        if (distanceNm > settings.threatRadius) continue;
+        if (distanceNm > currentSettings.threatRadius) continue;
 
-        bearing = calculateBearing(position.lat, position.lon, ac.lat, ac.lon);
+        bearing = calculateBearing(currentPosition.lat, currentPosition.lon, ac.lat, ac.lon);
       }
 
       // FIX: Calculate threat level AFTER distance filter
@@ -206,11 +237,12 @@ export function useThreatCalculation({
 
       // Apply altitude filters
       const altitude = ac.alt_baro || ac.alt_geom || ac.alt || 0;
-      if (altitude < settings.altitudeFloor || altitude > settings.altitudeCeiling) continue;
-      if (altitude > settings.ignoreAboveAltitude) continue;
+      if (altitude < currentSettings.altitudeFloor || altitude > currentSettings.altitudeCeiling)
+        continue;
+      if (altitude > currentSettings.ignoreAboveAltitude) continue;
 
       // Check whitelisted hexes
-      if (settings.whitelistedHexes?.includes(ac.hex)) continue;
+      if (currentSettings.whitelistedHexes?.includes(ac.hex)) continue;
 
       // Determine trend and calculate closing speed
       let trend = 'unknown';
@@ -224,9 +256,9 @@ export function useThreatCalculation({
         else trend = 'holding';
 
         // Calculate closing speed
-        if (position && prevPositionRef.current && prevThreat.lat && prevThreat.lon) {
+        if (currentPosition && prevPositionRef.current && prevThreat.lat && prevThreat.lon) {
           closingSpeed = calculateClosingSpeed(
-            position,
+            currentPosition,
             prevPositionRef.current,
             { lat: ac.lat, lon: ac.lon },
             { lat: prevThreat.lat, lon: prevThreat.lon },
@@ -245,19 +277,19 @@ export function useThreatCalculation({
         threatHistoryRef.current.set(ac.hex, history);
 
         // Detect circling behavior
-        if (settings.detectCircling && history.length >= 10) {
+        if (currentSettings.detectCircling && history.length >= 10) {
           const circlingResult = detectCirclingBehavior(history, 10);
           behavior.isCircling = circlingResult.isCircling;
           behavior.circleConfidence = circlingResult.confidence;
         }
 
         // Detect loitering
-        if (settings.detectLoitering && history.length >= 2) {
+        if (currentSettings.detectLoitering && history.length >= 2) {
           const firstSeen = { timestamp: history[0].timestamp, distance_nm: distanceNm };
           const loiteringResult = detectLoitering(
             { distance_nm: distanceNm },
             firstSeen,
-            settings.loiterThreshold
+            currentSettings.loiterThreshold
           );
           behavior.isLoitering = loiteringResult.isLoitering;
           behavior.duration = loiteringResult.duration;
@@ -314,11 +346,18 @@ export function useThreatCalculation({
     processNewThreats(sortedThreats, lastThreatsRef.current);
 
     // Store previous position for closing speed calculation
-    prevPositionRef.current = position ? { ...position } : null;
+    prevPositionRef.current = currentPosition ? { ...currentPosition } : null;
     lastThreatsRef.current = sortedThreats;
     setThreats(sortedThreats);
     setConnected(true);
-  }, [position, aircraft, settings, backendThreats, backendConnected, processNewThreats]);
+  }, [
+    positionLat,
+    positionLon,
+    aircraftLength,
+    backendThreatsLength,
+    backendConnected,
+    processNewThreats,
+  ]);
 
   return {
     threats,

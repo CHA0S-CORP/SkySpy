@@ -218,9 +218,7 @@ describe('tafUtils', () => {
     it('should return transition info', () => {
       const taf = {
         currentCategory: 'VFR',
-        changeGroups: [
-          { type: 'FM', flightCategory: 'MVFR', startTime: '2024-01-15T18:00:00Z' },
-        ],
+        changeGroups: [{ type: 'FM', flightCategory: 'MVFR', startTime: '2024-01-15T18:00:00Z' }],
       };
       const result = getCategoryTransition(taf);
       expect(result).not.toBeNull();

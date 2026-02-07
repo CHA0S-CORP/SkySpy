@@ -213,11 +213,16 @@ const ProRadarScope = memo(
 
       // Draw range rings
       if (showRangeRings) {
-        const ringIntervals = range <= 25 ? [5, 10, 15, 20, 25] :
-                             range <= 50 ? [10, 25, 50] :
-                             range <= 100 ? [25, 50, 75, 100] :
-                             range <= 250 ? [50, 100, 150, 200, 250] :
-                             [100, 200, 300, 400, 500];
+        const ringIntervals =
+          range <= 25
+            ? [5, 10, 15, 20, 25]
+            : range <= 50
+              ? [10, 25, 50]
+              : range <= 100
+                ? [25, 50, 75, 100]
+                : range <= 250
+                  ? [50, 100, 150, 200, 250]
+                  : [100, 200, 300, 400, 500];
 
         ctx.strokeStyle = colors.rangeRing;
         ctx.fillStyle = colors.rangeRingText;
@@ -391,8 +396,12 @@ const ProRadarScope = memo(
         if (showVerticalSpeedTrend && ac.baro_rate) {
           const vsTrendSize = 4;
           ctx.save();
-          ctx.fillStyle = ac.baro_rate > 300 ? 'rgba(100, 255, 100, 0.8)' :
-                          ac.baro_rate < -300 ? 'rgba(255, 100, 100, 0.8)' : 'transparent';
+          ctx.fillStyle =
+            ac.baro_rate > 300
+              ? 'rgba(100, 255, 100, 0.8)'
+              : ac.baro_rate < -300
+                ? 'rgba(255, 100, 100, 0.8)'
+                : 'transparent';
 
           if (Math.abs(ac.baro_rate) > 300) {
             ctx.beginPath();
@@ -416,7 +425,11 @@ const ProRadarScope = memo(
         // Draw data block
         if (showDataBlocks && !isGround) {
           const callsign = ac.flight?.trim() || ac.hex.toUpperCase();
-          const altitude = ac.alt ? Math.round(ac.alt / 100).toString().padStart(3, '0') : '---';
+          const altitude = ac.alt
+            ? Math.round(ac.alt / 100)
+                .toString()
+                .padStart(3, '0')
+            : '---';
           const speed = ac.gs ? Math.round(ac.gs).toString() : '---';
 
           const labelX = pos.x + 15;
@@ -480,7 +493,8 @@ const ProRadarScope = memo(
         if (!running) return;
 
         const now = performance.now();
-        if (now - lastRenderRef.current > 50) { // ~20fps for inactive scopes
+        if (now - lastRenderRef.current > 50) {
+          // ~20fps for inactive scopes
           drawScope();
           lastRenderRef.current = now;
         }

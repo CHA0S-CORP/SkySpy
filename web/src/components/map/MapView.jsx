@@ -910,7 +910,13 @@ function MapView({
   );
 
   // Phase 5: Theme & Customization - using useProTheme hook
-  const { theme: proTheme, setTheme: setProTheme, cycleTheme: cycleProTheme, themeColors: proThemeColors, themeInfo: proThemeInfo } = useProTheme();
+  const {
+    theme: proTheme,
+    setTheme: setProTheme,
+    cycleTheme: cycleProTheme,
+    themeColors: proThemeColors,
+    themeInfo: proThemeInfo,
+  } = useProTheme();
   // Theme colors for Pro mode - computed from proTheme for use in render
   const themeColors = useMemo(() => {
     return config.mapMode === 'pro' ? proThemeColors : null;
@@ -2795,7 +2801,25 @@ function MapView({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [config.mapMode, panelPinned, selectedAircraft, toggleWatchList, toggleWatchListPanel, toggleQuickFilterBar, msaw, cycleProTheme, dataBlockCustomPositionCount, resetAllDataBlockOffsets, toastContext, isPlayback, togglePlayPause, skipPlaybackBackward, skipPlaybackForward, cyclePlaybackSpeedUp, cyclePlaybackSpeedDown]);
+  }, [
+    config.mapMode,
+    panelPinned,
+    selectedAircraft,
+    toggleWatchList,
+    toggleWatchListPanel,
+    toggleQuickFilterBar,
+    msaw,
+    cycleProTheme,
+    dataBlockCustomPositionCount,
+    resetAllDataBlockOffsets,
+    toastContext,
+    isPlayback,
+    togglePlayPause,
+    skipPlaybackBackward,
+    skipPlaybackForward,
+    cyclePlaybackSpeedUp,
+    cyclePlaybackSpeedDown,
+  ]);
 
   // Handle mouse move on radar container to show/hide range control and track cursor
   const handleContainerMouseMove = useCallback(
@@ -5333,10 +5357,13 @@ function MapView({
               ctx.beginPath();
               ctx.arc(6, -6, 3, 0, Math.PI * 2);
               // Color based on worst forecast category
-              const worstCat = aptTaf.forecastCategories?.includes('LIFR') ? 'LIFR'
-                : aptTaf.forecastCategories?.includes('IFR') ? 'IFR'
-                : aptTaf.forecastCategories?.includes('MVFR') ? 'MVFR'
-                : 'VFR';
+              const worstCat = aptTaf.forecastCategories?.includes('LIFR')
+                ? 'LIFR'
+                : aptTaf.forecastCategories?.includes('IFR')
+                  ? 'IFR'
+                  : aptTaf.forecastCategories?.includes('MVFR')
+                    ? 'MVFR'
+                    : 'VFR';
               const tafColors = {
                 VFR: 'rgba(0, 200, 80, 0.9)',
                 MVFR: 'rgba(80, 120, 255, 0.9)',
@@ -5996,8 +6023,10 @@ function MapView({
       // Draw Winds Aloft overlay (Pro mode only)
       if (isPro && overlays.windsAloft && windGrid && windGrid.length > 0) {
         // Adapt barb size to zoom level
-        const barbSize = radarRange <= 25 ? 30 : radarRange <= 50 ? 25 : radarRange <= 100 ? 22 : 18;
-        const minSpacing = radarRange <= 25 ? 50 : radarRange <= 50 ? 45 : radarRange <= 100 ? 40 : 35;
+        const barbSize =
+          radarRange <= 25 ? 30 : radarRange <= 50 ? 25 : radarRange <= 100 ? 22 : 18;
+        const minSpacing =
+          radarRange <= 25 ? 50 : radarRange <= 50 ? 45 : radarRange <= 100 ? 40 : 35;
 
         drawWindBarbs(ctx, windGrid, latLonToScreen, {
           size: barbSize,
@@ -6355,7 +6384,12 @@ function MapView({
         const acPos = latLonToScreen(selectedAircraft.lat, selectedAircraft.lon);
 
         // Skip if aircraft is too far off screen
-        if (acPos.x >= -200 && acPos.x <= width + 200 && acPos.y >= -200 && acPos.y <= height + 200) {
+        if (
+          acPos.x >= -200 &&
+          acPos.x <= width + 200 &&
+          acPos.y >= -200 &&
+          acPos.y <= height + 200
+        ) {
           // J-Ring distances in nautical miles (configurable)
           const jRingDistances = [5, 10, 20];
 
@@ -6463,10 +6497,16 @@ function MapView({
           ? Math.min(config.shortTrackLength || 15, 8)
           : config.shortTrackLength || 15;
         // Reduce max trail points at far ranges
-        const lodTrailMax = radarRange <= 50 ? trackLength : radarRange <= 100 ? Math.min(trackLength, 15) : Math.min(trackLength, 8);
+        const lodTrailMax =
+          radarRange <= 50
+            ? trackLength
+            : radarRange <= 100
+              ? Math.min(trackLength, 15)
+              : Math.min(trackLength, 8);
         const effectiveTrackLength = lodTrailMax;
         // Phase 5.4: Range-based trail point decimation
-        const lodTrailStride = radarRange <= 50 ? 1 : radarRange <= 100 ? 2 : radarRange <= 200 ? 3 : 4;
+        const lodTrailStride =
+          radarRange <= 50 ? 1 : radarRange <= 100 ? 2 : radarRange <= 200 ? 3 : 4;
 
         // Helper to get smooth altitude-based RGB color
         const getAltitudeRGB = (alt) => {
@@ -6580,7 +6620,8 @@ function MapView({
             // Draw individual segments with smooth altitude gradient
             for (let i = 1; i < positions.length; i++) {
               // LOD: skip trail points at far ranges for performance
-              if (lodTrailStride > 1 && i % lodTrailStride !== 0 && i !== positions.length - 1) continue;
+              if (lodTrailStride > 1 && i % lodTrailStride !== 0 && i !== positions.length - 1)
+                continue;
               const p1 = positions[i - 1];
               const p2 = positions[i];
               const pos1 = latLonToScreen(p1.lat, p1.lon);
@@ -6613,7 +6654,8 @@ function MapView({
 
             positions.forEach((point, i) => {
               // LOD: skip trail points at far ranges for performance
-              if (lodTrailStride > 1 && i % lodTrailStride !== 0 && i !== positions.length - 1) return;
+              if (lodTrailStride > 1 && i % lodTrailStride !== 0 && i !== positions.length - 1)
+                return;
               const pos = latLonToScreen(point.lat, point.lon);
               if (pos.x < -50 || pos.x > width + 50 || pos.y < -50 || pos.y > height + 50) return;
 
@@ -7264,10 +7306,7 @@ function MapView({
 
           // Phase 8.4: Wake turbulence separation ring for H/J aircraft
           if (showWakeRings && isPro) {
-            const wakeCat = determineWakeCategory(
-              ac,
-              aircraftInfo?.[ac.hex?.toUpperCase()] || {}
-            );
+            const wakeCat = determineWakeCategory(ac, aircraftInfo?.[ac.hex?.toUpperCase()] || {});
             const WAKE_SEP_NM = { J: 8, H: 6 };
             const sepNm = WAKE_SEP_NM[wakeCat] || 0;
             if (sepNm > 0) {
@@ -8253,9 +8292,7 @@ function MapView({
   const centerOnWatchedAircraft = useCallback(
     (entry) => {
       // Find live aircraft data for this watched entry
-      const ac = sortedAircraft.find(
-        (a) => a.hex?.toUpperCase() === entry.hex?.toUpperCase()
-      );
+      const ac = sortedAircraft.find((a) => a.hex?.toUpperCase() === entry.hex?.toUpperCase());
       if (ac?.lat && ac?.lon && config.mapMode === 'map' && leafletMapRef.current) {
         leafletMapRef.current.flyTo([ac.lat, ac.lon], 12, {
           duration: 1.5,
@@ -9283,9 +9320,7 @@ function MapView({
                       top: 8,
                       left: 8,
                       background:
-                        msaw.counts.alerts > 0
-                          ? 'rgba(255,50,50,0.8)'
-                          : 'rgba(255,200,0,0.8)',
+                        msaw.counts.alerts > 0 ? 'rgba(255,50,50,0.8)' : 'rgba(255,200,0,0.8)',
                       color: '#000',
                       padding: '2px 8px',
                       borderRadius: 4,
@@ -10158,7 +10193,9 @@ function MapView({
       {/* Watch List Panel - Pro/CRT Mode */}
       <WatchListPanel
         watchList={watchList}
-        panelVisible={watchListPanelVisible && (config.mapMode === 'pro' || config.mapMode === 'crt')}
+        panelVisible={
+          watchListPanelVisible && (config.mapMode === 'pro' || config.mapMode === 'crt')
+        }
         onRemove={removeFromWatchList}
         onClear={clearWatchList}
         onTogglePanel={toggleWatchListPanel}
@@ -11860,8 +11897,8 @@ function MapView({
               <div className="detail-row">
                 <span>Altitude</span>
                 <span>
-                  FL{Math.round((selectedSigmet.altitude.lower || 0) / 100)} -{' '}
-                  FL{Math.round((selectedSigmet.altitude.upper || 45000) / 100)}
+                  FL{Math.round((selectedSigmet.altitude.lower || 0) / 100)} - FL
+                  {Math.round((selectedSigmet.altitude.upper || 45000) / 100)}
                 </span>
               </div>
             )}

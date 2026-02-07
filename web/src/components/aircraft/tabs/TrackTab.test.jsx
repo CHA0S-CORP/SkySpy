@@ -275,7 +275,9 @@ describe('TrackTab', () => {
 
     it('should call setShowTelemOverlay when toggle is clicked', () => {
       const mockSetShowTelemOverlay = vi.fn();
-      renderWithTimers(<TrackTab {...defaultProps} setShowTelemOverlay={mockSetShowTelemOverlay} />);
+      renderWithTimers(
+        <TrackTab {...defaultProps} setShowTelemOverlay={mockSetShowTelemOverlay} />
+      );
 
       const toggleBtn = screen.getByText('Toggle Telemetry');
       fireEvent.click(toggleBtn);
@@ -397,7 +399,9 @@ describe('TrackTab', () => {
     });
 
     it('should pass position to graphs when not in live mode', () => {
-      renderWithTimers(<TrackTab {...defaultProps} trackLiveMode={false} trackReplayPosition={50} />);
+      renderWithTimers(
+        <TrackTab {...defaultProps} trackLiveMode={false} trackReplayPosition={50} />
+      );
 
       const altGraph = screen.getByTestId('mini-graph-altitude');
       expect(altGraph).toHaveAttribute('data-position', '50');
@@ -427,7 +431,9 @@ describe('TrackTab', () => {
     });
 
     it('should display interpolated data when not in live mode', () => {
-      renderWithTimers(<TrackTab {...defaultProps} trackLiveMode={false} trackReplayPosition={50} />);
+      renderWithTimers(
+        <TrackTab {...defaultProps} trackLiveMode={false} trackReplayPosition={50} />
+      );
 
       const overlay = screen.getByTestId('telemetry-overlay');
       // The interpolated position should show some altitude
@@ -462,7 +468,9 @@ describe('TrackTab', () => {
     it('should call setTrackReplaySpeed when speed changes', () => {
       const mockSetTrackReplaySpeed = vi.fn();
 
-      renderWithTimers(<TrackTab {...defaultProps} setTrackReplaySpeed={mockSetTrackReplaySpeed} />);
+      renderWithTimers(
+        <TrackTab {...defaultProps} setTrackReplaySpeed={mockSetTrackReplaySpeed} />
+      );
 
       // Speed control is part of ReplayControls which we mocked
       expect(screen.getByTestId('replay-controls')).toBeInTheDocument();

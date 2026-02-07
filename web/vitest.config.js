@@ -15,6 +15,9 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.js'],
+    fakeTimers: {
+      shouldAdvanceTime: true,
+    },
     include: ['src/**/*.{test,spec}.{js,jsx}'],
     exclude: ['node_modules', 'dist', 'e2e/**'],
     passWithNoTests: true,

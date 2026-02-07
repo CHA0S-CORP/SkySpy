@@ -388,29 +388,50 @@ export function useDeviceGPS({
     });
   }, [isSupported, highAccuracy, handlePositionUpdate, handlePositionError]);
 
+  // Store startTracking/stopTracking in refs to avoid dependency loops
+  const startTrackingRef = useRef(startTracking);
+  startTrackingRef.current = startTracking;
+  const stopTrackingRef = useRef(stopTracking);
+  stopTrackingRef.current = stopTracking;
+
   // Auto-start/stop based on enabled prop
+  // Use refs for enabled/autoRequest to avoid re-running the effect on every prop change
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
+  const autoRequestRef = useRef(autoRequest);
+  autoRequestRef.current = autoRequest;
+
   useEffect(() => {
     // Only auto-start if autoRequest is true or permission is already granted
     const shouldAutoStart =
-      enabled && !isTracking && (autoRequest || permissionState === GPS_PERMISSION_STATES.GRANTED);
+      enabledRef.current &&
+      !isTracking &&
+      (autoRequestRef.current || permissionState === GPS_PERMISSION_STATES.GRANTED);
 
     if (shouldAutoStart) {
-      startTracking().catch((err) => {
+      startTrackingRef.current().catch((err) => {
         // startTracking already sets error state, just log here
         console.error('Auto-start tracking failed:', err);
       });
-    } else if (!enabled && isTracking) {
-      stopTracking();
+    } else if (!enabledRef.current && isTracking) {
+      stopTrackingRef.current();
     }
+  }, [isTracking, permissionState]);
 
+  // Stop tracking when enabled goes from true to false
+  useEffect(() => {
+    if (!enabled && isTracking) {
+      stopTrackingRef.current();
+    }
+  }, [enabled, isTracking]);
+
+  // Cleanup on unmount only
+  useEffect(() => {
     return () => {
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
-        // FIX: Also reset tracking state on cleanup
-        setIsTracking(false);
       }
-      // Use inline cleanup to avoid dependency on cleanupOrientationListeners
       if (orientationHandlerRef.current) {
         window.removeEventListener(
           'deviceorientationabsolute',
@@ -421,14 +442,7 @@ export function useDeviceGPS({
         orientationHandlerRef.current = null;
       }
     };
-  }, [enabled, isTracking, autoRequest, permissionState, startTracking, stopTracking]);
-
-  // Retry tracking after permission change
-  useEffect(() => {
-    if (enabled && !isTracking && permissionState === GPS_PERMISSION_STATES.GRANTED) {
-      startTracking();
-    }
-  }, [enabled, isTracking, permissionState, startTracking]);
+  }, []);
 
   return {
     // Position data

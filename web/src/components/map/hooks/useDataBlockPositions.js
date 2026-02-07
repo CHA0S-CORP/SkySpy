@@ -125,21 +125,24 @@ export function useDataBlockPositions() {
 
   // Periodic cleanup of expired positions (every 5 minutes)
   useEffect(() => {
-    const cleanupInterval = setInterval(() => {
-      const now = Date.now();
-      setPositions((prev) => {
-        const filtered = {};
-        let changed = false;
-        for (const [hex, data] of Object.entries(prev)) {
-          if (data.lastSeen && now - data.lastSeen < EXPIRY_MS) {
-            filtered[hex] = data;
-          } else {
-            changed = true;
+    const cleanupInterval = setInterval(
+      () => {
+        const now = Date.now();
+        setPositions((prev) => {
+          const filtered = {};
+          let changed = false;
+          for (const [hex, data] of Object.entries(prev)) {
+            if (data.lastSeen && now - data.lastSeen < EXPIRY_MS) {
+              filtered[hex] = data;
+            } else {
+              changed = true;
+            }
           }
-        }
-        return changed ? filtered : prev;
-      });
-    }, 5 * 60 * 1000); // Every 5 minutes
+          return changed ? filtered : prev;
+        });
+      },
+      5 * 60 * 1000
+    ); // Every 5 minutes
 
     return () => clearInterval(cleanupInterval);
   }, []);
@@ -309,69 +312,74 @@ export function useDataBlockPositions() {
   }, [autoDeconflictEnabled]);
 
   // Phase 14.3: Auto-deconfliction - reposition overlapping data blocks
-  const autoDeconflict = useCallback((visibleBlocks) => {
-    if (!visibleBlocks || visibleBlocks.length < 2) return;
+  const autoDeconflict = useCallback(
+    (visibleBlocks) => {
+      if (!visibleBlocks || visibleBlocks.length < 2) return;
 
-    // 8 candidate offsets (in pixels) around aircraft position
-    const OFFSETS = [
-      { x: 15, y: -15 },   // NE (default)
-      { x: 15, y: 15 },    // SE
-      { x: -75, y: -15 },  // NW
-      { x: -75, y: 15 },   // SW
-      { x: 15, y: -35 },   // N-NE
-      { x: 15, y: 35 },    // S-SE
-      { x: -75, y: -35 },  // N-NW
-      { x: -75, y: 35 },   // S-SW
-    ];
+      // 8 candidate offsets (in pixels) around aircraft position
+      const OFFSETS = [
+        { x: 15, y: -15 }, // NE (default)
+        { x: 15, y: 15 }, // SE
+        { x: -75, y: -15 }, // NW
+        { x: -75, y: 15 }, // SW
+        { x: 15, y: -35 }, // N-NE
+        { x: 15, y: 35 }, // S-SE
+        { x: -75, y: -35 }, // N-NW
+        { x: -75, y: 35 }, // S-SW
+      ];
 
-    // Check overlap between two rectangles
-    const overlaps = (a, b) =>
-      a.x < b.x + b.width && a.x + a.width > b.x &&
-      a.y < b.y + b.height && a.y + a.height > b.y;
+      // Check overlap between two rectangles
+      const overlaps = (a, b) =>
+        a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
 
-    // For each block, count overlaps with other blocks
-    const overlapCount = (block, allBlocks) =>
-      allBlocks.filter(b => b.hex !== block.hex && overlaps(block, b)).length;
+      // For each block, count overlaps with other blocks
+      const overlapCount = (block, allBlocks) =>
+        allBlocks.filter((b) => b.hex !== block.hex && overlaps(block, b)).length;
 
-    // Only process blocks without manual positions
-    const autoBlocks = visibleBlocks.filter(b => !positions[b.hex]);
+      // Only process blocks without manual positions
+      const autoBlocks = visibleBlocks.filter((b) => !positions[b.hex]);
 
-    for (const block of autoBlocks) {
-      const currentOverlaps = overlapCount(block, visibleBlocks);
-      if (currentOverlaps === 0) continue;
+      for (const block of autoBlocks) {
+        const currentOverlaps = overlapCount(block, visibleBlocks);
+        if (currentOverlaps === 0) continue;
 
-      // Try each offset position, pick the one with fewest overlaps
-      let bestOffset = null;
-      let bestOverlaps = currentOverlaps;
+        // Try each offset position, pick the one with fewest overlaps
+        let bestOffset = null;
+        let bestOverlaps = currentOverlaps;
 
-      for (const offset of OFFSETS) {
-        const candidate = {
-          ...block,
-          x: block.aircraftX + offset.x,
-          y: block.aircraftY + offset.y,
-        };
-        const count = overlapCount(candidate, visibleBlocks);
-        if (count < bestOverlaps) {
-          bestOverlaps = count;
-          bestOffset = offset;
+        for (const offset of OFFSETS) {
+          const candidate = {
+            ...block,
+            x: block.aircraftX + offset.x,
+            y: block.aircraftY + offset.y,
+          };
+          const count = overlapCount(candidate, visibleBlocks);
+          if (count < bestOverlaps) {
+            bestOverlaps = count;
+            bestOffset = offset;
+          }
+        }
+
+        if (bestOffset) {
+          setOffset(block.hex, bestOffset.x, bestOffset.y);
         }
       }
-
-      if (bestOffset) {
-        setOffset(block.hex, bestOffset.x, bestOffset.y);
-      }
-    }
-  }, [positions, setOffset]);
+    },
+    [positions, setOffset]
+  );
 
   // Throttle auto-deconfliction to run at most every 500ms
   const lastDeconflictRef = useRef(0);
 
-  const maybeDeconflict = useCallback((visibleBlocks) => {
-    const now = Date.now();
-    if (now - lastDeconflictRef.current < 500) return;
-    lastDeconflictRef.current = now;
-    autoDeconflict(visibleBlocks);
-  }, [autoDeconflict]);
+  const maybeDeconflict = useCallback(
+    (visibleBlocks) => {
+      const now = Date.now();
+      if (now - lastDeconflictRef.current < 500) return;
+      lastDeconflictRef.current = now;
+      autoDeconflict(visibleBlocks);
+    },
+    [autoDeconflict]
+  );
 
   // Check if an aircraft has a custom offset
   const hasCustomOffset = useCallback(

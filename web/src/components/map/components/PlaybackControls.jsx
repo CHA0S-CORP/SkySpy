@@ -171,10 +171,7 @@ export const PlaybackControls = memo(function PlaybackControls({
                 </button>
               ))}
               <div className="playback-menu-divider" />
-              <button
-                className="playback-time-option"
-                onClick={handleShowCustomRange}
-              >
+              <button className="playback-time-option" onClick={handleShowCustomRange}>
                 <Calendar size={14} />
                 <span>Custom range...</span>
               </button>

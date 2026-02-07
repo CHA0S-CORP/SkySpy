@@ -117,8 +117,4 @@ export {
 } from './useRadarSettings';
 
 // Track Playback (Phase 13.1)
-export {
-  useTrackPlayback,
-  TIME_RANGE_PRESETS,
-  PLAYBACK_SPEEDS,
-} from './useTrackPlayback';
+export { useTrackPlayback, TIME_RANGE_PRESETS, PLAYBACK_SPEEDS } from './useTrackPlayback';

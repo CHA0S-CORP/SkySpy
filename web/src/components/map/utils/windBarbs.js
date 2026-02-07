@@ -183,7 +183,17 @@ function drawBarb(ctx, centerX, centerY, staffRad, staffLength, offset, length, 
 /**
  * Draw a pennant (filled triangle for 50 kt)
  */
-function drawPennant(ctx, centerX, centerY, staffRad, staffLength, startOffset, endOffset, height, color) {
+function drawPennant(
+  ctx,
+  centerX,
+  centerY,
+  staffRad,
+  staffLength,
+  startOffset,
+  endOffset,
+  height,
+  color
+) {
   // Three points of the triangle:
   // 1. Start point on staff
   // 2. End point on staff
@@ -280,10 +290,7 @@ export function drawWindBarbs(ctx, windGrid, latLonToScreen, options = {}) {
  * @param {Object} options - Drawing options
  */
 export function drawWindBarbLegend(ctx, x, y, options = {}) {
-  const {
-    themeColors = null,
-    opacity = 0.9,
-  } = options;
+  const { themeColors = null, opacity = 0.9 } = options;
 
   const legendItems = [
     { speed: 5, label: '5 kt' },
@@ -301,12 +308,8 @@ export function drawWindBarbLegend(ctx, x, y, options = {}) {
   const legendWidth = 80;
   const legendHeight = legendItems.length * itemHeight + padding * 2;
 
-  ctx.fillStyle = themeColors
-    ? themeColors.rgba('background', 0.85)
-    : 'rgba(0, 0, 0, 0.85)';
-  ctx.strokeStyle = themeColors
-    ? themeColors.rgba('grid', 0.5)
-    : 'rgba(100, 100, 100, 0.5)';
+  ctx.fillStyle = themeColors ? themeColors.rgba('background', 0.85) : 'rgba(0, 0, 0, 0.85)';
+  ctx.strokeStyle = themeColors ? themeColors.rgba('grid', 0.5) : 'rgba(100, 100, 100, 0.5)';
   ctx.lineWidth = 1;
 
   ctx.beginPath();
@@ -316,9 +319,7 @@ export function drawWindBarbLegend(ctx, x, y, options = {}) {
 
   // Title
   ctx.font = 'bold 11px "JetBrains Mono", monospace';
-  ctx.fillStyle = themeColors
-    ? themeColors.rgba('text', 0.9)
-    : 'rgba(255, 255, 255, 0.9)';
+  ctx.fillStyle = themeColors ? themeColors.rgba('text', 0.9) : 'rgba(255, 255, 255, 0.9)';
   ctx.textAlign = 'center';
   ctx.fillText('Winds', x + legendWidth / 2, y + 14);
 
@@ -353,19 +354,14 @@ export function drawWindBarbLegend(ctx, x, y, options = {}) {
  * @param {Object} options - Drawing options
  */
 export function drawWindsLevelIndicator(ctx, x, y, level, options = {}) {
-  const {
-    themeColors = null,
-  } = options;
+  const { themeColors = null } = options;
 
-  const label = level >= 18000
-    ? `FL${Math.round(level / 100)}`
-    : `${(level / 1000).toFixed(0)}k ft`;
+  const label =
+    level >= 18000 ? `FL${Math.round(level / 100)}` : `${(level / 1000).toFixed(0)}k ft`;
 
   ctx.save();
   ctx.font = 'bold 12px "JetBrains Mono", monospace';
-  ctx.fillStyle = themeColors
-    ? themeColors.rgba('accent', 0.9)
-    : 'rgba(0, 255, 255, 0.9)';
+  ctx.fillStyle = themeColors ? themeColors.rgba('accent', 0.9) : 'rgba(0, 255, 255, 0.9)';
   ctx.textAlign = 'left';
   ctx.fillText(`Winds @ ${label}`, x, y);
   ctx.restore();

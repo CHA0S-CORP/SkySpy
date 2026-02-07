@@ -486,7 +486,7 @@ export function useTrackPlayback({
     (seconds = 60) => {
       if (!timeRange) return;
       const totalMs = timeRange.end.getTime() - timeRange.start.getTime();
-      const incrementPercent = (seconds * 1000 / totalMs) * 100;
+      const incrementPercent = ((seconds * 1000) / totalMs) * 100;
       setPlaybackPercent((prev) => Math.min(100, prev + incrementPercent));
     },
     [timeRange]
@@ -499,7 +499,7 @@ export function useTrackPlayback({
     (seconds = 60) => {
       if (!timeRange) return;
       const totalMs = timeRange.end.getTime() - timeRange.start.getTime();
-      const decrementPercent = (seconds * 1000 / totalMs) * 100;
+      const decrementPercent = ((seconds * 1000) / totalMs) * 100;
       setPlaybackPercent((prev) => Math.max(0, prev - decrementPercent));
     },
     [timeRange]
@@ -549,9 +549,9 @@ export function useTrackPlayback({
       // Calculate percent increment based on speed
       // At 1x speed, we want to cover 100% over the duration of the time range
       // increment per ms = 100 / (totalMs) * speed
-      const totalMs = (customTimeRange
+      const totalMs = customTimeRange
         ? customTimeRange.end.getTime() - customTimeRange.start.getTime()
-        : selectedHours * 60 * 60 * 1000);
+        : selectedHours * 60 * 60 * 1000;
       const incrementPerMs = (100 / totalMs) * speed;
       const increment = deltaTime * incrementPerMs;
 

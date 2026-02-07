@@ -115,9 +115,9 @@ export function searchAircraft(query, aircraft, aircraftInfo = {}, limit = 10) {
         info?.operator,
       ].filter(Boolean);
 
-      const match = fields.some(f => regexPattern.test(f));
+      const match = fields.some((f) => regexPattern.test(f));
       if (match) {
-        const matchField = fields.find(f => regexPattern.test(f));
+        const matchField = fields.find((f) => regexPattern.test(f));
         results.push({
           ...ac,
           _matchScore: 100, // Regex matches are all equal priority

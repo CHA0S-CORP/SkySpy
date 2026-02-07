@@ -1,5 +1,16 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Star, X, ChevronDown, ChevronUp, EyeOff, Trash2, Clock, Crosshair, Download, Upload } from 'lucide-react';
+import {
+  Star,
+  X,
+  ChevronDown,
+  ChevronUp,
+  EyeOff,
+  Trash2,
+  Clock,
+  Crosshair,
+  Download,
+  Upload,
+} from 'lucide-react';
 
 /**
  * Format milliseconds to human-readable duration
@@ -178,11 +189,7 @@ export function WatchListPanel({
       </div>
 
       {/* Import status feedback */}
-      {importStatus && (
-        <div className="watch-list-import-status">
-          {importStatus}
-        </div>
-      )}
+      {importStatus && <div className="watch-list-import-status">{importStatus}</div>}
 
       {/* Content */}
       {expanded && (

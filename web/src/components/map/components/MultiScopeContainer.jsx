@@ -1,6 +1,16 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { LayoutGrid, Maximize2, Minus, Plus, RotateCcw, Link2, Link2Off, GripVertical, GripHorizontal } from 'lucide-react';
+import {
+  LayoutGrid,
+  Maximize2,
+  Minus,
+  Plus,
+  RotateCcw,
+  Link2,
+  Link2Off,
+  GripVertical,
+  GripHorizontal,
+} from 'lucide-react';
 
 /**
  * Grid class mapping for different layout modes
@@ -20,12 +30,15 @@ function ResizableDivider({ orientation = 'vertical', position, onDrag, onDragEn
   const startPosRef = useRef(0);
   const startValueRef = useRef(50);
 
-  const handleMouseDown = useCallback((e) => {
-    e.preventDefault();
-    setIsDragging(true);
-    startPosRef.current = orientation === 'vertical' ? e.clientX : e.clientY;
-    startValueRef.current = position;
-  }, [orientation, position]);
+  const handleMouseDown = useCallback(
+    (e) => {
+      e.preventDefault();
+      setIsDragging(true);
+      startPosRef.current = orientation === 'vertical' ? e.clientX : e.clientY;
+      startValueRef.current = position;
+    },
+    [orientation, position]
+  );
 
   useEffect(() => {
     if (!isDragging) return;

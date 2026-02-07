@@ -6,11 +6,36 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
  */
 export const SIGMET_SEVERITY = {
   SEV: { level: 3, color: 'rgba(255, 0, 0, 0.5)', stroke: 'rgba(255, 0, 0, 0.9)', label: 'Severe' },
-  EMBD: { level: 2, color: 'rgba(255, 140, 0, 0.4)', stroke: 'rgba(255, 140, 0, 0.8)', label: 'Embedded' },
-  OBSC: { level: 2, color: 'rgba(255, 100, 50, 0.4)', stroke: 'rgba(255, 100, 50, 0.8)', label: 'Obscured' },
-  SQL: { level: 2, color: 'rgba(255, 180, 0, 0.4)', stroke: 'rgba(255, 180, 0, 0.8)', label: 'Squall Line' },
-  MOD: { level: 1, color: 'rgba(255, 200, 0, 0.3)', stroke: 'rgba(255, 200, 0, 0.7)', label: 'Moderate' },
-  DEFAULT: { level: 1, color: 'rgba(255, 220, 100, 0.3)', stroke: 'rgba(255, 220, 100, 0.7)', label: 'Convective' },
+  EMBD: {
+    level: 2,
+    color: 'rgba(255, 140, 0, 0.4)',
+    stroke: 'rgba(255, 140, 0, 0.8)',
+    label: 'Embedded',
+  },
+  OBSC: {
+    level: 2,
+    color: 'rgba(255, 100, 50, 0.4)',
+    stroke: 'rgba(255, 100, 50, 0.8)',
+    label: 'Obscured',
+  },
+  SQL: {
+    level: 2,
+    color: 'rgba(255, 180, 0, 0.4)',
+    stroke: 'rgba(255, 180, 0, 0.8)',
+    label: 'Squall Line',
+  },
+  MOD: {
+    level: 1,
+    color: 'rgba(255, 200, 0, 0.3)',
+    stroke: 'rgba(255, 200, 0, 0.7)',
+    label: 'Moderate',
+  },
+  DEFAULT: {
+    level: 1,
+    color: 'rgba(255, 220, 100, 0.3)',
+    stroke: 'rgba(255, 220, 100, 0.7)',
+    label: 'Convective',
+  },
 };
 
 /**
@@ -59,7 +84,7 @@ export function getSigmetSeverity(sigmet) {
 function parsePolygonCoords(sigmet) {
   // If there's already a coords array, use it
   if (sigmet.coords && Array.isArray(sigmet.coords)) {
-    return sigmet.coords.map(c => {
+    return sigmet.coords.map((c) => {
       if (Array.isArray(c)) {
         // GeoJSON format [lon, lat]
         return { lat: c[1], lon: c[0] };
@@ -70,16 +95,17 @@ function parsePolygonCoords(sigmet) {
 
   // If there's a GeoJSON geometry
   if (sigmet.geometry?.coordinates) {
-    const coords = sigmet.geometry.type === 'Polygon'
-      ? sigmet.geometry.coordinates[0]
-      : sigmet.geometry.coordinates;
-    return coords.map(c => ({ lat: c[1], lon: c[0] }));
+    const coords =
+      sigmet.geometry.type === 'Polygon'
+        ? sigmet.geometry.coordinates[0]
+        : sigmet.geometry.coordinates;
+    return coords.map((c) => ({ lat: c[1], lon: c[0] }));
   }
 
   // If there's a polygon field (FAA format)
   if (sigmet.polygon) {
     if (Array.isArray(sigmet.polygon)) {
-      return sigmet.polygon.map(p => {
+      return sigmet.polygon.map((p) => {
         if (typeof p === 'string') {
           // Parse "lat,lon" string format
           const [lat, lon] = p.split(',').map(Number);
@@ -95,7 +121,7 @@ function parsePolygonCoords(sigmet) {
 
   // If there's an area field with points
   if (sigmet.area?.points) {
-    return sigmet.area.points.map(p => ({
+    return sigmet.area.points.map((p) => ({
       lat: p.latitude || p.lat,
       lon: p.longitude || p.lon || p.lng,
     }));
@@ -178,7 +204,7 @@ async function fetchSigmets({ type = 'conv', hours = 3, format = 'json' } = {}) 
     const response = await fetch(`${AWC_SIGMET_URL}?${params}`, {
       cache: 'no-store',
       headers: {
-        'Accept': 'application/json',
+        Accept: 'application/json',
       },
     });
 
@@ -202,7 +228,7 @@ async function fetchSigmets({ type = 'conv', hours = 3, format = 'json' } = {}) 
 
     // Some responses wrap data in an object
     if (data.features) {
-      return data.features.map(f => ({ ...f.properties, geometry: f.geometry }));
+      return data.features.map((f) => ({ ...f.properties, geometry: f.geometry }));
     }
     if (data.data) {
       return data.data;
@@ -310,7 +336,7 @@ export function useSigmetData({
           };
         })
         .filter(Boolean)
-        .filter(s => s.active); // Only show active SIGMETs
+        .filter((s) => s.active); // Only show active SIGMETs
 
       setSigmets(processed);
       setTimestamp(new Date());
@@ -381,9 +407,12 @@ export function useSigmetData({
    * @param {string} id - SIGMET ID
    * @returns {Object|null} SIGMET object or null
    */
-  const getSigmetById = useCallback((id) => {
-    return sigmets.find(s => s.id === id) || null;
-  }, [sigmets]);
+  const getSigmetById = useCallback(
+    (id) => {
+      return sigmets.find((s) => s.id === id) || null;
+    },
+    [sigmets]
+  );
 
   /**
    * Check if a point is inside any SIGMET polygon
@@ -391,21 +420,24 @@ export function useSigmetData({
    * @param {number} lon - Longitude
    * @returns {Object|null} Matching SIGMET or null
    */
-  const getSigmetAtPoint = useCallback((lat, lon) => {
-    for (const sigmet of sigmets) {
-      if (isPointInPolygon(lat, lon, sigmet.coords)) {
-        return sigmet;
+  const getSigmetAtPoint = useCallback(
+    (lat, lon) => {
+      for (const sigmet of sigmets) {
+        if (isPointInPolygon(lat, lon, sigmet.coords)) {
+          return sigmet;
+        }
       }
-    }
-    return null;
-  }, [sigmets]);
+      return null;
+    },
+    [sigmets]
+  );
 
   /**
    * Get only severe SIGMETs
    * @returns {Array} Array of severe SIGMET objects
    */
   const severeSigmets = useMemo(() => {
-    return sigmets.filter(s => s.severity.level >= 3);
+    return sigmets.filter((s) => s.severity.level >= 3);
   }, [sigmets]);
 
   /**
@@ -414,7 +446,7 @@ export function useSigmetData({
    */
   const countsBySeverity = useMemo(() => {
     const counts = { severe: 0, moderate: 0, other: 0, total: sigmets.length };
-    sigmets.forEach(s => {
+    sigmets.forEach((s) => {
       if (s.severity.level >= 3) counts.severe++;
       else if (s.severity.level >= 2) counts.moderate++;
       else counts.other++;
@@ -447,96 +479,106 @@ export function useSigmetData({
    * @param {Function} latLonToScreen - Function to convert lat/lon to screen coords
    * @param {number} opacity - Overall opacity multiplier (0-1)
    */
-  const drawOnCanvas = useCallback((ctx, latLonToScreen, opacity = 1.0) => {
-    if (!sigmets.length) return;
+  const drawOnCanvas = useCallback(
+    (ctx, latLonToScreen, opacity = 1.0) => {
+      if (!sigmets.length) return;
 
-    sigmets.forEach(sigmet => {
-      const { coords, severity, id } = sigmet;
-      if (coords.length < 3) return;
+      sigmets.forEach((sigmet) => {
+        const { coords, severity, id } = sigmet;
+        if (coords.length < 3) return;
 
-      // Convert coordinates to screen positions
-      const screenCoords = coords.map(c => latLonToScreen(c.lat, c.lon));
+        // Convert coordinates to screen positions
+        const screenCoords = coords.map((c) => latLonToScreen(c.lat, c.lon));
 
-      // Check if any point is visible
-      const hasVisiblePoint = screenCoords.some(p =>
-        p.x >= -100 && p.x <= ctx.canvas.width + 100 &&
-        p.y >= -100 && p.y <= ctx.canvas.height + 100
-      );
-      if (!hasVisiblePoint) return;
+        // Check if any point is visible
+        const hasVisiblePoint = screenCoords.some(
+          (p) =>
+            p.x >= -100 &&
+            p.x <= ctx.canvas.width + 100 &&
+            p.y >= -100 &&
+            p.y <= ctx.canvas.height + 100
+        );
+        if (!hasVisiblePoint) return;
 
-      ctx.save();
+        ctx.save();
 
-      // Draw filled polygon with hatching pattern
-      ctx.beginPath();
-      ctx.moveTo(screenCoords[0].x, screenCoords[0].y);
-      screenCoords.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
-      ctx.closePath();
+        // Draw filled polygon with hatching pattern
+        ctx.beginPath();
+        ctx.moveTo(screenCoords[0].x, screenCoords[0].y);
+        screenCoords.slice(1).forEach((p) => ctx.lineTo(p.x, p.y));
+        ctx.closePath();
 
-      // Create hatching pattern for convective areas
-      const patternCanvas = document.createElement('canvas');
-      const patternSize = severity.level >= 3 ? 8 : 10;
-      patternCanvas.width = patternSize;
-      patternCanvas.height = patternSize;
-      const patternCtx = patternCanvas.getContext('2d');
+        // Create hatching pattern for convective areas
+        const patternCanvas = document.createElement('canvas');
+        const patternSize = severity.level >= 3 ? 8 : 10;
+        patternCanvas.width = patternSize;
+        patternCanvas.height = patternSize;
+        const patternCtx = patternCanvas.getContext('2d');
 
-      // Draw diagonal lines for hatching
-      patternCtx.strokeStyle = severity.stroke.replace(/[\d.]+\)$/, `${opacity * 0.6})`);
-      patternCtx.lineWidth = severity.level >= 3 ? 2 : 1.5;
-      patternCtx.beginPath();
-      patternCtx.moveTo(0, patternSize);
-      patternCtx.lineTo(patternSize, 0);
-      patternCtx.stroke();
-
-      // Add cross-hatch for severe
-      if (severity.level >= 3) {
+        // Draw diagonal lines for hatching
+        patternCtx.strokeStyle = severity.stroke.replace(/[\d.]+\)$/, `${opacity * 0.6})`);
+        patternCtx.lineWidth = severity.level >= 3 ? 2 : 1.5;
         patternCtx.beginPath();
-        patternCtx.moveTo(0, 0);
-        patternCtx.lineTo(patternSize, patternSize);
+        patternCtx.moveTo(0, patternSize);
+        patternCtx.lineTo(patternSize, 0);
         patternCtx.stroke();
-      }
 
-      const pattern = ctx.createPattern(patternCanvas, 'repeat');
-      ctx.fillStyle = pattern;
-      ctx.fill();
+        // Add cross-hatch for severe
+        if (severity.level >= 3) {
+          patternCtx.beginPath();
+          patternCtx.moveTo(0, 0);
+          patternCtx.lineTo(patternSize, patternSize);
+          patternCtx.stroke();
+        }
 
-      // Also draw semi-transparent fill
-      ctx.fillStyle = severity.color.replace(/[\d.]+\)$/, `${opacity * 0.3})`);
-      ctx.fill();
+        const pattern = ctx.createPattern(patternCanvas, 'repeat');
+        ctx.fillStyle = pattern;
+        ctx.fill();
 
-      // Draw border
-      ctx.strokeStyle = severity.stroke.replace(/[\d.]+\)$/, `${opacity * 0.9})`);
-      ctx.lineWidth = severity.level >= 3 ? 3 : 2;
-      ctx.setLineDash(severity.level >= 3 ? [] : [8, 4]);
-      ctx.stroke();
-      ctx.setLineDash([]);
+        // Also draw semi-transparent fill
+        ctx.fillStyle = severity.color.replace(/[\d.]+\)$/, `${opacity * 0.3})`);
+        ctx.fill();
 
-      // Draw SIGMET ID label at centroid
-      const centroid = {
-        x: screenCoords.reduce((sum, p) => sum + p.x, 0) / screenCoords.length,
-        y: screenCoords.reduce((sum, p) => sum + p.y, 0) / screenCoords.length,
-      };
+        // Draw border
+        ctx.strokeStyle = severity.stroke.replace(/[\d.]+\)$/, `${opacity * 0.9})`);
+        ctx.lineWidth = severity.level >= 3 ? 3 : 2;
+        ctx.setLineDash(severity.level >= 3 ? [] : [8, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
 
-      // Only draw label if centroid is visible
-      if (centroid.x >= 0 && centroid.x <= ctx.canvas.width &&
-          centroid.y >= 0 && centroid.y <= ctx.canvas.height) {
-        ctx.font = 'bold 11px "JetBrains Mono", monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
+        // Draw SIGMET ID label at centroid
+        const centroid = {
+          x: screenCoords.reduce((sum, p) => sum + p.x, 0) / screenCoords.length,
+          y: screenCoords.reduce((sum, p) => sum + p.y, 0) / screenCoords.length,
+        };
 
-        // Background for label
-        const labelText = id.replace('SIGMET_', '').replace('WST', 'CWA ');
-        const labelWidth = ctx.measureText(labelText).width + 8;
-        ctx.fillStyle = `rgba(0, 0, 0, ${opacity * 0.7})`;
-        ctx.fillRect(centroid.x - labelWidth / 2, centroid.y - 8, labelWidth, 16);
+        // Only draw label if centroid is visible
+        if (
+          centroid.x >= 0 &&
+          centroid.x <= ctx.canvas.width &&
+          centroid.y >= 0 &&
+          centroid.y <= ctx.canvas.height
+        ) {
+          ctx.font = 'bold 11px "JetBrains Mono", monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
 
-        // Label text
-        ctx.fillStyle = severity.stroke.replace(/[\d.]+\)$/, `${opacity})`);
-        ctx.fillText(labelText, centroid.x, centroid.y);
-      }
+          // Background for label
+          const labelText = id.replace('SIGMET_', '').replace('WST', 'CWA ');
+          const labelWidth = ctx.measureText(labelText).width + 8;
+          ctx.fillStyle = `rgba(0, 0, 0, ${opacity * 0.7})`;
+          ctx.fillRect(centroid.x - labelWidth / 2, centroid.y - 8, labelWidth, 16);
 
-      ctx.restore();
-    });
-  }, [sigmets]);
+          // Label text
+          ctx.fillStyle = severity.stroke.replace(/[\d.]+\)$/, `${opacity})`);
+          ctx.fillText(labelText, centroid.x, centroid.y);
+        }
+
+        ctx.restore();
+      });
+    },
+    [sigmets]
+  );
 
   return {
     // State
@@ -581,11 +623,12 @@ function isPointInPolygon(lat, lon, polygon) {
   const n = polygon.length;
 
   for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = polygon[i].lon, yi = polygon[i].lat;
-    const xj = polygon[j].lon, yj = polygon[j].lat;
+    const xi = polygon[i].lon,
+      yi = polygon[i].lat;
+    const xj = polygon[j].lon,
+      yj = polygon[j].lat;
 
-    if (((yi > lat) !== (yj > lat)) &&
-        (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)) {
+    if (yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
       inside = !inside;
     }
   }

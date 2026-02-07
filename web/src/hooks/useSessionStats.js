@@ -37,22 +37,6 @@ const CATEGORY_NAMES = {
 };
 
 /**
- * @typedef {Object} SessionStats
- * @property {number} sessionStartTime - Timestamp when session started
- * @property {number} sessionDuration - Duration in milliseconds
- * @property {string} sessionDurationFormatted - Human-readable duration
- * @property {number} uniqueAircraftCount - Total unique aircraft seen
- * @property {number} currentCount - Current number of aircraft
- * @property {number} peakSimultaneousCount - Maximum aircraft at one time
- * @property {number} peakSimultaneousTime - Timestamp of peak
- * @property {Object} categoryBreakdown - Aircraft counts by category
- * @property {Array} topAircraftTypes - Top 5 most seen aircraft types
- * @property {number} maxRangeNm - Maximum range seen in nautical miles
- * @property {string} maxRangeAircraft - Aircraft hex that achieved max range
- * @property {number} totalPositionUpdates - Total position updates received
- */
-
-/**
  * Track session statistics
  * @param {Array} aircraft - Current aircraft array from socket/API
  * @param {Object} options - Configuration options
@@ -62,6 +46,10 @@ const CATEGORY_NAMES = {
  */
 export function useSessionStats(aircraft = [], options = {}) {
   const { enabled = true, updateInterval = 1000 } = options;
+
+  // Store aircraft in ref for access in interval callbacks
+  const aircraftRef = useRef(aircraft);
+  aircraftRef.current = aircraft;
 
   // Session start timestamp
   const sessionStartRef = useRef(Date.now());
@@ -74,6 +62,7 @@ export function useSessionStats(aircraft = [], options = {}) {
   const maxRangeRef = useRef({ range: 0, hex: null });
   const positionUpdatesRef = useRef(0);
   const lastAircraftCountRef = useRef(0);
+  const lastStatsSnapshotRef = useRef(null);
 
   // State for UI updates
   const [sessionDuration, setSessionDuration] = useState(0);
@@ -89,6 +78,47 @@ export function useSessionStats(aircraft = [], options = {}) {
     totalPositionUpdates: 0,
   });
 
+  // Helper to compute current stats from refs
+  const computeAndSetStats = useCallback(() => {
+    // Get top 5 aircraft types
+    const sortedTypes = Object.entries(typeCountsRef.current)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5)
+      .map(([type, count]) => ({ type, count }));
+
+    // Get category breakdown with names
+    const categoryBreakdown = {};
+    Object.entries(categoryCountsRef.current).forEach(([cat, count]) => {
+      const name = CATEGORY_NAMES[cat] || cat;
+      categoryBreakdown[name] = count;
+    });
+
+    const currentAircraft = aircraftRef.current;
+    const aircraftWithPosition = (currentAircraft || []).filter((ac) => ac.lat && ac.lon);
+
+    const newSnapshot = {
+      uniqueAircraftCount: uniqueAircraftRef.current.size,
+      currentCount: aircraftWithPosition.length,
+      peakSimultaneousCount: peakCountRef.current.count,
+      peakSimultaneousTime: peakCountRef.current.time,
+      maxRangeNm: maxRangeRef.current.range,
+      maxRangeAircraft: maxRangeRef.current.hex,
+      totalPositionUpdates: positionUpdatesRef.current,
+    };
+
+    // Create a simple comparison key to detect meaningful changes
+    const snapshotKey = `${newSnapshot.uniqueAircraftCount}:${newSnapshot.currentCount}:${newSnapshot.peakSimultaneousCount}:${newSnapshot.maxRangeNm}:${newSnapshot.totalPositionUpdates}`;
+
+    if (snapshotKey !== lastStatsSnapshotRef.current) {
+      lastStatsSnapshotRef.current = snapshotKey;
+      setStats({
+        ...newSnapshot,
+        categoryBreakdown,
+        topAircraftTypes: sortedTypes,
+      });
+    }
+  }, []);
+
   // Update session duration every second
   useEffect(() => {
     if (!enabled) return;
@@ -100,90 +130,79 @@ export function useSessionStats(aircraft = [], options = {}) {
     return () => clearInterval(interval);
   }, [enabled, updateInterval]);
 
-  // Process aircraft updates
-  useEffect(() => {
-    if (!enabled || !aircraft || aircraft.length === 0) return;
-
-    // Count position updates (each aircraft with position is an update)
-    const aircraftWithPosition = aircraft.filter((ac) => ac.lat && ac.lon);
-    positionUpdatesRef.current += aircraftWithPosition.length;
-
-    // Track unique aircraft
-    aircraft.forEach((ac) => {
-      if (ac.hex) {
-        const isNew = !uniqueAircraftRef.current.has(ac.hex);
-        uniqueAircraftRef.current.add(ac.hex);
-
-        // Only count category/type for new aircraft to avoid over-counting
-        if (isNew) {
-          // Track category
-          const category = ac.category || 'Unknown';
-          categoryCountsRef.current[category] = (categoryCountsRef.current[category] || 0) + 1;
-
-          // Track aircraft type
-          const type = ac.t || ac.type || ac.desc || 'Unknown';
-          if (type && type !== 'Unknown') {
-            typeCountsRef.current[type] = (typeCountsRef.current[type] || 0) + 1;
-          }
-        }
-
-        // Track max range
-        const range = ac.distance_nm || ac.r_dst;
-        if (range && range > maxRangeRef.current.range) {
-          maxRangeRef.current = { range, hex: ac.hex };
-        }
-      }
-    });
-
-    // Track peak simultaneous count
-    const currentCount = aircraftWithPosition.length;
-    if (currentCount > peakCountRef.current.count) {
-      peakCountRef.current = { count: currentCount, time: Date.now() };
-    }
-
-    // Update last count for change detection
-    lastAircraftCountRef.current = currentCount;
-  }, [aircraft, enabled]);
-
-  // Update stats state periodically (debounced for performance)
+  // Process aircraft updates and sync stats
   useEffect(() => {
     if (!enabled) return;
 
-    const updateStats = () => {
-      // Get top 5 aircraft types
-      const sortedTypes = Object.entries(typeCountsRef.current)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 5)
-        .map(([type, count]) => ({ type, count }));
+    if (aircraft && aircraft.length > 0) {
+      // Count position updates (each aircraft with position is an update)
+      const aircraftWithPosition = aircraft.filter((ac) => ac.lat && ac.lon);
+      positionUpdatesRef.current += aircraftWithPosition.length;
 
-      // Get category breakdown with names
-      const categoryBreakdown = {};
-      Object.entries(categoryCountsRef.current).forEach(([cat, count]) => {
-        const name = CATEGORY_NAMES[cat] || cat;
-        categoryBreakdown[name] = count;
+      // Track unique aircraft
+      aircraft.forEach((ac) => {
+        if (ac.hex) {
+          const isNew = !uniqueAircraftRef.current.has(ac.hex);
+          uniqueAircraftRef.current.add(ac.hex);
+
+          // Only count category/type for new aircraft to avoid over-counting
+          if (isNew) {
+            // Track category
+            const category = ac.category || 'Unknown';
+            categoryCountsRef.current[category] = (categoryCountsRef.current[category] || 0) + 1;
+
+            // Track aircraft type
+            const type = ac.t || ac.type || ac.desc || 'Unknown';
+            if (type && type !== 'Unknown') {
+              typeCountsRef.current[type] = (typeCountsRef.current[type] || 0) + 1;
+            }
+          }
+
+          // Track max range
+          const range = ac.distance_nm || ac.r_dst;
+          if (range && range > maxRangeRef.current.range) {
+            maxRangeRef.current = { range, hex: ac.hex };
+          }
+        }
       });
 
-      const aircraftWithPosition = (aircraft || []).filter((ac) => ac.lat && ac.lon);
+      // Track peak simultaneous count
+      const currentCount = aircraftWithPosition.length;
+      if (currentCount > peakCountRef.current.count) {
+        peakCountRef.current = { count: currentCount, time: Date.now() };
+      }
 
-      setStats({
-        uniqueAircraftCount: uniqueAircraftRef.current.size,
-        currentCount: aircraftWithPosition.length,
-        peakSimultaneousCount: peakCountRef.current.count,
-        peakSimultaneousTime: peakCountRef.current.time,
-        categoryBreakdown,
-        topAircraftTypes: sortedTypes,
-        maxRangeNm: maxRangeRef.current.range,
-        maxRangeAircraft: maxRangeRef.current.hex,
-        totalPositionUpdates: positionUpdatesRef.current,
-      });
-    };
+      // Update last count for change detection
+      lastAircraftCountRef.current = currentCount;
+    }
 
-    // Update stats every 2 seconds to avoid excessive re-renders
-    const interval = setInterval(updateStats, 2000);
-    updateStats(); // Initial update
+    // Sync stats state from refs (only if changed)
+    computeAndSetStats();
+  }, [aircraft, enabled, computeAndSetStats]);
+
+  // Also process aircraft and update stats periodically
+  // This handles cases where the aircraft array reference doesn't change
+  // but we still need to count ongoing position updates
+  useEffect(() => {
+    if (!enabled) return;
+
+    const interval = setInterval(() => {
+      const currentAircraft = aircraftRef.current;
+      if (currentAircraft && currentAircraft.length > 0) {
+        const aircraftWithPosition = currentAircraft.filter((ac) => ac.lat && ac.lon);
+        positionUpdatesRef.current += aircraftWithPosition.length;
+
+        // Update peak count
+        const currentCount = aircraftWithPosition.length;
+        if (currentCount > peakCountRef.current.count) {
+          peakCountRef.current = { count: currentCount, time: Date.now() };
+        }
+      }
+      computeAndSetStats();
+    }, 2000);
 
     return () => clearInterval(interval);
-  }, [aircraft, enabled]);
+  }, [enabled, computeAndSetStats]);
 
   // Format session duration
   const sessionDurationFormatted = useMemo(() => {
@@ -215,6 +234,7 @@ export function useSessionStats(aircraft = [], options = {}) {
     maxRangeRef.current = { range: 0, hex: null };
     positionUpdatesRef.current = 0;
     lastAircraftCountRef.current = 0;
+    lastStatsSnapshotRef.current = null;
     setSessionDuration(0);
     setStats({
       uniqueAircraftCount: 0,

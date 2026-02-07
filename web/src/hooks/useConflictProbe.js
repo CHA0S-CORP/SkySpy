@@ -388,10 +388,13 @@ export function useConflictProbe({
     (hex) => {
       if (!hex) return null;
       const upperHex = hex.toUpperCase();
-      return conflicts.find(
-        (c) =>
-          c.aircraft1.hex?.toUpperCase() === upperHex || c.aircraft2.hex?.toUpperCase() === upperHex
-      ) || null;
+      return (
+        conflicts.find(
+          (c) =>
+            c.aircraft1.hex?.toUpperCase() === upperHex ||
+            c.aircraft2.hex?.toUpperCase() === upperHex
+        ) || null
+      );
     },
     [conflicts]
   );
