@@ -254,15 +254,16 @@ class DayNightRatioTests(TestCase):
 
     def test_calculate_day_night_ratio_with_day_data(self):
         """Test day/night ratio with daytime data."""
-        # Create daytime sightings (hour 12)
+        # Create daytime sightings then set timestamp to hour 12
+        # (auto_now_add ignores the timestamp kwarg on create)
         base_time = self.now.replace(hour=12, minute=0, second=0, microsecond=0)
         for i in range(10):
             AircraftSighting.objects.create(
                 icao_hex=f"DAY{i:03d}",
-                timestamp=base_time,
                 latitude=40.0,
                 longitude=-74.0,
             )
+        AircraftSighting.objects.filter(icao_hex__startswith="DAY").update(timestamp=base_time)
 
         result = tcs.calculate_day_night_ratio(days=30)
 
@@ -271,15 +272,16 @@ class DayNightRatioTests(TestCase):
 
     def test_calculate_day_night_ratio_with_night_data(self):
         """Test day/night ratio with nighttime data."""
-        # Create nighttime sightings (hour 22)
+        # Create nighttime sightings then set timestamp to hour 22
+        # (auto_now_add ignores the timestamp kwarg on create)
         base_time = self.now.replace(hour=22, minute=0, second=0, microsecond=0)
         for i in range(10):
             AircraftSighting.objects.create(
                 icao_hex=f"NGT{i:03d}",
-                timestamp=base_time,
                 latitude=40.0,
                 longitude=-74.0,
             )
+        AircraftSighting.objects.filter(icao_hex__startswith="NGT").update(timestamp=base_time)
 
         result = tcs.calculate_day_night_ratio(days=30)
 
@@ -289,23 +291,24 @@ class DayNightRatioTests(TestCase):
     def test_calculate_day_night_ratio_calculation(self):
         """Test day/night ratio calculation."""
         # Create 20 daytime and 10 nighttime sightings
+        # (auto_now_add ignores the timestamp kwarg on create)
         day_time = self.now.replace(hour=12, minute=0, second=0, microsecond=0)
         for i in range(20):
             AircraftSighting.objects.create(
                 icao_hex=f"DAY{i:03d}",
-                timestamp=day_time,
                 latitude=40.0,
                 longitude=-74.0,
             )
+        AircraftSighting.objects.filter(icao_hex__startswith="DAY").update(timestamp=day_time)
 
         night_time = self.now.replace(hour=22, minute=0, second=0, microsecond=0)
         for i in range(10):
             AircraftSighting.objects.create(
                 icao_hex=f"NGT{i:03d}",
-                timestamp=night_time,
                 latitude=40.0,
                 longitude=-74.0,
             )
+        AircraftSighting.objects.filter(icao_hex__startswith="NGT").update(timestamp=night_time)
 
         result = tcs.calculate_day_night_ratio(days=30)
 
@@ -714,14 +717,14 @@ class EdgeCaseTests(TestCase):
 
     def test_day_night_ratio_zero_division(self):
         """Test day/night ratio handles zero night data."""
-        # Only daytime data
+        # Only daytime data (auto_now_add ignores timestamp kwarg)
         day_time = timezone.now().replace(hour=12, minute=0, second=0, microsecond=0)
-        AircraftSighting.objects.create(
+        sighting = AircraftSighting.objects.create(
             icao_hex="DAY001",
-            timestamp=day_time,
             latitude=40.0,
             longitude=-74.0,
         )
+        AircraftSighting.objects.filter(pk=sighting.pk).update(timestamp=day_time)
 
         result = tcs.calculate_day_night_ratio(days=30)
 
