@@ -11,3 +11,9 @@ web/test-results/
 storybook-static
 dist/
 coverage/
+.ruffle-cache/
+.pytest_cache/
+.DS_Store
+test-results/
+.venv/
+venv/

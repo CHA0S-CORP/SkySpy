@@ -3,3 +3,4 @@ node_modules/
 .ruffle-cache/
 .pytest_cache/
 .DS_Store
+test-results/
