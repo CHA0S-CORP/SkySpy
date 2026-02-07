@@ -176,15 +176,15 @@ type AlertSettings struct {
 // AirbandSettings contains RTL-Airband uploader configuration
 type AirbandSettings struct {
 	RecordingsDir    string            `json:"recordings_dir"`
-	PollInterval     int               `json:"poll_interval"`      // seconds
-	MinFileSize      int               `json:"min_file_size"`      // bytes
-	MinDuration      float64           `json:"min_duration"`       // seconds
+	PollInterval     int               `json:"poll_interval"` // seconds
+	MinFileSize      int               `json:"min_file_size"` // bytes
+	MinDuration      float64           `json:"min_duration"`  // seconds
 	MaxRetries       int               `json:"max_retries"`
-	MetricsPort      int               `json:"metrics_port"`       // 0 = disabled
-	UploadTimeout    int               `json:"upload_timeout"`     // seconds
-	RetryInterval    int               `json:"retry_interval"`     // seconds
+	MetricsPort      int               `json:"metrics_port"`   // 0 = disabled
+	UploadTimeout    int               `json:"upload_timeout"` // seconds
+	RetryInterval    int               `json:"retry_interval"` // seconds
 	StabilitySeconds int               `json:"stability_seconds"`
-	FrequencyMap     map[string]string `json:"frequency_map"`      // Hz string -> label
+	FrequencyMap     map[string]string `json:"frequency_map"` // Hz string -> label
 }
 
 // Config is the main configuration container

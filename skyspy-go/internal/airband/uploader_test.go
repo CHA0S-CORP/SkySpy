@@ -63,7 +63,7 @@ func TestUploader_SuccessfulUpload(t *testing.T) {
 		FrequencyMHz: 119.9,
 		Timestamp:    time.Now(),
 		FileSize:     5000,
-		HasTimestamp:  true,
+		HasTimestamp: true,
 		HasFrequency: true,
 	}
 

@@ -92,7 +92,7 @@ func ParseFilename(fpath string, chanMap *ChannelMap) FileMetadata {
 		FrequencyMHz: frequencyMHz,
 		Timestamp:    ts,
 		FileSize:     fileSize,
-		HasTimestamp:  hasTimestamp,
+		HasTimestamp: hasTimestamp,
 		HasFrequency: hasFrequency,
 	}
 }

@@ -27,7 +27,7 @@ type FileMetadata struct {
 	FrequencyMHz float64
 	Timestamp    time.Time
 	FileSize     int64
-	HasTimestamp  bool
+	HasTimestamp bool
 	HasFrequency bool
 }
 

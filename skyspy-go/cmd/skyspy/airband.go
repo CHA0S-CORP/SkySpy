@@ -20,17 +20,17 @@ import (
 )
 
 var (
-	airbandDir          string
-	airbandTUI          bool
-	airbandFreqMapFile  string
-	airbandPollInterval int
-	airbandMinFileSize  int
-	airbandMinDuration  float64
-	airbandMaxRetries   int
-	airbandMetricsPort  int
+	airbandDir           string
+	airbandTUI           bool
+	airbandFreqMapFile   string
+	airbandPollInterval  int
+	airbandMinFileSize   int
+	airbandMinDuration   float64
+	airbandMaxRetries    int
+	airbandMetricsPort   int
 	airbandUploadTimeout int
-	airbandStability    int
-	airbandDryRun       bool
+	airbandStability     int
+	airbandDryRun        bool
 )
 
 var airbandCmd = &cobra.Command{
