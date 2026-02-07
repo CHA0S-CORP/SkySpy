@@ -72,6 +72,10 @@ from skyspy.serializers.system import (
     HealthResponseSerializer,
     StatusResponseSerializer,
 )
+from skyspy.serializers.watch_list import (
+    WatchedAircraftSerializer,
+    WatchListImportSerializer,
+)
 
 __all__ = [
     # Aircraft
@@ -133,4 +137,7 @@ __all__ = [
     "NotamStatsSerializer",
     "CachedAirlineSerializer",
     "CachedAircraftTypeSerializer",
+    # Watch List
+    "WatchedAircraftSerializer",
+    "WatchListImportSerializer",
 ]

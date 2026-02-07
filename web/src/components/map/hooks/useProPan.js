@@ -20,6 +20,7 @@ export function useProPan({
   const proPanStartRef = useRef({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
   const proPanOffsetRef = useRef(proPanOffset);
   const setHashParamsRef = useRef(setHashParams);
+  const animRef = useRef(null);
 
   // Keep refs in sync
   useEffect(() => {
@@ -29,6 +30,51 @@ export function useProPan({
   useEffect(() => {
     setHashParamsRef.current = setHashParams;
   }, [setHashParams]);
+
+  // Animated pan-to function (easeOutCubic over ~250ms)
+  const animatePanTo = useCallback((targetX, targetY) => {
+    // Cancel any existing animation
+    if (animRef.current) {
+      cancelAnimationFrame(animRef.current.rafId);
+      animRef.current = null;
+    }
+
+    const startX = proPanOffsetRef.current.x;
+    const startY = proPanOffsetRef.current.y;
+    const startTime = performance.now();
+    const duration = 250; // ms
+
+    const step = (now) => {
+      const elapsed = now - startTime;
+      const t = Math.min(1, elapsed / duration);
+      // easeOutCubic: 1 - (1 - t)^3
+      const eased = 1 - Math.pow(1 - t, 3);
+
+      const x = startX + (targetX - startX) * eased;
+      const y = startY + (targetY - startY) * eased;
+      setProPanOffset({ x, y });
+
+      if (t >= 1) {
+        // Snap to exact target and stop
+        setProPanOffset({ x: targetX, y: targetY });
+        animRef.current = null;
+      } else {
+        animRef.current.rafId = requestAnimationFrame(step);
+      }
+    };
+
+    animRef.current = { rafId: requestAnimationFrame(step) };
+  }, []);
+
+  // Cleanup animation on unmount
+  useEffect(() => {
+    return () => {
+      if (animRef.current) {
+        cancelAnimationFrame(animRef.current.rafId);
+        animRef.current = null;
+      }
+    };
+  }, []);
 
   // Pro mode pan handlers (middle mouse button)
   const handleProPanStart = useCallback(
@@ -124,12 +170,12 @@ export function useProPan({
 
   // Reset view helper
   const resetView = useCallback(() => {
-    setProPanOffset({ x: 0, y: 0 });
+    animatePanTo(0, 0);
     setFollowingAircraft(null);
     if (setHashParams) {
       setHashParams({ panX: undefined, panY: undefined });
     }
-  }, [setHashParams]);
+  }, [setHashParams, animatePanTo]);
 
   return {
     proPanOffset,
@@ -142,6 +188,7 @@ export function useProPan({
     handleProPanMove,
     handleProPanEnd,
     resetView,
+    animatePanTo,
     proPanOffsetRef,
   };
 }

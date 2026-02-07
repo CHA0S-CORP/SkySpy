@@ -58,6 +58,8 @@ import {
   getWakeCategoryColor,
   findMetarForAirport,
   getFlightCategoryColor,
+  calculateCPA,
+  formatTimeToCPA,
 } from '../../utils';
 
 // Helper to safely parse JSON from fetch response
@@ -85,7 +87,7 @@ import { useDataBlockPositions, DATA_BLOCK_DEFAULT_X, DATA_BLOCK_DEFAULT_Y } fro
 import { useHeatMap } from '../../hooks/useHeatMap';
 import { HeatMapLayer } from './components/HeatMapLayer';
 import { useWindsAloft, WINDS_ALOFT_LEVELS } from '../../hooks/useWindsAloft';
-import { drawWindBarbs, drawWindsLevelIndicator } from './utils/windBarbs';
+import { drawWindBarb, drawWindBarbs, drawWindsLevelIndicator } from './utils/windBarbs';
 import { useWatchList } from '../../hooks/useWatchList';
 import { WatchListPanel, WatchListShowButton } from './components/WatchListPanel';
 import { useHighlightGroups } from '../../hooks/useHighlightGroups';
@@ -475,6 +477,8 @@ function MapView({
     hidePanel: hideWatchListPanel,
     clearWatchList,
     removeFromWatchList,
+    exportWatchList,
+    importWatchList,
     initializeAudio: _initializeWatchListAudio,
   } = useWatchList({ enableAudio: true });
 
@@ -487,6 +491,11 @@ function MapView({
   // Phase 6: J-Rings toggle state (range rings around selected aircraft)
   const [showJRings, setShowJRings] = useState(
     () => localStorage.getItem('adsb-pro-j-rings') === 'true'
+  );
+
+  // Phase 8.4: Wake turbulence separation rings toggle
+  const [showWakeRings, setShowWakeRings] = useState(
+    () => localStorage.getItem('adsb-pro-wake-rings') === 'true'
   );
 
   // Phase 3.4: Conflict Probe (Look-Ahead)
@@ -627,6 +636,8 @@ function MapView({
     pruneStaleAircraft: _pruneStaleDataBlockPositions,
     customPositionCount: dataBlockCustomPositionCount,
     updateLastSeen: _updateDataBlockLastSeen,
+    maybeDeconflict,
+    autoDeconflictEnabled,
   } = useDataBlockPositions();
 
   // Toast context for notifications (gracefully handles if not in provider)
@@ -979,6 +990,51 @@ function MapView({
   useEffect(() => {
     proPanOffsetRef.current = proPanOffset;
   }, [proPanOffset]);
+
+  // Animated pan-to function (easeOutCubic over ~250ms)
+  const animRef = useRef(null);
+  const animatePanTo = useCallback((targetX, targetY) => {
+    // Cancel any existing animation
+    if (animRef.current) {
+      cancelAnimationFrame(animRef.current.rafId);
+      animRef.current = null;
+    }
+
+    const startX = proPanOffsetRef.current.x;
+    const startY = proPanOffsetRef.current.y;
+    const startTime = performance.now();
+    const duration = 250; // ms
+
+    const step = (now) => {
+      const elapsed = now - startTime;
+      const t = Math.min(1, elapsed / duration);
+      // easeOutCubic: 1 - (1 - t)^3
+      const eased = 1 - Math.pow(1 - t, 3);
+
+      const x = startX + (targetX - startX) * eased;
+      const y = startY + (targetY - startY) * eased;
+      setProPanOffset({ x, y });
+
+      if (t >= 1) {
+        setProPanOffset({ x: targetX, y: targetY });
+        animRef.current = null;
+      } else {
+        animRef.current.rafId = requestAnimationFrame(step);
+      }
+    };
+
+    animRef.current = { rafId: requestAnimationFrame(step) };
+  }, []);
+
+  // Cleanup animation on unmount
+  useEffect(() => {
+    return () => {
+      if (animRef.current) {
+        cancelAnimationFrame(animRef.current.rafId);
+        animRef.current = null;
+      }
+    };
+  }, []);
 
   // Aviation data from REST endpoints
   const [aviationData, setAviationData] = useState({
@@ -2513,7 +2569,7 @@ function MapView({
 
       switch (key) {
         case 'r': // Reset view
-          setProPanOffset({ x: 0, y: 0 });
+          animatePanTo(0, 0);
           setFollowingAircraft(null);
           break;
         case 'v': // Toggle velocity/prediction vectors
@@ -2676,6 +2732,13 @@ function MapView({
           setShowJRings((prev) => {
             const newVal = !prev;
             localStorage.setItem('adsb-pro-j-rings', String(newVal));
+            return newVal;
+          });
+          break;
+        case 'k': // Toggle wake turbulence separation rings
+          setShowWakeRings((prev) => {
+            const newVal = !prev;
+            localStorage.setItem('adsb-pro-wake-rings', String(newVal));
             return newVal;
           });
           break;
@@ -6032,13 +6095,14 @@ function MapView({
 
           // Wind barb if significant wind
           if (metar.wspd && metar.wspd > 10) {
-            const windDir = ((metar.wdir || 0) * Math.PI) / 180;
-            ctx.strokeStyle = color;
-            ctx.lineWidth = isSelected ? 2 : 1.5;
-            ctx.beginPath();
-            ctx.moveTo(pos.x, pos.y);
-            ctx.lineTo(pos.x + Math.sin(windDir) * 15, pos.y - Math.cos(windDir) * 15);
-            ctx.stroke();
+            drawWindBarb(ctx, pos.x, pos.y, metar.wdir || 0, metar.wspd, {
+              size: 21,
+              barbLength: 8,
+              barbSpacing: 4,
+              lineWidth: isSelected ? 2 : 1.5,
+              color,
+              opacity: 0.9,
+            });
           }
         });
       }
@@ -6166,6 +6230,37 @@ function MapView({
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(relAltText, midX, midY);
+
+          // Phase 3.1: CPA X marker and time-to-CPA label
+          if (ac1.lat && ac1.lon && ac2.lat && ac2.lon) {
+            const cpaData = calculateCPA(ac1, ac2);
+
+            // Draw CPA X marker at midpoint
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(midX - 5, midY - 5);
+            ctx.lineTo(midX + 5, midY + 5);
+            ctx.moveTo(midX + 5, midY - 5);
+            ctx.lineTo(midX - 5, midY + 5);
+            ctx.stroke();
+
+            // Draw time-to-CPA label below the midpoint
+            if (cpaData.tCPASeconds > 0 && !cpaData.isPast) {
+              const timeLabel = formatTimeToCPA(cpaData.tCPASeconds);
+              ctx.font = '9px "JetBrains Mono", monospace';
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'top';
+              ctx.fillText(timeLabel, midX, midY + 14);
+
+              // Draw distance at CPA below time label
+              if (cpaData.distanceAtCPA != null) {
+                const distLabel = `${cpaData.distanceAtCPA.toFixed(1)}nm`;
+                ctx.fillText(distLabel, midX, midY + 26);
+              }
+            }
+          }
         });
 
         ctx.restore();
@@ -6364,9 +6459,14 @@ function MapView({
         ctx.lineJoin = 'round';
 
         // Performance: Limit trail length when > 100 aircraft
-        const effectiveTrackLength = perfMode.reduceTrailLength
+        const trackLength = perfMode.reduceTrailLength
           ? Math.min(config.shortTrackLength || 15, 8)
           : config.shortTrackLength || 15;
+        // Reduce max trail points at far ranges
+        const lodTrailMax = radarRange <= 50 ? trackLength : radarRange <= 100 ? Math.min(trackLength, 15) : Math.min(trackLength, 8);
+        const effectiveTrackLength = lodTrailMax;
+        // Phase 5.4: Range-based trail point decimation
+        const lodTrailStride = radarRange <= 50 ? 1 : radarRange <= 100 ? 2 : radarRange <= 200 ? 3 : 4;
 
         // Helper to get smooth altitude-based RGB color
         const getAltitudeRGB = (alt) => {
@@ -6475,10 +6575,12 @@ function MapView({
           // Draw trail with fading opacity (older = more transparent)
           const isSelected = selectedAircraft?.hex === ac.hex;
 
-          // Always draw altitude gradient in pro mode
-          if (isPro) {
+          // Draw altitude gradient in pro mode when altitude trails enabled
+          if (isPro && showAltitudeTrails) {
             // Draw individual segments with smooth altitude gradient
             for (let i = 1; i < positions.length; i++) {
+              // LOD: skip trail points at far ranges for performance
+              if (lodTrailStride > 1 && i % lodTrailStride !== 0 && i !== positions.length - 1) continue;
               const p1 = positions[i - 1];
               const p2 = positions[i];
               const pos1 = latLonToScreen(p1.lat, p1.lon);
@@ -6509,7 +6611,9 @@ function MapView({
             ctx.beginPath();
             let started = false;
 
-            positions.forEach((point) => {
+            positions.forEach((point, i) => {
+              // LOD: skip trail points at far ranges for performance
+              if (lodTrailStride > 1 && i % lodTrailStride !== 0 && i !== positions.length - 1) return;
               const pos = latLonToScreen(point.lat, point.lon);
               if (pos.x < -50 || pos.x > width + 50 || pos.y < -50 || pos.y > height + 50) return;
 
@@ -6635,6 +6739,9 @@ function MapView({
             dataBlockVisibleSet.add(hex);
           });
         }
+
+        // Phase 14.3: Collect data block rects for auto-deconfliction
+        const dataBlockRects = [];
 
         aircraftToDraw.forEach((ac) => {
           // Skip aircraft without valid position
@@ -7131,6 +7238,59 @@ function MapView({
             ctx.restore();
           }
 
+          // Phase 8.2: MSAW warning visualization - pulsing ring around aircraft
+          if (msaw.enabled) {
+            const msawWarning = msaw.getWarning(ac.hex);
+            if (msawWarning) {
+              const pulseAlpha = 0.4 + 0.4 * Math.abs(Math.sin(Date.now() / 300));
+              const ringColor =
+                msawWarning.status === 'alert'
+                  ? `rgba(255, 50, 50, ${pulseAlpha})` // Red for alert (<500ft)
+                  : `rgba(255, 200, 0, ${pulseAlpha})`; // Yellow for warning (<1000ft)
+              ctx.save();
+              ctx.strokeStyle = ringColor;
+              ctx.lineWidth = 2.5;
+              ctx.beginPath();
+              ctx.arc(x, y, symSize + 6, 0, Math.PI * 2);
+              ctx.stroke();
+              // Draw "MSAW" text above aircraft
+              ctx.fillStyle = ringColor;
+              ctx.font = '9px monospace';
+              ctx.textAlign = 'center';
+              ctx.fillText('MSAW', x, y - symSize - 8);
+              ctx.restore();
+            }
+          }
+
+          // Phase 8.4: Wake turbulence separation ring for H/J aircraft
+          if (showWakeRings && isPro) {
+            const wakeCat = determineWakeCategory(
+              ac,
+              aircraftInfo?.[ac.hex?.toUpperCase()] || {}
+            );
+            const WAKE_SEP_NM = { J: 8, H: 6 };
+            const sepNm = WAKE_SEP_NM[wakeCat] || 0;
+            if (sepNm > 0) {
+              const wakePixelsPerNm = (Math.min(width, height) * 0.45) / radarRange;
+              const sepPx = sepNm * wakePixelsPerNm;
+              const catColor = getWakeCategoryColor(wakeCat);
+              ctx.save();
+              ctx.strokeStyle = catColor + '66'; // semi-transparent
+              ctx.lineWidth = 1.5;
+              ctx.setLineDash([6, 4]);
+              ctx.beginPath();
+              ctx.arc(x, y, sepPx, 0, Math.PI * 2);
+              ctx.stroke();
+              ctx.setLineDash([]);
+              // Label
+              ctx.fillStyle = catColor + '99';
+              ctx.font = '8px monospace';
+              ctx.textAlign = 'left';
+              ctx.fillText(`${sepNm}nm`, x + sepPx + 3, y);
+              ctx.restore();
+            }
+          }
+
           // Position for data block (used by both data block and alert labels)
           // Phase 14.3: Support custom data block positions with leader lines
           const dataBlockOffset = getDataBlockOffset(ac.hex);
@@ -7264,6 +7424,19 @@ function MapView({
             // Calculate label height based on number of lines (15px per line + padding)
             const lineHeight = 15;
             const labelHeight = Math.max(18, labelLines.length * lineHeight + 4);
+
+            // Phase 14.3: Collect data block rect for auto-deconfliction
+            if (isPro) {
+              dataBlockRects.push({
+                hex: ac.hex?.toUpperCase(),
+                x: blockX - 4,
+                y: blockY - 2,
+                width: labelWidth,
+                height: labelHeight,
+                aircraftX: x,
+                aircraftY: y,
+              });
+            }
 
             // Draw background for label readability
             ctx.fillStyle = isPro ? 'rgba(10, 13, 18, 0.85)' : 'rgba(10, 15, 10, 0.8)';
@@ -7421,6 +7594,11 @@ function MapView({
             ctx.restore();
           }
         });
+
+        // Phase 14.3: After drawing all data blocks, run auto-deconfliction
+        if (autoDeconflictEnabled && dataBlockRects.length > 0) {
+          maybeDeconflict(dataBlockRects);
+        }
       }
 
       // ========== PRO MODE OVERLAYS ==========
@@ -7615,6 +7793,9 @@ function MapView({
     showFpsCounter,
     showAltitudeTrails,
     reducedMotion,
+    msaw,
+    showWakeRings,
+    aircraftInfo,
   ]);
 
   // Leaflet map setup
@@ -9082,7 +9263,7 @@ function MapView({
                       const newPanX = proPanOffset.x - (clickX - centerX);
                       const newPanY = proPanOffset.y - (clickY - centerY);
                       setFollowingAircraft(null);
-                      setProPanOffset({ x: newPanX, y: newPanY });
+                      animatePanTo(newPanX, newPanY);
                     }
                   }}
                 />
@@ -9091,6 +9272,30 @@ function MapView({
                 {config.mapMode === 'crt' && (
                   <div className="crt-effects">
                     <div className="crt-scanlines" />
+                  </div>
+                )}
+
+                {/* Phase 8.2: MSAW status badge */}
+                {msaw.enabled && msaw.counts.total > 0 && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 8,
+                      left: 8,
+                      background:
+                        msaw.counts.alerts > 0
+                          ? 'rgba(255,50,50,0.8)'
+                          : 'rgba(255,200,0,0.8)',
+                      color: '#000',
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                      fontWeight: 'bold',
+                      zIndex: 50,
+                    }}
+                  >
+                    MSAW: {msaw.counts.alerts}A / {msaw.counts.warnings}W
                   </div>
                 )}
 
@@ -9960,6 +10165,8 @@ function MapView({
         onHidePanel={hideWatchListPanel}
         onCenterAircraft={centerOnWatchedAircraft}
         onSelectAircraft={selectAircraft}
+        onExport={exportWatchList}
+        onImport={importWatchList}
         aircraft={sortedAircraft}
         isProMode={config.mapMode === 'pro'}
         expanded={watchListExpanded}
@@ -12164,6 +12371,8 @@ function MapView({
         }}
         hasNote={hasAircraftNote(contextMenuState.aircraft?.hex)}
         isTracking={selectedAircraft?.hex === contextMenuState.aircraft?.hex}
+        isFavorite={isWatched(contextMenuState.aircraft?.hex)}
+        onToggleFavorite={() => toggleWatchList(contextMenuState.aircraft)}
         hasCustomDataBlockPosition={hasCustomDataBlockOffset(contextMenuState.aircraft?.hex)}
         onResetDataBlockPosition={() => {
           resetDataBlockOffset(contextMenuState.aircraft?.hex);

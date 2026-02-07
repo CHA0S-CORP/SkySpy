@@ -171,6 +171,60 @@ export function useWeatherRadar({
     setError(null);
 
     try {
+      // Try backend proxy first
+      try {
+        const proxyParams = new URLSearchParams({
+          north: effectiveBounds.north,
+          south: effectiveBounds.south,
+          east: effectiveBounds.east,
+          west: effectiveBounds.west,
+          width: 1024,
+          height: 1024,
+        });
+        const proxyRes = await fetch(`/api/v1/aviation/nexrad/?${proxyParams}`);
+        if (proxyRes.ok && proxyRes.headers.get('content-type')?.includes('image/')) {
+          const blob = await proxyRes.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          const img = new Image();
+
+          await new Promise((resolve, reject) => {
+            img.onload = () => {
+              URL.revokeObjectURL(objectUrl);
+              resolve(img);
+            };
+            img.onerror = () => {
+              URL.revokeObjectURL(objectUrl);
+              reject(new Error('Failed to load proxied radar'));
+            };
+            img.src = objectUrl;
+          });
+
+          imageRef.current = img;
+          setRadarImage(img);
+          setRadarBounds(effectiveBounds);
+
+          // Also try fetching timestamp from proxy
+          try {
+            const tsRes = await fetch('/api/v1/aviation/nexrad-timestamp/');
+            if (tsRes.ok) {
+              const tsData = await tsRes.json();
+              setTimestamp(tsData.utc_valid ? new Date(tsData.utc_valid) : new Date());
+            } else {
+              setTimestamp(new Date());
+            }
+          } catch {
+            setTimestamp(new Date());
+          }
+
+          setLastFetch(now);
+          setLoading(false);
+          return; // Successfully loaded from proxy
+        }
+      } catch {
+        // Proxy failed, fall through to direct fetch
+        console.info('[WeatherRadar] Backend proxy unavailable, using direct fetch');
+      }
+
       // Fetch timestamp first
       const radarTime = await fetchRadarTimestamp();
 

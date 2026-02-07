@@ -347,6 +347,29 @@ app.conf.beat_schedule = {
         "schedule": crontab(minute=10),  # 10 minutes past each hour
     },
     # ==========================================================================
+    # SRTM Terrain Tile Management
+    # ==========================================================================
+    # Check SRTM tile coverage on startup and weekly
+    "check-srtm-coverage-weekly": {
+        "task": "skyspy.tasks.terrain.check_srtm_coverage",
+        "schedule": crontab(hour=3, minute=15, day_of_week="monday"),
+    },
+    # ==========================================================================
+    # Weather Proxy Cache Refresh
+    # ==========================================================================
+    "refresh-nexrad-cache-every-5m": {
+        "task": "skyspy.tasks.geodata.refresh_nexrad_cache",
+        "schedule": 300.0,  # 5 minutes
+    },
+    "refresh-sigmets-cache-every-15m": {
+        "task": "skyspy.tasks.geodata.refresh_sigmets_cache",
+        "schedule": 900.0,  # 15 minutes
+    },
+    "refresh-winds-aloft-every-30m": {
+        "task": "skyspy.tasks.geodata.refresh_winds_aloft_cache",
+        "schedule": 1800.0,  # 30 minutes
+    },
+    # ==========================================================================
     # Data Retention Cleanup Tasks
     # ==========================================================================
     # Daily cleanup of all old data - runs at 3 AM
@@ -481,6 +504,8 @@ app.conf.task_routes = {
     "skyspy.tasks.notifications.process_notification_queue": {"queue": "notifications"},
     "skyspy.tasks.notifications.cleanup_notification_cooldowns": {"queue": "notifications"},
     "skyspy.tasks.notifications.*": {"queue": "notifications"},
+    # Terrain tasks (tile downloads, not time-sensitive)
+    "skyspy.tasks.terrain.*": {"queue": "database"},
     # Cannonball tasks (pattern analysis is time-sensitive)
     "skyspy.tasks.cannonball.analyze_aircraft_patterns": {"queue": "polling"},
     "skyspy.tasks.cannonball.cleanup_cannonball_sessions": {"queue": "database"},

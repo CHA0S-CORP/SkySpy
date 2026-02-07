@@ -254,6 +254,7 @@ export function useConflictProbe({
   feederLocation,
   enabled = true,
   maxDistance = 100, // Only analyze aircraft within 100nm of each other
+  safetyEvents = [], // Backend safety events with CPA data
 }) {
   const [conflicts, setConflicts] = useState([]);
   const lastUpdateRef = useRef(0);
@@ -261,9 +262,12 @@ export function useConflictProbe({
   // Store aircraft in ref to avoid triggering effect on every array reference change
   const aircraftRef = useRef(aircraft);
   aircraftRef.current = aircraft;
+  const safetyEventsRef = useRef(safetyEvents);
+  safetyEventsRef.current = safetyEvents;
 
   // Build aircraft map for quick lookups - use length as dependency to avoid unnecessary rebuilds
   const aircraftLength = aircraft.length;
+  const safetyEventsLength = safetyEvents?.length || 0;
   useEffect(() => {
     const currentAircraft = aircraftRef.current;
     const map = new Map();
@@ -336,6 +340,35 @@ export function useConflictProbe({
         return a.cpa.timeSeconds - b.cpa.timeSeconds;
       });
 
+      // Merge backend CPA data from safety events (more authoritative)
+      const currentSafetyEvents = safetyEventsRef.current;
+      if (currentSafetyEvents?.length > 0) {
+        for (const conflict of newConflicts) {
+          const matchingEvent = currentSafetyEvents.find(
+            (e) =>
+              e.event_type === 'proximity_conflict' &&
+              e.details?.cpa &&
+              ((e.icao_hex === conflict.aircraft1.hex && e.icao_hex_2 === conflict.aircraft2.hex) ||
+                (e.icao_hex === conflict.aircraft2.hex && e.icao_hex_2 === conflict.aircraft1.hex))
+          );
+
+          if (matchingEvent?.details?.cpa) {
+            const backendCPA = matchingEvent.details.cpa;
+            conflict.cpa = {
+              ...conflict.cpa,
+              // Prefer backend CPA data
+              lateralNm: Math.round(backendCPA.cpa_distance_nm * 10) / 10,
+              timeSeconds: Math.round(backendCPA.cpa_time_seconds),
+              midpoint:
+                backendCPA.cpa_lat && backendCPA.cpa_lon
+                  ? { lat: backendCPA.cpa_lat, lon: backendCPA.cpa_lon }
+                  : conflict.cpa.midpoint,
+              source: 'backend',
+            };
+          }
+        }
+      }
+
       setConflicts(newConflicts);
     };
 
@@ -346,7 +379,7 @@ export function useConflictProbe({
     const intervalId = setInterval(analyzeConflicts, UPDATE_INTERVAL);
 
     return () => clearInterval(intervalId);
-  }, [enabled, feederLocation, maxDistance]);
+  }, [enabled, feederLocation, maxDistance, safetyEventsLength]);
 
   // Get conflict involving a specific aircraft
   const getConflictForAircraft = useCallback(

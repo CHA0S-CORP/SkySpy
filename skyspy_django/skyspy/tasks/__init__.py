@@ -25,5 +25,6 @@ from skyspy.tasks import (
     notams,
     notifications,
     openaip,
+    terrain,
     transcription,
 )

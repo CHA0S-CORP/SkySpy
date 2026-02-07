@@ -85,96 +85,136 @@ export function searchAircraft(query, aircraft, aircraftInfo = {}, limit = 10) {
   const q = query.toLowerCase().trim();
   if (!q) return [];
 
+  // Detect regex pattern: starts and ends with /, e.g. /DAL\d+/ or /DAL\d+/i
+  const isRegex = q.startsWith('/') && q.lastIndexOf('/') > 0;
+  let regexPattern = null;
+  if (isRegex) {
+    try {
+      const regexStr = q.slice(1, q.lastIndexOf('/'));
+      const flags = q.slice(q.lastIndexOf('/') + 1) || 'i';
+      regexPattern = new RegExp(regexStr, flags);
+    } catch (e) {
+      // Invalid regex, fall back to fuzzy search
+      regexPattern = null;
+    }
+  }
+
   const results = [];
 
   for (const ac of aircraft) {
     const info = aircraftInfo[ac.hex?.toUpperCase()] || aircraftInfo[ac.hex] || {};
-    let bestScore = 0;
-    let matchType = null;
-    let matchValue = null;
 
-    // Match callsign
-    if (ac.flight) {
-      const callsign = ac.flight.trim();
-      const score = fuzzyScore(q, callsign);
-      if (score > bestScore) {
-        bestScore = score;
-        matchType = 'callsign';
-        matchValue = callsign;
+    if (regexPattern) {
+      // Regex mode: test each field against the pattern
+      const fields = [
+        ac.flight?.trim(),
+        ac.hex,
+        info?.registration,
+        info?.typecode || ac.t,
+        ac.squawk,
+        info?.operator,
+      ].filter(Boolean);
+
+      const match = fields.some(f => regexPattern.test(f));
+      if (match) {
+        const matchField = fields.find(f => regexPattern.test(f));
+        results.push({
+          ...ac,
+          _matchScore: 100, // Regex matches are all equal priority
+          _matchType: 'regex',
+          _matchValue: matchField,
+          _info: info,
+        });
       }
-    }
+    } else {
+      // Existing fuzzy matching logic
+      let bestScore = 0;
+      let matchType = null;
+      let matchValue = null;
 
-    // Match hex/ICAO
-    if (ac.hex) {
-      const score = fuzzyScore(q, ac.hex);
-      if (score > bestScore) {
-        bestScore = score;
-        matchType = 'icao';
-        matchValue = ac.hex.toUpperCase();
-      }
-    }
-
-    // Match registration
-    if (info.registration) {
-      const score = fuzzyScore(q, info.registration);
-      if (score > bestScore) {
-        bestScore = score;
-        matchType = 'registration';
-        matchValue = info.registration;
-      }
-    }
-
-    // Match aircraft type code
-    if (ac.type) {
-      const score = fuzzyScore(q, ac.type);
-      if (score > bestScore) {
-        bestScore = score;
-        matchType = 'type';
-        matchValue = ac.type;
-      }
-    }
-
-    // Match aircraft type name
-    if (info.type_name) {
-      const score = fuzzyScore(q, info.type_name);
-      if (score > bestScore) {
-        bestScore = score;
-        matchType = 'type_name';
-        matchValue = info.type_name;
-      }
-    }
-
-    // Match squawk (exact or prefix only)
-    if (ac.squawk) {
-      if (ac.squawk.startsWith(q) || ac.squawk === q) {
-        const score = q.length === 4 ? 1 : 0.8;
+      // Match callsign
+      if (ac.flight) {
+        const callsign = ac.flight.trim();
+        const score = fuzzyScore(q, callsign);
         if (score > bestScore) {
           bestScore = score;
-          matchType = 'squawk';
-          matchValue = ac.squawk;
+          matchType = 'callsign';
+          matchValue = callsign;
         }
       }
-    }
 
-    // Match operator
-    if (info.operator) {
-      const score = fuzzyScore(q, info.operator);
-      if (score > bestScore) {
-        bestScore = score;
-        matchType = 'operator';
-        matchValue = info.operator;
+      // Match hex/ICAO
+      if (ac.hex) {
+        const score = fuzzyScore(q, ac.hex);
+        if (score > bestScore) {
+          bestScore = score;
+          matchType = 'icao';
+          matchValue = ac.hex.toUpperCase();
+        }
       }
-    }
 
-    // Include if score is high enough
-    if (bestScore >= 0.3) {
-      results.push({
-        ...ac,
-        _matchScore: bestScore,
-        _matchType: matchType,
-        _matchValue: matchValue,
-        _info: info,
-      });
+      // Match registration
+      if (info.registration) {
+        const score = fuzzyScore(q, info.registration);
+        if (score > bestScore) {
+          bestScore = score;
+          matchType = 'registration';
+          matchValue = info.registration;
+        }
+      }
+
+      // Match aircraft type code
+      if (ac.type) {
+        const score = fuzzyScore(q, ac.type);
+        if (score > bestScore) {
+          bestScore = score;
+          matchType = 'type';
+          matchValue = ac.type;
+        }
+      }
+
+      // Match aircraft type name
+      if (info.type_name) {
+        const score = fuzzyScore(q, info.type_name);
+        if (score > bestScore) {
+          bestScore = score;
+          matchType = 'type_name';
+          matchValue = info.type_name;
+        }
+      }
+
+      // Match squawk (exact or prefix only)
+      if (ac.squawk) {
+        if (ac.squawk.startsWith(q) || ac.squawk === q) {
+          const score = q.length === 4 ? 1 : 0.8;
+          if (score > bestScore) {
+            bestScore = score;
+            matchType = 'squawk';
+            matchValue = ac.squawk;
+          }
+        }
+      }
+
+      // Match operator
+      if (info.operator) {
+        const score = fuzzyScore(q, info.operator);
+        if (score > bestScore) {
+          bestScore = score;
+          matchType = 'operator';
+          matchValue = info.operator;
+        }
+      }
+
+      // Include if score is high enough
+      if (bestScore >= 0.3) {
+        results.push({
+          ...ac,
+          _matchScore: bestScore,
+          _matchType: matchType,
+          _matchValue: matchValue,
+          _info: info,
+        });
+      }
     }
   }
 

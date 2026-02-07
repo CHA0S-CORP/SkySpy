@@ -87,6 +87,7 @@ from skyspy.api.system import (
     WeatherCacheStatsView,
 )
 from skyspy.api.tasks import TaskResultViewSet
+from skyspy.api.watch_list import WatchListViewSet
 
 # Import Auth views and ViewSets
 from skyspy.auth.views import (
@@ -136,6 +137,7 @@ router.register(r"cannonball/alerts", CannonballAlertViewSet, basename="cannonba
 router.register(r"cannonball/known-aircraft", CannonballKnownAircraftViewSet, basename="cannonball-known-aircraft")
 router.register(r"cannonball/stats", CannonballStatsViewSet, basename="cannonball-stats")
 router.register(r"tasks", TaskResultViewSet, basename="tasks")
+router.register(r"watchlist", WatchListViewSet, basename="watchlist")
 
 # Admin management router
 admin_router = DefaultRouter()

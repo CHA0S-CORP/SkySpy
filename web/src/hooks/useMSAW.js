@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 
 /**
  * MSAW (Minimum Safe Altitude Warning) Thresholds
@@ -66,12 +66,13 @@ const findNearestAirport = (aircraft, airports) => {
 
 /**
  * Calculate AGL (Above Ground Level) altitude
- * Uses nearest airport elevation as terrain reference
+ * Uses SRTM terrain grid when available, falls back to nearest airport elevation
  * @param {Object} aircraft - Aircraft object with altitude
  * @param {Array} airports - Array of airport objects with elevation
+ * @param {Object|null} terrainGridData - Terrain grid data from backend API
  * @returns {number} - Estimated AGL altitude in feet
  */
-const calculateAGL = (aircraft, airports) => {
+const calculateAGL = (aircraft, airports, terrainGridData) => {
   if (!aircraft) return Infinity;
 
   const alt =
@@ -79,7 +80,29 @@ const calculateAGL = (aircraft, airports) => {
       ? 0
       : aircraft.alt_baro || aircraft.alt_geom || aircraft.alt || 0;
 
-  // Find nearest airport to use its elevation as terrain reference
+  // Try terrain grid first (most accurate)
+  if (terrainGridData && aircraft.lat && aircraft.lon) {
+    const { bounds, resolution, elevations } = terrainGridData;
+    const { north, south, east, west } = bounds;
+
+    if (
+      aircraft.lat >= south &&
+      aircraft.lat <= north &&
+      aircraft.lon >= west &&
+      aircraft.lon <= east
+    ) {
+      const row = Math.floor(((north - aircraft.lat) / (north - south)) * (resolution - 1));
+      const col = Math.floor(((aircraft.lon - west) / (east - west)) * (resolution - 1));
+      const clampedRow = Math.max(0, Math.min(row, resolution - 1));
+      const clampedCol = Math.max(0, Math.min(col, resolution - 1));
+
+      if (elevations[clampedRow] && elevations[clampedRow][clampedCol] != null) {
+        return alt - elevations[clampedRow][clampedCol];
+      }
+    }
+  }
+
+  // Fallback to airport elevation
   let terrainElevation = DEFAULT_TERRAIN_ELEVATION;
 
   if (airports?.length && aircraft.lat && aircraft.lon) {
@@ -135,6 +158,11 @@ export function useMSAW(aircraft = [], airports = []) {
     }
   });
 
+  // Terrain grid state
+  const [terrainGrid, setTerrainGrid] = useState(null);
+  const terrainFetchRef = useRef(null);
+  const lastBoundsRef = useRef(null);
+
   // Persist enabled state to localStorage
   useEffect(() => {
     try {
@@ -143,6 +171,76 @@ export function useMSAW(aircraft = [], airports = []) {
       // Ignore storage errors
     }
   }, [enabled]);
+
+  // Fetch terrain grid when enabled and aircraft bounds change
+  useEffect(() => {
+    if (!enabled || !aircraft?.length) {
+      setTerrainGrid(null);
+      return;
+    }
+
+    // Calculate bounds from aircraft positions
+    let minLat = Infinity,
+      maxLat = -Infinity,
+      minLon = Infinity,
+      maxLon = -Infinity;
+    for (const ac of aircraft) {
+      if (ac.lat && ac.lon) {
+        minLat = Math.min(minLat, ac.lat);
+        maxLat = Math.max(maxLat, ac.lat);
+        minLon = Math.min(minLon, ac.lon);
+        maxLon = Math.max(maxLon, ac.lon);
+      }
+    }
+
+    if (!isFinite(minLat)) return;
+
+    // Add padding
+    const latPad = (maxLat - minLat) * 0.1 + 0.1;
+    const lonPad = (maxLon - minLon) * 0.1 + 0.1;
+    const bounds = {
+      north: Math.round((maxLat + latPad) * 100) / 100,
+      south: Math.round((minLat - latPad) * 100) / 100,
+      east: Math.round((maxLon + lonPad) * 100) / 100,
+      west: Math.round((minLon - lonPad) * 100) / 100,
+    };
+
+    // Throttle: only refetch if bounds changed significantly
+    const prev = lastBoundsRef.current;
+    if (
+      prev &&
+      Math.abs(prev.north - bounds.north) < 0.05 &&
+      Math.abs(prev.south - bounds.south) < 0.05
+    ) {
+      return;
+    }
+    lastBoundsRef.current = bounds;
+
+    // Debounce fetch
+    if (terrainFetchRef.current) clearTimeout(terrainFetchRef.current);
+    terrainFetchRef.current = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({
+          north: bounds.north,
+          south: bounds.south,
+          east: bounds.east,
+          west: bounds.west,
+          resolution: 25,
+        });
+        const res = await fetch(`/api/v1/aviation/terrain-grid/?${params}`);
+        if (res.ok) {
+          const grid = await res.json();
+          setTerrainGrid(grid);
+        }
+      } catch (err) {
+        console.warn('[MSAW] Failed to fetch terrain grid:', err);
+      }
+    }, 2000);
+
+    return () => {
+      if (terrainFetchRef.current) clearTimeout(terrainFetchRef.current);
+    };
+  }, [enabled, aircraft]);
 
   /**
    * Toggle MSAW enabled state
@@ -174,7 +272,7 @@ export function useMSAW(aircraft = [], airports = []) {
       if (nearAirport) continue; // Skip aircraft in airport exclusion zone
 
       // Calculate AGL and MSAW status
-      const agl = calculateAGL(ac, airports);
+      const agl = calculateAGL(ac, airports, terrainGrid);
       const status = getMSAWStatus(agl);
 
       if (status) {
@@ -182,13 +280,13 @@ export function useMSAW(aircraft = [], airports = []) {
           status,
           agl: Math.round(agl),
           altitude: Math.round(alt),
-          terrainRef: airports?.length ? 'airport' : 'default',
+          terrainRef: terrainGrid ? 'srtm' : airports?.length ? 'airport' : 'default',
         });
       }
     }
 
     return warnings;
-  }, [enabled, aircraft, airports]);
+  }, [enabled, aircraft, airports, terrainGrid]);
 
   /**
    * Check if a specific aircraft has MSAW warning
@@ -259,6 +357,7 @@ export function useMSAW(aircraft = [], airports = []) {
     hasWarning,
     counts,
     affectedAircraft,
+    terrainGrid,
     thresholds: MSAW_THRESHOLDS,
     exclusion: AIRPORT_EXCLUSION,
   };

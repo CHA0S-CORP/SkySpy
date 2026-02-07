@@ -251,6 +251,16 @@ export function ProSearchBar({
             <X size={14} />
           </button>
         )}
+        {searchQuery.startsWith('/') && (
+          <span style={{
+            fontSize: 9, color: '#0ff',
+            position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+            fontFamily: 'monospace', opacity: 0.7,
+            pointerEvents: 'none', zIndex: 2,
+          }}>
+            REGEX
+          </span>
+        )}
         <SearchAutocomplete
           query={searchQuery}
           results={searchResults}

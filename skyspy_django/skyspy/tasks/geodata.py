@@ -11,6 +11,7 @@ Provides Celery tasks for:
 import logging
 
 from celery import shared_task
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -342,3 +343,61 @@ def check_and_refresh_openflights():
     except Exception as e:
         logger.error(f"Error checking OpenFlights freshness: {e}")
         return False
+
+
+@shared_task(bind=True, max_retries=2)
+def refresh_nexrad_cache(self, bbox: str = None):
+    """Pre-cache NEXRAD radar image for the feeder's coverage area."""
+    from skyspy.services import weather_cache
+
+    if bbox is None:
+        feeder_lat = getattr(settings, "FEEDER_LAT", None)
+        feeder_lon = getattr(settings, "FEEDER_LON", None)
+        if feeder_lat is None or feeder_lon is None:
+            return {"status": "skipped", "reason": "no_feeder_location"}
+
+        # Build bbox for ~150nm radius
+        deg_radius = 2.5
+        bbox = f"{feeder_lon - deg_radius},{feeder_lat - deg_radius},{feeder_lon + deg_radius},{feeder_lat + deg_radius}"
+
+    try:
+        image_data = weather_cache.fetch_nexrad_radar(bbox)
+        return {
+            "status": "ok",
+            "bbox": bbox,
+            "size_bytes": len(image_data) if image_data else 0,
+        }
+    except Exception as e:
+        logger.error(f"Failed to refresh NEXRAD cache: {e}")
+        raise self.retry(exc=e, countdown=60)
+
+
+@shared_task(bind=True, max_retries=2)
+def refresh_sigmets_cache(self):
+    """Pre-cache SIGMETs/AIRMETs."""
+    from skyspy.services import weather_cache
+
+    try:
+        data = weather_cache.fetch_sigmets()
+        return {"status": "ok", "count": len(data)}
+    except Exception as e:
+        logger.error(f"Failed to refresh SIGMETs cache: {e}")
+        raise self.retry(exc=e, countdown=60)
+
+
+@shared_task(bind=True, max_retries=2)
+def refresh_winds_aloft_cache(self):
+    """Pre-cache winds aloft for the feeder location."""
+    from skyspy.services import weather_cache
+
+    feeder_lat = getattr(settings, "FEEDER_LAT", None)
+    feeder_lon = getattr(settings, "FEEDER_LON", None)
+    if feeder_lat is None or feeder_lon is None:
+        return {"status": "skipped", "reason": "no_feeder_location"}
+
+    try:
+        data = weather_cache.fetch_winds_aloft(feeder_lat, feeder_lon)
+        return {"status": "ok", "has_data": data is not None}
+    except Exception as e:
+        logger.error(f"Failed to refresh winds aloft cache: {e}")
+        raise self.retry(exc=e, countdown=60)

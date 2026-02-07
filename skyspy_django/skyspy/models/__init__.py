@@ -59,6 +59,7 @@ from skyspy.models.stats import (
     SpottedAircraft,
     SpottedCount,
 )
+from skyspy.models.watch_list import WatchedAircraft
 
 __all__ = [
     # Aircraft
@@ -135,6 +136,8 @@ __all__ = [
     # System Configuration
     "SystemConfig",
     "ConfigAuditLog",
+    # Watch List
+    "WatchedAircraft",
 ]
 
 # Connect cache invalidation signals after models are loaded

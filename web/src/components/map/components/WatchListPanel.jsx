@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { Star, X, ChevronDown, ChevronUp, EyeOff, Trash2, Clock, Crosshair } from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
+import { Star, X, ChevronDown, ChevronUp, EyeOff, Trash2, Clock, Crosshair, Download, Upload } from 'lucide-react';
 
 /**
  * Format milliseconds to human-readable duration
@@ -39,6 +39,8 @@ export function WatchListPanel({
   onHidePanel,
   onCenterAircraft,
   onSelectAircraft,
+  onExport,
+  onImport,
   // Live aircraft data
   aircraft = [],
   // UI state
@@ -50,6 +52,27 @@ export function WatchListPanel({
   isDragging = false,
   onMouseDown,
 }) {
+  const fileInputRef = useRef(null);
+  const [importStatus, setImportStatus] = useState(null);
+
+  const handleFileImport = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const result = onImport?.(evt.target.result);
+      if (result?.success) {
+        setImportStatus(`Imported ${result.added} aircraft`);
+      } else {
+        setImportStatus(`Import failed: ${result?.error || 'Unknown error'}`);
+      }
+      setTimeout(() => setImportStatus(null), 3000);
+    };
+    reader.readAsText(file);
+    // Reset input so same file can be re-imported
+    e.target.value = '';
+  };
+
   // Merge watch list with live aircraft data
   const watchedAircraft = useMemo(() => {
     return watchList.map((entry) => {
@@ -117,6 +140,33 @@ export function WatchListPanel({
           )}
           {expanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
         </button>
+        <div className="watch-list-header-actions">
+          <button
+            className="watch-list-action-btn"
+            onClick={onExport}
+            title="Export watch list"
+            aria-label="Export watch list"
+            disabled={watchList.length === 0}
+          >
+            <Download size={14} />
+          </button>
+          <button
+            className="watch-list-action-btn"
+            onClick={() => fileInputRef.current?.click()}
+            title="Import watch list"
+            aria-label="Import watch list"
+          >
+            <Upload size={14} />
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleFileImport}
+            style={{ display: 'none' }}
+            aria-hidden="true"
+          />
+        </div>
         <button
           className="watch-list-close"
           onClick={onHidePanel}
@@ -126,6 +176,13 @@ export function WatchListPanel({
           <X size={14} />
         </button>
       </div>
+
+      {/* Import status feedback */}
+      {importStatus && (
+        <div className="watch-list-import-status">
+          {importStatus}
+        </div>
+      )}
 
       {/* Content */}
       {expanded && (

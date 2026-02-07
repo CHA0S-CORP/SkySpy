@@ -669,3 +669,184 @@ def cache_aviation_data(data_type: str, bbox: str, data: list, ttl: int = 300) -
     cache.set(key, data, ttl)
     logger.debug(f"Cached {data_type} data (TTL: {ttl}s, {len(data)} items)")
     return True
+
+
+# =============================================================================
+# NEXRAD Radar Proxy
+# =============================================================================
+
+MESONET_WMS_URL = "https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0q.cgi"
+MESONET_TIMESTAMP_URL = "https://mesonet.agron.iastate.edu/json/radar_time.py"
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+)
+def _fetch_nexrad_image(bbox: str, width: int = 1024, height: int = 1024) -> bytes | None:
+    """Fetch NEXRAD composite reflectivity image from Iowa State Mesonet."""
+    params = {
+        "SERVICE": "WMS",
+        "VERSION": "1.1.1",
+        "REQUEST": "GetMap",
+        "FORMAT": "image/png",
+        "TRANSPARENT": "true",
+        "LAYERS": "nexrad-n0q-900913",
+        "WIDTH": str(width),
+        "HEIGHT": str(height),
+        "SRS": "EPSG:4326",
+        "BBOX": bbox,
+    }
+
+    with httpx.Client(timeout=30.0) as client:
+        response = client.get(
+            MESONET_WMS_URL,
+            params=params,
+            headers={"User-Agent": "SkySpyAPI/2.6 (weather-proxy)"},
+        )
+        response.raise_for_status()
+
+        if response.headers.get("content-type", "").startswith("image/"):
+            return response.content
+        return None
+
+
+def fetch_nexrad_radar(bbox: str, width: int = 1024, height: int = 1024, ttl: int = 300) -> bytes | None:
+    """
+    Fetch and cache NEXRAD radar image for a bounding box.
+
+    Args:
+        bbox: "west,south,east,north" format
+        width: Image width
+        height: Image height
+        ttl: Cache TTL in seconds (default 5 minutes)
+
+    Returns:
+        PNG image bytes or None
+    """
+    cache_key = f"nexrad:img:{hashlib.md5(f'{bbox}:{width}:{height}'.encode(), usedforsecurity=False).hexdigest()[:16]}"
+
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        image_data = _fetch_nexrad_image(bbox, width, height)
+        if image_data:
+            cache.set(cache_key, image_data, ttl)
+            logger.debug(f"Cached NEXRAD radar image ({len(image_data)} bytes)")
+        return image_data
+    except Exception as e:
+        logger.warning(f"Failed to fetch NEXRAD radar: {e}")
+        return None
+
+
+def fetch_radar_timestamp() -> str | None:
+    """Fetch latest NEXRAD radar timestamp from Mesonet."""
+    cache_key = "nexrad:timestamp"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.get(
+                MESONET_TIMESTAMP_URL,
+                headers={"User-Agent": "SkySpyAPI/2.6 (weather-proxy)"},
+            )
+            response.raise_for_status()
+            data = response.json()
+            ts = data.get("utc_valid")
+            if ts:
+                cache.set(cache_key, ts, 120)  # Cache for 2 min
+            return ts
+    except Exception as e:
+        logger.warning(f"Failed to fetch radar timestamp: {e}")
+        return None
+
+
+# =============================================================================
+# Winds Aloft Proxy
+# =============================================================================
+
+
+def fetch_winds_aloft(lat: float, lon: float, ttl: int = 3600) -> dict | None:
+    """
+    Fetch winds aloft forecast data from AWC.
+
+    Args:
+        lat: Latitude
+        lon: Longitude
+        ttl: Cache TTL (default 1 hour)
+
+    Returns:
+        Winds aloft data dict or None
+    """
+    cache_key = f"winds:aloft:{round(lat, 1)}:{round(lon, 1)}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        data = _fetch_awc_data(
+            "windtemp",
+            {
+                "lat": lat,
+                "lon": lon,
+                "format": "json",
+            },
+        )
+
+        if isinstance(data, dict) and "error" in data:
+            logger.warning(f"Failed to fetch winds aloft: {data.get('error')}")
+            return None
+
+        cache.set(cache_key, data, ttl)
+        return data
+    except Exception as e:
+        logger.warning(f"Failed to fetch winds aloft: {e}")
+        return None
+
+
+# =============================================================================
+# SIGMET/AIRMET Proxy
+# =============================================================================
+
+
+def fetch_sigmets(ttl: int = 900) -> list:
+    """
+    Fetch and cache active SIGMETs and AIRMETs from AWC.
+
+    Args:
+        ttl: Cache TTL (default 15 minutes)
+
+    Returns:
+        List of SIGMET/AIRMET data dicts
+    """
+    cache_key = "sigmets:active"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        data = _fetch_awc_data(
+            "airsigmet",
+            {
+                "format": "json",
+                "type": "sigmet,airmet",
+            },
+        )
+
+        if isinstance(data, dict) and "error" in data:
+            logger.warning(f"Failed to fetch SIGMETs: {data.get('error')}")
+            return []
+
+        if not isinstance(data, list):
+            data = []
+
+        cache.set(cache_key, data, ttl)
+        return data
+    except Exception as e:
+        logger.warning(f"Failed to fetch SIGMETs: {e}")
+        return []

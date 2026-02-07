@@ -37,6 +37,13 @@ class SafetyEvent(models.Model):
     details = models.JSONField(blank=True, null=True)
     aircraft_snapshot = models.JSONField(blank=True, null=True)  # Telemetry at event time
     aircraft_snapshot_2 = models.JSONField(blank=True, null=True)  # Second aircraft (proximity)
+
+    # CPA (Closest Point of Approach) enrichment fields
+    cpa_distance_nm = models.FloatField(blank=True, null=True, help_text="Predicted CPA distance in nautical miles")
+    cpa_time_seconds = models.FloatField(blank=True, null=True, help_text="Time to CPA in seconds")
+    cpa_lat = models.FloatField(blank=True, null=True, help_text="Predicted CPA latitude")
+    cpa_lon = models.FloatField(blank=True, null=True, help_text="Predicted CPA longitude")
+
     acknowledged = models.BooleanField(default=False)
     acknowledged_at = models.DateTimeField(blank=True, null=True)
 

@@ -455,6 +455,88 @@ class SafetyMonitor:
 
         return round(closure, 1)
 
+    @staticmethod
+    def _calculate_cpa(pos1: dict, pos2: dict) -> dict | None:
+        """
+        Calculate Closest Point of Approach between two aircraft.
+
+        Uses current position, track, and ground speed to predict
+        when and where the aircraft will be closest.
+
+        Returns dict with cpa_distance_nm, cpa_time_seconds, cpa_lat, cpa_lon
+        or None if calculation isn't possible.
+        """
+        if pos1["gs"] is None or pos2["gs"] is None:
+            return None
+        if pos1["track"] is None or pos2["track"] is None:
+            return None
+
+        # Relative position in nautical miles
+        avg_lat = (pos1["lat"] + pos2["lat"]) / 2
+        dx = (pos2["lon"] - pos1["lon"]) * 60 * math.cos(math.radians(avg_lat))
+        dy = (pos2["lat"] - pos1["lat"]) * 60
+
+        # Velocity components in nm/hour (East/North)
+        track1 = math.radians(pos1["track"])
+        track2 = math.radians(pos2["track"])
+        v1x = pos1["gs"] * math.sin(track1)
+        v1y = pos1["gs"] * math.cos(track1)
+        v2x = pos2["gs"] * math.sin(track2)
+        v2y = pos2["gs"] * math.cos(track2)
+
+        # Relative velocity
+        dvx = v2x - v1x
+        dvy = v2y - v1y
+
+        # Magnitude squared of relative velocity
+        dv_mag_sq = dvx * dvx + dvy * dvy
+
+        # If aircraft are not moving relative to each other
+        if dv_mag_sq < 0.001:
+            current_dist = math.sqrt(dx * dx + dy * dy)
+            mid_lat = (pos1["lat"] + pos2["lat"]) / 2
+            mid_lon = (pos1["lon"] + pos2["lon"]) / 2
+            return {
+                "cpa_distance_nm": round(current_dist, 3),
+                "cpa_time_seconds": 0,
+                "cpa_lat": round(mid_lat, 6),
+                "cpa_lon": round(mid_lon, 6),
+            }
+
+        # Time to CPA in hours: t = -(dx*dvx + dy*dvy) / (dvx^2 + dvy^2)
+        t_cpa_hours = -(dx * dvx + dy * dvy) / dv_mag_sq
+        t_cpa_seconds = t_cpa_hours * 3600
+
+        # If CPA is in the past, aircraft are diverging
+        if t_cpa_hours < 0:
+            return None
+
+        # Cap look-ahead to 5 minutes (300 seconds)
+        if t_cpa_seconds > 300:
+            return None
+
+        # Calculate CPA positions
+        cpa1_lat = pos1["lat"] + (v1y * t_cpa_hours) / 60
+        cpa1_lon = pos1["lon"] + (v1x * t_cpa_hours) / (60 * math.cos(math.radians(pos1["lat"])))
+        cpa2_lat = pos2["lat"] + (v2y * t_cpa_hours) / 60
+        cpa2_lon = pos2["lon"] + (v2x * t_cpa_hours) / (60 * math.cos(math.radians(pos2["lat"])))
+
+        # Distance at CPA
+        cpa_dx = (cpa2_lon - cpa1_lon) * 60 * math.cos(math.radians((cpa1_lat + cpa2_lat) / 2))
+        cpa_dy = (cpa2_lat - cpa1_lat) * 60
+        cpa_distance = math.sqrt(cpa_dx * cpa_dx + cpa_dy * cpa_dy)
+
+        # Midpoint at CPA
+        cpa_lat = (cpa1_lat + cpa2_lat) / 2
+        cpa_lon = (cpa1_lon + cpa2_lon) / 2
+
+        return {
+            "cpa_distance_nm": round(cpa_distance, 3),
+            "cpa_time_seconds": round(t_cpa_seconds, 1),
+            "cpa_lat": round(cpa_lat, 6),
+            "cpa_lon": round(cpa_lon, 6),
+        }
+
     def _update_state(
         self,
         icao: str,
@@ -760,6 +842,9 @@ class SafetyMonitor:
 
                 closure_rate = self._calculate_closure_rate(pos1, pos2)
 
+                # Calculate CPA (Closest Point of Approach)
+                cpa = self._calculate_cpa(pos1, pos2)
+
                 # Skip if aircraft are diverging
                 if dist_nm > 0.5 and closure_rate is not None and closure_rate <= 0:
                     continue
@@ -811,6 +896,7 @@ class SafetyMonitor:
                                 "closure_rate_kt": closure_rate,
                                 "horizontal_nm": round(dist_nm, 3),
                                 "vertical_ft": alt_diff,
+                                "cpa": cpa,  # May be None if CPA can't be calculated
                                 "aircraft_1": {
                                     "icao": icao1,
                                     "callsign": display1,
@@ -832,6 +918,10 @@ class SafetyMonitor:
                                     "vr": pos2["vr"],
                                 },
                             },
+                            "cpa_distance_nm": cpa["cpa_distance_nm"] if cpa else None,
+                            "cpa_time_seconds": cpa["cpa_time_seconds"] if cpa else None,
+                            "cpa_lat": cpa["cpa_lat"] if cpa else None,
+                            "cpa_lon": cpa["cpa_lon"] if cpa else None,
                             "aircraft_snapshot": self._build_aircraft_snapshot(pos1["raw"]),
                             "aircraft_snapshot_2": self._build_aircraft_snapshot(pos2["raw"]),
                         }
@@ -876,6 +966,10 @@ class SafetyMonitor:
                 details=event.get("details"),
                 aircraft_snapshot=event.get("aircraft_snapshot"),
                 aircraft_snapshot_2=event.get("aircraft_snapshot_2"),
+                cpa_distance_nm=event.get("cpa_distance_nm"),
+                cpa_time_seconds=event.get("cpa_time_seconds"),
+                cpa_lat=event.get("cpa_lat"),
+                cpa_lon=event.get("cpa_lon"),
             )
             # Store DB ID back in active event (with lock)
             event_id = event.get("id")

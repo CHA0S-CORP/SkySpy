@@ -487,3 +487,184 @@ class AviationViewSet(viewsets.ViewSet):
                 "count": navaids.count(),
             }
         )
+
+    @extend_schema(
+        summary="Get terrain elevation",
+        description="Get terrain elevation for a single point using SRTM data",
+        parameters=[
+            OpenApiParameter(name="lat", type=float, required=True, description="Latitude"),
+            OpenApiParameter(name="lon", type=float, required=True, description="Longitude"),
+        ],
+    )
+    @action(detail=False, methods=["get"], url_path="terrain-elevation")
+    def terrain_elevation(self, request):
+        """Get terrain elevation for a single lat/lon point."""
+        from skyspy.services.terrain_elevation import get_elevation_ft
+
+        lat = request.query_params.get("lat")
+        lon = request.query_params.get("lon")
+
+        if not lat or not lon:
+            return Response({"error": "lat and lon parameters required"}, status=400)
+
+        try:
+            lat = float(lat)
+            lon = float(lon)
+        except (ValueError, TypeError):
+            return Response({"error": "Invalid lat/lon values"}, status=400)
+
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            return Response({"error": "lat/lon out of range"}, status=400)
+
+        elevation_ft = get_elevation_ft(lat, lon)
+
+        return Response(
+            {
+                "lat": lat,
+                "lon": lon,
+                "elevation_ft": elevation_ft,
+                "source": "srtm",
+            }
+        )
+
+    @extend_schema(
+        summary="Get terrain elevation grid",
+        description="Get a grid of terrain elevations for a bounding box",
+        parameters=[
+            OpenApiParameter(name="north", type=float, required=True, description="North latitude"),
+            OpenApiParameter(name="south", type=float, required=True, description="South latitude"),
+            OpenApiParameter(name="east", type=float, required=True, description="East longitude"),
+            OpenApiParameter(name="west", type=float, required=True, description="West longitude"),
+            OpenApiParameter(name="resolution", type=int, description="Grid resolution (5-50, default 20)"),
+        ],
+    )
+    @action(detail=False, methods=["get"], url_path="terrain-grid")
+    def terrain_grid(self, request):
+        """Get a grid of terrain elevations for a bounding box."""
+        from skyspy.services.terrain_elevation import get_elevation_grid
+
+        try:
+            north = float(request.query_params.get("north"))
+            south = float(request.query_params.get("south"))
+            east = float(request.query_params.get("east"))
+            west = float(request.query_params.get("west"))
+        except (ValueError, TypeError):
+            return Response({"error": "north, south, east, west parameters required"}, status=400)
+
+        try:
+            resolution = int(request.query_params.get("resolution", 20))
+        except (ValueError, TypeError):
+            resolution = 20
+
+        # Validate bounds
+        if north <= south or east <= west:
+            return Response({"error": "Invalid bounds"}, status=400)
+
+        # Limit grid area to prevent abuse
+        lat_range = north - south
+        lon_range = east - west
+        if lat_range > 10 or lon_range > 10:
+            return Response({"error": "Bounds too large (max 10 degrees)"}, status=400)
+
+        grid = get_elevation_grid(north, south, east, west, resolution)
+
+        return Response(grid)
+
+    @extend_schema(
+        summary="Get NEXRAD weather radar image",
+        description="Proxied NEXRAD composite reflectivity radar image",
+        parameters=[
+            OpenApiParameter(name="north", type=float, required=True, description="North latitude"),
+            OpenApiParameter(name="south", type=float, required=True, description="South latitude"),
+            OpenApiParameter(name="east", type=float, required=True, description="East longitude"),
+            OpenApiParameter(name="west", type=float, required=True, description="West longitude"),
+            OpenApiParameter(name="width", type=int, description="Image width (default 1024)"),
+            OpenApiParameter(name="height", type=int, description="Image height (default 1024)"),
+        ],
+    )
+    @action(detail=False, methods=["get"])
+    def nexrad(self, request):
+        """Get proxied NEXRAD weather radar image."""
+        from django.http import HttpResponse
+
+        from skyspy.services import weather_cache
+
+        try:
+            north = float(request.query_params.get("north"))
+            south = float(request.query_params.get("south"))
+            east = float(request.query_params.get("east"))
+            west = float(request.query_params.get("west"))
+        except (ValueError, TypeError):
+            return Response({"error": "north, south, east, west parameters required"}, status=400)
+
+        try:
+            width = int(request.query_params.get("width", 1024))
+            height = int(request.query_params.get("height", 1024))
+        except (ValueError, TypeError):
+            width, height = 1024, 1024
+
+        # Cap dimensions
+        width = min(width, 2048)
+        height = min(height, 2048)
+
+        bbox = f"{west},{south},{east},{north}"
+        image_data = weather_cache.fetch_nexrad_radar(bbox, width, height)
+
+        if image_data:
+            response = HttpResponse(image_data, content_type="image/png")
+            response["Cache-Control"] = "public, max-age=300"
+            return response
+
+        return Response({"error": "Failed to fetch radar image"}, status=502)
+
+    @extend_schema(
+        summary="Get winds aloft data",
+        description="Proxied winds aloft forecast data from AWC",
+        parameters=[
+            OpenApiParameter(name="lat", type=float, required=True, description="Latitude"),
+            OpenApiParameter(name="lon", type=float, required=True, description="Longitude"),
+        ],
+    )
+    @action(detail=False, methods=["get"], url_path="winds-aloft")
+    def winds_aloft(self, request):
+        """Get winds aloft forecast data."""
+        from skyspy.services import weather_cache
+
+        try:
+            lat = float(request.query_params.get("lat"))
+            lon = float(request.query_params.get("lon"))
+        except (ValueError, TypeError):
+            return Response({"error": "lat and lon parameters required"}, status=400)
+
+        data = weather_cache.fetch_winds_aloft(lat, lon)
+
+        if data is None:
+            return Response({"error": "Failed to fetch winds aloft data"}, status=502)
+
+        return Response(
+            {
+                "data": data,
+                "source": "aviationweather.gov",
+                "cached": True,
+            }
+        )
+
+    @extend_schema(
+        summary="Get active SIGMETs/AIRMETs (proxied)",
+        description="Proxied active SIGMETs and AIRMETs from AWC, cached server-side",
+    )
+    @action(detail=False, methods=["get"], url_path="sigmets-proxy")
+    def sigmets_proxy(self, request):
+        """Get proxied SIGMETs/AIRMETs from AWC."""
+        from skyspy.services import weather_cache
+
+        data = weather_cache.fetch_sigmets()
+
+        return Response(
+            {
+                "data": data,
+                "count": len(data),
+                "source": "aviationweather.gov",
+                "cached": True,
+            }
+        )
