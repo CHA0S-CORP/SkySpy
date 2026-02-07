@@ -358,7 +358,9 @@ def refresh_nexrad_cache(self, bbox: str = None):
 
         # Build bbox for ~150nm radius
         deg_radius = 2.5
-        bbox = f"{feeder_lon - deg_radius},{feeder_lat - deg_radius},{feeder_lon + deg_radius},{feeder_lat + deg_radius}"
+        bbox = (
+            f"{feeder_lon - deg_radius},{feeder_lat - deg_radius},{feeder_lon + deg_radius},{feeder_lat + deg_radius}"
+        )
 
     try:
         image_data = weather_cache.fetch_nexrad_radar(bbox)
