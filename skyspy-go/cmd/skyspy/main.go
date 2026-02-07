@@ -78,12 +78,14 @@ func SetupCommands() {
 	RegisterAuthCommands()  // Sets up auth command hierarchy
 	RegisterRadioFlags()    // Sets up radio command flags
 	RegisterRadioProFlags() // Sets up radio-pro command flags
+	RegisterAirbandFlags()  // Sets up airband command flags
 	rootCmd.AddCommand(loginCmd)
 	rootCmd.AddCommand(logoutCmd)
 	rootCmd.AddCommand(authCmd)
 	rootCmd.AddCommand(radioCmd)
 	rootCmd.AddCommand(radioProCmd)
 	rootCmd.AddCommand(configureCmd)
+	rootCmd.AddCommand(airbandCmd)
 }
 
 func main() {

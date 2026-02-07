@@ -47,6 +47,7 @@
       "order": 5,
       "pages": [
         "go-services",
+        "cli-airband",
         "frontend",
         "background-tasks"
       ]

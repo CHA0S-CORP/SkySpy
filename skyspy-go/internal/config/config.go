@@ -173,6 +173,20 @@ type AlertSettings struct {
 	SoundDir  string            `json:"sound_dir,omitempty"`
 }
 
+// AirbandSettings contains RTL-Airband uploader configuration
+type AirbandSettings struct {
+	RecordingsDir    string            `json:"recordings_dir"`
+	PollInterval     int               `json:"poll_interval"`      // seconds
+	MinFileSize      int               `json:"min_file_size"`      // bytes
+	MinDuration      float64           `json:"min_duration"`       // seconds
+	MaxRetries       int               `json:"max_retries"`
+	MetricsPort      int               `json:"metrics_port"`       // 0 = disabled
+	UploadTimeout    int               `json:"upload_timeout"`     // seconds
+	RetryInterval    int               `json:"retry_interval"`     // seconds
+	StabilitySeconds int               `json:"stability_seconds"`
+	FrequencyMap     map[string]string `json:"frequency_map"`      // Hz string -> label
+}
+
 // Config is the main configuration container
 type Config struct {
 	Display     DisplaySettings    `json:"display"`
@@ -183,6 +197,7 @@ type Config struct {
 	Overlays    OverlaySettings    `json:"overlays"`
 	Export      ExportSettings     `json:"export"`
 	Alerts      AlertSettings      `json:"alerts"`
+	Airband     AirbandSettings    `json:"airband"`
 	RecentHosts []string           `json:"recent_hosts"`
 }
 
@@ -242,6 +257,18 @@ func DefaultConfig() *Config {
 			Geofences: []GeofenceConfig{},
 			LogFile:   "",
 			SoundDir:  "",
+		},
+		Airband: AirbandSettings{
+			RecordingsDir:    "",
+			PollInterval:     5,
+			MinFileSize:      2048,
+			MinDuration:      2.0,
+			MaxRetries:       3,
+			MetricsPort:      9090,
+			UploadTimeout:    60,
+			RetryInterval:    60,
+			StabilitySeconds: 2,
+			FrequencyMap:     map[string]string{},
 		},
 		RecentHosts: []string{},
 	}
