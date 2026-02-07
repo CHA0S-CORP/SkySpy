@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import { TrackTab } from './TrackTab';
+
+// Helper to render and advance timers for map initialization
+const renderWithTimers = (ui) => {
+  const result = render(ui);
+  act(() => {
+    vi.advanceTimersByTime(100);
+  });
+  return result;
+};
 
 // Mock lucide-react
 vi.mock('lucide-react', () => ({
@@ -189,11 +198,15 @@ describe('TrackTab', () => {
   };
 
   beforeEach(() => {
+    vi.useFakeTimers();
     vi.clearAllMocks();
   });
 
   afterEach(() => {
-    vi.resetAllMocks();
+    vi.clearAllTimers();
+    cleanup();
+    vi.useRealTimers();
+    vi.clearAllMocks();
   });
 
   describe('empty state', () => {
@@ -226,19 +239,19 @@ describe('TrackTab', () => {
 
   describe('with track data', () => {
     it('should render map container', () => {
-      const { container } = render(<TrackTab {...defaultProps} />);
+      const { container } = renderWithTimers(<TrackTab {...defaultProps} />);
 
       expect(container.querySelector('.track-map')).toBeInTheDocument();
     });
 
     it('should render TelemetryOverlay', () => {
-      render(<TrackTab {...defaultProps} />);
+      renderWithTimers(<TrackTab {...defaultProps} />);
 
       expect(screen.getByTestId('telemetry-overlay')).toBeInTheDocument();
     });
 
     it('should render MiniGraphs', () => {
-      render(<TrackTab {...defaultProps} />);
+      renderWithTimers(<TrackTab {...defaultProps} />);
 
       expect(screen.getByTestId('mini-graph-altitude')).toBeInTheDocument();
       expect(screen.getByTestId('mini-graph-speed')).toBeInTheDocument();
@@ -246,7 +259,7 @@ describe('TrackTab', () => {
     });
 
     it('should render ReplayControls', () => {
-      render(<TrackTab {...defaultProps} />);
+      renderWithTimers(<TrackTab {...defaultProps} />);
 
       expect(screen.getByTestId('replay-controls')).toBeInTheDocument();
     });
@@ -254,7 +267,7 @@ describe('TrackTab', () => {
 
   describe('telemetry overlay', () => {
     it('should pass collapsed state to TelemetryOverlay', () => {
-      render(<TrackTab {...defaultProps} showTelemOverlay={false} />);
+      renderWithTimers(<TrackTab {...defaultProps} showTelemOverlay={false} />);
 
       const overlay = screen.getByTestId('telemetry-overlay');
       expect(overlay).toHaveAttribute('data-collapsed', 'true');
@@ -262,7 +275,7 @@ describe('TrackTab', () => {
 
     it('should call setShowTelemOverlay when toggle is clicked', () => {
       const mockSetShowTelemOverlay = vi.fn();
-      render(<TrackTab {...defaultProps} setShowTelemOverlay={mockSetShowTelemOverlay} />);
+      renderWithTimers(<TrackTab {...defaultProps} setShowTelemOverlay={mockSetShowTelemOverlay} />);
 
       const toggleBtn = screen.getByText('Toggle Telemetry');
       fireEvent.click(toggleBtn);
@@ -274,7 +287,7 @@ describe('TrackTab', () => {
   describe('replay controls', () => {
     it('should call setTrackIsPlaying when play button is clicked', () => {
       const mockSetTrackIsPlaying = vi.fn();
-      render(<TrackTab {...defaultProps} setTrackIsPlaying={mockSetTrackIsPlaying} />);
+      renderWithTimers(<TrackTab {...defaultProps} setTrackIsPlaying={mockSetTrackIsPlaying} />);
 
       const playBtn = screen.getByTestId('play-btn');
       fireEvent.click(playBtn);
@@ -288,7 +301,7 @@ describe('TrackTab', () => {
       const mockSetTrackIsPlaying = vi.fn();
       const mockSetTrackLiveMode = vi.fn();
 
-      render(
+      renderWithTimers(
         <TrackTab
           {...defaultProps}
           setTrackReplayPosition={mockSetTrackReplayPosition}
@@ -310,7 +323,7 @@ describe('TrackTab', () => {
       const mockSetTrackIsPlaying = vi.fn();
       const mockSetTrackLiveMode = vi.fn();
 
-      render(
+      renderWithTimers(
         <TrackTab
           {...defaultProps}
           setTrackReplayPosition={mockSetTrackReplayPosition}
@@ -331,7 +344,7 @@ describe('TrackTab', () => {
       const mockSetTrackReplayPosition = vi.fn();
       const mockSetTrackLiveMode = vi.fn();
 
-      render(
+      renderWithTimers(
         <TrackTab
           {...defaultProps}
           setTrackReplayPosition={mockSetTrackReplayPosition}
@@ -346,7 +359,7 @@ describe('TrackTab', () => {
     });
 
     it('should render position slider in replay controls', () => {
-      render(<TrackTab {...defaultProps} />);
+      renderWithTimers(<TrackTab {...defaultProps} />);
 
       const slider = screen.getByTestId('position-slider');
       expect(slider).toBeInTheDocument();
@@ -358,7 +371,7 @@ describe('TrackTab', () => {
       const mockSetTrackLiveMode = vi.fn();
       const mockSetTrackReplayPosition = vi.fn();
 
-      render(
+      renderWithTimers(
         <TrackTab
           {...defaultProps}
           trackLiveMode={false}
@@ -375,7 +388,7 @@ describe('TrackTab', () => {
     });
 
     it('should pass null positionPercent to graphs when in live mode', () => {
-      render(<TrackTab {...defaultProps} trackLiveMode={true} />);
+      renderWithTimers(<TrackTab {...defaultProps} trackLiveMode={true} />);
 
       const altGraph = screen.getByTestId('mini-graph-altitude');
       // null gets stringified to empty string in data attribute or "null"
@@ -384,7 +397,7 @@ describe('TrackTab', () => {
     });
 
     it('should pass position to graphs when not in live mode', () => {
-      render(<TrackTab {...defaultProps} trackLiveMode={false} trackReplayPosition={50} />);
+      renderWithTimers(<TrackTab {...defaultProps} trackLiveMode={false} trackReplayPosition={50} />);
 
       const altGraph = screen.getByTestId('mini-graph-altitude');
       expect(altGraph).toHaveAttribute('data-position', '50');
@@ -395,7 +408,7 @@ describe('TrackTab', () => {
     it('should toggle track points when button is clicked', () => {
       const mockSetShowTrackPoints = vi.fn();
 
-      render(<TrackTab {...defaultProps} setShowTrackPoints={mockSetShowTrackPoints} />);
+      renderWithTimers(<TrackTab {...defaultProps} setShowTrackPoints={mockSetShowTrackPoints} />);
 
       const trackPointsBtn = screen.getByTestId('track-points-btn');
       fireEvent.click(trackPointsBtn);
@@ -406,7 +419,7 @@ describe('TrackTab', () => {
 
   describe('telemetry data', () => {
     it('should display live aircraft data when in live mode', () => {
-      render(<TrackTab {...defaultProps} trackLiveMode={true} />);
+      renderWithTimers(<TrackTab {...defaultProps} trackLiveMode={true} />);
 
       const overlay = screen.getByTestId('telemetry-overlay');
       expect(overlay).toHaveTextContent('Alt: 35000');
@@ -414,7 +427,7 @@ describe('TrackTab', () => {
     });
 
     it('should display interpolated data when not in live mode', () => {
-      render(<TrackTab {...defaultProps} trackLiveMode={false} trackReplayPosition={50} />);
+      renderWithTimers(<TrackTab {...defaultProps} trackLiveMode={false} trackReplayPosition={50} />);
 
       const overlay = screen.getByTestId('telemetry-overlay');
       // The interpolated position should show some altitude
@@ -424,7 +437,7 @@ describe('TrackTab', () => {
 
   describe('accessibility', () => {
     it('should have correct tabpanel role', () => {
-      render(<TrackTab {...defaultProps} />);
+      renderWithTimers(<TrackTab {...defaultProps} />);
 
       const tabPanel = screen.getByRole('tabpanel');
       expect(tabPanel).toBeInTheDocument();
@@ -433,7 +446,7 @@ describe('TrackTab', () => {
     });
 
     it('should have application role on map', () => {
-      render(<TrackTab {...defaultProps} />);
+      renderWithTimers(<TrackTab {...defaultProps} />);
 
       expect(screen.getByRole('application', { name: /flight track map/i })).toBeInTheDocument();
     });
@@ -441,7 +454,7 @@ describe('TrackTab', () => {
 
   describe('speed control', () => {
     it('should pass speed to ReplayControls', () => {
-      render(<TrackTab {...defaultProps} trackReplaySpeed={2} />);
+      renderWithTimers(<TrackTab {...defaultProps} trackReplaySpeed={2} />);
 
       expect(screen.getByTestId('replay-controls')).toBeInTheDocument();
     });
@@ -449,7 +462,7 @@ describe('TrackTab', () => {
     it('should call setTrackReplaySpeed when speed changes', () => {
       const mockSetTrackReplaySpeed = vi.fn();
 
-      render(<TrackTab {...defaultProps} setTrackReplaySpeed={mockSetTrackReplaySpeed} />);
+      renderWithTimers(<TrackTab {...defaultProps} setTrackReplaySpeed={mockSetTrackReplaySpeed} />);
 
       // Speed control is part of ReplayControls which we mocked
       expect(screen.getByTestId('replay-controls')).toBeInTheDocument();
@@ -460,7 +473,7 @@ describe('TrackTab', () => {
     it('should handle aircraft without coordinates gracefully', () => {
       const aircraftWithoutCoords = { ...mockAircraft, lat: null, lon: null };
 
-      render(<TrackTab {...defaultProps} aircraft={aircraftWithoutCoords} />);
+      renderWithTimers(<TrackTab {...defaultProps} aircraft={aircraftWithoutCoords} />);
 
       // Should still render without crashing
       expect(screen.getByTestId('replay-controls')).toBeInTheDocument();
@@ -471,13 +484,13 @@ describe('TrackTab', () => {
         { lat: 37.77, lon: -122.41, timestamp: '2024-01-15T12:00:00Z' },
       ];
 
-      render(<TrackTab {...defaultProps} sightings={sightingsWithMissingFields} />);
+      renderWithTimers(<TrackTab {...defaultProps} sightings={sightingsWithMissingFields} />);
 
       expect(screen.getByTestId('replay-controls')).toBeInTheDocument();
     });
 
     it('should handle null feederLocation', () => {
-      render(<TrackTab {...defaultProps} feederLocation={null} />);
+      renderWithTimers(<TrackTab {...defaultProps} feederLocation={null} />);
 
       expect(screen.getByTestId('replay-controls')).toBeInTheDocument();
     });
