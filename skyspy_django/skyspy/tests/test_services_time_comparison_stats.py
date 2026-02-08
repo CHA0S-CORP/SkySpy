@@ -94,9 +94,7 @@ class WeekOverWeekComparisonTests(TestCase):
                 latitude=40.0,
                 longitude=-74.0,
             )
-            AircraftSighting.objects.filter(pk=s.pk).update(
-                timestamp=this_week_start + timedelta(hours=i)
-            )
+            AircraftSighting.objects.filter(pk=s.pk).update(timestamp=this_week_start + timedelta(hours=i))
 
         # Create sightings for last week
         last_week_start, _ = tcs._get_week_dates(1)
@@ -106,9 +104,7 @@ class WeekOverWeekComparisonTests(TestCase):
                 latitude=40.0,
                 longitude=-74.0,
             )
-            AircraftSighting.objects.filter(pk=s.pk).update(
-                timestamp=last_week_start + timedelta(hours=i)
-            )
+            AircraftSighting.objects.filter(pk=s.pk).update(timestamp=last_week_start + timedelta(hours=i))
 
         result = tcs.calculate_week_over_week_comparison()
 
@@ -126,9 +122,7 @@ class WeekOverWeekComparisonTests(TestCase):
                 latitude=40.0,
                 longitude=-74.0,
             )
-            AircraftSighting.objects.filter(pk=s.pk).update(
-                timestamp=this_week_start + timedelta(minutes=i)
-            )
+            AircraftSighting.objects.filter(pk=s.pk).update(timestamp=this_week_start + timedelta(minutes=i))
 
         # Create sightings for last week (50)
         last_week_start, _ = tcs._get_week_dates(1)
@@ -138,9 +132,7 @@ class WeekOverWeekComparisonTests(TestCase):
                 latitude=40.0,
                 longitude=-74.0,
             )
-            AircraftSighting.objects.filter(pk=s.pk).update(
-                timestamp=last_week_start + timedelta(minutes=i)
-            )
+            AircraftSighting.objects.filter(pk=s.pk).update(timestamp=last_week_start + timedelta(minutes=i))
 
         result = tcs.calculate_week_over_week_comparison()
 
@@ -169,9 +161,7 @@ class WeekOverWeekComparisonTests(TestCase):
             longitude=-74.0,
             is_military=True,
         )
-        AircraftSighting.objects.filter(pk=sighting.pk).update(
-            timestamp=this_week_start + timedelta(hours=1)
-        )
+        AircraftSighting.objects.filter(pk=sighting.pk).update(timestamp=this_week_start + timedelta(hours=1))
 
         result = tcs.calculate_week_over_week_comparison()
 
@@ -218,9 +208,7 @@ class SeasonalTrendsTests(TestCase):
                 latitude=40.0,
                 longitude=-74.0,
             )
-            AircraftSighting.objects.filter(pk=s.pk).update(
-                timestamp=current_month_start + timedelta(hours=i)
-            )
+            AircraftSighting.objects.filter(pk=s.pk).update(timestamp=current_month_start + timedelta(hours=i))
 
         result = tcs.calculate_seasonal_trends(months=3)
 
@@ -442,9 +430,7 @@ class DailyTotalsTests(TestCase):
                 latitude=40.0,
                 longitude=-74.0,
             )
-            AircraftSighting.objects.filter(pk=s.pk).update(
-                timestamp=self.now - timedelta(days=i)
-            )
+            AircraftSighting.objects.filter(pk=s.pk).update(timestamp=self.now - timedelta(days=i))
 
         result = tcs.calculate_daily_totals(days=30)
 
@@ -730,9 +716,7 @@ class EdgeCaseTests(TestCase):
             latitude=40.0,
             longitude=-74.0,
         )
-        AircraftSighting.objects.filter(pk=sighting.pk).update(
-            timestamp=this_week_start + timedelta(hours=1)
-        )
+        AircraftSighting.objects.filter(pk=sighting.pk).update(timestamp=this_week_start + timedelta(hours=1))
 
         result = tcs.calculate_week_over_week_comparison()
 

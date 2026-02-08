@@ -346,7 +346,7 @@ func (s *MockServer) handleOIDCAuthorize(w http.ResponseWriter, r *http.Request)
 			"state": {state},
 		}.Encode()
 		client := &http.Client{Timeout: 5 * time.Second}
-		resp, err := client.Get(callbackURL) //nolint:errcheck
+		resp, err := client.Get(callbackURL) //nolint:errcheck // test helper: error is handled on next line
 		if err == nil {
 			resp.Body.Close()
 		}
