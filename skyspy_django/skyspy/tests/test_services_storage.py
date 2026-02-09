@@ -458,8 +458,10 @@ class GetLocalFileStatsTests(TestCase):
     def test_stats_with_files(self):
         """Test stats with files."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            (Path(tmpdir) / "file1.txt").write_bytes(b"a" * 1000)
-            (Path(tmpdir) / "file2.txt").write_bytes(b"b" * 2000)
+            # Files must be large enough that total_size_mb > 0 after
+            # rounding to 2 decimal places (i.e. >= 0.005 MB = 5243 bytes)
+            (Path(tmpdir) / "file1.txt").write_bytes(b"a" * 5000)
+            (Path(tmpdir) / "file2.txt").write_bytes(b"b" * 6000)
 
             stats = get_local_file_stats(tmpdir)
 

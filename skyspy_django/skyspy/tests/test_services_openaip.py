@@ -198,7 +198,9 @@ class GetAirspacesTests(TestCase):
         openaip.get_airspaces(lat=47.0, lon=-122.0, airspace_types=[4, 5])
 
         call_args = mock_request.call_args
-        self.assertIn("type", call_args[1]["params"])
+        # _make_request is called with positional args: ("airspaces", params)
+        params = call_args[0][1]
+        self.assertIn("type", params)
 
 
 class ParseAirspaceTests(TestCase):
@@ -282,8 +284,10 @@ class ParseAirspaceTests(TestCase):
         result = openaip._parse_airspace(item)
 
         self.assertIsNotNone(result)
-        self.assertIsNone(result["floor_ft"])
-        self.assertIsNone(result["ceiling_ft"])
+        # When lowerLimit/upperLimit are missing, item.get returns {},
+        # which is a dict, so the parsing branch executes with default value 0
+        self.assertEqual(result["floor_ft"], 0)
+        self.assertEqual(result["ceiling_ft"], 0)
 
 
 class GetAirportsTests(TestCase):

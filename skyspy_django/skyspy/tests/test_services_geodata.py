@@ -28,13 +28,13 @@ class HaversineDistanceTests(TestCase):
         self.assertAlmostEqual(result, 0.0, places=3)
 
     def test_known_distance_seattle_portland(self):
-        """Test known distance between Seattle and Portland (~145nm)."""
+        """Test known distance between Seattle and Portland (~126nm)."""
         # Seattle: 47.6062, -122.3321
         # Portland: 45.5152, -122.6784
         result = geodata.haversine_nm(47.6062, -122.3321, 45.5152, -122.6784)
-        # Approximately 145 nm
-        self.assertGreater(result, 140)
-        self.assertLess(result, 150)
+        # Approximately 126 nm
+        self.assertGreater(result, 120)
+        self.assertLess(result, 135)
 
     def test_distance_is_symmetric(self):
         """Test that distance A to B equals distance B to A."""

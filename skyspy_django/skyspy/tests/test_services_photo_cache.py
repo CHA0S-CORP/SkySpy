@@ -510,11 +510,12 @@ class GetCacheStatsTests(TestCase):
     @override_settings(S3_ENABLED=False)
     def test_get_stats_local_with_files(self):
         """Test stats with actual cached files."""
-        # Create some test files
+        # Create test files large enough that total_size_mb > 0 after
+        # rounding to 2 decimal places (i.e. >= 0.005 MB = 5243 bytes)
         cache_dir = get_cache_dir()
-        (cache_dir / "ABC123.jpg").write_bytes(b"photo data")
-        (cache_dir / "ABC123_thumb.jpg").write_bytes(b"thumb")
-        (cache_dir / "DEF456.jpg").write_bytes(b"another")
+        (cache_dir / "ABC123.jpg").write_bytes(b"x" * 4000)
+        (cache_dir / "ABC123_thumb.jpg").write_bytes(b"x" * 3000)
+        (cache_dir / "DEF456.jpg").write_bytes(b"x" * 4000)
 
         try:
             stats = get_cache_stats()

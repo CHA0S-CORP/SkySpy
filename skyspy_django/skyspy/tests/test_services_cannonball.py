@@ -405,7 +405,7 @@ class CannonballServicePatternDetectionTests(TestCase):
         # Create positions that stay in a small area for a while
         now = timezone.now()
         positions = []
-        for i in range(10):
+        for i in range(12):
             positions.append(
                 AircraftPosition(
                     lat=47.5 + (i % 3) * 0.001,  # Small movement
@@ -413,7 +413,7 @@ class CannonballServicePatternDetectionTests(TestCase):
                     altitude=3000,
                     speed=50,
                     track=90,
-                    timestamp=now - timedelta(minutes=15 - i),  # 15 minutes of history
+                    timestamp=now - timedelta(minutes=12 - i),  # 12 minutes of history
                 )
             )
 

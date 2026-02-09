@@ -285,15 +285,16 @@ class LEDataImportServiceTests(TestCase):
     # Full Import Flow Tests
     # =========================================================================
 
-    @patch.object(LEDataImportService, "_session")
-    def test_import_source_success(self, mock_session):
+    def test_import_source_success(self):
         """Test successful source import."""
-        # Mock the HTTP response
+        # Mock the HTTP response on the instance's _session attribute
+        mock_session = Mock()
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.text = "adshex,reg,dept_mapped\nA12345,N12345,FBI"
         mock_response.raise_for_status = Mock()
         mock_session.get.return_value = mock_response
+        self.service._session = mock_session
 
         result = self.service.import_source("buzzfeed_spyplanes", force=True)
 
@@ -301,9 +302,11 @@ class LEDataImportServiceTests(TestCase):
         self.assertEqual(result.records_fetched, 1)
         self.assertEqual(result.records_imported, 1)
 
-    @patch.object(LEDataImportService, "_session")
-    def test_import_source_skips_recent_fetch(self, mock_session):
+    def test_import_source_skips_recent_fetch(self):
         """Test that recent fetches are skipped."""
+        mock_session = Mock()
+        self.service._session = mock_session
+
         # Create source with recent fetch
         LEDataSource.objects.create(
             name="buzzfeed_spyplanes",
@@ -318,12 +321,13 @@ class LEDataImportServiceTests(TestCase):
         self.assertEqual(result.records_skipped, 1)
         mock_session.get.assert_not_called()
 
-    @patch.object(LEDataImportService, "_session")
-    def test_import_source_handles_http_error(self, mock_session):
+    def test_import_source_handles_http_error(self):
         """Test handling HTTP errors."""
         import requests
 
+        mock_session = Mock()
         mock_session.get.side_effect = requests.RequestException("Network error")
+        self.service._session = mock_session
 
         result = self.service.import_source("buzzfeed_spyplanes", force=True)
 

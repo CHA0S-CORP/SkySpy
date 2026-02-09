@@ -513,8 +513,8 @@ class SearchAirlinesTests(TestCase):
         """Test that partial matches work."""
         result = openflights.search_airlines("Air")
 
-        # Should match "American Airlines" and "Delta Air Lines"
-        self.assertEqual(len(result), 2)
+        # Should match "American Airlines", "United Airlines", and "Delta Air Lines"
+        self.assertEqual(len(result), 3)
 
     def test_search_respects_limit(self):
         """Test that limit is respected."""

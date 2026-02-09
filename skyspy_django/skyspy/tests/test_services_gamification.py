@@ -428,16 +428,16 @@ class RareSightingsTests(TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result["category"], "government")
 
-    def test_check_notable_registration_boeing_test(self):
-        """Test detection of Boeing test flight."""
-        result = self.service._check_notable_registration("N700")
+    def test_check_notable_registration_test_flight(self):
+        """Test detection of Airbus test flight registration."""
+        result = self.service._check_notable_registration("F-WWAB")
 
         self.assertIsNotNone(result)
         self.assertEqual(result["category"], "test_flight")
 
     def test_check_notable_registration_no_match(self):
         """Test no match for normal registration."""
-        result = self.service._check_notable_registration("N12345")
+        result = self.service._check_notable_registration("G-ABCD")
 
         self.assertIsNone(result)
 
@@ -449,18 +449,18 @@ class RareSightingsTests(TestCase):
         self.assertEqual(result["category"], "military")
 
     def test_check_notable_callsign_medevac(self):
-        """Test detection of air ambulance callsign."""
+        """Test detection of medical evacuation callsign."""
         result = self.service._check_notable_callsign("MEDEVAC1")
 
         self.assertIsNotNone(result)
-        self.assertEqual(result["category"], "air_ambulance")
+        self.assertEqual(result["category"], "emergency")
 
     def test_check_notable_callsign_coast_guard(self):
         """Test detection of Coast Guard callsign."""
-        result = self.service._check_notable_callsign("COAST1")
+        result = self.service._check_notable_callsign("USCG1")
 
         self.assertIsNotNone(result)
-        self.assertEqual(result["category"], "law_enforcement")
+        self.assertEqual(result["category"], "government")
 
     def test_check_rare_type_b748(self):
         """Test detection of rare 747-8."""
@@ -471,9 +471,10 @@ class RareSightingsTests(TestCase):
 
     def test_check_rare_type_a380(self):
         """Test detection of rare A380."""
-        result = self.service._check_rare_type("A380")
+        result = self.service._check_rare_type("A388")
 
         self.assertIsNotNone(result)
+        self.assertEqual(result["type_code"], "A388")
 
     def test_check_rare_type_common(self):
         """Test no match for common type."""

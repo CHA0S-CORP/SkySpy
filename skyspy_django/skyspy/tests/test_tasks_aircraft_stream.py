@@ -963,11 +963,23 @@ class ComputeAircraftDeltaTest(TestCase):
         self.assertTrue(delta["full_update"])
 
     def test_update_only_changed_fields(self):
-        """Test that updates contain only changed fields."""
-        initial = [{"hex": "AC1", "lat": 40.0, "lon": -74.0, "alt": 30000, "track": 180}]
+        """Test that updates contain only changed fields.
+
+        We include multiple aircraft so that a single field change stays
+        under the 50% churn threshold that triggers a full_update.
+        """
+        initial = [
+            {"hex": "AC1", "lat": 40.0, "lon": -74.0, "alt": 30000, "track": 180},
+            {"hex": "AC2", "lat": 41.0, "lon": -73.0, "alt": 25000, "track": 90},
+            {"hex": "AC3", "lat": 42.0, "lon": -72.0, "alt": 20000, "track": 270},
+        ]
         compute_aircraft_delta(initial)
 
-        current = [{"hex": "AC1", "lat": 40.1, "lon": -74.0, "alt": 30000, "track": 180}]
+        current = [
+            {"hex": "AC1", "lat": 40.1, "lon": -74.0, "alt": 30000, "track": 180},
+            {"hex": "AC2", "lat": 41.0, "lon": -73.0, "alt": 25000, "track": 90},
+            {"hex": "AC3", "lat": 42.0, "lon": -72.0, "alt": 20000, "track": 270},
+        ]
         delta = compute_aircraft_delta(current)
 
         self.assertFalse(delta["full_update"])

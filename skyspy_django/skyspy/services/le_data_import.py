@@ -354,18 +354,19 @@ class LEDataImportService:
         """Infer agency type from name."""
         name_lower = agency_name.lower()
 
-        federal_keywords = ["fbi", "dea", "dhs", "ice", "cbp", "atf", "usms", "federal", "national"]
-        state_keywords = ["state", "highway patrol", "state police", "state patrol"]
-        local_keywords = ["police", "sheriff", "pd", "county", "city", "municipal"]
+        # Order matters: check more specific categories first
         military_keywords = ["army", "navy", "air force", "marine", "coast guard", "national guard"]
-
-        for keyword in federal_keywords:
-            if keyword in name_lower:
-                return "federal"
+        federal_keywords = ["fbi", "dea", "dhs", "ice", "cbp", "atf", "usms", "federal", "national"]
+        state_keywords = ["state police", "state patrol", "highway patrol", "state"]
+        local_keywords = ["police", "sheriff", "pd", "county", "city", "municipal"]
 
         for keyword in military_keywords:
             if keyword in name_lower:
                 return "military"
+
+        for keyword in federal_keywords:
+            if keyword in name_lower:
+                return "federal"
 
         for keyword in state_keywords:
             if keyword in name_lower:

@@ -5,10 +5,12 @@ Tests flight pattern detection, geographic statistics,
 route analysis, and statistical aggregations.
 """
 
+import unittest
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.db import connection
 from django.test import TestCase
 from django.utils import timezone
 
@@ -215,16 +217,18 @@ class BusiestHoursTests(TestCase):
 
     def test_calculate_busiest_hours_with_data(self):
         """Test busiest hours with sighting data."""
-        # Create sightings at specific hours
+        # Create sightings, then override timestamp (auto_now_add ignores explicit values)
         base_time = self.now.replace(hour=10, minute=0, second=0, microsecond=0)
+        sighting_ids = []
         for i in range(10):
-            AircraftSighting.objects.create(
+            s = AircraftSighting.objects.create(
                 icao_hex=f"ABC{i:03d}",
-                timestamp=base_time,
                 latitude=40.0,
                 longitude=-74.0,
                 altitude_baro=35000,
             )
+            sighting_ids.append(s.pk)
+        AircraftSighting.objects.filter(pk__in=sighting_ids).update(timestamp=base_time)
 
         result = fps.calculate_busiest_hours(hours=24)
 
@@ -236,25 +240,29 @@ class BusiestHoursTests(TestCase):
 
     def test_calculate_busiest_hours_peak_detection(self):
         """Test peak hour detection."""
-        # Create more sightings at hour 14
+        # Create more sightings at hour 14 (override auto_now_add timestamp)
         base_time_14 = self.now.replace(hour=14, minute=0, second=0, microsecond=0)
+        ids_14 = []
         for i in range(20):
-            AircraftSighting.objects.create(
+            s = AircraftSighting.objects.create(
                 icao_hex=f"ABC{i:03d}",
-                timestamp=base_time_14,
                 latitude=40.0,
                 longitude=-74.0,
             )
+            ids_14.append(s.pk)
+        AircraftSighting.objects.filter(pk__in=ids_14).update(timestamp=base_time_14)
 
         # Create fewer sightings at hour 3
         base_time_3 = self.now.replace(hour=3, minute=0, second=0, microsecond=0)
+        ids_3 = []
         for i in range(5):
-            AircraftSighting.objects.create(
+            s = AircraftSighting.objects.create(
                 icao_hex=f"DEF{i:03d}",
-                timestamp=base_time_3,
                 latitude=40.0,
                 longitude=-74.0,
             )
+            ids_3.append(s.pk)
+        AircraftSighting.objects.filter(pk__in=ids_3).update(timestamp=base_time_3)
 
         result = fps.calculate_busiest_hours(hours=24)
 
@@ -263,25 +271,29 @@ class BusiestHoursTests(TestCase):
 
     def test_calculate_busiest_hours_day_night_ratio(self):
         """Test day vs night ratio calculation."""
-        # Create daytime sightings (6am-6pm)
+        # Create daytime sightings (6am-6pm), then override auto_now_add timestamp
         day_time = self.now.replace(hour=12, minute=0, second=0, microsecond=0)
+        day_ids = []
         for i in range(20):
-            AircraftSighting.objects.create(
+            s = AircraftSighting.objects.create(
                 icao_hex=f"DAY{i:03d}",
-                timestamp=day_time,
                 latitude=40.0,
                 longitude=-74.0,
             )
+            day_ids.append(s.pk)
+        AircraftSighting.objects.filter(pk__in=day_ids).update(timestamp=day_time)
 
         # Create nighttime sightings
         night_time = self.now.replace(hour=22, minute=0, second=0, microsecond=0)
+        night_ids = []
         for i in range(10):
-            AircraftSighting.objects.create(
+            s = AircraftSighting.objects.create(
                 icao_hex=f"NGT{i:03d}",
-                timestamp=night_time,
                 latitude=40.0,
                 longitude=-74.0,
             )
+            night_ids.append(s.pk)
+        AircraftSighting.objects.filter(pk__in=night_ids).update(timestamp=night_time)
 
         result = fps.calculate_busiest_hours(hours=24)
 
@@ -289,6 +301,7 @@ class BusiestHoursTests(TestCase):
         self.assertGreater(result["day_positions"], 0)
 
 
+@unittest.skipIf(connection.vendor == "sqlite", "ExtractEpoch on DurationField requires PostgreSQL")
 class DurationByTypeTests(TestCase):
     """Tests for flight duration by aircraft type."""
 
@@ -308,15 +321,19 @@ class DurationByTypeTests(TestCase):
 
     def test_calculate_duration_by_type_with_data(self):
         """Test duration by type with session data."""
-        # Create sessions for B738
+        # Create sessions for B738, then override auto_now_add/auto_now timestamps
+        session_ids = []
         for i in range(5):
-            AircraftSession.objects.create(
+            s = AircraftSession.objects.create(
                 icao_hex=f"ABC{i:03d}",
                 aircraft_type="B738",
-                first_seen=self.now - timedelta(hours=3),
-                last_seen=self.now - timedelta(hours=1),  # 2 hour duration
                 total_positions=100,
             )
+            session_ids.append(s.pk)
+        AircraftSession.objects.filter(pk__in=session_ids).update(
+            first_seen=self.now - timedelta(hours=3),
+            last_seen=self.now - timedelta(hours=1),
+        )
 
         result = fps.calculate_duration_by_type(hours=24)
 
@@ -329,13 +346,15 @@ class DurationByTypeTests(TestCase):
 
     def test_calculate_duration_by_type_filters_short_sessions(self):
         """Test that very short sessions are filtered."""
-        # Create session shorter than 1 minute
-        AircraftSession.objects.create(
+        # Create session shorter than 1 minute, then override auto timestamps
+        s = AircraftSession.objects.create(
             icao_hex="ABC001",
             aircraft_type="B738",
+            total_positions=5,
+        )
+        AircraftSession.objects.filter(pk=s.pk).update(
             first_seen=self.now - timedelta(seconds=30),
             last_seen=self.now,
-            total_positions=5,
         )
 
         result = fps.calculate_duration_by_type(hours=24)
@@ -345,21 +364,26 @@ class DurationByTypeTests(TestCase):
 
     def test_calculate_duration_by_type_limit(self):
         """Test that limit parameter is respected."""
-        # Create sessions for many different types
+        # Create sessions for many different types, then override auto timestamps
+        session_ids = []
         for i in range(30):
-            AircraftSession.objects.create(
+            s = AircraftSession.objects.create(
                 icao_hex=f"ABC{i:03d}",
                 aircraft_type=f"TYPE{i:02d}",
-                first_seen=self.now - timedelta(hours=2),
-                last_seen=self.now - timedelta(hours=1),
                 total_positions=50,
             )
+            session_ids.append(s.pk)
+        AircraftSession.objects.filter(pk__in=session_ids).update(
+            first_seen=self.now - timedelta(hours=2),
+            last_seen=self.now - timedelta(hours=1),
+        )
 
         result = fps.calculate_duration_by_type(hours=24, limit=10)
 
         self.assertLessEqual(len(result), 10)
 
 
+@unittest.skipIf(connection.vendor == "sqlite", "ExtractEpoch on DurationField requires PostgreSQL")
 class CommonAircraftTypesTests(TestCase):
     """Tests for common aircraft types calculation."""
 

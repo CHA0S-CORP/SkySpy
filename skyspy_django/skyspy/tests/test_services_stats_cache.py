@@ -487,10 +487,13 @@ class HistoryStatsTests(TestCase):
         now = timezone.now()
 
         # Create sighting within range
-        AircraftSightingFactory(timestamp=now - timedelta(hours=1))
+        sighting_in = AircraftSightingFactory()
+        # auto_now_add=True ignores passed timestamp, so update via queryset
+        AircraftSighting.objects.filter(pk=sighting_in.pk).update(timestamp=now - timedelta(hours=1))
 
         # Create sighting outside range
-        AircraftSightingFactory(timestamp=now - timedelta(hours=48))
+        sighting_out = AircraftSightingFactory()
+        AircraftSighting.objects.filter(pk=sighting_out.pk).update(timestamp=now - timedelta(hours=48))
 
         result = calculate_history_stats(hours=24)
 
@@ -790,17 +793,19 @@ class TrackingQualityStatsTests(TestCase):
         now = timezone.now()
 
         # Create session with good tracking
-        AircraftSessionFactory(
+        # auto_now_add/auto_now on first_seen/last_seen ignore factory values,
+        # so we update via queryset after creation.
+        session1 = AircraftSessionFactory(total_positions=200)
+        AircraftSession.objects.filter(pk=session1.pk).update(
             first_seen=now - timedelta(minutes=30),
             last_seen=now - timedelta(minutes=5),
-            total_positions=200,  # Good update rate
         )
 
         # Create session with poor tracking
-        AircraftSessionFactory(
+        session2 = AircraftSessionFactory(total_positions=10)
+        AircraftSession.objects.filter(pk=session2.pk).update(
             first_seen=now - timedelta(minutes=60),
             last_seen=now - timedelta(minutes=30),
-            total_positions=10,  # Poor update rate
         )
 
         result = calculate_tracking_quality_stats(hours=24)
@@ -821,9 +826,9 @@ class AllCachedStatsTests(TestCase):
         """Clean up after tests."""
         cache.clear()
 
-    @patch("skyspy.services.stats_cache.get_cached_acars_stats")
-    @patch("skyspy.services.stats_cache.get_cached_acars_trends")
-    @patch("skyspy.services.stats_cache.get_cached_acars_airlines")
+    @patch("skyspy.services.acars_stats.get_cached_acars_stats")
+    @patch("skyspy.services.acars_stats.get_cached_acars_trends")
+    @patch("skyspy.services.acars_stats.get_cached_acars_airlines")
     def test_get_all_cached_stats(self, mock_acars_airlines, mock_acars_trends, mock_acars_stats):
         """Test get_all_cached_stats returns all stat types."""
         mock_acars_stats.return_value = {"test": "acars_stats"}

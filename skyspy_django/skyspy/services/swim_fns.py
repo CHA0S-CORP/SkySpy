@@ -16,7 +16,7 @@ import threading
 import time
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timezone as dt_timezone
 from typing import Any, Optional
 
 from django.conf import settings
@@ -441,7 +441,7 @@ def _parse_datetime(dt_str: str | None) -> datetime | None:
         try:
             dt = datetime.strptime(dt_str, fmt)
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
+                dt = dt.replace(tzinfo=dt_timezone.utc)
             return dt
         except ValueError:
             continue

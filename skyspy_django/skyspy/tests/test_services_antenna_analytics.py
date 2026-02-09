@@ -655,7 +655,6 @@ class TimeRangeTests(TestCase):
         # Create sighting within time range
         AircraftSighting.objects.create(
             icao_hex="IN0001",
-            timestamp=self.now - timedelta(hours=1),
             latitude=40.0,
             longitude=-74.0,
             distance_nm=50.0,
@@ -663,13 +662,17 @@ class TimeRangeTests(TestCase):
         )
 
         # Create sighting outside time range
-        AircraftSighting.objects.create(
+        # Note: auto_now_add on timestamp ignores values passed to create(),
+        # so we must use .update() to backdate the record.
+        old_sighting = AircraftSighting.objects.create(
             icao_hex="OUT001",
-            timestamp=self.now - timedelta(hours=48),  # 48 hours ago
             latitude=40.0,
             longitude=-74.0,
             distance_nm=50.0,
             track=90.0,
+        )
+        AircraftSighting.objects.filter(pk=old_sighting.pk).update(
+            timestamp=self.now - timedelta(hours=48),
         )
 
         result = antenna_analytics.calculate_polar_data(hours=24)
@@ -682,7 +685,6 @@ class TimeRangeTests(TestCase):
         # Create sighting within time range
         AircraftSighting.objects.create(
             icao_hex="IN0001",
-            timestamp=self.now - timedelta(hours=1),
             latitude=40.0,
             longitude=-74.0,
             distance_nm=50.0,
@@ -690,13 +692,17 @@ class TimeRangeTests(TestCase):
         )
 
         # Create sighting outside time range
-        AircraftSighting.objects.create(
+        # Note: auto_now_add on timestamp ignores values passed to create(),
+        # so we must use .update() to backdate the record.
+        old_sighting = AircraftSighting.objects.create(
             icao_hex="OUT001",
-            timestamp=self.now - timedelta(hours=48),
             latitude=40.0,
             longitude=-74.0,
             distance_nm=50.0,
             rssi=-5.0,
+        )
+        AircraftSighting.objects.filter(pk=old_sighting.pk).update(
+            timestamp=self.now - timedelta(hours=48),
         )
 
         result = antenna_analytics.calculate_rssi_data(hours=24)
@@ -709,19 +715,22 @@ class TimeRangeTests(TestCase):
         # Create sighting within time range
         AircraftSighting.objects.create(
             icao_hex="IN0001",
-            timestamp=self.now - timedelta(hours=1),
             latitude=40.0,
             longitude=-74.0,
             distance_nm=50.0,
         )
 
         # Create sighting outside time range
-        AircraftSighting.objects.create(
+        # Note: auto_now_add on timestamp ignores values passed to create(),
+        # so we must use .update() to backdate the record.
+        old_sighting = AircraftSighting.objects.create(
             icao_hex="OUT001",
-            timestamp=self.now - timedelta(hours=48),
             latitude=40.0,
             longitude=-74.0,
             distance_nm=50.0,
+        )
+        AircraftSighting.objects.filter(pk=old_sighting.pk).update(
+            timestamp=self.now - timedelta(hours=48),
         )
 
         result = antenna_analytics.calculate_summary(hours=24)

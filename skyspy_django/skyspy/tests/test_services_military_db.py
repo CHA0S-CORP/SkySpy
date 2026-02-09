@@ -417,12 +417,16 @@ class MilitaryHexRangesTests(TestCase):
         self.assertEqual(result["country"], "USA")
 
     def test_no_overlap_between_ranges(self):
-        """Test that there's no overlap in hex ranges."""
+        """Test that there's no overlap in hex ranges across different countries.
+
+        Ranges for the same country MAY intentionally overlap (e.g., a broad
+        'US Military' range and a more specific 'US Air Force' sub-range).
+        """
         ranges = military_db.MILITARY_HEX_RANGES
-        for i, (start1, end1, _, _) in enumerate(ranges):
-            for j, (start2, end2, _, _) in enumerate(ranges):
-                if i != j:
-                    # Ranges should not overlap
+        for i, (start1, end1, country1, _) in enumerate(ranges):
+            for j, (start2, end2, country2, _) in enumerate(ranges):
+                if i != j and country1 != country2:
+                    # Ranges for different countries should not overlap
                     if start1 <= start2:
                         self.assertLess(end1, start2, f"Overlap between ranges {i} and {j}")
                     else:

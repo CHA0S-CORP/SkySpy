@@ -582,9 +582,9 @@ class TestInitialState:
                                 # All snapshots should be sent
                                 assert "aircraft:snapshot" in event_names
                                 assert "safety:snapshot" in event_names
-                                assert "alert:snapshot" in event_names
+                                assert "alerts:snapshot" in event_names
                                 assert "acars:snapshot" in event_names
-                                assert "notam:snapshot" in event_names
+                                assert "notams:snapshot" in event_names
 
     @pytest.mark.asyncio
     @pytest.mark.django_db

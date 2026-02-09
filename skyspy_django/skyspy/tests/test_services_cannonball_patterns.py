@@ -225,7 +225,7 @@ class StakeoutPatternTests(TestCase):
 
         self.assertIsNotNone(result)
         self.assertIn("duration_minutes", result.metadata)
-        self.assertIn("radius_nm", result.metadata)
+        self.assertIn("max_spread_nm", result.metadata)
 
 
 class RacetrackPatternTests(TestCase):
@@ -462,7 +462,7 @@ class PatternConfidenceCalculationTests(TestCase):
         le_info = {"is_law_enforcement": True, "is_surveillance_type": True}
         result = self.service._calculate_pattern_confidence(pattern, le_info=le_info)
 
-        self.assertEqual(result, 0.8)  # 0.5 + 0.2 + 0.1 = 0.8
+        self.assertAlmostEqual(result, 0.8, places=5)  # 0.5 + 0.2 + 0.1 = 0.8
 
     def test_calculate_confidence_stakeout_duration_boost(self):
         """Test stakeout confidence boost for long duration."""

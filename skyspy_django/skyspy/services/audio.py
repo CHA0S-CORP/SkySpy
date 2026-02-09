@@ -1115,7 +1115,7 @@ def create_transmission(
         frequency_mhz=frequency_mhz,
         channel_name=channel_name,
         transcription_status="pending",
-        metadata=metadata or {},
+        extra_metadata=metadata or {},
     )
 
     logger.info(f"Created audio transmission {transmission.id}: {safe_filename}")

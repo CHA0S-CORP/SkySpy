@@ -173,6 +173,7 @@ class FetchWithRetryTests(TestCase):
     def test_fetch_retries_on_failure(self, mock_client_class):
         """Test that fetch retries on failure."""
         import httpx
+        from tenacity import RetryError
 
         mock_client = Mock()
         mock_client.get.side_effect = httpx.RequestError("Connection failed")
@@ -180,11 +181,11 @@ class FetchWithRetryTests(TestCase):
         mock_client.__exit__ = Mock(return_value=False)
         mock_client_class.return_value = mock_client
 
-        with self.assertRaises(httpx.RequestError):
+        with self.assertRaises(RetryError):
             fetch_with_retry("https://example.com/test")
 
-        # Should have retried multiple times
-        self.assertGreater(mock_client.get.call_count, 1)
+        # Should have retried multiple times (3 attempts)
+        self.assertEqual(mock_client.get.call_count, 3)
 
 
 class StreamWithRetryTests(TestCase):
