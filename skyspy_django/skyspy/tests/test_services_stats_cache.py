@@ -5,11 +5,13 @@ Tests statistics aggregation, caching logic, cache invalidation,
 and various statistics calculations.
 """
 
+import unittest
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
 from django.core.cache import cache
+from django.db import connection
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
@@ -499,6 +501,7 @@ class HistoryStatsTests(TestCase):
 
         self.assertEqual(result["total_sightings"], 1)
 
+    @unittest.skipIf(connection.vendor == "sqlite", "ExtractEpoch on DurationField requires PostgreSQL")
     def test_get_history_stats_caches_result(self):
         """Test that get_history_stats caches the result."""
         # First call should trigger calculation
@@ -509,6 +512,7 @@ class HistoryStatsTests(TestCase):
         self.assertIsNotNone(cached)
 
     @patch("skyspy.services.stats_cache.broadcast_stats_update")
+    @unittest.skipIf(connection.vendor == "sqlite", "ExtractEpoch on DurationField requires PostgreSQL")
     def test_refresh_history_cache(self, mock_broadcast):
         """Test refresh_history_cache updates all history caches."""
         refresh_history_cache(broadcast=True)
@@ -565,6 +569,7 @@ class HistoryTopTests(TestCase):
         AircraftSession.objects.all().delete()
         cache.clear()
 
+    @unittest.skipIf(connection.vendor == "sqlite", "ExtractEpoch on DurationField requires PostgreSQL")
     def test_calculate_history_top_empty(self):
         """Test top performers with no data."""
         result = calculate_history_top(hours=24)
@@ -575,6 +580,7 @@ class HistoryTopTests(TestCase):
         self.assertEqual(result["most_positions"], [])
         self.assertEqual(result["closest_approach"], [])
 
+    @unittest.skipIf(connection.vendor == "sqlite", "ExtractEpoch on DurationField requires PostgreSQL")
     def test_calculate_history_top_with_sessions(self):
         """Test top performers with session data."""
         now = timezone.now()
@@ -703,6 +709,7 @@ class FlightPatternsStatsTests(TestCase):
         AircraftSession.objects.all().delete()
         cache.clear()
 
+    @unittest.skipIf(connection.vendor == "sqlite", "ExtractEpoch on DurationField requires PostgreSQL")
     def test_calculate_flight_patterns_empty(self):
         """Test flight patterns with no data."""
         result = calculate_flight_patterns_stats(hours=24)
@@ -712,6 +719,7 @@ class FlightPatternsStatsTests(TestCase):
         self.assertIsNone(result["peak_hour"])
         self.assertEqual(result["avg_duration_by_type"], [])
 
+    @unittest.skipIf(connection.vendor == "sqlite", "ExtractEpoch on DurationField requires PostgreSQL")
     def test_calculate_flight_patterns_busiest_hours(self):
         """Test busiest hours calculation with data."""
         now = timezone.now()
@@ -780,6 +788,7 @@ class TrackingQualityStatsTests(TestCase):
         AircraftSession.objects.all().delete()
         cache.clear()
 
+    @unittest.skipIf(connection.vendor == "sqlite", "ExtractEpoch on DurationField requires PostgreSQL")
     def test_calculate_tracking_quality_empty(self):
         """Test tracking quality with no sessions."""
         result = calculate_tracking_quality_stats(hours=24)
@@ -788,6 +797,7 @@ class TrackingQualityStatsTests(TestCase):
         self.assertIsNone(result["avg_update_rate_per_min"])
         self.assertEqual(result["quality_breakdown"], {"excellent": 0, "good": 0, "fair": 0, "poor": 0})
 
+    @unittest.skipIf(connection.vendor == "sqlite", "ExtractEpoch on DurationField requires PostgreSQL")
     def test_calculate_tracking_quality_with_sessions(self):
         """Test tracking quality with session data."""
         now = timezone.now()
@@ -829,6 +839,7 @@ class AllCachedStatsTests(TestCase):
     @patch("skyspy.services.acars_stats.get_cached_acars_stats")
     @patch("skyspy.services.acars_stats.get_cached_acars_trends")
     @patch("skyspy.services.acars_stats.get_cached_acars_airlines")
+    @unittest.skipIf(connection.vendor == "sqlite", "ExtractEpoch on DurationField requires PostgreSQL")
     def test_get_all_cached_stats(self, mock_acars_airlines, mock_acars_trends, mock_acars_stats):
         """Test get_all_cached_stats returns all stat types."""
         mock_acars_stats.return_value = {"test": "acars_stats"}

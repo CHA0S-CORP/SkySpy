@@ -453,14 +453,14 @@ class RareSightingsTests(TestCase):
         result = self.service._check_notable_callsign("MEDEVAC1")
 
         self.assertIsNotNone(result)
-        self.assertEqual(result["category"], "emergency")
+        self.assertEqual(result["category"], "air_ambulance")
 
     def test_check_notable_callsign_coast_guard(self):
         """Test detection of Coast Guard callsign."""
         result = self.service._check_notable_callsign("USCG1")
 
         self.assertIsNotNone(result)
-        self.assertEqual(result["category"], "government")
+        self.assertEqual(result["category"], "law_enforcement")
 
     def test_check_rare_type_b748(self):
         """Test detection of rare 747-8."""

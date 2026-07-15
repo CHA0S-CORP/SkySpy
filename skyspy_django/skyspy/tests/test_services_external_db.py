@@ -14,6 +14,7 @@ from pathlib import Path
 from threading import Lock
 from unittest.mock import MagicMock, Mock, patch
 
+import httpx
 import pytest
 from django.test import TestCase, override_settings
 
@@ -299,7 +300,7 @@ class ADSBXDatabaseTests(TestCase):
     @patch("skyspy.services.external_db.fetch_with_retry")
     def test_download_adsbx_database_failure(self, mock_fetch):
         """Test ADSBX download failure."""
-        mock_fetch.side_effect = Exception("Network error")
+        mock_fetch.side_effect = httpx.ConnectError("Network error")
 
         result = download_adsbx_database()
 
@@ -561,7 +562,7 @@ class RouteCacheTests(TestCase):
     def test_fetch_route_api_error(self, mock_client_class):
         """Test route fetch handles API errors gracefully."""
         mock_client = Mock()
-        mock_client.post.side_effect = Exception("API error")
+        mock_client.post.side_effect = httpx.ConnectError("API error")
         mock_client.__enter__ = Mock(return_value=mock_client)
         mock_client.__exit__ = Mock(return_value=False)
         mock_client_class.return_value = mock_client
@@ -612,7 +613,7 @@ class FetchAircraftFromADSBLolTests(TestCase):
     def test_fetch_aircraft_api_error(self, mock_client_class):
         """Test API error handling."""
         mock_client = Mock()
-        mock_client.get.side_effect = Exception("API error")
+        mock_client.get.side_effect = httpx.ConnectError("API error")
         mock_client.__enter__ = Mock(return_value=mock_client)
         mock_client.__exit__ = Mock(return_value=False)
         mock_client_class.return_value = mock_client

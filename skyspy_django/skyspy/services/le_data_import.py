@@ -11,6 +11,7 @@ Imports aircraft data from external sources like:
 import csv
 import io
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -354,27 +355,25 @@ class LEDataImportService:
         """Infer agency type from name."""
         name_lower = agency_name.lower()
 
-        # Order matters: check more specific categories first
+        # Order matters: check more specific categories first.
+        # Word-boundary matching - plain substring checks misclassify
+        # (e.g. "ice" inside "police" would flag every PD as federal).
         military_keywords = ["army", "navy", "air force", "marine", "coast guard", "national guard"]
         federal_keywords = ["fbi", "dea", "dhs", "ice", "cbp", "atf", "usms", "federal", "national"]
         state_keywords = ["state police", "state patrol", "highway patrol", "state"]
         local_keywords = ["police", "sheriff", "pd", "county", "city", "municipal"]
 
-        for keyword in military_keywords:
-            if keyword in name_lower:
-                return "military"
+        def matches(keywords):
+            return any(re.search(rf"\b{re.escape(kw)}\b", name_lower) for kw in keywords)
 
-        for keyword in federal_keywords:
-            if keyword in name_lower:
-                return "federal"
-
-        for keyword in state_keywords:
-            if keyword in name_lower:
-                return "state"
-
-        for keyword in local_keywords:
-            if keyword in name_lower:
-                return "local"
+        if matches(military_keywords):
+            return "military"
+        if matches(federal_keywords):
+            return "federal"
+        if matches(state_keywords):
+            return "state"
+        if matches(local_keywords):
+            return "local"
 
         return "unknown"
 
